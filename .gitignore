@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# MetaGPT（源码，不提交）
+MetaGPT/
+
+# 备份
+*.bak
+*.backup
+*~
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# Node modules (如果有)
+node_modules/
+npm-debug.log*
+
+# 打包文件
+*.egg
+*.whl
+*.zip
+
+# LEE 框架特定
+logs/
+runtime/runs/
+*~
