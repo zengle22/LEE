@@ -1,0 +1,31 @@
+id: local-engine-test
+name: 本地 Engine 测试
+version: "1.0"
+
+description: |
+  测试使用本地 OpenAI 兼容服务的统一 Engine 接口
+
+steps:
+  - id: step1_test_local
+    name: 测试本地服务
+    description: |
+      使用本地 OpenAI 兼容服务 (http://127.0.0.1:8045/v1)
+      测试统一 Engine 接口是否正常工作。
+    run: agent:tester
+    engine:
+      type: llm
+      provider: openai
+      base_url: http://127.0.0.1:8045/v1
+      api_key: sk-2988e892730744ccafde80aac9ced361
+      model: gemini-3-flash
+      temperature: 0.7
+      max_tokens: 2000
+    system_prompt: |
+      你是一个测试助手。
+      你的任务是生成一个简单的测试报告。
+    inputs:
+      - description: "无需输入"
+    outputs:
+      - path: output/test-report.md
+        required: true
+        description: "生成的测试报告"
