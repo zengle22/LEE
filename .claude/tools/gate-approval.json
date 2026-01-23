@@ -1,0 +1,89 @@
+{
+  "name": "gate_approval",
+  "description": "Gate Assistant approval tools - List pending gates, show gate details with checklist and upstream artifacts, and submit gate decisions in the LEE system.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["list_pending", "show", "decide"],
+        "description": "The action to perform on gates"
+      },
+      "project_dir": {
+        "type": "string",
+        "description": "Project directory path (default: current directory)"
+      },
+      "gate_id": {
+        "type": "string",
+        "description": "Gate ID (required for show and decide actions)"
+      },
+      "option": {
+        "type": "string",
+        "enum": ["approve", "reject", "revise"],
+        "description": "Decision option (required for decide action)"
+      },
+      "comment": {
+        "type": "string",
+        "description": "Decision comment explaining the reasoning (required for decide action)"
+      },
+      "checklist": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "item": {
+              "type": "string",
+              "description": "Checklist item name"
+            },
+            "ok": {
+              "type": "boolean",
+              "description": "Whether the item passes the check"
+            }
+          }
+        },
+        "description": "Approval checklist results (optional for decide action)"
+      },
+      "decided_by": {
+        "type": "string",
+        "description": "Name of the person making the decision (default: 'user')"
+      }
+    },
+    "required": ["action"]
+  },
+  "handler": "flowcore.api:gate_approval_handler",
+  "examples": [
+    {
+      "action": "list_pending",
+      "project_dir": ".",
+      "description": "List all gates pending approval"
+    },
+    {
+      "action": "show",
+      "project_dir": ".",
+      "gate_id": "freeze_approval",
+      "description": "Show gate details with checklist and upstream artifacts"
+    },
+    {
+      "action": "decide",
+      "project_dir": ".",
+      "gate_id": "freeze_approval",
+      "option": "approve",
+      "comment": "All analysis criteria met, confidence threshold passed",
+      "decided_by": "lezeng",
+      "description": "Approve a gate with comment"
+    },
+    {
+      "action": "decide",
+      "project_dir": ".",
+      "gate_id": "acceptance_gate",
+      "option": "revise",
+      "comment": "Need more detail on technical architecture",
+      "checklist": [
+        {"item": "Requirements covered", "ok": true},
+        {"item": "Technical feasibility", "ok": false}
+      ],
+      "decided_by": "reviewer",
+      "description": "Request revision with checklist"
+    }
+  ]
+}

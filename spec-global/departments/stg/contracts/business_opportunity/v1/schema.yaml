@@ -1,0 +1,149 @@
+# Business Opportunity Contract v1.0
+# 商业机会假设数据结构
+
+kind: contract_schema
+version: 1.0
+description: "商业机会构建 Agent 的输出数据结构"
+
+schema:
+  type: object
+  required:
+    - opportunity_id
+    - one_liner
+    - target_user_scenario
+    - why_now
+    - differentiation_hypothesis
+    - reasons_not_to_do
+    - product_validation_suggestion
+    - created_at
+  properties:
+    opportunity_id:
+      type: string
+      format: "uuid"
+      description: "机会唯一标识"
+
+    one_liner:
+      type: string
+      maxLength: 100
+      description: "一句话机会定义"
+
+    target_user_scenario:
+      type: object
+      required:
+        - user
+        - scenario
+      properties:
+        user:
+          type: string
+          description: "目标用户"
+        scenario:
+          type: string
+          description: "使用场景"
+
+    why_now:
+      type: array
+      items:
+        type: string
+      minItems: 3
+      maxItems: 5
+      description: "为什么此刻值得做（3-5条理由）"
+
+    differentiation_hypothesis:
+      type: array
+      items:
+        type: string
+      description: "可能的差异化切口（不是方案）"
+
+    reasons_not_to_do:
+      type: array
+      items:
+        type: object
+        required:
+          - type
+          - reason
+        properties:
+          type:
+            type: string
+            enum: [market, technology, execution, alternative]
+            description: "风险类型"
+          reason:
+            type: string
+            description: "具体理由"
+      minItems: 3
+      description: "Reasons NOT to Do（必须诚实）"
+
+    product_validation_suggestion:
+      type: object
+      required:
+        - priority
+        - method
+        - success_criteria
+      properties:
+        priority:
+          type: string
+          description: "优先级建议"
+        method:
+          type: array
+          items:
+            type: string
+          description: "验证方法列表"
+        success_criteria:
+          type: array
+          items:
+            type: string
+          description: "成功标准"
+
+    created_at:
+      type: string
+      format: "date-time"
+      description: "创建时间"
+
+    source_freeze_id:
+      type: string
+      description: "来源的 market_signal_freeze ID"
+
+# ============================================
+# 示例数据
+# ============================================
+example:
+  opportunity_id: "opp-20250123-001"
+  one_liner: "AI Sales Assistant for mid-market B2B companies (200-1000 employees)"
+
+  target_user_scenario:
+    user: "VP of Sales or Sales Manager at mid-market B2B SaaS companies"
+    scenario: "Quarterly planning cycle, looking to improve team productivity without enterprise tool complexity"
+
+  why_now:
+    - "Search volume for 'AI sales assistant' grew 150% YoY (from freeze data)"
+    - "Enterprise solutions exist ($5k+/month) but too expensive for mid-market"
+    - "Industry-specific AI sales tools are virtually non-existent (supply_gap)"
+    - "AI technology is commoditized and affordable (tech_dependency assessment)"
+
+  differentiation_hypothesis:
+    - "Mid-market focus: Features and pricing for 200-1000 employee companies"
+    - "Industry verticalization: First mover in healthcare/education/legal vertical AI sales tools"
+    - "Fast setup: Deploy in 2 weeks, not 3-6 months"
+
+  reasons_not_to_do:
+    - type: "market"
+      reason: "Mid-market may have lower willingness-to-pay than expected"
+    - type: "technology"
+      reason: "Integration with legacy CRM systems may be complex"
+    - type: "execution"
+      reason: "Sales cycle may be long (6-12 months), requiring significant runway"
+    - type: "alternative"
+      reason: "Enterprise tools may launch mid-market pricing tiers (competitive response)"
+
+  product_validation_suggestion:
+    priority: "First: Validate user pain"
+    method:
+      - "User interview: 15-20 interviews with target users (VP of Sales at B2B SaaS, 200-1000 employees)"
+      - "Landing page: Value proposition + email capture"
+      - "Fake door test: Measure click-through on 'Sign up for early access'"
+    success_criteria:
+      - "80% confirm pain point"
+      - "60% express willingness to pay $500-2000/month"
+      - "20+ email signups from landing page"
+
+  created_at: "2025-01-23T15:00:00Z"
+  source_freeze_id: "freeze-20250123-001"

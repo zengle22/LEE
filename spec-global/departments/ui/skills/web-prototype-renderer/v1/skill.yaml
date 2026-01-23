@@ -1,0 +1,265 @@
+# Web Prototype Renderer Skill v1.0
+# 将 UI Contract 渲染为可访问的 Web 原型
+
+kind: skill
+version: 1.0
+
+id: skill.design.web_prototype_renderer
+name: Web Prototype Renderer
+description: >
+  将 Renderer-Ready UI Contract 渲染为真实可访问的 HTML/CSS 网页原型。
+  支持状态切换、响应式布局、组件预览。
+owner: design-ai
+tags: [renderer, prototype, html, css, mvp]
+
+interface:
+  inputs:
+    type: object
+    required: [ui_contracts, tokens]
+    properties:
+      ui_contracts:
+        type: array
+        description: "页面契约列表"
+      tokens:
+        type: object
+        description: "Design Tokens"
+      project_name:
+        type: string
+        description: "项目名称"
+
+  outputs:
+    type: object
+    required: [prototype_path, pages]
+    properties:
+      prototype_path:
+        type: string
+        description: "原型入口路径"
+      pages:
+        type: array
+        description: "生成的页面列表"
+
+# 渲染规则
+rendering_rules:
+  # CSS 变量映射
+  tokens_to_css:
+    color: "--color-{path}"
+    spacing: "--space-{size}"
+    radius: "--radius-{size}"
+    shadow: "--shadow-{size}"
+    font_size: "--font-size-{size}"
+    font_weight: "--font-weight-{weight}"
+
+  # 组件映射
+  component_mapping:
+    Text:
+      h1: "<h1 class='text-h1'>{value}</h1>"
+      h2: "<h2 class='text-h2'>{value}</h2>"
+      h3: "<h3 class='text-h3'>{value}</h3>"
+      body: "<p class='text-body'>{value}</p>"
+      caption: "<span class='text-caption'>{value}</span>"
+      label: "<label class='text-label'>{value}</label>"
+
+    Button:
+      primary: "<button class='btn btn-primary'>{text}</button>"
+      secondary: "<button class='btn btn-secondary'>{text}</button>"
+      ghost: "<button class='btn btn-ghost'>{text}</button>"
+      link: "<a class='btn-link' href='{href}'>{text}</a>"
+
+    Input:
+      text: "<input type='text' class='input' placeholder='{placeholder}' />"
+      password: "<input type='password' class='input' />"
+      textarea: "<textarea class='input textarea'></textarea>"
+      select: "<select class='input select'>{options}</select>"
+
+    Card:
+      default: |
+        <div class="card">
+          <div class="card-header">{header}</div>
+          <div class="card-content">{content}</div>
+          <div class="card-footer">{footer}</div>
+        </div>
+
+    List:
+      default: |
+        <ul class="list">
+          {items}
+        </ul>
+
+    ListItem:
+      default: |
+        <li class="list-item">
+          <span class="list-item-icon">{icon}</span>
+          <span class="list-item-text">{text}</span>
+          <span class="list-item-action">{action}</span>
+        </li>
+
+    Modal:
+      default: |
+        <div class="modal-overlay">
+          <div class="modal">
+            <div class="modal-header">{header}</div>
+            <div class="modal-content">{content}</div>
+            <div class="modal-actions">{actions}</div>
+          </div>
+        </div>
+
+    TabBar:
+      default: |
+        <nav class="tab-bar">
+          {tabs}
+        </nav>
+
+    Header:
+      default: |
+        <header class="header">
+          <div class="header-logo">{logo}</div>
+          <nav class="header-nav">{nav}</nav>
+          <div class="header-actions">{actions}</div>
+        </header>
+
+  # 布局映射
+  layout_mapping:
+    column: "display: flex; flex-direction: column;"
+    row: "display: flex; flex-direction: row;"
+    grid: "display: grid; grid-template-columns: repeat({columns}, 1fr);"
+    stack: "display: flex; flex-direction: column;"
+
+  # 间距映射
+  spacing_mapping:
+    none: "0"
+    xs: "var(--space-1)"
+    sm: "var(--space-2)"
+    md: "var(--space-4)"
+    lg: "var(--space-6)"
+    xl: "var(--space-8)"
+
+# 状态渲染
+state_rendering:
+  # 状态切换器
+  state_switcher: |
+    <div class="state-switcher">
+      <button class="state-btn active" data-state="default">Default</button>
+      <button class="state-btn" data-state="loading">Loading</button>
+      <button class="state-btn" data-state="empty">Empty</button>
+      <button class="state-btn" data-state="error">Error</button>
+    </div>
+
+  # Loading 状态
+  loading:
+    skeleton: |
+      <div class="skeleton" style="width: {width}; height: {height};"></div>
+    spinner: |
+      <div class="spinner-container">
+        <div class="spinner"></div>
+      </div>
+
+  # Empty 状态
+  empty: |
+    <div class="empty-state">
+      <div class="empty-illustration">{illustration}</div>
+      <p class="empty-message">{message}</p>
+      <button class="btn btn-primary">{cta}</button>
+    </div>
+
+  # Error 状态
+  error:
+    inline: |
+      <div class="error-inline">
+        <span class="error-icon">⚠️</span>
+        <span class="error-message">{message}</span>
+        <button class="btn btn-ghost" onclick="retry()">{action}</button>
+      </div>
+    toast: |
+      <div class="toast toast-error">
+        <span>{message}</span>
+      </div>
+    fullscreen: |
+      <div class="error-fullscreen">
+        <div class="error-content">
+          <span class="error-icon">❌</span>
+          <h2>{title}</h2>
+          <p>{message}</p>
+          <button class="btn btn-primary" onclick="retry()">重试</button>
+        </div>
+      </div>
+
+# 模板结构
+templates:
+  # 页面模板
+  page: |
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>{page_name} - {project_name}</title>
+      <link rel="stylesheet" href="css/tokens.css">
+      <link rel="stylesheet" href="css/components.css">
+      <link rel="stylesheet" href="css/pages.css">
+    </head>
+    <body>
+      <div class="prototype-container">
+        {state_switcher}
+        <main class="page" data-page="{page_id}">
+          {content}
+        </main>
+      </div>
+      <script src="js/prototype.js"></script>
+    </body>
+    </html>
+
+  # 入口导航模板
+  index: |
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>{project_name} - UI Prototype</title>
+      <link rel="stylesheet" href="css/tokens.css">
+      <link rel="stylesheet" href="css/components.css">
+      <style>
+        .nav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 24px; }
+        .nav-card { background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: 12px; padding: 16px; text-decoration: none; color: inherit; }
+        .nav-card:hover { box-shadow: var(--shadow-md); }
+        .nav-card h3 { margin: 0 0 8px; }
+        .nav-card p { margin: 0; color: var(--color-text-secondary); font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <header style="padding: 24px; border-bottom: 1px solid var(--color-border-default);">
+        <h1>{project_name}</h1>
+        <p>UI Prototype - {page_count} pages</p>
+      </header>
+      <nav class="nav-grid">
+        {page_links}
+      </nav>
+    </body>
+    </html>
+
+# 输出文件结构
+output_structure:
+  - path: "prototype/index.html"
+    template: index
+  - path: "prototype/{page_id}.html"
+    template: page
+  - path: "prototype/css/tokens.css"
+    content: "CSS 变量（从 tokens.json 生成）"
+  - path: "prototype/css/components.css"
+    content: "组件样式"
+  - path: "prototype/css/pages.css"
+    content: "页面布局样式"
+  - path: "prototype/js/prototype.js"
+    content: "状态切换逻辑"
+
+# 运行时配置
+runtime:
+  type: tool_wrapper
+  tool: file.write
+  timeout_ms: 30000
+
+# 约束
+constraints:
+  deterministic: true
+  side_effects: writes
+  pii: forbidden

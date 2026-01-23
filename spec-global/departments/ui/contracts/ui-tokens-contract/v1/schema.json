@@ -1,0 +1,223 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ui-tokens-contract/v1/schema.json",
+  "title": "UI Tokens Contract",
+  "description": "设计 Token 契约规范 - 杜绝 magic number，让 UI 一致性可以门禁化",
+  "type": "object",
+  "required": ["$schema", "version"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "ui-tokens-contract/v1"
+    },
+    "version": {
+      "type": "string",
+      "description": "Token 版本号"
+    },
+    "color": {
+      "$ref": "#/definitions/ColorTokens"
+    },
+    "font": {
+      "$ref": "#/definitions/FontTokens"
+    },
+    "space": {
+      "$ref": "#/definitions/SpaceTokens"
+    },
+    "radius": {
+      "$ref": "#/definitions/RadiusTokens"
+    },
+    "shadow": {
+      "$ref": "#/definitions/ShadowTokens"
+    },
+    "animation": {
+      "$ref": "#/definitions/AnimationTokens"
+    },
+    "breakpoint": {
+      "$ref": "#/definitions/BreakpointTokens"
+    },
+    "zIndex": {
+      "$ref": "#/definitions/ZIndexTokens"
+    }
+  },
+  "definitions": {
+    "ColorTokens": {
+      "type": "object",
+      "properties": {
+        "primary": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "secondary": { "type": "string" },
+        "success": { "type": "string" },
+        "warning": { "type": "string" },
+        "danger": { "type": "string" },
+        "info": { "type": "string" },
+        "text": {
+          "type": "object",
+          "properties": {
+            "primary": { "type": "string" },
+            "secondary": { "type": "string" },
+            "disabled": { "type": "string" },
+            "inverse": { "type": "string" }
+          }
+        },
+        "background": {
+          "type": "object",
+          "properties": {
+            "primary": { "type": "string" },
+            "secondary": { "type": "string" },
+            "elevated": { "type": "string" },
+            "overlay": { "type": "string" }
+          }
+        },
+        "border": {
+          "type": "object",
+          "properties": {
+            "default": { "type": "string" },
+            "hover": { "type": "string" },
+            "focus": { "type": "string" },
+            "error": { "type": "string" }
+          }
+        }
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "FontTokens": {
+      "type": "object",
+      "properties": {
+        "family": {
+          "type": "object",
+          "properties": {
+            "base": { "type": "string" },
+            "heading": { "type": "string" },
+            "mono": { "type": "string" }
+          }
+        },
+        "size": {
+          "type": "object",
+          "properties": {
+            "xs": { "type": "number" },
+            "sm": { "type": "number" },
+            "md": { "type": "number" },
+            "lg": { "type": "number" },
+            "xl": { "type": "number" },
+            "2xl": { "type": "number" },
+            "3xl": { "type": "number" }
+          }
+        },
+        "weight": {
+          "type": "object",
+          "properties": {
+            "regular": { "type": "number" },
+            "medium": { "type": "number" },
+            "semibold": { "type": "number" },
+            "bold": { "type": "number" }
+          }
+        },
+        "lineHeight": {
+          "type": "object",
+          "properties": {
+            "tight": { "type": "number" },
+            "base": { "type": "number" },
+            "relaxed": { "type": "number" }
+          }
+        },
+        "letterSpacing": {
+          "type": "object",
+          "properties": {
+            "tight": { "type": "string" },
+            "normal": { "type": "string" },
+            "wide": { "type": "string" }
+          }
+        }
+      }
+    },
+    "SpaceTokens": {
+      "type": "object",
+      "properties": {
+        "0": { "type": "number", "const": 0 },
+        "1": { "type": "number" },
+        "2": { "type": "number" },
+        "3": { "type": "number" },
+        "4": { "type": "number" },
+        "5": { "type": "number" },
+        "6": { "type": "number" },
+        "8": { "type": "number" },
+        "10": { "type": "number" },
+        "12": { "type": "number" },
+        "16": { "type": "number" },
+        "20": { "type": "number" },
+        "24": { "type": "number" }
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "RadiusTokens": {
+      "type": "object",
+      "properties": {
+        "none": { "type": "number", "const": 0 },
+        "sm": { "type": "number" },
+        "md": { "type": "number" },
+        "lg": { "type": "number" },
+        "xl": { "type": "number" },
+        "full": { "type": "string", "const": "9999px" }
+      }
+    },
+    "ShadowTokens": {
+      "type": "object",
+      "properties": {
+        "none": { "type": "string" },
+        "sm": { "type": "string" },
+        "md": { "type": "string" },
+        "lg": { "type": "string" },
+        "xl": { "type": "string" }
+      }
+    },
+    "AnimationTokens": {
+      "type": "object",
+      "properties": {
+        "duration": {
+          "type": "object",
+          "properties": {
+            "fast": { "type": "string" },
+            "normal": { "type": "string" },
+            "slow": { "type": "string" }
+          }
+        },
+        "easing": {
+          "type": "object",
+          "properties": {
+            "linear": { "type": "string" },
+            "easeIn": { "type": "string" },
+            "easeOut": { "type": "string" },
+            "easeInOut": { "type": "string" }
+          }
+        }
+      }
+    },
+    "BreakpointTokens": {
+      "type": "object",
+      "properties": {
+        "sm": { "type": "number" },
+        "md": { "type": "number" },
+        "lg": { "type": "number" },
+        "xl": { "type": "number" },
+        "2xl": { "type": "number" }
+      }
+    },
+    "ZIndexTokens": {
+      "type": "object",
+      "properties": {
+        "dropdown": { "type": "number" },
+        "sticky": { "type": "number" },
+        "fixed": { "type": "number" },
+        "modal": { "type": "number" },
+        "popover": { "type": "number" },
+        "tooltip": { "type": "number" }
+      }
+    }
+  }
+}

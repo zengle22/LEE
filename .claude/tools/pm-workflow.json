@@ -1,0 +1,47 @@
+{
+  "name": "pm_workflow",
+  "description": "PM Agent workflow management tools - Query state, list ready steps, execute workflow steps, and manage workflow execution in the LEE system.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["get_state", "list_ready_steps", "run_step", "next_step"],
+        "description": "The action to perform on the workflow"
+      },
+      "project_dir": {
+        "type": "string",
+        "description": "Project directory path (default: current directory)"
+      },
+      "step_id": {
+        "type": "string",
+        "description": "Step ID to execute (required for run_step action)"
+      }
+    },
+    "required": ["action"]
+  },
+  "handler": "flowcore.api:pm_workflow_handler",
+  "examples": [
+    {
+      "action": "get_state",
+      "project_dir": ".",
+      "description": "Get current workflow state"
+    },
+    {
+      "action": "list_ready_steps",
+      "project_dir": ".",
+      "description": "List all ready (pending and unblocked) steps"
+    },
+    {
+      "action": "run_step",
+      "project_dir": ".",
+      "step_id": "search_signals",
+      "description": "Execute a specific workflow step"
+    },
+    {
+      "action": "next_step",
+      "project_dir": ".",
+      "description": "Execute the next ready step automatically"
+    }
+  ]
+}

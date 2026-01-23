@@ -1,0 +1,23 @@
+.
+ CHANGELOG.md
+ docker
+  .gitignore
+  build.bat
+  build.sh
+  Dockerfile
+  package.json
+  playwright.config.ts
+ examples
+  EXAMPLES.md
+  smoke-test
+   accessibility.spec.ts
+   home.spec.ts
+   login.spec.ts
+ knowledge
+  patterns.md
+  pitfalls.md
+ QUICKSTART.md
+ README.md
+ skill.yaml
+ SUMMARY.md
+ TREE.txt

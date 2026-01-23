@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution-log-contract/v1/schema.json",
+  "title": "Execution Log Contract",
+  "description": "Agent 执行日志格式契约 - 记录 Agent 调用和执行详情",
+  "type": "object",
+  "required": ["log_id", "workflow_id", "timestamp", "entries"],
+  "properties": {
+    "log_id": {
+      "type": "string",
+      "pattern": "^LOG-[0-9]{8}-[A-Z0-9]{6}$",
+      "description": "执行日志唯一标识"
+    },
+    "workflow_id": {
+      "type": "string",
+      "description": "关联的工作流 ID"
+    },
+    "phase_id": {
+      "type": "string",
+      "description": "关联的 Phase ID (可选)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "日志创建时间"
+    },
+    "execution_context": {
+      "type": "object",
+      "description": "执行上下文信息",
+      "properties": {
+        "executor": {
+          "type": "string",
+          "enum": ["claude", "gpt-4", "human", "custom"],
+          "description": "实际执行者类型"
+        },
+        "environment": {
+          "type": "string",
+          "enum": ["claude_code", "subprocess", "api", "manual"],
+          "description": "执行环境"
+        },
+        "session_id": {
+          "type": "string",
+          "description": "会话标识"
+        }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "description": "执行日志条目",
+      "items": {
+        "$ref": "#/$defs/LogEntry"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "执行摘要",
+      "properties": {
+        "total_steps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "completed_steps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped_steps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed_steps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "agents_invoked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "human_gates_triggered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "validation_errors": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "$defs": {
+    "LogEntry": {
+      "type": "object",
+      "required": ["entry_id", "step_id", "agent_id", "execution_model", "status", "started_at"],
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "description": "条目唯一标识"
+        },
+        "step_id": {
+          "type": "string",
+          "description": "步骤 ID"
+        },
+        "step_name": {
+          "type": "string",
+          "description": "步骤名称"
+        },
+        "agent_id": {
+          "type": "string",
+          "description": "Agent ID"
+        },
+        "agent_name": {
+          "type": "string",
+          "description": "Agent 名称"
+        },
+        "execution_model": {
+          "type": "object",
+          "description": "执行模型信息",
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["prompt_switch", "subprocess", "api_call", "human_delegate"],
+              "description": "执行模型类型"
+            },
+            "persona_file": {
+              "type": "string",
+              "description": "Persona 文件路径 (prompt_switch)"
+            },
+            "process_id": {
+              "type": "string",
+              "description": "进程 ID (subprocess)"
+            },
+            "api_endpoint": {
+              "type": "string",
+              "description": "API 端点 (api_call)"
+            },
+            "human_operator": {
+              "type": "string",
+              "description": "人类操作者 (human_delegate)"
+            }
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "completed", "failed", "skipped", "blocked"],
+          "description": "执行状态"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "开始时间"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "完成时间"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "执行时长 (毫秒)"
+        },
+        "inputs": {
+          "type": "array",
+          "description": "输入文件列表",
+          "items": {
+            "type": "string"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "description": "输出产物",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "size_bytes": {
+                "type": "integer"
+              },
+              "checksum": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "validation_result": {
+          "type": "object",
+          "description": "产物验证结果",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["passed", "failed", "skipped", "warning"]
+            },
+            "contract_ref": {
+              "type": "string"
+            },
+            "errors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "human_gate": {
+          "type": "object",
+          "description": "人类门禁信息",
+          "properties": {
+            "gate_id": {
+              "type": "string"
+            },
+            "triggered_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "responded_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "response": {
+              "type": "string",
+              "enum": ["approved", "rejected", "adjusted", "timeout"]
+            },
+            "responder": {
+              "type": "string"
+            },
+            "comment": {
+              "type": "string"
+            }
+          }
+        },
+        "error": {
+          "type": "object",
+          "description": "错误信息",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "stack_trace": {
+              "type": "string"
+            },
+            "retry_count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "skip_reason": {
+          "type": "string",
+          "description": "跳过原因 (当 status 为 skipped 时)"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "扩展元数据",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

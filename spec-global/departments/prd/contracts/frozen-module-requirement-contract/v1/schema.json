@@ -1,0 +1,505 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-spec.example.com/contracts/frozen-module-requirement-contract/v1/schema.json",
+    "title": "Frozen Module Requirement Contract Schema",
+    "description": "Schema for frozen module-level requirements (Input for detailed design)",
+    "type": "object",
+    "required": [
+        "contract_type",
+        "contract_version",
+        "metadata",
+        "product_overview",
+        "module_definitions"
+    ],
+    "properties": {
+        "contract_type": {
+            "type": "string",
+            "const": "frozen-module-requirement"
+        },
+        "contract_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [
+                "contract_id",
+                "document_id",
+                "product_name",
+                "created_date",
+                "status"
+            ],
+            "properties": {
+                "contract_id": {
+                    "type": "string",
+                    "pattern": "^FMR-\\d{8}-\\d{3}$"
+                },
+                "document_id": {
+                    "type": "string"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string",
+                    "default": "1.0"
+                },
+                "created_date": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "last_modified_date": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "DRAFT",
+                        "PENDING_REVIEW",
+                        "APPROVED",
+                        "REVISION_REQUIRED",
+                        "REJECTED",
+                        "LOCKED"
+                    ]
+                },
+                "author": {
+                    "type": "string"
+                }
+            }
+        },
+        "product_overview": {
+            "type": "object",
+            "required": [
+                "background",
+                "objectives",
+                "core_value"
+            ],
+            "properties": {
+                "background": {
+                    "type": "string"
+                },
+                "objectives": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "index": {
+                                "type": "integer"
+                            },
+                            "description": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "target_users_description": {
+                    "type": "string"
+                },
+                "user_personas": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "role": {
+                                "type": "string"
+                            },
+                            "characteristics": {
+                                "type": "string"
+                            },
+                            "core_needs": {
+                                "type": "string"
+                            },
+                            "usage_scenarios": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "core_value": {
+                    "type": "string"
+                },
+                "success_metrics": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "baseline": {
+                                "type": "string"
+                            },
+                            "target": {
+                                "type": "string"
+                            },
+                            "method": {
+                                "type": "string"
+                            },
+                            "owner": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "module_definitions": {
+            "type": "object",
+            "required": [
+                "modules"
+            ],
+            "properties": {
+                "modules": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "id",
+                            "name",
+                            "priority"
+                        ],
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "priority": {
+                                "type": "string",
+                                "enum": [
+                                    "P0",
+                                    "P1",
+                                    "P2"
+                                ]
+                            },
+                            "description": {
+                                "type": "string"
+                            },
+                            "boundaries": {
+                                "type": "string",
+                                "description": "模块边界与职责描述"
+                            },
+                            "non_goals": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "非目标清单 (非常重要)"
+                            },
+                            "dependencies": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "high_level_logic": {
+            "type": "object",
+            "properties": {
+                "core_flows": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "exception_strategies": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "异常与边界策略"
+                }
+            }
+        },
+        "non_functional_requirements": {
+            "type": "object",
+            "properties": {
+                "performance_requirements": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "metric": {
+                                "type": "string"
+                            },
+                            "requirement": {
+                                "type": "string"
+                            },
+                            "measurement": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security_requirements": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "availability_requirements": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "compatibility_requirements": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "other_requirements": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "implementation_plan": {
+            "type": "object",
+            "properties": {
+                "phases": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "order": {
+                                "type": "integer"
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            },
+                            "modules": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "deliverables": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "milestones": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            },
+                            "deliverables": {
+                                "type": "string"
+                            },
+                            "acceptance": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "dependencies": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "risks": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            },
+                            "type": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            },
+                            "probability": {
+                                "type": "string"
+                            },
+                            "impact": {
+                                "type": "string"
+                            },
+                            "mitigation": {
+                                "type": "string"
+                            },
+                            "owner": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "appendix": {
+            "type": "object",
+            "properties": {
+                "glossary": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "term": {
+                                "type": "string"
+                            },
+                            "definition": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "references": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "decision_records": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "index": {
+                                "type": "integer"
+                            },
+                            "id": {
+                                "type": "string"
+                            },
+                            "title": {
+                                "type": "string"
+                            },
+                            "type": {
+                                "type": "string"
+                            },
+                            "date": {
+                                "type": "string",
+                                "format": "date"
+                            },
+                            "decider": {
+                                "type": "string"
+                            },
+                            "problem": {
+                                "type": "string"
+                            },
+                            "chosen_option": {
+                                "type": "string"
+                            },
+                            "rationale": {
+                                "type": "string"
+                            },
+                            "impact": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "approval": {
+            "type": "object",
+            "properties": {
+                "approvers": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "role": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "date": {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": [
+                                    "PENDING",
+                                    "APPROVED",
+                                    "REJECTED"
+                                ]
+                            },
+                            "comments": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "change_history": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "modified_by": {
+                        "type": "string"
+                    },
+                    "changes": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "effective_info": {
+            "type": "object",
+            "properties": {
+                "effective_status": {
+                    "type": "string"
+                },
+                "effective_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "valid_until": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "next_stage": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

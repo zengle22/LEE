@@ -1,0 +1,347 @@
+# Phase Directory Structure Contract v1.0
+# 定义标准的 Phase 目录结构，所有研发 Phase 必须遵循
+
+kind: contract
+version: "1.0"
+
+# ============================================
+# 基础标识
+# ============================================
+id: contract.dev.phase_directory
+name: Phase Directory Structure Contract
+description: |
+  定义研发 Phase 的标准目录结构。
+  综合 Phase 3 和 Phase 4 的优点，形成统一规范。
+  所有研发 Agent 必须按此结构生成产出物。
+owner: dev-governance
+tags: [contract, directory, phase, structure]
+
+# ============================================
+# 标准目录结构
+# ============================================
+structure:
+  # Phase 根目录
+  phase_root: "dev/phase{N}/"
+
+  directories:
+    # ========== 核心文件 ==========
+    - path: "phase.yaml"
+      type: file
+      required: true
+      description: "Phase 配置契约，定义输入输出和门禁"
+      created_by: development-planner
+
+    - path: "workflow.yaml"
+      type: file
+      required: true
+      description: "工作流实例，引用标准 phase-openspec-flow"
+      format: workflow-instance
+      created_by: development-planner
+
+    - path: "README.md"
+      type: file
+      required: false
+      description: "Phase 概述文档"
+
+    # ========== Orchestrator 状态 (系统管理) ==========
+    - path: ".workflow/"
+      type: directory
+      required: true
+      managed_by: orchestrator
+      description: "Orchestrator 运行状态，禁止手动编辑"
+      contents:
+        - "state.yaml"
+        - "events.jsonl"
+        - "approvals/"
+        - "tokens/"
+        - "artifacts/"
+
+    # ========== OpenSpec 工作空间 ==========
+    - path: "openspec/"
+      type: directory
+      required: true
+      description: "OpenSpec 工作空间，存放过程产物"
+
+    # 步骤 00: 配置
+    - path: "openspec/00-config/"
+      type: directory
+      required: false
+      description: "OpenSpec 配置"
+      contents:
+        - "project.yaml"     # OpenSpec 项目配置
+        - "context.yaml"     # 项目上下文
+
+    # 步骤 01: 需求校准
+    - path: "openspec/01-requirements/"
+      type: directory
+      required: true
+      workflow_step: p2_requirement_calibration
+      description: "需求校准产物"
+      contents:
+        - "calibrated-requirements.md"  # 校准后的需求
+        - "tech-constraints.md"         # 技术约束
+        - "assumptions.md"              # 假设条件
+
+    # 步骤 02: 测试契约
+    - path: "openspec/02-test-contracts/"
+      type: directory
+      required: true
+      workflow_step: p3_test_contract
+      description: "测试契约 (QA 设计)"
+      contents:
+        - "test-contract.yaml"          # 测试契约定义
+        - "scenarios/"                  # 测试场景详情
+
+    # 步骤 03: 变更提案
+    - path: "openspec/03-proposals/"
+      type: directory
+      required: true
+      workflow_step: p4_openspec_proposal
+      description: "OpenSpec 变更提案"
+      contents:
+        - "{change-id}/"               # 变更目录
+        - "{change-id}/proposal.md"    # 提案文档
+        - "{change-id}/tasks.md"       # 任务清单
+        - "{change-id}/design.md"      # 技术设计
+        - "archive/"                   # 已归档提案
+
+    # 步骤 04: 代码实现
+    - path: "openspec/04-implementation/"
+      type: directory
+      required: true
+      workflow_step: p5_implementation
+      description: "实现产物 (引用或软链接)"
+      contents:
+        - "ai-contracts/"              # AI 工程契约 (如适用)
+        - "migrations/"                # 数据库迁移 (如适用)
+        - "README.md"                  # 实现说明，指向 src/
+
+    # 步骤 05: 单元测试
+    - path: "openspec/05-unit-tests/"
+      type: directory
+      required: true
+      workflow_step: p6_unit_test
+      description: "单元测试产物"
+      contents:
+        - "coverage-report.json"       # 覆盖率报告
+        - "test-results.json"          # 测试结果
+
+    # 步骤 06: 代码审查
+    - path: "openspec/06-review/"
+      type: directory
+      required: true
+      workflow_step: p7_code_review
+      description: "代码审查产物"
+      contents:
+        - "review-report.md"           # 审查报告
+        - "review-checklist.md"        # 审查清单
+
+    # 步骤 07: 复盘
+    - path: "openspec/07-retrospective/"
+      type: directory
+      required: true
+      workflow_step: p8_retrospective
+      description: "复盘产物"
+      contents:
+        - "retrospective.md"           # 复盘报告
+        - "lessons-learned.yaml"       # 经验教训
+        - "improvement-actions.md"     # 改进措施
+
+    # 步骤 08: 知识沉淀
+    - path: "openspec/08-knowledge/"
+      type: directory
+      required: true
+      workflow_step: p9_knowledge_update
+      description: "知识沉淀产物 (Phase 级)"
+      contents:
+        - "patterns/"                  # 技术模式
+        - "pitfalls/"                  # 踩坑记录
+        - "best-practices/"            # 最佳实践
+        - "tips/"                      # 技巧提示
+
+    # 步骤 09: 归档
+    - path: "openspec/09-archive/"
+      type: directory
+      required: true
+      workflow_step: p10_openspec_archive
+      description: "归档产物"
+      contents:
+        - "{date}-{change-id}/"        # 归档的提案
+        - "archive-manifest.yaml"      # 归档清单
+
+    # ========== 输出目录 (最终交付物) ==========
+    - path: "output/"
+      type: directory
+      required: true
+      description: "Phase 最终交付物"
+
+    - path: "output/acceptance-report.yaml"
+      type: file
+      required: true
+      workflow_step: p11_phase_acceptance
+      description: "验收报告"
+      created_by: phase-acceptance-gate-agent
+
+    - path: "output/handover.yaml"
+      type: file
+      required: true
+      workflow_step: p13_handover
+      description: "交接文档"
+
+    - path: "output/artifacts.md"
+      type: file
+      required: true
+      workflow_step: p13_handover
+      description: "产出物清单"
+
+    - path: "output/api-contracts/"
+      type: directory
+      required: false
+      description: "API 契约 (如适用)"
+
+    # ========== 源代码目录 ==========
+    - path: "src/"
+      type: directory
+      required: true
+      description: "源代码目录"
+      structure: "遵循 Go 标准项目布局"
+      contents:
+        - "go.mod"
+        - "go.sum"
+        - "internal/"
+        - "cmd/"                       # 可选
+        - "pkg/"                       # 可选
+
+    # ========== 可选目录 ==========
+    - path: "research/"
+      type: directory
+      required: false
+      description: "调研资料 (如适用)"
+
+    - path: "design/"
+      type: directory
+      required: false
+      description: "设计文档 (如适用)"
+
+# ============================================
+# 目录编号规则
+# ============================================
+numbering_rules:
+  description: |
+    OpenSpec 子目录使用两位数字编号，与工作流步骤对应：
+    - 00-config: 配置 (可选)
+    - 01-requirements: 需求校准 (p2)
+    - 02-test-contracts: 测试契约 (p3)
+    - 03-proposals: 变更提案 (p4)
+    - 04-implementation: 代码实现 (p5)
+    - 05-unit-tests: 单元测试 (p6)
+    - 06-review: 代码审查 (p7)
+    - 07-retrospective: 复盘 (p8)
+    - 08-knowledge: 知识沉淀 (p9)
+    - 09-archive: 归档 (p10)
+
+  step_mapping:
+    "01-requirements": "p2_requirement_calibration"
+    "02-test-contracts": "p3_test_contract"
+    "03-proposals": "p4_openspec_proposal"
+    "04-implementation": "p5_implementation"
+    "05-unit-tests": "p6_unit_test"
+    "06-review": "p7_code_review"
+    "07-retrospective": "p8_retrospective"
+    "08-knowledge": "p9_knowledge_update"
+    "09-archive": "p10_openspec_archive"
+
+# ============================================
+# 禁止规则
+# ============================================
+forbidden:
+  - pattern: "docs/"
+    reason: "与 openspec/ 冗余，文档应放在对应的 openspec 子目录"
+
+  - pattern: "openspec/changes/"
+    reason: "使用 openspec/03-proposals/ 代替"
+
+  - pattern: "openspec/00-requirements/"
+    reason: "使用 openspec/01-requirements/ 代替 (编号从 01 开始)"
+
+  - pattern: "output/knowledge/"
+    reason: "使用 openspec/08-knowledge/ 代替"
+
+  - pattern: "openspec/specs/"
+    reason: "Spec 模板应放在 ai-spec/specs/，不放在项目目录"
+
+# ============================================
+# 迁移指南
+# ============================================
+migration:
+  from_phase3:
+    - old: "openspec/00-config/"
+      new: "openspec/00-config/"
+      action: keep
+    - old: "openspec/00-requirements/"
+      new: "openspec/01-requirements/"
+      action: rename
+    - old: "openspec/02-implementation/proposal.md"
+      new: "openspec/03-proposals/{change-id}/proposal.md"
+      action: move
+    - old: "openspec/06-knowledge/"
+      new: "openspec/08-knowledge/"
+      action: rename
+    - old: "openspec/07-archive/"
+      new: "openspec/09-archive/"
+      action: rename
+    - old: "openspec/08-acceptance/"
+      new: "output/acceptance-report.yaml"
+      action: move
+
+  from_phase4:
+    - old: "docs/"
+      new: null
+      action: delete_if_redundant
+    - old: "openspec/00-requirements/"
+      new: "openspec/01-requirements/"
+      action: rename
+    - old: "openspec/01-test-contracts/"
+      new: "openspec/02-test-contracts/"
+      action: rename
+    - old: "openspec/02-implementation/"
+      new: "openspec/04-implementation/"
+      action: rename
+    - old: "openspec/03-unit-tests/"
+      new: "openspec/05-unit-tests/"
+      action: rename
+    - old: "openspec/04-review/"
+      new: "openspec/06-review/"
+      action: rename
+    - old: "openspec/05-retrospective/"
+      new: "openspec/07-retrospective/"
+      action: rename
+    - old: "openspec/changes/"
+      new: "openspec/03-proposals/"
+      action: rename
+    - old: "output/knowledge/"
+      new: "openspec/08-knowledge/"
+      action: move
+
+# ============================================
+# 验证规则
+# ============================================
+validation:
+  on_phase_init:
+    - check: required_directories_exist
+      directories: [".workflow", "openspec", "output", "src"]
+    - check: phase_yaml_exists
+      file: "phase.yaml"
+    - check: workflow_yaml_exists
+      file: "workflow.yaml"
+
+  on_step_complete:
+    - check: step_deliverables_exist
+      mapping: "$numbering_rules.step_mapping"
+
+  on_phase_complete:
+    - check: all_required_directories_exist
+    - check: acceptance_report_exists
+      file: "output/acceptance-report.yaml"
+    - check: handover_exists
+      file: "output/handover.yaml"

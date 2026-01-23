@@ -1,0 +1,108 @@
+# User Hypothesis Contract v1.0
+# 用户假设数据结构
+
+kind: contract_schema
+version: 1.0
+description: "用户信号分析 Agent 的输出数据结构"
+
+schema:
+  type: object
+  required:
+    - hypotheses
+    - metadata
+  properties:
+    hypotheses:
+      type: array
+      items:
+        type: object
+        required:
+          - keyword
+          - user_hypothesis
+          - confidence_score
+          - inference_basis
+        properties:
+          keyword:
+            type: string
+            description: "分析的关键词"
+          user_hypothesis:
+            type: object
+            required:
+              - user_type
+              - trigger_scenario
+              - core_pain
+              - urgency_signal
+              - search_intent_type
+            properties:
+              user_type:
+                type: string
+                description: "推测的用户类型"
+              trigger_scenario:
+                type: string
+                description: "触发搜索的场景"
+              core_pain:
+                type: string
+                description: "核心痛点"
+              urgency_signal:
+                type: string
+                enum: [high, medium, low]
+                description: "紧迫程度信号"
+              search_intent_type:
+                type: string
+                enum: [information, tool, transaction_pre]
+                description: "搜索意图类型"
+          confidence_score:
+            type: number
+            minimum: 0
+            maximum: 1
+            description: "推断置信度"
+          inference_basis:
+            type: array
+            items:
+              type: string
+            description: "推断依据"
+
+    metadata:
+      type: object
+      required:
+        - analysis_timestamp
+        - agent_version
+      properties:
+        analysis_timestamp:
+          type: string
+          format: "date-time"
+        agent_version:
+          type: string
+          description: "Agent 版本"
+
+# ============================================
+# 示例数据
+# ============================================
+example:
+  hypotheses:
+    - keyword: "AI sales assistant tool"
+      user_hypothesis:
+        user_type: "B2B SaaS sales manager or VP of Sales"
+        trigger_scenario: "Planning quarterly sales targets or reviewing team performance"
+        core_pain: "Sales team productivity is bottlenecked by manual prospecting and follow-up"
+        urgency_signal: "medium"
+        search_intent_type: "tool"
+      confidence_score: 0.75
+      inference_basis:
+        - "关键词包含 'assistant tool' 表明是寻找解决方案"
+        - "'sales' 暗示 B2B 销售场景"
+        - "通常 sales manager 会在季度规划时关注工具"
+    - keyword: "best AI for sales team"
+      user_hypothesis:
+        user_type: "Sales operations or procurement role"
+        trigger_scenario: "Evaluating AI tools for team adoption"
+        core_pain: "Uncertain which AI solution provides best ROI"
+        urgency_signal: "high"
+        search_intent_type: "information"
+      confidence_score: 0.65
+      inference_basis:
+        - "'best' 表明比较评估阶段"
+        - "'for sales team' 暗示团队决策者"
+
+  metadata:
+    analysis_timestamp: "2025-01-23T12:30:00Z"
+    agent_version: "v1.0"

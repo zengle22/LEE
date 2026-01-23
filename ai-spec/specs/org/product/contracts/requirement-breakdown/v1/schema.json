@@ -1,0 +1,162 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-spec.example.com/contracts/requirement-breakdown/v1/schema.json",
+    "title": "Requirement Breakdown Contract",
+    "description": "需求拆解契约 - 将问题空间拆解为可讨论的需求单元",
+    "type": "object",
+    "required": [
+        "contract_type",
+        "contract_version",
+        "metadata",
+        "requirement_units"
+    ],
+    "properties": {
+        "contract_type": {
+            "type": "string",
+            "const": "requirement-breakdown"
+        },
+        "contract_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "default": "1.0.0"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [
+                "generated_at",
+                "source_document"
+            ],
+            "properties": {
+                "contract_id": {
+                    "type": "string",
+                    "pattern": "^RB-\\d{8}-\\d{3}$"
+                },
+                "source_document": {
+                    "type": "string",
+                    "description": "来源的 Problem Definition Contract 路径"
+                },
+                "generated_at": {
+                    "type": "string",
+                    "format": "date-time"
+                }
+            }
+        },
+        "background_understanding": {
+            "type": "string",
+            "description": "对原始问题空间的理解概述"
+        },
+        "requirement_units": {
+            "type": "array",
+            "description": "需求单元列表",
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "category",
+                    "question",
+                    "context"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "pattern": "^R\\d+$"
+                    },
+                    "category": {
+                        "type": "string",
+                        "enum": [
+                            "user",
+                            "system",
+                            "business_rule",
+                            "constraint"
+                        ]
+                    },
+                    "question": {
+                        "type": "string",
+                        "description": "需求问题形式：用户能否...？系统是否需要...？"
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "为什么提出这个问题"
+                    },
+                    "discussion_points": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "需要决策的关键点"
+                    },
+                    "options": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "可选方案 A/B/C"
+                    },
+                    "priority_suggestion": {
+                        "type": "string",
+                        "enum": [
+                            "must_discuss_first",
+                            "can_discuss_later",
+                            "optional"
+                        ],
+                        "description": "讨论优先级建议"
+                    }
+                }
+            }
+        },
+        "user_requirements": {
+            "type": "array",
+            "items": {
+                "$ref": "#/properties/requirement_units/items"
+            }
+        },
+        "system_requirements": {
+            "type": "array",
+            "items": {
+                "$ref": "#/properties/requirement_units/items"
+            }
+        },
+        "business_rules": {
+            "type": "array",
+            "items": {
+                "$ref": "#/properties/requirement_units/items"
+            }
+        },
+        "constraints": {
+            "type": "array",
+            "items": {
+                "$ref": "#/properties/requirement_units/items"
+            }
+        },
+        "priority_matrix": {
+            "type": "object",
+            "properties": {
+                "must_discuss_first": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "can_discuss_later": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "optional": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "missing_information": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "需要补充的信息"
+        }
+    }
+}

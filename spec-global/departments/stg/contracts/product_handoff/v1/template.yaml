@@ -1,0 +1,333 @@
+# Product Handoff Template v1.0
+# 产品部门交付模板 - 机会移交层
+
+kind: contract_template
+version: 1.0
+
+# ============================================
+# 模板说明
+# ============================================
+description: >
+  这是策略部门向产品部门交付机会的标准模板。
+
+  核心原则：
+  1. 清晰区分"我们相信的"和"我们不知道的"
+  2. 明确说明"现在不要做什么"（防止过早实现）
+  3. 给出可执行的验证建议
+
+  目的：极大减少产品对"上游胡扯"的不信任。
+
+# ============================================
+# Template Schema
+# ============================================
+template:
+  type: object
+  required:
+    - handoff_id
+    - opportunity_summary
+    - what_we_believe
+    - what_we_dont_know
+    - what_not_to_build_yet
+    - suggested_experiments
+    - success_criteria
+    - next_steps
+  properties:
+    # ============================================
+    # 交付元信息
+    # ============================================
+    handoff_id:
+      type: string
+      format: "uuid"
+      description: "交付记录唯一标识"
+
+    handoff_date:
+      type: string
+      format: "date"
+      description: "交付日期"
+
+    source_freeze_id:
+      type: string
+      description: "来源的 market_signal_freeze ID"
+
+    # ============================================
+    # 机会摘要
+    # ============================================
+    opportunity_summary:
+      type: object
+      required:
+        - one_liner
+        - target_user
+        - estimated_market_size
+      properties:
+        one_liner:
+          type: string
+          maxLength: 100
+          description: "一句话机会定义"
+
+        target_user:
+          type: string
+          description: "目标用户描述"
+
+        estimated_market_size:
+          type: string
+          description: "预估市场规模（如果是估算，标注'估算'）"
+
+        confidence_level:
+          type: string
+          enum: [high, medium, low]
+          description: "整体置信度"
+
+    # ============================================
+    # 我们相信的（基于冻结数据）
+    # ============================================
+    what_we_believe:
+      type: object
+      required:
+        - user_problem
+        - why_now
+        - market_gap
+        - supporting_data
+      properties:
+        user_problem:
+          type: string
+          description: "用户问题假设（来自 freeze）"
+
+        why_now:
+          type: array
+          items:
+            type: string
+          description: "为什么此刻值得做（3-5 条理由）"
+
+        market_gap:
+          type: array
+          items:
+            type: string
+          description: "市场空缺（来自 supply_gap 分析）"
+
+        supporting_data:
+          type: object
+          properties:
+            search_trends:
+              type: string
+              description: "搜索趋势摘要"
+
+            competitor_landscape:
+              type: string
+              description: "竞争格局摘要"
+
+            industry_stage:
+              type: string
+              description: "行业成熟阶段"
+
+    # ============================================
+    # 我们不知道的（诚实声明）
+    # ============================================
+    what_we_dont_know:
+      type: array
+      items:
+        type: object
+        properties:
+          question:
+            type: string
+            description: "不知道什么"
+
+          importance:
+            type: string
+            enum: [critical, important, nice_to_have]
+            description: "重要程度"
+
+          suggested_validation:
+            type: string
+            description: "如何验证（方法建议）"
+
+      description: "明确未知项及验证建议"
+
+    # ============================================
+    # 现在不要做什么（防止过早实现）
+    # ============================================
+    what_not_to_build_yet:
+      type: array
+      items:
+        type: string
+      description: "明确不要过早构建的功能或进入的市场"
+
+      examples:
+        - "Don't: Build full multi-channel support yet (start with email only)"
+        - "Don't: Target enterprise segment yet (start with mid-market)"
+        - "Don't: Build industry-specific features yet (start with horizontal)"
+
+    # ============================================
+    # 建议的验证实验
+    # ============================================
+    suggested_experiments:
+      type: array
+      items:
+        type: object
+        required:
+          - experiment_type
+          - description
+          - duration
+          - success_metrics
+        properties:
+          experiment_type:
+            type: string
+            enum: [landing_page, user_interview, fake_door_test, survey, prototype]
+            description: "实验类型"
+
+          description:
+            type: string
+            description: "实验描述"
+
+          duration:
+            type: string
+            description: "建议持续时间"
+
+          success_metrics:
+            type: array
+            items:
+              type: string
+            description: "成功指标"
+
+          resources_needed:
+            type: array
+            items:
+              type: string
+            description: "所需资源"
+
+      minItems: 1
+      description: "建议的验证实验列表（至少1个）"
+
+    # ============================================
+    # 成功标准
+    # ============================================
+    success_criteria:
+      type: object
+      required:
+        - must_have
+        - nice_to_have
+      properties:
+        must_have:
+          type: array
+          items:
+            type: string
+          description: "必须达到的标准（不达到则放弃）"
+
+        nice_to_have:
+          type: array
+          items:
+            type: string
+          description: "最好达到的标准"
+
+    # ============================================
+    # 下一步
+    # ============================================
+    next_steps:
+      type: array
+      items:
+        type: object
+        properties:
+          step:
+            type: string
+            description: "步骤描述"
+
+          owner:
+            type: string
+            description: "负责人（团队或角色）"
+
+          timeline:
+            type: string
+            description: "建议时间线"
+
+      description: "建议的下一步行动"
+
+# ============================================
+# 完整示例
+# ============================================
+example:
+  handoff_id: "handoff-20250123-001"
+  handoff_date: "2025-01-23"
+  source_freeze_id: "freeze-20250123-001"
+
+  opportunity_summary:
+    one_liner: "AI Sales Assistant for mid-market B2B SaaS companies"
+    target_user: "VP of Sales at B2B SaaS with 200-1000 employees"
+    estimated_market_size: "~10,000 companies (US), estimated"
+    confidence_level: "medium"
+
+  what_we_believe:
+    user_problem: "Mid-market sales teams need AI productivity but can't afford enterprise tools"
+    why_now:
+      - "Search volume grew 150% YoY"
+      - "Enterprise tools priced out ($5k+/month)"
+      - "No industry-specific solutions exist"
+    market_gap:
+      - "Mid-market underserved"
+      - "Industry verticals open"
+    supporting_data:
+      search_trends: "30-day avg: 50k searches/month, trend up"
+      competitor_landscape: "Enterprise: Salesforce Einstein; SMB: Apollo.io; Gap: Mid-market"
+      industry_stage: "Growing, 30% YoY"
+
+  what_we_dont_know:
+    - question: "Actual willingness-to-pay"
+      importance: "critical"
+      suggested_validation: "User interview with pricing scenario test"
+    - question: "CRM integration complexity"
+      importance: "important"
+      suggested_validation: "Technical spike with 3-5 target customers"
+    - question: "Time-to-value expectations"
+      importance: "nice_to_have"
+      suggested_validation: "Include in user interview"
+
+  what_not_to_build_yet:
+    - "Don't build full multi-channel (start with email only)"
+    - "Don't target enterprise (start with mid-market)"
+    - "Don't build industry-specific features yet (start with horizontal)"
+
+  suggested_experiments:
+    - experiment_type: "landing_page"
+      description: "Create landing page with value prop and email capture"
+      duration: "2 weeks"
+      success_metrics:
+        - "500+ unique visitors"
+        - "10% email capture rate"
+        - "20+ qualified leads"
+      resources_needed:
+        - "Landing page design"
+        - "Google Ads budget ($500)"
+        - "Email nurture sequence"
+
+    - experiment_type: "user_interview"
+      description: "Conduct 15-20 interviews with target users"
+      duration: "3 weeks"
+      success_metrics:
+        - "80% confirm pain point"
+        - "60% express willingness to pay $500-2000/month"
+      resources_needed:
+        - "Interview script"
+        - "Recruitment budget ($100 per interview)"
+        - "Note-taker/analyzer"
+
+  success_criteria:
+    must_have:
+      - "80% of interviewed users confirm this is a real pain point"
+      - "At least 50% express willingness to pay $500+/month"
+      - "Clear differentiation path from competitors identified"
+
+    nice_to_have:
+      - "20+ email signups from landing page"
+      - "3+ companies agree to pilot"
+      - "Clear integration path identified"
+
+  next_steps:
+    - step: "Product team reviews handoff and commits to validation"
+      owner: "Product (VP Product)"
+      timeline: "Week 1"
+
+    - step: "Run landing page experiment in parallel with interviews"
+      owner: "Growth + Product"
+      timeline: "Week 2-3"
+
+    - step: "Decision point: Proceed to MVP or pivot/kill"
+      owner: "Product + Strategy"
+      timeline: "Week 4"

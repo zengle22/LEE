@@ -1,0 +1,423 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contract.dev.execution_state/v1",
+  "title": "Execution State Contract",
+  "description": "工作流执行状态的标准契约，用于跟踪步骤进度、门禁状态和产出物验证",
+  "type": "object",
+  "required": ["version", "schema", "workflow", "run", "enforcement"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "状态文件版本"
+    },
+    "schema": {
+      "type": "string",
+      "const": "contract.dev.execution_state/v1",
+      "description": "契约标识"
+    },
+    "workflow": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^workflow\\.[a-z]+\\.[a-z_]+$",
+          "description": "工作流标识"
+        },
+        "version": {
+          "type": "string",
+          "description": "工作流版本"
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": ["id", "started_at", "status"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^RUN-[0-9]{8}-[0-9]{6}$",
+          "description": "执行运行ID"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "开始时间"
+        },
+        "completed_at": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "完成时间"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "running", "blocked", "completed", "failed"],
+          "description": "执行状态"
+        }
+      }
+    },
+    "current_step": {
+      "type": ["object", "null"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "当前步骤ID"
+        },
+        "agent_id": {
+          "type": ["string", "null"],
+          "description": "执行Agent ID"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "starting", "in_progress", "validating", "awaiting_gate", "completed", "failed", "blocked"],
+          "description": "步骤状态"
+        },
+        "started_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "completed_steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step_id", "completed_at", "validation_passed"],
+        "properties": {
+          "step_id": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": ["string", "null"]
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validation_passed": {
+            "type": "boolean"
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outputs_hash": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    },
+    "enforcement": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["permissive", "warning", "strict"],
+          "description": "强制模式"
+        },
+        "mandatory_steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mandatory_step"
+          },
+          "description": "必选步骤列表"
+        },
+        "pending_gates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pending_gate"
+          },
+          "description": "待审批门禁"
+        },
+        "checkpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/checkpoint"
+          },
+          "description": "已通过检查点"
+        },
+        "auto_approved_gates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/auto_approved_gate"
+          },
+          "description": "Agent 自动通过的条件门禁"
+        },
+        "remediation": {
+          "$ref": "#/$defs/remediation_state",
+          "description": "整改循环状态"
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "step_id": {
+            "type": "string"
+          },
+          "error_type": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "mandatory_step": {
+      "type": "object",
+      "required": ["step_id", "status"],
+      "properties": {
+        "step_id": {
+          "type": "string",
+          "description": "必选步骤ID"
+        },
+        "required_outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "必须产出的文件"
+        },
+        "validation_schema": {
+          "type": ["string", "null"],
+          "description": "产出物验证契约"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "validated", "failed"],
+          "description": "验证状态"
+        },
+        "validated_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "validation_errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "pending_gate": {
+      "type": "object",
+      "required": ["gate_id", "step_id", "status", "blocking"],
+      "properties": {
+        "gate_id": {
+          "type": "string",
+          "description": "门禁ID"
+        },
+        "step_id": {
+          "type": "string",
+          "description": "关联步骤ID"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected", "timeout", "auto_approved", "skipped"],
+          "description": "门禁状态"
+        },
+        "blocking": {
+          "type": "boolean",
+          "description": "是否阻断后续步骤"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "resolved_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "resolved_by": {
+          "type": ["string", "null"],
+          "description": "审批人"
+        },
+        "notes": {
+          "type": ["string", "null"],
+          "description": "审批备注"
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "required": ["step_id", "passed_at"],
+      "properties": {
+        "step_id": {
+          "type": "string"
+        },
+        "gate_id": {
+          "type": ["string", "null"]
+        },
+        "passed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "approver": {
+          "type": ["string", "null"]
+        },
+        "outputs_validated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "auto_approved_gate": {
+      "type": "object",
+      "required": ["gate_id", "step_id", "auto_approved_at", "reason"],
+      "description": "Agent 自动通过的条件门禁",
+      "properties": {
+        "gate_id": {
+          "type": "string",
+          "description": "门禁ID"
+        },
+        "step_id": {
+          "type": "string",
+          "description": "关联步骤ID"
+        },
+        "auto_approved_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "自动通过时间"
+        },
+        "reason": {
+          "type": "string",
+          "description": "自动通过原因"
+        },
+        "agent_id": {
+          "type": ["string", "null"],
+          "description": "做出判断的 Agent ID"
+        },
+        "review_metrics": {
+          "type": "object",
+          "description": "审查指标 (用于判断的依据)",
+          "additionalProperties": true
+        },
+        "conditions_evaluated": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "condition": {
+                "type": "string"
+              },
+              "result": {
+                "type": "boolean"
+              }
+            }
+          },
+          "description": "评估的条件列表"
+        }
+      }
+    },
+    "remediation_state": {
+      "type": "object",
+      "description": "整改循环状态追踪",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否启用整改循环"
+        },
+        "attempt_count": {
+          "type": "integer",
+          "default": 0,
+          "description": "当前整改尝试次数"
+        },
+        "max_attempts": {
+          "type": "integer",
+          "default": 5,
+          "description": "最大整改尝试次数"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["idle", "in_progress", "passed", "failed", "human_intervention"],
+          "description": "整改状态"
+        },
+        "current_rollback": {
+          "type": ["object", "null"],
+          "description": "当前回滚信息",
+          "properties": {
+            "target_step": {
+              "type": "string",
+              "description": "回滚目标步骤"
+            },
+            "reason": {
+              "type": "string",
+              "description": "回滚原因"
+            },
+            "failures": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "gate_id": {"type": "string"},
+                  "issue": {"type": "string"},
+                  "expected": {"type": "string"},
+                  "actual": {"type": "string"}
+                }
+              }
+            },
+            "started_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "history": {
+          "type": "array",
+          "description": "整改历史记录",
+          "items": {
+            "type": "object",
+            "properties": {
+              "attempt": {
+                "type": "integer"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "failures": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "gate_id": {"type": "string"},
+                    "issue": {"type": "string"},
+                    "actual": {"type": "string"}
+                  }
+                }
+              },
+              "action": {
+                "type": "string",
+                "description": "采取的动作 (rollback_to, pass, trigger_gate)"
+              },
+              "target_step": {
+                "type": ["string", "null"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

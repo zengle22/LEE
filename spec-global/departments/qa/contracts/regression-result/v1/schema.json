@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/testing/regression-result/v1",
+  "title": "Regression Test Result Contract",
+  "description": "回归测试结果契约 - 记录回归测试执行结果",
+  "type": "object",
+  "required": [
+    "result_id",
+    "manifest_id",
+    "version",
+    "regression_type",
+    "trigger",
+    "executed_at",
+    "executor",
+    "cases"
+  ],
+  "properties": {
+    "result_id": {
+      "type": "string",
+      "pattern": "^REG-[0-9]{4}-[0-9]{4}$",
+      "description": "回归测试结果唯一标识"
+    },
+    "manifest_id": {
+      "type": "string",
+      "description": "关联的提测包清单 ID"
+    },
+    "version": {
+      "type": "string",
+      "description": "测试版本"
+    },
+    "previous_version": {
+      "type": "string",
+      "description": "对比的上一版本"
+    },
+    "regression_type": {
+      "type": "string",
+      "enum": ["minimal", "risk", "full", "smoke"],
+      "description": "回归类型: minimal-最小, risk-风险, full-完整, smoke-冒烟"
+    },
+    "trigger": {
+      "type": "object",
+      "required": ["reason"],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": ["bug_fix", "code_change", "config_change", "dependency_update", "scheduled"],
+          "description": "触发原因"
+        },
+        "bug_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "关联的修复缺陷 ID"
+        },
+        "change_description": {
+          "type": "string",
+          "description": "变更描述"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "affected_modules": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "受影响模块"
+        },
+        "affected_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "受影响链路"
+        }
+      }
+    },
+    "executed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "executor": {
+      "type": "string",
+      "description": "执行者 Agent ID"
+    },
+    "duration_seconds": {
+      "type": "integer"
+    },
+    "summary": {
+      "type": "object",
+      "required": ["total", "passed", "failed", "pass_rate"],
+      "properties": {
+        "total": { "type": "integer" },
+        "passed": { "type": "integer" },
+        "failed": { "type": "integer" },
+        "skipped": { "type": "integer" },
+        "pass_rate": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["case_id", "name", "result"],
+        "properties": {
+          "case_id": { "type": "string" },
+          "name": { "type": "string" },
+          "module": { "type": "string" },
+          "is_bug_regression": {
+            "type": "boolean",
+            "description": "是否为 Bug 回归用例"
+          },
+          "related_bug_id": {
+            "type": "string",
+            "description": "关联的 Bug ID (如果是 Bug 回归用例)"
+          },
+          "result": {
+            "type": "string",
+            "enum": ["pass", "fail", "skip"]
+          },
+          "previous_result": {
+            "type": "string",
+            "enum": ["pass", "fail", "skip", "new"],
+            "description": "上次执行结果"
+          },
+          "regression_detected": {
+            "type": "boolean",
+            "description": "是否检测到回归"
+          },
+          "duration_ms": { "type": "integer" },
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": { "type": "string" },
+              "diff": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "regressions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["case_id", "severity"],
+        "properties": {
+          "case_id": { "type": "string" },
+          "description": { "type": "string" },
+          "severity": { "type": "string", "enum": ["P0", "P1", "P2", "P3"] },
+          "bug_id": { "type": "string", "description": "新建的 Bug ID" }
+        }
+      },
+      "description": "发现的回归问题"
+    },
+    "bug_verifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["bug_id", "verification_result"],
+        "properties": {
+          "bug_id": { "type": "string" },
+          "regression_case_id": { "type": "string" },
+          "verification_result": {
+            "type": "string",
+            "enum": ["pass", "fail", "partial"]
+          },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Bug 验证结果"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "partial"],
+      "description": "总体判定"
+    },
+    "recommendation": {
+      "type": "string",
+      "enum": ["proceed", "fix_and_retest", "block"],
+      "description": "建议操作"
+    }
+  }
+}

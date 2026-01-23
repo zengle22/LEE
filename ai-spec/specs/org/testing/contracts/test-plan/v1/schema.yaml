@@ -1,0 +1,536 @@
+# Test Plan Contract Schema v1.0
+# 测试计划契约标准
+
+kind: contract_schema
+version: 1.0
+
+schema:
+  type: object
+  required:
+    - plan_id
+    - version
+    - target_release
+    - test_suites
+    - schedule
+
+  properties:
+    # ========== 基础标识 ==========
+    plan_id:
+      type: string
+      pattern: "^PLAN-[0-9]{4}-[0-9]{3}$"
+      description: "测试计划唯一标识"
+      example: "PLAN-2026-001"
+
+    version:
+      type: string
+      description: "计划版本"
+      example: "v1.1.0"
+
+    target_release:
+      type: object
+      required: [release_version, release_date]
+      properties:
+        release_version:
+          type: string
+          description: "目标发布版本"
+          example: "v1.1.0"
+
+        release_date:
+          type: string
+          format: date
+          description: "计划发布日期"
+
+        scope:
+          type: string
+          description: "发布范围说明"
+
+    # ========== 测试目标 ==========
+    objectives:
+      type: array
+      items:
+        type: string
+      description: "测试目标"
+      examples:
+        - "验证v1.1新功能（跑者画像、计划生成）"
+        - "确保核心流程无回归"
+        - "性能指标满足要求"
+
+    # ========== 测试范围 ==========
+    scope:
+      type: object
+      properties:
+        in_scope:
+          type: array
+          items:
+            type: string
+          description: "测试范围内"
+          examples:
+            - "跑者画像模块"
+            - "计划生成模块"
+            - "核心登录流程"
+
+        out_of_scope:
+          type: array
+          items:
+            type: string
+          description: "不在测试范围"
+          examples:
+            - "历史遗留功能（无变更）"
+            - "第三方集成（已隔离）"
+
+        risk_areas:
+          type: array
+          items:
+            type: object
+            properties:
+              area:
+                type: string
+                description: "风险区域"
+              risk_level:
+                type: string
+                enum: [high, medium, low]
+              mitigation:
+                type: string
+                description: "缓解措施"
+
+    # ========== 测试套件清单 ==========
+    test_suites:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required: [suite_id, execution_rounds]
+        properties:
+          suite_id:
+            type: string
+            description: "测试套件ID"
+
+          execution_rounds:
+            type: string
+            enum: [every, first_last, last_only, risk_based]
+            description: |
+              执行轮次策略
+              - every: 每轮都执行
+              - first_last: 第一轮和最后一轮
+              - last_only: 仅最后一轮全量回归
+              - risk_based: 基于风险动态决定
+
+          priority:
+            type: string
+            enum: [must, should, nice_to_have]
+            description: "优先级"
+
+          estimated_duration_minutes:
+            type: number
+            description: "预计执行时间（分钟）"
+
+    # ========== 测试策略 ==========
+    strategy:
+      type: object
+      properties:
+        multi_round:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+              description: "是否启用多轮测试"
+              default: true
+
+            max_rounds:
+              type: integer
+              minimum: 1
+              maximum: 10
+              description: "最大轮次"
+              default: 10
+
+            exit_criteria_ref:
+              type: string
+              description: "出测标准引用"
+              example: "gate.test.exit_gate_v2"
+
+        regression:
+          type: object
+          properties:
+            scope:
+              type: string
+              enum: [risk_based, full, minimal]
+              description: "回归范围"
+              default: "risk_based"
+
+            trigger:
+              type: string
+              description: "回归触发条件"
+              examples:
+                - "bug_fixed"
+                - "code_changed"
+
+        automation:
+          type: object
+          properties:
+            target_coverage:
+              type: number
+              minimum: 0
+              maximum: 100
+              description: "自动化覆盖率目标（%）"
+
+            priority:
+              type: array
+              items:
+                type: string
+              description: "优先自动化的用例类型"
+              examples:
+                - "smoke"
+                - "regression"
+                - "p0_p1_cases"
+
+    # ========== 测试进度计划 ==========
+    schedule:
+      type: object
+      required: [start_date, end_date]
+      properties:
+        start_date:
+          type: string
+          format: date
+          description: "测试开始日期"
+
+        end_date:
+          type: string
+          format: date
+          description: "测试结束日期"
+
+        milestones:
+          type: array
+          items:
+            type: object
+            properties:
+              milestone:
+                type: string
+                description: "里程碑名称"
+              date:
+                type: string
+                format: date
+              deliverables:
+                type: array
+                items:
+                  type: string
+
+    # ========== 资源配置 ==========
+    resources:
+      type: object
+      properties:
+        team:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+                enum: [qa_lead, qa_engineer, automation_engineer, performance_tester]
+              name:
+                type: string
+              allocation:
+                type: number
+                description: "投入比例（%）"
+
+        tools:
+          type: array
+          items:
+            type: string
+          description: "使用的测试工具"
+          examples:
+            - "Playwright"
+            - "Postman"
+            - "JMeter"
+
+        environments:
+          type: array
+          items:
+            type: object
+            properties:
+              env_name:
+                type: string
+              url:
+                type: string
+              status:
+                type: string
+                enum: [ready, pending, blocked]
+
+    # ========== 质量目标 ==========
+    quality_targets:
+      type: object
+      properties:
+        pass_rate:
+          type: object
+          properties:
+            smoke:
+              type: number
+              description: "冒烟测试通过率目标（%）"
+              default: 100
+
+            regression:
+              type: number
+              description: "回归测试通过率目标（%）"
+              default: 95
+
+            e2e:
+              type: number
+              description: "E2E测试通过率目标（%）"
+              default: 90
+
+        bug_targets:
+          type: object
+          properties:
+            p0_max:
+              type: integer
+              description: "P0 Bug最大数量"
+              default: 0
+
+            p1_max:
+              type: integer
+              description: "P1 Bug最大数量"
+              default: 3
+
+            p2_max:
+              type: integer
+              description: "P2 Bug最大数量"
+              default: 10
+
+        coverage_targets:
+          type: object
+          properties:
+            requirement_coverage:
+              type: number
+              description: "需求覆盖率目标（%）"
+              default: 100
+
+            code_coverage:
+              type: number
+              description: "代码覆盖率目标（%）"
+
+    # ========== 风险管理 ==========
+    risks:
+      type: array
+      items:
+        type: object
+        properties:
+          risk_id:
+            type: string
+          description:
+            type: string
+          probability:
+            type: string
+            enum: [high, medium, low]
+          impact:
+            type: string
+            enum: [high, medium, low]
+          mitigation:
+            type: string
+          contingency:
+            type: string
+
+    # ========== 执行状态 ==========
+    execution_status:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [draft, approved, in_progress, completed, blocked]
+
+        current_round:
+          type: integer
+          description: "当前测试轮次"
+
+        completion_percentage:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: "完成百分比"
+
+        actual_bugs_found:
+          type: object
+          properties:
+            p0: integer
+            p1: integer
+            p2: integer
+            p3: integer
+
+    # ========== 元数据 ==========
+    created_by:
+      type: string
+      description: "创建者"
+
+    approved_by:
+      type: string
+      description: "审批者"
+
+    created_at:
+      type: string
+      format: date-time
+
+    approved_at:
+      type: string
+      format: date-time
+
+# ========== 示例 ==========
+examples:
+  - name: "AI Marathon Coach v1.1 测试计划"
+    data:
+      plan_id: "PLAN-2026-001"
+      version: "v1.1.0"
+
+      target_release:
+        release_version: "v1.1.0"
+        release_date: "2026-01-20"
+        scope: "新增跑者画像和计划生成功能"
+
+      objectives:
+        - "验证v1.1新功能（跑者画像、计划生成、训练执行）正常工作"
+        - "确保核心流程（登录、表单提交）无回归"
+        - "E2E测试覆盖所有用户路径"
+        - "达到出测标准（P0=0, 冒烟100%, 回归≥95%）"
+
+      scope:
+        in_scope:
+          - "跑者画像模块（性别、年龄、体重、跑龄、目标距离）"
+          - "计划生成模块（目标配置、AI评估、计划生成）"
+          - "核心登录流程"
+          - "表单验证逻辑"
+
+        out_of_scope:
+          - "训练执行模块（计划v1.2）"
+          - "社区功能（暂未开发）"
+
+        risk_areas:
+          - area: "E2E测试选择器兼容性"
+            risk_level: high
+            mitigation: "提前验证UniApp H5渲染，创建选择器辅助函数"
+
+          - area: "AI评估API稳定性"
+            risk_level: medium
+            mitigation: "Mock AI响应，独立测试API可用性"
+
+      test_suites:
+        - suite_id: "SUITE-SMOKE-001"
+          execution_rounds: every
+          priority: must
+          estimated_duration_minutes: 10
+
+        - suite_id: "SUITE-E2E-001"
+          execution_rounds: every
+          priority: must
+          estimated_duration_minutes: 30
+
+        - suite_id: "SUITE-REGRESSION-001"
+          execution_rounds: risk_based
+          priority: should
+          estimated_duration_minutes: 20
+
+        - suite_id: "SUITE-FULL-REGRESSION-001"
+          execution_rounds: last_only
+          priority: nice_to_have
+          estimated_duration_minutes: 60
+
+      strategy:
+        multi_round:
+          enabled: true
+          max_rounds: 10
+          exit_criteria_ref: "gate.test.exit_gate_v2"
+
+        regression:
+          scope: risk_based
+          trigger: "bug_fixed OR code_changed"
+
+        automation:
+          target_coverage: 90
+          priority:
+            - "smoke"
+            - "regression"
+            - "p0_p1_cases"
+
+      schedule:
+        start_date: "2026-01-15"
+        end_date: "2026-01-18"
+        milestones:
+          - milestone: "Round 1完成"
+            date: "2026-01-15"
+            deliverables:
+              - "冒烟测试报告"
+              - "E2E测试报告"
+              - "Bug清单"
+
+          - milestone: "Round 2完成（修复验证）"
+            date: "2026-01-16"
+            deliverables:
+              - "修复验证报告"
+              - "回归测试报告"
+
+          - milestone: "最终签字"
+            date: "2026-01-18"
+            deliverables:
+              - "最终测试报告"
+              - "出测评估报告"
+              - "人类签字"
+
+      resources:
+        team:
+          - role: qa_lead
+            name: "QA Lead"
+            allocation: 100
+
+          - role: qa_engineer
+            name: "Claude Sonnet 4.5"
+            allocation: 100
+
+        tools:
+          - "Playwright (E2E)"
+          - "Jest (Unit)"
+          - "Postman (API)"
+
+        environments:
+          - env_name: "test"
+            url: "http://localhost:3002"
+            status: ready
+
+      quality_targets:
+        pass_rate:
+          smoke: 100
+          regression: 95
+          e2e: 90
+
+        bug_targets:
+          p0_max: 0
+          p1_max: 3
+          p2_max: 10
+
+        coverage_targets:
+          requirement_coverage: 100
+
+      risks:
+        - risk_id: "RISK-001"
+          description: "UniApp H5渲染与Playwright选择器不兼容"
+          probability: high
+          impact: high
+          mitigation: "提前创建选择器辅助函数库"
+          contingency: "回退到手工测试"
+
+        - risk_id: "RISK-002"
+          description: "AI评估API不稳定"
+          probability: medium
+          impact: medium
+          mitigation: "Mock AI响应"
+          contingency: "跳过AI相关测试用例"
+
+      execution_status:
+        status: completed
+        current_round: 2
+        completion_percentage: 100
+        actual_bugs_found:
+          p0: 1  # BUG-2026-0001 (已修复)
+          p1: 0
+          p2: 0
+          p3: 0
+
+      created_by: "qa-lead"
+      approved_by: "tech-lead"
+      created_at: "2026-01-14T10:00:00Z"
+      approved_at: "2026-01-14T16:00:00Z"

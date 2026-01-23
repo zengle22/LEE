@@ -1,0 +1,167 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-spec.example.com/contracts/frozen-detailed-prd-contract/v1/schema.json",
+    "title": "Frozen Detailed PRD Contract Schema",
+    "description": "Schema for frozen functional-point level PRD (Output for development)",
+    "type": "object",
+    "required": [
+        "contract_type",
+        "contract_version",
+        "metadata",
+        "product_overview",
+        "functional_details"
+    ],
+    "properties": {
+        "contract_type": {
+            "type": "string",
+            "const": "frozen-detailed-prd"
+        },
+        "contract_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [
+                "contract_id",
+                "product_name",
+                "created_date",
+                "status",
+                "is_frozen"
+            ],
+            "properties": {
+                "contract_id": {
+                    "type": "string",
+                    "pattern": "^FDPRD-\\d{8}-\\d{3}$"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                },
+                "created_date": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "DRAFT",
+                        "PENDING_CONFIRMATION",
+                        "FROZEN"
+                    ]
+                },
+                "is_frozen": {
+                    "type": "boolean",
+                    "const": true
+                }
+            }
+        },
+        "product_overview": {
+            "type": "object",
+            "required": [
+                "background",
+                "objectives"
+            ],
+            "properties": {
+                "background": {
+                    "type": "string"
+                },
+                "objectives": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "functional_details": {
+            "type": "object",
+            "required": [
+                "features"
+            ],
+            "properties": {
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "id",
+                            "name",
+                            "priority",
+                            "description",
+                            "acceptance_criteria"
+                        ],
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "priority": {
+                                "type": "string",
+                                "enum": [
+                                    "P0",
+                                    "P1",
+                                    "P2"
+                                ]
+                            },
+                            "description": {
+                                "type": "string"
+                            },
+                            "business_rules": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "acceptance_criteria": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "exception_handling": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "user_flows": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "mermaid_code": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "approval_record": {
+            "type": "object",
+            "properties": {
+                "approver": {
+                    "type": "string"
+                },
+                "approval_date": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "comments": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

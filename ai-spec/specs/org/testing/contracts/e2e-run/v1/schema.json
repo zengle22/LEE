@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contract.test.e2e_run.v1",
+  "title": "E2E Test Run Contract",
+  "description": "E2E 测试执行契约，定义一次执行的输入输出",
+  "type": "object",
+  "required": ["run_id", "manifest_id", "suite_id", "environment", "status"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "pattern": "^E2E-RUN-[0-9]{8}-[A-Z0-9]+$",
+      "description": "执行运行 ID",
+      "examples": ["E2E-RUN-20260113-ABC123"]
+    },
+    "manifest_id": {
+      "type": "string",
+      "description": "关联的提测包 ID"
+    },
+    "suite_id": {
+      "type": "string",
+      "description": "执行的用例集 ID"
+    },
+    "triggered_by": {
+      "type": "string",
+      "description": "触发者 (agent/human/ci)"
+    },
+    "triggered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "触发时间"
+    },
+    "environment": {
+      "type": "object",
+      "required": ["platform", "base_url"],
+      "properties": {
+        "platform": {
+          "type": "string",
+          "enum": ["chrome", "wechat-miniprogram", "h5"],
+          "description": "执行平台"
+        },
+        "base_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "测试 URL"
+        },
+        "browser_version": {
+          "type": "string",
+          "description": "浏览器版本"
+        },
+        "os": {
+          "type": "string",
+          "description": "操作系统"
+        },
+        "wechat_devtools_version": {
+          "type": "string",
+          "description": "微信开发者工具版本 (如适用)"
+        },
+        "deployed_version": {
+          "type": "string",
+          "description": "被测版本"
+        },
+        "env_provisioned_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "环境准备完成时间"
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "description": "执行信息",
+      "properties": {
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "description": "总执行时长"
+        },
+        "executor": {
+          "type": "string",
+          "description": "执行者 Agent ID"
+        },
+        "runner": {
+          "type": "string",
+          "enum": ["playwright", "puppeteer", "wechat-automator", "custom"],
+          "description": "使用的 runner"
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "running", "passed", "failed", "error", "cancelled"],
+      "description": "执行状态"
+    },
+    "summary": {
+      "type": "object",
+      "description": "执行汇总",
+      "properties": {
+        "total": { "type": "integer" },
+        "passed": { "type": "integer" },
+        "failed": { "type": "integer" },
+        "skipped": { "type": "integer" },
+        "error": { "type": "integer" },
+        "pass_rate": { "type": "number" },
+        "by_priority": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "integer" },
+                "passed": { "type": "integer" },
+                "failed": { "type": "integer" }
+              }
+            },
+            "P1": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "integer" },
+                "passed": { "type": "integer" },
+                "failed": { "type": "integer" }
+              }
+            },
+            "P2": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "integer" },
+                "passed": { "type": "integer" },
+                "failed": { "type": "integer" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "case_results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CaseResult"
+      },
+      "description": "各用例执行结果"
+    },
+    "artifacts": {
+      "type": "object",
+      "description": "产物路径",
+      "properties": {
+        "report_json": { "type": "string" },
+        "report_html": { "type": "string" },
+        "screenshots_dir": { "type": "string" },
+        "videos_dir": { "type": "string" },
+        "traces_dir": { "type": "string" },
+        "logs_dir": { "type": "string" }
+      }
+    },
+    "bugs_created": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "自动创建的 Bug ID 列表"
+    }
+  },
+  "$defs": {
+    "CaseResult": {
+      "type": "object",
+      "required": ["case_id", "status"],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "description": "用例 ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "用例名称"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["passed", "failed", "skipped", "error"],
+          "description": "执行状态"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "description": "执行时长"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "retry_count": {
+          "type": "integer",
+          "default": 0,
+          "description": "重试次数"
+        },
+        "step_results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StepResult"
+          },
+          "description": "各步骤结果"
+        },
+        "failure": {
+          "type": "object",
+          "description": "失败信息 (如失败)",
+          "properties": {
+            "step": { "type": "integer" },
+            "message": { "type": "string" },
+            "expected": { "type": "string" },
+            "actual": { "type": "string" },
+            "stack_trace": { "type": "string" },
+            "category": {
+              "type": "string",
+              "enum": [
+                "assertion_failed",
+                "element_not_found",
+                "timeout",
+                "network_error",
+                "script_error",
+                "environment_error",
+                "unknown"
+              ]
+            }
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "description": "证据",
+          "properties": {
+            "screenshots": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "video": { "type": "string" },
+            "trace": { "type": "string" },
+            "console_logs": { "type": "string" },
+            "network_logs": { "type": "string" }
+          }
+        },
+        "bug_id": {
+          "type": "string",
+          "description": "关联的 Bug ID (如失败自动创建)"
+        }
+      }
+    },
+    "StepResult": {
+      "type": "object",
+      "properties": {
+        "step": { "type": "integer" },
+        "action": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["passed", "failed", "skipped"]
+        },
+        "duration_ms": { "type": "integer" },
+        "screenshot": { "type": "string" },
+        "error": { "type": "string" }
+      }
+    }
+  }
+}

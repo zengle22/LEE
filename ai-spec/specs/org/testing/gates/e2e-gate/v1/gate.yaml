@@ -1,0 +1,186 @@
+# E2E Gate v1.0
+# E2E 端到端测试门禁
+
+kind: gate
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: gate.test.e2e_gate
+name: E2E Test Gate
+description: >
+  E2E 端到端测试门禁，验证真实浏览器/小程序环境下的用户场景。
+  只有满足 E2E 通过率要求，才能进入系统测试阶段。
+owner: test-governance
+tags: [gate, e2e, browser, quality]
+
+# ============================================
+# 门禁位置
+# ============================================
+placement:
+  after_stage: t4_e2e_test
+  before_stage: t5_system_test
+  in_workflow: workflow.test.testing_pipeline
+
+# ============================================
+# 输入契约
+# ============================================
+input_contract:
+  ref: ../../contracts/e2e-report/v1/schema.json
+  description: "E2E 测试报告 (汇总所有平台)"
+  required_fields:
+    - report_id
+    - run_id
+    - summary.total
+    - summary.passed
+    - summary.failed
+    - summary.pass_rate
+    - summary.p0_pass_rate
+    - summary.p1_pass_rate
+    - verdict
+
+# ============================================
+# 门禁判定规则
+# ============================================
+rules:
+  # P0 用例必须 100% 通过
+  - id: p0_100_pass
+    name: P0 用例全部通过
+    description: P0 (核心链路) 用例必须 100% 通过
+    condition: "summary.p0_pass_rate == 100"
+    severity: blocker
+    on_fail:
+      verdict: FAIL
+      message: "P0 用例未能 100% 通过，当前: {summary.p0_pass_rate}%"
+      action: reject
+
+  # P1 用例 >= 90% 通过
+  - id: p1_90_pass
+    name: P1 用例达标
+    description: P1 (重要功能) 用例通过率 >= 90%
+    condition: "summary.p1_pass_rate >= 90"
+    severity: major
+    on_fail:
+      verdict: CONDITIONAL_PASS
+      message: "P1 用例通过率未达 90%，当前: {summary.p1_pass_rate}%"
+      action: continue_with_risk
+
+  # 整体通过率 >= 80%
+  - id: overall_80_pass
+    name: 整体通过率达标
+    description: E2E 整体通过率 >= 80%
+    condition: "summary.pass_rate >= 80"
+    severity: major
+    on_fail:
+      verdict: FAIL
+      message: "整体通过率未达 80%，当前: {summary.pass_rate}%"
+      action: reject
+
+# ============================================
+# 判定结果定义
+# ============================================
+verdicts:
+  PASS:
+    conditions:
+      - "p0_100_pass"
+      - "p1_90_pass"
+      - "overall_80_pass"
+    actions:
+      - continue_to_next_stage
+    message: "E2E 测试通过"
+
+  CONDITIONAL_PASS:
+    conditions:
+      - "p0_100_pass"
+      - "overall_80_pass"
+      - "!p1_90_pass"
+    actions:
+      - log_risk_item
+      - continue_with_warning
+    message: "E2E 条件通过，P1 失败已记录风险"
+    requires:
+      risk_acceptance: optional  # 可自动继续，但记录风险
+
+  FAIL:
+    conditions:
+      - "!p0_100_pass || !overall_80_pass"
+    actions:
+      - create_bugs_from_failures
+      - loop_back_to_fix_cycle
+    message: "E2E 测试失败"
+    next_stage: t6_bug_fix_cycle
+
+# ============================================
+# 自动 Bug 创建
+# ============================================
+auto_bug_creation:
+  enabled: true
+  conditions:
+    - "failure.category in ['assertion_failed', 'element_not_found', 'script_error']"
+    - "failure.category != 'environment_error'"
+    - "failure.category != 'test_code_error'"
+
+  bug_template:
+    title: "[E2E] {case_name} - {failure_summary}"
+    severity_mapping:
+      P0: P0  # 核心链路失败
+      P1: P1  # 重要功能失败
+      P2: P2  # 次要功能失败
+    evidence_required:
+      - screenshot
+      - video (if available)
+      - trace (if available)
+      - console_log
+      - network_log
+
+# ============================================
+# 人类介入配置
+# ============================================
+human_intervention:
+  on_conditional_pass:
+    required: false  # 条件通过可自动继续
+    notify: [qa_lead]
+    timeout: 4h
+    auto_action: continue
+
+  on_fail:
+    required: false  # 失败自动进入 Bug 修复循环
+    notify: [qa_lead, dev_lead]
+    auto_action: loop_back
+
+# ============================================
+# 输出产物
+# ============================================
+outputs:
+  gate_report:
+    path: "gate-reports/e2e-gate-{run_id}.json"
+    content:
+      gate_id: "{gate_id}"
+      run_id: "{run_id}"
+      timestamp: "{timestamp}"
+      input_summary:
+        total: "{summary.total}"
+        passed: "{summary.passed}"
+        failed: "{summary.failed}"
+        pass_rate: "{summary.pass_rate}"
+        p0_pass_rate: "{summary.p0_pass_rate}"
+        p1_pass_rate: "{summary.p1_pass_rate}"
+      rule_results:
+        - rule_id: "p0_100_pass"
+          result: "{p0_result}"
+        - rule_id: "p1_90_pass"
+          result: "{p1_result}"
+        - rule_id: "overall_80_pass"
+          result: "{overall_result}"
+      verdict: "{final_verdict}"
+      bugs_created: []
+      risk_items: []
+
+# ============================================
+# 版本历史
+# ============================================
+version_history:
+  - version: "1.0"
+    date: "2026-01-13"
+    changes: "初始版本"

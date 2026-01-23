@@ -1,0 +1,113 @@
+# Industry Structure Contract v1.0
+# 行业结构分析数据结构
+
+kind: contract_schema
+version: 1.0
+description: "行业结构分析 Agent 的输出数据结构"
+
+schema:
+  type: object
+  required:
+    - industry
+    - maturity_stage
+    - tech_dependency
+    - entry_barrier
+    - structural_gap
+    - assessment_basis
+    - last_updated
+  properties:
+    industry:
+      type: string
+      description: "评估的行业"
+    maturity_stage:
+      type: string
+      enum: [emerging, growing, mature, declining]
+      description: "行业成熟阶段"
+    tech_dependency:
+      type: object
+      properties:
+        required_tech:
+          type: array
+          items:
+            type: string
+          description: "所需技术栈"
+        tech_readiness:
+          type: string
+          enum: [early, available, commoditized]
+          description: "技术就绪度"
+        adoption_cost:
+          type: string
+          enum: [high, medium, low]
+          description: "技术采用成本"
+    entry_barrier:
+      type: object
+      properties:
+        capital_requirement:
+          type: string
+          enum: [high, medium, low]
+          description: "资本要求"
+        regulation_barrier:
+          type: string
+          enum: [high, medium, low]
+          description: "监管壁垒"
+        network_effect:
+          type: string
+          enum: [strong, moderate, weak]
+          description: "网络效应强度"
+        switching_cost:
+          type: string
+          enum: [high, medium, low]
+          description: "客户切换成本"
+    structural_gap:
+      type: array
+      items:
+        type: object
+        properties:
+          area:
+            type: string
+            description: "空缺领域"
+          description:
+            type: string
+            description: "空缺描述"
+          confidence:
+            type: string
+            enum: [high, medium, low]
+            description: "置信度"
+      description: "结构性空缺列表"
+    assessment_basis:
+      type: array
+      items:
+        type: string
+      description: "评估依据（报告来源、数据点）"
+    last_updated:
+      type: string
+      format: date
+      description: "评估更新日期"
+
+# ============================================
+# 示例数据
+# ============================================
+example:
+  industry: "AI Sales Assistant Software"
+  maturity_stage: "growing"
+  tech_dependency:
+    required_tech: ["NLP", "Machine Learning", "CRM Integration"]
+    tech_readiness: "available"
+    adoption_cost: "medium"
+  entry_barrier:
+    capital_requirement: "medium"
+    regulation_barrier: "low"
+    network_effect: "moderate"
+    switching_cost: "high"
+  structural_gap:
+    - area: "SMB Segment"
+      description: "Large enterprises well-served, but SMB segment lacks affordable solutions"
+      confidence: "high"
+    - area: "Industry-Specific Verticals"
+      description: "Generic solutions exist, but industry-tailored solutions are rare"
+      confidence: "medium"
+  assessment_basis:
+    - "Gartner Magic Quadrant for Sales Tech 2024"
+    - "Crunchbase funding data: $2B+ invested in 2023-2024"
+    - "Industry reports showing 30% YoY growth"
+  last_updated: "2025-01-23"

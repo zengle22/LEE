@@ -1,0 +1,363 @@
+# Opportunity Discovery Workflow v1.0
+# 商业机会发现工作流 - 策略部门主流程
+
+kind: workflow
+id: workflow.stg.opportunity_discovery
+name: 商业机会发现工作流
+version: "1.0"
+
+description: >
+  这是一个"可冻结、可复盘、可移交"的需求发现流水线。
+  从市场信号采集到商业机会交付，完整的 5 层流程。
+
+  核心思想：
+  - 分析必须在 freeze 层收敛
+  - 机会必须在 handoff 层"对产品部门负责"
+
+# ============================================
+# 工作流步骤
+# ============================================
+steps:
+  # ============================================
+  # Step 1: 搜索采集（事实采集层）
+  # ============================================
+  - id: search_signals
+    name: 搜索采集
+    kind: agent
+    agent: search_agent
+    description: |
+      采集市场搜索信号，获取显性发生的市场数据。
+
+      输出：
+      - 关键词列表
+      - 搜索趋势
+      - 量级范围
+      - 地理分布
+      - 原始数据链接
+
+      不做：
+      - 用户分析
+      - 价值判断
+      - 趋势预测
+
+    inputs: []
+    outputs:
+      - path: contracts/search_signals/v1/signals.yaml
+        required: true
+        description: 搜索信号数据
+
+  # ============================================
+  # Step 2: 用户信号分析（分析层）
+  # ============================================
+  - id: analyze_user_signals
+    name: 用户信号分析
+    kind: agent
+    agent: user_signal_agent
+    depends_on:
+      - search_signals
+    description: |
+      分析搜索关键词，回答"搜这个词的人在试图解决什么问题"。
+
+      输出：
+      - 用户类型推断
+      - 触发场景
+      - 核心痛点
+      - 紧迫程度
+      - 搜索意图类型
+
+      约束：
+      - 只基于关键词+常识+公开资料
+      - 禁止发明用户故事
+      - 必须标注推断置信度
+
+    inputs:
+      - from_step: search_signals
+        contract: contracts/search_signals/v1/signals.yaml
+    outputs:
+      - path: contracts/user_hypothesis/v1/hypothesis.yaml
+        required: true
+        description: 用户假设分析
+
+  # ============================================
+  # Step 3: 行业结构分析（分析层）
+  # ============================================
+  - id: analyze_industry_structure
+    name: 行业结构分析
+    kind: agent
+    agent: industry_structure_agent
+    depends_on:
+      - search_signals
+    description: |
+      评估行业结构是否允许新机会出现。
+
+      输出：
+      - 行业成熟阶段
+      - 技术依赖评估
+      - 进入壁垒分析
+      - 结构性空缺识别
+
+      约束：
+      - 基于公开行业报告
+      - 不判断具体机会
+      - 不推荐进入策略
+
+    inputs:
+      - from_step: search_signals
+        contract: contracts/search_signals/v1/signals.yaml
+    outputs:
+      - path: contracts/industry_structure/v1/structure.yaml
+        required: true
+        description: 行业结构分析
+
+  # ============================================
+  # Step 4: 供给竞争分析（分析层）
+  # ============================================
+  - id: analyze_supply_competition
+    name: 供给竞争分析
+    kind: agent
+    agent: supply_competition_agent
+    depends_on:
+      - search_signals
+    description: |
+      分析已有解决方案，回答"已有方案哪里不够好"。
+
+      输出：
+      - 现有解决方案分类
+      - 已知局限性
+      - 解决方案空缺
+
+      约束：
+      - 基于公开产品信息
+      - 不推荐具体策略
+      - 不判断机会价值
+
+    inputs:
+      - from_step: search_signals
+        contract: contracts/search_signals/v1/signals.yaml
+    outputs:
+      - path: contracts/supply_gap/v1/gap.yaml
+        required: true
+        description: 供给空缺分析
+
+  # ============================================
+  # Step 5: 市场信号冻结（冻结层）
+  # ============================================
+  - id: freeze_market_signals
+    name: 市场信号冻结
+    kind: human_gate
+    description: |
+      这是系统稳定性的根！
+
+      冻结分析层的所有结论，确保：
+      - 后续 agent 只能引用，不可推翻
+      - 版本化所有假设
+      - 设置重新打开条件
+
+      需要人工或规则审核：
+      - 三个分析层输出是否一致？
+      - 置信度是否达标（≥50）？
+      - 假设是否可验证？
+
+    depends_on:
+      - analyze_user_signals
+      - analyze_industry_structure
+      - analyze_supply_competition
+
+    inputs:
+      - from_step: analyze_user_signals
+        contract: contracts/user_hypothesis/v1/hypothesis.yaml
+      - from_step: analyze_industry_structure
+        contract: contracts/industry_structure/v1/structure.yaml
+      - from_step: analyze_supply_competition
+        contract: contracts/supply_gap/v1/gap.yaml
+
+    outputs:
+      - path: contracts/market_signal_freeze/v1/freeze.yaml
+        required: true
+        description: 冻结的市场信号
+
+    gate_rules:
+      reviewers:
+        - role: stg_lead
+          description: "策略部门负责人"
+
+      approval_criteria:
+        - label: "分析一致性"
+          criteria: "三个分析层输出无明显矛盾"
+          required: true
+
+        - label: "置信度达标"
+          criteria: "综合置信度 ≥ 50"
+          required: true
+
+        - label: "可验证性"
+          criteria: "核心假设可以通过后续验证"
+          required: true
+
+      rejection_criteria:
+        - "分析层输出存在重大矛盾"
+        - "置信度过低（<30）"
+        - "假设过于宽泛，无法验证"
+
+  # ============================================
+  # Step 6: 商业机会构建（机会构建层）
+  # ============================================
+  - id: build_business_opportunity
+    name: 商业机会构建
+    kind: agent
+    agent: business_opportunity_agent
+    depends_on:
+      - freeze_market_signals
+    description: |
+      基于冻结的市场信号，构建可验证的商业机会假设。
+
+      这是唯一做"价值判断"的地方，但必须对产品部门负责。
+
+      输出：
+      - 一句话机会定义
+      - 目标用户和场景
+      - Why Now 理由
+      - 差异化假设
+      - Reasons NOT to Do（必须诚实）
+      - 产品验证建议
+
+      约束：
+      - 只能引用 freeze 内容
+      - 必须包含风险
+      - 不设计具体功能
+
+    inputs:
+      - from_step: freeze_market_signals
+        contract: contracts/market_signal_freeze/v1/freeze.yaml
+
+    outputs:
+      - path: contracts/business_opportunity/v1/opportunity.yaml
+        required: true
+        description: 商业机会假设
+
+  # ============================================
+  # Step 7: 产品部门交付（交付层）
+  # ============================================
+  - id: product_handoff
+    name: 产品部门交付
+    kind: skill
+    skill: product_handoff_generator
+    depends_on:
+      - build_business_opportunity
+    description: |
+      将商业机会转化为标准的产品交付文档。
+
+      核心原则：
+      - 清晰区分"相信的"和"不知道的"
+      - 明确"现在不要做什么"
+      - 给出可执行的验证建议
+
+      目的：
+      - 减少产品对"上游胡扯"的不信任
+      - 提供清晰的验证路径
+
+    inputs:
+      - from_step: build_business_opportunity
+        contract: contracts/business_opportunity/v1/opportunity.yaml
+      - from_step: freeze_market_signals
+        contract: contracts/market_signal_freeze/v1/freeze.yaml
+
+    outputs:
+      - path: contracts/product_handoff/v1/handoff.yaml
+        required: true
+        description: 产品交付文档
+
+# ============================================
+# 工作流配置
+# ============================================
+config:
+  max_parallel_steps: 3  # 分析层可以并行
+  timeout:
+    search_signals: 3600       # 1 hour
+    analyze_user_signals: 1800 # 30 min
+    analyze_industry_structure: 1800
+    analyze_supply_competition: 1800
+    freeze_market_signals: 86400  # 24 hours (human review)
+    build_business_opportunity: 1800
+    product_handoff: 600
+
+# ============================================
+# 质量门控
+# ============================================
+quality_gates:
+  - name: "分析层完整性检查"
+    at_step: freeze_market_signals
+    checks:
+      - type: "required_outputs"
+        required: [user_hypothesis, industry_structure, supply_gap]
+
+      - type: "consistency_check"
+        description: "三个分析层输出必须一致"
+
+  - name: "机会假设完整性"
+    at_step: build_business_opportunity
+    checks:
+      - type: "required_fields"
+        required: [one_liner, target_user, why_now, reasons_not_to_do]
+
+      - type: "risk_honesty"
+        description: "Reasons NOT to Do 必须至少 3 条"
+
+# ============================================
+# 输出产物清单
+# ============================================
+artifacts:
+  - name: "搜索信号数据"
+    path: contracts/search_signals/v1/signals.yaml
+    description: "原始市场搜索数据"
+
+  - name: "用户假设"
+    path: contracts/user_hypothesis/v1/hypothesis.yaml
+    description: "用户类型和意图推断"
+
+  - name: "行业结构分析"
+    path: contracts/industry_structure/v1/structure.yaml
+    description: "行业成熟度和壁垒分析"
+
+  - name: "供给空缺分析"
+    path: contracts/supply_gap/v1/gap.yaml
+    description: "现有方案和空缺"
+
+  - name: "市场信号冻结"
+    path: contracts/market_signal_freeze/v1/freeze.yaml
+    description: "冻结层 - 系统稳定性根"
+
+  - name: "商业机会假设"
+    path: contracts/business_opportunity/v1/opportunity.yaml
+    description: "可验证的机会假设"
+
+  - name: "产品交付文档"
+    path: contracts/product_handoff/v1/handoff.yaml
+    description: "向产品部门交付的最终文档"
+
+# ============================================
+# 重启和恢复策略
+# ============================================
+recovery:
+  # 如果分析层输出矛盾
+  analysis_conflict:
+    action: "回退到搜索采集，重新定义搜索范围"
+
+  # 如果置信度不达标
+  low_confidence:
+    action: "扩大搜索范围或延长时间窗口，重新采集"
+
+  # 如果产品部门拒绝机会
+  product_rejection:
+    action: "记录拒绝原因，更新冻结层，重新构建机会"
+
+# ============================================
+# 版本历史
+# ============================================
+changelog:
+  - version: "1.0"
+    date: "2025-01-23"
+    changes:
+      - "初始版本：建立 5 层机会发现流程"
+      - "定义冻结层机制"
+      - "创建产品交付标准模板"

@@ -1,0 +1,209 @@
+# Market Signal Freeze Approval Gate v1.0
+# 市场信号冻结审批门控
+
+kind: gate
+version: 1.0
+
+# ============================================
+# 门控描述
+# ============================================
+id: gate.stg.freeze_approval
+name: Market Signal Freeze Approval
+description: >
+  这是系统稳定性的根！审核分析层的所有结论是否可以冻结。
+
+  需要验证：
+  - 三个分析层输出是否一致？
+  - 置信度是否达标（≥50）？
+  - 假设是否可验证？
+
+owner: stg-governance
+tags: [gate, stg, freeze, human-approval, quality-control]
+
+# ============================================
+# 触发条件
+# ============================================
+trigger:
+  when:
+    - analysis_layers_completed
+  context:
+    requires:
+      - user_hypothesis: "contracts/user_hypothesis/v1/hypothesis.yaml"
+      - industry_structure: "contracts/industry_structure/v1/structure.yaml"
+      - supply_gap: "contracts/supply_gap/v1/gap.yaml"
+
+# ============================================
+# 审批标准
+# ============================================
+approval_criteria:
+  # ============================================
+  # 必需条件（必须全部通过）
+  # ============================================
+  must_have:
+    - id: analysis_consistency
+      name: "分析一致性"
+      description: "三个分析层输出无明显矛盾"
+      check_type: "manual"
+      weight: "critical"
+
+    - id: confidence_threshold
+      name: "置信度达标"
+      description: "综合置信度 ≥ 50"
+      check_type: "automated"
+      weight: "critical"
+      condition:
+        field: "confidence_score.overall_score"
+        operator: ">="
+        value: 50
+
+    - id: validation_feasibility
+      name: "可验证性"
+      description: "核心假设可以通过后续验证"
+      check_type: "manual"
+      weight: "critical"
+
+  # ============================================
+  # 可选条件（建议通过）
+  # ============================================
+  nice_to_have:
+    - id: external_validation
+      name: "外部验证"
+      description: "有外部数据支持分析结论"
+      check_type: "manual"
+      weight: "medium"
+
+    - id: clarity_score
+      name: "清晰度评分"
+      description: "分析结论表达清晰，无歧义"
+      check_type: "manual"
+      weight: "medium"
+
+# ============================================
+# 拒绝条件
+# ============================================
+rejection_criteria:
+  - condition: "分析层输出存在重大矛盾"
+    severity: "critical"
+    action: "回退到分析层，重新分析"
+
+  - condition: "置信度过低（<30）"
+    severity: "critical"
+    action: "扩大搜索范围或延长时间窗口"
+
+  - condition: "假设过于宽泛，无法验证"
+    severity: "high"
+    action: "细化假设范围"
+
+  - condition: "数据来源不足或不可靠"
+    severity: "medium"
+    action: "补充数据采集"
+
+# ============================================
+# 审批流程
+# ============================================
+approval_process:
+  reviewers:
+    - role: stg_lead
+      name: "策略部门负责人"
+      required: true
+      approval_type: "manual"
+
+    - role: data_analyst
+      name: "数据分析师"
+      required: false
+      approval_type: "consult"
+
+  steps:
+    - order: 1
+      name: "自动化检查"
+      description: "系统自动检查必需条件"
+      checks:
+        - confidence_threshold
+        - data_completeness
+
+    - order: 2
+      name: "人工审核"
+      description: "策略负责人审核分析质量"
+      reviewer: stg_lead
+      checklist:
+        - "分析层输出是否一致？"
+        - "假设是否清晰可验证？"
+        - "数据来源是否可靠？"
+
+    - order: 3
+      name: "决策"
+      description: "批准、拒绝或要求修改"
+      outcomes:
+        - approve: "通过冻结"
+        - reject: "拒绝，需重新分析"
+        - request_changes: "要求修改后重新提交"
+
+# ============================================
+# 审批检查清单
+# ============================================
+checklist:
+  category_analysis_consistency:
+    items:
+      - label: "用户问题与行业结构一致"
+        description: "User Signal 的推断与 Industry Stage 匹配"
+      - label: "用户问题与供给空缺一致"
+        description: "User Pain Point 在 Supply Gap 中有对应"
+      - label: "行业结构支持供给空缺"
+        description: "Structural Gap 可以从 Entry Barrier 解释"
+
+  category_confidence:
+    items:
+      - label: "数据质量评分 ≥ 70"
+        description: "Signal Quality 良好"
+      - label: "分析一致性评分 ≥ 60"
+        description: "各层分析无重大矛盾"
+      - label: "综合置信度 ≥ 50"
+        description: "Overall Score 达标"
+
+  category_validation_feasibility:
+    items:
+      - label: "用户问题可验证"
+        description: "可以通过用户访谈验证"
+      - label: "市场空缺可测量"
+        description: "可以通过市场调研验证"
+      - label: "验证方法明确"
+        description: "有清晰的验证路径"
+
+# ============================================
+# 审批输出
+# ============================================
+output:
+  on_approve:
+    create_freeze_record:
+      description: "创建冻结记录"
+      template: "contracts/market_signal_freeze/v1/schema.yaml"
+      auto_fill:
+        freeze_id: "{{generated_uuid}}"
+        freeze_version: "v1.0"
+        freeze_timestamp: "{{current_time}}"
+        accepted_assumptions: "{{from_analysis_layers}}"
+        confidence_score: "{{calculated_score}}"
+
+  on_reject:
+    create_rejection_notice:
+      description: "创建拒绝通知"
+      fields:
+        - rejection_reason
+        - required_changes
+        - resubmission_deadline
+
+# ============================================
+# 版本控制
+# ============================================
+versioning:
+  - "每次更新都是新版本，不覆盖历史"
+  - "保留版本变更记录"
+  - "支持回滚到历史版本"
+
+# ============================================
+# 审批历史记录
+# ============================================
+audit_log:
+  - "每次审批记录到审计日志"
+  - "包含审批人、时间、决策、理由"
+  - "支持追溯和复盘"

@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/adr-output/v1",
+  "title": "ADR Output",
+  "description": "Tech Lead 输出的架构决策记录 (Architecture Decision Record)",
+  "type": "object",
+  "required": ["adr_number", "title", "status", "date", "context", "decision", "rationale", "consequences", "rollback_plan"],
+  "properties": {
+    "adr_number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "ADR 编号"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 10,
+      "description": "决策标题"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "accepted", "deprecated", "superseded"],
+      "description": "决策状态"
+    },
+    "superseded_by": {
+      "type": "integer",
+      "description": "如果被取代，指向新的 ADR 编号"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "决策日期"
+    },
+    "deciders": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "决策者列表"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["architecture", "tech-stack", "api", "database", "security", "performance", "infrastructure", "frontend", "backend"]
+      },
+      "description": "标签"
+    },
+    "context": {
+      "type": "string",
+      "minLength": 50,
+      "description": "决策背景：为什么需要这个决策？业务背景、技术约束、团队现状"
+    },
+    "decision_drivers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "决策驱动因素"
+    },
+    "considered_options": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "pros", "cons"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "方案名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "方案描述"
+          },
+          "pros": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "优点"
+          },
+          "cons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "缺点"
+          },
+          "effort": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "实施成本"
+          }
+        }
+      },
+      "description": "考虑过的方案"
+    },
+    "decision": {
+      "type": "string",
+      "minLength": 10,
+      "description": "最终决策：选择了哪个方案"
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 50,
+      "description": "决策理由：为什么选这个？关键取舍点是什么？"
+    },
+    "consequences": {
+      "type": "object",
+      "required": ["positive", "negative"],
+      "properties": {
+        "positive": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "正面影响"
+        },
+        "negative": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "负面影响"
+        },
+        "neutral": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "中性影响"
+        }
+      },
+      "description": "预期影响"
+    },
+    "rollback_plan": {
+      "type": "object",
+      "required": ["description"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "回滚方案描述"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "回滚步骤"
+        },
+        "triggers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "触发回滚的条件"
+        }
+      },
+      "description": "回滚方案"
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "likelihood", "impact", "mitigation"],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "likelihood": {
+            "type": "string",
+            "enum": ["High", "Medium", "Low"]
+          },
+          "impact": {
+            "type": "string",
+            "enum": ["High", "Medium", "Low"]
+          },
+          "mitigation": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "风险与缓解"
+    },
+    "related_adrs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["adr_number", "title"],
+        "properties": {
+          "adr_number": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "relationship": {
+            "type": "string",
+            "enum": ["depends_on", "supersedes", "related_to"]
+          }
+        }
+      },
+      "description": "相关 ADR"
+    },
+    "implementation_notes": {
+      "type": "string",
+      "description": "给实现 Agent 的补充说明"
+    },
+    "review_checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Code Review 检查点"
+    }
+  }
+}

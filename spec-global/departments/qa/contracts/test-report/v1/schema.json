@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/testing/test-report/v1",
+  "title": "Test Report Contract",
+  "description": "测试报告契约 - 综合测试结果报告",
+  "type": "object",
+  "required": [
+    "report_id",
+    "manifest_id",
+    "version",
+    "report_type",
+    "generated_at",
+    "generator",
+    "verdict",
+    "summary"
+  ],
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "pattern": "^REPORT-[0-9]{4}-[0-9]{4}$",
+      "description": "报告唯一标识"
+    },
+    "manifest_id": {
+      "type": "string",
+      "description": "关联的提测包清单 ID"
+    },
+    "version": {
+      "type": "string",
+      "description": "测试版本"
+    },
+    "project": {
+      "type": "string",
+      "description": "项目名称"
+    },
+    "report_type": {
+      "type": "string",
+      "enum": ["smoke", "system", "regression", "final", "interim"],
+      "description": "报告类型"
+    },
+    "test_period": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" },
+        "cycles": { "type": "integer", "description": "测试轮次" }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "generator": {
+      "type": "string",
+      "description": "生成者 Agent ID"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "conditional_pass", "fail", "blocked"],
+      "description": "总体判定"
+    },
+    "exit_criteria_check": {
+      "type": "object",
+      "description": "出测标准检查",
+      "properties": {
+        "p0_open": {
+          "type": "object",
+          "properties": {
+            "threshold": { "type": "integer" },
+            "actual": { "type": "integer" },
+            "pass": { "type": "boolean" }
+          }
+        },
+        "p1_open": {
+          "type": "object",
+          "properties": {
+            "threshold": { "type": "integer" },
+            "actual": { "type": "integer" },
+            "pass": { "type": "boolean" }
+          }
+        },
+        "smoke_pass_rate": {
+          "type": "object",
+          "properties": {
+            "threshold": { "type": "number" },
+            "actual": { "type": "number" },
+            "pass": { "type": "boolean" }
+          }
+        },
+        "core_path_pass_rate": {
+          "type": "object",
+          "properties": {
+            "threshold": { "type": "number" },
+            "actual": { "type": "number" },
+            "pass": { "type": "boolean" }
+          }
+        },
+        "regression_pass_rate": {
+          "type": "object",
+          "properties": {
+            "threshold": { "type": "number" },
+            "actual": { "type": "number" },
+            "pass": { "type": "boolean" }
+          }
+        },
+        "all_passed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["total_cases", "total_bugs"],
+      "properties": {
+        "total_cases": { "type": "integer" },
+        "passed_cases": { "type": "integer" },
+        "failed_cases": { "type": "integer" },
+        "skipped_cases": { "type": "integer" },
+        "overall_pass_rate": { "type": "number" },
+        "total_bugs": { "type": "integer" },
+        "bugs_by_severity": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "type": "object",
+              "properties": {
+                "found": { "type": "integer" },
+                "fixed": { "type": "integer" },
+                "open": { "type": "integer" }
+              }
+            },
+            "P1": {
+              "type": "object",
+              "properties": {
+                "found": { "type": "integer" },
+                "fixed": { "type": "integer" },
+                "open": { "type": "integer" }
+              }
+            },
+            "P2": {
+              "type": "object",
+              "properties": {
+                "found": { "type": "integer" },
+                "fixed": { "type": "integer" },
+                "open": { "type": "integer" }
+              }
+            },
+            "P3": {
+              "type": "object",
+              "properties": {
+                "found": { "type": "integer" },
+                "fixed": { "type": "integer" },
+                "open": { "type": "integer" }
+              }
+            }
+          }
+        },
+        "bug_fix_rate": { "type": "number" }
+      }
+    },
+    "test_activities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "activity_type": {
+            "type": "string",
+            "enum": ["smoke", "system", "regression", "exploratory"]
+          },
+          "result_id": { "type": "string" },
+          "executed_at": { "type": "string", "format": "date-time" },
+          "verdict": { "type": "string" }
+        }
+      }
+    },
+    "bug_summary": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["bug_id", "severity", "status"],
+        "properties": {
+          "bug_id": { "type": "string" },
+          "title": { "type": "string" },
+          "severity": { "type": "string", "enum": ["P0", "P1", "P2", "P3"] },
+          "status": { "type": "string" },
+          "resolution": { "type": "string" },
+          "module": { "type": "string" }
+        }
+      }
+    },
+    "open_bugs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "bug_id": { "type": "string" },
+          "title": { "type": "string" },
+          "severity": { "type": "string" },
+          "reason_open": { "type": "string" },
+          "workaround": { "type": "string" },
+          "eta_fix": { "type": "string", "format": "date" }
+        }
+      },
+      "description": "未关闭的缺陷列表"
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "severity", "mitigation"],
+        "properties": {
+          "description": { "type": "string" },
+          "severity": { "type": "string", "enum": ["high", "medium", "low"] },
+          "affected_areas": { "type": "array", "items": { "type": "string" } },
+          "mitigation": { "type": "string" },
+          "accepted_by": { "type": "string" }
+        }
+      },
+      "description": "已知风险列表"
+    },
+    "recommendations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "建议事项"
+    },
+    "next_steps": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "下一步行动"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "type": { "type": "string" }
+        }
+      }
+    },
+    "sign_off": {
+      "type": "object",
+      "properties": {
+        "qa_lead": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "signed_at": { "type": "string", "format": "date-time" },
+            "comments": { "type": "string" }
+          }
+        },
+        "pm": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "signed_at": { "type": "string", "format": "date-time" },
+            "comments": { "type": "string" }
+          }
+        },
+        "tech_lead": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "signed_at": { "type": "string", "format": "date-time" },
+            "comments": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

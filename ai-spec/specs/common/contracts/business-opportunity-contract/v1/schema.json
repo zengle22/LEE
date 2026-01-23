@@ -1,0 +1,375 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-spec.example.com/contracts/business-opportunity-contract/v1/schema.json",
+  "title": "Business Opportunity Contract Schema",
+  "description": "Schema for business opportunity analysis output - market assessment and entry strategy",
+  "type": "object",
+  "required": ["contract_type", "contract_version", "metadata", "opportunity_assessment", "entry_strategy"],
+  "properties": {
+    "contract_type": {
+      "type": "string",
+      "const": "business-opportunity-output"
+    },
+    "contract_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["analysis_id", "source_contract", "generated_at", "keyword"],
+      "properties": {
+        "analysis_id": {
+          "type": "string",
+          "pattern": "^BO-\\d{8}-\\d{3}$"
+        },
+        "source_contract": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "keyword": {
+          "type": "string"
+        },
+        "analyst": {
+          "type": "string"
+        }
+      }
+    },
+    "opportunity_assessment": {
+      "$ref": "#/$defs/OpportunityAssessment"
+    },
+    "market_analysis": {
+      "$ref": "#/$defs/MarketAnalysis"
+    },
+    "competitive_landscape": {
+      "$ref": "#/$defs/CompetitiveLandscape"
+    },
+    "entry_strategy": {
+      "$ref": "#/$defs/EntryStrategy"
+    },
+    "risk_analysis": {
+      "$ref": "#/$defs/RiskAnalysis"
+    },
+    "pending_confirmation": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PendingConfirmation"
+      }
+    },
+    "downstream_handoff": {
+      "$ref": "#/$defs/DownstreamHandoff"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "OpportunityAssessment": {
+      "type": "object",
+      "required": ["overall_rating", "one_line_conclusion", "scores"],
+      "properties": {
+        "overall_rating": {
+          "type": "string",
+          "enum": ["A", "B", "C", "D"]
+        },
+        "rating_reasoning": {
+          "type": "string"
+        },
+        "one_line_conclusion": {
+          "type": "string"
+        },
+        "scores": {
+          "type": "object",
+          "properties": {
+            "market_gap": { "$ref": "#/$defs/Score" },
+            "entry_barrier": { "$ref": "#/$defs/Score" },
+            "differentiation_potential": { "$ref": "#/$defs/Score" },
+            "small_team_fit": { "$ref": "#/$defs/Score" }
+          }
+        },
+        "recommendation": {
+          "type": "string"
+        }
+      }
+    },
+    "Score": {
+      "type": "object",
+      "required": ["value", "summary"],
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "level": {
+          "type": "string",
+          "enum": ["excellent", "good", "moderate", "poor", "very_poor"]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "MarketAnalysis": {
+      "type": "object",
+      "properties": {
+        "market_size": {
+          "type": "object",
+          "properties": {
+            "global": { "type": "string" },
+            "china": { "type": "string" },
+            "cagr": { "type": "string" },
+            "data_source": { "type": "string" }
+          }
+        },
+        "market_stage": {
+          "type": "string",
+          "enum": ["emerging", "growth", "mature", "declining"]
+        },
+        "stage_reasoning": {
+          "type": "string"
+        },
+        "target_segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "segment_name": { "type": "string" },
+              "segment_size": { "type": "string" },
+              "competition_level": { "type": "string" },
+              "opportunity_reasoning": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "CompetitiveLandscape": {
+      "type": "object",
+      "properties": {
+        "concentration": {
+          "type": "string",
+          "enum": ["monopoly", "oligopoly", "competitive", "fragmented"]
+        },
+        "head_players": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "market_share": { "type": "string" },
+              "strengths": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "weaknesses": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "mid_tier_summary": {
+          "type": "object",
+          "properties": {
+            "count": { "type": "integer" },
+            "funding_activity": { "type": "string" },
+            "common_characteristics": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "open_source_alternatives": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "coverage": { "type": "string" },
+              "adoption": { "type": "string" }
+            }
+          }
+        },
+        "white_space_analysis": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "EntryStrategy": {
+      "type": "object",
+      "required": ["recommended_positioning", "target_user"],
+      "properties": {
+        "recommended_positioning": {
+          "type": "string"
+        },
+        "target_user": {
+          "type": "object",
+          "properties": {
+            "primary_persona": { "type": "string" },
+            "user_pain_points": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "underserved_needs": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "differentiation": {
+          "type": "object",
+          "properties": {
+            "primary_direction": { "type": "string" },
+            "specific_opportunities": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "mvp_suggestion": {
+          "type": "object",
+          "properties": {
+            "core_features": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "out_of_scope": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "estimated_dev_cost": { "type": "string" },
+            "estimated_timeline": { "type": "string" }
+          }
+        },
+        "pricing_strategy": {
+          "type": "object",
+          "properties": {
+            "model": { "type": "string" },
+            "reasoning": { "type": "string" }
+          }
+        },
+        "go_to_market": {
+          "type": "object",
+          "properties": {
+            "initial_channels": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "growth_strategy": { "type": "string" }
+          }
+        }
+      }
+    },
+    "RiskAnalysis": {
+      "type": "object",
+      "properties": {
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "level", "description"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["giant_entry", "tech_disruption", "policy_change", "economic_cycle", "funding_pressure", "talent_shortage"]
+              },
+              "level": {
+                "type": "string",
+                "enum": ["high", "medium", "low"]
+              },
+              "description": { "type": "string" },
+              "mitigation": { "type": "string" }
+            }
+          }
+        },
+        "biggest_risk": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string" },
+            "detail": { "type": "string" },
+            "recommendation": { "type": "string" }
+          }
+        },
+        "success_factors": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "PendingConfirmation": {
+      "type": "object",
+      "required": ["id", "question", "priority"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^PC-\\d{3}$"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["market_data", "user_assumption", "tech_feasibility", "strategy_choice", "resource_estimate"]
+        },
+        "question": { "type": "string" },
+        "context": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "impact": { "type": "string" },
+        "priority": {
+          "type": "string",
+          "enum": ["critical", "important", "nice_to_have"]
+        }
+      }
+    },
+    "DownstreamHandoff": {
+      "type": "object",
+      "properties": {
+        "for_prd_designer": {
+          "type": "object",
+          "properties": {
+            "product_goal_suggestions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 3
+            },
+            "user_persona_inputs": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "value_proposition_hints": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "differentiation_features": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "competitive_advantages": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "key_constraints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "constraint": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "recommended_next_steps": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

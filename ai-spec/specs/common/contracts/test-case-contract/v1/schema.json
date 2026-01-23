@@ -1,0 +1,422 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-spec.example.com/contracts/test-case-contract/v1/schema.json",
+    "title": "Test Case Contract Schema",
+    "description": "Schema for test cases generated from PRD and technical architecture",
+    "type": "object",
+    "required": [
+        "contract_type",
+        "contract_version",
+        "metadata",
+        "test_plan"
+    ],
+    "properties": {
+        "contract_type": {
+            "type": "string",
+            "const": "test-case"
+        },
+        "contract_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [
+                "contract_id",
+                "product_name",
+                "created_date",
+                "status",
+                "created_by"
+            ],
+            "properties": {
+                "contract_id": {
+                    "type": "string",
+                    "pattern": "^TC-\\d{8}-\\d{3}$",
+                    "description": "Unique test case contract ID (e.g., TC-20260121-001)"
+                },
+                "product_name": {
+                    "type": "string",
+                    "description": "Product or feature name being tested"
+                },
+                "version": {
+                    "type": "string",
+                    "description": "Test plan version"
+                },
+                "created_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "ISO 8601 timestamp when test cases were created"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "DRAFT",
+                        "READY_FOR_REVIEW",
+                        "APPROVED",
+                        "DEPRECATED"
+                    ],
+                    "description": "Current status of the test plan"
+                },
+                "created_by": {
+                    "type": "string",
+                    "description": "Agent or human who created the test cases"
+                },
+                "source_prd": {
+                    "type": "string",
+                    "description": "Reference to the source PRD contract"
+                },
+                "source_architecture": {
+                    "type": "string",
+                    "description": "Reference to the source technical architecture contract"
+                }
+            }
+        },
+        "test_plan": {
+            "type": "object",
+            "required": [
+                "test_suites"
+            ],
+            "properties": {
+                "overview": {
+                    "type": "string",
+                    "description": "High-level overview of the testing approach"
+                },
+                "test_strategy": {
+                    "type": "object",
+                    "properties": {
+                        "test_types": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "unit",
+                                    "integration",
+                                    "e2e",
+                                    "performance",
+                                    "security",
+                                    "accessibility",
+                                    "smoke",
+                                    "regression"
+                                ]
+                            },
+                            "description": "Types of tests to be executed"
+                        },
+                        "test_levels": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "level": {
+                                        "type": "string",
+                                        "enum": [
+                                            "component",
+                                            "api",
+                                            "ui",
+                                            "system"
+                                        ]
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "coverage_target": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                    }
+                                }
+                            }
+                        },
+                        "automation_strategy": {
+                            "type": "object",
+                            "properties": {
+                                "automated_ratio": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100,
+                                    "description": "Target percentage of automated tests"
+                                },
+                                "tools": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "description": "Testing tools and frameworks"
+                                }
+                            }
+                        }
+                    }
+                },
+                "test_suites": {
+                    "type": "array",
+                    "description": "Collection of test suites",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "suite_id",
+                            "name",
+                            "type",
+                            "priority",
+                            "test_cases"
+                        ],
+                        "properties": {
+                            "suite_id": {
+                                "type": "string",
+                                "pattern": "^TS-\\d{3}$",
+                                "description": "Unique test suite ID (e.g., TS-001)"
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "Test suite name"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Detailed description of what this suite tests"
+                            },
+                            "type": {
+                                "type": "string",
+                                "enum": [
+                                    "unit",
+                                    "integration",
+                                    "e2e",
+                                    "performance",
+                                    "security",
+                                    "accessibility",
+                                    "smoke",
+                                    "regression"
+                                ],
+                                "description": "Type of testing"
+                            },
+                            "module": {
+                                "type": "string",
+                                "description": "Module or feature being tested"
+                            },
+                            "priority": {
+                                "type": "string",
+                                "enum": [
+                                    "P0",
+                                    "P1",
+                                    "P2"
+                                ],
+                                "description": "Priority level (P0: Critical, P1: High, P2: Medium)"
+                            },
+                            "automated": {
+                                "type": "boolean",
+                                "description": "Whether this suite should be automated"
+                            },
+                            "test_cases": {
+                                "type": "array",
+                                "description": "List of test cases in this suite",
+                                "items": {
+                                    "type": "object",
+                                    "required": [
+                                        "test_id",
+                                        "title",
+                                        "priority",
+                                        "scenario",
+                                        "steps",
+                                        "expected_result"
+                                    ],
+                                    "properties": {
+                                        "test_id": {
+                                            "type": "string",
+                                            "pattern": "^TC-\\d{4}$",
+                                            "description": "Unique test case ID (e.g., TC-0001)"
+                                        },
+                                        "title": {
+                                            "type": "string",
+                                            "description": "Short, descriptive title"
+                                        },
+                                        "description": {
+                                            "type": "string",
+                                            "description": "Detailed description of the test case"
+                                        },
+                                        "priority": {
+                                            "type": "string",
+                                            "enum": [
+                                                "P0",
+                                                "P1",
+                                                "P2"
+                                            ],
+                                            "description": "Priority level"
+                                        },
+                                        "feature_id": {
+                                            "type": "string",
+                                            "description": "Reference to the feature ID from PRD"
+                                        },
+                                        "acceptance_criteria_id": {
+                                            "type": "string",
+                                            "description": "Reference to the AC ID from PRD"
+                                        },
+                                        "scenario": {
+                                            "type": "string",
+                                            "description": "Test scenario description"
+                                        },
+                                        "preconditions": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "description": "Conditions that must be met before test execution"
+                                        },
+                                        "test_data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                        "properties": {
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "value": {},
+                                                            "description": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    }
+                                            },
+                                            "description": "Test data required for execution"
+                                        },
+                                        "steps": {
+                                            "type": "array",
+                                            "description": "Test execution steps",
+                                            "items": {
+                                                "type": "object",
+                                                "required": [
+                                                    "step_number",
+                                                    "action",
+                                                    "expected_result"
+                                                ],
+                                                "properties": {
+                                                    "step_number": {
+                                                        "type": "integer",
+                                                        "minimum": 1
+                                                    },
+                                                    "action": {
+                                                        "type": "string",
+                                                        "description": "Action to perform"
+                                                    },
+                                                    "expected_result": {
+                                                        "type": "string",
+                                                        "description": "Expected result after this step"
+                                                    },
+                                                    "test_data_ref": {
+                                                        "type": "string",
+                                                        "description": "Reference to test data item"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "expected_result": {
+                                            "type": "string",
+                                            "description": "Overall expected result of the test case"
+                                        },
+                                        "postconditions": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "description": "State verification after test execution"
+                                        },
+                                        "dependencies": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "description": "References to other test cases this depends on"
+                                        },
+                                        "tags": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "description": "Tags for categorization and filtering"
+                                        },
+                                        "automation_notes": {
+                                            "type": "object",
+                                            "properties": {
+                                                "automatable": {
+                                                    "type": "boolean"
+                                                },
+                                                "framework": {
+                                                    "type": "string",
+                                                    "description": "Testing framework to use (e.g., Playwright, Jest)"
+                                                },
+                                                "complexity": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "low",
+                                                        "medium",
+                                                        "high"
+                                                    ]
+                                                },
+                                                "estimated_automated_time": {
+                                                    "type": "string",
+                                                    "description": "Estimated time to automate this test case"
+                                                },
+                                                "implementation_notes": {
+                                                    "type": "string",
+                                                    "description": "Notes for automation implementation"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "coverage_matrix": {
+                    "type": "array",
+                    "description": "Mapping of features to test coverage",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "feature_id": {
+                                "type": "string"
+                            },
+                            "feature_name": {
+                                "type": "string"
+                            },
+                            "test_cases": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "List of test case IDs covering this feature"
+                            },
+                            "coverage_percentage": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "approval_record": {
+            "type": "object",
+            "description": "Test plan approval information",
+            "properties": {
+                "reviewer": {
+                    "type": "string",
+                    "description": "Person who reviewed the test plan"
+                },
+                "review_date": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "approval_status": {
+                    "type": "string",
+                    "enum": [
+                        "APPROVED",
+                        "CONDITIONAL",
+                        "REJECTED"
+                    ]
+                },
+                "comments": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,225 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ui-component-contract/v1/schema.json",
+  "title": "UI Component Contract",
+  "description": "组件契约规范 - 把组件当成前端 API，让开发/测试/验收都有共同语言",
+  "type": "object",
+  "required": ["id", "props", "states"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^component\\.[a-z_]+$",
+      "description": "组件唯一标识符，格式: component.{name}"
+    },
+    "name": {
+      "type": "string",
+      "description": "组件显示名称"
+    },
+    "description": {
+      "type": "string",
+      "description": "组件描述"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["basic", "form", "data-display", "feedback", "navigation", "layout", "business"],
+      "description": "组件分类"
+    },
+    "figma": {
+      "type": "string",
+      "description": "Figma 组件链接"
+    },
+    "props": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/PropDefinition"
+      },
+      "description": "组件属性定义"
+    },
+    "states": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["default", "hover", "active", "focus", "disabled", "loading", "error", "success", "selected"]
+      },
+      "description": "组件状态列表"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/EventDefinition"
+      },
+      "description": "组件事件定义"
+    },
+    "slots": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/SlotDefinition"
+      },
+      "description": "组件插槽定义"
+    },
+    "a11y": {
+      "$ref": "#/definitions/ComponentA11y",
+      "description": "组件可访问性配置"
+    },
+    "tokens": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "组件使用的设计 token 引用"
+    },
+    "variants": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Variant"
+      },
+      "description": "组件变体定义"
+    },
+    "examples": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Example"
+      },
+      "description": "使用示例"
+    }
+  },
+  "definitions": {
+    "PropDefinition": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "boolean", "array", "object", "function"]
+        },
+        "enum": {
+          "type": "array",
+          "description": "可选值列表"
+        },
+        "default": {
+          "description": "默认值"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "description": {
+          "type": "string"
+        },
+        "tokenRef": {
+          "type": "string",
+          "description": "关联的设计 token"
+        }
+      }
+    },
+    "EventDefinition": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "事件名称"
+        },
+        "when": {
+          "type": "string",
+          "description": "触发条件表达式"
+        },
+        "payload": {
+          "type": "object",
+          "description": "事件携带的数据结构"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "SlotDefinition": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string",
+          "description": "默认内容"
+        }
+      }
+    },
+    "ComponentA11y": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "ARIA role"
+        },
+        "ariaLabel": {
+          "type": "string"
+        },
+        "keyboard": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "event"],
+            "properties": {
+              "key": {
+                "type": "string",
+                "enum": ["Enter", "Space", "Escape", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]
+              },
+              "event": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "键盘交互映射"
+        },
+        "focusable": {
+          "type": "boolean",
+          "default": true
+        },
+        "screenReaderText": {
+          "type": "string",
+          "description": "屏幕阅读器专用文本"
+        }
+      }
+    },
+    "Variant": {
+      "type": "object",
+      "required": ["name", "props"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "props": {
+          "type": "object",
+          "description": "变体的属性覆盖"
+        }
+      }
+    },
+    "Example": {
+      "type": "object",
+      "required": ["name", "props"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "props": {
+          "type": "object"
+        },
+        "code": {
+          "type": "string",
+          "description": "示例代码"
+        }
+      }
+    }
+  }
+}

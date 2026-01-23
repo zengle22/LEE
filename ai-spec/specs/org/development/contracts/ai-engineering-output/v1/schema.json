@@ -1,0 +1,366 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/ai-engineering-output/v1",
+  "title": "AI Engineering Output",
+  "description": "AI 工程师输出的三类契约：Prompt/Policy、Model Routing、Eval",
+  "type": "object",
+  "required": ["feature_name", "prompt_policy_contract", "model_routing_contract", "eval_contract"],
+  "properties": {
+    "feature_name": {
+      "type": "string",
+      "description": "AI 功能名称"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "prompt_policy_contract": {
+      "$ref": "#/$defs/PromptPolicyContract"
+    },
+    "model_routing_contract": {
+      "$ref": "#/$defs/ModelRoutingContract"
+    },
+    "eval_contract": {
+      "$ref": "#/$defs/EvalContract"
+    },
+    "observability_config": {
+      "$ref": "#/$defs/ObservabilityConfig"
+    }
+  },
+  "$defs": {
+    "PromptPolicyContract": {
+      "type": "object",
+      "required": ["version", "status", "system_prompt", "output_format"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^v\\d+\\.\\d+\\.\\d+$",
+          "description": "语义化版本号"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "eval_passed", "production", "deprecated"],
+          "description": "状态"
+        },
+        "system_prompt": {
+          "type": "string",
+          "minLength": 50,
+          "description": "系统提示词"
+        },
+        "user_prompt_template": {
+          "type": "string",
+          "description": "用户提示词模板"
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "约束条件"
+        },
+        "output_format": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["text", "json", "markdown", "streaming"]
+            },
+            "schema": {
+              "type": "object",
+              "description": "JSON 输出的 schema（如适用）"
+            }
+          },
+          "description": "输出格式规范"
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["input", "output"],
+            "properties": {
+              "input": {
+                "type": "string"
+              },
+              "output": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Few-shot 示例"
+        },
+        "changelog": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["version", "date", "changes"],
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string",
+                "format": "date"
+              },
+              "changes": {
+                "type": "string"
+              },
+              "eval_result": {
+                "type": "string",
+                "enum": ["passed", "failed"]
+              }
+            }
+          },
+          "description": "变更日志"
+        }
+      }
+    },
+    "ModelRoutingContract": {
+      "type": "object",
+      "required": ["primary_model", "fallback_chain", "timeout_config", "cost_limits"],
+      "properties": {
+        "primary_model": {
+          "type": "object",
+          "required": ["provider", "model_id"],
+          "properties": {
+            "provider": {
+              "type": "string",
+              "description": "模型提供商"
+            },
+            "model_id": {
+              "type": "string",
+              "description": "模型ID"
+            },
+            "cost_per_1k_input_tokens": {
+              "type": "number",
+              "description": "输入 token 成本 ($/1K)"
+            },
+            "cost_per_1k_output_tokens": {
+              "type": "number",
+              "description": "输出 token 成本 ($/1K)"
+            }
+          }
+        },
+        "fallback_chain": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["priority", "model", "trigger_condition"],
+            "properties": {
+              "priority": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "model": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string"
+                  },
+                  "model_id": {
+                    "type": "string"
+                  }
+                }
+              },
+              "trigger_condition": {
+                "type": "string",
+                "description": "触发降级的条件"
+              }
+            }
+          },
+          "description": "降级链"
+        },
+        "timeout_config": {
+          "type": "object",
+          "required": ["first_token_ms", "total_ms"],
+          "properties": {
+            "first_token_ms": {
+              "type": "integer",
+              "description": "首 token 超时（毫秒）"
+            },
+            "total_ms": {
+              "type": "integer",
+              "description": "总超时（毫秒）"
+            },
+            "retry_count": {
+              "type": "integer",
+              "default": 1,
+              "description": "重试次数"
+            },
+            "retry_delay_ms": {
+              "type": "integer",
+              "description": "重试间隔（毫秒）"
+            }
+          }
+        },
+        "cost_limits": {
+          "type": "object",
+          "properties": {
+            "per_request_usd": {
+              "type": "number",
+              "description": "单次请求成本上限 ($)"
+            },
+            "daily_usd": {
+              "type": "number",
+              "description": "日成本上限 ($)"
+            },
+            "monthly_usd": {
+              "type": "number",
+              "description": "月成本上限 ($)"
+            }
+          }
+        },
+        "rate_limits": {
+          "type": "object",
+          "properties": {
+            "requests_per_minute": {
+              "type": "integer"
+            },
+            "tokens_per_minute": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "EvalContract": {
+      "type": "object",
+      "required": ["dataset", "metrics", "release_gate"],
+      "properties": {
+        "dataset": {
+          "type": "object",
+          "required": ["name", "size"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "评测数据集名称"
+            },
+            "size": {
+              "type": "integer",
+              "description": "样本数量"
+            },
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "数据类别"
+            },
+            "location": {
+              "type": "string",
+              "description": "数据集位置"
+            }
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "baseline", "threshold"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": ["accuracy", "refusal_rate", "hallucination_rate", "tool_call_success_rate", "latency_p99", "user_satisfaction"],
+                "description": "指标名称"
+              },
+              "baseline": {
+                "type": "number",
+                "description": "基线值"
+              },
+              "threshold": {
+                "type": "number",
+                "description": "阈值（发布门槛）"
+              },
+              "direction": {
+                "type": "string",
+                "enum": ["higher_is_better", "lower_is_better"],
+                "description": "指标方向"
+              },
+              "current": {
+                "type": "number",
+                "description": "当前值"
+              }
+            }
+          }
+        },
+        "release_gate": {
+          "type": "object",
+          "required": ["all_metrics_must_pass"],
+          "properties": {
+            "all_metrics_must_pass": {
+              "type": "boolean",
+              "default": true
+            },
+            "regression_investigation_required": {
+              "type": "boolean",
+              "default": true,
+              "description": "基线回归是否需要调查"
+            }
+          }
+        },
+        "eval_history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["date", "version", "pass"],
+            "properties": {
+              "date": {
+                "type": "string",
+                "format": "date"
+              },
+              "version": {
+                "type": "string"
+              },
+              "metrics_snapshot": {
+                "type": "object"
+              },
+              "pass": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ObservabilityConfig": {
+      "type": "object",
+      "properties": {
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "user_satisfaction_score",
+              "response_latency_p50",
+              "response_latency_p99",
+              "token_usage_per_request",
+              "cost_per_request",
+              "error_rate_by_type",
+              "tool_call_failure_rate",
+              "hallucination_detected_rate"
+            ]
+          },
+          "description": "需要埋点的指标"
+        },
+        "alerting_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["condition", "action"],
+            "properties": {
+              "condition": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

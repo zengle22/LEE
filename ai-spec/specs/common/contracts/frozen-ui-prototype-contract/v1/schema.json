@@ -1,0 +1,78 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-spec.example.com/contracts/frozen-ui-prototype-contract/v1/schema.json",
+    "title": "Frozen UI Prototype Contract Schema",
+    "description": "Schema for frozen UI prototype and design principles",
+    "type": "object",
+    "required": [
+        "contract_type",
+        "contract_version",
+        "metadata",
+        "design_specs"
+    ],
+    "properties": {
+        "contract_type": {
+            "type": "string",
+            "const": "frozen-ui-prototype"
+        },
+        "contract_version": {
+            "type": "string"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [
+                "contract_id",
+                "is_frozen"
+            ],
+            "properties": {
+                "contract_id": {
+                    "type": "string",
+                    "pattern": "^FUIP-\\d{8}-\\d{3}$"
+                },
+                "is_frozen": {
+                    "type": "boolean",
+                    "const": true
+                }
+            }
+        },
+        "design_specs": {
+            "type": "object",
+            "required": [
+                "interaction_principles",
+                "core_paths"
+            ],
+            "properties": {
+                "interaction_principles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "core_paths": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "prototype_link": {
+                                "type": "string"
+                            },
+                            "critical_states": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "secondary_paths_description": {
+                    "type": "string",
+                    "description": "非主路径的文字描述"
+                }
+            }
+        }
+    }
+}

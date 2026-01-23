@@ -1,0 +1,289 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-spec.example.com/contracts/alignment-confirmation-contract/v1/schema.json",
+    "title": "Alignment Confirmation Contract Schema",
+    "description": "Contract for requirement alignment confirmation",
+    "type": "object",
+    "required": [
+        "contract_type",
+        "contract_version",
+        "metadata",
+        "original_requirement",
+        "clarified_description"
+    ],
+    "properties": {
+        "contract_type": {
+            "type": "string",
+            "const": "alignment-confirmation"
+        },
+        "contract_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [
+                "contract_id",
+                "requirement_id",
+                "created_at",
+                "status"
+            ],
+            "properties": {
+                "contract_id": {
+                    "type": "string",
+                    "pattern": "^AC-\\d{8}-\\d{3}$"
+                },
+                "requirement_id": {
+                    "type": "string"
+                },
+                "requirement_title": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string",
+                    "default": "1.0"
+                },
+                "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "updated_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "DRAFT",
+                        "PENDING_CONFIRMATION",
+                        "CONFIRMED",
+                        "REVISION_REQUIRED",
+                        "REJECTED"
+                    ]
+                },
+                "source": {
+                    "type": "string"
+                },
+                "submitter": {
+                    "type": "string"
+                },
+                "submitted_at": {
+                    "type": "string",
+                    "format": "date-time"
+                }
+            }
+        },
+        "original_requirement": {
+            "type": "string",
+            "description": "Original requirement text as submitted"
+        },
+        "clarified_description": {
+            "type": "string",
+            "description": "Clarified requirement description after analysis"
+        },
+        "background": {
+            "type": "string",
+            "description": "Background information and context"
+        },
+        "target_users": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "description"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "priority_icon": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "estimated_size": {
+                        "type": "string"
+                    },
+                    "core_needs": {
+                        "type": "string"
+                    },
+                    "usage_scenarios": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "business_goals": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "description"
+                ],
+                "properties": {
+                    "index": {
+                        "type": "integer"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "type_display": {
+                        "type": "string"
+                    },
+                    "importance_display": {
+                        "type": "string"
+                    },
+                    "success_criteria": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "success_metrics": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "target_value",
+                    "measurement_method"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "current_value": {
+                        "type": "string"
+                    },
+                    "target_value": {
+                        "type": "string"
+                    },
+                    "measurement_method": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "scope_includes": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Items included in scope"
+        },
+        "scope_excludes": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Items explicitly excluded from scope"
+        },
+        "scope_future": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Items for future consideration"
+        },
+        "constraints": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type_display": {
+                        "type": "string"
+                    },
+                    "severity_display": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "pending_questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "index",
+                    "question"
+                ],
+                "properties": {
+                    "index": {
+                        "type": "integer"
+                    },
+                    "question": {
+                        "type": "string"
+                    },
+                    "context": {
+                        "type": "string"
+                    },
+                    "options": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "option_letter": {
+                                    "type": "string"
+                                },
+                                "description": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "answer": {
+                        "type": "string"
+                    },
+                    "answer_status": {
+                        "type": "string",
+                        "enum": [
+                            "PENDING",
+                            "ANSWERED"
+                        ]
+                    }
+                }
+            }
+        },
+        "confirmation": {
+            "type": "object",
+            "properties": {
+                "confirmed_by": {
+                    "type": "string"
+                },
+                "confirmed_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "comments": {
+                    "type": "string"
+                }
+            }
+        },
+        "change_log": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "changes": {
+                        "type": "string"
+                    },
+                    "author": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}

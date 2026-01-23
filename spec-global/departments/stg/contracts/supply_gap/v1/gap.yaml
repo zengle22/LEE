@@ -1,0 +1,123 @@
+# Supply Gap Contract v1.0
+# 供给空缺分析数据结构
+
+kind: contract_schema
+version: 1.0
+description: "供给竞争分析 Agent 的输出数据结构"
+
+schema:
+  type: object
+  required:
+    - industry
+    - existing_solutions
+    - solution_gaps
+    - assessment_basis
+  properties:
+    industry:
+      type: string
+      description: "分析的行业"
+    existing_solutions:
+      type: array
+      items:
+        type: object
+        required:
+          - category
+          - representative_companies
+          - key_features
+          - target_segment
+          - known_limitations
+        properties:
+          category:
+            type: string
+            description: "解决方案类别"
+          representative_companies:
+            type: array
+            items:
+              type: string
+            description: "代表性公司/产品"
+          key_features:
+            type: array
+            items:
+              type: string
+            description: "核心功能列表"
+          target_segment:
+            type: string
+            description: "目标客户群"
+          known_limitations:
+            type: array
+            items:
+              type: string
+            description: "已知的局限性"
+      description: "现有解决方案列表"
+    solution_gaps:
+      type: object
+      required:
+        - unserved_segment
+        - poor_ux_cost_integration
+        - emerging_needs
+      properties:
+        unserved_segment:
+          type: array
+          items:
+            type: string
+          description: "未被服务的细分市场"
+        poor_ux_cost_integration:
+          type: array
+          items:
+            type: string
+          description: "UX/成本/集成方面的痛点"
+        emerging_needs:
+          type: array
+          items:
+            type: string
+          description: "新兴需求（现有方案未覆盖）"
+      description: "解决方案空缺分析"
+    assessment_basis:
+      type: array
+      items:
+        type: string
+      description: "评估依据（产品页面、评测、用户评论等）"
+
+# ============================================
+# 示例数据
+# ============================================
+example:
+  industry: "AI Sales Assistant Software"
+  existing_solutions:
+    - category: "Enterprise Sales Platforms"
+      representative_companies: ["Salesforce Einstein", "HubSpot Sales Hub"]
+      key_features:
+        - "CRM-integrated AI assistant"
+        - "Lead scoring and prioritization"
+        - "Email sequence optimization"
+      target_segment: "Enterprise (1000+ employees)"
+      known_limitations:
+        - "High cost ($5k+/month minimum)"
+        - "Complex setup (3-6 months)"
+        - "Requires dedicated admin"
+    - category: "SMB Sales Tools"
+      representative_companies: ["Apollo.io", "Lavender"]
+      key_features:
+        - "AI email writing"
+        - "Lead enrichment"
+        - "Basic prospecting"
+      target_segment: "SMB (10-200 employees)"
+      known_limitations:
+        - "Limited AI capabilities (mostly templates)"
+        - "Poor CRM integration"
+        - "No industry-specific features"
+  solution_gaps:
+    unserved_segment:
+      - "Mid-market (200-1000 employees): Too expensive for enterprise tools, too complex for SMB tools"
+      - "Industry-specific verticals: No solutions tailored for healthcare, education, legal"
+    poor_ux_cost_integration:
+      - "Integration requires API development or expensive consultants"
+      - "Setup time is 3-6 months, not weeks"
+      - "Training required for sales teams (high adoption friction)"
+    emerging_needs:
+      - "AI voice assistants for sales calls (emerging, few solutions)"
+      - "Multi-channel AI (email + LinkedIn + phone) - most solutions are single-channel"
+  assessment_basis:
+    - "Product websites and pricing pages"
+    - "G2 and Capterra reviews (500+ reviews analyzed)"
+    - "Case studies and whitepapers"

@@ -1,0 +1,381 @@
+# Exit Gate Rules v2.0
+# 出测门禁规则 - 更工程化的质量标准
+
+kind: gate_rules
+version: 2.0
+
+# ============================================
+# 基础信息
+# ============================================
+gate_id: gate.test.exit_gate_v2
+name: Exit Gate (Multi-Round Optimized)
+description: >
+  多轮循环优化的出测门禁规则，支持：
+  - 强制标准（0 容忍）
+  - 阈值标准（数据驱动）
+  - 风险可接受标准（人类签字）
+  - Bug 状态严格验证
+  - 回归范围优化（风险回归而非全量）
+
+owner: test-governance
+tags: [gate, exit-criteria, quality-bar]
+
+# ============================================
+# 强制标准（0 容忍，不可豁免）
+# ============================================
+mandatory_criteria:
+  - criterion_id: C001
+    name: "P0 Bug 清零"
+    description: "所有 P0 Bug 必须关闭"
+    rule: "COUNT(bugs WHERE severity=P0 AND status != closed) == 0"
+    severity: blocker
+    exemption: false
+    rationale: "P0 阻塞核心流程，绝对不可放行"
+
+  - criterion_id: C002
+    name: "冒烟测试 100% 通过"
+    description: "冒烟测试套件必须全部通过"
+    rule: "smoke_test_pass_rate == 100"
+    severity: blocker
+    exemption: false
+    rationale: "冒烟失败说明基础环境有问题"
+
+  - criterion_id: C003
+    name: "核心流程 100% 通过"
+    description: "核心业务流程必须全部通过"
+    rule: "core_flow_pass_rate == 100"
+    severity: blocker
+    exemption: false
+    rationale: "核心流程代表最小可用产品"
+    core_flows:
+      - "用户注册登录"
+      - "核心业务交易链路"
+      - "支付流程（如涉及）"
+      - "数据持久化"
+
+  - criterion_id: C004
+    name: "人类介入 Bug 已决策"
+    description: "所有 needs_human=true 的 Bug 必须完成人类审批"
+    rule: "COUNT(bugs WHERE decision.needs_human=true AND decision.human_approver IS NULL) == 0"
+    severity: blocker
+    exemption: false
+    rationale: "高风险 Bug 必须人类背书"
+
+  - criterion_id: C005
+    name: "API 契约无违反"
+    description: "API 契约测试不允许有违反"
+    rule: "api_contract_violations == 0"
+    severity: blocker
+    exemption: false
+    rationale: "契约违反会导致集成失败"
+
+# ============================================
+# 阈值标准（数据驱动，可根据项目调整）
+# ============================================
+threshold_criteria:
+  - criterion_id: T001
+    name: "P1 Bug 阈值"
+    description: "P1 Bug 数量不超过阈值"
+    rule: "COUNT(bugs WHERE severity=P1 AND status IN [new,triaged,fixing,fixed,verifying]) <= p1_threshold"
+    default_threshold: 3
+    severity: major
+    exemption_condition: "已有规避方案且风险可接受"
+
+  - criterion_id: T002
+    name: "P2 Bug 阈值"
+    description: "P2 Bug 数量不超过阈值"
+    rule: "COUNT(bugs WHERE severity=P2 AND status != closed) <= p2_threshold"
+    default_threshold: 10
+    severity: minor
+    exemption_condition: "不影响主要功能"
+
+  - criterion_id: T003
+    name: "回归测试通过率"
+    description: "回归测试通过率不低于阈值"
+    rule: "regression_pass_rate >= regression_threshold"
+    default_threshold: 95
+    severity: major
+    exemption_condition: "失败用例为 P3 且有规避"
+
+  - criterion_id: T004
+    name: "E2E 测试通过率"
+    description: "端到端测试通过率不低于阈值"
+    rule: "e2e_pass_rate >= e2e_threshold"
+    default_threshold: 90
+    severity: major
+    exemption_condition: "失败场景为边缘用例"
+
+# ============================================
+# 风险可接受标准（需人类签字）
+# ============================================
+risk_acceptance_criteria:
+  - criterion_id: R001
+    name: "已知 P2/P3 已记录"
+    description: "所有已知 P2/P3 Bug 必须有文档记录"
+    rule: "ALL(bugs WHERE severity IN [P2,P3] AND status != closed) HAVE documentation"
+    required_fields: [title, impact_assessment, workaround, defer_reason]
+    severity: major
+
+  - criterion_id: R002
+    name: "规避方案可用"
+    description: "未修复的 P1/P2 Bug 必须有可用的规避方案"
+    rule: "ALL(bugs WHERE severity IN [P1,P2] AND status != closed) HAVE workaround"
+    verification: "QA 验证规避方案可行"
+    severity: major
+
+  - criterion_id: R003
+    name: "回滚计划就绪"
+    description: "必须有回滚计划和演练记录"
+    rule: "rollback_plan_exists == true AND rollback_tested == true"
+    severity: major
+    required_artifacts:
+      - "rollback-plan.md"
+      - "rollback-test-record.yaml"
+
+  - criterion_id: R004
+    name: "风险评估完成"
+    description: "所有遗留风险必须有评估和签字"
+    rule: "risk_assessment_completed == true"
+    severity: major
+    required_approvers: [qa_lead, tech_lead, pm]
+
+# ============================================
+# Bug 状态验证规则
+# ============================================
+bug_state_validation:
+  - validation_id: B001
+    name: "无自证闭环"
+    description: "验证者不能是修复者"
+    rule: "ALL(bugs WHERE status=verified) SATISFY verification.verified_by != routing.owner_agent"
+    error_message: "发现自证闭环 Bug，必须重新验证"
+    severity: blocker
+
+  - validation_id: B002
+    name: "无中间状态残留"
+    description: "不允许有卡在中间状态的 Bug"
+    rule: "COUNT(bugs WHERE status IN [fixing, verifying] AND age > 72h) == 0"
+    error_message: "有 Bug 卡在中间状态超过 72 小时"
+    severity: major
+    action: "升级或关闭"
+
+  - validation_id: B003
+    name: "无未分流 Bug"
+    description: "所有 Bug 必须完成分流"
+    rule: "COUNT(bugs WHERE status=new) == 0"
+    error_message: "有未分流的 Bug"
+    severity: major
+
+  - validation_id: B004
+    name: "阻塞 Bug 已解决"
+    description: "不允许有未解决的阻塞状态 Bug"
+    rule: "COUNT(bugs WHERE status IN [blocked_human, blocked_pm, blocked_env, blocked_dependency] AND age > 48h) == 0"
+    error_message: "有阻塞状态 Bug 超过 48 小时未解决"
+    severity: major
+    action: "升级或降级"
+
+# ============================================
+# 回归范围验证（风险回归优化）
+# ============================================
+regression_coverage_validation:
+  required_regression_scope:
+    - scope: smoke_suite
+      coverage: 100
+      description: "冒烟套件全量回归"
+      rationale: "快速验证基础功能"
+
+    - scope: core_flows
+      coverage: 100
+      description: "核心流程全量回归"
+      rationale: "保证核心业务可用"
+
+    - scope: bug_related
+      coverage: 100
+      description: "本轮修复 Bug 的相关用例"
+      rule: "ALL(bugs WHERE status=verified) HAVE regression_case_ids"
+      rationale: "确保 Bug 不复发"
+
+    - scope: changed_areas
+      coverage: ">= 80"
+      description: "代码变更区域的回归用例"
+      rule: "cover changed_areas from release_manifest"
+      rationale: "变更影响范围回归"
+
+    - scope: historical_hotspots
+      coverage: ">= 70"
+      description: "历史高发 Bug 区域"
+      rule: "cover top 20% bug_prone_modules"
+      rationale: "防止重复问题"
+
+  optional_full_regression:
+    when: "final_round OR major_release"
+    coverage: 100
+    description: "出测前最后一轮或重大版本才跑全量回归"
+    rationale: "效率优化，避免重复劳动"
+
+# ============================================
+# 测试产物验证
+# ============================================
+required_artifacts:
+  - artifact: "release-manifest.yaml"
+    description: "研发提测包清单"
+    validation: schema_valid
+
+  - artifact: "test-rounds/"
+    description: "所有轮次测试记录"
+    validation: all_rounds_have_conclusion
+
+  - artifact: "bugs/"
+    description: "所有 Bug 契约文件"
+    validation: all_bugs_have_resolution
+
+  - artifact: "test-report-final.yaml"
+    description: "最终测试报告"
+    validation: schema_valid + signed_by_qa_lead
+
+  - artifact: "regression-evidence/"
+    description: "回归测试证据"
+    validation: coverage_meets_criteria
+
+  - artifact: "risk-assessment.md"
+    description: "风险评估文档"
+    validation: signed_by_stakeholders
+
+# ============================================
+# 门禁判定逻辑
+# ============================================
+gate_verdict:
+  PASS:
+    condition: >
+      ALL(mandatory_criteria) == MET
+      AND ALL(threshold_criteria) == MET
+      AND ALL(risk_acceptance_criteria) == DOCUMENTED_AND_SIGNED
+      AND ALL(bug_state_validation) == VALID
+      AND ALL(regression_coverage_validation.required_regression_scope) == COVERED
+    action: allow_release
+    next_state: RELEASED
+
+  CONDITIONAL_PASS:
+    condition: >
+      ALL(mandatory_criteria) == MET
+      AND MOST(threshold_criteria) == MET (with documented exemptions)
+      AND ALL(risk_acceptance_criteria) == DOCUMENTED_AND_SIGNED
+    action: human_decision_required
+    required_approvers: [qa_lead, pm, tech_lead]
+    next_state: RELEASE_CANDIDATE (pending approval)
+
+  FAIL:
+    condition: >
+      ANY(mandatory_criteria) == NOT_MET
+      OR (too_many_threshold_violations AND no_valid_exemptions)
+    action: next_round_required
+    next_state: ENV_READY (start next round)
+
+  BLOCKED:
+    condition: >
+      critical_blocker_detected
+      OR max_rounds_exceeded
+      OR unresolvable_issues
+    action: abort_and_escalate
+    next_state: BLOCKED
+
+# ============================================
+# 阈值配置（可根据项目定制）
+# ============================================
+thresholds:
+  default:
+    p1_threshold: 3
+    p2_threshold: 10
+    p3_threshold: 50
+    regression_threshold: 95  # %
+    e2e_threshold: 90  # %
+
+  conservative:
+    p1_threshold: 1
+    p2_threshold: 5
+    p3_threshold: 20
+    regression_threshold: 98
+    e2e_threshold: 95
+
+  aggressive:
+    p1_threshold: 5
+    p2_threshold: 20
+    p3_threshold: 100
+    regression_threshold: 90
+    e2e_threshold: 85
+
+# ============================================
+# 豁免管理
+# ============================================
+exemption_policy:
+  allowed_exemptions:
+    - criterion: T001 (P1 threshold)
+      max_exemptions: 2
+      requires_approval: qa_lead + pm
+      requires_documentation: true
+
+    - criterion: T003 (regression pass rate)
+      max_exemptions: 1
+      requires_approval: qa_lead
+      condition: "failed_cases are all P3"
+
+  forbidden_exemptions:
+    - criterion: C001 (P0 清零)
+    - criterion: C002 (冒烟 100%)
+    - criterion: C003 (核心流程 100%)
+    - criterion: C004 (人类介入 Bug)
+    - criterion: C005 (API 契约)
+
+# ============================================
+# 人类签字要求
+# ============================================
+signoff_requirements:
+  final_signoff:
+    required_approvers:
+      - role: qa_lead
+        responsibility: "质量保证"
+      - role: pm
+        responsibility: "产品验收"
+      - role: tech_lead
+        responsibility: "技术风险"
+
+    optional_approvers:
+      - role: security_officer
+        condition: "has_security_bugs OR has_security_changes"
+      - role: compliance_officer
+        condition: "has_compliance_requirements"
+
+    approval_sla: 24h
+
+    inputs_to_review:
+      - "test-report-final.yaml"
+      - "bugs/ (all open P1/P2/P3)"
+      - "risk-assessment.md"
+      - "regression-evidence/"
+
+# ============================================
+# 可观测性
+# ============================================
+metrics:
+  - exit_gate_pass_rate
+  - average_rounds_to_release
+  - bug_escape_rate (到下一环境)
+  - exemption_usage_rate
+  - time_to_signoff
+
+dashboards:
+  - exit_criteria_progress
+  - bug_burndown_by_severity
+  - regression_coverage_heatmap
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  version: 2.0
+  created: "2026-01-15"
+  replaces: gate.test.exit_gate (v1.0)
+  breaking_changes:
+    - "引入风险回归策略"
+    - "增加 Bug 状态验证"
+    - "优化阈值标准"
+    - "强化人类签字要求"

@@ -1,0 +1,105 @@
+# Search Signals Contract v1.0
+# 搜索信号数据结构
+
+kind: contract_schema
+version: 1.0
+description: "搜索采集 Agent 的输出数据结构"
+
+schema:
+  type: object
+  required:
+    - signals
+    - metadata
+  properties:
+    signals:
+      type: array
+      items:
+        type: object
+        required:
+          - keyword
+          - trend
+          - volume_range
+          - geo
+          - time_window
+          - source_links
+        properties:
+          keyword:
+            type: string
+            description: "搜索关键词"
+          trend:
+            type: string
+            enum: [up, flat, down]
+            description: "搜索趋势方向"
+          volume_range:
+            type: string
+            description: "搜索量级范围"
+          geo:
+            type: array
+            items:
+              type: string
+            description: "地理分布"
+          time_window:
+            type: string
+            description: "观察时间窗口"
+          source_links:
+            type: array
+            items:
+              type: string
+            description: "原始数据来源链接"
+
+    metadata:
+      type: object
+      required:
+        - query
+        - collection_timestamp
+        - data_sources
+      properties:
+        query:
+          type: object
+          properties:
+            industry:
+              type: string
+            region:
+              type: string
+            time_window:
+              type: string
+        collection_timestamp:
+          type: string
+          format: "date-time"
+        data_sources:
+          type: array
+          items:
+            type: string
+          description: "使用的数据源"
+
+# ============================================
+# 示例数据
+# ============================================
+example:
+  signals:
+    - keyword: "AI sales assistant"
+      trend: "up"
+      volume_range: "10k-50k/month"
+      geo: ["US", "UK", "CA"]
+      time_window: "2025-01-01 to 2025-01-23"
+      source_links:
+        - "https://trends.google.com/..."
+        - "https://keywordtool.io/..."
+    - keyword: "sales automation AI"
+      trend: "up"
+      volume_range: "5k-10k/month"
+      geo: ["US", "DE"]
+      time_window: "2025-01-01 to 2025-01-23"
+      source_links:
+        - "https://trends.google.com/..."
+
+  metadata:
+    query:
+      industry: "AI SaaS"
+      region: "US"
+      time_window: "30d"
+    collection_timestamp: "2025-01-23T12:00:00Z"
+    data_sources:
+      - "Google Trends"
+      - "Keyword Tool"
+      - "Ahrefs"

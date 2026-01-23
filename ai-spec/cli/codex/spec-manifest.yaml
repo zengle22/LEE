@@ -1,0 +1,207 @@
+kind: codex_spec_manifest
+version: 1.0
+base_path: ../specs/common
+description: >
+  Registry that exposes every shared agent/skill/contract/workflow spec hosted
+  under specs/common to the Codex CLI.
+
+agents:
+  - handle: _template
+    version: v1
+    entry: ../specs/common/agents/_template/v1/agent.yaml
+  - handle: agent-spec-maintainer
+    version: v1
+    entry: ../specs/common/agents/agent-spec-maintainer/v1/agent.yaml
+  - handle: analysis-freezer
+    version: v1
+    entry: ../specs/common/agents/analysis-freezer/v1/agent.yaml
+  - handle: approval-reviewer
+    version: v1
+    entry: ../specs/common/agents/approval-reviewer/v1/agent.yaml
+  - handle: business-opportunity-analyzer
+    version: v1
+    entry: ../specs/common/agents/business-opportunity-analyzer/v1/agent.yaml
+  - handle: business-opportunity-builder
+    version: v1
+    entry: ../specs/common/agents/business-opportunity-builder/v1/agent.yaml
+  - handle: dev-freeze-orchestrator
+    version: v1
+    entry: ../specs/common/agents/dev-freeze-orchestrator/v1/agent.yaml
+  - handle: fact-collector
+    version: v1
+    entry: ../specs/common/agents/fact-collector/v1/agent.yaml
+  - handle: google-keyword-searcher
+    version: v1
+    entry: ../specs/common/agents/google-keyword-searcher/v1/agent.yaml
+  - handle: google-trend-analyzer
+    version: v1
+    entry: ../specs/common/agents/google-trend-analyzer/v1/agent.yaml
+  - handle: industry-structure-analyzer
+    version: v1
+    entry: ../specs/common/agents/industry-structure-analyzer/v1/agent.yaml
+  - handle: plan-architect
+    version: v1
+    entry: ../specs/common/agents/plan-architect/v1/agent.yaml
+  - handle: prd-writer
+    version: v1
+    entry: ../specs/common/agents/prd-writer/v1/agent.yaml
+  - handle: product-goal-analyzer
+    version: v1
+    entry: ../specs/common/agents/product-goal-analyzer/v1/agent.yaml
+  - handle: prototype-designer
+    version: v1
+    entry: ../specs/common/agents/prototype-designer/v1/agent.yaml
+  - handle: requirement-reviewer
+    version: v1
+    entry: ../specs/common/agents/requirement-reviewer/v1/agent.yaml
+  - handle: spec-review
+    version: v1
+    entry: ../specs/common/agents/spec-review/v1/agent.yaml
+  - handle: supply-analyzer
+    version: v1
+    entry: ../specs/common/agents/supply-analyzer/v1/agent.yaml
+  - handle: tech-architect
+    version: v1
+    entry: ../specs/common/agents/tech-architect/v1/agent.yaml
+  - handle: ui-designer
+    version: v1
+    entry: ../specs/common/agents/ui-designer/v1/agent.yaml
+  - handle: user-signal-analyzer
+    version: v1
+    entry: ../specs/common/agents/user-signal-analyzer/v1/agent.yaml
+
+skills:
+  - handle: _template
+    version: v1
+    entry: ../specs/common/skills/_template/v1/skill.md
+  - handle: agent-spec-creator
+    version: v1
+    entry: ../specs/common/skills/agent-spec-creator/v1/skill.md
+  - handle: figma-import-guide
+    version: v1
+    entry: ../specs/common/skills/figma-import-guide/v1/skill.md
+  - handle: planning-methodology
+    version: v1
+    entry: ../specs/common/skills/planning-methodology/v1/skill.md
+  - handle: product-goal-analysis
+    version: v1
+    entry: ../specs/common/skills/product-goal-analysis/v1/skill.md
+  - handle: requirement-discovery
+    version: v1
+    entry: ../specs/common/skills/requirement-discovery/v1/skill.md
+  - handle: value-analysis-guide
+    version: v1
+    entry: ../specs/common/skills/value-analysis-guide/v1/skill.md
+
+contracts:
+  - handle: _template
+    version: v1
+    schema: ../specs/common/contracts/_template/v1/schema.json
+  - handle: alignment-confirmation-contract
+    version: v1
+    schema: ../specs/common/contracts/alignment-confirmation-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/alignment-confirmation-contract/v1/schema.md
+  - handle: business-opportunity-contract
+    version: v1
+    schema: ../specs/common/contracts/business-opportunity-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/business-opportunity-contract/v1/schema.md
+  - handle: decision-checklist-contract
+    version: v1
+    schema: ../specs/common/contracts/decision-checklist-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/decision-checklist-contract/v1/schema.md
+  - handle: decision-document-contract
+    version: v1
+    schema: ../specs/common/contracts/decision-document-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/decision-document-contract/v1/schema.md
+  - handle: fact-collection-contract
+    version: v1
+    schema: ../specs/common/contracts/fact-collection-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/fact-collection-contract/v1/schema.md
+  - handle: frozen-analysis-contract
+    version: v1
+    schema: ../specs/common/contracts/frozen-analysis-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/frozen-analysis-contract/v1/schema.md
+  - handle: frozen-detailed-prd-contract
+    version: v1
+    schema: ../specs/common/contracts/frozen-detailed-prd-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/frozen-detailed-prd-contract/v1/schema.md
+  - handle: frozen-dev-package-contract
+    version: v1
+    schema: ../specs/common/contracts/frozen-dev-package-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/frozen-dev-package-contract/v1/schema.md
+  - handle: frozen-module-requirement-contract
+    version: v1
+    schema: ../specs/common/contracts/frozen-module-requirement-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/frozen-module-requirement-contract/v1/schema.md
+  - handle: frozen-technical-architecture-contract
+    version: v1
+    schema: ../specs/common/contracts/frozen-technical-architecture-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/frozen-technical-architecture-contract/v1/schema.md
+  - handle: frozen-ui-prototype-contract
+    version: v1
+    schema: ../specs/common/contracts/frozen-ui-prototype-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/frozen-ui-prototype-contract/v1/schema.md
+  - handle: google-keyword-contract
+    version: v1
+    schema: ../specs/common/contracts/google-keyword-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/google-keyword-contract/v1/schema.md
+  - handle: opportunity-builder-contract
+    version: v1
+    schema: ../specs/common/contracts/opportunity-builder-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/opportunity-builder-contract/v1/schema.md
+  - handle: plan-contract
+    version: v1
+    schema: ../specs/common/contracts/plan-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/plan-contract/v1/schema.md
+  - handle: product-goal-contract
+    version: v1
+    schema: ../specs/common/contracts/product-goal-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/product-goal-contract/v1/schema.md
+  - handle: spec-review-contract
+    version: v1
+    schema: ../specs/common/contracts/spec-review-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/spec-review-contract/v1/schema.md
+  - handle: supply-analysis-contract
+    version: v1
+    schema: ../specs/common/contracts/supply-analysis-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/supply-analysis-contract/v1/schema.md
+  - handle: trend-research-contract
+    version: v1
+    schema: ../specs/common/contracts/trend-research-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/trend-research-contract/v1/schema.md
+  - handle: user-signal-input-contract
+    version: v1
+    schema: ../specs/common/contracts/user-signal-input-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/user-signal-input-contract/v1/schema.md
+  - handle: user-signal-output-contract
+    version: v1
+    schema: ../specs/common/contracts/user-signal-output-contract/v1/schema.json
+    docs:
+      - ../specs/common/contracts/user-signal-output-contract/v1/schema.md
+
+workflows:
+  - handle: _template
+    version: v1
+    entry: ../specs/common/workflows/_template/v1/workflow.yaml
+  - handle: product-pipeline
+    version: v1
+    entry: ../specs/common/workflows/product-pipeline/v1/workflow.yaml

@@ -1,0 +1,324 @@
+# Figma Interaction Design Skill Specification v1.0
+# Figma 交互设计技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.design.figma_interaction_design
+name: Figma Interaction Design
+description: >
+  在 Figma 中创建交互原型，包括 hover/focus/disabled/error 状态、
+  微交互动效和用户流程。
+owner: design-ai
+tags: [figma, interaction, prototype, animation, states]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [component_or_page, interactions]
+    properties:
+      component_or_page:
+        type: string
+        description: "组件或页面 ID"
+      interactions:
+        type: array
+        description: "交互列表"
+        items:
+          type: object
+          properties:
+            trigger:
+              type: string
+              enum: [on_click, while_hovering, while_pressing, on_drag, after_delay, mouse_enter, mouse_leave, key_down]
+            action:
+              type: string
+              enum: [navigate, change_to, open_overlay, close_overlay, swap_overlay, scroll_to, set_variable]
+            animation:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [instant, dissolve, smart_animate, move_in, move_out, push, slide_in, slide_out]
+                duration:
+                  type: number
+                easing:
+                  type: string
+
+  outputs:
+    type: object
+    required: [prototype_link, interactions_count, flows]
+    properties:
+      prototype_link:
+        type: string
+        description: "原型链接"
+      interactions_count:
+        type: integer
+        description: "交互数量"
+      flows:
+        type: array
+        description: "用户流程列表"
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+            start_frame:
+              type: string
+            frames:
+              type: array
+              items:
+                type: string
+
+# ============================================
+# 交互状态规范
+# ============================================
+interaction_states:
+  # 基础交互状态
+  basic_states:
+    default:
+      description: "默认/静止状态"
+      visual: "正常外观"
+      trigger: "无"
+
+    hover:
+      description: "鼠标悬停状态"
+      visual: |
+        - 背景色变浅/变深 5-10%
+        - 可选：轻微放大 (scale: 1.02)
+        - 可选：添加阴影
+      trigger: "While hovering"
+      note: "移动端不适用，需替换为 press 效果"
+
+    focus:
+      description: "键盘焦点状态"
+      visual: |
+        - 添加 2px focus ring
+        - Focus ring 颜色使用 border.focus token
+        - Offset: 2px
+      trigger: "On focus"
+      a11y: "WCAG 2.4.7 必需"
+
+    active:
+      description: "按下/激活状态"
+      visual: |
+        - 背景色变深 10-15%
+        - 可选：轻微缩小 (scale: 0.98)
+        - 可选：移除阴影
+      trigger: "While pressing"
+
+    disabled:
+      description: "禁用状态"
+      visual: |
+        - 透明度降低 (opacity: 0.5)
+        - 或使用灰色调
+        - 移除交互效果
+      cursor: "not-allowed"
+      a11y: "aria-disabled=true"
+
+    loading:
+      description: "加载中状态"
+      visual: |
+        - 显示 Spinner 或 Skeleton
+        - 可选：禁用交互
+        - 可选：降低透明度
+      animation: "infinite rotation / pulse"
+
+    error:
+      description: "错误状态"
+      visual: |
+        - 边框变为 status.error 颜色
+        - 显示错误图标
+        - 显示错误消息
+      color: "status.error"
+
+  # 表单输入状态
+  input_states:
+    empty:
+      description: "空值状态"
+      visual: "显示 placeholder"
+
+    filled:
+      description: "有值状态"
+      visual: "显示输入内容"
+
+    valid:
+      description: "验证通过"
+      visual: |
+        - 边框变为 status.success
+        - 可选：显示勾选图标
+
+    invalid:
+      description: "验证失败"
+      visual: |
+        - 边框变为 status.error
+        - 显示错误消息
+        - 可选：显示警告图标
+
+    readonly:
+      description: "只读状态"
+      visual: |
+        - 背景色使用 bg.disabled
+        - 移除交互效果
+
+  # 页面级状态
+  page_states:
+    default:
+      description: "正常显示数据"
+      content: "完整的页面内容"
+
+    loading:
+      description: "数据加载中"
+      content: |
+        - Skeleton 占位
+        - 或 Full-page Spinner
+        - 或 Progress Bar
+
+    empty:
+      description: "无数据"
+      content: |
+        - 空状态插图
+        - 说明文案
+        - 引导操作按钮
+
+    error:
+      description: "加载失败"
+      content: |
+        - 错误插图
+        - 错误说明
+        - 重试按钮
+
+# ============================================
+# 微交互规范
+# ============================================
+micro_interactions:
+  button_press:
+    description: "按钮点击效果"
+    sequence:
+      - trigger: "While pressing"
+        animation:
+          type: smart_animate
+          duration: 100ms
+          easing: ease-out
+        changes:
+          - scale: 0.98
+          - background: "darken 10%"
+      - trigger: "Mouse up"
+        animation:
+          type: smart_animate
+          duration: 150ms
+          easing: ease-out
+        changes:
+          - scale: 1
+          - background: "normal"
+
+  card_hover:
+    description: "卡片悬停效果"
+    sequence:
+      - trigger: "While hovering"
+        animation:
+          type: smart_animate
+          duration: 200ms
+          easing: ease-out
+        changes:
+          - translateY: -2px
+          - shadow: "lg"
+      - trigger: "Mouse leave"
+        animation:
+          type: smart_animate
+          duration: 200ms
+          easing: ease-out
+        changes:
+          - translateY: 0
+          - shadow: "md"
+
+  toggle_switch:
+    description: "开关切换效果"
+    sequence:
+      - trigger: "On click"
+        animation:
+          type: smart_animate
+          duration: 200ms
+          easing: ease-in-out
+        changes:
+          - thumb_position: "toggle"
+          - background: "toggle"
+
+  dropdown_expand:
+    description: "下拉展开效果"
+    sequence:
+      - trigger: "On click"
+        animation:
+          type: smart_animate
+          duration: 200ms
+          easing: ease-out
+        changes:
+          - opacity: "0 → 1"
+          - translateY: "-8px → 0"
+          - chevron_rotation: "0 → 180deg"
+
+  toast_appear:
+    description: "Toast 通知出现"
+    sequence:
+      - trigger: "On appear"
+        animation:
+          type: move_in
+          direction: bottom
+          duration: 300ms
+          easing: ease-out
+      - trigger: "After delay 3000ms"
+        animation:
+          type: move_out
+          direction: bottom
+          duration: 200ms
+          easing: ease-in
+
+  skeleton_pulse:
+    description: "Skeleton 加载动画"
+    animation:
+      type: smart_animate
+      duration: 1500ms
+      easing: ease-in-out
+      loop: infinite
+    changes:
+      - opacity: "0.3 → 0.7 → 0.3"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: tool_wrapper
+  tool: figma.prototype.create
+  timeout_ms: 30000
+  retries: 1
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: writes
+  pii: forbidden
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: create_button_interactions
+      input:
+        component_or_page: "button_component"
+        interactions:
+          - trigger: "while_hovering"
+            action: "change_to"
+            animation:
+              type: "smart_animate"
+              duration: 200
+      assert:
+        - path: "$.interactions_count"
+          op: ">="
+          value: 1

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/ui-review-input/v1",
+  "title": "UI Review Input",
+  "description": "UI Implementation Reviewer Agent 的输入契约",
+  "type": "object",
+  "required": ["target", "design_reference", "platforms"],
+  "properties": {
+    "target": {
+      "type": "object",
+      "required": ["type", "name", "code_location"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["page", "component"],
+          "description": "审查目标类型"
+        },
+        "name": {
+          "type": "string",
+          "description": "页面/组件名称"
+        },
+        "code_location": {
+          "type": "string",
+          "description": "代码位置"
+        }
+      },
+      "description": "审查目标"
+    },
+    "design_reference": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["figma", "sketch", "image", "contract"],
+          "description": "设计稿类型"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "设计稿链接"
+        },
+        "contract_path": {
+          "type": "string",
+          "description": "UI 契约路径（如使用契约）"
+        }
+      },
+      "description": "设计参考"
+    },
+    "design_tokens": {
+      "type": "object",
+      "properties": {
+        "token_file": {
+          "type": "string",
+          "description": "Design Token 文件路径"
+        },
+        "colors": {
+          "type": "object",
+          "description": "颜色 Token"
+        },
+        "spacing": {
+          "type": "object",
+          "description": "间距 Token"
+        },
+        "typography": {
+          "type": "object",
+          "description": "字体 Token"
+        }
+      },
+      "description": "Design Token 定义"
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["wechat-miniprogram", "ios", "android", "h5"]
+      },
+      "minItems": 1,
+      "description": "需要审查的平台"
+    },
+    "review_dimensions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["fidelity", "design_system", "cross_platform", "accessibility", "usability"]
+      },
+      "default": ["fidelity", "design_system", "cross_platform", "accessibility", "usability"],
+      "description": "审查维度"
+    },
+    "accessibility_level": {
+      "type": "string",
+      "enum": ["A", "AA", "AAA"],
+      "default": "AA",
+      "description": "可访问性级别要求"
+    },
+    "implementation_screenshots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["platform", "image_path"],
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "image_path": {
+            "type": "string"
+          },
+          "screen_size": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "实现截图"
+    }
+  }
+}

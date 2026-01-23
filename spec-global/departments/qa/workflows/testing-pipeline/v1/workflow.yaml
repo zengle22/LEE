@@ -1,0 +1,1181 @@
+# Testing Pipeline Workflow v1.0
+# 测试流水线工作流 - 研发转测 → 系统测试 → 交付版本
+
+kind: workflow
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: workflow.test.testing_pipeline
+name: Testing Pipeline
+description: >
+  测试流水线完整工作流，作为 Development Pipeline 的下游。
+  接收研发交付物，执行测试工作，保障最终产品交付质量。
+  核心原则：提测包清单驱动、冒烟准入、契约式 Bug 管理、Orchestrator 强制执行。
+owner: test-governance
+tags: [workflow, testing, quality, gate]
+
+# ============================================
+# 概念定义引用
+# ============================================
+concepts:
+  test_types:
+    ref: ../../concepts/test-types/v1/concept.md
+    description: >
+      定义各测试类型的职责边界：
+      - 冒烟测试：快速健康检查，验证"能不能跑"
+      - E2E测试：真实浏览器验证，确认"用户能用"
+      - 系统测试：全面功能验证，保证"功能完整"
+      - 回归测试：修复验证，确保"修复有效"
+
+# ============================================
+# 契约定义
+# ============================================
+inputs_contract: ../contracts/release-manifest/v1/schema.json
+outputs_contract: ../contracts/test-report/v1/schema.json
+
+# ============================================
+# 前置条件
+# ============================================
+preconditions:
+  required_artifacts:
+    - release_manifest: "release-manifest.yaml"
+    - artifact: "构建产物存在"
+    - test_cases: "测试用例已准备"
+
+  upstream_gate:
+    ref: gate.dev.release_gate
+    must_pass: true
+    description: "研发发布门禁必须通过"
+
+# ============================================
+# 编排配置
+# ============================================
+orchestration:
+  type: sequential  # 测试流程顺序执行
+  timeout_ms: 259200000  # 72 hours max
+  orchestrator_enforced: true  # 必须由 Orchestrator 执行
+
+# ============================================
+# 执行模型
+# ============================================
+execution_model_types:
+  prompt_switch:
+    description: "单一执行者通过切换系统提示词模拟多 Agent"
+    config:
+      context_preservation: true
+      max_context_tokens: 100000
+
+  human_delegate:
+    description: "委托人类执行任务"
+    config:
+      notification_channels: [console]
+      timeout_action: escalate
+
+# ============================================
+# Agent 资源池
+# ============================================
+agent_resources:
+  # 门禁层
+  gate_layer:
+    - id: agent.test.release_manifest_reviewer
+      name: Release Manifest Reviewer
+      spec: ../../agents/release-manifest-reviewer/v1/agent.yaml
+      responsibility: "提测包完整性审核"
+      execution_model:
+        type: prompt_switch
+
+    - id: agent.test.release_gate_reviewer
+      name: Release Gate Reviewer
+      spec: ../../agents/release-gate-reviewer/v1/agent.yaml
+      responsibility: "出测门禁判定"
+      execution_model:
+        type: prompt_switch
+
+  # 执行层
+  execution_layer:
+    - id: agent.test.smoke_test_executor
+      name: Smoke Test Executor
+      spec: ../../agents/smoke-test-executor/v1/agent.yaml
+      responsibility: "冒烟测试执行"
+      output_contract: ../../contracts/smoke-test-result/v1/schema.json
+      execution_model:
+        type: prompt_switch
+
+    - id: agent.test.e2e_test_executor
+      name: E2E Test Executor
+      spec: ../../agents/e2e-test-executor/v1/agent.yaml
+      responsibility: "端到端测试执行 (Chrome/WeChat)"
+      skills:
+        - skill.test.env_provision
+        - skill.test.browser_runner
+        - skill.test.wechat_sandbox_runner
+        - skill.test.selector_page_model
+        - skill.test.assertion_oracle
+        - skill.test.reporting_artifact
+      input_contract: ../../contracts/e2e-suite/v1/schema.json
+      output_contract: ../../contracts/e2e-report/v1/schema.json
+      execution_model:
+        type: prompt_switch
+
+    - id: agent.test.system_test_executor
+      name: System Test Executor
+      spec: ../../agents/system-test-executor/v1/agent.yaml
+      responsibility: "系统测试执行"
+      output_contract: ../../contracts/system-test-result/v1/schema.json
+      execution_model:
+        type: prompt_switch
+
+    - id: agent.test.regression_test_executor
+      name: Regression Test Executor
+      spec: ../../agents/regression-test-executor/v1/agent.yaml
+      responsibility: "回归测试执行"
+      output_contract: ../../contracts/regression-result/v1/schema.json
+      execution_model:
+        type: prompt_switch
+
+  # 诊断层 (新增)
+  diagnosis_layer:
+    - id: agent.test.debug_agent
+      name: Debug Agent
+      spec: ../../agents/debug-agent/v1/agent.yaml
+      responsibility: "缺陷根因分析与修复建议"
+      description: >
+        专职 Bug 诊断 Agent，将问题现象压缩成可执行的根因假设 + 修复方案 + 回归点。
+        只诊断不修复，输出交给开发团队执行。
+      skills:
+        - skill.test.repro_scenario
+        - skill.test.frontend_observability
+        - skill.test.backend_trace
+        - skill.test.api_probe
+        - skill.test.db_inspection
+        - skill.test.root_cause_synthesis
+        - skill.test.patch_regression_plan
+      input_contract: ../../contracts/bug-contract/v1/schema.json
+      output_contract: ../../contracts/debug-run/v1/schema.json
+      execution_model:
+        type: prompt_switch
+      triggers:
+        - condition: "bug.severity in ['P0', 'P1']"
+          action: auto_trigger
+          description: "P0/P1 Bug 自动触发诊断"
+        - condition: "bug.status == 'cannot_reproduce'"
+          action: auto_trigger
+          description: "无法复现时触发复现增强"
+        - condition: "similar_bugs.count >= 3"
+          action: auto_trigger
+          description: "同类 Bug 聚类触发诊断"
+        - condition: "bug.reopened_count >= 1"
+          action: auto_trigger
+          description: "重开 Bug 触发诊断"
+      permissions:
+        db_access: read_only
+        log_access: read_only
+        code_access: read_only
+        audit_all_queries: true
+
+  # 管理层
+  management_layer:
+    - id: agent.test.bug_manager
+      name: Bug Manager
+      spec: ../../agents/bug-manager/v1/agent.yaml
+      responsibility: "缺陷生命周期管理"
+      input_contract: ../../contracts/bug-contract/v1/schema.json
+      output_contract: ../../contracts/bug-contract/v1/schema.json
+      execution_model:
+        type: prompt_switch
+
+    - id: agent.test.test_report_generator
+      name: Test Report Generator
+      spec: ../../agents/test-report-generator/v1/agent.yaml
+      responsibility: "测试报告生成"
+      output_contract: ../../contracts/test-report/v1/schema.json
+      execution_model:
+        type: prompt_switch
+
+# ============================================
+# 状态机定义
+# ============================================
+state_machine:
+  states:
+    - INIT: "初始化"
+    - SUBMISSION_REVIEW: "提测包审核"
+    - PREPARING: "测试准备"
+    - SMOKE_TESTING: "冒烟测试"
+    - E2E_TESTING: "端到端测试"
+    - SYSTEM_TESTING: "系统测试"
+    - BUG_DIAGNOSING: "缺陷诊断"      # 新增: Debug Agent 工作状态
+    - BUG_DIAGNOSED: "诊断完成"        # 新增: 诊断结果已输出
+    - BUG_FIXING: "缺陷修复"
+    - REGRESSION_TESTING: "回归测试"
+    - EXIT_REVIEW: "出测审核"
+    - RELEASED: "已交付"
+    - REJECTED: "已拒绝"
+
+  transitions:
+    INIT:
+      - to: SUBMISSION_REVIEW
+        trigger: "release_manifest_submitted"
+
+    SUBMISSION_REVIEW:
+      - to: PREPARING
+        trigger: "submission_gate_pass"
+      - to: REJECTED
+        trigger: "submission_gate_fail"
+
+    PREPARING:
+      - to: SMOKE_TESTING
+        trigger: "environment_ready"
+
+    SMOKE_TESTING:
+      - to: E2E_TESTING
+        trigger: "smoke_gate_pass"
+      - to: REJECTED
+        trigger: "smoke_gate_fail"
+
+    E2E_TESTING:
+      - to: SYSTEM_TESTING
+        trigger: "e2e_gate_pass"
+      - to: SYSTEM_TESTING
+        trigger: "e2e_gate_conditional_pass"
+        note: "条件通过，记录风险后继续"
+      - to: BUG_DIAGNOSING
+        trigger: "e2e_gate_fail"
+        note: "E2E 失败触发 Debug Agent 诊断"
+
+    SYSTEM_TESTING:
+      - to: BUG_DIAGNOSING
+        trigger: "p0_p1_bugs_found"
+        note: "P0/P1 Bug 自动触发诊断"
+      - to: BUG_FIXING
+        trigger: "p2_p3_bugs_found"
+        note: "P2/P3 直接进入修复"
+      - to: REGRESSION_TESTING
+        trigger: "system_test_complete"
+
+    BUG_DIAGNOSING:
+      - to: BUG_DIAGNOSED
+        trigger: "diagnosis_complete"
+        note: "Debug Agent 完成根因分析"
+      - to: BUG_FIXING
+        trigger: "diagnosis_skipped"
+        note: "跳过诊断（简单 Bug）"
+      - to: BUG_DIAGNOSING
+        trigger: "diagnosis_blocked"
+        note: "诊断受阻，需要更多信息"
+
+    BUG_DIAGNOSED:
+      - to: BUG_FIXING
+        trigger: "handoff_to_dev"
+        note: "交接开发团队修复"
+      - to: REJECTED
+        trigger: "bug_by_design"
+        note: "需求澄清后判定为设计如此"
+
+    BUG_FIXING:
+      - to: REGRESSION_TESTING
+        trigger: "fix_submitted"
+      - to: E2E_TESTING
+        trigger: "e2e_retest_required"
+        note: "修复后需要重跑 E2E"
+      - to: SYSTEM_TESTING
+        trigger: "retest_required"
+      - to: BUG_DIAGNOSING
+        trigger: "fix_failed_need_rediagnosis"
+        note: "修复失败需重新诊断"
+
+    REGRESSION_TESTING:
+      - to: EXIT_REVIEW
+        trigger: "regression_complete"
+      - to: BUG_DIAGNOSING
+        trigger: "regression_fail_p0_p1"
+        note: "回归失败 P0/P1 重新诊断"
+      - to: BUG_FIXING
+        trigger: "regression_fail_p2_p3"
+        note: "回归失败 P2/P3 直接修复"
+
+    EXIT_REVIEW:
+      - to: RELEASED
+        trigger: "exit_gate_pass"
+      - to: BUG_FIXING
+        trigger: "exit_gate_fail"
+
+    RELEASED: []  # 终态
+    REJECTED: []  # 终态
+
+# ============================================
+# 主流程定义
+# ============================================
+stages:
+  # ---------- Stage 1: 研发转测 ----------
+  - id: t1_submission
+    name: 研发转测
+    description: 接收研发提测包，验证完整性
+    steps:
+      - id: t1_1_manifest_review
+        name: 提测包审核
+        description: 验证提测包清单完整性
+        run: agent.test.release_manifest_reviewer
+        execution:
+          model: prompt_switch
+          timeout: 30m
+        inputs:
+          - release_manifest: $inputs.release_manifest
+        outputs:
+          - path: "output/submission-review.yaml"
+        gate:
+          ref: gate.test.submission_gate
+          on_fail:
+            action: reject_and_return
+            notify: development
+
+      - id: t1_2_submission_decision
+        name: 提测决策
+        description: 根据审核结果决定是否接收
+        dependencies:
+          requires: [t1_1_manifest_review]
+        type: gate_decision
+        gate_result: $t1_1_manifest_review.gate_result
+        on_pass:
+          action: continue
+          update_status: "accepted"
+        on_fail:
+          action: reject
+          update_status: "rejected"
+          notify_channel: development
+          message: "提测包被打回: {rejection_reason}"
+
+  # ---------- Stage 2: 测试准备 ----------
+  - id: t2_preparation
+    name: 测试准备
+    description: 准备测试环境和用例
+    depends_on: [t1_submission]
+    steps:
+      - id: t2_1_env_setup
+        name: 环境准备
+        description: 部署测试版本，准备测试环境
+        run: agent.devops.test_env_deployer
+        execution:
+          model: prompt_switch
+          timeout: 60m
+        inputs:
+          - manifest: $inputs.release_manifest
+        outputs:
+          - path: "output/env-status.yaml"
+        validation:
+          - check: "health_check"
+            endpoint: "$TEST_ENV/health"
+            expected: 200
+
+      - id: t2_2_test_cases_ready
+        name: 用例确认
+        description: 确认冒烟用例和系统测试用例已就绪
+        dependencies:
+          requires: [t2_1_env_setup]
+        run: agent.test.test_report_generator
+        execution:
+          model: prompt_switch
+          timeout: 15m
+        inputs:
+          - smoke_cases: "test-cases/smoke/"
+          - system_cases: "test-cases/system/"
+        outputs:
+          - path: "output/test-readiness.yaml"
+
+  # ---------- Stage 3: 冒烟测试 ----------
+  - id: t3_smoke_test
+    name: 冒烟测试
+    description: 执行冒烟测试，验证核心功能
+    depends_on: [t2_preparation]
+    steps:
+      - id: t3_1_smoke_execution
+        name: 冒烟测试执行
+        description: 执行冒烟用例集
+        run: agent.test.smoke_test_executor
+        execution:
+          model: prompt_switch
+          timeout: 60m
+        inputs:
+          - manifest_id: $inputs.manifest_id
+          - environment: $t2_1_env_setup.outputs.env_url
+          - smoke_cases: "test-cases/smoke/"
+        outputs:
+          - path: "output/smoke-test-result.yaml"
+            contract: ../../contracts/smoke-test-result/v1/schema.json
+        gate:
+          ref: gate.test.smoke_gate
+          on_fail:
+            action: reject_and_return
+            create_bugs: true
+            notify: development
+
+      - id: t3_2_smoke_decision
+        name: 冒烟决策
+        description: 根据冒烟结果决定是否进入系统测试
+        dependencies:
+          requires: [t3_1_smoke_execution]
+        type: gate_decision
+        gate_result: $t3_1_smoke_execution.gate_result
+        on_pass:
+          action: continue
+          message: "冒烟测试通过，进入系统测试"
+        on_fail:
+          action: reject
+          message: "冒烟测试失败，打回研发"
+          notify_channel: development
+
+  # ---------- Stage 4: E2E 端到端测试 ----------
+  - id: t4_e2e_test
+    name: E2E 端到端测试
+    description: 执行浏览器/小程序端到端测试，验证真实用户场景
+    depends_on: [t3_smoke_test]
+    steps:
+      - id: t4_1_e2e_chrome_execution
+        name: Chrome E2E 测试执行
+        description: 使用 Playwright 执行 Chrome 浏览器 E2E 测试
+        run: agent.test.e2e_test_executor
+        execution:
+          model: prompt_switch
+          timeout: 120m
+        inputs:
+          - manifest_id: $inputs.manifest_id
+          - environment: $t2_1_env_setup.outputs.env_url
+          - e2e_suite: "test-cases/e2e/chrome/"
+          - platform: "chrome"
+        outputs:
+          - path: "output/e2e/chrome-report.json"
+            contract: ../../contracts/e2e-report/v1/schema.json
+          - path: "output/e2e/evidence/chrome/"
+            type: directory
+            description: "Chrome E2E 证据 (截图/视频/trace)"
+          - path: "bugs/"
+            type: directory
+            description: "E2E 发现的缺陷"
+        evidence:
+          screenshots: "output/e2e/evidence/chrome/screenshots/"
+          videos: "output/e2e/evidence/chrome/videos/"
+          traces: "output/e2e/evidence/chrome/traces/"
+          logs: "output/e2e/evidence/chrome/logs/"
+
+      - id: t4_2_e2e_wechat_execution
+        name: 微信小程序 E2E 测试执行
+        description: 使用微信开发者工具执行小程序 E2E 测试
+        dependencies:
+          requires: []  # 可与 Chrome 并行
+          parallel_with: [t4_1_e2e_chrome_execution]
+        run: agent.test.e2e_test_executor
+        execution:
+          model: prompt_switch
+          timeout: 60m
+        inputs:
+          - manifest_id: $inputs.manifest_id
+          - environment: $t2_1_env_setup.outputs.env_url
+          - e2e_suite: "test-cases/e2e/wechat/"
+          - platform: "wechat"
+        outputs:
+          - path: "output/e2e/wechat-report.json"
+            contract: ../../contracts/e2e-report/v1/schema.json
+          - path: "output/e2e/evidence/wechat/"
+            type: directory
+            description: "微信 E2E 证据"
+        optional: true  # 小程序 E2E 可选 (根据项目)
+        skip_if:
+          condition: "!has_wechat_miniprogram"
+
+      - id: t4_3_e2e_aggregate
+        name: E2E 结果汇总
+        description: 汇总所有平台的 E2E 测试结果
+        dependencies:
+          requires: [t4_1_e2e_chrome_execution]
+          optional: [t4_2_e2e_wechat_execution]
+        run: agent.test.test_report_generator
+        execution:
+          model: prompt_switch
+          timeout: 15m
+        inputs:
+          - chrome_report: "output/e2e/chrome-report.json"
+          - wechat_report: "output/e2e/wechat-report.json"
+        outputs:
+          - path: "output/e2e/e2e-summary.yaml"
+
+      - id: t4_4_e2e_gate
+        name: E2E 门禁判定
+        description: 根据 E2E 结果判定是否进入系统测试
+        dependencies:
+          requires: [t4_3_e2e_aggregate]
+        type: gate_decision
+        gate:
+          ref: gate.test.e2e_gate
+          criteria:
+            p0_pass_rate: 100     # P0 用例必须 100% 通过
+            p1_pass_rate: 90      # P1 用例 >= 90% 通过
+            overall_pass_rate: 80 # 整体 >= 80% 通过
+          verdict_rules:
+            PASS: "p0_pass_rate == 100 && p1_pass_rate >= 90 && overall_pass_rate >= 80"
+            CONDITIONAL_PASS: "p0_pass_rate == 100 && overall_pass_rate >= 80"
+            FAIL: "p0_pass_rate < 100 || overall_pass_rate < 80"
+        on_pass:
+          action: continue
+          message: "E2E 测试通过，进入系统测试"
+        on_conditional_pass:
+          action: continue_with_risk
+          message: "E2E 条件通过，P1 失败已记录风险"
+          create_risk_item: true
+        on_fail:
+          action: loop_back
+          target: t6_bug_fix_cycle
+          create_bugs: true
+          message: "E2E 测试失败，进入缺陷修复循环"
+
+  # ---------- Stage 5: 系统测试 ----------
+  - id: t5_system_test
+    name: 系统测试
+    description: 执行完整功能测试
+    depends_on: [t4_e2e_test]
+    steps:
+      - id: t5_1_system_execution
+        name: 系统测试执行
+        description: 按模块执行功能测试
+        run: agent.test.system_test_executor
+        execution:
+          model: prompt_switch
+          timeout: 480m  # 8 hours
+        inputs:
+          - manifest_id: $inputs.manifest_id
+          - environment: $t2_1_env_setup.outputs.env_url
+          - test_cases: "test-cases/system/"
+        outputs:
+          - path: "output/system-test-result.yaml"
+            contract: ../../contracts/system-test-result/v1/schema.json
+          - path: "bugs/"
+            type: directory
+            description: "发现的缺陷"
+
+      - id: t5_2_bug_triage
+        name: 缺陷分类
+        description: 对发现的缺陷进行分类分流
+        dependencies:
+          requires: [t5_1_system_execution]
+        run: agent.test.bug_manager
+        execution:
+          model: prompt_switch
+          timeout: 60m
+        inputs:
+          - bugs_dir: "bugs/"
+        outputs:
+          - path: "bugs/"
+            description: "更新后的缺陷契约"
+        human_gate: h1_bug_review
+
+  # ---------- Stage 6: 缺陷诊断 (Debug Agent) ----------
+  - id: t6_bug_diagnosis
+    name: 缺陷诊断
+    description: Debug Agent 执行根因分析，输出修复建议
+    depends_on: [t5_system_test]
+    trigger_conditions:
+      - "bugs.any(b => b.severity in ['P0', 'P1'])"
+      - "bugs.any(b => b.status == 'cannot_reproduce')"
+      - "bugs.groupBy(b => b.suspected_module).any(g => g.count >= 3)"
+    steps:
+      - id: t6_1_diagnosis_triage
+        name: 诊断分流
+        description: 判断哪些 Bug 需要 Debug Agent 诊断
+        run: agent.test.bug_manager
+        execution:
+          model: prompt_switch
+          timeout: 15m
+        inputs:
+          - bugs_dir: "bugs/"
+        outputs:
+          - path: "output/diagnosis/triage-result.yaml"
+        decision:
+          p0_p1_bugs:
+            action: route_to_diagnosis
+            description: "P0/P1 自动触发诊断"
+          cannot_reproduce_bugs:
+            action: route_to_diagnosis
+            description: "无法复现的 Bug 触发复现增强"
+          p2_p3_bugs:
+            action: skip_to_fix
+            description: "P2/P3 直接进入修复流程"
+
+      - id: t6_2_debug_analysis
+        name: Debug Agent 分析
+        description: 执行跨层诊断，输出根因假设和修复建议
+        dependencies:
+          requires: [t6_1_diagnosis_triage]
+          condition: "triage_result.needs_diagnosis == true"
+        run: agent.test.debug_agent
+        execution:
+          model: prompt_switch
+          timeout: 120m  # 2 hours max per bug
+        inputs:
+          - bugs: "bugs/"
+          - filter: "needs_diagnosis == true"
+          - environment: $t2_1_env_setup.outputs.env_url
+          - log_endpoint: "$LOG_SERVICE_URL"
+          - db_readonly_dsn: "$DB_READONLY_DSN"
+        outputs:
+          - path: "output/debug/{bug_id}/"
+            type: directory
+            description: "诊断输出目录"
+          - path: "output/debug/{bug_id}/debug-report.json"
+            contract: ../../contracts/debug-run/v1/schema.json
+          - path: "output/debug/{bug_id}/debug-report.md"
+            description: "人类可读报告"
+          - path: "output/debug/{bug_id}/patch-draft.patch"
+            description: "修复补丁草稿"
+          - path: "output/debug/{bug_id}/regression-checklist.md"
+            description: "回归检查清单"
+          - path: "bugs/{bug_id}.yaml"
+            description: "更新后的 Bug 契约 (含 debug_analysis)"
+        permissions:
+          db_access: read_only
+          log_access: read_only
+          code_access: read_only
+        audit:
+          log_path: "output/debug/audit/queries.log"
+          mask_sensitive: true
+
+      - id: t6_3_diagnosis_review
+        name: 诊断结果审核
+        description: 人工审核 Debug Agent 的诊断结果
+        dependencies:
+          requires: [t6_2_debug_analysis]
+        type: human_decision
+        human_gate: h4_diagnosis_review
+        inputs_to_review:
+          - "output/debug/{bug_id}/debug-report.md"
+          - "output/debug/{bug_id}/patch-draft.patch"
+          - "bugs/{bug_id}.yaml"
+        actions:
+          approve:
+            label: "确认诊断结果，交接开发"
+            next_step: t6_4_handoff_to_dev
+          adjust:
+            label: "调整诊断结论"
+            next_step: retry_step
+          escalate:
+            label: "升级为需求问题"
+            next_step: escalate_to_pm
+        optional: true
+        skip_if:
+          condition: "bug.severity == 'P2' || bug.severity == 'P3'"
+          description: "P2/P3 可跳过人工审核"
+
+      - id: t6_4_handoff_to_dev
+        name: 交接开发团队
+        description: 将诊断结果通知开发团队
+        dependencies:
+          requires: [t6_2_debug_analysis]
+          optional: [t6_3_diagnosis_review]
+        type: notification
+        channels: [development, console]
+        message_template: |
+          🔍 Bug {bug_id} 根因分析完成
+
+          **根因**: {root_cause_summary}
+          **置信度**: {confidence}%
+          **推荐修复**: {fix_recommendation}
+          **预估工作量**: {estimated_effort}
+
+          📋 详情:
+          - Bug 契约: bugs/{bug_id}.yaml
+          - 诊断报告: output/debug/{bug_id}/debug-report.md
+          - 补丁草稿: output/debug/{bug_id}/patch-draft.patch
+          - 回归清单: output/debug/{bug_id}/regression-checklist.md
+
+          请审阅后开始修复。
+        outputs:
+          - path: "output/debug/handoff-{bug_id}.yaml"
+            description: "交接记录"
+
+  # ---------- Stage 7: 缺陷修复循环 ----------
+  - id: t7_bug_fix_cycle
+    name: 缺陷修复循环
+    description: 缺陷修复与验证循环
+    depends_on: [t6_bug_diagnosis]
+    loop:
+      condition: "open_bugs.count > 0 && cycle < max_cycles"
+      max_cycles: 5
+    steps:
+      - id: t7_1_wait_for_fix
+        name: 等待修复
+        description: 等待研发提交修复版本
+        type: external_wait
+        wait_for:
+          event: "fix_version_submitted"
+          timeout: 48h
+        on_timeout:
+          action: escalate
+          notify: [development, pm]
+
+      - id: t7_2_deploy_fix
+        name: 部署修复版本
+        description: 部署修复后的版本
+        dependencies:
+          requires: [t7_1_wait_for_fix]
+        run: agent.devops.test_env_deployer
+        execution:
+          model: prompt_switch
+          timeout: 30m
+        inputs:
+          - fix_manifest: $t7_1_wait_for_fix.outputs.fix_manifest
+
+      - id: t7_3_e2e_retest
+        name: E2E 回归测试
+        description: 执行 E2E 回归测试验证修复 (针对 E2E 相关 Bug)
+        dependencies:
+          requires: [t7_2_deploy_fix]
+        run: agent.test.e2e_test_executor
+        execution:
+          model: prompt_switch
+          timeout: 60m
+        inputs:
+          - bugs: "bugs/"
+          - regression_type: "e2e_failed"
+          - platform: "chrome"
+          - regression_checklist: "output/debug/{bug_id}/regression-checklist.md"
+        outputs:
+          - path: "output/e2e/regression-report.json"
+            contract: ../../contracts/e2e-report/v1/schema.json
+        skip_if:
+          condition: "!has_e2e_bugs"
+
+      - id: t7_4_regression_test
+        name: 回归测试
+        description: 执行回归测试验证修复（使用 Debug Agent 生成的回归清单）
+        dependencies:
+          requires: [t7_2_deploy_fix]
+          optional: [t7_3_e2e_retest]
+        run: agent.test.regression_test_executor
+        execution:
+          model: prompt_switch
+          timeout: 120m
+        inputs:
+          - bugs: "bugs/"
+          - regression_type: "risk"
+          - regression_checklist: "output/debug/{bug_id}/regression-checklist.md"
+        outputs:
+          - path: "output/regression-result.yaml"
+            contract: ../../contracts/regression-result/v1/schema.json
+
+      - id: t7_5_verify_fixes
+        name: 验证修复
+        description: 更新缺陷验证状态
+        dependencies:
+          requires: [t7_4_regression_test]
+        run: agent.test.bug_manager
+        execution:
+          model: prompt_switch
+          timeout: 30m
+        inputs:
+          - regression_result: $t7_4_regression_test.outputs
+          - e2e_regression_result: $t7_3_e2e_retest.outputs
+          - debug_analysis: "bugs/{bug_id}.yaml#debug_analysis"
+        outputs:
+          - path: "bugs/"
+            description: "更新验证状态"
+        on_fail:
+          action: rediagnosis
+          target: t6_bug_diagnosis
+          condition: "bug.severity in ['P0', 'P1']"
+          description: "高优先级 Bug 修复失败，重新诊断"
+
+  # ---------- Stage 8: 出测审核 ----------
+  - id: t8_exit_review
+    name: 出测审核
+    description: 检查出测标准，生成测试报告
+    depends_on: [t7_bug_fix_cycle]
+    condition: "exit_criteria_may_pass"
+    steps:
+      - id: t8_1_generate_report
+        name: 生成测试报告
+        description: 汇总所有测试结果生成最终报告（含诊断摘要）
+        run: agent.test.test_report_generator
+        execution:
+          model: prompt_switch
+          timeout: 30m
+        inputs:
+          - smoke_result: "output/smoke-test-result.yaml"
+          - e2e_result: "output/e2e/e2e-summary.yaml"
+          - system_result: "output/system-test-result.yaml"
+          - regression_result: "output/regression-result.yaml"
+          - bugs: "bugs/"
+          - debug_reports: "output/debug/"
+        outputs:
+          - path: "output/test-report.yaml"
+            contract: ../../contracts/test-report/v1/schema.json
+
+      - id: t8_2_exit_gate
+        name: 出测门禁检查
+        description: 检查是否满足出测标准
+        dependencies:
+          requires: [t8_1_generate_report]
+        run: agent.test.release_gate_reviewer
+        execution:
+          model: prompt_switch
+          timeout: 30m
+        inputs:
+          - test_report: "output/test-report.yaml"
+        outputs:
+          - path: "output/exit-gate-result.yaml"
+        gate:
+          ref: gate.test.exit_gate
+          on_pass:
+            action: continue
+          on_conditional_pass:
+            action: human_decision
+            human_gate: h2_risk_acceptance
+          on_fail:
+            action: loop_back
+            target: t7_bug_fix_cycle
+
+      - id: t8_3_signoff
+        name: 签字确认
+        description: 各方签字确认
+        dependencies:
+          requires: [t8_2_exit_gate]
+        type: human_decision
+        human_gate: h3_final_signoff
+        required_approvers:
+          - role: qa_lead
+          - role: pm
+          - role: tech_lead
+        on_approve:
+          action: release
+        on_reject:
+          action: loop_back
+          target: t7_bug_fix_cycle
+
+  # ---------- Stage 9: 交付 ----------
+  - id: t9_release
+    name: 交付
+    description: 完成测试，交付版本
+    depends_on: [t8_exit_review]
+    steps:
+      - id: t9_1_archive
+        name: 归档测试资产
+        description: 归档所有测试产物（含诊断证据）
+        run: agent.test.test_report_generator
+        execution:
+          model: prompt_switch
+          timeout: 15m
+        outputs:
+          - path: "output/release-frozen/{version}/"
+            freeze: true
+            status: "🔒"
+          - path: "output/release-frozen/{version}/debug/"
+            description: "归档诊断证据"
+            freeze: true
+
+      - id: t9_2_notify
+        name: 通知发布
+        description: 通知下游可以开始发布
+        dependencies:
+          requires: [t9_1_archive]
+        type: notification
+        channels: [release, development, pm]
+        message: "版本 {version} 已通过测试，可以发布"
+
+# ============================================
+# 人类介入点
+# ============================================
+human_in_the_loop:
+  - id: h1_bug_review
+    purpose: "审核缺陷分类和优先级"
+    gate:
+      enabled: true
+      type: review
+      blocking: false  # 不阻塞，但建议审核
+      timeout:
+        duration: 24h
+        action: auto_continue
+      notification:
+        channels: [console]
+    inputs_to_review:
+      - "bugs/"
+      - "output/system-test-result.yaml"
+    actions:
+      approve:
+        label: "确认分类正确"
+        next_step: continue
+      adjust:
+        label: "调整优先级"
+        next_step: retry_step
+
+  - id: h4_diagnosis_review
+    purpose: "审核 Debug Agent 的诊断结果"
+    description: >
+      人工审核 Debug Agent 的根因分析和修复建议。
+      仅对 P0/P1 Bug 强制审核，P2/P3 可自动跳过。
+    gate:
+      enabled: true
+      type: review
+      blocking: true  # P0/P1 必须审核
+      timeout:
+        duration: 4h
+        action: escalate
+      notification:
+        channels: [console, development]
+      approval:
+        required_roles: [qa_lead, tech_lead]
+        min_approvals: 1
+    inputs_to_review:
+      - "output/debug/{bug_id}/debug-report.md"
+      - "output/debug/{bug_id}/patch-draft.patch"
+      - "output/debug/{bug_id}/regression-checklist.md"
+      - "bugs/{bug_id}.yaml"
+    review_checklist:
+      - "根因分析是否准确"
+      - "修复建议是否可行"
+      - "回归范围是否完整"
+      - "是否有安全风险"
+      - "是否需要需求澄清"
+    actions:
+      approve:
+        label: "确认诊断结果，交接开发"
+        next_step: continue
+        updates:
+          bug_status: "diagnosed"
+      adjust:
+        label: "调整诊断结论"
+        next_step: retry_step
+        requires_comment: true
+      escalate_to_pm:
+        label: "升级为需求问题"
+        next_step: escalate
+        updates:
+          bug_type: "requirement"
+          pm_confirmation: "pending"
+      reject_as_design:
+        label: "判定为设计如此"
+        next_step: close
+        requires_comment: true
+        updates:
+          bug_status: "rejected"
+          decision_resolution: "by_design"
+
+  - id: h2_risk_acceptance
+    purpose: "确认条件放行的风险接受"
+    gate:
+      enabled: true
+      type: approval
+      blocking: true
+      timeout:
+        duration: 48h
+        action: escalate
+      approval:
+        required_roles: [pm, product_owner]
+        min_approvals: 1
+      notification:
+        channels: [console]
+    inputs_to_review:
+      - "output/test-report.yaml"
+      - "output/exit-gate-result.yaml"
+    review_checklist:
+      - "已知风险是否可接受"
+      - "规避方案是否可行"
+      - "是否理解遗留问题"
+    actions:
+      accept_risk:
+        label: "接受风险，继续发布"
+        next_step: continue
+        requires_comment: true
+      reject:
+        label: "不接受风险，继续修复"
+        next_step: loop_back
+
+  - id: h3_final_signoff
+    purpose: "最终签字确认"
+    gate:
+      enabled: true
+      type: approval
+      blocking: true
+      timeout:
+        duration: 72h
+        action: escalate
+      approval:
+        required_roles: [qa_lead, pm, tech_lead]
+        min_approvals: 3
+      notification:
+        channels: [console]
+    inputs_to_review:
+      - "output/test-report.yaml"
+      - "output/exit-gate-result.yaml"
+    actions:
+      approve:
+        label: "签字确认，允许发布"
+        next_step: continue
+      reject:
+        label: "拒绝发布"
+        next_step: fail
+        requires_comment: true
+
+# ============================================
+# 错误处理
+# ============================================
+error_handling:
+  retry:
+    max_attempts: 2
+    backoff_ms: 30000
+
+  fallbacks:
+    - when: "smoke_failed"
+      action: "reject_and_return_to_dev"
+      notify: true
+    - when: "environment_unavailable"
+      action: "wait_and_retry"
+      max_wait: "4h"
+    - when: "bug_fix_timeout"
+      action: "escalate_to_pm"
+    - when: "exit_gate_failed"
+      action: "continue_bug_cycle"
+
+# ============================================
+# 完成条件
+# ============================================
+completion:
+  required_outputs:
+    - "output/smoke-test-result.yaml"
+    - "output/e2e/e2e-summary.yaml"
+    - "output/system-test-result.yaml"
+    - "output/test-report.yaml"
+    - "output/exit-gate-result.yaml"
+  optional_outputs:
+    - "output/debug/{bug_id}/debug-report.json"  # 有 P0/P1 Bug 时必须
+    - "output/debug/{bug_id}/debug-report.md"
+    - "output/debug/{bug_id}/regression-checklist.md"
+  gate_to_next:
+    description: "进入发布部署阶段"
+    requires:
+      - smoke_gate_passed: true
+      - e2e_gate_passed: true  # 或 conditional_pass 且已接受风险
+      - exit_gate_passed: true
+      - all_signoffs_complete: true
+      - p0_p1_bugs_diagnosed: true  # 所有 P0/P1 必须有诊断结果
+
+# ============================================
+# 出测标准
+# ============================================
+exit_criteria:
+  p0_open: 0
+  p1_open_max: 3
+  smoke_pass_rate: 100
+  e2e_p0_pass_rate: 100      # E2E P0 必须 100%
+  e2e_p1_pass_rate: 90       # E2E P1 >= 90%
+  e2e_overall_pass_rate: 80  # E2E 整体 >= 80%
+  core_path_pass_rate: 100
+  regression_pass_rate: 95
+  risk_documented: true
+
+# ============================================
+# 目录结构模板
+# ============================================
+directory_template: |
+  {project}/testing/
+  ├── release-manifest.yaml       # 提测包清单
+  │
+  ├── test-cases/
+  │   ├── smoke/                  # 冒烟用例
+  │   ├── e2e/                    # E2E 测试用例
+  │   │   ├── chrome/             # Chrome 浏览器 E2E
+  │   │   │   ├── e2e-suite.yaml  # E2E 用例集定义
+  │   │   │   └── pages/          # Page Object 模型
+  │   │   └── wechat/             # 微信小程序 E2E (可选)
+  │   │       ├── e2e-suite.yaml
+  │   │       └── pages/
+  │   ├── system/                 # 系统测试用例
+  │   └── regression/             # 回归用例
+  │
+  ├── bugs/
+  │   ├── BUG-YYYY-NNNN.yaml      # Bug 契约文件 (含 debug_analysis)
+  │   └── ...
+  │
+  ├── evidence/
+  │   └── BUG-YYYY-NNNN/          # Bug 证据
+  │       ├── screenshots/
+  │       ├── logs/
+  │       └── videos/
+  │
+  ├── output/
+  │   ├── submission-review.yaml
+  │   ├── smoke-test-result.yaml
+  │   ├── e2e/                    # E2E 测试输出
+  │   │   ├── chrome-report.json  # Chrome E2E 报告
+  │   │   ├── wechat-report.json  # 微信 E2E 报告 (可选)
+  │   │   ├── e2e-summary.yaml    # 汇总报告
+  │   │   ├── regression-report.json  # E2E 回归报告
+  │   │   └── evidence/           # E2E 证据
+  │   │       ├── chrome/
+  │   │       │   ├── screenshots/
+  │   │       │   ├── videos/
+  │   │       │   ├── traces/
+  │   │       │   └── logs/
+  │   │       └── wechat/
+  │   │           ├── screenshots/
+  │   │           └── logs/
+  │   ├── debug/                  # Debug Agent 输出 (新增)
+  │   │   ├── triage-result.yaml  # 诊断分流结果
+  │   │   ├── audit/              # 审计日志
+  │   │   │   └── queries.log     # DB 查询审计
+  │   │   ├── BUG-YYYY-NNNN/      # 每个 Bug 的诊断目录
+  │   │   │   ├── debug-report.json    # 机器可读报告
+  │   │   │   ├── debug-report.md      # 人类可读报告
+  │   │   │   ├── patch-draft.patch    # 修复补丁草稿
+  │   │   │   ├── regression-checklist.md  # 回归检查清单
+  │   │   │   └── evidence/            # 诊断证据包
+  │   │   │       ├── frontend/        # 前端证据
+  │   │   │       │   ├── console.log
+  │   │   │       │   ├── network.har
+  │   │   │       │   └── screenshots/
+  │   │   │       ├── backend/         # 后端证据
+  │   │   │       │   ├── logs.txt
+  │   │   │       │   └── call-chain.mermaid
+  │   │   │       ├── api/             # API 探测结果
+  │   │   │       │   └── probe-results.json
+  │   │   │       └── db/              # 数据库检查
+  │   │   │           ├── snapshots/
+  │   │   │           └── diff-report.md
+  │   │   └── handoff-BUG-YYYY-NNNN.yaml  # 交接记录
+  │   ├── diagnosis/              # 诊断汇总
+  │   │   └── triage-result.yaml
+  │   ├── system-test-result.yaml
+  │   ├── regression-result.yaml
+  │   ├── test-report.yaml
+  │   ├── exit-gate-result.yaml
+  │   └── release-frozen/{version}/
+  │       └── debug/              # 归档的诊断证据
+  │
+  └── gate-reports/
+      ├── submission-gate-{id}.json
+      ├── smoke-gate-{id}.json
+      ├── e2e-gate-{id}.json      # E2E 门禁报告
+      ├── diagnosis-gate-{id}.json  # 诊断审核报告 (新增)
+      └── exit-gate-{id}.json
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: happy_path
+      input:
+        manifest_id: "MAN-2026-0001"
+        smoke_result: "pass"
+        bugs_count: 2
+        bugs_fixed: 2
+      assert:
+        - path: "$.final_state"
+          op: "equals"
+          value: "RELEASED"
+
+    - name: smoke_failure_path
+      input:
+        manifest_id: "MAN-2026-0002"
+        smoke_result: "fail"
+      assert:
+        - path: "$.final_state"
+          op: "equals"
+          value: "REJECTED"

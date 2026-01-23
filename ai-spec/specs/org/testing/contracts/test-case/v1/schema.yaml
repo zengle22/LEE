@@ -1,0 +1,361 @@
+# Test Case Contract Schema v1.0
+# 测试用例契约标准
+
+kind: contract_schema
+version: 1.0
+
+schema:
+  type: object
+  required:
+    - case_id
+    - title
+    - suite
+    - priority
+    - type
+    - steps
+    - expected_result
+
+  properties:
+    # ========== 基础标识 ==========
+    case_id:
+      type: string
+      pattern: "^(F|NF|P|S)-[A-Z0-9]+-[0-9]{3}$"
+      description: |
+        用例唯一标识
+        格式：{类型}-{模块}-{序号}
+        - F: 功能测试 (Functional)
+        - NF: 非功能测试 (Non-Functional)
+        - P: 性能测试 (Performance)
+        - S: 安全测试 (Security)
+      examples:
+        - "F-BASE-002"      # 功能-基础功能-002
+        - "F-P1-001"        # 功能-跑者画像-001
+        - "NF-PERF-001"     # 非功能-性能-001
+
+    title:
+      type: string
+      minLength: 10
+      maxLength: 200
+      description: "用例标题，简洁描述测试目标"
+      example: "开发测试登录 - 验证快速登录流程"
+
+    suite:
+      type: string
+      enum:
+        - smoke           # 冒烟测试
+        - api             # API测试
+        - e2e_chrome      # E2E Chrome浏览器
+        - e2e_wechat      # E2E 微信小程序
+        - performance     # 性能测试
+        - security        # 安全测试
+        - regression      # 回归测试
+        - integration     # 集成测试
+      description: "所属测试套件"
+
+    priority:
+      type: string
+      enum: [P0, P1, P2, P3]
+      description: |
+        用例优先级
+        - P0: 核心流程，每轮必跑
+        - P1: 主要功能，每轮必跑
+        - P2: 次要功能，风险回归
+        - P3: 边缘场景，全量回归
+
+    type:
+      type: string
+      enum:
+        - positive        # 正向用例
+        - negative        # 负向用例
+        - boundary        # 边界值
+        - exception       # 异常场景
+      description: "用例类型"
+
+    # ========== 需求追溯 ==========
+    traceability:
+      type: object
+      properties:
+        requirement_id:
+          type: string
+          description: "关联的需求ID"
+          example: "REQ-2026-001"
+
+        user_story_id:
+          type: string
+          description: "关联的用户故事ID"
+          example: "US-001"
+
+        feature_id:
+          type: string
+          description: "关联的功能模块ID"
+          example: "runner-profile"
+
+        acceptance_criteria:
+          type: string
+          description: "验收标准"
+
+    # ========== 测试步骤 ==========
+    steps:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required: [step_num, action, expected]
+        properties:
+          step_num:
+            type: integer
+            description: "步骤序号"
+
+          action:
+            type: string
+            description: "操作步骤"
+            example: "点击'开发测试登录'按钮"
+
+          expected:
+            type: string
+            description: "预期结果"
+            example: "页面跳转到跑者画像页面"
+
+          test_data:
+            type: object
+            description: "该步骤使用的测试数据"
+
+    expected_result:
+      type: string
+      description: "整体预期结果"
+
+    # ========== 测试数据 ==========
+    test_data:
+      type: object
+      description: "测试数据定义"
+      properties:
+        data_set:
+          type: string
+          description: "数据集名称"
+          example: "valid_user"
+
+        inputs:
+          type: object
+          description: "输入数据"
+
+        preconditions:
+          type: object
+          description: "前置数据（如数据库状态）"
+
+    # ========== 前置条件 ==========
+    preconditions:
+      type: array
+      items:
+        type: string
+      description: "执行前置条件"
+      examples:
+        - "用户未登录"
+        - "后端服务健康"
+        - "测试数据已准备"
+
+    # ========== 执行信息 ==========
+    automation:
+      type: object
+      properties:
+        automated:
+          type: boolean
+          description: "是否已自动化"
+          default: false
+
+        script_path:
+          type: string
+          description: "自动化脚本路径"
+          example: "tests/e2e/login.spec.ts"
+
+        framework:
+          type: string
+          enum: [playwright, jest, pytest, postman]
+          description: "自动化框架"
+
+    # ========== 执行历史 ==========
+    execution_history:
+      type: array
+      items:
+        type: object
+        properties:
+          round_id:
+            type: string
+            description: "测试轮次ID"
+
+          executed_at:
+            type: string
+            format: date-time
+            description: "执行时间"
+
+          result:
+            type: string
+            enum: [passed, failed, skipped, blocked]
+            description: "执行结果"
+
+          executor:
+            type: string
+            description: "执行者（Agent或人）"
+
+          duration_seconds:
+            type: number
+            description: "执行耗时"
+
+          bug_id:
+            type: string
+            description: "失败时关联的Bug ID"
+
+          evidence:
+            type: object
+            description: "执行证据"
+
+    # ========== 标签与分类 ==========
+    tags:
+      type: array
+      items:
+        type: string
+      description: "标签，用于分类和筛选"
+      examples:
+        - "login"
+        - "core-flow"
+        - "smoke"
+        - "happy-path"
+
+    # ========== 元数据 ==========
+    created_by:
+      type: string
+      description: "创建者"
+
+    created_at:
+      type: string
+      format: date-time
+      description: "创建时间"
+
+    updated_at:
+      type: string
+      format: date-time
+      description: "最后更新时间"
+
+    status:
+      type: string
+      enum: [draft, review, approved, deprecated]
+      description: "用例状态"
+
+# ========== 验证规则 ==========
+validation_rules:
+  - rule: "priority_matches_suite"
+    description: "冒烟/核心流程必须是P0/P1"
+    check: "IF suite == 'smoke' THEN priority IN [P0, P1]"
+    error_message: "冒烟测试用例必须是P0或P1优先级"
+
+  - rule: "automation_required_for_regression"
+    description: "回归测试必须自动化"
+    check: "IF suite == 'regression' THEN automation.automated == true"
+    error_message: "回归测试用例必须自动化"
+
+  - rule: "traceability_required"
+    description: "P0/P1用例必须有需求追溯"
+    check: "IF priority IN [P0, P1] THEN traceability.requirement_id IS NOT NULL"
+    error_message: "P0/P1用例必须关联需求ID"
+
+# ========== 示例 ==========
+examples:
+  - name: "功能测试用例 - 开发测试登录"
+    data:
+      case_id: "F-BASE-002"
+      title: "开发测试登录 - 验证快速登录流程"
+      suite: smoke
+      priority: P0
+      type: positive
+
+      traceability:
+        requirement_id: "REQ-2026-001"
+        feature_id: "login"
+        acceptance_criteria: "用户可以通过开发测试快速登录"
+
+      steps:
+        - step_num: 1
+          action: "访问登录页面 http://localhost:3002/#/pages/login/index"
+          expected: "页面加载成功，显示'跑步AI教练'标题"
+
+        - step_num: 2
+          action: "点击'开发测试登录'按钮"
+          expected: "触发登录请求，返回token"
+
+        - step_num: 3
+          action: "等待页面跳转"
+          expected: "跳转到 /pages/runner-profile/index"
+
+      expected_result: "用户成功登录，进入跑者画像页面，token已存储"
+
+      preconditions:
+        - "前后端服务均已启动"
+        - "用户未登录状态"
+
+      automation:
+        automated: true
+        script_path: "tests/e2e/e2e-suite.spec.ts"
+        framework: playwright
+
+      tags:
+        - "login"
+        - "smoke"
+        - "core-flow"
+        - "happy-path"
+
+      status: approved
+
+  - name: "负向测试用例 - 年龄边界值"
+    data:
+      case_id: "F-P1-002"
+      title: "年龄输入 - 边界值验证"
+      suite: e2e_chrome
+      priority: P1
+      type: boundary
+
+      traceability:
+        requirement_id: "REQ-2026-005"
+        feature_id: "runner-profile"
+        acceptance_criteria: "年龄必须在15-80之间"
+
+      steps:
+        - step_num: 1
+          action: "输入年龄 10（低于下限）"
+          expected: "显示错误提示：年龄需在15-80之间"
+          test_data:
+            inputs:
+              age: 10
+
+        - step_num: 2
+          action: "输入年龄 85（高于上限）"
+          expected: "显示错误提示：年龄需在15-80之间"
+          test_data:
+            inputs:
+              age: 85
+
+        - step_num: 3
+          action: "输入年龄 15（下限边界）"
+          expected: "接受输入，无错误提示"
+          test_data:
+            inputs:
+              age: 15
+
+        - step_num: 4
+          action: "输入年龄 80（上限边界）"
+          expected: "接受输入，无错误提示"
+          test_data:
+            inputs:
+              age: 80
+
+      expected_result: "边界值验证正确，拒绝超出范围的输入"
+
+      automation:
+        automated: true
+        script_path: "tests/e2e/e2e-suite.spec.ts"
+        framework: playwright
+
+      tags:
+        - "validation"
+        - "boundary"
+        - "runner-profile"
+
+      status: approved

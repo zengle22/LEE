@@ -1,0 +1,1107 @@
+# Phase OpenSpec Flow v1.7
+# v1.7: 工作流生成器 - AI 必须使用 generate-workflow 命令生成实例
+#       禁止手写 workflow.yaml，防止步骤被遗漏或简化
+# v1.6: 路径分离规范 - 代码必须放 git/{仓库名}/, 文档放 project/
+# Phase 内 OpenSpec 子流程 - L1 级研发流程
+#
+# v1.5 变更: 强化防跳过/防绕过机制
+#   - 新增 enforcement 配置节，强制所有步骤执行
+#   - 新增 orchestrator_integration，禁止手动执行
+#   - 所有 13 步均标记 mandatory: true
+#   - 修正步骤数量注释和测试断言
+#
+# v1.4 变更: 强化整改循环 (Remediation Loop) 机制
+#   - p11_phase_acceptance 验收失败时，自动触发整改
+#   - 最大尝试 5 次，超过后触发人类门禁
+#   - 根据失败类型自动回滚到对应步骤
+#
+# v1.3 变更: Code Review 门禁改为条件门禁 (Agent 驱动)
+#
+# 这是 OpenSpec 在研发阶段的核心定位：
+# - 不是项目级方法论
+# - 是 Phase 内部的可执行子空间
+# - 形成 Spec → Contract → Implementation → Verification → Reflection → Memory 的强闭环
+# - 强制验收门禁：Phase 必须通过 Phase Acceptance Gate Agent 验收后才能完成
+# - 知识闭环：Phase 知识必须合并到项目级，供后续 Phase 使用
+# - 强制执行：所有 13 步必须执行，禁止跳过或绕过
+
+kind: workflow
+version: 1.7
+
+# ============================================
+# 基础标识
+# ============================================
+id: workflow.dev.phase_openspec_flow
+name: Phase OpenSpec Flow
+description: >
+  Phase 内部的 OpenSpec 子流程，形成"需求校准 → 测试契约 → 实现 → 验证 → 复盘 → 沉淀"的强闭环。
+  每个 Phase 实例化一个独立的 OpenSpec 工作空间。
+owner: dev-governance
+tags: [workflow, phase, openspec, development]
+
+# ============================================
+# 实例生成规则 (v1.7 新增)
+# ============================================
+# AI 必须使用 generate-workflow 命令生成实例，禁止手写完整 workflow.yaml
+# 这确保所有 13 步都被保留，防止步骤被遗漏或简化
+instance_generation:
+  required: true
+  generator_command: |
+    python -m orchestrator generate-workflow \
+      --template ai-spec/specs/org/development/workflows/phase-openspec-flow/v1/workflow.yaml \
+      --config <phase-config.yaml> \
+      --output <phase_dir>/workflow.yaml
+
+  config_schema: ai-spec/specs/common/contracts/phase-config-contract/v1/schema.json
+
+  # AI 可以在 phase-config.yaml 中覆盖的字段
+  allowed_overrides:
+    - name                    # Phase 名称
+    - description             # Phase 描述
+    - metadata                # 元数据 (phase_number, track, priority 等)
+    - step_descriptions       # 步骤描述 (仅文字，不能改结构)
+    - gate_descriptions       # 门禁描述 (仅文字，不能改结构)
+    - quality_overrides       # 质量阈值 (只能提高，不能降低)
+    - output_paths            # 输出路径映射
+    - deliverables            # 交付物清单
+    - standards               # 遵循的规范
+
+  # 禁止覆盖的字段 (结构性字段)
+  forbidden_overrides:
+    - steps                   # 步骤结构 (13 步不可删减)
+    - enforcement             # 强制执行规则
+    - human_in_the_loop       # 人类门禁定义
+    - preconditions           # 前置条件
+    - knowledge_access_protocol  # 知识访问协议
+    - phase_agents            # Agent 资源池
+
+  # 验证规则
+  validation:
+    init_time: true           # 在 orchestrator init 时验证
+    required_steps: 13        # 必须包含 13 步
+    enforcement_required: true  # 必须包含 enforcement 配置
+
+# ============================================
+# 契约定义
+# ============================================
+inputs_contract: ../../contracts/phase-contract/v1/schema.json
+outputs_contract: ../../contracts/phase-output-contract/v1/schema.json
+
+# ============================================
+# 前置条件
+# ============================================
+preconditions:
+  required_files:
+    - phase_contract: "{phase_dir}/phase.yaml"
+  phase_status:
+    allowed: ["planning", "in_progress"]
+
+# ============================================
+# 知识库访问协议 (v1.1 新增)
+# ============================================
+# 所有研发 Agent 在执行任务前必须阅读知识库，避免重复踩坑
+knowledge_access_protocol:
+  enabled: true
+  mandatory: true
+  protocol_ref: ../../protocols/knowledge-access/v1/protocol.yaml
+
+  # 知识库位置
+  knowledge_locations:
+    phase_level:
+      - "{phase_dir}/knowledge/pitfalls/"
+      - "{phase_dir}/knowledge/patterns/"
+      - "{phase_dir}/knowledge/best-practices/"
+    project_level:
+      - "{project_dir}/knowledge/pitfalls/"
+      - "{project_dir}/knowledge/patterns/"
+      - "{project_dir}/knowledge/best-practices/"
+
+  # 必须阅读的知识类型
+  required_reading:
+    - pitfalls   # 踩坑记录，避免重复错误
+    - patterns   # 技术模式，复用方案
+
+  # 强制执行步骤
+  enforcement:
+    - step_id: p5_implementation
+      agents: [go_backend_engineer, uniapp_frontend_engineer, database_engineer, ai_engineer]
+      pre_action: "read_knowledge_base"
+    - step_id: p6_unit_test
+      agents: [test_automation_engineer]
+      pre_action: "read_knowledge_base"
+    - step_id: p7_code_review
+      agents: [code_reviewer]
+      pre_action: "read_knowledge_base"
+
+  # 知识应用规则
+  application_rules:
+    - rule: "遇到 pitfall 描述的场景"
+      action: "必须使用 pitfall 中的解决方案"
+      enforcement: "代码审查时检查"
+    - rule: "存在可复用的 pattern"
+      action: "优先使用 pattern 而非重新设计"
+      enforcement: "代码审查时检查"
+
+  # 违规处理
+  violation_handling:
+    - condition: "未阅读知识库就执行任务"
+      action: "标记为需整改"
+    - condition: "忽略 pitfall 中的解决方案"
+      action: "代码审查失败，需修复"
+
+# ============================================
+# 编排配置
+# ============================================
+orchestration:
+  type: linear  # Phase 内部严格线性执行
+  timeout_ms: 28800000  # 8 hours max per phase
+
+# ============================================
+# 防跳过/防绕过机制 (v1.5 新增)
+# ============================================
+enforcement:
+  # 核心规则：所有步骤强制执行
+  skip_prevention:
+    enabled: true
+    description: "禁止跳过任何步骤，所有 13 步必须按顺序执行"
+    rule: "NO_SKIP_ALLOWED"
+    violation_action: "FAIL_FAST"
+    violation_message: "步骤 {step_id} 不可跳过，必须执行并通过验证"
+
+  bypass_prevention:
+    enabled: true
+    description: "禁止绕过前置步骤，必须依次完成"
+    rule: "DEPENDENCY_ENFORCED"
+    violation_action: "FAIL_FAST"
+    violation_message: "步骤 {step_id} 的前置步骤 {depends_on} 未完成"
+
+  # 步骤完成验证
+  completion_validation:
+    enabled: true
+    require_outputs: true  # 必须产出物存在
+    require_quality_gate: true  # 必须通过质量门禁
+    verification_command: "workflow-guard verify {step_id} --phase {phase_dir}"
+
+  # Orchestrator 集成
+  orchestrator_integration:
+    required: true
+    description: "必须通过 Orchestrator 执行，禁止手动跳步"
+    validation_mode: "strict"
+    commands:
+      start_step: "python -m orchestrator start {phase_dir} {step_id}"
+      complete_step: "python -m orchestrator complete {phase_dir} {step_id} --outputs {outputs}"
+      validate_step: "python -m orchestrator validate {phase_dir} {step_id}"
+    state_file: ".workflow/state.yaml"
+    audit_log: ".workflow/events.jsonl"
+
+  # 全局步骤属性 (应用到所有 13 步)
+  step_defaults:
+    mandatory: true
+    skip_allowed: false
+    bypass_allowed: false
+    require_predecessor_complete: true
+
+  # 违规审计
+  violation_audit:
+    enabled: true
+    log_path: ".workflow/violations.jsonl"
+    alert_on_violation: true
+    block_on_violation: true
+
+# ============================================
+# Phase 级 Agent 资源池 (v3.5.0 专业角色映射)
+# ============================================
+phase_agents:
+  # 决策支持
+  decision_support:
+    - id: agent.dev.tech_lead
+      name: Tech Lead
+      when: "architectural_decision_needed"
+      outputs: ["ADR 记录"]
+
+  # 实现层 (根据 Phase 类型选择)
+  implementation:
+    backend:
+      - id: agent.dev.go_backend_engineer
+        name: Go Backend Engineer
+        for_phases: ["phase-foundation", "phase-user-auth", "phase-coach-core", "phase-training-*", "phase-subscription"]
+      - id: agent.dev.database_engineer
+        name: Database Engineer
+        for_phases: ["phase-foundation", "phase-user-auth", "phase-training-*"]
+        outputs: ["Migration Contract"]
+      - id: agent.dev.ai_engineer
+        name: AI Engineer
+        for_phases: ["phase-coach-core"]
+        outputs: ["Prompt Policy", "Model Routing", "Eval Contract"]
+    frontend:
+      - id: agent.dev.uniapp_frontend_engineer
+        name: UniApp Frontend Engineer
+        for_phases: ["phase-ui-*"]
+
+  # 测试层 (硬边界: 设计与实现分离)
+  testing:
+    design:
+      - id: agent.dev.qa_engineer
+        name: QA Engineer
+        hard_boundary: "只负责测试设计"
+        outputs: ["Test Case Contract"]
+    implementation:
+      - id: agent.dev.test_automation_engineer
+        name: SDET
+        hard_boundary: "只负责测试代码"
+        inputs: ["Test Case Contract"]
+
+  # 审查层
+  review:
+    - id: agent.dev.code_reviewer
+      name: Code Reviewer
+    - id: agent.dev.ui_implementation_reviewer
+      name: UI Implementation Reviewer
+      for_phases: ["phase-ui-*"]
+
+  # 验收层 (v1.1 新增: 强制验收门禁)
+  acceptance:
+    - id: agent.dev.phase_acceptance_gate
+      name: Phase Acceptance Gate
+      spec: ../../agents/phase-acceptance-gate/v1/agent.yaml
+      responsibility: "Phase 验收门禁 - 验证工作流完成情况、质量门禁、知识沉淀"
+      mandatory: true  # 强制执行，不可跳过
+      input_contract: ../../contracts/acceptance-input/v1/schema.json
+      output_contract: ../../contracts/acceptance-report/v1/schema.json
+
+  # DevOps 支持
+  devops:
+    - id: agent.dev.devops_engineer
+      name: DevOps Engineer
+      responsibility: "测试环境 + Migration 执行"
+
+# ============================================
+# Phase 内步骤定义 (L1: OpenSpec Flow)
+# ============================================
+steps:
+  # ---------- Step 1: OpenSpec 初始化 ----------
+  - id: p1_openspec_init
+    name: OpenSpec 初始化
+    description: 在 Phase 目录下初始化 OpenSpec 工作空间
+    mandatory: true
+    skip_allowed: false
+    run: skill.openspec.initializer
+    inputs:
+      phase_contract: "{phase_dir}/phase.yaml"
+      workspace_path: "{phase_dir}/openspec/"
+    outputs:
+      - path: "{phase_dir}/openspec/project.md"
+      - path: "{phase_dir}/openspec/specs/"
+      - path: "{phase_dir}/openspec/03-proposals/"
+    condition: "!exists('{phase_dir}/openspec/project.md')"
+
+  # ---------- Step 2: 需求校准 ----------
+  - id: p2_requirement_calibration
+    name: 需求校准
+    description: 从研发视角校准需求，确保可实现性
+    mandatory: true
+    skip_allowed: false
+    depends_on: [p1_openspec_init]
+    run: agent.dev.requirement_calibrator
+    inputs:
+      phase_contract: "{phase_dir}/phase.yaml"
+      requirement_source: "$phase_contract.inputs.requirement_source"
+      architecture_source: "$phase_contract.inputs.architecture_source"
+    outputs:
+      - path: "{phase_dir}/openspec/01-requirements/calibrated-requirements.md"
+      - path: "{phase_dir}/openspec/01-requirements/tech-constraints.md"
+      - path: "{phase_dir}/openspec/01-requirements/assumptions.md"
+    quality_gate:
+      ref: gate.dev.requirement_calibration_gate
+      criteria:
+        - all_requirements_mapped: true
+        - tech_feasibility_confirmed: true
+        - assumptions_documented: true
+    on_success: [p3_test_contract]
+    on_failure: [h1_calibration_review]
+
+  # ---------- Step 3: 测试契约生成 (QA Engineer) ----------
+  - id: p3_test_contract
+    name: 测试契约生成
+    description: >
+      QA Engineer 设计测试用例 (硬边界: 只设计不实现)
+      产物: Test Case Contract → 交给 SDET 实现
+    mandatory: true
+    skip_allowed: false
+    depends_on: [p2_requirement_calibration]
+    run: agent.dev.qa_engineer
+    hard_boundary: "只负责测试设计，不写测试代码"
+    inputs:
+      calibrated_requirements: "{phase_dir}/openspec/01-requirements/calibrated-requirements.md"
+      phase_contract: "{phase_dir}/phase.yaml"
+    outputs:
+      - path: "{phase_dir}/openspec/02-test-contracts/test-contract.yaml"
+        contract: ../../../contracts/test-case-contract/v1/schema.json
+      - path: "{phase_dir}/openspec/02-test-contracts/scenarios/"
+    quality_gate:
+      criteria:
+        - min_scenarios_per_requirement: 3
+        - edge_cases_covered: true
+        - acceptance_criteria_defined: true
+        - coverage_matrix_complete: true
+    on_success: [p4_openspec_proposal]
+    on_failure: [h2_test_contract_review]
+
+  # ---------- Step 4: OpenSpec 变更提案 ----------
+  - id: p4_openspec_proposal
+    name: OpenSpec 变更提案
+    description: 创建 OpenSpec 变更提案，定义实现规范
+    mandatory: true
+    skip_allowed: false
+    depends_on: [p3_test_contract]
+    run: agent.dev.openspec_proposal_creator
+    inputs:
+      calibrated_requirements: "{phase_dir}/openspec/01-requirements/calibrated-requirements.md"
+      test_contract: "{phase_dir}/openspec/02-test-contracts/test-contract.yaml"
+      phase_contract: "{phase_dir}/phase.yaml"
+    outputs:
+      - path: "{phase_dir}/openspec/03-proposals/{change-id}/proposal.md"
+      - path: "{phase_dir}/openspec/03-proposals/{change-id}/tasks.md"
+      - path: "{phase_dir}/openspec/03-proposals/{change-id}/design.md"
+      - path: "{phase_dir}/openspec/03-proposals/{change-id}/specs/"
+    quality_gate:
+      command: "openspec validate {change-id} --strict"
+      must_pass: true
+    human_gate: h3_proposal_review
+    on_success: [p5_implementation]
+    on_failure: [h3_proposal_review]
+
+  # ---------- Step 5: 代码实现 (专业角色 Agent) ----------
+  - id: p5_implementation
+    name: 代码实现
+    description: >
+      按照 OpenSpec 提案实现代码
+      根据 Phase 类型自动选择对应专业 Agent:
+      - 后端: Go Backend Engineer + Database Engineer (Migration)
+      - 前端: UniApp Frontend Engineer
+      - AI: AI Engineer (Prompt/Routing/Eval 三契约)
+    mandatory: true
+    skip_allowed: false
+    depends_on: [p4_openspec_proposal]
+    run:
+      selector:
+        backend_phases:
+          agents:
+            - agent.dev.go_backend_engineer
+            - agent.dev.database_engineer  # 涉及 Schema 时召唤
+          condition: "phase_type in ['foundation', 'feature'] and track == 'backend'"
+        frontend_phases:
+          agents:
+            - agent.dev.uniapp_frontend_engineer
+          condition: "phase_type in ['foundation', 'feature'] and track == 'frontend'"
+        ai_phases:
+          agents:
+            - agent.dev.ai_engineer
+          condition: "'coach' in phase_id or 'ai' in phase_id"
+      fallback: agent.dev.implementation_executor
+    inputs:
+      proposal: "{phase_dir}/openspec/03-proposals/{change-id}/proposal.md"
+      tasks: "{phase_dir}/openspec/03-proposals/{change-id}/tasks.md"
+      design: "{phase_dir}/openspec/03-proposals/{change-id}/design.md"
+      test_contract: "{phase_dir}/openspec/02-test-contracts/test-contract.yaml"
+    outputs:
+      - path: "{phase_dir}/openspec/04-implementation/"
+      - path: "{phase_dir}/openspec/03-proposals/{change-id}/tasks.md"
+        update: "mark_completed"
+      # 数据库变更产物
+      - path: "{phase_dir}/openspec/04-implementation/migrations/"
+        contract: ../../../contracts/migration-contract/v1/schema.json
+        condition: "has_database_changes"
+      # AI 工程产物
+      - path: "{phase_dir}/openspec/04-implementation/ai-contracts/"
+        contract: ../../../contracts/ai-engineering-output/v1/schema.json
+        condition: "has_ai_features"
+    implementation_rules:
+      - follow_tasks_order: true
+      - test_driven: true
+      - incremental_commits: true
+    on_success: [p6_unit_test]
+    on_failure: [p5_implementation]  # 自动重试
+
+  # ---------- Step 6: 单元测试 (SDET) ----------
+  - id: p6_unit_test
+    name: 单元测试实现与执行
+    description: >
+      SDET 实现测试代码 (硬边界: 只实现不设计)
+      输入: QA 的 Test Case Contract
+      遵循测试金字塔: Unit 70%, Integration 20%, E2E 10%
+    mandatory: true
+    skip_allowed: false
+    depends_on: [p5_implementation]
+    run: agent.dev.test_automation_engineer
+    hard_boundary: "只负责测试代码实现，用例设计来自 QA Contract"
+    inputs:
+      implementation: "{phase_dir}/openspec/04-implementation/"
+      test_contract: "{phase_dir}/openspec/02-test-contracts/test-contract.yaml"
+    outputs:
+      - path: "{phase_dir}/openspec/05-unit-tests/"
+      - path: "{phase_dir}/openspec/05-unit-tests/coverage-report.json"
+    test_pyramid:
+      unit: 70
+      integration: 20
+      e2e: 10
+    quality_gate:
+      ref: gate.dev.unit_test_gate
+      criteria:
+        - coverage_threshold: "$phase_contract.quality_gates.unit_test.coverage_threshold"
+        - all_tests_pass: true
+        - no_skipped_tests: true
+        - no_flaky_tests: true
+    stability_governance:
+      flaky_threshold: 0
+      retry_policy: "禁止 retry 掩盖 flaky"
+    on_success: [p7_code_review]
+    on_failure: [p5_implementation]  # 回退到实现修复
+
+  # ---------- Step 7: Code Review ----------
+  - id: p7_code_review
+    name: Code Review
+    description: >
+      代码审查，确保质量和规范。
+      人类门禁为可选，由 Code Reviewer Agent 根据审查结果决定是否需要人类介入。
+    mandatory: true
+    skip_allowed: false
+    depends_on: [p6_unit_test]
+    run: agent.dev.code_reviewer
+    inputs:
+      implementation: "{phase_dir}/openspec/04-implementation/"
+      proposal: "{phase_dir}/openspec/03-proposals/{change-id}/proposal.md"
+      design: "{phase_dir}/openspec/03-proposals/{change-id}/design.md"
+    outputs:
+      - path: "{phase_dir}/openspec/06-review/review-report.md"
+      - path: "{phase_dir}/openspec/06-review/review-checklist.md"
+    review_criteria:
+      - code_style: true
+      - security_check: true
+      - performance_review: true
+      - documentation_complete: true
+    # 条件人类门禁: Agent 判断是否需要人类介入
+    conditional_human_gate:
+      gate_id: h4_code_review
+      trigger_conditions:
+        # 任一条件满足则触发人类审批
+        - condition: "critical_issues > 0"
+          reason: "发现 Critical 级别问题，需要人类确认"
+        - condition: "high_issues > 3"
+          reason: "High 级别问题超过 3 个，需要人类审查"
+        - condition: "security_vulnerabilities > 0"
+          reason: "发现安全漏洞，必须人类确认"
+        - condition: "architecture_changes_detected"
+          reason: "检测到架构变更，需要人类确认"
+        - condition: "code_quality_score < 6"
+          reason: "代码质量评分过低 (<6/10)，需要人类审查"
+      auto_approve_conditions:
+        # 全部满足则自动通过
+        - "critical_issues == 0"
+        - "high_issues <= 3"
+        - "security_vulnerabilities == 0"
+        - "code_quality_score >= 7"
+        - "all_tests_pass == true"
+    on_success: [p8_retrospective]
+    on_failure: [p5_implementation]
+
+  # ---------- Step 8: Phase 复盘 ----------
+  - id: p8_retrospective
+    name: Phase 复盘
+    description: 总结经验教训，提炼可复用知识
+    mandatory: true
+    skip_allowed: false
+    depends_on: [p7_code_review]
+    run: agent.dev.phase_retrospector
+    inputs:
+      phase_contract: "{phase_dir}/phase.yaml"
+      review_report: "{phase_dir}/openspec/06-review/review-report.md"
+      coverage_report: "{phase_dir}/openspec/05-unit-tests/coverage-report.json"
+    outputs:
+      - path: "{phase_dir}/openspec/07-retrospective/retrospective.md"
+      - path: "{phase_dir}/openspec/07-retrospective/lessons-learned.yaml"
+      - path: "{phase_dir}/openspec/07-retrospective/improvement-actions.md"
+    retrospective_format:
+      - what_went_well: true
+      - what_can_improve: true
+      - action_items: true
+      - knowledge_to_capture: true
+    on_success: [p9_knowledge_update]
+
+  # ---------- Step 9: 知识沉淀 ----------
+  - id: p9_knowledge_update
+    name: 知识沉淀
+    description: 将经验转化为可复用规则和检查清单
+    mandatory: true
+    skip_allowed: false
+    depends_on: [p8_retrospective]
+    run: agent.dev.knowledge_extractor
+    inputs:
+      retrospective: "{phase_dir}/openspec/07-retrospective/retrospective.md"
+      lessons_learned: "{phase_dir}/openspec/07-retrospective/lessons-learned.yaml"
+    outputs:
+      - path: "{phase_dir}/openspec/08-knowledge/"
+        items:
+          - patterns/*.md
+          - anti-patterns/*.md
+          - checklists/*.md
+    knowledge_targets:
+      - spec_templates: "更新规范模板"
+      - review_rules: "更新审查规则"
+      - test_strategies: "更新测试策略"
+    on_success: [p10_openspec_archive]
+
+  # ---------- Step 10: OpenSpec 归档 ----------
+  - id: p10_openspec_archive
+    name: OpenSpec 归档
+    description: 归档 OpenSpec 变更，标记为只读
+    mandatory: true
+    skip_allowed: false
+    depends_on: [p9_knowledge_update]
+    run: skill.openspec.archiver
+    inputs:
+      change_id: "{change-id}"
+      workspace: "{phase_dir}/openspec/"
+    outputs:
+      - path: "{phase_dir}/openspec/09-archive/{date}-{change-id}/"
+    archive_actions:
+      - move_to_archive: true
+      - update_specs: true
+      - mark_readonly: true
+    command: "openspec archive {change-id} --yes"
+    on_success: [p11_phase_acceptance]
+
+  # ---------- Step 11: Phase 验收 (v1.1 强制步骤) ----------
+  - id: p11_phase_acceptance
+    name: Phase 验收
+    description: >
+      强制验收门禁，验证 Phase 所有工作流步骤完成情况。
+      必须全部通过才能进入交接阶段。
+      验收内容包括：
+      - 工作流步骤完成率 (7/7)
+      - 交付物完整性
+      - 质量门禁 (测试通过率、覆盖率、问题数)
+      - 代码审查验收
+      - 复盘报告验收
+      - 知识沉淀验收
+    mandatory: true  # 强制执行，不可跳过
+    skip_allowed: false  # 禁止跳过
+    bypass_allowed: false  # 禁止绕过
+    depends_on: [p10_openspec_archive]
+    run: agent.dev.phase_acceptance_gate
+    inputs:
+      phase_contract: "{phase_dir}/phase.yaml"
+      # 工作流步骤交付物
+      calibration: "{phase_dir}/openspec/01-requirements/calibrated-requirements.md"
+      test_contract: "{phase_dir}/openspec/02-test-contracts/test-contract.yaml"
+      proposal: "{phase_dir}/openspec/03-proposals/{change-id}/proposal.md"
+      tasks: "{phase_dir}/openspec/03-proposals/{change-id}/tasks.md"
+      implementation: "{phase_dir}/openspec/04-implementation/"
+      test_report: "{phase_dir}/openspec/05-unit-tests/coverage-report.json"
+      review_report: "{phase_dir}/openspec/06-review/review-report.md"
+      retrospective: "{phase_dir}/openspec/07-retrospective/retrospective.md"
+      knowledge: "{phase_dir}/openspec/08-knowledge/"
+    outputs:
+      - path: "{phase_dir}/output/acceptance-report.yaml"
+        contract: ../../contracts/acceptance-report/v1/schema.json
+        freeze: false
+    # 验收检查清单 (全部通过才能 PASS)
+    # v1.5: 修正步骤 ID 为实际步骤 ID (p2-p10)
+    acceptance_checklist:
+      workflow_steps:
+        - step_id: "p2_requirement_calibration"
+          name: "需求校准"
+          deliverable: "01-requirements/calibrated-requirements.md"
+          required: true
+        - step_id: "p3_test_contract"
+          name: "测试契约"
+          deliverable: "02-test-contracts/test-contract.yaml"
+          required: true
+        - step_id: "p4_openspec_proposal"
+          name: "实现提案"
+          deliverables: ["03-proposals/{change-id}/proposal.md", "03-proposals/{change-id}/tasks.md"]
+          required: true
+        - step_id: "p5_implementation"
+          name: "代码实现"
+          deliverable: "04-implementation/"
+          required: true
+        - step_id: "p6_unit_test"
+          name: "单元测试"
+          deliverables: ["05-unit-tests/", "05-unit-tests/coverage-report.json"]
+          required: true
+        - step_id: "p7_code_review"
+          name: "代码审查"
+          deliverable: "06-review/review-report.md"
+          required: true
+        - step_id: "p8_retrospective"
+          name: "复盘"
+          deliverable: "07-retrospective/retrospective.md"
+          required: true
+        - step_id: "p9_knowledge_update"
+          name: "知识沉淀"
+          deliverable: "08-knowledge/"
+          required: true
+        - step_id: "p10_openspec_archive"
+          name: "OpenSpec 归档"
+          deliverable: "09-archive/"
+          required: true
+      quality_gates:
+        - id: "QG-001"
+          name: "步骤完成率"
+          operator: "=="
+          target: 100
+          unit: "%"
+        - id: "QG-002"
+          name: "交付物完整率"
+          operator: "=="
+          target: 100
+          unit: "%"
+        - id: "QG-003"
+          name: "测试通过率"
+          operator: "=="
+          target: 100
+          unit: "%"
+        - id: "QG-004"
+          name: "代码覆盖率"
+          operator: ">="
+          target: 80
+          unit: "%"
+        - id: "QG-005"
+          name: "Critical 问题数"
+          operator: "=="
+          target: 0
+        - id: "QG-006"
+          name: "High 问题数"
+          operator: "=="
+          target: 0
+        - id: "QG-007"
+          name: "复盘报告完整性"
+          operator: "=="
+          target: 100
+          unit: "%"
+      retrospective_sections:
+        - "目标回顾"
+        - "做得好的"
+        - "待改进的"
+        - "问题分析"
+        - "改进措施"
+        - "知识沉淀"
+        - "指标统计"
+      knowledge_requirements:
+        min_items: 1
+        types: ["pattern", "best_practice", "pitfall", "tip"]
+    # 整改机制 (v1.4 强化)
+    remediation:
+      enabled: true
+      max_attempts: 5  # 最大整改尝试次数 (用户要求: 5次不达标再人类介入)
+      on_failure:
+        action: "remediate"
+        rollback_to: "responsible_step"  # 根据失败类型自动确定回滚目标
+        command: "workflow-guard remediate --step p11_phase_acceptance --failures '{failures_json}' --phase {phase_dir}"
+      on_max_attempts_exceeded:
+        action: "human_intervention"
+        trigger_gate: "h5_acceptance_review"
+        message: "Phase 验收已尝试整改 {attempt_count} 次仍未通过，需要人类介入"
+        command: "workflow-guard approve h5_acceptance_review --phase {phase_dir}"
+      # 失败类型到步骤的映射
+      step_mapping:
+        - issue: "code_coverage"
+          pattern: "代码覆盖率.*不达标|coverage.*<.*80"
+          responsible_step: "p6_unit_test"
+          remediation_action: "补充单元测试，提高覆盖率至 80% 以上"
+        - issue: "test_pass_rate"
+          pattern: "测试通过率.*不达标|tests.*failed"
+          responsible_step: "p5_implementation"
+          remediation_action: "修复失败的测试用例"
+        - issue: "critical_issues"
+          pattern: "Critical.*问题|严重.*问题"
+          responsible_step: "p5_implementation"
+          remediation_action: "修复所有 Critical 级别问题"
+        - issue: "high_issues"
+          pattern: "High.*问题|高危.*问题"
+          responsible_step: "p5_implementation"
+          remediation_action: "修复 High 级别问题"
+        - issue: "security_vulnerabilities"
+          pattern: "安全.*漏洞|security.*vulnerab"
+          responsible_step: "p5_implementation"
+          remediation_action: "修复安全漏洞"
+        - issue: "missing_deliverables"
+          pattern: "交付物.*缺失|missing.*deliverable"
+          responsible_step: "p5_implementation"
+          remediation_action: "补全缺失的交付物"
+        - issue: "retrospective_incomplete"
+          pattern: "复盘.*不完整|retrospective.*incomplete"
+          responsible_step: "p8_retrospective"
+          remediation_action: "补全复盘报告"
+        - issue: "knowledge_missing"
+          pattern: "知识沉淀.*缺失|knowledge.*missing"
+          responsible_step: "p9_knowledge_update"
+          remediation_action: "提取并记录知识条目"
+      # 整改判定逻辑 (由 Phase Acceptance Gate Agent 执行)
+      agent_judgment:
+        description: >
+          Phase Acceptance Gate Agent 在验收失败时，必须执行以下判定逻辑:
+          1. 检查 enforcement.remediation.attempt_count < max_attempts
+          2. 如果未超限，分析失败原因，匹配 step_mapping
+          3. 调用 workflow-guard remediate 命令触发整改
+          4. 如果超限，调用 workflow-guard approve h5_acceptance_review 触发人类门禁
+        enforcement:
+          - "验收失败时，必须先检查整改次数"
+          - "未超限时，禁止直接触发人类门禁"
+          - "必须记录每次整改的具体失败项"
+    # 判定规则
+    verdict_rules:
+      pass:
+        condition: "all_checks_passed"
+        next_step: "p12_knowledge_merge"  # 先合并知识再交接
+      conditional_pass:
+        condition: "no_blocking_issues and minor_issues_exist"
+        next_step: "p12_knowledge_merge"  # 先合并知识再交接
+        requires: "deferred_items_documented"
+      remediation_required:
+        condition: "blocking_issues_exist"
+        next_step: "remediate"
+      human_intervention_required:
+        condition: "attempt_count > max_attempts"
+        next_step: "human_gate"
+    human_gate: h5_acceptance_review
+    on_success: [p12_knowledge_merge]  # 验收通过后合并知识
+    on_failure: [p11_phase_acceptance]  # 整改后重试
+
+  # ---------- Step 12: 知识合并到项目级 (v1.1 新增 - 闭环关键步骤) ----------
+  - id: p12_knowledge_merge
+    name: 知识合并到项目级
+    description: >
+      将 Phase 级知识合并到 Project 级知识库。
+      这是知识闭环的关键步骤，确保后续 Phase 能读取到之前的经验。
+      只有验收通过的知识才会被合并到项目级。
+    mandatory: true  # 强制执行
+    skip_allowed: false
+    depends_on: [p11_phase_acceptance]  # 必须通过验收才能合并
+    run: skill.knowledge.merger
+    inputs:
+      phase_knowledge: "{phase_dir}/openspec/08-knowledge/"
+      project_knowledge: "{project_dir}/knowledge/"
+    outputs:
+      - path: "{project_dir}/knowledge/patterns/"
+        merge_mode: "append_with_dedup"
+      - path: "{project_dir}/knowledge/pitfalls/"
+        merge_mode: "append_with_dedup"
+      - path: "{project_dir}/knowledge/best-practices/"
+        merge_mode: "append_with_dedup"
+      - path: "{project_dir}/knowledge/tips/"
+        merge_mode: "append_with_dedup"
+      - path: "{project_dir}/knowledge/index.yaml"
+        update: "add_phase_entries"
+    merge_rules:
+      # 去重：相同 ID 不重复添加
+      deduplication:
+        enabled: true
+        key: "id"
+      # 来源追溯：保留知识来源 Phase
+      source_tracking:
+        enabled: true
+        field: "source_phase"
+      # 合并日志
+      merge_log:
+        enabled: true
+        path: "{project_dir}/knowledge/merge-log.yaml"
+    on_success: [p13_handover]
+    on_failure: [p12_knowledge_merge]  # 失败重试
+
+  # ---------- Step 13: Phase 交接 ----------
+  - id: p13_handover
+    name: Phase 交接
+    description: 生成交接文档，准备集成
+    mandatory: true
+    skip_allowed: false
+    depends_on: [p12_knowledge_merge]  # 知识合并后才交接
+    run: agent.dev.phase_handover_generator
+    inputs:
+      phase_contract: "{phase_dir}/phase.yaml"
+      implementation: "{phase_dir}/openspec/04-implementation/"
+      test_report: "{phase_dir}/openspec/05-unit-tests/coverage-report.json"
+      review_report: "{phase_dir}/openspec/06-review/review-report.md"
+      knowledge_merged: "{project_dir}/knowledge/merge-log.yaml"  # 确认知识已合并
+    outputs:
+      - path: "{phase_dir}/output/handover.yaml"
+      - path: "{phase_dir}/output/artifacts.md"
+      - path: "{phase_dir}/output/api-contracts/"
+    handover_contents:
+      - deliverables_summary: true
+      - interface_contracts: true
+      - integration_notes: true
+      - known_issues: true
+      - dependencies_status: true
+      - knowledge_merged_count: true  # 新增：本 Phase 贡献的知识数量
+    final_status_update:
+      phase_status: "completed"
+      ready_for_integration: true
+      knowledge_contributed: true  # 标记知识已贡献到项目级
+
+# ============================================
+# 人类介入点
+# ============================================
+human_in_the_loop:
+  - id: h1_calibration_review
+    purpose: "需求校准失败时，人类介入调整"
+    required: false
+    type: decision
+    actions:
+      - approve: 继续执行
+      - adjust: 调整需求后重试
+      - escalate: 升级到 PM
+
+  - id: h2_test_contract_review
+    purpose: "测试契约审查"
+    required: false
+    type: validation
+    actions:
+      - approve: 继续
+      - supplement: 补充场景后继续
+      - reject: 重新生成
+
+  - id: h3_proposal_review
+    purpose: "审批 OpenSpec 变更提案"
+    required: true
+    type: decision
+    actions:
+      - approve: 开始实现
+      - request_revision: 修改后重新提交
+      - reject: 拒绝提案
+
+  - id: h4_code_review
+    purpose: "代码审查确认 (可选门禁，由 Agent 判断是否触发)"
+    required: false  # 改为可选，由 Code Reviewer Agent 决定
+    type: review
+    trigger_mode: agent_driven  # Agent 自主判断是否需要人类介入
+    trigger_criteria:
+      description: >
+        Code Reviewer Agent 在以下情况会触发人类审批：
+        - 发现 Critical 级别问题
+        - High 级别问题超过 3 个
+        - 发现安全漏洞
+        - 检测到架构变更
+        - 代码质量评分 < 6/10
+      auto_approve_when: >
+        满足以下全部条件时自动通过，无需人类审批：
+        - Critical 问题 = 0
+        - High 问题 ≤ 3
+        - 安全漏洞 = 0
+        - 代码质量评分 ≥ 7/10
+        - 所有测试通过
+    actions:
+      - approve: 通过审查
+      - request_changes: 需要修改
+      - reject: 重大问题需重新实现
+
+  - id: h5_acceptance_review
+    purpose: "Phase 验收确认 (v1.1 新增: 强制门禁)"
+    required: true  # 强制要求
+    type: approval
+    description: >
+      验收 Phase 所有工作流步骤的完成情况，包括：
+      - 工作流步骤完成率
+      - 交付物完整性
+      - 质量门禁
+      - 代码审查验收
+      - 复盘报告验收
+      - 知识沉淀验收
+    inputs_to_review:
+      - "{phase_dir}/output/acceptance-report.yaml"
+      - "{phase_dir}/openspec/06-review/review-report.md"
+      - "{phase_dir}/openspec/07-retrospective/retrospective.md"
+      - "{phase_dir}/openspec/08-knowledge/"
+    review_checklist:
+      - "所有工作流步骤是否完成"
+      - "所有必需交付物是否存在"
+      - "测试通过率是否达标"
+      - "代码覆盖率是否达标"
+      - "阻塞性问题是否为 0"
+      - "复盘报告是否完整"
+      - "知识沉淀是否提取"
+    actions:
+      - approve:
+          label: "验收通过，进入交接"
+          next_step: continue
+      - conditional_approve:
+          label: "条件通过，遗留问题记录到技术债务"
+          next_step: continue_with_deferred
+          requires_comment: true
+      - remediate:
+          label: "需要整改"
+          next_step: retry_with_remediation
+          requires_comment: true
+      - reject:
+          label: "验收失败，需要重新实现"
+          next_step: rollback_to_implementation
+          requires_comment: true
+
+# ============================================
+# 错误处理
+# ============================================
+error_handling:
+  retry:
+    max_attempts: 3
+    backoff_ms: 10000
+
+  fallbacks:
+    - when: "calibration_failed"
+      action: "human_escalation"
+    - when: "test_generation_failed"
+      action: "retry_with_simpler_scenarios"
+    - when: "implementation_stuck"
+      action: "break_into_subtasks"
+    - when: "test_coverage_low"
+      action: "add_tests_and_retry"
+    - when: "review_rejected"
+      action: "fix_and_resubmit"
+
+# ============================================
+# 完成条件 (v1.1 更新: 必须通过验收)
+# ============================================
+completion:
+  required_outputs:
+    - "{phase_dir}/output/acceptance-report.yaml"  # 验收报告必须存在
+    - "{phase_dir}/output/handover.yaml"
+    - "{phase_dir}/output/artifacts.md"
+  quality_criteria:
+    - all_tests_pass: true
+    - coverage_met: true
+    - review_approved: true
+    - retrospective_complete: true
+    - openspec_archived: true
+    - acceptance_passed: true  # v1.1 新增: 必须通过验收
+    - knowledge_items_created: true  # v1.1 新增: 必须有知识沉淀
+  phase_contract_update:
+    status: "completed"
+    handover.ready_for_integration: true
+    acceptance.verdict: "pass"  # v1.1 新增
+
+# ============================================
+# OpenSpec 目录结构 (v1.5 标准化)
+# 参考契约: contracts/phase-directory-contract/v1
+# ============================================
+directory_contract: ../../../contracts/phase-directory-contract/v1/contract.yaml
+
+# ============================================
+# 输出路径规范 (遵循 AI 宪法 -1.2) - v1.6 新增
+# ============================================
+output_path_rules:
+  code:
+    target: git/{repo_name}/
+    extensions: [".go", ".py", ".js", ".ts"]
+    validation: required
+    violation_action: FAIL_ACCEPTANCE
+  documents:
+    target: project/{project_name}/dev/{phase_id}/
+    extensions: [".md", ".yaml", ".json"]
+    validation: required
+  required_instance_config:
+    git_repo_path: "代码仓库路径"
+    project_path: "项目文档路径"
+
+phase_directory_template: |
+  {phase_dir}/
+  ├── phase.yaml                    # Phase 配置契约
+  ├── workflow.yaml                 # 工作流实例 (引用标准模板)
+  ├── README.md                     # Phase 概述
+  │
+  ├── .workflow/                    # Orchestrator 状态 (系统管理)
+  │   ├── state.yaml
+  │   ├── events.jsonl
+  │   ├── approvals/
+  │   └── tokens/
+  │
+  ├── openspec/                     # OpenSpec 工作空间
+  │   ├── 00-config/                # [可选] 配置
+  │   │   └── project.yaml
+  │   │
+  │   ├── 01-requirements/          # [p2] 需求校准
+  │   │   ├── calibrated-requirements.md
+  │   │   ├── tech-constraints.md
+  │   │   └── assumptions.md
+  │   │
+  │   ├── 02-test-contracts/        # [p3] 测试契约
+  │   │   ├── test-contract.yaml
+  │   │   └── scenarios/
+  │   │
+  │   ├── 03-proposals/             # [p4] 变更提案
+  │   │   ├── {change-id}/
+  │   │   │   ├── proposal.md
+  │   │   │   ├── tasks.md
+  │   │   │   └── design.md
+  │   │   └── archive/
+  │   │
+  │   ├── 04-implementation/        # [p5] 实现引用
+  │   │   ├── ai-contracts/         # AI 工程契约 (如适用)
+  │   │   ├── migrations/           # 数据库迁移 (如适用)
+  │   │   └── code-manifest.yaml    # 代码清单，指向 git 仓库
+  │   │
+  │   ├── 05-unit-tests/            # [p6] 单元测试
+  │   │   ├── coverage-report.json
+  │   │   └── test-results.json
+  │   │
+  │   ├── 06-review/                # [p7] 代码审查
+  │   │   ├── review-report.md
+  │   │   └── review-checklist.md
+  │   │
+  │   ├── 07-retrospective/         # [p8] 复盘
+  │   │   ├── retrospective.md
+  │   │   ├── lessons-learned.yaml
+  │   │   └── improvement-actions.md
+  │   │
+  │   ├── 08-knowledge/             # [p9] 知识沉淀
+  │   │   ├── patterns/
+  │   │   ├── pitfalls/
+  │   │   ├── best-practices/
+  │   │   └── tips/
+  │   │
+  │   └── 09-archive/               # [p10] 归档
+  │       └── {date}-{change-id}/
+  │
+  ├── output/                       # 最终交付物
+  │   ├── acceptance-report.yaml    # [p11] 验收报告
+  │   ├── handover.yaml             # [p13] 交接文档
+  │   ├── artifacts.md              # [p13] 产出物清单
+  │   └── api-contracts/            # [可选] API 契约
+  │
+  # ⚠️ 注意: 源代码必须放在 git/{仓库名}/ 目录，不在此目录下
+  # 详见 output_path_rules 配置
+  │
+  └── research/                     # [可选] 调研资料
+
+# ============================================
+# 测试钩子 (v1.5 更新: 13 步骤，强化防跳过/防绕过)
+# ============================================
+tests:
+  smoke:
+    - name: single_phase_flow
+      input:
+        phase_id: "auth"
+        phase_contract:
+          inputs:
+            requirement_source: "requirements/auth.md"
+      assert:
+        - path: "$.steps.length"
+          op: "=="
+          value: 13  # v1.5: 完整 13 步 (p1-p13)
+        - path: "$.steps[10].id"
+          op: "=="
+          value: "p11_phase_acceptance"
+        - path: "$.steps[10].mandatory"
+          op: "=="
+          value: true
+        - path: "$.steps[10].skip_allowed"
+          op: "=="
+          value: false
+        - path: "$.enforcement.skip_prevention.enabled"
+          op: "=="
+          value: true
+        - path: "$.enforcement.bypass_prevention.enabled"
+          op: "=="
+          value: true
+
+  replay:
+    fixtures:
+      - tests/fixtures/phase_openspec_flow_auth.json

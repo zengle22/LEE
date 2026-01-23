@@ -1,0 +1,236 @@
+# Market Signal Freeze Contract v1.0
+# 市场信号冻结契约 - 系统稳定性的根
+
+kind: contract_schema
+version: 1.0
+
+# ============================================
+# 契约说明
+# ============================================
+description: >
+  这是一个状态对象，不是分析。用于冻结分析层的结论，
+  确保后续 agent 只能引用，不可重解释。
+
+  核心原则：分析必须在 freeze 层收敛，机会必须在 handoff 层"对产品部门负责"。
+
+# ============================================
+# Schema 定义
+# ============================================
+schema:
+  type: object
+  required:
+    - freeze_id
+    - freeze_version
+    - freeze_timestamp
+    - keyword_set
+    - accepted_assumptions
+    - confidence_score
+    - re_open_conditions
+  properties:
+    # ============================================
+    # 冻结元信息
+    # ============================================
+    freeze_id:
+      type: string
+      format: "uuid"
+      description: "冻结记录唯一标识"
+
+    freeze_version:
+      type: string
+      pattern: "^v[0-9]+\\.[0-9]+$"
+      description: "冻结版本号（如 v1.3）"
+      example: "v1.0"
+
+    freeze_timestamp:
+      type: string
+      format: "date-time"
+      description: "冻结时间戳"
+
+    # ============================================
+    # 关键词集
+    # ============================================
+    keyword_set:
+      type: object
+      required:
+        - included_keywords
+        - excluded_keywords
+        - version_notes
+      properties:
+        included_keywords:
+          type: array
+          items:
+            type: string
+          description: "纳入分析的关键词列表"
+
+        excluded_keywords:
+          type: array
+          items:
+            type: string
+          description: "明确排除的关键词列表（及原因）"
+
+        version_notes:
+          type: string
+          description: "版本变更说明"
+
+    # ============================================
+    # 已接受的假设（这是核心！）
+    # ============================================
+    accepted_assumptions:
+      type: object
+      required:
+        - user_problem
+        - industry_stage
+        - supply_gap
+        - confidence_breakdown
+      properties:
+        user_problem:
+          type: string
+          description: "用户问题假设（来自 User Signal Agent）"
+
+        industry_stage:
+          type: string
+          enum: [emerging, growing, mature, declining]
+          description: "行业成熟阶段（来自 Industry Structure Agent）"
+
+        supply_gap:
+          type: array
+          items:
+            type: string
+          description: "供给空缺列表（来自 Supply/Competition Agent）"
+
+        confidence_breakdown:
+          type: object
+          properties:
+            data_confidence:
+              type: string
+              enum: [★, ★★, ★★★, ★★★★, ★★★★★]
+              description: "数据置信度（基于搜索数据质量）"
+
+            assumption_risk:
+              type: string
+              enum: [low, medium, high]
+              description: "假设风险等级"
+
+            validation_needed:
+              type: array
+              items:
+                type: string
+              description: "需要后续验证的假设点"
+
+    # ============================================
+    # 置信度评分
+    # ============================================
+    confidence_score:
+      type: object
+      properties:
+        overall_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: "综合置信度分数 (0-100)"
+
+        component_scores:
+          type: object
+          properties:
+            signal_quality:
+              type: number
+              minimum: 0
+              maximum: 100
+              description: "信号质量分数"
+
+            analysis_consistency:
+              type: number
+              minimum: 0
+              maximum: 100
+              description: "分析一致性分数"
+
+            external_validation:
+              type: number
+              minimum: 0
+              maximum: 100
+              description: "外部验证分数（如果有）"
+
+    # ============================================
+    # 重新打开条件
+    # ============================================
+    re_open_conditions:
+      type: array
+      items:
+        type: object
+        properties:
+          trigger:
+            type: string
+            description: "触发条件描述"
+
+          threshold:
+            type: string
+            description: "阈值或具体条件"
+
+      description: "哪些情况下应该重新评估此冻结"
+
+# ============================================
+# 冻结规则（硬约束）
+# ============================================
+freeze_rules:
+  # 后续 Agent 的约束
+  downstream_constraints:
+    - "❌ 后续 agent 不允许推翻已接受的假设"
+    - "✅ 只能引用，不可重解释"
+    - "✅ 可以补充，但不能否定"
+
+  # 冻结触发条件
+  freeze_triggers:
+    - "三个分析层 Agent 都完成输出"
+    - "人工或规则审核通过"
+    - "置信度评分达到最低阈值（≥50）"
+
+  # 版本控制
+  version_control:
+    - "每次更新都是新版本，不覆盖历史"
+    - "保留版本变更记录"
+    - "支持回滚到历史版本"
+
+# ============================================
+# 输出示例
+# ============================================
+example:
+  freeze_id: "freeze-20250123-001"
+  freeze_version: "v1.0"
+  freeze_timestamp: "2025-01-23T12:00:00Z"
+
+  keyword_set:
+    included_keywords:
+      - "AI sales assistant"
+      - "AI sales tool"
+      - "sales automation AI"
+    excluded_keywords:
+      - "sales training"  # 原因：非工具类搜索
+      - "sales jobs"      # 原因：非工具类搜索
+    version_notes: "Initial freeze based on 30-day search data"
+
+  accepted_assumptions:
+    user_problem: "B2B sales managers are looking for AI tools to improve team productivity"
+    industry_stage: "growing"
+    supply_gap:
+      - "Mid-market (200-1000 employees) underserved"
+      - "Industry-specific verticals lack AI solutions"
+    confidence_breakdown:
+      data_confidence: "★★★★"
+      assumption_risk: "medium"
+      validation_needed:
+        - "Verify actual SMB pain points through user interviews"
+
+  confidence_score:
+    overall_score: 72
+    component_scores:
+      signal_quality: 80
+      analysis_consistency: 70
+      external_validation: 65
+
+  re_open_conditions:
+    - trigger: "搜索趋势反转"
+      threshold: "Search volume drops >50% in 30 days"
+    - trigger: "新竞品出现"
+      threshold: "3+ new products launch in target segment"
+    - trigger: "用户访谈否定核心假设"
+      threshold: "5+ interviews contradict user_problem assumption"

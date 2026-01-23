@@ -1,0 +1,344 @@
+# DevOps 配置模板 v1.0
+# 测试环境管理员 (test-env-admin) 输入配置
+#
+# 使用说明:
+# 1. 复制此模板到项目目录: {project}/testing/devops-config.yaml
+# 2. 根据实际情况填写配置
+# 3. 敏感信息建议使用环境变量引用或密钥管理服务
+#
+# 安全提醒:
+# - 不要将此文件提交到公开仓库
+# - 密码/密钥使用 vault: 或 env: 引用
+# - 建议加入 .gitignore
+
+version: "1.0"
+config_id: "DEVOPS-{YYYY}-{NNNN}"
+
+# ============================================
+# 项目基本信息
+# ============================================
+project:
+  name: "AI跑步教练"                    # 项目名称
+  version: "v1.0.0"                     # 部署版本
+  environment: "test"                   # 环境标识 (test | staging | prod)
+
+# ============================================
+# Git 仓库配置
+# ============================================
+git:
+  # 后端仓库
+  backend:
+    url: "git@github.com:org/backend-repo.git"    # SSH 格式
+    # url: "https://github.com/org/backend-repo.git"  # HTTPS 格式
+    branch: "main"                                 # 分支名
+    tag: ""                                        # 版本标签 (可选，优先于 branch)
+    deploy_key: "~/.ssh/deploy_backend"            # 部署密钥路径 (SSH 格式需要)
+    # token_ref: "env:GITHUB_TOKEN"                # Token 引用 (HTTPS 格式需要)
+
+  # 前端仓库 (如果分离)
+  frontend:
+    enabled: false                                 # 是否有独立前端仓库
+    url: ""
+    branch: "main"
+    deploy_key: ""
+
+  # 克隆配置
+  clone_options:
+    depth: 1                                       # 浅克隆深度 (0=完整克隆)
+    submodules: false                              # 是否包含子模块
+
+# ============================================
+# 服务器配置
+# ============================================
+server:
+  # 主服务器
+  primary:
+    host: "192.168.1.100"                          # IP 或域名
+    port: 22                                       # SSH 端口
+    user: "deploy"                                 # SSH 用户名
+
+    # 认证方式 (二选一)
+    auth:
+      method: "key"                                # key | password
+
+      # 密钥认证 (推荐)
+      key_path: "~/.ssh/id_ed25519"                # 私钥路径
+      passphrase_ref: ""                           # 密钥密码引用 (如有)
+
+      # 密码认证 (不推荐)
+      # method: "password"
+      # password_ref: "vault:secret/server/password"  # 密码引用
+
+    # 工作目录
+    work_dir: "/home/deploy/app"                   # 应用部署目录
+    backup_dir: "/home/deploy/backups"             # 备份目录
+
+  # 跳板机 (可选)
+  jump_host:
+    enabled: false
+    host: "bastion.example.com"
+    port: 22
+    user: "jump_user"
+    key_path: "~/.ssh/bastion_key"
+
+  # 服务器资源要求
+  requirements:
+    min_disk_gb: 10                                # 最小磁盘空间
+    min_memory_gb: 2                               # 最小内存
+    os: "ubuntu"                                   # 操作系统 (ubuntu | centos | debian)
+    os_version: "22.04"                            # 操作系统版本
+
+# ============================================
+# 数据库配置
+# ============================================
+database:
+  # 主数据库
+  primary:
+    type: "postgres"                               # postgres | mysql | sqlite
+    host: "localhost"                              # 数据库地址 (可以是容器名)
+    port: 5432                                     # 端口
+    name: "app_test"                               # 数据库名
+    user: "app_user"                               # 用户名
+    password_ref: "vault:secret/db/password"       # 密码引用
+    # password_ref: "env:DATABASE_PASSWORD"        # 或使用环境变量
+
+    # 连接选项
+    ssl_mode: "prefer"                             # disable | require | prefer
+    pool_size: 10                                  # 连接池大小
+    timeout: 30                                    # 连接超时 (秒)
+
+  # Redis 缓存 (可选)
+  redis:
+    enabled: true
+    host: "localhost"
+    port: 6379
+    password_ref: ""                               # Redis 密码 (如有)
+    db: 0                                          # 数据库编号
+
+  # 迁移配置
+  migration:
+    tool: "golang-migrate"                         # golang-migrate | knex | alembic | rails
+    path: "migrations/"                            # 迁移文件路径
+    auto_migrate: true                             # 部署时自动迁移
+
+  # 种子数据
+  seed:
+    enabled: true
+    path: "seeds/"                                 # 种子文件路径
+    files:
+      - "01_users.sql"
+      - "02_test_data.sql"
+
+# ============================================
+# 环境变量配置
+# ============================================
+environment:
+  # 基础环境变量
+  base:
+    NODE_ENV: "test"
+    GO_ENV: "test"
+    LOG_LEVEL: "debug"
+    TZ: "Asia/Shanghai"
+
+  # 应用配置
+  app:
+    APP_NAME: "AI Running Coach"
+    APP_PORT: "8080"
+    APP_HOST: "0.0.0.0"
+    API_PREFIX: "/api/v1"
+
+  # 认证配置 (敏感)
+  auth:
+    JWT_SECRET_REF: "vault:secret/auth/jwt_secret"
+    JWT_EXPIRES_IN: "7d"
+    # SESSION_SECRET_REF: "vault:secret/auth/session_secret"
+
+  # 外部服务 (敏感)
+  external:
+    # OpenAI
+    OPENAI_API_KEY_REF: "vault:secret/openai/api_key"
+    OPENAI_MODEL: "gpt-4"
+
+    # 其他服务
+    # SENTRY_DSN_REF: "vault:secret/sentry/dsn"
+    # AWS_ACCESS_KEY_REF: "vault:secret/aws/access_key"
+    # AWS_SECRET_KEY_REF: "vault:secret/aws/secret_key"
+
+  # 数据库连接串 (自动生成，也可手动指定)
+  database:
+    DATABASE_URL_REF: "auto"                       # auto = 根据 database 配置自动生成
+    REDIS_URL_REF: "auto"
+
+# ============================================
+# 部署配置
+# ============================================
+deploy:
+  # 部署模式
+  mode: "docker_compose"                           # docker_compose | docker | binary | pm2
+
+  # Docker Compose 配置
+  docker_compose:
+    file: "docker-compose.test.yml"                # compose 文件
+    project_name: "ai-running-coach-test"          # 项目名
+    pull_before_up: true                           # 启动前拉取最新镜像
+    build_before_up: false                         # 启动前重新构建
+
+  # 单容器 Docker 配置 (mode=docker 时使用)
+  docker:
+    image: "registry.example.com/app:latest"
+    container_name: "app-test"
+    ports:
+      - "8080:8080"
+    volumes:
+      - "${work_dir}/data:/app/data"
+      - "${work_dir}/logs:/app/logs"
+    networks:
+      - "test-network"
+
+  # 二进制部署配置 (mode=binary 时使用)
+  binary:
+    build_command: "go build -o app ./cmd/server"
+    start_command: "./app --config=config.test.yaml"
+    process_manager: "systemd"                     # systemd | supervisor | none
+
+  # PM2 配置 (mode=pm2 时使用)
+  pm2:
+    config_file: "ecosystem.config.js"
+    env: "test"
+
+  # 部署前后钩子
+  hooks:
+    pre_deploy:
+      - "echo 'Starting deployment...'"
+      # - "npm run build"
+    post_deploy:
+      - "echo 'Deployment completed!'"
+      # - "curl -X POST https://webhook.example.com/deploy"
+
+  # 回滚配置
+  rollback:
+    enabled: true
+    keep_versions: 3                               # 保留版本数
+    auto_rollback_on_failure: true                 # 失败自动回滚
+
+# ============================================
+# 健康检查配置
+# ============================================
+health_check:
+  # 等待服务就绪
+  wait_for_ready:
+    timeout: 120                                   # 最长等待时间 (秒)
+    interval: 5                                    # 检查间隔 (秒)
+
+  # 服务检查列表
+  services:
+    - name: "backend"
+      type: "http"
+      url: "http://localhost:8080/health"
+      expected_status: [200, 204]
+      timeout: 10
+      critical: true                               # 关键服务，失败则部署失败
+
+    - name: "database"
+      type: "tcp"
+      host: "localhost"
+      port: 5432
+      timeout: 5
+      critical: true
+
+    - name: "redis"
+      type: "tcp"
+      host: "localhost"
+      port: 6379
+      timeout: 5
+      critical: false                              # 非关键，失败只警告
+
+    # API 端点检查
+    - name: "api-status"
+      type: "http"
+      url: "http://localhost:8080/api/v1/status"
+      expected_status: [200]
+      expected_body_contains: "ok"
+      timeout: 10
+      critical: true
+
+# ============================================
+# 日志配置
+# ============================================
+logging:
+  # 日志级别
+  level: "debug"                                   # debug | info | warn | error
+
+  # 日志文件
+  files:
+    app: "${work_dir}/logs/app.log"
+    deploy: "${work_dir}/logs/deploy.log"
+    error: "${work_dir}/logs/error.log"
+
+  # 日志轮转
+  rotation:
+    max_size: "100m"                               # 单文件最大大小
+    max_files: 5                                   # 保留文件数
+    compress: true                                 # 是否压缩
+
+  # 日志采集
+  collect:
+    on_failure: true                               # 失败时采集
+    tail_lines: 500                                # 采集最后 N 行
+
+# ============================================
+# 通知配置 (可选)
+# ============================================
+notifications:
+  enabled: false
+
+  # Webhook 通知
+  webhook:
+    url: "https://hooks.example.com/deploy"
+    events:
+      - "deploy_started"
+      - "deploy_success"
+      - "deploy_failed"
+      - "rollback_triggered"
+
+  # 企业微信/钉钉 (可选)
+  # wechat_work:
+  #   webhook_url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
+
+# ============================================
+# 密钥管理配置
+# ============================================
+secrets:
+  # 密钥来源
+  provider: "env"                                  # env | vault | aws-secrets | file
+
+  # HashiCorp Vault 配置
+  vault:
+    address: "http://vault.example.com:8200"
+    token_ref: "env:VAULT_TOKEN"
+    namespace: "test"
+    path_prefix: "secret/data/test-env"
+
+  # AWS Secrets Manager 配置
+  # aws:
+  #   region: "us-west-2"
+  #   profile: "default"
+
+  # 本地加密文件
+  # file:
+  #   path: ".secrets.enc"
+  #   encryption: "age"
+  #   key_ref: "env:SECRETS_KEY"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_at: "2026-01-14"
+  created_by: "DevOps Team"
+  last_updated: "2026-01-14"
+  notes: |
+    测试环境配置模板
+    - 数据库使用 Docker 容器
+    - Redis 用于缓存
+    - 日志保留 7 天

@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/testing/release-manifest/v1",
+  "title": "Release Manifest Contract",
+  "description": "提测包清单契约 - 研发提交给测试部门的完整交付物清单",
+  "type": "object",
+  "required": [
+    "manifest_id",
+    "version",
+    "batch_id",
+    "commit",
+    "artifact",
+    "changelog",
+    "self_test",
+    "submitted_at",
+    "submitted_by"
+  ],
+  "properties": {
+    "manifest_id": {
+      "type": "string",
+      "pattern": "^MAN-[0-9]{4}-[0-9]{4}$",
+      "description": "提测包清单唯一标识"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-rc[0-9]+)?$",
+      "description": "版本号 (如 v0.8.3-rc1)"
+    },
+    "batch_id": {
+      "type": "string",
+      "description": "提测批次号"
+    },
+    "project": {
+      "type": "string",
+      "description": "项目名称"
+    },
+    "commit": {
+      "type": "object",
+      "required": ["hash", "tag", "branch"],
+      "properties": {
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{7,40}$",
+          "description": "Git commit hash"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Git tag"
+        },
+        "branch": {
+          "type": "string",
+          "description": "分支名称"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["type", "location", "checksum"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["docker_image", "binary", "package", "archive"],
+          "description": "产物类型"
+        },
+        "location": {
+          "type": "string",
+          "description": "产物位置 (镜像地址/包路径)"
+        },
+        "checksum": {
+          "type": "object",
+          "properties": {
+            "algorithm": {
+              "type": "string",
+              "enum": ["sha256", "md5"]
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        },
+        "size_bytes": {
+          "type": "integer",
+          "description": "产物大小"
+        }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "properties": {
+        "feature_flags": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "功能开关配置"
+        },
+        "env_vars": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "default": { "type": "string" },
+              "required": { "type": "boolean" }
+            }
+          }
+        },
+        "config_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "配置文件列表"
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "description": "数据库 Schema 版本"
+        },
+        "migration_scripts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "迁移脚本路径列表"
+        },
+        "backward_compatible": {
+          "type": "boolean",
+          "description": "是否向后兼容"
+        }
+      }
+    },
+    "api": {
+      "type": "object",
+      "properties": {
+        "openapi_version": {
+          "type": "string",
+          "description": "OpenAPI 规范版本"
+        },
+        "spec_location": {
+          "type": "string",
+          "description": "API 规范文件位置"
+        },
+        "breaking_changes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "破坏性变更列表"
+        }
+      }
+    },
+    "changelog": {
+      "type": "object",
+      "required": ["summary", "changes"],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "变更摘要"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "description"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["feature", "bugfix", "improvement", "breaking", "security"]
+              },
+              "description": {
+                "type": "string"
+              },
+              "issue_id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "risk_points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "area": { "type": "string" },
+              "risk": { "type": "string" },
+              "mitigation": { "type": "string" }
+            }
+          },
+          "description": "风险点列表"
+        },
+        "rollback_plan": {
+          "type": "string",
+          "description": "回滚方案"
+        }
+      }
+    },
+    "self_test": {
+      "type": "object",
+      "required": ["unit_test", "smoke_test"],
+      "properties": {
+        "unit_test": {
+          "type": "object",
+          "required": ["passed", "total", "coverage"],
+          "properties": {
+            "passed": { "type": "integer" },
+            "total": { "type": "integer" },
+            "coverage": { "type": "number", "minimum": 0, "maximum": 100 },
+            "report_url": { "type": "string", "format": "uri" }
+          }
+        },
+        "smoke_test": {
+          "type": "object",
+          "required": ["passed", "total"],
+          "properties": {
+            "passed": { "type": "integer" },
+            "total": { "type": "integer" },
+            "report_url": { "type": "string", "format": "uri" }
+          }
+        },
+        "integration_test": {
+          "type": "object",
+          "properties": {
+            "passed": { "type": "integer" },
+            "total": { "type": "integer" },
+            "report_url": { "type": "string", "format": "uri" }
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["service", "database", "cache", "message_queue", "external_api"]
+          }
+        }
+      },
+      "description": "外部依赖列表"
+    },
+    "deployment": {
+      "type": "object",
+      "properties": {
+        "target_env": {
+          "type": "string",
+          "enum": ["test", "staging", "production"]
+        },
+        "instructions": {
+          "type": "string",
+          "description": "部署说明"
+        },
+        "health_check": {
+          "type": "object",
+          "properties": {
+            "endpoint": { "type": "string" },
+            "expected_status": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "提交时间"
+    },
+    "submitted_by": {
+      "type": "string",
+      "description": "提交人/Agent"
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["pending", "accepted", "rejected", "need_revision"],
+      "default": "pending",
+      "description": "审核状态"
+    },
+    "rejection_reason": {
+      "type": "string",
+      "description": "拒绝原因 (当 review_status 为 rejected 时)"
+    }
+  }
+}

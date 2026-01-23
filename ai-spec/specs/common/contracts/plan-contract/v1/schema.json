@@ -1,0 +1,842 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-spec.example.com/contracts/plan-contract/v1/schema.json",
+  "title": "Plan Contract Schema",
+  "description": "Schema for development plan contract - task decomposition, scheduling, resource allocation with multi-phase confirmation",
+  "type": "object",
+  "required": ["contract_type", "contract_version", "metadata", "phase1_task_decomposition", "phase2_dependencies_schedule", "phase3_resources_risks", "final_approval", "summary"],
+  "properties": {
+    "contract_type": {
+      "type": "string",
+      "const": "plan-contract"
+    },
+    "contract_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["contract_id", "plan_id", "prd_id", "prd_title", "version", "created_at", "contract_status"],
+      "properties": {
+        "contract_id": {
+          "type": "string",
+          "pattern": "^CONTRACT-[A-Z0-9-]+$"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^PLAN-[A-Z0-9-]+$"
+        },
+        "prd_id": {
+          "type": "string"
+        },
+        "prd_title": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created_by": {
+          "type": "string"
+        },
+        "contract_status": {
+          "type": "string",
+          "enum": ["draft", "phase1_confirmed", "phase2_confirmed", "phase3_confirmed", "approved", "rejected"]
+        },
+        "confirmation_phases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfirmationPhase"
+          }
+        }
+      }
+    },
+    "phase1_task_decomposition": {
+      "$ref": "#/$defs/Phase1TaskDecomposition"
+    },
+    "phase2_dependencies_schedule": {
+      "$ref": "#/$defs/Phase2DependenciesSchedule"
+    },
+    "phase3_resources_risks": {
+      "$ref": "#/$defs/Phase3ResourcesRisks"
+    },
+    "final_approval": {
+      "$ref": "#/$defs/FinalApproval"
+    },
+    "change_management": {
+      "$ref": "#/$defs/ChangeManagement"
+    },
+    "summary": {
+      "$ref": "#/$defs/PlanSummary"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "ConfirmationPhase": {
+      "type": "object",
+      "required": ["phase", "name", "status"],
+      "properties": {
+        "phase": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "confirmed", "rejected", "revision_requested"]
+        },
+        "required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "PhaseConfirmation": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending_confirmation", "confirmed", "rejected"]
+        },
+        "confirmed_by": {
+          "type": "string"
+        },
+        "confirmed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "comments": {
+          "type": "string"
+        },
+        "revision_history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "revision": {
+                "type": "integer"
+              },
+              "date": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "changes": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "KeyDecision": {
+      "type": "object",
+      "required": ["decision_id", "category", "question"],
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "pattern": "^DEC-\\d{3}$"
+        },
+        "category": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "context": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "description"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "impact": {
+                "type": "string"
+              },
+              "requires_input": {
+                "type": "boolean"
+              },
+              "input_prompt": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "selected_option": {
+          "type": "string"
+        },
+        "decision_reason": {
+          "type": "string"
+        },
+        "decided_by": {
+          "type": "string"
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "ItemConfirmation": {
+      "type": "object",
+      "properties": {
+        "is_confirmed": {
+          "type": "boolean"
+        },
+        "needs_revision": {
+          "type": "boolean"
+        },
+        "revision_notes": {
+          "type": "string"
+        }
+      }
+    },
+    "Feature": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^FEAT-\\d{3}$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["P0", "P1", "P2", "P3"]
+        },
+        "source_prd_section": {
+          "type": "string"
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "_confirmation": {
+          "$ref": "#/$defs/ItemConfirmation"
+        }
+      }
+    },
+    "Task": {
+      "type": "object",
+      "required": ["id", "name", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^TASK-\\d{3}$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["database", "backend", "frontend", "test", "integration", "docs"]
+        },
+        "description": {
+          "type": "string"
+        },
+        "feature_id": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["P0", "P1", "P2", "P3"]
+        },
+        "complexity": {
+          "type": "string",
+          "enum": ["XS", "S", "M", "L", "XL"]
+        },
+        "estimated_hours": {
+          "type": "number",
+          "minimum": 0
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "_confirmation": {
+          "type": "object",
+          "properties": {
+            "is_confirmed": {
+              "type": "boolean"
+            },
+            "needs_revision": {
+              "type": "boolean"
+            },
+            "revision_notes": {
+              "type": "string"
+            },
+            "complexity_override": {
+              "type": ["string", "null"]
+            },
+            "hours_override": {
+              "type": ["number", "null"]
+            }
+          }
+        }
+      }
+    },
+    "Phase1TaskDecomposition": {
+      "type": "object",
+      "properties": {
+        "confirmation": {
+          "$ref": "#/$defs/PhaseConfirmation"
+        },
+        "key_decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeyDecision"
+          }
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Feature"
+          }
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Task"
+          }
+        }
+      }
+    },
+    "DependencyEdge": {
+      "type": "object",
+      "required": ["target", "type"],
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["blocks", "depends_on", "related"]
+        },
+        "_confirmation": {
+          "$ref": "#/$defs/ItemConfirmation"
+        }
+      }
+    },
+    "Milestone": {
+      "type": "object",
+      "required": ["id", "name", "date"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "_confirmation": {
+          "type": "object",
+          "properties": {
+            "is_confirmed": {
+              "type": "boolean"
+            },
+            "date_override": {
+              "type": ["string", "null"],
+              "format": "date"
+            }
+          }
+        }
+      }
+    },
+    "Schedule": {
+      "type": "object",
+      "properties": {
+        "start_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "end_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "total_workdays": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "critical_path": {
+          "type": "object",
+          "properties": {
+            "tasks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "total_days": {
+              "type": "integer"
+            }
+          }
+        },
+        "_confirmation": {
+          "type": "object",
+          "properties": {
+            "is_confirmed": {
+              "type": "boolean"
+            },
+            "date_override": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "type": ["string", "null"],
+                  "format": "date"
+                },
+                "end": {
+                  "type": ["string", "null"],
+                  "format": "date"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Phase2DependenciesSchedule": {
+      "type": "object",
+      "properties": {
+        "confirmation": {
+          "$ref": "#/$defs/PhaseConfirmation"
+        },
+        "key_decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeyDecision"
+          }
+        },
+        "dependencies_graph": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/DependencyEdge"
+            }
+          }
+        },
+        "milestones": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Milestone"
+          }
+        },
+        "schedule": {
+          "$ref": "#/$defs/Schedule"
+        }
+      }
+    },
+    "TeamRole": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hours_per_day": {
+          "type": "number",
+          "minimum": 0
+        },
+        "_confirmation": {
+          "type": "object",
+          "properties": {
+            "is_confirmed": {
+              "type": "boolean"
+            },
+            "count_override": {
+              "type": ["integer", "null"]
+            }
+          }
+        }
+      }
+    },
+    "WeeklyAllocation": {
+      "type": "object",
+      "required": ["week"],
+      "properties": {
+        "week": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "backend": {
+          "type": "object",
+          "properties": {
+            "assigned": {
+              "type": "integer"
+            },
+            "utilization": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "frontend": {
+          "type": "object",
+          "properties": {
+            "assigned": {
+              "type": "integer"
+            },
+            "utilization": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "test": {
+          "type": "object",
+          "properties": {
+            "assigned": {
+              "type": "integer"
+            },
+            "utilization": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "_confirmation": {
+          "type": "object",
+          "properties": {
+            "is_confirmed": {
+              "type": "boolean"
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Risk": {
+      "type": "object",
+      "required": ["id", "description", "category", "probability", "impact"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^RISK-\\d{3}$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["technical", "resource", "schedule", "scope", "external"]
+        },
+        "probability": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "impact": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "mitigation": {
+          "type": "string"
+        },
+        "_confirmation": {
+          "type": "object",
+          "properties": {
+            "is_confirmed": {
+              "type": "boolean"
+            },
+            "accepted": {
+              "type": ["boolean", "null"]
+            },
+            "additional_mitigation": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Phase3ResourcesRisks": {
+      "type": "object",
+      "properties": {
+        "confirmation": {
+          "$ref": "#/$defs/PhaseConfirmation"
+        },
+        "key_decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeyDecision"
+          }
+        },
+        "team": {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "$ref": "#/$defs/TeamRole"
+            },
+            "frontend": {
+              "$ref": "#/$defs/TeamRole"
+            },
+            "test": {
+              "$ref": "#/$defs/TeamRole"
+            }
+          }
+        },
+        "resource_allocation": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WeeklyAllocation"
+          }
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Risk"
+          }
+        }
+      }
+    },
+    "Approver": {
+      "type": "object",
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "comments": {
+          "type": "string"
+        }
+      }
+    },
+    "FinalApproval": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"]
+        },
+        "approvers": {
+          "type": "object",
+          "properties": {
+            "product_manager": {
+              "$ref": "#/$defs/Approver"
+            },
+            "tech_lead": {
+              "$ref": "#/$defs/Approver"
+            },
+            "project_manager": {
+              "$ref": "#/$defs/Approver"
+            }
+          }
+        },
+        "approval_criteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "criterion": {
+                "type": "string"
+              },
+              "met": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "effective_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "is_locked": {
+          "type": "boolean"
+        },
+        "locked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "locked_by": {
+          "type": "string"
+        }
+      }
+    },
+    "ChangeRequest": {
+      "type": "object",
+      "required": ["change_id", "requested_by", "requested_at", "change_type", "description", "status"],
+      "properties": {
+        "change_id": {
+          "type": "string",
+          "pattern": "^CHG-\\d{3}$"
+        },
+        "requested_by": {
+          "type": "string"
+        },
+        "requested_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "change_type": {
+          "type": "string",
+          "enum": ["scope", "schedule", "resource"]
+        },
+        "description": {
+          "type": "string"
+        },
+        "impact_analysis": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"]
+        },
+        "approved_by": {
+          "type": "string"
+        },
+        "approved_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "ChangeManagement": {
+      "type": "object",
+      "properties": {
+        "change_requests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChangeRequest"
+          }
+        },
+        "version_history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "author": {
+                "type": "string"
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "PlanSummary": {
+      "type": "object",
+      "properties": {
+        "total_tasks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_hours": {
+          "type": "number",
+          "minimum": 0
+        },
+        "total_workdays": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "by_type": {
+          "type": "object",
+          "properties": {
+            "database": {
+              "type": "integer"
+            },
+            "backend": {
+              "type": "integer"
+            },
+            "frontend": {
+              "type": "integer"
+            },
+            "test": {
+              "type": "integer"
+            },
+            "integration": {
+              "type": "integer"
+            }
+          }
+        },
+        "by_priority": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "type": "integer"
+            },
+            "P1": {
+              "type": "integer"
+            },
+            "P2": {
+              "type": "integer"
+            }
+          }
+        },
+        "confirmation_progress": {
+          "type": "object",
+          "properties": {
+            "phase1": {
+              "type": "string"
+            },
+            "phase2": {
+              "type": "string"
+            },
+            "phase3": {
+              "type": "string"
+            },
+            "overall": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

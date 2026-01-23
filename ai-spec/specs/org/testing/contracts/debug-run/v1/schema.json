@@ -1,0 +1,453 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-spec.example.com/contracts/debug-run/v1/schema.json",
+  "title": "Debug Run Contract",
+  "description": "调试运行记录契约 - 记录 Debug Agent 的调试过程和结果",
+  "type": "object",
+  "required": [
+    "run_id",
+    "bug_id",
+    "started_at",
+    "status",
+    "phases"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "pattern": "^DBG-RUN-\\d{8}-[A-Z0-9]{6}$",
+      "description": "调试运行 ID",
+      "examples": ["DBG-RUN-20260113-ABC123"]
+    },
+    "bug_id": {
+      "type": "string",
+      "description": "关联的 Bug ID",
+      "examples": ["BUG-2026-0001"]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "开始时间"
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "结束时间"
+    },
+    "duration_seconds": {
+      "type": "number",
+      "description": "耗时（秒）"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["running", "completed", "failed", "blocked"],
+      "description": "运行状态"
+    },
+    "trigger": {
+      "type": "object",
+      "description": "触发信息",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["automatic", "manual"],
+          "description": "触发类型"
+        },
+        "reason": {
+          "type": "string",
+          "description": "触发原因",
+          "examples": ["P0 Bug 自动触发", "QA 手动请求"]
+        },
+        "requested_by": {
+          "type": "string",
+          "description": "请求人（手动触发时）"
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "调试环境",
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "description": "应用 URL"
+        },
+        "version": {
+          "type": "string",
+          "description": "被调试版本"
+        },
+        "log_endpoint": {
+          "type": "string",
+          "description": "日志服务地址"
+        },
+        "db_readonly": {
+          "type": "boolean",
+          "description": "是否使用只读数据库"
+        }
+      }
+    },
+    "phases": {
+      "type": "object",
+      "description": "调试阶段",
+      "properties": {
+        "repro": {
+          "$ref": "#/$defs/ReproPhase"
+        },
+        "evidence_collection": {
+          "$ref": "#/$defs/EvidencePhase"
+        },
+        "root_cause_analysis": {
+          "$ref": "#/$defs/RootCausePhase"
+        },
+        "fix_planning": {
+          "$ref": "#/$defs/FixPlanPhase"
+        }
+      }
+    },
+    "root_cause": {
+      "$ref": "#/$defs/RootCause"
+    },
+    "fix_plan": {
+      "$ref": "#/$defs/FixPlan"
+    },
+    "regression_required": {
+      "$ref": "#/$defs/RegressionPlan"
+    },
+    "risk_assessment": {
+      "$ref": "#/$defs/RiskAssessment"
+    },
+    "evidence_bundle": {
+      "type": "object",
+      "description": "证据包",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "证据目录路径"
+        },
+        "frontend": {
+          "type": "object",
+          "properties": {
+            "console_log": { "type": "string" },
+            "network_log": { "type": "string" },
+            "screenshots": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "dom_snapshots": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "backend": {
+          "type": "object",
+          "properties": {
+            "logs": { "type": "string" },
+            "trace": { "type": "string" },
+            "call_chain": { "type": "string" }
+          }
+        },
+        "api": {
+          "type": "object",
+          "properties": {
+            "requests": { "type": "string" },
+            "probe_results": { "type": "string" }
+          }
+        },
+        "db": {
+          "type": "object",
+          "properties": {
+            "queries": { "type": "string" },
+            "snapshots": { "type": "string" },
+            "diff": { "type": "string" }
+          }
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "description": "输出文件",
+      "properties": {
+        "debug_report_json": {
+          "type": "string",
+          "description": "机器可读报告路径"
+        },
+        "debug_report_md": {
+          "type": "string",
+          "description": "人类可读报告路径"
+        },
+        "patch_file": {
+          "type": "string",
+          "description": "补丁文件路径"
+        },
+        "regression_checklist": {
+          "type": "string",
+          "description": "回归检查清单路径"
+        },
+        "updated_bug_contract": {
+          "type": "string",
+          "description": "更新后的 Bug 契约路径"
+        }
+      }
+    },
+    "audit_log": {
+      "type": "string",
+      "description": "审计日志路径"
+    },
+    "handoff": {
+      "type": "object",
+      "description": "交接信息",
+      "properties": {
+        "to": {
+          "type": "string",
+          "enum": ["development", "qa", "pm"],
+          "description": "交接给谁"
+        },
+        "notified_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "ReproPhase": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["success", "failed", "partial", "skipped"]
+        },
+        "repro_rate": {
+          "type": "string",
+          "description": "复现率",
+          "examples": ["5/5", "3/5"]
+        },
+        "minimal_steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "最小复现步骤"
+        },
+        "key_conditions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "关键触发条件"
+        },
+        "repro_script": {
+          "type": "string",
+          "description": "复现脚本路径"
+        }
+      }
+    },
+    "EvidencePhase": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["completed", "partial", "failed"]
+        },
+        "frontend_collected": { "type": "boolean" },
+        "backend_collected": { "type": "boolean" },
+        "api_probed": { "type": "boolean" },
+        "db_inspected": { "type": "boolean" },
+        "trace_id": {
+          "type": "string",
+          "description": "关联的 trace ID"
+        }
+      }
+    },
+    "RootCausePhase": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["determined", "uncertain", "unknown"]
+        },
+        "hypotheses_count": {
+          "type": "integer",
+          "description": "假设数量"
+        },
+        "top_hypothesis_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "最高假设置信度"
+        }
+      }
+    },
+    "FixPlanPhase": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["generated", "pending", "skipped"]
+        },
+        "options_count": {
+          "type": "integer",
+          "description": "方案选项数"
+        },
+        "recommended_option": {
+          "type": "string",
+          "description": "推荐方案"
+        }
+      }
+    },
+    "RootCause": {
+      "type": "object",
+      "required": ["summary", "confidence"],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "根因摘要"
+        },
+        "category": {
+          "type": "string",
+          "description": "问题分类",
+          "examples": ["database.index_missing", "backend.logic_error", "frontend.render_error"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "置信度"
+        },
+        "causal_chain": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "因果链"
+        },
+        "code_locations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "file": { "type": "string" },
+              "line": { "type": "integer" },
+              "method": { "type": "string" },
+              "issue": { "type": "string" }
+            }
+          }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "证据引用"
+        }
+      }
+    },
+    "FixPlan": {
+      "type": "object",
+      "properties": {
+        "recommended": {
+          "type": "object",
+          "properties": {
+            "option": { "type": "string" },
+            "description": { "type": "string" },
+            "steps": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "patch_ref": { "type": "string" }
+          }
+        },
+        "alternatives": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "option": { "type": "string" },
+              "description": { "type": "string" },
+              "pros": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "cons": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "recommendation": { "type": "string" }
+            }
+          }
+        },
+        "estimated_effort": {
+          "type": "string",
+          "description": "预估工作量"
+        }
+      }
+    },
+    "RegressionPlan": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "enum": ["minimal", "moderate", "extensive"],
+          "description": "回归范围"
+        },
+        "tests": {
+          "type": "object",
+          "properties": {
+            "unit": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "template": { "type": "string" }
+                }
+              }
+            },
+            "integration": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "template": { "type": "string" }
+                }
+              }
+            },
+            "e2e": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "template": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "checklist_ref": {
+          "type": "string",
+          "description": "回归检查清单路径"
+        }
+      }
+    },
+    "RiskAssessment": {
+      "type": "object",
+      "properties": {
+        "fix_risk": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "修复风险"
+        },
+        "fix_risk_detail": {
+          "type": "string",
+          "description": "修复风险详情"
+        },
+        "regression_risk": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "回归风险"
+        },
+        "affected_areas": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "影响范围"
+        }
+      }
+    }
+  }
+}

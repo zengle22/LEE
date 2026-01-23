@@ -1,0 +1,261 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-spec.example.com/contracts/decision-checklist-contract/v1/schema.json",
+    "title": "Decision Checklist Contract Schema",
+    "description": "Contract for product goal value decision checklist",
+    "type": "object",
+    "required": [
+        "contract_type",
+        "contract_version",
+        "metadata"
+    ],
+    "properties": {
+        "contract_type": {
+            "type": "string",
+            "const": "decision-checklist"
+        },
+        "contract_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [
+                "contract_id",
+                "created_at",
+                "status"
+            ],
+            "properties": {
+                "contract_id": {
+                    "type": "string",
+                    "pattern": "^DC-\\d{8}-\\d{3}$"
+                },
+                "source_contract_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string",
+                    "default": "1.0"
+                },
+                "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "PENDING_DECISION",
+                        "COMPLETED",
+                        "PROCESSING"
+                    ]
+                }
+            }
+        },
+        "decision_maker": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "decided_at": {
+                    "type": "string",
+                    "format": "date-time"
+                }
+            }
+        },
+        "goal_analysis": {
+            "type": "object",
+            "properties": {
+                "primary_goal_description": {
+                    "type": "string"
+                },
+                "primary_metrics": {
+                    "type": "string"
+                },
+                "primary_success_criteria": {
+                    "type": "string"
+                }
+            }
+        },
+        "value_chain_analysis": {
+            "type": "object",
+            "properties": {
+                "user_need": {
+                    "type": "string"
+                },
+                "product_feature": {
+                    "type": "string"
+                },
+                "direct_value": {
+                    "type": "string"
+                },
+                "business_impact": {
+                    "type": "string"
+                },
+                "strategic_significance": {
+                    "type": "string"
+                }
+            }
+        },
+        "priority_analysis": {
+            "type": "object",
+            "properties": {
+                "user_value_score": {
+                    "type": "string"
+                },
+                "user_value_rationale": {
+                    "type": "string"
+                },
+                "industry_score": {
+                    "type": "string"
+                },
+                "industry_rationale": {
+                    "type": "string"
+                },
+                "efficiency_score": {
+                    "type": "string"
+                },
+                "efficiency_rationale": {
+                    "type": "string"
+                },
+                "cost_score": {
+                    "type": "string"
+                },
+                "cost_rationale": {
+                    "type": "string"
+                },
+                "overall_score": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "suggested_timeline": {
+                    "type": "string"
+                },
+                "resource_estimate": {
+                    "type": "string"
+                }
+            }
+        },
+        "risk_analysis": {
+            "type": "object",
+            "properties": {
+                "risk_table": {
+                    "type": "string"
+                },
+                "in_scope": {
+                    "type": "string"
+                },
+                "out_of_scope": {
+                    "type": "string"
+                },
+                "dependencies": {
+                    "type": "string"
+                }
+            }
+        },
+        "decisions": {
+            "type": "object",
+            "properties": {
+                "goal_decisions": {
+                    "type": "object",
+                    "properties": {
+                        "d1_1": {
+                            "type": "boolean"
+                        },
+                        "d1_2": {
+                            "type": "boolean"
+                        },
+                        "d1_3": {
+                            "type": "boolean"
+                        },
+                        "feedback": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "value_chain_decisions": {
+                    "type": "object",
+                    "properties": {
+                        "d2_1": {
+                            "type": "boolean"
+                        },
+                        "d2_2": {
+                            "type": "boolean"
+                        },
+                        "d2_3": {
+                            "type": "boolean"
+                        },
+                        "d2_4": {
+                            "type": "boolean"
+                        },
+                        "d2_5": {
+                            "type": "boolean"
+                        },
+                        "feedback": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "priority_decisions": {
+                    "type": "object",
+                    "properties": {
+                        "d3_1": {
+                            "type": "boolean"
+                        },
+                        "d3_2": {
+                            "type": "boolean"
+                        },
+                        "d3_3": {
+                            "type": "boolean"
+                        },
+                        "d3_4": {
+                            "type": "boolean"
+                        },
+                        "feedback": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "risk_decisions": {
+                    "type": "object",
+                    "properties": {
+                        "d4_1": {
+                            "type": "boolean"
+                        },
+                        "d4_2": {
+                            "type": "boolean"
+                        },
+                        "d4_3": {
+                            "type": "boolean"
+                        },
+                        "d4_4": {
+                            "type": "boolean"
+                        },
+                        "feedback": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "all_confirmed": {
+                    "type": "boolean"
+                },
+                "overall_feedback": {
+                    "type": "string"
+                },
+                "approval_decision": {
+                    "type": "string",
+                    "enum": [
+                        "DIRECT_APPROVE",
+                        "NEED_PROCESSING",
+                        "PENDING"
+                    ]
+                }
+            }
+        }
+    }
+}

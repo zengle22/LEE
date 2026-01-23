@@ -1,0 +1,32 @@
+{
+  "industry": "AI Sales Assistant Software",
+  "maturity_stage": "growing",
+  "tech_dependency": {
+    "required_tech": ["NLP", "Machine Learning", "CRM Integration"],
+    "tech_readiness": "available",
+    "adoption_cost": "medium"
+  },
+  "entry_barrier": {
+    "capital_requirement": "medium",
+    "regulation_barrier": "low",
+    "network_effect": "moderate",
+    "switching_cost": "high"
+  },
+  "structural_gap": [
+    {
+      "area": "SMB Segment",
+      "description": "Large enterprises well-served, but SMB segment lacks affordable solutions",
+      "confidence": "high"
+    },
+    {
+      "area": "Industry-Specific Verticals",
+      "description": "Generic solutions exist, but industry-tailored solutions are rare",
+      "confidence": "medium"
+    }
+  ],
+  "assessment_basis": [
+    "Gartner Magic Quadrant for Sales Tech 2024",
+    "Crunchbase funding data: $2B+ invested in 2023-2024"
+  ],
+  "last_updated": "2025-01-23"
+}

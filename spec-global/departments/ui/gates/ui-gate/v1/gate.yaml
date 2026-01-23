@@ -1,0 +1,192 @@
+# UI Gate Specification v1.0
+# UI 门禁规范 - 进入研发前的质量检查
+
+kind: gate
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: gate.ui.ui_gate
+name: UI Gate
+description: >
+  UI 设计进入研发阶段前的质量门禁。
+  确保 Figma 设计稿、UI Contract、状态覆盖等均已就绪。
+owner: ui-governance
+tags: [gate, ui, design, quality]
+
+# ============================================
+# 触发条件
+# ============================================
+trigger:
+  when:
+    - design_phase_complete
+    - ui_review_approved
+  context:
+    requires:
+      - ui_map_file: "spec/ui/ui.map.yaml"
+      - tokens_file: "spec/ui/tokens/tokens.json"
+
+# ============================================
+# 检查规则
+# ============================================
+checks:
+  # ---------- Figma 链接检查 ----------
+  - id: figma_links
+    name: Figma 设计稿链接
+    description: 所有页面和组件必须有 Figma 链接
+    severity: blocker
+    rule: |
+      ui_map.pages.every(page => page.figma != null && page.figma != '')
+      && ui_map.components.every(comp => comp.figma != null && comp.figma != '')
+    message: "缺少 Figma 链接"
+    fix: "为所有 pages 和 components 添加 figma 字段"
+
+  # ---------- 页面契约检查 ----------
+  - id: page_contracts
+    name: 页面契约完整
+    description: 所有页面必须有对应的 page contract
+    severity: blocker
+    rule: |
+      ui_map.pages.every(page =>
+        page.contracts?.page != null
+        && file_exists(page.contracts.page)
+      )
+    message: "页面缺少契约文件"
+    fix: "为每个页面创建 page.yaml 契约文件"
+
+  # ---------- 必需状态覆盖 ----------
+  - id: required_states
+    name: 必需状态覆盖
+    description: 每个页面必须定义 default/loading/empty/error 状态
+    severity: blocker
+    rule: |
+      ui_map.pages.every(page =>
+        page.requiredStates?.includes('default')
+        && page.requiredStates?.includes('loading')
+        && page.requiredStates?.includes('empty')
+        && page.requiredStates?.includes('error')
+      )
+    message: "页面缺少必需状态定义"
+    fix: "在 page contract 中添加 default/loading/empty/error 状态"
+
+  # ---------- 组件契约检查 ----------
+  - id: component_contracts
+    name: 组件契约完整
+    description: 所有组件必须有对应的 component contract
+    severity: major
+    rule: |
+      ui_map.components.every(comp =>
+        comp.contract != null
+        && file_exists(comp.contract)
+      )
+    message: "组件缺少契约文件"
+    fix: "为每个组件创建 component.yaml 契约文件"
+
+  # ---------- Tokens 文件检查 ----------
+  - id: tokens_exist
+    name: 设计 Tokens 存在
+    description: 必须有 tokens.json 文件
+    severity: major
+    rule: |
+      file_exists(ui_map.quality.requireTokens ? 'spec/ui/tokens/tokens.json' : null)
+      || !ui_map.quality.requireTokens
+    message: "缺少 tokens.json 文件"
+    fix: "创建 spec/ui/tokens/tokens.json 设计 token 文件"
+
+  # ---------- A11y 配置检查 ----------
+  - id: a11y_config
+    name: 可访问性配置
+    description: 启用 a11y 时，页面必须有 a11y 配置
+    severity: major
+    rule: |
+      !ui_map.quality.requireA11y
+      || ui_map.pages.every(page =>
+        load_contract(page.contracts.page).a11y?.required == true
+      )
+    message: "页面缺少可访问性配置"
+    fix: "在 page contract 中添加 a11y 配置"
+
+  # ---------- 交互绑定检查 ----------
+  - id: interaction_api_binding
+    name: 交互绑定 API 契约
+    description: 有 API 调用的交互必须绑定 API 契约
+    severity: major
+    rule: |
+      ui_map.pages.every(page => {
+        const contract = load_contract(page.contracts.page);
+        return contract.interactions?.every(i =>
+          !i.api || i.api.contractRef != null
+        ) ?? true;
+      })
+    message: "交互缺少 API 契约绑定"
+    fix: "为交互的 api 字段添加 contractRef"
+
+  # ---------- 埋点配置检查 ----------
+  - id: tracking_config
+    name: 埋点配置
+    description: 启用 tracking 时，页面必须有埋点配置
+    severity: minor
+    rule: |
+      !ui_map.quality.requireTracking
+      || ui_map.pages.every(page => {
+        const contract = load_contract(page.contracts.page);
+        return contract.tracking != null;
+      })
+    message: "页面缺少埋点配置"
+    fix: "在 page contract 中添加 tracking 配置"
+
+  # ---------- P0 页面优先检查 ----------
+  - id: p0_pages_complete
+    name: P0 页面完整
+    description: 所有 P0 优先级页面必须完整
+    severity: blocker
+    rule: |
+      ui_map.pages
+        .filter(p => p.priority == 'P0')
+        .every(p =>
+          p.status == 'approved' || p.status == 'implemented'
+        )
+    message: "P0 页面未完成审批"
+    fix: "确保所有 P0 页面状态为 approved"
+
+# ============================================
+# 通过条件
+# ============================================
+pass_criteria:
+  blocker: 0        # 不允许有 blocker
+  major: 0          # 不允许有 major
+  minor: null       # minor 仅警告
+
+# ============================================
+# 输出产物
+# ============================================
+outputs:
+  - type: report
+    format: json
+    path: "output/gate-reports/ui-gate-{timestamp}.json"
+  - type: summary
+    format: markdown
+    path: "output/gate-reports/ui-gate-{timestamp}.md"
+
+# ============================================
+# 后续动作
+# ============================================
+actions:
+  on_pass:
+    - log: "UI Gate 通过，可以进入研发阶段"
+    - update_status:
+        target: ui_design_phase
+        status: complete
+    - notify:
+        channel: dev-team
+        message: "UI 设计已通过门禁，可以开始开发"
+
+  on_fail:
+    - log: "UI Gate 未通过"
+    - create_tasks:
+        from: failed_checks
+        assignee: ui-team
+    - notify:
+        channel: ui-team
+        message: "UI Gate 有 {blocker_count} 个阻断问题需要修复"

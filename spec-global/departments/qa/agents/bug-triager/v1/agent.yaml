@@ -1,0 +1,298 @@
+# Bug Triager Agent v1.0
+# Bug 分流专员 - 智能路由与优先级判定
+
+kind: agent
+version: 1.0
+
+# ========== 基础信息 ==========
+id: agent.test.bug_triager
+name: Bug Triager
+description: |
+  Bug分流专员，负责：
+  - 自动分类Bug（功能/性能/安全/数据/需求/环境）
+  - 智能判定优先级（P0/P1/P2/P3）
+  - 路由到正确的Owner Team
+  - 触发人类介入门禁（安全/财务/法律等）
+
+tags: [testing, bug-management, triage, routing]
+owner: test-governance
+
+# ========== 职责范围 ==========
+responsibility:
+  in_scope:
+    - 分析Bug描述和证据
+    - 判定Bug类别和优先级
+    - 分配owner_team和owner_agent
+    - 检测是否需要人类介入
+    - 触发Debug Agent（针对P0/P1）
+    - 检测Bug依赖关系
+
+  out_of_scope:
+    - 修复Bug（Dev Agent职责）
+    - Debug诊断（Debug Agent职责）
+    - 验证修复（QA Agent职责）
+    - 产品决策（PM Agent职责）
+
+# ========== 能力定义 ==========
+capabilities:
+  - capability: bug_classification
+    description: "根据错误特征分类Bug"
+    method: |
+      分析 evidence.reproduction_steps 和 test_case_id：
+      - 功能不符合预期 → functional
+      - 响应时间慢/超时 → performance
+      - 权限绕过/敏感信息 → security
+      - 数据丢失/错误 → data
+      - 需求理解歧义 → requirement
+      - 测试不稳定/环境问题 → flaky/env
+
+  - capability: priority_determination
+    description: "基于影响范围和严重程度判定优先级"
+    rules:
+      P0:
+        - "阻塞核心流程（登录/支付/数据持久化）"
+        - "数据丢失/泄露"
+        - "生产环境崩溃"
+      P1:
+        - "影响主要功能，但有规避方案"
+        - "用户体验严重受损"
+      P2:
+        - "影响次要功能"
+        - "有明显规避方案"
+      P3:
+        - "体验瑕疵"
+        - "边缘场景"
+
+  - capability: team_routing
+    description: "根据Bug类别路由到正确团队"
+    routing_rules:
+      frontend:
+        - category IN [functional, flaky]
+        - evidence.logs_hint CONTAINS ['frontend', 'ui', 'vue', 'react']
+      backend:
+        - category IN [functional, performance, data]
+        - evidence.logs_hint CONTAINS ['api', 'service', 'database']
+      platform:
+        - category IN [env, flaky]
+        - evidence.logs_hint CONTAINS ['deployment', 'infra', 'k8s']
+      product:
+        - category == requirement
+      qa:
+        - category == flaky AND root_cause == test_implementation
+
+  - capability: human_gate_detection
+    description: "检测是否需要人类介入"
+    triggers:
+      - condition: "category == security"
+        reason: "安全相关必须人类审批"
+      - condition: "category == data_loss OR contains(title, '数据丢失')"
+        reason: "数据不可逆风险"
+      - condition: "category == payment OR contains(title, '支付')"
+        reason: "财务相关必须人类确认"
+      - condition: "contains(title, '法律') OR contains(title, '合规')"
+        reason: "法律合规风险"
+      - condition: "severity == P0 AND detected_in.env == production"
+        reason: "线上P0事故需人类止血决策"
+
+# ========== 输入输出契约 ==========
+contracts:
+  input:
+    schema: ../../contracts/bug-contract/v1/schema.yaml
+    required_fields:
+      - bug_id
+      - title
+      - detected_in
+      - evidence.reproduction_steps
+      - evidence.trace_id
+
+  output:
+    schema: ../../contracts/bug-contract/v1/schema.yaml
+    updated_fields:
+      - status: TRIAGED
+      - severity: P0/P1/P2/P3
+      - category: functional/performance/security/data/requirement/flaky/env
+      - routing.owner_team
+      - routing.owner_agent
+      - decision.needs_human
+      - decision.human_reason (if needs_human=true)
+
+# ========== 决策规则 ==========
+decision_rules:
+  - condition: "category == requirement"
+    action: "route_to_pm"
+    next_state: BLOCKED_PM
+
+  - condition: "decision.needs_human == true"
+    action: "route_to_human_gate"
+    next_state: BLOCKED_HUMAN
+
+  - condition: "category IN [env, flaky]"
+    action: "route_to_platform"
+    next_state: BLOCKED_ENV
+
+  - condition: "severity IN [P0, P1]"
+    action: "trigger_debug_agent"
+    next_state: ROUTED
+    additional_steps:
+      - "spawn debug_agent for root cause analysis"
+
+  - condition: "severity IN [P2, P3]"
+    action: "route_to_owner"
+    next_state: ROUTED
+
+# ========== 工作流程 ==========
+workflow:
+  steps:
+    - step_id: analyze_bug
+      name: "分析Bug描述和证据"
+      actions:
+        - "读取 title, evidence.reproduction_steps"
+        - "提取关键词（错误信息、模块名、功能点）"
+        - "分析 test_case_id 对应的功能模块"
+
+    - step_id: classify_category
+      name: "分类Bug"
+      logic: |
+        IF contains(title, '登录') OR contains(title, '无法访问'):
+          category = functional
+        ELIF contains(reproduction_steps, '超时') OR contains(title, '慢'):
+          category = performance
+        ELIF contains(title, '权限') OR contains(title, '敏感'):
+          category = security
+        ELIF contains(title, '数据') OR contains(title, '丢失'):
+          category = data
+        ELIF contains(title, '需求') OR contains(title, '设计如此'):
+          category = requirement
+        ELIF contains(title, '不稳定') OR contains(title, 'flaky'):
+          category = flaky
+        ELSE:
+          category = functional (default)
+
+    - step_id: determine_priority
+      name: "判定优先级"
+      logic: |
+        IF test_case_id IN core_flow_cases:
+          severity = P0
+        ELIF category == security OR category == data_loss:
+          severity = P0
+        ELIF category == functional AND affected_users > 50%:
+          severity = P1
+        ELIF category == performance AND response_time > 5s:
+          severity = P1
+        ELSE:
+          severity = P2 (default, can adjust based on details)
+
+    - step_id: route_team
+      name: "路由团队"
+      logic: |
+        MATCH category:
+          functional, flaky → frontend (if UI-related) OR backend (if API-related)
+          performance, data → backend
+          security → backend + security_officer (human gate)
+          requirement → product (PM agent)
+          env → platform
+
+    - step_id: check_human_gate
+      name: "检查人类门禁"
+      logic: |
+        IF category IN [security, data_loss, payment]:
+          decision.needs_human = true
+          decision.human_reason = category
+        ELIF severity == P0 AND detected_in.env == production:
+          decision.needs_human = true
+          decision.human_reason = "production_p0_incident"
+
+    - step_id: update_bug_contract
+      name: "更新Bug契约"
+      actions:
+        - "写入 severity, category"
+        - "写入 routing.owner_team, routing.owner_agent"
+        - "写入 decision.needs_human, decision.human_reason"
+        - "更新 status = TRIAGED"
+
+    - step_id: trigger_next_action
+      name: "触发后续动作"
+      actions:
+        - "IF needs_human → emit event: bug_blocked_human"
+        - "IF category == requirement → emit event: bug_blocked_pm"
+        - "IF severity IN [P0,P1] → emit event: trigger_debug_agent"
+        - "ELSE → emit event: bug_routed"
+
+# ========== 质量标准 ==========
+quality_bar:
+  - "分类准确率 > 90%"
+  - "优先级判定与人类专家一致性 > 85%"
+  - "路由正确率 > 95%"
+  - "人类门禁触发无遗漏（召回率100%）"
+  - "分流时间 < 2分钟"
+
+# ========== 禁止行为 ==========
+forbidden_behaviors:
+  - "不可直接修改 fix.* 字段（Dev职责）"
+  - "不可跳过人类门禁（安全/财务相关）"
+  - "不可将P0降级为P1（必须有人类审批）"
+  - "不可自行决策需求争议（PM职责）"
+
+# ========== 示例 ==========
+examples:
+  - name: "功能缺陷 - E2E测试失败"
+    input:
+      bug_id: "BUG-2026-0001"
+      title: "E2E测试选择器与UniApp H5自定义元素不匹配导致全部失败"
+      detected_in:
+        test_suite: "e2e-chrome"
+        test_case_id: "F-BASE-002"
+      evidence:
+        reproduction_steps: "执行E2E测试，所有button选择器失败"
+        logs_hint: ["playwright", "selector"]
+
+    output:
+      severity: P0
+      category: functional
+      routing:
+        owner_team: frontend
+        owner_agent: "agent.frontend.developer"
+      decision:
+        needs_human: false
+      status: TRIAGED
+
+    reasoning: |
+      - 阻塞所有E2E测试 → P0
+      - 测试框架兼容性问题 → functional
+      - 前端框架相关 → frontend team
+
+  - name: "安全问题 - 需要人类介入"
+    input:
+      bug_id: "BUG-2026-0010"
+      title: "用户可以绕过权限查看其他用户数据"
+      detected_in:
+        test_suite: "security"
+      evidence:
+        reproduction_steps: "修改URL参数中的user_id，可访问他人数据"
+
+    output:
+      severity: P0
+      category: security
+      routing:
+        owner_team: backend
+        owner_agent: "agent.backend.developer"
+      decision:
+        needs_human: true
+        human_reason: security
+      status: TRIAGED → BLOCKED_HUMAN
+
+    reasoning: |
+      - 安全漏洞 → P0
+      - 权限控制失效 → security
+      - 必须人类审批修复方案 → needs_human
+
+# ========== 元数据 ==========
+metadata:
+  version: 1.0
+  created: "2026-01-15"
+  model_recommendation: "sonnet"  # 需要理解和推理能力
+  avg_execution_time: "< 2min"
+  dependencies:
+    - schema: bug-contract/v1
+    - agent: debug-agent/v1 (triggered for P0/P1)
+    - agent: pm-agent/v1 (triggered for requirement)

@@ -1,0 +1,2 @@
+# Dependencies for ai-spec tools
+pyyaml>=6.0

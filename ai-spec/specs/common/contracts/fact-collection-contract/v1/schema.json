@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-spec.example.com/contracts/fact-collection-contract/v1/schema.json",
+  "title": "Fact Collection Contract Schema",
+  "description": "Schema for fact collection output - raw market signal data from search engines",
+  "type": "object",
+  "required": ["contract_type", "contract_version", "metadata", "keywords"],
+  "properties": {
+    "contract_type": {
+      "type": "string",
+      "const": "fact-collection"
+    },
+    "contract_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["collection_id", "input_keywords", "collected_at", "sources", "total_keywords_found"],
+      "properties": {
+        "collection_id": {
+          "type": "string",
+          "pattern": "^FC-\\d{8}-\\d{3}$",
+          "description": "Collection ID in format: FC-YYYYMMDD-XXX"
+        },
+        "input_keywords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "collected_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["google", "bing"]
+          }
+        },
+        "total_keywords_found": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "keywords": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Keyword"
+      },
+      "minItems": 1
+    },
+    "sources_log": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceLog"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Keyword": {
+      "type": "object",
+      "required": ["keyword", "trend", "volume_range", "source_links"],
+      "properties": {
+        "keyword": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Keyword text (recorded as-is, no merging or modification)"
+        },
+        "trend": {
+          "type": "string",
+          "enum": ["up", "flat", "down", "unknown"],
+          "description": "Trend signal based on raw data"
+        },
+        "volume_range": {
+          "type": "string",
+          "enum": ["10M+", "1M-10M", "100K-1M", "10K-100K", "<10K", "unknown"],
+          "description": "Search volume range estimate"
+        },
+        "geo": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Geographic distribution signals"
+        },
+        "time_window": {
+          "type": "string",
+          "description": "Time window/relevance (e.g., '2024', 'last 7 days', 'unknown')"
+        },
+        "source_links": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "SourceLog": {
+      "type": "object",
+      "required": ["url", "search_engine", "query", "timestamp", "status"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "search_engine": {
+          "type": "string",
+          "enum": ["google", "bing"]
+        },
+        "query": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["success", "failed", "partial"]
+        },
+        "error_message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

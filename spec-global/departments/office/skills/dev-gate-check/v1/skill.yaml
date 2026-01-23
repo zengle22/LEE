@@ -1,0 +1,118 @@
+# Dev Gate Check Skill Specification v1.0
+# Dev Gate 检查技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.gate.dev_gate
+name: Dev Gate Check
+description: >
+  执行 Dev Gate 检查，验证代码合并前的质量标准。
+owner: dev-ai
+tags: [gate, dev, check]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [project_path]
+    properties:
+      project_path:
+        type: string
+        description: "项目根目录路径"
+      ui_map_path:
+        type: string
+        description: "ui.map.yaml 文件路径"
+      verbose:
+        type: boolean
+        description: "是否输出详细信息"
+        default: false
+
+  outputs:
+    type: object
+    required: [result, checks, summary]
+    properties:
+      result:
+        type: string
+        description: "检查结果"
+        enum: [pass, fail]
+      checks:
+        type: array
+        description: "各检查项结果"
+        items:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            severity:
+              type: string
+              enum: [blocker, major, minor]
+            status:
+              type: string
+              enum: [pass, fail, skip]
+            message:
+              type: string
+            duration_ms:
+              type: integer
+            details:
+              type: object
+      summary:
+        type: object
+        description: "统计信息"
+        properties:
+          blocker:
+            type: integer
+          major:
+            type: integer
+          minor:
+            type: integer
+          total_checks:
+            type: integer
+          passed_checks:
+            type: integer
+          total_duration_ms:
+            type: integer
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: shell
+  tool: npx dev-gate check
+  timeout_ms: 300000
+  retries: 0
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: false  # 测试结果可能因环境而异
+  side_effects: reads
+  pii: forbidden
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: dev_gate_build_check
+      input:
+        project_path: "."
+      assert:
+        - path: "$.checks[?(@.id=='build_success')]"
+          op: "!="
+          value: null
+    - name: dev_gate_test_check
+      input:
+        project_path: "."
+      assert:
+        - path: "$.checks[?(@.id=='unit_tests')]"
+          op: "!="
+          value: null

@@ -1,0 +1,429 @@
+# Product Decision Pipeline
+# 产品决策流水线 - Stage 2 的详细子阶段定义
+#
+# 本流水线属于 AI 宪法体系的一部分
+# 参考: AI-CONSTITUTION.md
+#
+# 关键设计原则:
+# 1. 人类仅在冻结阶段参与审批
+# 2. 每个 Agent 有明确的 non_goals（禁止事项）
+# 3. 输入输出形成严格的依赖链
+
+id: product_pipeline
+
+version: v1
+
+metadata:
+  name: Product Decision Pipeline
+  name_zh: 产品决策流水线
+  description: |
+    Product decision pipeline with explicit freeze points.
+    Human involvement is limited to approval at freeze stages only.
+
+    本流水线是 Stage 2 (产品设计) 的内部细分，包含4个子阶段：
+    - value_definition: 价值定义
+    - problem_definition: 问题定义
+    - solution_design: 方案设计
+    - delivery_planning: 交付规划
+
+  prerequisites:
+    - description: 必须存在已冻结的 discovery-freeze.md
+    - required_files:
+        - "*-discovery-freeze.md"
+    - gate_check: |
+        进入产品设计阶段前，必须确认：
+        1. discovery-freeze.md 已存在且状态为 🔒 已冻结
+        2. 商业机会已被人类确认
+        3. 目标市场和用户群体已明确
+
+  outputs:
+    - file: "output/design-frozen/{project}-design-freeze.md"
+      description: 产品设计阶段总冻结文件
+
+steps:
+  # ============================================
+  # Stage 2.1: 价值定义 (Value Definition)
+  # ============================================
+  - id: product_value
+    agent: product_value_agent@v1
+    contract: product_value_proposal@v1
+
+    metadata:
+      name: Product Value Definition
+      name_zh: 产品价值定义
+      stage_id: "2.1"
+      description: |
+        Translate business opportunity into product-level value proposition.
+        将商业机会转化为产品级别的价值主张。
+        这是从"做什么生意"到"做什么产品"的关键转换。
+
+    input:
+      - file: "business_opportunity.md"
+        source: discovery_freeze
+        required: true
+
+    output:
+      file: "output/product_value_proposal.md"
+      freeze: false
+
+    non_goals:
+      - define features          # 不定义具体功能
+      - propose solutions        # 不提出解决方案
+      - discuss implementation   # 不讨论实现细节
+
+    thinking_boundary: |
+      ✅ 可以思考：产品解决什么核心问题、目标用户是谁、价值主张是什么、成功指标如何定义
+      ❌ 禁止思考：用什么技术实现、界面长什么样、需要哪些功能
+
+    on_failure:
+      retry: 2
+      fallback: human_review
+
+  - id: product_value_freeze
+    agent: approval_reviewer@v1
+    contract: frozen_analysis_contract@v1
+
+    metadata:
+      name: Product Value Freeze
+      name_zh: 产品价值冻结
+      stage_id: "2.1-freeze"
+      description: 人类审批产品价值主张
+
+    input:
+      - source: product_value
+        required: true
+
+    output:
+      file: "output/design-frozen/{project}-product-value-freeze.md"
+      freeze: true
+      includes:
+        - 产品愿景
+        - 目标用户画像
+        - 核心价值主张
+        - 成功指标定义
+
+    human_role:
+      type: decision
+      actions:
+        - approve: 进入下一阶段
+        - request_revision: Agent 重新生成
+        - reject: 终止流程，返回商业发现
+
+    on_failure:
+      retry: 1
+      fallback: human_review
+
+  # ============================================
+  # Stage 2.2: 问题定义 (Problem Definition)
+  # ============================================
+  - id: requirement_alignment
+    agent: requirement_alignment_agent@v1
+    contract: problem_definition@v1
+
+    metadata:
+      name: Requirement Alignment
+      name_zh: 需求对齐
+      stage_id: "2.2.1"
+      description: |
+        Translate value goals into problem space.
+        将价值目标转化为问题空间定义。
+
+    input:
+      - source: product_value_freeze
+        required: true
+
+    output:
+      file: "output/problem_definition.md"
+      freeze: false
+
+    non_goals:
+      - feature design        # 不设计功能
+      - solution thinking     # 不思考解决方案
+
+    thinking_boundary: |
+      ✅ 可以思考：用户面临什么问题、问题的根本原因是什么、问题的优先级如何
+      ❌ 禁止思考：如何解决这些问题、需要什么功能来解决
+
+    on_failure:
+      retry: 2
+      fallback: human_review
+
+  - id: requirement_breakdown
+    agent: requirement_breakdown_agent@v1
+    contract: requirement_breakdown@v1
+
+    metadata:
+      name: Requirement Breakdown
+      name_zh: 需求分解
+      stage_id: "2.2.2"
+      description: |
+        Decompose problem space into structured requirements.
+        将问题空间分解为结构化需求。
+
+    input:
+      - source: requirement_alignment
+        required: true
+
+    output:
+      file: "output/requirement_breakdown.md"
+      freeze: false
+
+    non_goals:
+      - prioritization           # 不做优先级判断
+      - feasibility judgement    # 不做可行性评估
+
+    thinking_boundary: |
+      ✅ 可以思考：需求的结构化表达、需求之间的依赖关系、需求的完整性
+      ❌ 禁止思考：哪个需求更重要、这个需求能不能实现
+
+    on_failure:
+      retry: 2
+      fallback: human_review
+
+  - id: requirement_review
+    agent: requirement_review_agent@v1
+    contract: requirement_review@v1
+
+    metadata:
+      name: Requirement Review
+      name_zh: 需求评审
+      stage_id: "2.2.3"
+      description: |
+        Validate alignment between requirements and frozen value goals.
+        验证需求与已冻结价值目标的对齐程度。
+
+    input:
+      - source: product_value_freeze
+        required: true
+      - source: requirement_breakdown
+        required: true
+
+    output:
+      file: "output/requirement_review.md"
+      freeze: false
+
+    non_goals:
+      - add new requirements     # 不添加新需求
+      - redesign value goals     # 不重新设计价值目标
+
+    thinking_boundary: |
+      ✅ 可以思考：需求是否与价值目标对齐、是否有遗漏的需求、是否有偏离价值目标的需求
+      ❌ 禁止思考：应该增加什么需求、价值目标应该如何调整
+
+    on_failure:
+      retry: 2
+      fallback: human_review
+
+  - id: requirement_freeze
+    agent: approval_reviewer@v1
+    contract: frozen_analysis_contract@v1
+
+    metadata:
+      name: Requirement Freeze
+      name_zh: 需求冻结
+      stage_id: "2.2-freeze"
+      description: 人类确认需求与价值目标对齐
+
+    input:
+      - source: requirement_review
+        required: true
+
+    output:
+      file: "output/design-frozen/{project}-requirement-freeze.md"
+      freeze: true
+      includes:
+        - 问题定义
+        - 结构化需求列表
+        - 对齐验证报告
+
+    human_role:
+      type: validation
+      actions:
+        - confirm_alignment: 进入下一阶段
+        - flag_misalignment: 返回修正
+
+    on_failure:
+      retry: 1
+      fallback: human_review
+
+  # ============================================
+  # Stage 2.3: 方案设计 (Solution Design)
+  # ============================================
+  - id: solution_prototype
+    agent: solution_prototype_agent@v1
+    contract: solution_prototype@v1
+
+    metadata:
+      name: Solution Prototype
+      name_zh: 方案原型
+      stage_id: "2.3"
+      description: |
+        Propose a solution structure for frozen requirements.
+        为已冻结需求提出解决方案结构。
+        这是从"解决什么问题"到"如何解决"的转换。
+
+    input:
+      - source: requirement_freeze
+        required: true
+
+    output:
+      file: "output/solution_prototype.md"
+      freeze: false
+
+    non_goals:
+      - visual polish            # 不做视觉美化
+      - technical optimization   # 不做技术优化
+
+    thinking_boundary: |
+      ✅ 可以思考：解决方案的整体结构、核心交互流程、信息架构
+      ❌ 禁止思考：界面应该用什么颜色、性能应该如何优化、技术栈选择
+
+    on_failure:
+      retry: 2
+      fallback: human_review
+
+  - id: solution_freeze
+    agent: approval_reviewer@v1
+    contract: frozen_analysis_contract@v1
+
+    metadata:
+      name: Solution Freeze
+      name_zh: 方案冻结
+      stage_id: "2.3-freeze"
+      description: 人类审批解决方案
+
+    input:
+      - source: solution_prototype
+        required: true
+
+    output:
+      file: "output/design-frozen/{project}-solution-freeze.md"
+      freeze: true
+      includes:
+        - 解决方案概述
+        - 核心交互流程
+        - 信息架构
+        - 原型草图
+
+    human_role:
+      type: decision
+      actions:
+        - approve: 进入交付规划
+        - request_adjustment: Agent 调整方案
+
+    on_failure:
+      retry: 1
+      fallback: human_review
+
+  # ============================================
+  # Stage 2.4: 交付规划 (Delivery Planning)
+  # ============================================
+  - id: delivery_planning
+    agent: pm_planning_agent@v1
+    contract: development_plan@v1
+
+    metadata:
+      name: Delivery Planning
+      name_zh: 交付规划
+      stage_id: "2.4"
+      description: |
+        Convert frozen solution into executable development plan.
+        将已冻结的解决方案转化为可执行的开发计划。
+        这是产品设计到研发实现的交接点。
+
+    input:
+      - source: solution_freeze
+        required: true
+
+    output:
+      file: "output/development_plan.md"
+      freeze: false
+
+    non_goals:
+      - revisit product value    # 不重新审视产品价值
+      - change requirements      # 不更改需求
+
+    thinking_boundary: |
+      ✅ 可以思考：开发阶段划分、里程碑设定、交付物定义、验收标准
+      ❌ 禁止思考：产品价值是否正确、需求是否需要调整
+
+    on_failure:
+      retry: 2
+      fallback: human_review
+
+  - id: delivery_review
+    agent: approval_reviewer@v1
+    contract: plan_review@v1
+
+    metadata:
+      name: Delivery Review
+      name_zh: 交付审阅
+      stage_id: "2.4-review"
+      description: 人类审阅开发计划
+
+    input:
+      - source: delivery_planning
+        required: true
+
+    output:
+      file: "output/{project}-delivery-plan.md"
+      freeze: false
+
+    human_role:
+      type: review
+      actions:
+        - approve_plan: 准备进入 Stage 3 研发实现
+        - adjust_plan: Agent 调整计划
+
+    handoff_to:
+      stage: "Stage 3 - 研发实现"
+      required_files:
+        - "output/design-frozen/{project}-solution-freeze.md"
+        - "output/{project}-delivery-plan.md"
+
+    on_failure:
+      retry: 1
+      fallback: human_review
+
+# 工作流约束
+constraints:
+  freeze_propagation: |
+    冻结文件一旦生成，下游步骤必须基于冻结版本工作。
+    如需修改上游冻结，必须：
+    1. 解冻上游文件
+    2. 完成修改
+    3. 重新冻结
+    4. 重新执行所有下游步骤
+
+  no_backtracking: |
+    Agent 不得在当前步骤试图修改上游冻结内容。
+    如发现上游问题，必须：
+    1. 在输出中标记问题
+    2. 请求人类审批回退
+    3. 等待解冻后再修改
+
+  boundary_enforcement: |
+    每个 Agent 的 non_goals 是硬性约束。
+    违反 non_goals 的输出将被视为无效，必须重新生成。
+
+# 工作流完成条件
+completion:
+  required_outputs:
+    - "output/design-frozen/{project}-product-value-freeze.md"
+    - "output/design-frozen/{project}-requirement-freeze.md"
+    - "output/design-frozen/{project}-solution-freeze.md"
+
+  final_output:
+    file: "output/design-frozen/{project}-design-freeze.md"
+    description: 产品设计阶段总冻结文件
+    includes:
+      - 产品价值定义
+      - 结构化需求
+      - 解决方案原型
+      - 开发计划
+
+  gate_to_next:
+    description: |
+      当 {project}-design-freeze.md 获得人类审批后，
+      Stage 2 (产品设计) 正式完成，
+      可以进入 Stage 3 (研发实现)。

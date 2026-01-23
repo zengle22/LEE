@@ -1,0 +1,234 @@
+{
+  "summary": {
+    "total": 24,
+    "passed": 21,
+    "failed": 3,
+    "warned": 0,
+    "success": false
+  },
+  "results": [
+    {
+      "spec_type": "agent",
+      "spec_id": "_template",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\_template\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "agent-spec-maintainer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\agent-spec-maintainer\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "analysis-freezer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\analysis-freezer\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "approval-reviewer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\approval-reviewer\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "business-opportunity-analyzer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\business-opportunity-analyzer\\v1\\agent.yaml",
+      "status": "FAIL",
+      "issues": [
+        {
+          "message": "downstream agent agent.analysis.product_goal@v1 not found",
+          "validator": "downstream_refs",
+          "severity": "error",
+          "line": null,
+          "column": null
+        }
+      ]
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "business-opportunity-builder",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\business-opportunity-builder\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "dev-freeze-orchestrator",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\dev-freeze-orchestrator\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "fact-collector",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\fact-collector\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "google-keyword-searcher",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\google-keyword-searcher\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "google-trend-analyzer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\google-trend-analyzer\\v1\\agent.yaml",
+      "status": "FAIL",
+      "issues": [
+        {
+          "message": "downstream agent agent.analysis.business_opportunity@v1 not found",
+          "validator": "downstream_refs",
+          "severity": "error",
+          "line": null,
+          "column": null
+        }
+      ]
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "industry-structure-analyzer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\industry-structure-analyzer\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "plan-architect",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\plan-architect\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "prd-writer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\prd-writer\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "product-goal-analyzer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\product-goal-analyzer\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "prototype-designer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\prototype-designer\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "requirement-reviewer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\requirement-reviewer\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "spec-review",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\spec-review\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "supply-analyzer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\supply-analyzer\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "tech-architect",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\tech-architect\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "ui-designer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\ui-designer\\v1\\agent.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "agent",
+      "spec_id": "user-signal-analyzer",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\agents\\user-signal-analyzer\\v1\\agent.yaml",
+      "status": "FAIL",
+      "issues": [
+        {
+          "message": "downstream agent agent.analysis.business_opportunity@v1 not found",
+          "validator": "downstream_refs",
+          "severity": "error",
+          "line": null,
+          "column": null
+        },
+        {
+          "message": "downstream agent agent.analysis.product_goal@v1 not found",
+          "validator": "downstream_refs",
+          "severity": "error",
+          "line": null,
+          "column": null
+        }
+      ]
+    },
+    {
+      "spec_type": "contract",
+      "spec_id": "plan-contract",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\contracts\\plan-contract\\v1\\schema.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "workflow",
+      "spec_id": "_template",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\workflows\\_template\\v1\\workflow.yaml",
+      "status": "PASS",
+      "issues": []
+    },
+    {
+      "spec_type": "workflow",
+      "spec_id": "product-pipeline",
+      "version": "v1",
+      "path": "E:\\ai\\ai-constitution\\ai-spec\\specs\\workflows\\product-pipeline\\v1\\workflow.yaml",
+      "status": "PASS",
+      "issues": []
+    }
+  ]
+}

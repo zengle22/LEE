@@ -1,0 +1,116 @@
+# Workflow Specification Template v1.0
+# 工作流规范模板
+#
+# Workflow: 只编排步骤、条件、回退、人类介入点，不承载业务分析内容。
+# 所有 Workflow 规范必须遵循此模板结构。
+
+kind: workflow
+version: 1.0
+
+# ============================================
+# 基础标识 (必填)
+# ============================================
+id: workflow.<domain>.<name>        # 格式: workflow.{domain}.{name}
+name: <Workflow Name>               # 人类可读名称
+description: >
+  一句话描述此 Workflow 的编排目标。
+owner: <team-name>                  # 负责团队
+tags: [workflow, <domain>]          # 标签列表
+
+# ============================================
+# 契约定义 (必填)
+# ============================================
+inputs_contract: contracts/<name>/v1/input.schema.json
+outputs_contract: contracts/<name>/v1/output.schema.json
+
+# ============================================
+# 编排配置 (必填)
+# ============================================
+orchestration:
+  type: dag                         # dag | state_machine | linear
+  timeout_ms: 180000                # 整体超时时间（毫秒）
+
+# ============================================
+# 步骤定义 (必填)
+# ============================================
+steps:
+  - id: s1_<step_name>
+    run: agent.<domain>.<name>      # 引用 Agent
+    on_success: [s2_<next_step>]    # 成功后的下一步
+    on_failure: [h1_human_gate]     # 失败后的处理
+  
+  - id: s2_<step_name>
+    run: agent.<domain>.<name>
+    on_success: [h2_human_review]
+    on_failure: [h1_human_gate]
+  
+  # 更多步骤...
+
+# ============================================
+# 人类介入点 (必填) - Workflow 必须有至少一个人类介入点
+# ============================================
+human_in_the_loop:
+  - id: h1_human_gate
+    purpose: "补充输入 / 修正方向 / 允许跳过"
+    required: true                  # true: 必须人类确认; false: 可选
+    type: decision                  # decision | validation | review
+    actions:
+      - approve: 进入下一阶段
+      - request_revision: Agent 重新生成
+      - reject: 终止流程
+  
+  - id: h2_human_review
+    purpose: "终审输出，确认可进入下一阶段"
+    required: true
+    type: review
+
+# ============================================
+# 错误处理 (必填)
+# ============================================
+error_handling:
+  retry:
+    max_attempts: 1
+    backoff_ms: 500
+  
+  fallbacks:
+    - when: "tool_rate_limited"
+      action: "reduce_search_limit"
+    - when: "low_confidence"
+      action: "request_human_confirmation"
+    - when: "agent_timeout"
+      action: "skip_and_notify"
+
+# ============================================
+# 完成条件 (建议填写)
+# ============================================
+completion:
+  required_outputs:
+    - "output/<domain>/<project>-output.md"
+  gate_to_next:
+    description: "进入下一阶段的前置条件"
+
+# ============================================
+# 测试钩子 (必填)
+# ============================================
+tests:
+  smoke:
+    - name: default_path
+      input:
+        <field_name>: "<test_value>"
+      assert:
+        - path: "$.<output_field>.length"
+          op: ">="
+          value: 1
+  
+  replay:
+    fixtures:
+      - tests/fixtures/<workflow_name>_case1.json
+
+# ============================================
+# 禁止事项 (强约束)
+# ============================================
+# ❌ Workflow 禁止包含以下内容:
+#   - 业务分析内容（应在 Agent 中）
+#   - 具体执行逻辑（应在 Agent/Skill 中）
+#   - 直接操作数据（应调用 Agent/Skill）
+#   - prompting / system prompt（应在 Agent 中）

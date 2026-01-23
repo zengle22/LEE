@@ -1,0 +1,547 @@
+# UI Design Pipeline
+# UI 设计流水线 - 从 Figma 到发布的完整质量控制
+#
+# 本流水线属于 AI 宪法体系的一部分
+# 参考: AI-CONSTITUTION.md
+#
+# 核心设计原则:
+# 1. Figma + UI Contract 双轨并行
+# 2. 三级质量门禁 (UI Gate → Dev Gate → Release Gate)
+# 3. 契约驱动的测试生成
+
+id: ui_design_pipeline
+
+version: v1
+
+metadata:
+  name: UI Design Pipeline
+  name_zh: UI 设计流水线
+  description: |
+    UI design to production pipeline with quality gates.
+    从 UI 设计到生产发布的完整流水线，包含三级质量门禁。
+
+    流程概览:
+    设计阶段 → UI Gate → 研发阶段 → Dev Gate → 发布阶段 → Release Gate → 生产
+
+    核心组件:
+    - UI Contracts: 页面/组件/Tokens/A11y 契约
+    - Quality Gates: UI Gate / Dev Gate / Release Gate
+    - Test Generation: 从契约生成测试用例
+
+  prerequisites:
+    - description: 必须存在已冻结的 UI 原型
+    - required_files:
+        - "*-ui-prototype-freeze.md"
+    - gate_check: |
+        进入 UI 设计流水线前，必须确认：
+        1. UI 原型已冻结并获得设计团队确认
+        2. Figma 设计稿已完成核心页面
+        3. 设计 Token 已定义
+
+  outputs:
+    - file: "output/ui-frozen/{project}-ui-freeze.md"
+      description: UI 设计阶段总冻结文件
+
+# ============================================
+# 阶段 1: 契约生成 (Contract Generation)
+# ============================================
+steps:
+  - id: contract_generation
+    agent: ui_contract_generator@v1
+    contract: ui_page_contract@v1
+
+    metadata:
+      name: UI Contract Generation
+      name_zh: UI 契约生成
+      stage_id: "1.1"
+      description: |
+        Generate UI contracts from Figma designs.
+        从 Figma 设计稿生成标准化的 UI 契约。
+
+    input:
+      - file: "figma_design_url"
+        source: design_team
+        required: true
+      - file: "design_tokens.json"
+        source: design_team
+        required: true
+
+    output:
+      file: "spec/ui/ui.map.yaml"
+      freeze: false
+      includes:
+        - 页面索引 (ui.map.yaml)
+        - 页面契约 (*.page.yaml)
+        - 组件契约 (*.component.yaml)
+        - 设计 Token (tokens.json)
+
+    non_goals:
+      - implement_components      # 不实现组件
+      - write_tests               # 不编写测试
+      - deploy_to_staging         # 不部署到 staging
+
+    thinking_boundary: |
+      ✅ 可以思考：页面结构、组件层级、状态定义、交互绑定、埋点配置、a11y 配置
+      ❌ 禁止思考：如何实现组件、测试如何编写、部署如何配置
+
+    on_failure:
+      retry: 2
+      fallback: human_review
+
+  # ============================================
+  # 阶段 1.2: 契约验证 (Contract Validation)
+  # ============================================
+  - id: contract_validation
+    agent: ui_contract_validator@v1
+    contract: null  # 输出验证报告
+
+    metadata:
+      name: UI Contract Validation
+      name_zh: UI 契约验证
+      stage_id: "1.2"
+      description: |
+        Validate UI contracts for completeness and consistency.
+        验证 UI 契约的完整性和一致性。
+
+    input:
+      - source: contract_generation
+        required: true
+
+    output:
+      file: "output/validation-reports/ui-contract-validation.md"
+      freeze: false
+
+    non_goals:
+      - fix_contracts             # 不修复契约
+      - generate_contracts        # 不生成契约
+
+    thinking_boundary: |
+      ✅ 可以思考：契约是否符合 schema、状态是否完整、引用是否有效
+      ❌ 禁止思考：如何生成契约、如何修复问题
+
+    on_failure:
+      retry: 1
+      fallback: human_review
+
+  # ============================================
+  # 阶段 1.2a: UX 可用性审查 (UX Review)
+  # ============================================
+  - id: ux_review
+    agent: ux_reviewer@v1
+    contract: ux-review-contract@v1
+
+    metadata:
+      name: UX Usability Review
+      name_zh: UX 可用性审查
+      stage_id: "1.2a"
+      description: |
+        Review UI contracts for usability issues.
+        基于 ui-ux-pro-max-skill 审查 UI 契约的可用性问题。
+
+        审查维度:
+        - Nielsen 启发式 (可见性、一致性、错误预防等)
+        - 信息架构合理性
+        - 交互一致性
+        - 可访问性 (WCAG AA)
+        - 状态完整性 (default/loading/empty/error)
+
+    input:
+      - source: contract_validation
+        required: true
+      - file: "spec/ui/ui.map.yaml"
+        required: true
+      - file: "spec/ui/pages/*.page.yaml"
+        required: false
+      - file: "spec/ui/components/*.component.yaml"
+        required: false
+
+    output:
+      file: "output/review-reports/ux-review-{timestamp}.md"
+      freeze: false
+
+    skill_integration:
+      skill: ui-ux-pro-max
+      search_commands:
+        - "python .claude/skills/ui-ux-pro-max/scripts/search.py '{product_type}' --domain ux"
+        - "python .claude/skills/ui-ux-pro-max/scripts/search.py 'accessibility' --domain ux"
+
+    gate_config:
+      pass_criteria:
+        ux_blocker: 0    # UX Blocker 必须为 0
+        ux_major: 3      # UX Major 最多 3 个
+
+    non_goals:
+      - generate_ui             # 不生成 UI
+      - fix_contracts           # 不修复契约
+      - replace_designer        # 不替代设计师判断
+
+    thinking_boundary: |
+      ✅ 可以思考：可用性问题、信息架构、交互一致性、可访问性、状态完整性
+      ❌ 禁止思考：如何生成 UI、如何实现组件、视觉设计细节
+
+    on_failure:
+      retry: 1
+      fallback: human_review
+
+  # ============================================
+  # 阶段 1.3: UI Gate (设计门禁)
+  # ============================================
+  - id: ui_gate
+    agent: ui_gate_runner@v1
+    contract: null  # 输出 Gate 报告
+
+    metadata:
+      name: UI Gate
+      name_zh: UI 设计门禁
+      stage_id: "1.3-gate"
+      description: |
+        Execute UI Gate checks before entering development.
+        进入研发前的 UI 设计质量门禁检查。
+
+        门禁检查包含:
+        - 契约完整性检查
+        - UX 审查结果检查 (ux_blocker=0, ux_major<=3)
+
+    input:
+      - source: ux_review
+        required: true
+      - file: "spec/ui/ui.map.yaml"
+        required: true
+      - file: "output/review-reports/ux-review-*.md"
+        required: true
+
+    output:
+      file: "output/gate-reports/ui-gate-{timestamp}.md"
+      freeze: false
+
+    gate_config:
+      gate_type: ui
+      pass_criteria:
+        blocker: 0
+        major: 0
+        minor: null  # 仅警告
+        # UX 审查标准 (来自 ux_review 步骤)
+        ux_blocker: 0     # UX Blocker 必须为 0
+        ux_major: 3       # UX Major 最多 3 个
+
+    human_role:
+      type: gate_approval
+      actions:
+        - approve: 进入研发阶段
+        - reject: 返回设计修改
+        - reject_ux: 返回 UX 审查修复
+
+    on_failure:
+      retry: 0  # Gate 失败不重试
+      fallback: human_review
+
+  # ============================================
+  # 阶段 2: 测试生成 (Test Generation)
+  # ============================================
+  - id: test_generation
+    agent: ui_test_generator@v1
+    contract: null  # 输出测试代码
+
+    metadata:
+      name: Test Generation
+      name_zh: 测试生成
+      stage_id: "2.1"
+      description: |
+        Generate tests from UI contracts.
+        从 UI 契约生成测试用例和测试代码。
+
+    input:
+      - source: ui_gate
+        required: true
+        condition: "gate_passed"
+      - file: "spec/ui/ui.map.yaml"
+        required: true
+
+    output:
+      freeze: false
+      includes:
+        - Storybook stories (*.stories.tsx)
+        - 单元测试 (*.test.tsx)
+        - E2E 测试 (*.spec.ts)
+        - 可访问性测试 (*.a11y.ts)
+
+    non_goals:
+      - implement_components      # 不实现组件
+      - run_tests                 # 不运行测试
+
+    thinking_boundary: |
+      ✅ 可以思考：测试用例设计、状态覆盖、边界条件、a11y 测试点
+      ❌ 禁止思考：组件如何实现、测试如何运行
+
+    on_failure:
+      retry: 2
+      fallback: human_review
+
+  # ============================================
+  # 阶段 2.2: 研发实现 (Development)
+  # ============================================
+  - id: development
+    agent: null  # 人类开发者
+    contract: ui_component_contract@v1
+
+    metadata:
+      name: Development
+      name_zh: 研发实现
+      stage_id: "2.2"
+      description: |
+        Human developers implement UI components based on contracts.
+        开发者根据契约实现 UI 组件。
+
+    input:
+      - source: test_generation
+        required: true
+      - file: "spec/ui/ui.map.yaml"
+        required: true
+
+    output:
+      freeze: false
+      includes:
+        - 组件实现代码
+        - 页面实现代码
+        - 样式文件
+
+    human_role:
+      type: implementation
+      guidance: |
+        开发者应该：
+        1. 根据 page/component 契约实现组件
+        2. 确保所有状态都有实现
+        3. 使用 Tokens 替代硬编码值
+        4. 实现契约中定义的交互
+        5. 遵循 a11y 配置
+
+  # ============================================
+  # 阶段 2.3: Dev Gate (开发门禁)
+  # ============================================
+  - id: dev_gate
+    agent: ui_gate_runner@v1
+    contract: null  # 输出 Gate 报告
+
+    metadata:
+      name: Dev Gate
+      name_zh: 开发门禁
+      stage_id: "2.3-gate"
+      description: |
+        Execute Dev Gate checks before merging to main.
+        代码合并前的开发质量门禁检查。
+
+    input:
+      - source: development
+        required: true
+      - file: "spec/ui/ui.map.yaml"
+        required: true
+
+    output:
+      file: "output/gate-reports/dev-gate-{pr_number}.md"
+      freeze: false
+
+    gate_config:
+      gate_type: dev
+      pass_criteria:
+        blocker: 0
+        major: 3  # 最多 3 个 major
+        minor: null
+
+    human_role:
+      type: code_review
+      actions:
+        - approve: 合并代码
+        - request_changes: 返回修改
+
+    on_failure:
+      retry: 0
+      fallback: human_review
+
+  # ============================================
+  # 阶段 3: 发布准备 (Release Preparation)
+  # ============================================
+  - id: staging_deployment
+    agent: null  # CI/CD 系统
+    contract: null
+
+    metadata:
+      name: Staging Deployment
+      name_zh: Staging 部署
+      stage_id: "3.1"
+      description: |
+        Deploy to staging environment for final testing.
+        部署到 Staging 环境进行最终测试。
+
+    input:
+      - source: dev_gate
+        required: true
+        condition: "gate_passed"
+
+    output:
+      staging_url: "$STAGING_URL"
+      freeze: false
+
+    human_role:
+      type: monitoring
+      guidance: |
+        运维应该：
+        1. 监控部署过程
+        2. 确认部署成功
+        3. 验证基本功能可用
+
+  # ============================================
+  # 阶段 3.2: Release Gate (发布门禁)
+  # ============================================
+  - id: release_gate
+    agent: ui_gate_runner@v1
+    contract: null  # 输出 Gate 报告
+
+    metadata:
+      name: Release Gate
+      name_zh: 发布门禁
+      stage_id: "3.2-gate"
+      description: |
+        Execute Release Gate checks before production deployment.
+        发布到生产环境前的最终质量门禁检查。
+
+    input:
+      - source: staging_deployment
+        required: true
+      - file: "spec/ui/ui.map.yaml"
+        required: true
+      - staging_url: "$STAGING_URL"
+        required: true
+
+    output:
+      file: "output/gate-reports/release-gate-{version}.md"
+      freeze: false
+
+    gate_config:
+      gate_type: release
+      pass_criteria:
+        blocker: 0
+        major: 0
+        minor: null
+
+    manual_checklist:
+      - id: product_signoff
+        name: 产品验收确认
+        assignee: product-manager
+        required: true
+      - id: design_signoff
+        name: 设计验收确认
+        assignee: ui-designer
+        required: true
+      - id: qa_signoff
+        name: QA 验收确认
+        assignee: qa-engineer
+        required: true
+
+    human_role:
+      type: final_approval
+      actions:
+        - approve: 发布到生产
+        - reject: 返回修复
+
+    on_failure:
+      retry: 0
+      fallback: human_review
+
+  # ============================================
+  # 阶段 3.3: 生产发布 (Production Release)
+  # ============================================
+  - id: production_release
+    agent: null  # CI/CD 系统
+    contract: null
+
+    metadata:
+      name: Production Release
+      name_zh: 生产发布
+      stage_id: "3.3"
+      description: |
+        Deploy to production environment.
+        发布到生产环境。
+
+    input:
+      - source: release_gate
+        required: true
+        condition: "gate_passed AND manual_checklist_complete"
+
+    output:
+      file: "output/releases/{version}/RELEASE_NOTES.md"
+      freeze: true
+
+    human_role:
+      type: monitoring
+      guidance: |
+        运维应该：
+        1. 监控发布过程
+        2. 验证生产环境功能
+        3. 监控错误告警
+        4. 准备回滚方案
+
+# ============================================
+# 工作流约束
+# ============================================
+constraints:
+  gate_blocking: |
+    每个 Gate 都是硬性阻断点：
+    - UI Gate 失败 → 不能进入研发
+    - Dev Gate 失败 → 不能合并代码
+    - Release Gate 失败 → 不能发布生产
+
+  contract_driven: |
+    所有 UI 实现必须基于契约：
+    - 组件实现参考 component 契约
+    - 页面实现参考 page 契约
+    - 样式实现参考 tokens 契约
+    - 测试生成参考 a11y 契约
+
+  state_completeness: |
+    必须实现四种必需状态：
+    - default: 正常状态
+    - loading: 加载中状态
+    - empty: 空数据状态
+    - error: 错误状态
+
+# ============================================
+# 工作流完成条件
+# ============================================
+completion:
+  required_outputs:
+    - "spec/ui/ui.map.yaml"
+    - "output/gate-reports/ui-gate-*.md"
+    - "output/gate-reports/dev-gate-*.md"
+    - "output/gate-reports/release-gate-*.md"
+    - "output/releases/{version}/RELEASE_NOTES.md"
+
+  final_output:
+    file: "output/ui-frozen/{project}-ui-freeze.md"
+    description: UI 设计阶段总冻结文件
+    includes:
+      - UI 契约索引
+      - Gate 检查报告
+      - 发布说明
+
+  gate_to_next:
+    description: |
+      当 Release Gate 通过且所有人工验收完成后，
+      可以发布到生产环境。
+
+# ============================================
+# 回滚流程
+# ============================================
+rollback:
+  trigger:
+    - production_error_rate: "> 1%"
+    - critical_bug_found: true
+
+  actions:
+    - revert_deployment:
+        to: previous_version
+    - notify:
+        channel: release
+        message: "生产回滚：{version} → {previous_version}"
+    - create_issue:
+        title: "生产回滚：{version}"
+        labels: [rollback, urgent]

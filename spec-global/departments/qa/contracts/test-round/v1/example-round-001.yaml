@@ -1,0 +1,158 @@
+# Test Round Example - Round 001
+# 测试轮次示例 - 第一轮测试
+
+kind: test_round
+version: 1.0
+
+# ========== 基础标识 ==========
+round_id: "TSTR-0001"
+round_number: 1
+target_version: "v1.1.0"
+start_time: "2026-01-15T09:00:00Z"
+end_time: "2026-01-15T18:30:00Z"
+duration_hours: 9.5
+status: completed
+
+# ========== 环境信息 ==========
+environment:
+  env_type: test
+  deployed_version: "v1.1.0-rc1"
+  deployment_time: "2026-01-15T08:30:00Z"
+  health_check_result: healthy
+  endpoints:
+    frontend_url: "http://localhost:3002"
+    backend_url: "http://localhost:8081"
+    api_base: "http://localhost:8081/api/v1"
+
+# ========== 测试套件执行 ==========
+suites_executed:
+  - suite_name: smoke
+    status: passed
+    total_cases: 11
+    passed: 10
+    failed: 1
+    skipped: 0
+    pass_rate: 90.91
+    duration_seconds: 180
+    report_path: "test-rounds/round-001/smoke-test-result.yaml"
+    evidence_path: "test-rounds/round-001/evidence/smoke/"
+
+  - suite_name: e2e_chrome
+    status: failed
+    total_cases: 12
+    passed: 0
+    failed: 12
+    skipped: 0
+    pass_rate: 0
+    duration_seconds: 240
+    report_path: "test-rounds/round-001/e2e/chrome-report.json"
+    evidence_path: "test-rounds/round-001/evidence/e2e/"
+
+  - suite_name: api
+    status: skipped
+    total_cases: 0
+    passed: 0
+    failed: 0
+    skipped: 0
+    pass_rate: 0
+    duration_seconds: 0
+    report_path: null
+    evidence_path: null
+
+# ========== Bug 汇总 ==========
+summary:
+  new_bugs: 1
+  total_open_bugs: 1
+  bugs_fixed_this_round: 0
+  bugs_verified_this_round: 0
+  bugs_closed_this_round: 0
+
+  bug_breakdown:
+    p0_open: 1
+    p0_new: 1
+    p1_open: 0
+    p1_new: 0
+    p2_open: 0
+    p2_new: 0
+    p3_open: 0
+    p3_new: 0
+
+  bug_ids:
+    - "BUG-2026-0001"
+
+# ========== 轮次目标 ==========
+round_goal:
+  objective: "首次完整功能验证 - 验证v1.1新功能（跑者画像、计划生成、训练执行）"
+  target_pass_rate: 90
+  target_bug_reduction:
+    p0_target: 0
+    p1_target: 0
+  achieved: false
+
+# ========== 回归策略 ==========
+regression_strategy:
+  scope: smoke_only
+  changed_areas:
+    - "runner-profile module"
+    - "plan-generation module"
+    - "training-execution module"
+  bug_related_cases: 0
+  historical_hotspot_coverage: 0
+
+# ========== 轮次结论 ==========
+conclusion:
+  decision: next_round
+  rationale: "发现P0 Bug（BUG-2026-0001）导致所有E2E测试失败，需修复后进入下一轮"
+  exit_criteria_met: false
+
+  exit_criteria_evaluation:
+    mandatory_criteria_met: false
+    threshold_criteria_met: false
+    risk_acceptance_signed: false
+    details: |
+      ❌ P0 Bug清零: 1个P0 Bug未修复
+      ❌ 冒烟测试100%: 90.91% (1个失败)
+      ❌ E2E测试通过: 0% (全部失败)
+
+      阻塞原因：UniApp自定义元素选择器不匹配
+
+  blockers:
+    - blocker_id: "BLK-001"
+      description: "E2E测试选择器与UniApp H5渲染不匹配"
+      bug_id: "BUG-2026-0001"
+
+  next_round_focus: "修复E2E测试选择器，重新执行完整E2E测试套件"
+
+# ========== 人类审批 ==========
+approvals: []  # 第一轮未通过，无需审批
+
+# ========== 产物清单 ==========
+artifacts:
+  reports:
+    - "test-rounds/round-001/smoke-test-result.yaml"
+    - "test-rounds/round-001/e2e/chrome-report.json"
+    - "test-rounds/round-001/ROUND-1-TEST-SUMMARY.md"
+
+  evidence:
+    - "test-rounds/round-001/evidence/smoke/"
+    - "test-rounds/round-001/evidence/e2e/"
+
+  bugs:
+    - "bugs/BUG-2026-0001.contract.yaml"
+
+  frozen: true
+
+# ========== 性能指标 ==========
+metrics:
+  total_test_time_seconds: 420
+  average_case_execution_time: 18.26
+  bug_detection_rate: 4.35  # 1 bug / 23 cases * 100
+  fix_verification_time_hours: null
+
+# ========== 元数据 ==========
+created_by: "test-coordinator-agent"
+coordinator_agent: "agent.test.test_coordinator"
+notes: |
+  第一轮测试，发现关键E2E测试框架兼容性问题。
+  所有E2E测试因Playwright选择器与UniApp H5自定义元素不匹配而失败。
+  已使用debugger agent进行根因分析，生成修复补丁。

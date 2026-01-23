@@ -1,0 +1,177 @@
+# E2E Runner Skill v1.0
+# E2E UI 测试执行技能 - 使用 Docker + Playwright 执行端到端测试
+#
+# 此 Skill 提供基于 Playwright 的 E2E 测试执行能力，
+# 在 Docker 容器中运行无头浏览器，生成测试报告、截图、视频和 trace。
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识 (必填)
+# ============================================
+id: skill.testing.e2e_runner
+name: E2E Runner
+description: >
+  使用 Docker + Playwright 执行 E2E UI 测试，支持 Chrome/Firefox/Safari，
+  输出 HTML 报告、JSON 报告、截图、视频、trace 和审计日志。
+owner: testing-team
+tags: [testing, e2e, playwright, docker, ui-automation]
+
+# ============================================
+# 接口定义 (必填) - 使用 JSON Schema 语法
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [test_suite_path, base_url]
+    properties:
+      test_suite_path:
+        type: string
+        description: "测试套件路径（相对于项目根目录），如 test-cases/e2e/chrome/"
+      base_url:
+        type: string
+        description: "被测应用的 URL，如 https://test.example.com"
+      browser:
+        type: string
+        enum: [chromium, firefox, webkit]
+        default: chromium
+        description: "浏览器类型"
+      workers:
+        type: integer
+        default: 4
+        description: "并行 worker 数量"
+      retries:
+        type: integer
+        default: 2
+        description: "失败重试次数"
+      timeout:
+        type: integer
+        default: 30000
+        description: "单个测试超时时间（毫秒）"
+      headed:
+        type: boolean
+        default: false
+        description: "是否使用有头模式（调试用）"
+      env_vars:
+        type: object
+        additionalProperties: true
+        description: "额外的环境变量"
+
+  outputs:
+    type: object
+    required: [status, report_path, summary]
+    properties:
+      status:
+        type: string
+        enum: [PASS, CONDITIONAL_PASS, FAIL]
+        description: "测试执行状态"
+      exit_code:
+        type: integer
+        description: "进程退出码（0=成功，非0=失败）"
+      report_path:
+        type: string
+        description: "HTML 报告路径"
+      json_report_path:
+        type: string
+        description: "JSON 报告路径（机器可读）"
+      evidence_dir:
+        type: string
+        description: "证据目录（screenshots/videos/traces）"
+      summary:
+        type: object
+        required: [total, passed, failed, skipped, duration_ms]
+        properties:
+          total:
+            type: integer
+            description: "总用例数"
+          passed:
+            type: integer
+            description: "通过数"
+          failed:
+            type: integer
+            description: "失败数"
+          skipped:
+            type: integer
+            description: "跳过数"
+          flaky:
+            type: integer
+            description: "不稳定用例数（重试后通过）"
+          duration_ms:
+            type: integer
+            description: "总耗时（毫秒）"
+          pass_rate:
+            type: number
+            description: "通过率（0-100）"
+      failed_tests:
+        type: array
+        items:
+          type: object
+          required: [test_id, title, error, screenshot, trace]
+          properties:
+            test_id:
+              type: string
+              description: "测试 ID"
+            title:
+              type: string
+              description: "测试标题"
+            error:
+              type: string
+              description: "错误信息"
+            screenshot:
+              type: string
+              description: "失败截图路径"
+            video:
+              type: string
+              description: "录屏路径"
+            trace:
+              type: string
+              description: "trace 文件路径"
+
+# ============================================
+# 运行时配置 (必填)
+# ============================================
+runtime:
+  type: shell
+  tool: docker
+  timeout_ms: 600000  # 10 分钟
+  retries: 0          # E2E 测试不自动重试（由 Playwright 内部控制）
+
+# ============================================
+# Docker 配置
+# ============================================
+docker:
+  image: e2e-runner:latest
+  build_context: ./docker
+  dockerfile: Dockerfile
+  volumes:
+    - "${PROJECT_ROOT}:/work"
+  working_dir: /work
+  environment:
+    - CI=true
+    - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# ============================================
+# 约束声明 (必填)
+# ============================================
+constraints:
+  deterministic: false  # E2E 测试可能受网络/环境影响
+  side_effects: reads   # 读取被测系统
+  pii: forbidden        # 禁止使用 PII
+
+# ============================================
+# 测试钩子 (必填)
+# ============================================
+tests:
+  smoke:
+    - name: basic_e2e_execution
+      input:
+        test_suite_path: "examples/smoke-test"
+        base_url: "https://example.com"
+      assert:
+        - path: "$.status"
+          op: "=="
+          value: "PASS"
+        - path: "$.summary.total"
+          op: ">="
+          value: 1

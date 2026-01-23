@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "project-config-contract/v1/schema.json",
+  "title": "Project Configuration Contract",
+  "description": "项目配置契约 - 定义仓库映射和路径别名",
+  "type": "object",
+  "required": ["kind", "version", "id", "name", "repositories"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "project",
+      "description": "配置类型标识"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "配置版本号"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "项目唯一标识 (小写字母、数字、连字符)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "项目显示名称"
+    },
+    "repositories": {
+      "type": "object",
+      "description": "仓库注册表",
+      "additionalProperties": {
+        "$ref": "#/$defs/Repository"
+      },
+      "minProperties": 1
+    },
+    "path_aliases": {
+      "type": "object",
+      "description": "路径别名映射",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^@[a-z0-9-]+$"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "项目元数据",
+      "properties": {
+        "team": {
+          "type": "string",
+          "description": "团队名称"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date",
+          "description": "创建日期"
+        },
+        "created_by": {
+          "type": "string",
+          "description": "创建者"
+        },
+        "tech_stack": {
+          "type": "object",
+          "description": "技术栈",
+          "properties": {
+            "frontend": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "backend": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "links": {
+          "type": "object",
+          "description": "相关链接",
+          "additionalProperties": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "Repository": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["git", "local", "remote"],
+          "default": "git",
+          "description": "仓库类型"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "仓库路径 (相对于 project.yaml)"
+        },
+        "description": {
+          "type": "string",
+          "description": "仓库描述"
+        },
+        "branch": {
+          "type": "string",
+          "default": "main",
+          "description": "默认分支"
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "kind": "project",
+      "version": "1.0",
+      "id": "ai-running-coach",
+      "name": "AI 跑步教练",
+      "repositories": {
+        "frontend": {
+          "type": "git",
+          "path": "../../git/ai-marathon-coach-front",
+          "description": "前端仓库 (UniApp)",
+          "branch": "main"
+        },
+        "backend": {
+          "type": "git",
+          "path": "../../git/ai-marathon-coach-server",
+          "description": "后端仓库 (Go)",
+          "branch": "main"
+        }
+      },
+      "path_aliases": {
+        "@frontend": "${repositories.frontend.path}",
+        "@backend": "${repositories.backend.path}"
+      },
+      "metadata": {
+        "team": "running-coach-team",
+        "created_at": "2026-01-11",
+        "tech_stack": {
+          "frontend": ["UniApp", "Vue3", "TypeScript"],
+          "backend": ["Go", "PostgreSQL", "Redis"]
+        }
+      }
+    }
+  ]
+}

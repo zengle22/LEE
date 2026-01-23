@@ -1,0 +1,354 @@
+# Auto Layout Master Skill Specification v1.0
+# Figma Auto Layout 技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.design.auto_layout_master
+name: Auto Layout Master
+description: >
+  精通 Figma Auto Layout，构建响应式、可维护的组件和布局。
+  包括 Grid 新特性、嵌套布局和断点适配。
+owner: design-ai
+tags: [figma, auto-layout, responsive, grid]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [layout_type, content]
+    properties:
+      layout_type:
+        type: string
+        description: "布局类型"
+        enum: [stack, grid, wrap, absolute]
+      content:
+        type: array
+        description: "子元素列表"
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+            sizing:
+              type: string
+              enum: [fixed, hug, fill]
+      direction:
+        type: string
+        enum: [horizontal, vertical]
+        default: vertical
+      gap:
+        type: number
+        description: "元素间距"
+      padding:
+        type: object
+        description: "内边距"
+        properties:
+          top:
+            type: number
+          right:
+            type: number
+          bottom:
+            type: number
+          left:
+            type: number
+
+  outputs:
+    type: object
+    required: [frame_config, children_config]
+    properties:
+      frame_config:
+        type: object
+        description: "Frame 配置"
+      children_config:
+        type: array
+        description: "子元素配置"
+      responsive_behavior:
+        type: object
+        description: "响应式行为"
+
+# ============================================
+# Auto Layout 完整规范
+# ============================================
+auto_layout_guide:
+  # 基础概念
+  fundamentals:
+    what_is_auto_layout: |
+      Auto Layout 是 Figma 的响应式布局系统，让设计自动适应内容变化。
+      - 子元素自动排列
+      - 间距自动计算
+      - 尺寸自动调整
+
+    when_to_use:
+      - "所有组件（无例外）"
+      - "所有可复用元素"
+      - "响应式页面布局"
+      - "列表和网格"
+
+    when_not_to_use:
+      - "需要绝对定位的浮动元素（如徽章角标）"
+      - "复杂插图"
+      - "自由排版设计"
+
+  # 方向设置
+  direction:
+    horizontal:
+      description: "水平排列（从左到右）"
+      use_cases:
+        - "导航栏项目"
+        - "按钮组"
+        - "标签列表"
+        - "面包屑"
+      figma_setting: "Horizontal (→)"
+
+    vertical:
+      description: "垂直排列（从上到下）"
+      use_cases:
+        - "表单字段"
+        - "卡片列表"
+        - "菜单项"
+        - "页面内容"
+      figma_setting: "Vertical (↓)"
+
+    wrap:
+      description: "自动换行"
+      use_cases:
+        - "标签云"
+        - "图片网格"
+        - "响应式卡片网格"
+      figma_setting: "Wrap"
+      note: "2023 新增功能"
+
+  # 对齐方式
+  alignment:
+    main_axis:
+      description: "主轴对齐（排列方向）"
+      options:
+        start: "靠起始位置"
+        center: "居中"
+        end: "靠结束位置"
+        space_between: "两端对齐，间距均分"
+
+    cross_axis:
+      description: "交叉轴对齐（垂直于排列方向）"
+      options:
+        start: "顶部/左侧对齐"
+        center: "居中对齐"
+        end: "底部/右侧对齐"
+        stretch: "拉伸填充"
+        baseline: "基线对齐（文本）"
+
+  # 间距设置
+  spacing:
+    gap:
+      description: "子元素之间的间距"
+      best_practices:
+        - "使用 Token 值（4px 倍数）"
+        - "根据内容密度选择"
+        - "紧凑: 4-8px"
+        - "标准: 12-16px"
+        - "宽松: 24-32px"
+
+    padding:
+      description: "Frame 内边距"
+      modes:
+        uniform: "四边相同"
+        horizontal_vertical: "水平/垂直分别设置"
+        individual: "四边分别设置"
+      best_practices:
+        - "使用 Token 值"
+        - "按钮: 12px 24px"
+        - "卡片: 16px 或 24px"
+        - "页面: 16px (mobile) / 32px (desktop)"
+
+  # 尺寸控制
+  sizing:
+    frame_sizing:
+      fixed:
+        description: "固定尺寸，不随内容变化"
+        use_cases:
+          - "图标容器"
+          - "头像"
+          - "固定宽度容器"
+
+      hug:
+        description: "自适应内容大小"
+        use_cases:
+          - "按钮"
+          - "标签"
+          - "提示框"
+
+      fill:
+        description: "填充父容器"
+        use_cases:
+          - "全宽输入框"
+          - "响应式卡片"
+          - "页面主体"
+
+    child_sizing:
+      fixed:
+        description: "子元素固定尺寸"
+        example: "图标 24x24"
+
+      hug:
+        description: "子元素自适应"
+        example: "按钮文字"
+
+      fill:
+        description: "子元素填充"
+        example: "表单输入框"
+
+      fill_with_constraints:
+        min_width: "最小宽度"
+        max_width: "最大宽度"
+        example: "卡片 min: 280px, max: 400px"
+
+  # 嵌套布局
+  nesting:
+    description: "Auto Layout 可以无限嵌套"
+    patterns:
+      card:
+        structure: |
+          Card (vertical, padding: 16)
+          ├── Header (horizontal, gap: 12)
+          │   ├── Avatar (fixed: 40x40)
+          │   └── Info (vertical, hug)
+          │       ├── Title (hug)
+          │       └── Subtitle (hug)
+          ├── Content (vertical, gap: 8)
+          │   └── Text (fill width)
+          └── Actions (horizontal, gap: 8)
+              ├── Button (hug)
+              └── Button (hug)
+
+      form_field:
+        structure: |
+          FormField (vertical, gap: 4)
+          ├── Label (hug)
+          ├── Input (fill width)
+          └── HelperText (hug)
+
+      navbar:
+        structure: |
+          Navbar (horizontal, space-between, padding: 16 24)
+          ├── Logo (fixed width)
+          ├── NavItems (horizontal, gap: 24)
+          │   ├── NavItem (hug)
+          │   └── NavItem (hug)
+          └── Actions (horizontal, gap: 12)
+              ├── Button (hug)
+              └── Avatar (fixed)
+
+  # Grid 布局（2024 新增）
+  grid:
+    description: "Figma Grid 是 Auto Layout 的扩展"
+    use_cases:
+      - "多列布局"
+      - "仪表板"
+      - "响应式网格"
+    features:
+      columns: "定义列数"
+      rows: "定义行数"
+      gap: "网格间距"
+      span: "跨列/跨行"
+    example: |
+      Grid (3 columns, gap: 24)
+      ├── Card (span: 1)
+      ├── Card (span: 1)
+      ├── Card (span: 1)
+      ├── WideCard (span: 2)
+      └── Card (span: 1)
+
+# ============================================
+# 常见布局模式
+# ============================================
+layout_patterns:
+  button:
+    direction: horizontal
+    main_axis: center
+    cross_axis: center
+    padding: "12px 24px"
+    gap: 8px
+    sizing: hug
+
+  input:
+    direction: horizontal
+    main_axis: start
+    cross_axis: center
+    padding: "12px 16px"
+    gap: 8px
+    sizing: "fill width, fixed height"
+
+  card:
+    direction: vertical
+    main_axis: start
+    cross_axis: stretch
+    padding: 16px
+    gap: 16px
+    sizing: "fill or fixed width"
+
+  list_item:
+    direction: horizontal
+    main_axis: space-between
+    cross_axis: center
+    padding: "12px 16px"
+    gap: 12px
+    sizing: fill width
+
+  modal:
+    direction: vertical
+    main_axis: start
+    cross_axis: stretch
+    padding: 24px
+    gap: 24px
+    sizing: "fixed width (480px)"
+
+  page:
+    direction: vertical
+    main_axis: start
+    cross_axis: stretch
+    padding: "24px 32px"
+    gap: 32px
+    sizing: fill
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: tool_wrapper
+  tool: figma.autolayout.configure
+  timeout_ms: 5000
+  retries: 0
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: writes
+  pii: forbidden
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: create_button_layout
+      input:
+        layout_type: "stack"
+        direction: "horizontal"
+        gap: 8
+        padding:
+          top: 12
+          right: 24
+          bottom: 12
+          left: 24
+      assert:
+        - path: "$.frame_config.direction"
+          op: "=="
+          value: "horizontal"

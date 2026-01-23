@@ -1,0 +1,928 @@
+# Development Pipeline Workflow v1.2
+# 研发流水线工作流 - Stage 3 完整实现
+#
+# 将 OpenSpec 作为 Phase 级子流程，而非全流程方法论
+# 每个 Phase 是一个独立的 OpenSpec 执行沙盒
+#
+# v1.2 更新: 增加项目初始化阶段 (s3_0_project_init)，由 Tech Lead 创建 project.yaml
+# v1.1 更新: Phase 必须通过 Phase Acceptance Gate 验收后才能完成
+
+kind: workflow
+version: 1.2
+
+# ============================================
+# 基础标识
+# ============================================
+id: workflow.dev.development_pipeline
+name: Development Pipeline
+description: >
+  研发阶段完整流水线，将冻结的产品设计转化为可交付的软件。
+  核心理念：OpenSpec 作为 Phase Runtime Workspace，而非主流程。
+owner: dev-governance
+tags: [workflow, development, stage3, openspec]
+
+# ============================================
+# 契约定义
+# ============================================
+inputs_contract: ../../contracts/frozen-dev-package-contract/v1/schema.json
+outputs_contract: ../../contracts/release-freeze-contract/v1/schema.json
+
+# ============================================
+# 前置条件
+# ============================================
+preconditions:
+  required_freeze_files:
+    - pattern: "*-design-freeze.md"
+      status: "🔒"
+      description: "必须存在已冻结的设计文件"
+  required_artifacts:
+    - prd: "prd/*.md"
+    - architecture: "architecture/*.md"
+    - ui_specs: "ui-specs/*.yaml"
+  gate_check:
+    ref: gate.ui.ui_gate
+    must_pass: true
+
+# ============================================
+# 编排配置
+# ============================================
+orchestration:
+  type: dag
+  timeout_ms: 86400000  # 24 hours max per workflow run
+  parallel_phases: true  # 允许 Phase 并行执行
+
+# ============================================
+# 执行模型定义 (v1.1 新增)
+# ============================================
+# 定义 Agent 的调用方式，支持以下模式:
+# - prompt_switch: 单一 LLM 切换系统提示词 (如 Claude Code)
+# - subprocess: 启动独立进程/容器执行
+# - api_call: 调用远程 Agent API
+# - human_delegate: 委托人类执行
+execution_model_types:
+  prompt_switch:
+    description: "单一执行者通过切换系统提示词模拟多 Agent"
+    config:
+      context_preservation: true  # 是否保留上下文
+      max_context_tokens: 100000
+  subprocess:
+    description: "启动独立进程或容器执行"
+    config:
+      container_image: null
+      timeout_ms: 3600000
+      resource_limits:
+        memory: "2Gi"
+        cpu: "1"
+  api_call:
+    description: "通过 API 调用远程 Agent 服务"
+    config:
+      endpoint: null
+      auth_method: "bearer"
+      retry_policy:
+        max_attempts: 3
+        backoff_ms: 1000
+  human_delegate:
+    description: "委托人类执行任务"
+    config:
+      notification_channels: [console]
+      timeout_action: escalate
+
+# ============================================
+# Agent 资源池 (v3.5.0 专业角色映射)
+# ============================================
+agent_resources:
+  # 核心决策层
+  decision_layer:
+    - id: agent.dev.tech_lead
+      name: Tech Lead
+      spec: ../../agents/tech-lead/v1/agent.yaml
+      responsibility: "架构决策 + ADR 机制"
+      output_contract: ../../contracts/adr-output/v1/schema.json
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/tech-lead/v1/persona.md
+    - id: agent.dev.delivery_gate
+      name: Delivery Gate
+      spec: ../../agents/delivery-gate/v1/agent.yaml
+      responsibility: "交付门禁判定"
+      input_contract: ../../contracts/delivery-gate-input/v1/schema.json
+      output_contract: ../../contracts/delivery-gate-output/v1/schema.json
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/delivery-gate/v1/persona.md
+
+  # 架构专家层 (由 Tech Lead 召唤)
+  architect_specialists:
+    - id: agent.dev.frontend_architect
+      name: Frontend Architect
+      spec: ../../agents/frontend-architect/v1/agent.yaml
+      invoked_by: tech_lead
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/frontend-architect/v1/persona.md
+    - id: agent.dev.backend_architect
+      name: Backend Architect
+      spec: ../../agents/backend-architect/v1/agent.yaml
+      invoked_by: tech_lead
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/backend-architect/v1/persona.md
+
+  # 实现层
+  implementation_layer:
+    - id: agent.dev.go_backend_engineer
+      name: Go Backend Engineer
+      spec: ../../agents/go-backend-engineer/v1/agent.yaml
+      responsibility: "后端服务实现"
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/go-backend-engineer/v1/persona.md
+    - id: agent.dev.uniapp_frontend_engineer
+      name: UniApp Frontend Engineer
+      spec: ../../agents/uniapp-frontend-engineer/v1/agent.yaml
+      responsibility: "前端页面实现"
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/uniapp-frontend-engineer/v1/persona.md
+    - id: agent.dev.database_engineer
+      name: Database Engineer (Data Owner)
+      spec: ../../agents/database-engineer/v1/agent.yaml
+      responsibility: "Schema 设计 + Migration Contract"
+      output_contract: ../../contracts/migration-contract/v1/schema.json
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/database-engineer/v1/persona.md
+    - id: agent.dev.ai_engineer
+      name: AI Engineer
+      spec: ../../agents/ai-engineer/v1/agent.yaml
+      responsibility: "LLM 集成 + Prompt/Routing/Eval 三类契约"
+      output_contract: ../../contracts/ai-engineering-output/v1/schema.json
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/ai-engineer/v1/persona.md
+
+  # 测试层 (硬边界)
+  testing_layer:
+    - id: agent.dev.qa_engineer
+      name: QA Engineer
+      spec: ../../agents/qa-engineer/v1/agent.yaml
+      responsibility: "测试设计 (只写标准)"
+      input_contract: ../../contracts/qa-input/v1/schema.json
+      output_contract: ../../contracts/test-case-contract/v1/schema.json
+      hard_boundary: "产物: Test Case Contract"
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/qa-engineer/v1/persona.md
+    - id: agent.dev.test_automation_engineer
+      name: SDET (Test Automation Engineer)
+      spec: ../../agents/test-automation-engineer/v1/agent.yaml
+      responsibility: "测试代码实现 + 稳定性治理"
+      input_contract: ../../contracts/test-case-contract/v1/schema.json
+      hard_boundary: "输入: QA Contract"
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/test-automation-engineer/v1/persona.md
+
+  # 运维与安全层
+  operations_layer:
+    - id: agent.dev.devops_engineer
+      name: DevOps Engineer
+      spec: ../../agents/devops-engineer/v1/agent.yaml
+      responsibility: "CI/CD + 测试环境 + Migration 执行"
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/devops-engineer/v1/persona.md
+    - id: agent.dev.secops
+      name: SecOps
+      spec: ../../agents/secops/v1/agent.yaml
+      responsibility: "安全扫描 + 阻断策略"
+      input_contract: ../../contracts/security-check-input/v1/schema.json
+      output_contract: ../../contracts/security-report-output/v1/schema.json
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/secops/v1/persona.md
+
+  # 质量审查层
+  review_layer:
+    - id: agent.dev.ui_implementation_reviewer
+      name: UI Implementation Reviewer
+      spec: ../../agents/ui-implementation-reviewer/v1/agent.yaml
+      responsibility: "设计还原度/跨端/可访问性审查"
+      input_contract: ../../contracts/ui-review-input/v1/schema.json
+      output_contract: ../../contracts/ui-review-output/v1/schema.json
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/ui-implementation-reviewer/v1/persona.md
+    - id: agent.dev.code_reviewer
+      name: Code Reviewer
+      spec: ../../agents/code-reviewer/v1/agent.yaml
+      responsibility: "代码质量审查"
+      execution_model:
+        type: prompt_switch
+        config:
+          persona_file: ../../agents/code-reviewer/v1/persona.md
+
+# ============================================
+# 主流程定义 (L0: Project Flow)
+# ============================================
+stages:
+  # ---------- Stage 3.0: 项目初始化 (v1.2 新增) ----------
+  - id: s3_0_project_init
+    name: 项目初始化
+    description: >
+      Tech Lead 初始化项目配置，建立仓库映射和路径别名。
+      这是研发流水线的第一步，确保后续 Phase 的输出路径配置正确。
+    steps:
+      - id: s3_0_1_project_setup
+        name: 项目配置初始化
+        description: >
+          Tech Lead 创建 project.yaml 配置文件：
+          - 定义项目 ID 和名称
+          - 配置仓库映射 (frontend, backend 等)
+          - 设置路径别名 (@frontend, @backend)
+          - 验证仓库路径是否存在
+        run: agent.dev.tech_lead
+        execution:
+          model: prompt_switch
+          timeout: 30m
+        dependencies:
+          requires: []
+        inputs:
+          - freeze_package: $inputs
+          - team_info:
+              tech_stack: $inputs.tech_stack
+              repositories: $inputs.repositories
+        outputs:
+          - path: "project.yaml"
+            contract: ../../contracts/project-config-contract/v1/schema.json
+            freeze: false
+            description: "项目配置文件，包含仓库映射和路径别名"
+        output_validation:
+          validation_mode: strict
+          on_failure:
+            action: retry
+            max_retries: 2
+          required_artifacts:
+            - path: "project.yaml"
+              min_count: 1
+        on_error:
+          action: escalate
+          max_retries: 1
+
+      - id: s3_0_2_repo_validation
+        name: 仓库路径验证
+        description: 验证所有配置的仓库路径是否存在
+        dependencies:
+          requires: [s3_0_1_project_setup]
+        run: agent.dev.tech_lead
+        execution:
+          model: prompt_switch
+          timeout: 10m
+        inputs:
+          - project_config: "project.yaml"
+        outputs:
+          - path: "00-project/repo-validation.md"
+            description: "仓库验证报告"
+        validation_command: "python -m orchestrator validate-project ."
+        on_error:
+          action: fail
+          message: "仓库路径验证失败，请检查 project.yaml 中的路径配置"
+
+      - id: s3_0_3_init_complete
+        name: 初始化完成确认
+        dependencies:
+          requires: [s3_0_2_repo_validation]
+        type: human_decision
+        decision:
+          approve: "初始化完成，开始研发规划"
+          adjust: "需要调整仓库配置"
+        on_approve:
+          action: continue
+        on_error:
+          action: escalate
+
+  # ---------- Stage 3.1: 研发规划 ----------
+  - id: s3_1_dev_planning
+    name: 研发规划
+    description: 基于冻结包和 UI 原型制定完整研发计划
+    depends_on: [s3_0_project_init]  # v1.2: 依赖项目初始化
+    steps:
+      - id: s3_1_1_development_planning
+        name: 研发计划制定
+        description: >
+          分析研发冻结包和 UI 原型，制定研发计划：
+          - Phase 划分与排期
+          - Agent 编排序列
+          - 交付标准定义
+          - 风险评估与缓冲
+        run: agent.dev.development_planner
+        # v1.1 新增: 执行配置
+        execution:
+          model: prompt_switch
+          timeout: 60m
+        # v1.1 新增: 依赖与编排
+        dependencies:
+          requires: []
+          parallel_with: []
+        inputs:
+          - freeze_package:
+              prd: $inputs.prd
+              architecture: $inputs.architecture
+              ui_specs: $inputs.ui_specs
+              api_contracts: $inputs.api_contracts
+          - ui_prototype: $inputs.ui_prototype
+        outputs:
+          - path: "03-planning/development-plan.yaml"
+            contract: ../../contracts/development-plan-contract/v1/schema.json
+            freeze: false
+        # v1.1 新增: 产物验证
+        output_validation:
+          contract_ref: ../../contracts/development-plan-contract/v1/schema.json
+          validation_mode: strict  # strict | warn | skip
+          on_failure:
+            action: retry  # block | warn | retry
+            max_retries: 2
+          required_artifacts:
+            - path: "03-planning/development-plan.yaml"
+              min_count: 1
+        # v1.1 新增: 错误处理
+        on_error:
+          action: escalate  # fail | skip | retry | escalate
+          max_retries: 1
+        human_gate: h1_plan_review
+
+      - id: s3_1_2_plan_approval
+        name: 研发计划审批
+        dependencies:
+          requires: [s3_1_1_development_planning]
+        type: human_decision
+        decision:
+          approve: "计划批准，启动执行"
+          adjust: "需要调整计划"
+          reject: "计划被否决"
+        on_approve:
+          action: update_plan_status
+          status: approved
+        on_error:
+          action: escalate
+
+      - id: s3_1_3_phase_init
+        name: Phase 初始化
+        dependencies:
+          requires: [s3_1_2_plan_approval]
+        run: agent.dev.phase_initializer
+        execution:
+          model: prompt_switch
+          timeout: 30m
+        for_each: $outputs.development_plan.phases
+        outputs:
+          - path: "04-phases/{phase_id}/phase.yaml"
+          - path: "04-phases/{phase_id}/openspec/"
+            type: directory
+        on_error:
+          action: fail
+
+  # ---------- Stage 3.2: 研发调度执行 ----------
+  - id: s3_2_dev_execution
+    name: 研发调度执行
+    description: 由调度器按计划协调 Phase 执行
+    depends_on: [s3_1_dev_planning]
+    steps:
+      - id: s3_2_1_scheduler_start
+        name: 启动调度器
+        description: 研发调度器开始按计划推进任务
+        run: agent.dev.development_scheduler
+        inputs:
+          - plan: "03-planning/development-plan.yaml"
+          - phases_dir: "04-phases/"
+        outputs:
+          - path: "03-planning/execution-status.yaml"
+        mode: continuous  # 持续运行直到所有 Phase 完成
+
+      - id: s3_2_2_phase_execution
+        name: Phase 并行执行
+        description: >
+          调度器触发的 Phase OpenSpec 子流程。
+          v1.1: 每个 Phase 必须通过 Phase Acceptance Gate 验收后才能完成。
+          验收内容包括：工作流步骤、交付物、质量门禁、代码审查、复盘报告、知识沉淀。
+        depends_on: [s3_2_1_scheduler_start]
+        triggered_by: development_scheduler
+        parallel: true
+        max_concurrent: 3  # 最多 3 个并行 Phase
+        for_each: $scheduler.ready_phases
+        subworkflow:
+          ref: workflow.dev.phase_openspec_flow
+          version: "1.1"  # v1.1 包含强制验收步骤
+          inputs:
+            phase_contract: "04-phases/{phase_id}/phase.yaml"
+            openspec_workspace: "04-phases/{phase_id}/openspec/"
+          outputs:
+            - path: "04-phases/{phase_id}/output/"
+          # v1.1 新增: 验收要求
+          acceptance_requirements:
+            mandatory: true
+            must_include:
+              - acceptance_report: "04-phases/{phase_id}/output/acceptance-report.yaml"
+              - retrospective: "04-phases/{phase_id}/openspec/05-retrospective/retrospective.md"
+              - knowledge_items: "04-phases/{phase_id}/output/knowledge/"
+        on_complete:
+          notify: development_scheduler
+          action: phase_completed
+          # v1.1 新增: 验收检查
+          verify:
+            - acceptance_verdict: ["pass", "conditional_pass"]
+
+      - id: s3_2_3_progress_monitoring
+        name: 进度监控
+        description: 实时监控执行进度，处理异常
+        run: agent.dev.development_scheduler
+        mode: monitoring
+        check_interval: "15m"
+        alerts:
+          - condition: "progress_deviation > 20%"
+            action: notify_pm
+          - condition: "critical_path_delayed"
+            action: immediate_escalation
+          - condition: "blocker_duration > 4h"
+            action: escalate_to_lead
+        outputs:
+          - path: "03-planning/daily-report.md"
+            frequency: daily
+
+  # ---------- Stage 3.3: 集成 ----------
+  - id: s3_3_integration
+    name: 系统集成
+    description: 合并所有 Phase 产出，打通链路
+    depends_on: [s3_2_phase_execution]
+    steps:
+      - id: s3_3_1_integration_plan
+        name: 集成计划
+        run: agent.dev.integration_planner
+        inputs:
+          - pattern: "04-phases/*/output/handover.yaml"
+        outputs:
+          - path: "05-integration/integration-plan.md"
+
+      - id: s3_3_2_integration_execute
+        name: 集成执行
+        depends_on: [s3_3_1_integration_plan]
+        run: agent.dev.integration_executor
+        outputs:
+          - path: "05-integration/integration-report.md"
+        human_gate: h2_integration_review
+
+  # ---------- Stage 3.4: E2E 测试 + 安全扫描 ----------
+  - id: s3_4_e2e_testing
+    name: E2E 测试与安全检查
+    description: 端到端全链路测试 + 安全扫描
+    depends_on: [s3_3_integration]
+    steps:
+      - id: s3_4_1_e2e_plan
+        name: E2E 测试计划
+        run: agent.dev.qa_engineer
+        description: "QA 设计 E2E 测试用例 (硬边界: 只设计不实现)"
+        execution:
+          model: prompt_switch
+          timeout: 45m
+        dependencies:
+          requires: []
+          parallel_with: []
+        inputs:
+          - $inputs.prd
+          - "05-integration/integration-plan.md"
+        outputs:
+          - path: "06-testing/e2e-test-cases.yaml"
+            contract: ../../contracts/test-case-contract/v1/schema.json
+        output_validation:
+          contract_ref: ../../contracts/test-case-contract/v1/schema.json
+          validation_mode: strict
+          on_failure:
+            action: retry
+            max_retries: 2
+          required_artifacts:
+            - path: "06-testing/e2e-test-cases.yaml"
+              min_count: 1
+        on_error:
+          action: escalate
+          max_retries: 1
+
+      - id: s3_4_2_e2e_implement
+        name: E2E 测试实现
+        dependencies:
+          requires: [s3_4_1_e2e_plan]
+        run: agent.dev.test_automation_engineer
+        description: "SDET 实现 E2E 测试代码 (硬边界: 只实现不设计)"
+        execution:
+          model: prompt_switch
+          timeout: 120m
+        inputs:
+          - "06-testing/e2e-test-cases.yaml"
+        outputs:
+          - path: "06-testing/e2e/"
+          - path: "06-testing/reports/e2e-report.json"
+        output_validation:
+          validation_mode: warn  # E2E 代码允许警告
+          required_artifacts:
+            - path: "06-testing/e2e/**/*.spec.ts"
+              min_count: 1
+            - path: "06-testing/reports/e2e-report.json"
+              min_count: 1
+        on_error:
+          action: retry
+          max_retries: 2
+
+      - id: s3_4_3_security_scan
+        name: 安全扫描
+        dependencies:
+          requires: [s3_4_2_e2e_implement]
+          parallel_with: [s3_4_4_ui_review]  # 与 UI 审查并行
+        run: agent.dev.secops
+        description: SecOps 执行 SAST/SCA/Secrets 扫描
+        execution:
+          model: prompt_switch
+          timeout: 30m
+        inputs:
+          - repository: "."
+          - branch: "main"
+        outputs:
+          - path: "06-testing/reports/security-report.json"
+            contract: ../../contracts/security-report-output/v1/schema.json
+        output_validation:
+          contract_ref: ../../contracts/security-report-output/v1/schema.json
+          validation_mode: strict
+          on_failure:
+            action: block
+            max_retries: 0  # 安全报告不允许重试
+        blocking_policy:
+          critical: block
+          high: block
+          medium: warn
+        on_error:
+          action: fail  # 安全扫描失败直接终止
+
+      - id: s3_4_4_ui_review
+        name: UI 实现审查
+        dependencies:
+          requires: [s3_4_2_e2e_implement]
+          parallel_with: [s3_4_3_security_scan]  # 与安全扫描并行
+        run: agent.dev.ui_implementation_reviewer
+        description: 审查设计还原度/跨端适配/可访问性
+        execution:
+          model: prompt_switch
+          timeout: 60m
+        inputs:
+          - ui_contracts: "../ui/"
+          - implementation: "frontend/"
+        outputs:
+          - path: "06-testing/reports/ui-review-report.json"
+            contract: ../../contracts/ui-review-output/v1/schema.json
+        output_validation:
+          contract_ref: ../../contracts/ui-review-output/v1/schema.json
+          validation_mode: strict
+          on_failure:
+            action: warn
+        gate_check:
+          fidelity_threshold: 90
+          accessibility_level: AA
+        on_error:
+          action: escalate
+
+  # ---------- Stage 3.5: 交付门禁 ----------
+  - id: s3_5_delivery_gate
+    name: 交付门禁
+    description: Delivery Gate Agent 执行放行判定
+    depends_on: [s3_4_e2e_testing]
+    steps:
+      - id: s3_5_1_gate_check
+        name: 交付门禁检查
+        run: agent.dev.delivery_gate
+        description: 汇总所有检查结果，判定是否放行
+        inputs:
+          - coverage_report: "06-testing/reports/coverage-report.json"
+          - e2e_report: "06-testing/reports/e2e-report.json"
+          - security_report: "06-testing/reports/security-report.json"
+          - ui_review_report: "06-testing/reports/ui-review-report.json"
+        outputs:
+          - path: "output/delivery-gate-result.json"
+            contract: ../../contracts/delivery-gate-output/v1/schema.json
+        gate_rules:
+          merge_gate:
+            coverage_core: 95
+            coverage_non_core: 80
+            e2e_critical_paths: pass
+            security_critical: 0
+            security_high: 0
+          release_gate:
+            regression_required: true
+            all_blockers_resolved: true
+
+      - id: s3_5_2_acceptance_review
+        name: 验收审查
+        depends_on: [s3_5_1_gate_check]
+        run: agent.dev.acceptance_reviewer
+        inputs:
+          - pattern: "04-phases/*/output/"
+          - "05-integration/integration-report.md"
+          - "output/delivery-gate-result.json"
+        outputs:
+          - path: "output/acceptance-report.md"
+        human_gate: h3_acceptance_review
+
+      - id: s3_5_3_release_freeze
+        name: 发布冻结
+        depends_on: [s3_5_2_acceptance_review]
+        condition: "delivery_gate_result.verdict == 'PASS'"
+        run: agent.governance.freezer
+        inputs:
+          - acceptance_report: "output/acceptance-report.md"
+        outputs:
+          - path: "output/release-frozen/{project}-release-freeze.md"
+            freeze: true
+            status: "🔒"
+
+  # ---------- Stage 3.6: 复盘与知识沉淀 ----------
+  - id: s3_6_retrospective
+    name: 项目复盘
+    description: 经验总结，知识沉淀
+    depends_on: [s3_5_acceptance]
+    steps:
+      - id: s3_6_1_retrospective
+        name: 研发复盘
+        run: agent.dev.retrospective_facilitator
+        inputs:
+          - pattern: "04-phases/*/output/retrospective.md"
+          - "05-integration/integration-report.md"
+          - "06-testing/reports/e2e-report.json"
+        outputs:
+          - path: "00-project/retrospective.md"
+
+      - id: s3_6_2_knowledge_update
+        name: 知识库更新
+        depends_on: [s3_6_1_retrospective]
+        run: agent.dev.knowledge_curator
+        outputs:
+          - path: "07-knowledge/patterns/"
+          - path: "07-knowledge/anti-patterns/"
+          - path: "07-knowledge/checklists/"
+
+# ============================================
+# 人类介入点 (v1.2 增强: 增加项目初始化门禁)
+# ============================================
+human_in_the_loop:
+  - id: h0_project_init_review
+    purpose: "确认项目配置（仓库映射、路径别名）正确"
+    gate:
+      enabled: true
+      type: review
+      blocking: true
+      timeout:
+        duration: 24h
+        action: escalate
+      approval:
+        required_roles: [tech_lead]
+        min_approvals: 1
+      notification:
+        channels: [console]
+        template: project_init_review_request
+    inputs_to_review:
+      - "project.yaml"
+      - "00-project/repo-validation.md"
+    review_checklist:
+      - "仓库路径是否正确配置"
+      - "路径别名是否与仓库映射匹配"
+      - "所有仓库是否可访问"
+      - "项目 ID 和名称是否正确"
+    actions:
+      approve:
+        label: "配置正确，开始研发规划"
+        next_step: continue
+      adjust:
+        label: "需要调整仓库配置"
+        next_step: retry_step
+
+  - id: h1_plan_review
+    purpose: "审批研发计划（Phase 划分、排期、Agent 编排、交付标准）"
+    # v1.1 新格式: 结构化 gate 对象
+    gate:
+      enabled: true
+      type: approval
+      blocking: true  # 阻断执行直到获得审批
+      timeout:
+        duration: 48h
+        action: escalate  # skip | fail | escalate
+      approval:
+        required_roles: [product_owner, tech_lead]
+        min_approvals: 1
+      notification:
+        channels: [console]  # 通知渠道
+        template: plan_approval_request
+    inputs_to_review:
+      - "03-planning/development-plan.yaml"
+    review_checklist:
+      - "Phase 划分是否合理"
+      - "依赖关系是否正确"
+      - "排期是否可行"
+      - "Agent 编排是否完整"
+      - "交付标准是否明确"
+      - "风险评估是否充分"
+    actions:
+      approve:
+        label: "批准计划，启动调度执行"
+        next_step: continue
+      adjust:
+        label: "调整计划后重新提交"
+        next_step: retry_step
+      reject:
+        label: "否决计划，需重新规划"
+        next_step: fail
+
+  - id: h2_integration_review
+    purpose: "确认集成结果，验证链路打通"
+    gate:
+      enabled: true
+      type: review
+      blocking: true
+      timeout:
+        duration: 24h
+        action: escalate
+      approval:
+        required_roles: [tech_lead]
+        min_approvals: 1
+      notification:
+        channels: [console]
+        template: integration_review_request
+    inputs_to_review:
+      - "05-integration/integration-report.md"
+      - "04-phases/*/output/handover.yaml"
+    review_checklist:
+      - "所有模块集成是否成功"
+      - "核心链路是否打通"
+      - "接口契约是否匹配"
+    actions:
+      approve:
+        label: "进入 E2E 测试"
+        next_step: continue
+      flag_issues:
+        label: "标记问题后继续"
+        next_step: continue_with_issues
+      rollback:
+        label: "回退到 Phase 修复"
+        next_step: rollback_to_phase
+
+  - id: h3_acceptance_review
+    purpose: "最终验收，确认可发布"
+    gate:
+      enabled: true
+      type: approval
+      blocking: true
+      timeout:
+        duration: 72h
+        action: escalate
+      approval:
+        required_roles: [product_owner, tech_lead]
+        min_approvals: 2
+      notification:
+        channels: [console]
+        template: acceptance_review_request
+    inputs_to_review:
+      - "output/acceptance-report.md"
+      - "output/delivery-gate-result.json"
+      - "06-testing/reports/e2e-report.json"
+      - "06-testing/reports/security-report.json"
+    review_checklist:
+      - "所有功能是否符合 PRD 要求"
+      - "性能是否达标"
+      - "安全扫描是否通过"
+      - "E2E 测试是否全部通过"
+    actions:
+      approve:
+        label: "生成发布冻结包"
+        next_step: continue
+      conditional_approve:
+        label: "带条件通过"
+        next_step: continue_with_conditions
+        requires_comment: true
+      reject:
+        label: "拒绝发布，列出问题"
+        next_step: fail
+        requires_comment: true
+
+# ============================================
+# 错误处理
+# ============================================
+error_handling:
+  retry:
+    max_attempts: 2
+    backoff_ms: 30000
+
+  fallbacks:
+    - when: "phase_failed"
+      action: "isolate_and_continue"
+      notify: true
+    - when: "integration_failed"
+      action: "rollback_phases"
+      notify: true
+    - when: "e2e_failed"
+      action: "create_issue_and_retry"
+    - when: "gate_blocked"
+      action: "human_escalation"
+
+# ============================================
+# 完成条件
+# ============================================
+completion:
+  required_outputs:
+    - "output/release-frozen/*-release-freeze.md"
+  gate_to_next:
+    description: "进入部署发布阶段"
+    requires:
+      - release_freeze_status: "🔒"
+      - all_gates_passed: true
+      - acceptance_approved: true
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: minimal_single_phase
+      input:
+        project_name: "test-project"
+        phases: ["auth"]
+      assert:
+        - path: "$.stages.length"
+          op: "=="
+          value: 6
+
+  replay:
+    fixtures:
+      - tests/fixtures/development_pipeline_case1.json
+
+# ============================================
+# 目录结构模板
+# ============================================
+directory_template: |
+  {project}/
+  ├── 00-project/
+  │   ├── project-charter.md
+  │   ├── roadmap.md
+  │   └── retrospective.md
+  │
+  ├── 01-ui/
+  │   └── ui-freeze/
+  │       ├── user-flows.pdf
+  │       ├── key-screens.png
+  │       └── interaction-notes.md
+  │
+  ├── 02-requirements/
+  │   ├── prd.md
+  │   ├── architecture.md
+  │   └── requirement-freeze.md
+  │
+  ├── 03-planning/
+  │   └── phase-plan.yaml
+  │
+  ├── 04-phases/
+  │   └── {phase-id}/
+  │       ├── phase.yaml          # Phase Contract
+  │       ├── openspec/           # OpenSpec 子流程工作空间
+  │       │   ├── 00-requirements/
+  │       │   ├── 01-test-contracts/
+  │       │   ├── 02-implementation/
+  │       │   ├── 03-unit-tests/
+  │       │   ├── 04-review/
+  │       │   └── 05-retrospective/
+  │       └── output/
+  │           ├── artifacts.md
+  │           ├── handover.yaml
+  │           └── retrospective.md
+  │
+  ├── 05-integration/
+  │   ├── integration-plan.md
+  │   └── integration-report.md
+  │
+  ├── 06-testing/
+  │   ├── env/
+  │   ├── e2e/
+  │   └── reports/
+  │
+  ├── 07-knowledge/
+  │   ├── patterns/
+  │   ├── anti-patterns/
+  │   └── checklists/
+  │
+  └── output/
+      └── release-frozen/

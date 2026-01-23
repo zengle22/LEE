@@ -1,0 +1,256 @@
+# Supply / Competition Agent Specification v1.0
+# 供给与竞争分析 Agent - 分析层
+
+kind: agent
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: agent.stg.supply_competition_agent
+name: Supply / Competition Agent
+description: >
+  分析已有解决方案，回答"已有方案哪里不够好"。
+  识别竞品分类、分析其优缺点、发现未服务市场空白。
+
+owner: stg-governance
+tags: [agent, stg, analysis, competitive-intelligence, market-gap]
+
+# ============================================
+# 核心约束
+# ============================================
+constraints:
+  hard_rules:
+    - 基于公开产品信息和用户反馈
+    - 必须标注信息来源
+    - 区分"事实"（产品功能）和"观点"（优缺点判断）
+
+  non_goals:
+    - 不推荐具体产品策略
+    - 不判断"应该做什么"（那是 Business Opportunity Agent）
+    - 不进行价格竞争分析（除非相关）
+
+# ============================================
+# 契约定义
+# ============================================
+contracts:
+  input_schema:
+    type: object
+    required:
+      - industry
+      - search_signals
+    properties:
+      industry:
+        type: string
+        description: "行业名称"
+      search_signals:
+        type: array
+        items:
+          $ref: "../../contracts/market_signal_freeze/v1/search_signal.yaml"
+
+  output_schema:
+    type: object
+    required:
+      - industry
+      - existing_solutions
+      - solution_gaps
+      - assessment_basis
+    properties:
+      industry:
+        type: string
+        description: "分析的行业"
+      existing_solutions:
+        type: array
+        items:
+          type: object
+          required:
+            - category
+            - representative_companies
+            - key_features
+            - target_segment
+            - known_limitations
+          properties:
+            category:
+              type: string
+              description: "解决方案类别"
+            representative_companies:
+              type: array
+              items:
+                type: string
+              description: "代表性公司/产品"
+            key_features:
+              type: array
+              items:
+                type: string
+              description: "核心功能列表"
+            target_segment:
+              type: string
+              description: "目标客户群"
+              example: "Enterprise, SMB"
+            known_limitations:
+              type: array
+              items:
+                type: string
+              description: "已知的局限性"
+        description: "现有解决方案列表"
+      solution_gaps:
+        type: object
+        required:
+          - unserved_segment
+          - poor_ux_cost_integration
+          - emerging_needs
+        properties:
+          unserved_segment:
+            type: array
+            items:
+              type: string
+            description: "未被服务的细分市场"
+          poor_ux_cost_integration:
+            type: array
+            items:
+              type: string
+            description: "UX/成本/集成方面的痛点"
+          emerging_needs:
+            type: array
+            items:
+              type: string
+            description: "新兴需求（现有方案未覆盖）"
+        description: "解决方案空缺分析"
+      assessment_basis:
+        type: array
+        items:
+          type: string
+        description: "评估依据（产品页面、评测、用户评论等）"
+
+# ============================================
+# 引擎配置
+# ============================================
+engine:
+  type: llm
+  provider: openai
+  model: gpt-4.1-mini
+  api_key: ${OPENAI_API_KEY}
+
+# ============================================
+# System Prompt
+# ============================================
+system_prompt: |
+  你是一个竞争分析专家，负责分析已有解决方案的优缺点。
+
+  ## 你的唯一职责
+  回答：**已有解决方案哪里不够好**
+
+  ## 你的分析框架
+
+  ### 1. 现有解决方案分类
+  - 按功能/定位分类（如：企业级、SMB、垂直行业等）
+  - 每个类别列出代表性公司/产品
+  - 核心功能是什么
+  - 服务哪个细分市场
+
+  ### 2. 已知局限性
+  - 这些产品的已知缺点是什么？
+  - 用户抱怨什么？
+  - 什么地方做得不好？
+
+  ### 3. 解决方案空缺
+  - **Unserved Segment**: 哪些细分市场没有被服务？
+  - **Poor UX/Cost/Integration**: UX、成本、集成方面有什么痛点？
+  - **Emerging Needs**: 有哪些新兴需求现有方案没覆盖？
+
+  ## 你的约束
+  - ✅ 基于公开产品信息、评测、用户反馈
+  - ✅ 标注信息来源
+  - ✅ 区分"事实"（产品功能）和"观点"（优缺点）
+  - ❌ 不推荐"应该做什么"（那是后面的事）
+  - ❌ 不分析具体竞争策略
+  - ❌ 不判断市场机会大小
+
+  ## 输出格式
+  严格按照 output_schema 输出，包含所有必需字段。
+
+# ============================================
+# Instructions
+# ============================================
+instructions:
+  - "先按类别分组：企业级 vs SMB，通用 vs 垂直行业"
+  - "每个类别列出 2-3 个代表性产品/公司"
+  - "总结核心功能（不是功能列表，而是核心能力）"
+  - "识别目标细分市场（谁在用）"
+  - "收集已知局限性：从产品评论、G2、Capterra 等平台"
+  - "识别三类空缺：未服务细分市场、UX/成本/集成痛点、新兴需求"
+  - "标注所有信息来源"
+
+# ============================================
+# Quality Bar
+# ============================================
+quality_bar:
+  factual_integrity:
+    - "产品功能必须基于公开资料"
+    - "局限性必须引用用户反馈或评测"
+    - "标注信息来源（产品网站、评测平台等）"
+
+  analysis_depth:
+    - "至少分析 2-3 个主要类别"
+    - "每个类别至少 2 个代表性产品"
+    - "三类空缺都要分析，不能只看一类"
+
+# ============================================
+# Forbidden Behaviors
+# ============================================
+forbidden_behaviors:
+  - id: "strategy_recommendation"
+    name: "策略推荐"
+    description: "不允许推荐具体的产品策略或差异化方案"
+
+  - id: "opportunity_evaluation"
+    name: "机会评估"
+    description: "不允许判断'是否值得做'（那是 Business Opportunity Agent）"
+
+  - id: "price_competition_focus"
+    name: "过度关注价格竞争"
+    description: "不要只分析价格，要关注价值空缺"
+
+# ============================================
+# 输出示例
+# ============================================
+output_example:
+  industry: "AI Sales Assistant Software"
+  existing_solutions:
+    - category: "Enterprise Sales Platforms"
+      representative_companies: ["Salesforce Einstein", "HubSpot Sales Hub"]
+      key_features:
+        - "CRM-integrated AI assistant"
+        - "Lead scoring and prioritization"
+        - "Email sequence optimization"
+      target_segment: "Enterprise (1000+ employees)"
+      known_limitations:
+        - "High cost ($5k+/month minimum)"
+        - "Complex setup (3-6 months)"
+        - "Requires dedicated admin"
+    - category: "SMB Sales Tools"
+      representative_companies: ["Apollo.io", "Lavender"]
+      key_features:
+        - "AI email writing"
+        - "Lead enrichment"
+        - "Basic prospecting"
+      target_segment: "SMB (10-200 employees)"
+      known_limitations:
+        - "Limited AI capabilities (mostly templates)"
+        - "Poor CRM integration"
+        - "No industry-specific features"
+  solution_gaps:
+    unserved_segment:
+      - "Mid-market (200-1000 employees): Too expensive for enterprise tools, too complex for SMB tools"
+      - "Industry-specific verticals: No solutions tailored for healthcare, education, legal"
+    poor_ux_cost_integration:
+      - "Integration requires API development or expensive consultants"
+      - "Setup time is 3-6 months, not weeks"
+      - "Training required for sales teams (high adoption friction)"
+    emerging_needs:
+      - "AI voice assistants for sales calls (emerging, few solutions)"
+      - "Multi-channel AI (email + LinkedIn + phone) - most solutions are single-channel"
+  assessment_basis:
+    - "Product websites and pricing pages"
+    - "G2 and Capterra reviews (500+ reviews analyzed)"
+    - "Case studies and whitepapers"

@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-spec.example.com/contracts/google-keyword-contract/v1/schema.json",
+  "title": "Google Keyword Contract Schema",
+  "description": "Schema for keyword search results passed from keyword searcher to trend researcher",
+  "type": "object",
+  "required": ["contract_type", "contract_version", "metadata", "keywords"],
+  "properties": {
+    "contract_type": {
+      "type": "string",
+      "const": "google-keyword-input"
+    },
+    "contract_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["analysis_id", "source_domain", "generated_at", "keyword_count"],
+      "properties": {
+        "analysis_id": {
+          "type": "string",
+          "pattern": "^KW-\\d{8}-\\d{3}$"
+        },
+        "source_domain": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "keyword_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "keywords": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Keyword"
+      },
+      "minItems": 1
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Category"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Keyword": {
+      "type": "object",
+      "required": ["id", "keyword", "intent_type", "heat_level", "competition"],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "keyword": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent_type": {
+          "$ref": "#/$defs/IntentType"
+        },
+        "heat_level": {
+          "$ref": "#/$defs/HeatLevel"
+        },
+        "competition": {
+          "$ref": "#/$defs/Competition"
+        },
+        "longtail_keywords": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "Category": {
+      "type": "object",
+      "required": ["type", "keywords"],
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/IntentType"
+        },
+        "keywords": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "recommended_usage": {
+          "type": "string"
+        }
+      }
+    },
+    "IntentType": {
+      "type": "string",
+      "enum": ["informational", "navigational", "transactional", "commercial"]
+    },
+    "HeatLevel": {
+      "type": "string",
+      "enum": ["very_high", "high", "medium", "low", "very_low"]
+    },
+    "Competition": {
+      "type": "string",
+      "enum": ["high", "medium", "low"]
+    }
+  }
+}

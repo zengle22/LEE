@@ -1,0 +1,564 @@
+# Development Retest Workflow v1.0
+# 开发返修流程 - 测试打回后的最小修复闭环
+
+kind: workflow
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: workflow.dev.retest
+name: Development Retest (Bug Fix & Resubmit)
+description: >
+  开发返修工作流 - 专门处理测试打回后的 Bug 修复和再提测。
+
+  核心原则：
+  - 在需求冻结前提下修复已知问题
+  - 禁止引入新需求或非相关改动
+  - 快速迭代，严格门禁
+  - 连续失败后强制升级人类介入
+
+owner: development
+tags: [workflow, development, retest, bugfix, quality]
+
+# ============================================
+# 触发条件
+# ============================================
+triggers:
+  - event: "test.rejection"
+    source: "workflow.test.testing_pipeline"
+    conditions:
+      - "smoke_test_failed OR gate_failed"
+      - "rejection_notice.yaml exists"
+
+  - event: "manual_retest"
+    source: "human_developer"
+    conditions:
+      - "bugs.contract.yaml exists"
+
+# ============================================
+# 入口门禁（强约束）
+# ============================================
+entry_gate:
+  name: "Retest Entry Gate"
+
+  required_inputs:
+    - file: "test-rejection-notice.yaml"
+      schema: "testing/contracts/rejection-notice/v1/schema.json"
+      description: "测试拒绝通知"
+
+    - file: "bugs/*.contract.yaml"
+      schema: "testing/contracts/bug-contract/v1/schema.yaml"
+      description: "Bug 契约文件列表"
+
+    - file: "test-report.yaml"
+      schema: "testing/contracts/test-report/v1/schema.json"
+      description: "测试报告（包含失败轮次）"
+
+  validation_rules:
+    - rule: "bugs_count > 0"
+      message: "必须有明确的 Bug 需要修复"
+
+    - rule: "rejection_reason != 'requirement_change'"
+      message: "如果是需求变更，应该走完整研发流程，而非返修"
+
+    - rule: "retest_round_count < 3"
+      message: "连续返修超过3次，必须升级人类介入"
+      on_fail:
+        action: escalate_to_human
+        notify: ["tech-lead", "product-manager"]
+
+# ============================================
+# 防滥用规则
+# ============================================
+constraints:
+  strict_mode: true
+
+  forbidden_actions:
+    - action: "add_new_requirement"
+      description: "禁止引入新需求"
+      penalty: "workflow_abort"
+
+    - action: "modify_frozen_spec"
+      description: "禁止修改已冻结的规格文档"
+      penalty: "workflow_abort"
+
+    - action: "change_acceptance_criteria"
+      description: "禁止修改验收标准"
+      penalty: "workflow_abort"
+
+    - action: "unrelated_refactor"
+      description: "禁止非必要的重构"
+      penalty: "human_review_required"
+
+  allowed_scope:
+    - "修复 bug.contract 中列出的问题"
+    - "补充回归测试用例"
+    - "必要的配置调整（需声明）"
+    - "相关单元测试"
+
+# ============================================
+# 工作流步骤
+# ============================================
+stages:
+  # ========== Stage 1: 返修准备 ==========
+  - id: r1_preparation
+    name: "返修准备"
+    description: "接收测试打回，准备修复工作"
+
+    steps:
+      - id: r1_1_receive_rejection
+        name: "接收拒绝通知"
+        description: "从测试团队接收拒绝通知和 Bug 清单"
+        run: agent.dev.rejection_receiver
+        execution:
+          model: prompt_switch
+          timeout: 10m
+
+        inputs:
+          - rejection_notice: "$inputs.rejection_notice"
+          - bugs_directory: "$inputs.bugs/"
+          - test_report: "$inputs.test_report"
+
+        outputs:
+          - path: "output/rejection-summary.yaml"
+
+        validation:
+          - "all_bugs_have_contracts"
+          - "rejection_reason_is_clear"
+
+      - id: r1_2_impact_analysis
+        name: "影响范围分析"
+        description: "分析 Bug 影响的代码模块和测试用例"
+        run: agent.dev.impact_analyzer
+        execution:
+          model: prompt_switch
+          timeout: 20m
+
+        dependencies:
+          requires: [r1_1_receive_rejection]
+
+        inputs:
+          - bugs: "$r1_1_receive_rejection.outputs.bugs"
+          - codebase: "$workspace.code"
+
+        outputs:
+          - path: "output/impact-analysis.yaml"
+
+        validation:
+          - "affected_modules_identified"
+          - "regression_scope_defined"
+
+  # ========== Stage 2: 修复计划 ==========
+  - id: r2_fix_planning
+    name: "修复计划"
+    description: "制定修复方案和分工"
+
+    steps:
+      - id: r2_1_bug_triage
+        name: "Bug 分诊"
+        description: "将 Bug 分配给具体的修复任务"
+        run: agent.dev.bug_triager
+        execution:
+          model: prompt_switch
+          timeout: 15m
+
+        dependencies:
+          requires: [r1_2_impact_analysis]
+
+        inputs:
+          - bugs: "$inputs.bugs"
+          - impact_analysis: "$r1_2_impact_analysis.outputs"
+
+        outputs:
+          - path: "output/dev-fix-plan.yaml"
+
+        contract:
+          schema: "development/contracts/fix-plan/v1/schema.yaml"
+          required_fields:
+            - bugs_to_fix
+            - owner_assignments
+            - scope_constraints
+            - regression_plan
+
+      - id: r2_2_fix_plan_review
+        name: "修复计划审核"
+        description: "确认修复计划符合约束"
+        type: gate_decision
+
+        dependencies:
+          requires: [r2_1_bug_triage]
+
+        gate:
+          ref: gate.dev.fix_plan_gate
+          checks:
+            - "no_new_requirements"
+            - "scope_within_bugs"
+            - "regression_tests_planned"
+
+          on_fail:
+            action: reject_plan
+            message: "修复计划超出允许范围"
+
+  # ========== Stage 3: 修复执行 ==========
+  - id: r3_fix_execution
+    name: "修复执行"
+    description: "执行代码修复和测试补充"
+
+    steps:
+      - id: r3_1_code_fix
+        name: "代码修复"
+        description: "修复 Bug（仅限已识别问题）"
+        run: agent.dev.bug_fixer
+        execution:
+          model: prompt_switch
+          timeout: 120m
+
+        dependencies:
+          requires: [r2_2_fix_plan_review]
+
+        inputs:
+          - fix_plan: "$r2_1_bug_triage.outputs.fix_plan"
+          - bugs: "$inputs.bugs"
+
+        outputs:
+          - path: "output/fix-commits.yaml"
+
+        constraints:
+          enforce: true
+          rules:
+            - "only_modify_affected_files"
+            - "no_unrelated_changes"
+            - "commit_message_references_bug_id"
+
+      - id: r3_2_regression_tests
+        name: "补充回归测试"
+        description: "为修复的 Bug 添加回归测试用例"
+        run: agent.dev.regression_test_writer
+        execution:
+          model: prompt_switch
+          timeout: 60m
+
+        dependencies:
+          requires: [r3_1_code_fix]
+
+        inputs:
+          - bugs: "$inputs.bugs"
+          - fixes: "$r3_1_code_fix.outputs"
+
+        outputs:
+          - path: "tests/regression/"
+
+        validation:
+          - "one_test_per_bug_minimum"
+          - "tests_cover_failure_scenario"
+
+  # ========== Stage 4: 开发自检（关键门禁）==========
+  - id: r4_selfcheck
+    name: "开发自检"
+    description: "修复后的强制自检门禁"
+
+    steps:
+      - id: r4_1_unit_tests
+        name: "单元测试"
+        description: "运行所有相关单元测试"
+        run: agent.dev.unit_test_runner
+        execution:
+          model: prompt_switch
+          timeout: 30m
+
+        dependencies:
+          requires: [r3_2_regression_tests]
+
+        inputs:
+          - test_scope: "$r1_2_impact_analysis.outputs.affected_modules"
+
+        outputs:
+          - path: "output/unit-test-result.yaml"
+
+        gate:
+          ref: gate.dev.unit_test_gate
+          criteria:
+            - "pass_rate >= 100%"  # 必须全部通过
+            - "affected_tests_pass"
+            - "new_regression_tests_pass"
+
+      - id: r4_2_local_smoke
+        name: "本地冒烟测试"
+        description: "在本地/临时环境运行最小冒烟测试"
+        run: agent.dev.local_smoke_runner
+        execution:
+          model: prompt_switch
+          timeout: 20m
+
+        dependencies:
+          requires: [r4_1_unit_tests]
+
+        inputs:
+          - bugs_fixed: "$r3_1_code_fix.outputs.bugs"
+          - environment: "local"
+
+        outputs:
+          - path: "output/local-smoke-result.yaml"
+
+        gate:
+          ref: gate.dev.local_smoke_gate
+          criteria:
+            - "critical_paths_pass"
+            - "fixed_bugs_verified_locally"
+
+      - id: r4_3_selfcheck_summary
+        name: "自检总结"
+        description: "生成开发自检报告"
+        run: agent.dev.selfcheck_reporter
+        execution:
+          model: prompt_switch
+          timeout: 10m
+
+        dependencies:
+          requires: [r4_2_local_smoke]
+
+        inputs:
+          - unit_test_result: "$r4_1_unit_tests.outputs"
+          - smoke_result: "$r4_2_local_smoke.outputs"
+          - fixes: "$r3_1_code_fix.outputs"
+
+        outputs:
+          - path: "output/dev-selfcheck.yaml"
+
+        contract:
+          schema: "development/contracts/selfcheck/v1/schema.yaml"
+
+  # ========== Stage 5: 再次提测 ==========
+  - id: r5_resubmit
+    name: "再次提测"
+    description: "生成返修提测包，重新提交测试"
+
+    steps:
+      - id: r5_1_retest_manifest
+        name: "生成返修提测包"
+        description: "创建简化的 retest-release-manifest.yaml"
+        run: agent.dev.retest_manifest_generator
+        execution:
+          model: prompt_switch
+          timeout: 15m
+
+        dependencies:
+          requires: [r4_3_selfcheck_summary]
+
+        inputs:
+          - original_manifest: "$inputs.original_manifest"
+          - bugs_fixed: "$r3_1_code_fix.outputs.bugs"
+          - selfcheck: "$r4_3_selfcheck_summary.outputs"
+          - fixes: "$r3_1_code_fix.outputs"
+
+        outputs:
+          - path: "retest-release-manifest.yaml"
+
+        contract:
+          schema: "development/contracts/retest-manifest/v1/schema.yaml"
+          required_fields:
+            - manifest_type: "retest"
+            - original_manifest_id
+            - retest_round
+            - bugs_fixed
+            - fix_commits
+            - risk_areas
+            - selfcheck_summary
+
+      - id: r5_2_resubmit_gate
+        name: "再提测门禁"
+        description: "确认是否满足再提测条件"
+        type: gate_decision
+
+        dependencies:
+          requires: [r5_1_retest_manifest]
+
+        gate:
+          ref: gate.dev.resubmit_gate
+          criteria:
+            - criterion: "所有 P0 Bug 已修复"
+              check: "all_p0_bugs_fixed"
+              required: true
+
+            - criterion: "自检测试通过"
+              check: "selfcheck_passed"
+              required: true
+
+            - criterion: "回归测试已补充"
+              check: "regression_tests_added"
+              required: true
+
+            - criterion: "返修提测包完整"
+              check: "retest_manifest_valid"
+              required: true
+
+          on_pass:
+            action: submit_to_testing
+            notify_channel: testing
+            message: "返修提测包已准备好，请测试团队接收"
+
+          on_fail:
+            action: block_resubmit
+            message: "不满足再提测条件，请继续修复"
+
+      - id: r5_3_handoff_to_testing
+        name: "交接测试团队"
+        description: "正式提交给测试团队，触发新的测试轮次"
+        run: agent.dev.testing_handoff
+        execution:
+          model: prompt_switch
+          timeout: 5m
+
+        dependencies:
+          requires: [r5_2_resubmit_gate]
+
+        inputs:
+          - retest_manifest: "$r5_1_retest_manifest.outputs"
+
+        outputs:
+          - path: "output/handoff-confirmation.yaml"
+
+        trigger_next:
+          workflow: "workflow.test.testing_pipeline"
+          event: "retest_submission"
+          payload:
+            - retest_manifest: "$r5_1_retest_manifest.outputs"
+            - retest_round: "$workflow.retest_count + 1"
+
+# ============================================
+# 循环控制（防失控）
+# ============================================
+loop_control:
+  max_iterations: 3
+
+  on_iteration_fail:
+    - if: "iteration == 1"
+      then:
+        action: "continue"
+        message: "第1次返修失败，允许再次尝试"
+
+    - if: "iteration == 2"
+      then:
+        action: "continue_with_warning"
+        message: "第2次返修失败，建议人工介入"
+        notify: ["tech-lead"]
+
+    - if: "iteration >= 3"
+      then:
+        action: "escalate_and_pause"
+        message: "连续3次返修失败，强制升级人类介入"
+        notify: ["tech-lead", "product-manager", "qa-lead"]
+        require_human_approval: true
+
+# ============================================
+# 退出条件
+# ============================================
+exit_conditions:
+  success:
+    - condition: "resubmit_gate_passed"
+      description: "再提测门禁通过，成功交接测试团队"
+
+    - condition: "all_p0_bugs_fixed"
+      description: "所有 P0 Bug 已修复"
+
+  failure:
+    - condition: "max_iterations_exceeded"
+      description: "超过最大返修次数"
+      action: "require_human_review"
+
+    - condition: "constraint_violation"
+      description: "违反返修流程约束（如引入新需求）"
+      action: "abort_and_escalate"
+
+# ============================================
+# 产物契约
+# ============================================
+outputs_contract:
+  required:
+    - file: "output/dev-fix-plan.yaml"
+      schema: "development/contracts/fix-plan/v1/schema.yaml"
+
+    - file: "output/dev-selfcheck.yaml"
+      schema: "development/contracts/selfcheck/v1/schema.yaml"
+
+    - file: "retest-release-manifest.yaml"
+      schema: "development/contracts/retest-manifest/v1/schema.yaml"
+
+    - files: "output/fix-commits.yaml"
+      description: "修复提交记录"
+
+  optional:
+    - file: "output/impact-analysis.yaml"
+      description: "影响范围分析"
+
+    - files: "tests/regression/*.test.*"
+      description: "新增回归测试"
+
+# ============================================
+# Agent 资源池
+# ============================================
+agent_resources:
+  - id: agent.dev.rejection_receiver
+    spec: "../../agents/rejection-receiver/v1/agent.yaml"
+
+  - id: agent.dev.impact_analyzer
+    spec: "../../agents/impact-analyzer/v1/agent.yaml"
+
+  - id: agent.dev.bug_triager
+    spec: "../../agents/bug-triager/v1/agent.yaml"
+
+  - id: agent.dev.bug_fixer
+    spec: "../../agents/bug-fixer/v1/agent.yaml"
+
+  - id: agent.dev.regression_test_writer
+    spec: "../../agents/regression-test-writer/v1/agent.yaml"
+
+  - id: agent.dev.unit_test_runner
+    spec: "../../agents/unit-test-runner/v1/agent.yaml"
+
+  - id: agent.dev.local_smoke_runner
+    spec: "../../agents/local-smoke-runner/v1/agent.yaml"
+
+  - id: agent.dev.selfcheck_reporter
+    spec: "../../agents/selfcheck-reporter/v1/agent.yaml"
+
+  - id: agent.dev.retest_manifest_generator
+    spec: "../../agents/retest-manifest-generator/v1/agent.yaml"
+
+  - id: agent.dev.testing_handoff
+    spec: "../../agents/testing-handoff/v1/agent.yaml"
+
+# ============================================
+# 门禁资源池
+# ============================================
+gate_resources:
+  - id: gate.dev.fix_plan_gate
+    spec: "../../gates/fix-plan-gate/v1/gate.yaml"
+
+  - id: gate.dev.unit_test_gate
+    spec: "../../gates/unit-test-gate/v1/gate.yaml"
+
+  - id: gate.dev.local_smoke_gate
+    spec: "../../gates/local-smoke-gate/v1/gate.yaml"
+
+  - id: gate.dev.resubmit_gate
+    spec: "../../gates/resubmit-gate/v1/gate.yaml"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "development-workflow-architect"
+  created_at: "2026-01-15"
+  version: "1.0"
+  last_updated: "2026-01-15"
+
+  changelog:
+    - version: "1.0"
+      date: "2026-01-15"
+      changes:
+        - "初始版本 - 完整的返修开发流程"
+        - "包含5个阶段：准备、计划、执行、自检、再提测"
+        - "强约束防止需求蔓延"
+        - "连续失败升级机制"

@@ -1,0 +1,113 @@
+# Figma Parser Skill Specification v1.0
+# Figma 设计解析技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.ui.figma_parser
+name: Figma Parser
+description: >
+  解析 Figma 设计链接，提取页面结构、组件层级和设计 token。
+owner: ui-ai
+tags: [ui, figma, parser]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [figma_url]
+    properties:
+      figma_url:
+        type: string
+        description: "Figma 设计链接"
+        pattern: "^https://figma.com/.*"
+      extract_tokens:
+        type: boolean
+        description: "是否提取设计 token"
+        default: false
+
+  outputs:
+    type: object
+    required: [page_structure, components]
+    properties:
+      page_structure:
+        type: object
+        description: "页面结构信息"
+        properties:
+          id:
+            type: string
+          name:
+            type: string
+          frames:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                type:
+                  type: string
+      components:
+        type: array
+        description: "组件列表"
+        items:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            variants:
+              type: array
+              items:
+                type: string
+      tokens:
+        type: object
+        description: "提取的设计 token（可选）"
+        properties:
+          colors:
+            type: object
+          typography:
+            type: object
+          spacing:
+            type: object
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: http
+  tool: figma.api.get_file
+  timeout_ms: 30000
+  retries: 2
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: reads
+  pii: forbidden
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: parse_figma_url
+      input:
+        figma_url: "https://figma.com/design/abc123/MyDesign"
+      assert:
+        - path: "$.page_structure.id"
+          op: "!="
+          value: null
+        - path: "$.components"
+          op: ">="
+          value: 0

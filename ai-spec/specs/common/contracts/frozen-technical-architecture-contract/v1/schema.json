@@ -1,0 +1,116 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-spec.example.com/contracts/frozen-technical-architecture-contract/v1/schema.json",
+    "title": "Frozen Technical Architecture Contract Schema",
+    "description": "Schema for frozen technical architecture (Output for development)",
+    "type": "object",
+    "required": [
+        "contract_type",
+        "contract_version",
+        "metadata",
+        "architecture_decisions",
+        "risk_management"
+    ],
+    "properties": {
+        "contract_type": {
+            "type": "string",
+            "const": "frozen-technical-architecture"
+        },
+        "contract_version": {
+            "type": "string"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [
+                "contract_id",
+                "status",
+                "is_frozen"
+            ],
+            "properties": {
+                "contract_id": {
+                    "type": "string",
+                    "pattern": "^FTA-\\d{8}-\\d{3}$"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "DRAFT",
+                        "FROZEN"
+                    ]
+                },
+                "is_frozen": {
+                    "type": "boolean",
+                    "const": true
+                }
+            }
+        },
+        "architecture_decisions": {
+            "type": "object",
+            "required": [
+                "tech_stack",
+                "core_components"
+            ],
+            "properties": {
+                "tech_stack": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "layer": {
+                                "type": "string"
+                            },
+                            "technology": {
+                                "type": "string"
+                            },
+                            "reasoning": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "core_components": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "responsibilities": {
+                                "type": "string"
+                            },
+                            "dependencies": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "risk_management": {
+            "type": "object",
+            "properties": {
+                "high_risk_points": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "description": {
+                                "type": "string"
+                            },
+                            "mitigation_plan": {
+                                "type": "string"
+                            },
+                            "degradation_strategy": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

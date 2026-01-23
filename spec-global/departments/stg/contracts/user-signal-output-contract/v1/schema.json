@@ -1,0 +1,366 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-spec.example.com/contracts/user-signal-output-contract/v1/schema.json",
+  "title": "User Signal Output Contract Schema",
+  "description": "Schema for user signal analysis output - user personas, intent analysis, and pain points",
+  "type": "object",
+  "required": ["contract_type", "contract_version", "metadata", "user_personas", "pain_point_signals"],
+  "properties": {
+    "contract_type": {
+      "type": "string",
+      "const": "user-signal-output"
+    },
+    "contract_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["analysis_id", "source_contract", "source_domain", "generated_at", "keyword_count"],
+      "properties": {
+        "analysis_id": {
+          "type": "string",
+          "pattern": "^USO-\\d{8}-\\d{3}$"
+        },
+        "source_contract": {
+          "type": "string"
+        },
+        "source_domain": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "keyword_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "user_personas": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/UserPersona"
+      },
+      "minItems": 1,
+      "maxItems": 5
+    },
+    "intent_analysis": {
+      "$ref": "#/$defs/IntentAnalysis"
+    },
+    "pain_point_signals": {
+      "$ref": "#/$defs/PainPointSignals"
+    },
+    "problem_synthesis": {
+      "$ref": "#/$defs/ProblemSynthesis"
+    },
+    "pending_confirmation": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PendingConfirmation"
+      }
+    },
+    "downstream_handoff": {
+      "$ref": "#/$defs/DownstreamHandoff"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "UserPersona": {
+      "type": "object",
+      "required": ["persona_id", "who", "confidence", "evidence"],
+      "properties": {
+        "persona_id": {
+          "type": "string",
+          "pattern": "^P\\d+$"
+        },
+        "who": {
+          "$ref": "#/$defs/WhoProfile"
+        },
+        "scenario": {
+          "$ref": "#/$defs/ScenarioProfile"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      }
+    },
+    "WhoProfile": {
+      "type": "object",
+      "required": ["primary_label"],
+      "properties": {
+        "primary_label": {
+          "type": "string"
+        },
+        "demographics": {
+          "type": "object",
+          "properties": {
+            "age_range": { "type": "string" },
+            "experience_level": {
+              "type": "string",
+              "enum": ["beginner", "intermediate", "advanced", "expert"]
+            },
+            "tech_savviness": {
+              "type": "string",
+              "enum": ["high", "medium", "low"]
+            }
+          }
+        },
+        "motivations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "frustrations": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "ScenarioProfile": {
+      "type": "object",
+      "properties": {
+        "context": { "type": "string" },
+        "trigger": { "type": "string" },
+        "goal": { "type": "string" },
+        "constraints": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "IntentAnalysis": {
+      "type": "object",
+      "properties": {
+        "intent_distribution": {
+          "type": "object",
+          "properties": {
+            "informational": { "$ref": "#/$defs/IntentDetail" },
+            "tool_seeking": { "$ref": "#/$defs/IntentDetail" },
+            "pre_transaction": { "$ref": "#/$defs/IntentDetail" },
+            "navigational": { "$ref": "#/$defs/IntentDetail" }
+          }
+        },
+        "intent_patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pattern_name": { "type": "string" },
+              "description": { "type": "string" },
+              "keywords": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "user_need": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "IntentDetail": {
+      "type": "object",
+      "properties": {
+        "percentage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "typical_keywords": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "user_mindset": { "type": "string" },
+        "conversion_readiness": {
+          "type": "string",
+          "enum": ["ready", "considering", "exploring", "unaware"]
+        }
+      }
+    },
+    "PainPointSignals": {
+      "type": "object",
+      "required": ["frequency_signals", "urgency_signals", "failure_cost_signals", "overall_pain_intensity"],
+      "properties": {
+        "frequency_signals": {
+          "type": "object",
+          "properties": {
+            "high_volume_keywords": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "repeat_patterns": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "volume_trend": {
+              "type": "string",
+              "enum": ["rising", "stable", "declining", "seasonal"]
+            },
+            "frequency_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "urgency_signals": {
+          "type": "object",
+          "properties": {
+            "urgent_markers": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "time_pressure_indicators": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "urgency_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "failure_cost_signals": {
+          "type": "object",
+          "properties": {
+            "consequence_keywords": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "risk_indicators": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "emotional_markers": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "failure_cost_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "overall_pain_intensity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"]
+        }
+      }
+    },
+    "ProblemSynthesis": {
+      "type": "object",
+      "properties": {
+        "core_problem_statement": { "type": "string" },
+        "problem_tree": {
+          "type": "object",
+          "properties": {
+            "root_problem": { "type": "string" },
+            "sub_problems": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "problem": { "type": "string" },
+                  "evidence": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "frequency": {
+                    "type": "string",
+                    "enum": ["very_high", "high", "medium", "low"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "jobs_to_be_done": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "job_statement": { "type": "string" },
+              "importance": {
+                "type": "string",
+                "enum": ["critical", "important", "nice_to_have"]
+              },
+              "satisfaction_gap": {
+                "type": "string",
+                "enum": ["large", "medium", "small"]
+              }
+            }
+          }
+        },
+        "opportunity_areas": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "PendingConfirmation": {
+      "type": "object",
+      "required": ["id", "assumption", "priority"],
+      "properties": {
+        "id": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["persona_assumption", "intent_inference", "pain_intensity", "market_signal"]
+        },
+        "assumption": { "type": "string" },
+        "validation_method": { "type": "string" },
+        "impact": { "type": "string" },
+        "priority": {
+          "type": "string",
+          "enum": ["critical", "important", "nice_to_have"]
+        }
+      }
+    },
+    "DownstreamHandoff": {
+      "type": "object",
+      "properties": {
+        "for_business_opportunity": {
+          "type": "object",
+          "properties": {
+            "target_user_summary": { "type": "string" },
+            "pain_intensity_summary": { "type": "string" },
+            "demand_validation": { "type": "string" }
+          }
+        },
+        "for_prd_designer": {
+          "type": "object",
+          "properties": {
+            "primary_persona": { "type": "string" },
+            "core_jobs": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "must_solve_problems": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "value_proposition_hints": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "key_insights": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "recommended_next_steps": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

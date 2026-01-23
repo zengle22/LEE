@@ -1,0 +1,268 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-spec.example.com/contracts/opportunity-builder-contract/v1/schema.json",
+  "title": "Opportunity Builder Contract Schema",
+  "description": "Schema for opportunity builder output - business opportunity hypothesis for product team validation",
+  "type": "object",
+  "required": ["contract_type", "contract_version", "metadata", "business_opportunity", "opportunity_handoff"],
+  "properties": {
+    "contract_type": {
+      "type": "string",
+      "const": "opportunity-builder-output"
+    },
+    "contract_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["report_id", "source_contract", "generated_at", "keyword"],
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "pattern": "^OB-\\d{8}-\\d{3}$"
+        },
+        "source_contract": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "keyword": {
+          "type": "string"
+        }
+      }
+    },
+    "business_opportunity": {
+      "$ref": "#/$defs/BusinessOpportunity"
+    },
+    "opportunity_handoff": {
+      "$ref": "#/$defs/OpportunityHandoff"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "BusinessOpportunity": {
+      "type": "object",
+      "required": ["one_liner", "target_user_scenario", "differentiation_hypothesis"],
+      "properties": {
+        "one_liner": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "One-line opportunity definition, max 30 Chinese characters"
+        },
+        "target_user_scenario": {
+          "$ref": "#/$defs/TargetUserScenario"
+        },
+        "why_now": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WhyNow"
+          },
+          "minItems": 1
+        },
+        "differentiation_hypothesis": {
+          "$ref": "#/$defs/DifferentiationHypothesis"
+        },
+        "reasons_not_to_do": {
+          "$ref": "#/$defs/ReasonsNotToDo"
+        },
+        "product_validation_suggestion": {
+          "$ref": "#/$defs/ValidationSuggestion"
+        }
+      }
+    },
+    "TargetUserScenario": {
+      "type": "object",
+      "required": ["user", "scenario"],
+      "properties": {
+        "user": {
+          "type": "string",
+          "description": "User persona in 1-2 sentences"
+        },
+        "scenario": {
+          "type": "object",
+          "required": ["trigger_moment", "current_action", "problem_faced"],
+          "properties": {
+            "trigger_moment": { "type": "string" },
+            "current_action": { "type": "string" },
+            "problem_faced": { "type": "string" }
+          }
+        }
+      }
+    },
+    "WhyNow": {
+      "type": "object",
+      "required": ["argument", "evidence", "category"],
+      "properties": {
+        "argument": { "type": "string" },
+        "evidence": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["tech_maturity", "market_window", "user_behavior", "cost_structure"]
+        }
+      }
+    },
+    "DifferentiationHypothesis": {
+      "type": "object",
+      "required": ["hypothesis", "verification_method", "falsification_signal"],
+      "properties": {
+        "hypothesis": {
+          "type": "string",
+          "description": "Hypothesis statement: 'If we... users will...'"
+        },
+        "verification_method": { "type": "string" },
+        "falsification_signal": { "type": "string" }
+      }
+    },
+    "ReasonsNotToDo": {
+      "type": "object",
+      "properties": {
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "probability": {
+                "type": "string",
+                "enum": ["high", "medium", "low"]
+              },
+              "impact": {
+                "type": "string",
+                "enum": ["high", "medium", "low"]
+              }
+            }
+          }
+        },
+        "uncertainties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["question"],
+            "properties": {
+              "question": { "type": "string" }
+            }
+          }
+        },
+        "alternative_paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["option", "description"],
+            "properties": {
+              "option": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "ValidationSuggestion": {
+      "type": "object",
+      "required": ["target", "method", "success_signal", "failure_signal"],
+      "properties": {
+        "target": { "type": "string" },
+        "method": { "type": "string" },
+        "success_signal": { "type": "string" },
+        "failure_signal": { "type": "string" },
+        "time_cost": { "type": "string" },
+        "resource_cost": { "type": "string" }
+      }
+    },
+    "OpportunityHandoff": {
+      "type": "object",
+      "required": ["what_we_believe", "what_we_dont_know", "what_not_to_build_yet", "suggested_experiments"],
+      "properties": {
+        "what_we_believe": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Belief"
+          }
+        },
+        "what_we_dont_know": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Unknown"
+          }
+        },
+        "what_not_to_build_yet": {
+          "$ref": "#/$defs/NotToBuild"
+        },
+        "suggested_experiments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Experiment"
+          }
+        }
+      }
+    },
+    "Belief": {
+      "type": "object",
+      "required": ["conclusion", "source"],
+      "properties": {
+        "conclusion": { "type": "string" },
+        "source": { "type": "string" }
+      }
+    },
+    "Unknown": {
+      "type": "object",
+      "required": ["question", "priority"],
+      "properties": {
+        "question": { "type": "string" },
+        "priority": {
+          "type": "string",
+          "enum": ["P0", "P1", "P2"]
+        },
+        "impact": { "type": "string" },
+        "suggested_verification": { "type": "string" }
+      }
+    },
+    "NotToBuild": {
+      "type": "object",
+      "properties": {
+        "do_not_build": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["item", "reason"],
+            "properties": {
+              "item": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "defer": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["item", "condition"],
+            "properties": {
+              "item": { "type": "string" },
+              "condition": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "Experiment": {
+      "type": "object",
+      "required": ["name", "type", "purpose", "method", "success_criteria"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["landing_page", "user_interview", "fake_door", "prototype_test", "competitor_analysis", "survey"]
+        },
+        "purpose": { "type": "string" },
+        "method": { "type": "string" },
+        "success_criteria": { "type": "string" },
+        "time_cost": { "type": "string" },
+        "resource_cost": { "type": "string" }
+      }
+    }
+  }
+}

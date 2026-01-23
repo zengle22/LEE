@@ -1,0 +1,354 @@
+# Design Token Generator Skill Specification v1.0
+# Design Token 生成技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.design.design_token_generator
+name: Design Token Generator
+description: >
+  生成符合 W3C DTCG 1.0 标准的 Design Token。
+  支持颜色、排版、间距、圆角、阴影等完整 Token 体系。
+owner: design-ai
+tags: [design-tokens, w3c-dtcg, css-variables, figma-variables]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [brand_primary]
+    properties:
+      brand_primary:
+        type: string
+        description: "品牌主色（HEX）"
+      brand_secondary:
+        type: string
+        description: "品牌辅色（HEX）"
+      dark_mode:
+        type: boolean
+        description: "是否生成深色模式"
+        default: true
+      output_format:
+        type: string
+        description: "输出格式"
+        enum: [json, css, scss, figma_variables]
+        default: json
+
+  outputs:
+    type: object
+    required: [tokens, css_variables, figma_variables]
+    properties:
+      tokens:
+        type: object
+        description: "Token JSON（DTCG 格式）"
+      css_variables:
+        type: string
+        description: "CSS 变量输出"
+      figma_variables:
+        type: object
+        description: "Figma Variables 配置"
+      statistics:
+        type: object
+        properties:
+          total_tokens:
+            type: integer
+          color_tokens:
+            type: integer
+          typography_tokens:
+            type: integer
+          spacing_tokens:
+            type: integer
+
+# ============================================
+# Token 规范（W3C DTCG 1.0）
+# ============================================
+token_specification:
+  # Token 格式
+  format:
+    standard: "W3C Design Tokens Community Group 1.0"
+    structure: |
+      {
+        "$description": "Token 描述",
+        "$type": "Token 类型",
+        "$value": "Token 值"
+      }
+
+    types:
+      - color
+      - dimension
+      - fontFamily
+      - fontWeight
+      - duration
+      - cubicBezier
+      - number
+      - shadow
+      - border
+      - transition
+      - gradient
+      - typography
+
+  # Token 层级
+  hierarchy:
+    primitive:
+      description: "原始值 Token（What）"
+      examples:
+        color:
+          - "blue.50: #EFF6FF"
+          - "blue.500: #3B82F6"
+          - "blue.900: #1E3A8A"
+        spacing:
+          - "1: 4px"
+          - "4: 16px"
+          - "8: 32px"
+        radius:
+          - "sm: 4px"
+          - "md: 8px"
+          - "lg: 12px"
+
+    semantic:
+      description: "语义化 Token（Why）"
+      examples:
+        color:
+          text:
+            - "text.primary: {color.gray.900}"
+            - "text.secondary: {color.gray.600}"
+            - "text.disabled: {color.gray.400}"
+            - "text.inverse: {color.white}"
+          background:
+            - "bg.surface: {color.white}"
+            - "bg.elevated: {color.gray.50}"
+            - "bg.overlay: rgba(0,0,0,0.5)"
+          border:
+            - "border.default: {color.gray.200}"
+            - "border.focus: {color.primary.500}"
+            - "border.error: {color.red.500}"
+          status:
+            - "status.success: {color.green.500}"
+            - "status.warning: {color.amber.500}"
+            - "status.error: {color.red.500}"
+            - "status.info: {color.blue.500}"
+
+    component:
+      description: "组件级 Token（Where）"
+      examples:
+        button:
+          - "button.primary.bg: {color.primary.500}"
+          - "button.primary.bg.hover: {color.primary.600}"
+          - "button.primary.text: {color.white}"
+          - "button.secondary.bg: {color.gray.100}"
+          - "button.secondary.text: {color.gray.900}"
+        input:
+          - "input.bg: {color.white}"
+          - "input.border: {color.gray.300}"
+          - "input.border.focus: {color.primary.500}"
+          - "input.text: {color.gray.900}"
+          - "input.placeholder: {color.gray.400}"
+        card:
+          - "card.bg: {color.white}"
+          - "card.border: {color.gray.200}"
+          - "card.shadow: {shadow.md}"
+          - "card.radius: {radius.lg}"
+
+  # 完整 Token 清单
+  token_categories:
+    color:
+      primitive:
+        gray: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+        primary: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+        secondary: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+        red: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+        orange: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+        amber: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+        yellow: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+        green: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+        blue: [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+      semantic:
+        text: [primary, secondary, tertiary, disabled, inverse, link]
+        background: [surface, elevated, sunken, overlay]
+        border: [default, subtle, strong, focus, error]
+        status: [success, success-bg, warning, warning-bg, error, error-bg, info, info-bg]
+
+    typography:
+      font_family:
+        - base
+        - heading
+        - mono
+      font_size:
+        - xs (12px)
+        - sm (14px)
+        - base (16px)
+        - lg (18px)
+        - xl (20px)
+        - 2xl (24px)
+        - 3xl (30px)
+        - 4xl (36px)
+        - 5xl (48px)
+      font_weight:
+        - regular (400)
+        - medium (500)
+        - semibold (600)
+        - bold (700)
+      line_height:
+        - none (1)
+        - tight (1.25)
+        - snug (1.375)
+        - normal (1.5)
+        - relaxed (1.625)
+        - loose (2)
+      letter_spacing:
+        - tighter (-0.05em)
+        - tight (-0.025em)
+        - normal (0)
+        - wide (0.025em)
+        - wider (0.05em)
+
+    spacing:
+      values:
+        0: 0px
+        0.5: 2px
+        1: 4px
+        1.5: 6px
+        2: 8px
+        2.5: 10px
+        3: 12px
+        3.5: 14px
+        4: 16px
+        5: 20px
+        6: 24px
+        7: 28px
+        8: 32px
+        9: 36px
+        10: 40px
+        11: 44px
+        12: 48px
+        14: 56px
+        16: 64px
+        20: 80px
+        24: 96px
+
+    radius:
+      values:
+        none: 0px
+        sm: 4px
+        default: 6px
+        md: 8px
+        lg: 12px
+        xl: 16px
+        2xl: 24px
+        3xl: 32px
+        full: 9999px
+
+    shadow:
+      values:
+        sm:
+          value: "0 1px 2px 0 rgba(0, 0, 0, 0.05)"
+        default:
+          value: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)"
+        md:
+          value: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)"
+        lg:
+          value: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)"
+        xl:
+          value: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)"
+        2xl:
+          value: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+        inner:
+          value: "inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)"
+
+    motion:
+      duration:
+        fastest: 50ms
+        faster: 100ms
+        fast: 150ms
+        normal: 200ms
+        slow: 300ms
+        slower: 400ms
+        slowest: 500ms
+      easing:
+        linear: "linear"
+        default: "cubic-bezier(0.4, 0, 0.2, 1)"
+        in: "cubic-bezier(0.4, 0, 1, 1)"
+        out: "cubic-bezier(0, 0, 0.2, 1)"
+        in_out: "cubic-bezier(0.4, 0, 0.2, 1)"
+
+# ============================================
+# 输出格式
+# ============================================
+output_formats:
+  json:
+    description: "W3C DTCG JSON 格式"
+    example: |
+      {
+        "color": {
+          "primary": {
+            "500": {
+              "$type": "color",
+              "$value": "#3B82F6"
+            }
+          }
+        }
+      }
+
+  css:
+    description: "CSS 自定义属性"
+    example: |
+      :root {
+        --color-primary-500: #3B82F6;
+        --spacing-4: 16px;
+        --radius-md: 8px;
+      }
+
+  scss:
+    description: "SCSS 变量"
+    example: |
+      $color-primary-500: #3B82F6;
+      $spacing-4: 16px;
+      $radius-md: 8px;
+
+  figma_variables:
+    description: "Figma Variables 格式"
+    collections:
+      - name: "Primitives"
+        modes: ["Default"]
+      - name: "Tokens"
+        modes: ["Light", "Dark"]
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: tool_wrapper
+  tool: token.generator.create
+  timeout_ms: 10000
+  retries: 0
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: none
+  pii: forbidden
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: generate_tokens
+      input:
+        brand_primary: "#3B82F6"
+        dark_mode: true
+        output_format: "json"
+      assert:
+        - path: "$.tokens.color.primary"
+          op: "!="
+          value: null
+        - path: "$.statistics.total_tokens"
+          op: ">="
+          value: 100

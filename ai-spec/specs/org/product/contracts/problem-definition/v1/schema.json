@@ -1,0 +1,269 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-spec.example.com/contracts/problem-definition/v1/schema.json",
+    "title": "Problem Definition Contract",
+    "description": "问题空间定义契约 - 将价值目标翻译为可解决的问题集合",
+    "type": "object",
+    "required": [
+        "contract_type",
+        "contract_version",
+        "metadata",
+        "core_problems",
+        "user_journeys",
+        "non_goals"
+    ],
+    "properties": {
+        "contract_type": {
+            "type": "string",
+            "const": "problem-definition"
+        },
+        "contract_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "default": "1.0.0"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [
+                "generated_at",
+                "source_document"
+            ],
+            "properties": {
+                "contract_id": {
+                    "type": "string",
+                    "pattern": "^PD-\\d{8}-\\d{3}$"
+                },
+                "source_document": {
+                    "type": "string",
+                    "description": "来源的 Product Value Freeze 文档路径"
+                },
+                "generated_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "pending_confirmation",
+                        "confirmed",
+                        "revision_required"
+                    ]
+                }
+            }
+        },
+        "value_goal_summary": {
+            "type": "object",
+            "description": "从 Value Freeze 提取的关键信息",
+            "properties": {
+                "value_statement": {
+                    "type": "string"
+                },
+                "north_star_metric": {
+                    "type": "string"
+                },
+                "strategic_constraints": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "core_problems": {
+            "type": "array",
+            "description": "核心问题列表",
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "priority",
+                    "description",
+                    "value_link"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "pattern": "^P[1-3]-\\d{3}$"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": [
+                            "P1",
+                            "P2",
+                            "P3"
+                        ]
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "affected_users": {
+                        "type": "string"
+                    },
+                    "impact_level": {
+                        "type": "string",
+                        "enum": [
+                            "high",
+                            "medium",
+                            "low"
+                        ]
+                    },
+                    "root_cause": {
+                        "type": "string"
+                    },
+                    "value_link": {
+                        "type": "string",
+                        "description": "如何关联到价值目标"
+                    }
+                }
+            }
+        },
+        "user_journeys": {
+            "type": "array",
+            "description": "用户旅程 Before/After 对比",
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "before",
+                    "after"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "pattern": "^UJ-\\d{3}$"
+                    },
+                    "scenario": {
+                        "type": "string"
+                    },
+                    "before": {
+                        "type": "object",
+                        "properties": {
+                            "steps": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "pain_points": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "after": {
+                        "type": "object",
+                        "properties": {
+                            "steps": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "improvements": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "non_goals": {
+            "type": "array",
+            "description": "明确不解决的问题",
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "description",
+                    "reason"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "pattern": "^NG-\\d{3}$"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "reason": {
+                        "type": "string"
+                    },
+                    "future_timing": {
+                        "type": "string",
+                        "description": "未来可能解决的时机"
+                    }
+                }
+            }
+        },
+        "confirmation_status": {
+            "type": "object",
+            "properties": {
+                "core_problems": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": [
+                                "pending",
+                                "confirmed",
+                                "revision_required"
+                            ]
+                        },
+                        "confirmed_by": {
+                            "type": "string"
+                        },
+                        "confirmed_at": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                },
+                "user_journeys": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": [
+                                "pending",
+                                "confirmed",
+                                "revision_required"
+                            ]
+                        },
+                        "confirmed_by": {
+                            "type": "string"
+                        },
+                        "confirmed_at": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                },
+                "non_goals": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": [
+                                "pending",
+                                "confirmed",
+                                "revision_required"
+                            ]
+                        },
+                        "confirmed_by": {
+                            "type": "string"
+                        },
+                        "confirmed_at": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

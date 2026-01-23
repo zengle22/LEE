@@ -1,0 +1,252 @@
+# LEE Framework Constitution
+# 框架宪法 - 核心原则、角色和治理规则
+
+schema_version: 1.0.0
+version: 1.0.0
+last_updated: 2025-01-23
+
+# ============================================
+# 目标与非目标
+# ============================================
+constitution:
+  goals:
+    - 提升工程与训练决策质量
+    - 降低重复劳动
+    - 实现可复现的 AI 工作流
+    - 建立清晰的规范和协议
+
+  non_goals:
+    - 直接执行任何未经过人类确认的高风险操作
+    - 替代人类决策者的核心判断
+    - 隐藏系统决策过程
+
+# ============================================
+# 核心原则
+# ============================================
+principles:
+  - safety_first: "安全优先 - 所有操作必须考虑安全边界"
+  - explainability: "可解释优先 - 系统行为必须可追溯和解释"
+  - reproducibility: "可复现优先 - 相同输入应产生相同输出"
+  - honesty: "不确定时坦白不确定 - 不产生幻觉或假信息"
+  - yaml_truth: "YAML 为单一事实源，MD 仅作补充，冲突时以 YAML 为准"
+
+# ============================================
+# 系统角色
+# ============================================
+roles:
+  - name: architect
+    scope: [system_design, workflow_design]
+    input_required: [requirements, constraints]
+    output: [architecture_doc, task_breakdown]
+
+  - name: code_writer
+    scope: [implementation, refactor]
+    input_required: [architecture_doc, task_detail]
+    output: [source_code, unit_tests]
+
+  - name: product_manager
+    scope: [requirement_analysis, feature_planning]
+    input_required: [user_feedback, business_goals]
+    output: [prd, feature_spec]
+
+  - name: qa_engineer
+    scope: [testing, quality_assurance]
+    input_required: [implementation, acceptance_criteria]
+    output: [test_report, bug_report]
+
+# ============================================
+# 工作流模板
+# ============================================
+workflows:
+  software_dev:
+    name: "标准软件开发流程"
+    stages:
+      - order: 1
+        role: product_manager
+        name: requirement_analysis
+        description: "需求分析和产品定义"
+
+      - order: 2
+        role: architect
+        name: design_solution
+        description: "技术方案设计"
+
+      - order: 3
+        role: code_writer
+        name: implement
+        description: "代码实现"
+
+      - order: 4
+        role: qa_engineer
+        name: test_and_verify
+        description: "测试和验证"
+
+      - order: 5
+        role: architect
+        name: review_and_signoff
+        description: "审查和验收"
+
+# ============================================
+# 质量标准
+# ============================================
+quality:
+  code:
+    must:
+      - compile_without_error
+      - pass_unit_tests
+      - follow_lint_rules
+      - have_documentation
+
+    should:
+      - follow_design_patterns
+      - handle_errors_gracefully
+      - be_maintainable
+
+  doc:
+    must:
+      - have_structure
+      - state_assumptions
+      - provide_examples
+
+    should:
+      - be_up_to_date
+      - be_clear_and_concise
+
+  workflow:
+    must:
+      - be_reproducible
+      - have_clear_inputs_outputs
+      - handle_failures_gracefully
+
+# ============================================
+# 治理规则
+# ============================================
+governance:
+  # 需要日志的操作
+  log_required_for:
+    - high_risk_operations
+    - state_changes
+    - external_api_calls
+    - human_interventions
+
+  # 升级规则
+  escalation_rules:
+    - condition: "quality_score < 3 for 2 consecutive runs"
+      action: "escalate_to_human"
+      severity: "high"
+
+    - condition: "unexpected_error_occurred"
+      action: "pause_and_notify"
+      severity: "medium"
+
+    - condition: "human_approval_required"
+      action: "wait_for_human_input"
+      severity: "low"
+
+  # 决策权限
+  decision_authority:
+    low_risk:
+      - "系统可以自动决策"
+      - "例如：代码格式化、文档生成"
+
+    medium_risk:
+      - "系统建议，人类确认"
+      - "例如：重构建议、测试生成"
+
+    high_risk:
+      - "必须由人类决策"
+      - "例如：架构变更、删除数据"
+
+# ============================================
+# 部门组织
+# ============================================
+organization:
+  departments:
+    dev:
+      name: "开发部门"
+      responsibilities:
+        - "技术架构设计"
+        - "代码实现"
+        - "技术文档"
+
+    prd:
+      name: "产品部门"
+      responsibilities:
+        - "需求分析"
+        - "PRD 编写"
+        - "产品规划"
+
+    qa:
+      name: "质量保证部门"
+      responsibilities:
+        - "测试计划"
+        - "质量验证"
+        - "缺陷追踪"
+
+    ui:
+      name: "UI/UX 设计部门"
+      responsibilities:
+        - "用户界面设计"
+        - "交互设计"
+        - "设计系统维护"
+
+    stg:
+      name: "策略部门"
+      responsibilities:
+        - "市场分析"
+        - "商业洞察"
+        - "竞品分析"
+
+    office:
+      name: "办公室"
+      responsibilities:
+        - "审批流程"
+        - "项目管理"
+        - "协调沟通"
+
+    ops:
+      name: "运营部门"
+      responsibilities:
+        - "系统运维"
+        - "部署管理"
+        - "监控告警"
+
+# ============================================
+# 跨部门协作
+# ============================================
+cross_department:
+  interfaces:
+    - name: "prd_to_dev"
+      from: "prd"
+      to: "dev"
+      protocol: "frozen_prd_contract"
+
+    - name: "dev_to_qa"
+      from: "dev"
+      to: "qa"
+      protocol: "test_round_contract"
+
+    - name: "ui_to_dev"
+      from: "ui"
+      to: "dev"
+      protocol: "ui_contract"
+
+  workflows:
+    - name: "product_pipeline"
+      description: "从需求到发布的完整流程"
+      participants: [prd, dev, qa, ui]
+
+    - name: "ui_design_pipeline"
+      description: "UI 设计流程"
+      participants: [prd, ui, dev]
+
+# ============================================
+# 版本控制
+# ============================================
+version_control:
+  spec_format: "yaml"
+  versioning_scheme: "semantic"
+  backward_compatibility:
+    - "Minor 版本更新保持向后兼容"
+    - "Major 版本更新可能包含破坏性变更"
+    - "所有变更必须在 CHANGELOG 中记录"

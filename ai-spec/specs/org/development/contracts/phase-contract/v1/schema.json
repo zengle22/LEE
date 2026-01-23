@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "phase-contract/v1/schema.json",
+  "title": "Phase Contract",
+  "description": "Phase 级研发契约 - 定义 OpenSpec 子流程与主流程的边界协议",
+  "type": "object",
+  "required": [
+    "phase_id",
+    "phase_name",
+    "owner",
+    "status",
+    "inputs",
+    "outputs",
+    "quality_gates"
+  ],
+  "properties": {
+    "phase_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Phase 唯一标识符，kebab-case",
+      "examples": ["auth", "payment-flow", "user-profile"]
+    },
+    "phase_name": {
+      "type": "string",
+      "description": "Phase 人类可读名称"
+    },
+    "description": {
+      "type": "string",
+      "description": "Phase 目标和范围描述"
+    },
+    "owner": {
+      "type": "string",
+      "description": "Phase 负责人"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["planning", "in_progress", "review", "completed", "blocked"],
+      "description": "Phase 当前状态"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["P0", "P1", "P2", "P3"],
+      "default": "P1",
+      "description": "Phase 优先级"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "inputs": {
+      "type": "object",
+      "description": "Phase 输入源声明",
+      "required": ["requirement_source"],
+      "properties": {
+        "requirement_source": {
+          "type": "string",
+          "description": "需求来源文件路径 (相对于项目根目录)"
+        },
+        "ui_source": {
+          "type": "string",
+          "description": "UI 设计源文件路径"
+        },
+        "architecture_source": {
+          "type": "string",
+          "description": "技术架构源文件路径"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["phase_id", "type"],
+            "properties": {
+              "phase_id": {
+                "type": "string",
+                "description": "依赖的 Phase ID"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["hard", "soft"],
+                "description": "依赖类型: hard=阻塞, soft=可并行"
+              },
+              "interface": {
+                "type": "string",
+                "description": "依赖接口描述"
+              }
+            }
+          },
+          "description": "Phase 间依赖声明"
+        },
+        "assumptions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Phase 假设列表"
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "description": "Phase 输出契约声明",
+      "required": ["deliverables"],
+      "properties": {
+        "deliverables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "path"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["api", "component", "service", "module", "config", "doc"],
+                "description": "交付物类型"
+              },
+              "path": {
+                "type": "string",
+                "description": "交付物路径"
+              },
+              "contract": {
+                "type": "string",
+                "description": "交付物契约文件路径"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "type"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "接口名称"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["rest_api", "graphql", "grpc", "event", "sdk"],
+                "description": "接口类型"
+              },
+              "spec_path": {
+                "type": "string",
+                "description": "接口规范文件路径"
+              }
+            }
+          },
+          "description": "对外暴露的接口"
+        },
+        "tests": {
+          "type": "object",
+          "properties": {
+            "unit_coverage_threshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "default": 80,
+              "description": "单元测试覆盖率阈值 (%)"
+            },
+            "integration_tests_required": {
+              "type": "boolean",
+              "default": true
+            },
+            "test_report_path": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "quality_gates": {
+      "type": "object",
+      "description": "Phase 内质量门禁",
+      "properties": {
+        "requirement_calibration": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean", "default": true },
+            "criteria": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "test_contract": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean", "default": true },
+            "min_scenarios": { "type": "integer", "default": 3 }
+          }
+        },
+        "unit_test": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean", "default": true },
+            "coverage_threshold": { "type": "number", "default": 80 }
+          }
+        },
+        "code_review": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean", "default": true },
+            "min_reviewers": { "type": "integer", "default": 1 }
+          }
+        },
+        "retrospective": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean", "default": true }
+          }
+        }
+      }
+    },
+    "openspec": {
+      "type": "object",
+      "description": "OpenSpec 子流程配置",
+      "properties": {
+        "workspace_path": {
+          "type": "string",
+          "default": "./openspec",
+          "description": "OpenSpec 工作空间相对路径"
+        },
+        "auto_init": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否自动初始化 OpenSpec"
+        },
+        "archive_on_complete": {
+          "type": "boolean",
+          "default": true,
+          "description": "完成后是否归档 OpenSpec"
+        }
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "description": "排期信息 (由 PM 填写)",
+      "properties": {
+        "planned_start": {
+          "type": "string",
+          "format": "date"
+        },
+        "planned_end": {
+          "type": "string",
+          "format": "date"
+        },
+        "actual_start": {
+          "type": "string",
+          "format": "date"
+        },
+        "actual_end": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "handover": {
+      "type": "object",
+      "description": "Phase 交接信息",
+      "properties": {
+        "ready_for_integration": {
+          "type": "boolean",
+          "default": false
+        },
+        "integration_notes": {
+          "type": "string"
+        },
+        "known_issues": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "verified_by": {
+          "type": "string"
+        },
+        "verified_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

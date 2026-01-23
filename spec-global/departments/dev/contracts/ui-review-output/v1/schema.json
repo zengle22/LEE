@@ -1,0 +1,289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/ui-review-output/v1",
+  "title": "UI Review Output",
+  "description": "UI Implementation Reviewer Agent 的输出契约",
+  "type": "object",
+  "required": ["review_id", "target", "timestamp", "verdict", "scores", "issues"],
+  "properties": {
+    "review_id": {
+      "type": "string",
+      "description": "审查ID"
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "description": "审查目标"
+    },
+    "design_reference": {
+      "type": "string",
+      "description": "设计稿链接"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "审查时间"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["PASS", "NEEDS_FIX", "FAIL"],
+      "description": "总体判定"
+    },
+    "scores": {
+      "type": "object",
+      "properties": {
+        "fidelity": {
+          "type": "object",
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "status": {
+              "type": "string",
+              "enum": ["pass", "warn", "fail"]
+            }
+          },
+          "description": "设计还原度评分 (%)"
+        },
+        "token_usage": {
+          "type": "object",
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "status": {
+              "type": "string",
+              "enum": ["pass", "warn", "fail"]
+            }
+          },
+          "description": "Token 使用率 (%)"
+        },
+        "cross_platform": {
+          "type": "object",
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "status": {
+              "type": "string",
+              "enum": ["pass", "warn", "fail"]
+            }
+          },
+          "description": "跨端适配评分 (1-10)"
+        },
+        "accessibility": {
+          "type": "object",
+          "properties": {
+            "level": {
+              "type": "string",
+              "enum": ["A", "AA", "AAA", "FAIL"]
+            },
+            "status": {
+              "type": "string",
+              "enum": ["pass", "warn", "fail"]
+            }
+          },
+          "description": "可访问性级别"
+        },
+        "usability": {
+          "type": "object",
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "status": {
+              "type": "string",
+              "enum": ["pass", "warn", "fail"]
+            }
+          },
+          "description": "可用性评分 (1-10)"
+        }
+      },
+      "description": "各维度评分"
+    },
+    "issues": {
+      "type": "object",
+      "properties": {
+        "blockers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UIIssue"
+          },
+          "description": "阻塞项（必须修复）"
+        },
+        "major": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UIIssue"
+          },
+          "description": "重要项（应当修复）"
+        },
+        "minor": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UIIssue"
+          },
+          "description": "次要项（建议修复）"
+        }
+      },
+      "description": "问题清单"
+    },
+    "platform_details": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["platform"],
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": ["wechat-miniprogram", "ios", "android", "h5"]
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "status"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["pass", "fail"]
+                },
+                "notes": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "description": "各平台检查详情"
+    },
+    "accessibility_details": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["criterion", "level", "status"],
+        "properties": {
+          "criterion": {
+            "type": "string",
+            "description": "检查项 (如 color_contrast)"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["A", "AA", "AAA"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pass", "fail"]
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "可访问性检查详情"
+    },
+    "design_deviations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["element", "design_value", "implementation_value"],
+        "properties": {
+          "element": {
+            "type": "string",
+            "description": "偏差元素"
+          },
+          "property": {
+            "type": "string",
+            "description": "属性 (color, spacing, font-size)"
+          },
+          "design_value": {
+            "type": "string",
+            "description": "设计值"
+          },
+          "implementation_value": {
+            "type": "string",
+            "description": "实现值"
+          },
+          "deviation": {
+            "type": "string",
+            "description": "偏差程度"
+          }
+        }
+      },
+      "description": "设计偏差列表"
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "改进建议"
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "total_issues": {
+          "type": "integer"
+        },
+        "blockers_count": {
+          "type": "integer"
+        },
+        "major_count": {
+          "type": "integer"
+        },
+        "minor_count": {
+          "type": "integer"
+        }
+      },
+      "description": "问题统计摘要"
+    }
+  },
+  "$defs": {
+    "UIIssue": {
+      "type": "object",
+      "required": ["dimension", "description", "location"],
+      "properties": {
+        "dimension": {
+          "type": "string",
+          "enum": ["fidelity", "design_system", "cross_platform", "accessibility", "usability"],
+          "description": "问题维度"
+        },
+        "description": {
+          "type": "string",
+          "description": "问题描述"
+        },
+        "location": {
+          "type": "string",
+          "description": "问题位置"
+        },
+        "fix_suggestion": {
+          "type": "string",
+          "description": "修复建议"
+        },
+        "screenshot": {
+          "type": "string",
+          "description": "截图路径"
+        }
+      }
+    }
+  }
+}
