@@ -49,29 +49,27 @@ import sys
 import argparse
 import yaml
 import json
+import asyncio
 from pathlib import Path
 from datetime import datetime
 
 # 添加父目录到路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from core.state_machine import StateMachine, StepState, RunState
-from core.tracing_integration import TracedStateMachine
-from core.trace import TraceLog, SpanType, SpanStatus
-from core.event_log import EventLog, EventType
-from core.token_manager import TokenManager, ToolGuard
-from core.workflow_parser import WorkflowParser
-
-# Agent 自动调度系统
-from core.agent_context import AgentContextBuilder
-from core.agent_injector import InjectorRegistry
-
-# Workflow Generator (v1.6)
-from core.workflow_generator import (
+from .state_machine import StateMachine, StepState, RunState
+from .tracing_integration import TracedStateMachine
+from .trace import TraceLog, SpanType, SpanStatus
+from .event_log import EventLog, EventType
+from .token_manager import TokenManager, ToolGuard
+from .workflow_parser import WorkflowParser
+from .agent_context import AgentContextBuilder
+from .agent_injector import InjectorRegistry
+from .workflow_generator import (
     WorkflowGenerator,
     PhaseConfig,
     validate_workflow_against_template,
 )
+from .engine_commands import cmd_run_engine as cmd_run_engine_async
 
 # ANSI 颜色
 RED = "\033[91m"
@@ -1867,6 +1865,11 @@ def cmd_loop_back(args):
     return 0
 
 
+def cmd_run_engine(args):
+    """使用统一 Engine 接口执行步骤（同步包装器）"""
+    return asyncio.run(cmd_run_engine_async(args))
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Workflow Orchestrator - 通用 AI 工作流编排器",
@@ -2013,6 +2016,15 @@ def main():
     p_validate_project.add_argument("project_dir", help="Project directory (or phase directory)")
 
     # ============================================
+    # 统一 Engine 接口命令 (新推荐)
+    # ============================================
+    # run-engine (使用统一 Engine 接口执行步骤)
+    p_run_engine = subparsers.add_parser("run-engine",
+                                             help="Execute step with unified Engine interface (new recommended way)")
+    p_run_engine.add_argument("project_dir", help="Project directory")
+    p_run_engine.add_argument("step_id", nargs="?", help="Step ID (optional, auto-select if not provided)")
+
+    # ============================================
     # 测试流程扩展命令
     # ============================================
 
@@ -2078,6 +2090,8 @@ def main():
         "detailed-log": cmd_detailed_log,
         "context": cmd_context,
         "validate-project": cmd_validate_project,
+        # 统一 Engine 接口命令（新推荐）
+        "run-engine": cmd_run_engine,
         # 测试流程扩展命令
         "loop-start": cmd_loop_start,
         "loop-complete": cmd_loop_complete,

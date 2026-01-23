@@ -11,8 +11,7 @@ from datetime import datetime
 
 from .agent_resolver import AgentResolver, AgentSpecNotFound
 from .agent_loader import AgentLoader, AgentSpec, AgentSpecInvalid
-from .agent_injector import InjectorRegistry, InjectionResult
-from .agent_injector.base import AgentContext
+from .agent_injector import InjectorRegistry, InjectionResult, AgentContext
 
 
 class AgentContextBuilder:

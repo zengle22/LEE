@@ -1,9 +1,8 @@
 """
 Allow running orchestrator as a module:
-  python -m orchestrator <command> [args]
+  python -m flowcore.orchestrator <command> [args]
 """
 
-from .cli import main
-
 if __name__ == "__main__":
+    from flowcore.orchestrator.cli import main
     main()
