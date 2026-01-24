@@ -70,6 +70,56 @@ gate_approval(
 )
 ```
 
+### 3. Gate Review Tool (`gate-review.json`) ⭐ NEW
+
+**Purpose**: Enhanced gate review with upstream analysis summary and decision recommendations
+
+**Actions**:
+- `list` - List all pending gates with summary
+- `show` - Show gate details with upstream analysis summary
+- `decide` - Submit gate decision with checklist support
+- `report` - Generate comprehensive decision report
+
+**Usage Examples**:
+```python
+# List pending gates
+gate_review(action="list", project_dir=".")
+
+# Show gate details with upstream analysis
+gate_review(action="show", gate_id="freeze_market_signals", project_dir=".")
+
+# Approve with checklist
+gate_review(
+    action="decide",
+    gate_id="freeze_market_signals",
+    decision="approve",
+    comment="Analysis consistent, confidence threshold met",
+    checklist=[
+        {"item": "Consistency", "ok": True, "note": "No contradictions"},
+        {"item": "Confidence", "ok": True, "note": ">70%"},
+        {"item": "Verifiability", "ok": True, "note": "Testable"}
+    ],
+    project_dir="."
+)
+
+# Generate full report
+gate_review(action="report", project_dir=".")
+```
+
+## Tools vs Slash Commands
+
+**Important**: This directory contains **Function Tools** (JSON), not Slash Commands.
+
+- **Function Tools** (`.claude/tools/*.json`): AI can call these automatically
+- **Slash Commands** (`.claude/commands/*.md`): User types these directly
+
+See `../commands/README.md` for slash command documentation.
+
+### Available Slash Commands
+- `/gate-review` - Review and approve gates (uses `gate_review` tool)
+- `/gate-approval` - Gate approval tools (uses `gate_approval` tool)
+- `/pm-workflow` - PM workflow management (uses `pm_workflow` tool)
+
 ## Implementation
 
 These tools are implemented in `flowcore/api.py`:

@@ -1,0 +1,88 @@
+{
+  "name": "gate_review",
+  "description": "Gate Review - List pending gates, show details with upstream analysis, and submit decisions. Usage: /gate-review [gate_id] [--approve|--reject|--revise] [--comment TEXT]",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["list", "show", "decide"],
+        "description": "Action to perform: list (all pending gates), show (specific gate details), decide (submit decision)"
+      },
+      "gate_id": {
+        "type": "string",
+        "description": "Gate ID (required for show and decide actions)"
+      },
+      "decision": {
+        "type": "string",
+        "enum": ["approve", "reject", "revise"],
+        "description": "Decision option (required for decide action)"
+      },
+      "comment": {
+        "type": "string",
+        "description": "Decision comment explaining the reasoning"
+      },
+      "checklist": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "item": {
+              "type": "string",
+              "description": "Checklist item name"
+            },
+            "ok": {
+              "type": "boolean",
+              "description": "Whether the item passes the check"
+            },
+            "note": {
+              "type": "string",
+              "description": "Optional note for the checklist item"
+            }
+          }
+        },
+        "description": "Approval checklist results"
+      },
+      "decided_by": {
+        "type": "string",
+        "description": "Name of the person making the decision (default: 'user')"
+      },
+      "project_dir": {
+        "type": "string",
+        "description": "Project directory path (default: current directory)"
+      }
+    },
+    "required": ["action"]
+  },
+  "handler": "flowcore.api:gate_review_handler",
+  "examples": [
+    {
+      "action": "list",
+      "description": "List all gates pending approval"
+    },
+    {
+      "action": "show",
+      "gate_id": "freeze_market_signals",
+      "description": "Show gate details with checklist and upstream analysis summary"
+    },
+    {
+      "action": "decide",
+      "gate_id": "freeze_market_signals",
+      "decision": "approve",
+      "comment": "Analysis consistent, confidence threshold met",
+      "checklist": [
+        {"item": "Consistency", "ok": true, "note": "No contradictions"},
+        {"item": "Confidence", "ok": true, "note": ">70%"},
+        {"item": "Verifiability", "ok": true, "note": "Testable hypotheses"}
+      ],
+      "description": "Approve gate with checklist"
+    },
+    {
+      "action": "decide",
+      "gate_id": "freeze_market_signals",
+      "decision": "revise",
+      "comment": "Need more user research data",
+      "description": "Request revision"
+    }
+  ]
+}
