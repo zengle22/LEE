@@ -175,7 +175,7 @@ async def _execute_step_with_engine(
     agent_spec = _build_agent_spec(project_dir, agent_ref, step_data)
 
     # 3. 构建执行上下文
-    context = _build_execution_context(step_id, step_data, workflow, state)
+    context = _build_execution_context(step_id, step_data, workflow, state, project_dir)
 
     # 4. 创建执行请求
     request = StepExecutionRequest(
@@ -256,14 +256,32 @@ def _build_agent_spec(project_dir: str, agent_ref: str, step_data: dict) -> dict
         }
     else:
         # Agent 步骤 - 使用 Agent 规范
-        # 尝试从 ai-spec/agents/ 加载（相对于项目目录）
         agent_id = agent_ref.replace("agent:", "") if agent_ref.startswith("agent:") else agent_ref
-        spec_path = Path(project_dir) / "ai-spec" / "agents" / agent_id / "agent.yaml"
-        if spec_path.exists():
-            import yaml
-            with open(spec_path) as f:
-                spec = yaml.safe_load(f)
-                return spec
+
+        # 获取项目根目录（向上查找到包含 spec-global 的目录）
+        project_path = Path(project_dir).resolve()
+        while project_path.name != "" and not (project_path / "spec-global").exists():
+            parent = project_path.parent
+            if parent == project_path:
+                break
+            project_path = parent
+
+        # 尝试多个路径加载 agent spec
+        spec_paths = [
+            project_path / "ai-spec" / "agents" / agent_id / "agent.yaml",  # 旧路径
+            project_path / "spec-global" / "departments" / "stg" / "agents" / agent_id / "v1" / "agent.yaml",  # 新路径
+            project_path / "spec-global" / "departments" / "prd" / "agents" / agent_id / "v1" / "agent.yaml",
+            project_path / "spec-global" / "departments" / "dev" / "agents" / agent_id / "v1" / "agent.yaml",
+            project_path / "spec-global" / "departments" / "qa" / "agents" / agent_id / "v1" / "agent.yaml",
+            project_path / "spec-global" / "departments" / "ui" / "agents" / agent_id / "v1" / "agent.yaml",
+        ]
+
+        for spec_path in spec_paths:
+            if spec_path.exists():
+                import yaml
+                with open(spec_path) as f:
+                    spec = yaml.safe_load(f)
+                    return spec
 
         # 如果没有找到 spec 文件，从 step_data 构建
         engine_config = step_data.get("engine", {"type": "llm"})
@@ -309,11 +327,29 @@ def _migrate_skill_spec(spec: dict) -> dict:
     return spec
 
 
+def _get_step_by_id(step_id: str, workflow: dict) -> Optional[dict]:
+    """
+    Get step definition by ID from workflow
+
+    Args:
+        step_id: Step ID
+        workflow: Workflow definition
+
+    Returns:
+        Step definition dict or None if not found
+    """
+    for step in workflow.get("steps", []):
+        if step.get("id") == step_id:
+            return step
+    return None
+
+
 def _build_execution_context(
     step_id: str,
     step_data: dict,
     workflow: dict,
-    state: dict
+    state: dict,
+    project_dir: str = "."
 ) -> dict:
     """
     构建执行上下文
@@ -323,10 +359,15 @@ def _build_execution_context(
         step_data: 步骤定义
         workflow: 工作流定义
         state: 状态
+        project_dir: 项目目录路径
 
     Returns:
         执行上下文
     """
+    import yaml
+
+    project_path = Path(project_dir).resolve()
+
     # 构建输入产物
     inputs = []
 
@@ -336,12 +377,106 @@ def _build_execution_context(
         dep_state = state.get("steps", {}).get(dep_id, {})
         dep_outputs = dep_state.get("outputs", [])
 
-        for out_path in dep_outputs:
-            inputs.append({
-                "id": dep_id,
-                "path": out_path,
-                "summary": f"Output from {dep_id}"
-            })
+        # Check if this dependency is a human gate
+        dep_step = _get_step_by_id(dep_id, workflow)
+        dep_kind = dep_step.get("kind", "") if dep_step else ""
+        is_human_gate = dep_kind == "human_gate"
+
+        # For human gates, read from gate file and its dependencies
+        if is_human_gate:
+            # Read the gate file
+            gate_file = project_path / ".workflow" / "gates" / f"{dep_id}.yaml"
+            if gate_file.exists():
+                with open(gate_file, 'r', encoding='utf-8') as f:
+                    gate_data = yaml.safe_load(f)
+
+                # Build gate summary
+                gate_summary = f"# Gate: {gate_data.get('step_name', dep_id)}\n\n"
+                gate_summary += f"**Status**: {gate_data.get('status', 'unknown')}\n"
+                if gate_data.get('comment'):
+                    gate_summary += f"**Comment**: {gate_data['comment']}\n"
+                if gate_data.get('checklist'):
+                    gate_summary += "\n**Checklist**:\n"
+                    for item in gate_data['checklist']:
+                        status = "✓" if item.get('ok') else "✗"
+                        gate_summary += f"  {status} {item.get('item')}: {item.get('note', '')}\n"
+
+                # Read the freeze contract if it exists
+                freeze_contract_path = project_path / "contracts" / dep_id.replace('freeze_', '') / "v1" / "freeze.yaml"
+                freeze_content = ""
+                if freeze_contract_path.exists():
+                    with open(freeze_contract_path, 'r', encoding='utf-8') as f:
+                        freeze_content = f.read()
+                    gate_summary += f"\n## Freeze Contract\n\n{freeze_content}\n"
+                else:
+                    # If no freeze contract, read all upstream analysis files
+                    gate_summary += "\n## Upstream Analysis\n\n"
+                    gate_deps = gate_data.get('depends_on', [])
+                    for gate_dep_id in gate_deps:
+                        dep_file = project_path / ".workflow" / "workspace" / gate_dep_id / "response.txt"
+                        if dep_file.exists():
+                            with open(dep_file, 'r', encoding='utf-8') as f:
+                                dep_content = f.read()
+                                # Truncate if too long
+                                if len(dep_content) > 5000:
+                                    dep_content = dep_content[:5000] + "\n\n...[truncated]"
+                                gate_summary += f"\n### {gate_dep_id}\n\n```\n{dep_content}\n```\n\n"
+
+                inputs.append({
+                    "id": dep_id,
+                    "path": str(gate_file.relative_to(project_path)),
+                    "summary": f"Gate approval: {gate_data.get('step_name', dep_id)}",
+                    "content": gate_summary
+                })
+            else:
+                # Gate file not found, add warning
+                import sys
+                print(f"[WARNING] Gate file not found for '{dep_id}': {gate_file}", file=sys.stderr)
+                inputs.append({
+                    "id": dep_id,
+                    "path": None,
+                    "summary": f"Gate file not found: {dep_id}",
+                    "content": f"[Gate file not found for {dep_id}]"
+                })
+        else:
+            # Regular step - read from workspace outputs
+            for out_path in dep_outputs:
+                # 读取文件内容
+                content = ""
+                full_path = project_path / out_path
+                if full_path.exists():
+                    try:
+                        with open(full_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+
+                        # Warn if file is empty
+                        if not content or len(content.strip()) == 0:
+                            import sys
+                            print(
+                                f"[WARNING] Empty file read from upstream step '{dep_id}': {out_path}",
+                                file=sys.stderr
+                            )
+                            print(
+                                f"[WARNING] This may indicate the previous step failed or produced no output.",
+                                file=sys.stderr
+                            )
+                            content = f"[Empty file from {dep_id}. File path: {out_path}]"
+
+                    except Exception as e:
+                        content = f"[Error reading file: {e}]"
+                        import sys
+                        print(f"[ERROR] Failed to read file {out_path}: {e}", file=sys.stderr)
+                else:
+                    content = "[File not found]"
+                    import sys
+                    print(f"[ERROR] File not found: {out_path}", file=sys.stderr)
+
+                inputs.append({
+                    "id": dep_id,
+                    "path": out_path,
+                    "summary": f"Output from {dep_id}",
+                    "content": content  # 添加文件内容
+                })
 
     # 构建契约
     contracts = {}
