@@ -212,12 +212,21 @@ class AbstractExecutor(ABC):
         # 添加输入产物信息
         inputs = request.get_inputs()
         if inputs:
-            system_prompt += "\n\nInputs:"
+            system_prompt += "\n\n## Upstream Outputs (Inputs):\n"
             for inp in inputs:
-                if inp.summary:
-                    system_prompt += f"\n  - {inp.id}: {inp.summary}"
-                elif inp.path:
-                    system_prompt += f"\n  - {inp.id}: {inp.path}"
+                system_prompt += f"\n### {inp.id}"
+                if inp.path:
+                    system_prompt += f"\nPath: {inp.path}"
+                # 添加文件内容
+                if hasattr(inp, 'content') and inp.content:
+                    # 限制内容长度避免 prompt 过长
+                    max_content_length = 8000
+                    content = inp.content
+                    if len(content) > max_content_length:
+                        content = content[:max_content_length] + "\n...[content truncated]"
+                    system_prompt += f"\nContent:\n```\n{content}\n```"
+                elif inp.summary:
+                    system_prompt += f"\n{inp.summary}"
 
         return system_prompt
 

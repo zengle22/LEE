@@ -17,6 +17,7 @@ class ArtifactReference:
     id: str                              # 产物标识
     path: Optional[str] = None           # 文件路径（如果是文件产物）
     summary: Optional[str] = None        # 内容摘要
+    content: Optional[str] = None        # 文件内容（用于传递给下游 agent）
     content_type: Optional[str] = None   # 内容类型（text/json/yaml等）
     metadata: Dict[str, Any] = field(default_factory=dict)
 

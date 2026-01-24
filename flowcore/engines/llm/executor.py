@@ -14,6 +14,7 @@ import aiohttp
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
+import random
 
 from ..base import AbstractExecutor
 from ..protocol import StepExecutionRequest, StepExecutionResult, ArtifactReference
@@ -58,21 +59,25 @@ class LLMExecutor(AbstractExecutor):
             system_prompt = self._build_system_prompt(request)
             user_message = self._build_user_message(request)
 
-            # 4. 调用 LLM API
+            # 4. 调用 LLM API (with retry for transient errors)
             provider = self.engine_config.get("provider", "openai")
 
             if provider == "openai":
-                response = await self._call_openai(system_prompt, user_message)
+                response = await self._call_with_retry(self._call_openai, system_prompt, user_message)
             elif provider == "anthropic":
-                response = await self._call_anthropic(system_prompt, user_message)
+                response = await self._call_with_retry(self._call_anthropic, system_prompt, user_message)
             elif provider == "azure":
-                response = await self._call_azure_openai(system_prompt, user_message)
+                response = await self._call_with_retry(self._call_azure_openai, system_prompt, user_message)
             else:
-                response = await self._call_custom(system_prompt, user_message)
+                response = await self._call_with_retry(self._call_custom, system_prompt, user_message)
 
             # 5. 保存响应到工作目录
             output_file = workspace / "response.txt"
-            output_file.write_text(response, encoding="utf-8")
+            # Only write if response is not empty
+            if response and len(response.strip()) > 0:
+                output_file.write_text(response, encoding="utf-8")
+            else:
+                raise ValueError("LLM returned empty response")
 
             # 6. 构建结果
             completed_at = datetime.now().isoformat()
@@ -125,6 +130,88 @@ class LLMExecutor(AbstractExecutor):
                 completed_at=completed_at,
                 engine_type="llm"
             )
+
+    async def _call_with_retry(
+        self,
+        call_func,
+        system_prompt: str,
+        user_message: str,
+        max_retries: int = 3,
+        initial_delay: float = 1.0
+    ) -> str:
+        """
+        Call LLM API with retry logic for transient errors
+
+        Handles:
+        - HTTP 429 (Too Many Requests) - rate limiting
+        - HTTP 500/502/503/504 - server errors
+        - Network timeouts
+
+        Args:
+            call_func: The API call function to retry
+            system_prompt: System prompt
+            user_message: User message
+            max_retries: Maximum number of retry attempts
+            initial_delay: Initial delay in seconds (exponential backoff)
+
+        Returns:
+            API response string
+
+        Raises:
+            ValueError: If all retries are exhausted
+        """
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                return await call_func(system_prompt, user_message)
+
+            except aiohttp.ClientResponseError as e:
+                last_error = e
+
+                # Check if it's a transient error that we should retry
+                if e.status in [429, 500, 502, 503, 504]:
+                    if attempt < max_retries - 1:
+                        # Calculate delay with exponential backoff + jitter
+                        delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
+                        delay = min(delay, 30)  # Cap at 30 seconds
+
+                        print(
+                            f"[LLM Executor] API error {e.status} (attempt {attempt + 1}/{max_retries}), "
+                            f"retrying in {delay:.1f}s..."
+                        )
+
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        raise ValueError(
+                            f"LLM API failed after {max_retries} attempts. "
+                            f"Last error: {e.status} {e.message}"
+                        )
+                else:
+                    # Non-transient error, don't retry
+                    raise ValueError(f"LLM API error: {e.status} {e.message}")
+
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                last_error = e
+
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
+                    delay = min(delay, 30)
+
+                    print(
+                        f"[LLM Executor] Network error (attempt {attempt + 1}/{max_retries}), "
+                        f"retrying in {delay:.1f}s..."
+                    )
+
+                    await asyncio.sleep(delay)
+                else:
+                    raise ValueError(
+                        f"LLM API network error after {max_retries} attempts: {str(e)}"
+                    )
+
+        # Should not reach here, but just in case
+        raise ValueError(f"LLM API call failed: {str(last_error)}")
 
     async def _call_openai(
         self,
