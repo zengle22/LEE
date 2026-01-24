@@ -68,9 +68,9 @@ def orchestrator_get_state(project_dir: str) -> Dict[str, Any]:
         completed_steps = []
         failed_steps = []
         for step_id, step_state in steps_state.items():
-            if step_state.get("status") == "completed":
+            if step_state.get("state") == "completed":
                 completed_steps.append(step_id)
-            elif step_state.get("status") == "failed":
+            elif step_state.get("state") == "failed":
                 failed_steps.append(step_id)
 
         # 构建步骤信息
@@ -78,7 +78,7 @@ def orchestrator_get_state(project_dir: str) -> Dict[str, Any]:
         for step in workflow.get("steps", []):
             step_id = step.get("id")
             step_state = steps_state.get(step_id, {})
-            status = step_state.get("status", "pending")
+            status = step_state.get("state", "pending")  # 使用 "state" 字段
 
             steps_info.append({
                 "id": step_id,
@@ -166,18 +166,32 @@ async def orchestrator_run_step(
         parser = WorkflowParser(str(workflow_file))
         workflow = parser.workflow
 
-        # 检查步骤是否存在
-        step_exists = False
+        # 检查步骤是否存在并获取 agent_ref
+        step_data = None
+        agent_ref = ""
         for step in workflow.get("steps", []):
             if step.get("id") == step_id:
-                step_exists = True
+                step_data = step
+                # 获取 agent 引用
+                agent_ref = step.get("run", "") or step.get("agent", "")
+                if isinstance(agent_ref, dict):
+                    agent_ref = agent_ref.get("ref", "")
                 break
 
-        if not step_exists:
+        if not step_data:
             return {
                 "status": "failed",
                 "step_id": step_id,
                 "error": f"Step '{step_id}' not found in workflow"
+            }
+
+        # 开始执行步骤（设置状态为 IN_PROGRESS）
+        start_success, start_error = sm.start_step(step_id, agent_ref)
+        if not start_success:
+            return {
+                "status": "failed",
+                "step_id": step_id,
+                "error": f"Failed to start step: {start_error}"
             }
 
         # 执行步骤
