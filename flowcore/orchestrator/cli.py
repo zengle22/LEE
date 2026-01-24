@@ -70,6 +70,12 @@ from .workflow_generator import (
     validate_workflow_against_template,
 )
 from .engine_commands import cmd_run_engine as cmd_run_engine_async
+from .project_config import (
+    init_project_structure,
+    check_project_structure_initialized,
+    require_project_structure,
+    get_project_structure
+)
 
 # ANSI 颜色
 RED = "\033[91m"
@@ -418,6 +424,25 @@ def cmd_init(args):
     workflow_path = args.workflow
     template_path = getattr(args, 'template', None)
 
+    # === Directory Structure Initialization (NEW) ===
+    print_header("Initializing Project Structure")
+    skip_structure_init = getattr(args, 'skip_structure_init', False)
+    if not skip_structure_init:
+        try:
+            dir_config = init_project_structure(Path(project_dir))
+            print_success(f"Directory structure initialized: {dir_config.version}")
+        except Exception as e:
+            print_error(f"Failed to initialize directory structure: {e}")
+            print_info("Use --skip-structure-init to bypass (not recommended)")
+            return 1
+    else:
+        # Verify structure exists if not skipping
+        is_initialized, _ = check_project_structure_initialized(Path(project_dir))
+        if not is_initialized:
+            print_error("Project structure not initialized and --skip-structure-init is set")
+            print_info("Either remove --skip-structure-init or initialize the structure separately")
+            return 1
+
     # === 项目配置验证 (在初始化前执行) ===
     skip_validation = getattr(args, 'skip_validation', False)
     if not skip_validation:
@@ -479,7 +504,7 @@ def cmd_init(args):
 
     # 显示创建的目录
     if created_dirs:
-        print(f"\n  {CYAN}Created directories:{RESET}")
+        print(f"\n  {CYAN}Phase directories:{RESET}")
         for d in created_dirs:
             print(f"    - {d}/")
 
@@ -609,6 +634,17 @@ def cmd_next(args):
         print_info("Run 'python -m orchestrator init' first")
         return 1
 
+    # === 项目结构初始化检查 ===
+    from pathlib import Path
+    from .project_config import check_project_structure_initialized
+    project_path = Path(project_dir)
+    is_initialized, dir_config = check_project_structure_initialized(project_path)
+    if not is_initialized:
+        print_warning("Project directory structure not initialized")
+        print_info("Run: python -m flowcore.orchestrator.cli init-structure .")
+        print_info("Or run: python -m flowcore.orchestrator.cli init . --force-structure")
+        return 1
+
     # 确保 Phase 目录结构存在 (从 workflow 动态提取)
     workflow = _load_workflow_from_project(project_dir)
     created_dirs = _create_phase_directories(project_dir, workflow)
@@ -706,6 +742,17 @@ def cmd_start(args):
     except FileNotFoundError:
         print_error("No workflow state found")
         print_info("Run 'python -m orchestrator init' first")
+        return 1
+
+    # === 项目结构初始化检查 ===
+    from pathlib import Path
+    from .project_config import check_project_structure_initialized
+    project_path = Path(project_dir)
+    is_initialized, dir_config = check_project_structure_initialized(project_path)
+    if not is_initialized:
+        print_warning("Project directory structure not initialized")
+        print_info("Run: python -m flowcore.orchestrator.cli init-structure .")
+        print_info("Or run: python -m flowcore.orchestrator.cli init . --force-structure")
         return 1
 
     # 确保 Phase 目录结构存在 (从 workflow 动态提取)
@@ -1865,6 +1912,155 @@ def cmd_loop_back(args):
     return 0
 
 
+def cmd_init_structure(args):
+    """Initialize project directory structure"""
+    print_header("Initializing Project Directory Structure")
+
+    from pathlib import Path
+    from .project_config import init_project_structure, check_project_structure_initialized
+
+    project_dir = Path(args.project_dir)
+    if not project_dir.exists():
+        print_error(f"Project directory does not exist: {project_dir}")
+        return 1
+
+    # Get project name from args or prompt user
+    project_name = getattr(args, 'project_name', None)
+
+    # Check if already initialized
+    is_initialized, existing_config = check_project_structure_initialized(project_dir)
+    if is_initialized and not getattr(args, 'force', False):
+        if existing_config.project_name and not project_name:
+            project_name = existing_config.project_name
+        print_warning(f"Project structure already initialized at {existing_config.initialized_at}")
+        print_info("Use --force to re-initialize (this will update the structure)")
+        # Still show current structure
+        print()
+        if existing_config.project_name:
+            print_success(f"Project name: {existing_config.project_name}")
+            print_info(f"Content directory: {existing_config.project_content_dir}")
+        return 0
+
+    try:
+        # Load custom config if provided
+        custom_config = None
+        if hasattr(args, 'config') and args.config:
+            import yaml
+            with open(args.config, 'r', encoding='utf-8') as f:
+                custom_config = yaml.safe_load(f)
+
+        dir_config = init_project_structure(
+            project_dir,
+            project_name=project_name,
+            config_schema=custom_config,
+            force=getattr(args, 'force', False)
+        )
+
+        print_success(f"Directory structure initialized (v{dir_config.version})")
+        print_info(f"Config saved to: {project_dir / '.project' / 'dirs.yaml'}")
+        print()
+        if dir_config.project_name:
+            print_success(f"Project name: {dir_config.project_name}")
+            print_info(f"Content directory: {dir_config.project_content_dir}")
+            print()
+        print("Directories created:")
+        for dir_id, dir_info in dir_config.directories.items():
+            status = "✓" if (project_dir / dir_info.path).exists() else "✗"
+            print(f"  {status} {dir_id}: {dir_info.path}")
+            if dir_info.description:
+                print(f"     {dir_info.description}")
+        print()
+        print_info("All outputs will now use these fixed directories")
+        return 0
+
+    except Exception as e:
+        print_error(f"Failed to initialize directory structure: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+def cmd_check_structure(args):
+    """Check project directory structure status"""
+    print_header("Checking Project Directory Structure")
+
+    from pathlib import Path
+    from .project_config import check_project_structure_initialized, get_project_structure
+
+    project_dir = Path(args.project_dir)
+    if not project_dir.exists():
+        print_error(f"Project directory does not exist: {project_dir}")
+        return 1
+
+    # Check if initialized
+    is_initialized, config = check_project_structure_initialized(project_dir)
+
+    if not is_initialized:
+        print_error("Project structure not initialized")
+        print_info("Run: python -m flowcore.orchestrator.cli init-structure .")
+        return 1
+
+    print_success(f"Project structure initialized (v{config.version})")
+    print_info(f"Initialized at: {config.initialized_at}")
+    print_info(f"Initialized by: {config.initialized_by}")
+    if config.project_name:
+        print_success(f"Project name: {config.project_name}")
+        print_info(f"Content directory: {config.project_content_dir}")
+    print()
+
+    # Check each directory
+    print("Directory Status:")
+    all_exist = True
+    for dir_id, dir_info in config.directories.items():
+        # Use get_directory_path to get full path (respects project_content_dir)
+        dir_path = config.get_directory_path(dir_id)
+        # Show relative path from project_dir
+        try:
+            rel_path = dir_path.relative_to(project_dir)
+        except ValueError:
+            rel_path = dir_path
+        exists = dir_path.exists()
+        status = "✓" if exists else "✗"
+        print(f"  {status} {dir_id}: {rel_path}")
+        if dir_info.description:
+            print(f"     {dir_info.description}")
+
+        if not exists:
+            all_exist = False
+        elif dir_info.subdirs:
+            # Check subdirectories
+            for subdir in dir_info.subdirs:
+                subdir_path = dir_path / subdir
+                sub_exists = subdir_path.exists()
+                sub_status = "✓" if sub_exists else "✗"
+                print(f"    {sub_status} {subdir}/")
+
+    print()
+
+    # Show constraints
+    if config.constraints:
+        print("Constraints:")
+        for key, value in config.constraints.items():
+            if value:
+                print(f"  • {key}: {value}")
+        print()
+
+    # Optional validation
+    if getattr(args, 'validate', False):
+        print_header("Validating Outputs Against Structure")
+        # TODO: Implement output validation
+        print_warning("Output validation not yet implemented")
+        print_info("This will check all generated files against the configured structure")
+
+    if all_exist:
+        print_success("All directories exist")
+        return 0
+    else:
+        print_warning("Some directories are missing")
+        print_info("Run: python -m flowcore.orchestrator.cli init-structure --force .")
+        return 1
+
+
 def cmd_run_engine(args):
     """使用统一 Engine 接口执行步骤（同步包装器）"""
     return asyncio.run(cmd_run_engine_async(args))
@@ -1910,6 +2106,10 @@ def main():
     p_init.add_argument("--skip-workflow-validation", dest="skip_workflow_validation",
         action="store_true",
         help="Skip workflow structure validation (not recommended)")
+    p_init.add_argument("--skip-structure-init", dest="skip_structure_init", action="store_true",
+        help="Skip directory structure initialization (not recommended)")
+    p_init.add_argument("--force-structure", dest="force_structure", action="store_true",
+        help="Re-initialize directory structure even if already exists")
 
     # status
     p_status = subparsers.add_parser("status", help="Show current status")
@@ -2064,6 +2264,21 @@ def main():
     p_loop_back.add_argument("to_step", help="Target step ID to loop back to")
     p_loop_back.add_argument("--reason", help="Reason for loop back")
 
+    # init-structure (NEW: Initialize directory structure only)
+    p_init_structure = subparsers.add_parser("init-structure", help="Initialize directory structure")
+    p_init_structure.add_argument("project_dir", help="Project directory")
+    p_init_structure.add_argument("--project-name", dest="project_name",
+        help="Name of the project (creates subdirectory with this name)")
+    p_init_structure.add_argument("--force", action="store_true",
+        help="Re-initialize even if already exists")
+    p_init_structure.add_argument("--config", help="Custom config schema file (optional)")
+
+    # check-structure (NEW: Check directory structure)
+    p_check_structure = subparsers.add_parser("check-structure", help="Check directory structure status")
+    p_check_structure.add_argument("project_dir", help="Project directory")
+    p_check_structure.add_argument("--validate", action="store_true",
+        help="Validate all outputs against configured structure")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -2098,6 +2313,9 @@ def main():
         "wait": cmd_wait,
         "resolve": cmd_resolve,
         "loop-back": cmd_loop_back,
+        # 项目初始化命令
+        "init-structure": cmd_init_structure,
+        "check-structure": cmd_check_structure,
     }
 
     return commands[args.command](args)
