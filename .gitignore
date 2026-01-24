@@ -69,3 +69,41 @@ npm-debug.log*
 logs/
 runtime/runs/
 *~
+
+# LEE 项目输出目录 (project-specific outputs)
+contracts/
+docs/
+outputs/
+specs/
+src/
+tests/
+
+# LEE 临时文件和目录
+output/
+nul
+metagpt/
+metagpt_workspace/
+MetaGPT/
+
+# LEE 配置和状态文件 (可选，根据需要保留)
+# .project/
+# .workflow/
+# .projectignore
+
+# 环境配置文件 (保留示例，忽略实际配置)
+.env
+.env.local
+.env.*.local
+
+# MCP 服务器临时文件
+mcp-server/*.pyc
+mcp-server/__pycache__/
+mcp-server/.pytest_cache/
+
+# 工作流和项目状态文件 (可选)
+# workflow.yaml
+
+# 示例和测试输出
+examples/*/output/
+examples/*/.project/
+examples/*/.workflow/
