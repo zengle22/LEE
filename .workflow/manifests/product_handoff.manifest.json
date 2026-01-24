@@ -1,0 +1,13 @@
+{
+  "step": "product_handoff",
+  "verified_at": "2026-01-25T00:55:08.510134",
+  "required": [
+    "contracts/product_handoff/v1/handoff.yaml"
+  ],
+  "produced": [
+    "contracts/product_handoff/v1/handoff.yaml"
+  ],
+  "missing": [],
+  "extra": [],
+  "status": "done"
+}

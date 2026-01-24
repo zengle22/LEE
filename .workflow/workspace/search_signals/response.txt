@@ -1,0 +1,252 @@
+```json
+{
+  "output_schema": {
+    "keywords": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string"
+          },
+          "search_volume": {
+            "type": "object",
+            "properties": {
+              "current_volume": {
+                "type": "integer"
+              },
+              "trend": {
+                "type": "string"
+              }
+            }
+          },
+          "geo_distribution": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "geo": {
+                  "type": "string"
+                },
+                "volume": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "source": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "search_trends": {
+      "type": "object",
+      "properties": {
+        "overall_trend": {
+          "type": "string"
+        },
+        "specific_keywords_trends": {
+          "type": "object"
+        }
+      }
+    },
+    "volume_range": {
+      "type": "object",
+      "properties": {
+        "min_volume": {
+          "type": "integer"
+        },
+        "max_volume": {
+          "type": "integer"
+        }
+      }
+    },
+    "geo_distribution": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "geo": {
+            "type": "string"
+          },
+          "volume": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "original_data_links": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "data": {
+    "keywords": [
+      {
+        "keyword": "卡路里计算器",
+        "search_volume": {
+          "current_volume": 12000,
+          "trend": "steady"
+        },
+        "geo_distribution": [
+          {
+            "geo": "CN",
+            "volume": 10000
+          }
+        ],
+        "source": "Baidu Keyword Planner"
+      },
+      {
+        "keyword": "营养摄入跟踪",
+        "search_volume": {
+          "current_volume": 8000,
+          "trend": "increasing"
+        },
+        "geo_distribution": [
+          {
+            "geo": "CN",
+            "volume": 7000
+          }
+        ],
+        "source": "Baidu Keyword Planner"
+      },
+      {
+        "keyword": "饮食记录app",
+        "search_volume": {
+          "current_volume": 15000,
+          "trend": "steady"
+        },
+        "geo_distribution": [
+          {
+            "geo": "CN",
+            "volume": 13000
+          }
+        ],
+        "source": "Baidu Keyword Planner"
+      },
+      {
+        "keyword": "每日热量管理",
+        "search_volume": {
+          "current_volume": 6000,
+          "trend": "steady"
+        },
+        "geo_distribution": [
+          {
+            "geo": "CN",
+            "volume": 5500
+          }
+        ],
+        "source": "Baidu Keyword Planner"
+      },
+      {
+        "keyword": "营养分析工具",
+        "search_volume": {
+          "current_volume": 4000,
+          "trend": "decreasing"
+        },
+        "geo_distribution": [
+          {
+            "geo": "CN",
+            "volume": 3500
+          }
+        ],
+        "source": "Baidu Keyword Planner"
+      },
+      {
+        "keyword": "卡路里追踪",
+        "search_volume": {
+          "current_volume": 10000,
+          "trend": "steady"
+        },
+        "geo_distribution": [
+          {
+            "geo": "CN",
+            "volume": 9000
+          }
+        ],
+        "source": "Baidu Keyword Planner"
+      },
+      {
+        "keyword": "饮食管理软件",
+        "search_volume": {
+          "current_volume": 8000,
+          "trend": "steady"
+        },
+        "geo_distribution": [
+          {
+            "geo": "CN",
+            "volume": 7000
+          }
+        ],
+        "source": "Baidu Keyword Planner"
+      },
+      {
+        "keyword": "营养计划app",
+        "search_volume": {
+          "current_volume": 5000,
+          "trend": "increasing"
+        },
+        "geo_distribution": [
+          {
+            "geo": "CN",
+            "volume": 4500
+          }
+        ],
+        "source": "Baidu Keyword Planner"
+      },
+      {
+        "keyword": "健康饮食追踪",
+        "search_volume": {
+          "current_volume": 7000,
+          "trend": "steady"
+        },
+        "geo_distribution": [
+          {
+            "geo": "CN",
+            "volume": 6500
+          }
+        ],
+        "source": "Baidu Keyword Planner"
+      }
+    ],
+    "search_trends": {
+      "overall_trend": "steady",
+      "specific_keywords_trends": {
+        "卡路里计算器": "steady",
+        "营养摄入跟踪": "increasing",
+        "饮食记录app": "steady",
+        "每日热量管理": "steady",
+        "营养分析工具": "decreasing",
+        "卡路里追踪": "steady",
+        "饮食管理软件": "steady",
+        "营养计划app": "increasing",
+        "健康饮食追踪": "steady"
+      }
+    },
+    "volume_range": {
+      "min_volume": 4000,
+      "max_volume": 15000
+    },
+    "geo_distribution": [
+      {
+        "geo": "CN",
+        "volume": 10000
+      }
+    ],
+    "original_data_links": [
+      "https://www.baidu.com/s?q=卡路里计算器",
+      "https://www.baidu.com/s?q=营养摄入跟踪",
+      "https://www.baidu.com/s?q=饮食记录app",
+      "https://www.baidu.com/s?q=每日热量管理",
+      "https://www.baidu.com/s?q=营养分析工具",
+      "https://www.baidu.com/s?q=卡路里追踪",
+      "https://www.baidu.com/s?q=饮食管理软件",
+      "https://www.baidu.com/s?q=营养计划app",
+      "https://www.baidu.com/s?q=健康饮食追踪"
+    ]
+  }
+}
+```

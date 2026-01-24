@@ -1,0 +1,17 @@
+{
+  "token_id": "TKN-E1EE49C976934E5B",
+  "run_id": "RUN-20260125004040-9e974f89",
+  "step_id": "product_handoff",
+  "agent_id": "auto",
+  "issued_at": "2026-01-25T00:54:56.826498",
+  "expires_at": "2026-01-25T04:54:56.826498",
+  "permissions": [
+    "read",
+    "write",
+    "execute"
+  ],
+  "requires_approval": null,
+  "inputs_hash": null,
+  "signature": "ef25023628890cc390e8f2ec1dc1f93ad83917c5f593c92e787d9bdb8c628c77",
+  "revoked": false
+}

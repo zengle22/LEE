@@ -1,0 +1,92 @@
+version: '1.0'
+description: LEE Standard Project Directory Structure
+initialized_at: '2026-01-25T01:29:43.175256'
+initialized_by: lee-orchestrator
+project_name: calorie-tracker
+directories:
+  config_dir:
+    path: .project
+    description: Project configuration and metadata
+    subdirs:
+    - schema
+    structure: flat
+    naming: default
+  workflow_dir:
+    path: .workflow
+    description: Workflow execution state and temporary files
+    subdirs:
+    - workspace
+    - gates
+    - events
+    - cache
+    structure: flat
+    naming: default
+  contracts_dir:
+    path: contracts
+    description: Frozen analysis results and formal contracts
+    subdirs:
+    - input
+    - output
+    structure: layered
+    naming: default
+  docs_dir:
+    path: docs
+    description: Generated documentation and reports
+    subdirs:
+    - spec
+    - reports
+    - guides
+    - archive
+    structure: flat
+    naming: descriptive
+  src_dir:
+    path: src
+    description: Generated source code
+    subdirs:
+    - components
+    - services
+    - utils
+    - types
+    structure: module
+    naming: default
+  outputs_dir:
+    path: outputs
+    description: Intermediate outputs and artifacts
+    subdirs:
+    - build
+    - test
+    - analysis
+    - temp
+    structure: flat
+    naming: default
+    cleanup: auto
+  tests_dir:
+    path: tests
+    description: Generated test files
+    subdirs:
+    - unit
+    - integration
+    - e2e
+    structure: hierarchical
+    naming: default
+  specs_dir:
+    path: specs
+    description: Generated specification documents
+    subdirs:
+    - requirements
+    - api
+    - database
+    - ui
+    structure: flat
+    naming: default
+file_naming_conventions:
+  contracts: '{layer}/{version}/{contract_name}.yaml'
+  docs: '{category}/{YYYY-MM-DD}-{title}.md'
+  source: '{module}/{file_name}.{ext}'
+  tests: '{type}/{test_name}_test.{ext}'
+  outputs: '{step_id}/{artifact_name}.{ext}'
+constraints:
+  strict_path_validation: true
+  forbid_creation_outside_defined_dirs: true
+  require_initialization: true
+  allow_overrides: false

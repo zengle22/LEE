@@ -1,0 +1,13 @@
+{
+  "step": "build_business_opportunity",
+  "verified_at": "2026-01-25T00:54:13.368723",
+  "required": [
+    "contracts/business_opportunity/v1/opportunity.yaml"
+  ],
+  "produced": [
+    "contracts/business_opportunity/v1/opportunity.yaml"
+  ],
+  "missing": [],
+  "extra": [],
+  "status": "done"
+}

@@ -1,0 +1,17 @@
+{
+  "token_id": "TKN-995813B3FF0FE9AB",
+  "run_id": "RUN-20260125004040-9e974f89",
+  "step_id": "analyze_user_signals",
+  "agent_id": "auto",
+  "issued_at": "2026-01-25T00:49:48.792997",
+  "expires_at": "2026-01-25T04:49:48.792997",
+  "permissions": [
+    "read",
+    "write",
+    "execute"
+  ],
+  "requires_approval": null,
+  "inputs_hash": null,
+  "signature": "29b2cae3cac758ce3b7bd647e76a9b3832626e05a71e9c377dc5ac53363b52c9",
+  "revoked": false
+}

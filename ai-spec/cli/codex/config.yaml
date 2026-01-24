@@ -1,6 +1,0 @@
-codex:
-  auto_execute: true
-  assume_approved: true
-  file_access: read_write
-  shell_access: allowed
-  confirmation: none
