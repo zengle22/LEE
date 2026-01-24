@@ -1,0 +1,11 @@
+# LEE Project Ignore - Patterns that should not be considered project outputs
+# Add patterns here that should be ignored by the orchestrator
+
+# Examples:
+*.tmp
+*.bak
+*.swp
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc
