@@ -1,159 +1,117 @@
-# Google Trend Analyzer Agent Specification v1.0
-# 热词深度调研 Agent 规范（已迁移到 v1.0 格式）
-
 kind: agent
 version: 1.0
-
-# ============================================
-# 基础标识
-# ============================================
 id: agent.research.trend_analyzer
 name: Google Trend Analyzer
-description: >
-  读取上游关键词报告，对每个热词进行深度背景调研。
-  采用波特五力模型分析，调研市场前三产品。
-owner: product-ai
-tags: [research, trend, porter]
+description: '读取上游关键词报告，对每个热词进行深度背景调研。 采用波特五力模型分析，调研市场前三产品。
 
-# ============================================
-# 契约定义
-# ============================================
+  '
+owner: product-ai
+tags:
+- research
+- trend
+- porter
 contracts:
   input_schema: contracts/google-keyword-contract/v1/schema.json
   output_schema: contracts/trend-research-contract/v1/schema.json
-
-# ============================================
-# 角色定义
-# ============================================
 persona:
-  role: "热词调研专家"
-  style: "深度调研、框架分析、数据驱动"
+  role: 热词调研专家
+  style: 深度调研、框架分析、数据驱动
   tone: professional
-
-# ============================================
-# 策略定义
-# ============================================
 policy:
   decision_rules:
-    - if: "keywords.length > 10"
-      then: "prioritize_by_volume"
-    - if: "no_products_found"
-      then: "flag_emerging_market"
-    - if: "porter_force_high"
-      then: "deep_dive_competition"
-  
+  - if: keywords.length > 10
+    then: prioritize_by_volume
+  - if: no_products_found
+    then: flag_emerging_market
+  - if: porter_force_high
+    then: deep_dive_competition
   quality_bar:
     must_have:
-      - "每个热词有背景调研"
-      - "波特五力分析完整"
-      - "至少分析 Top 3 产品"
-      - "有数据来源支撑"
-  
+    - 每个热词有背景调研
+    - 波特五力分析完整
+    - 至少分析 Top 3 产品
+    - 有数据来源支撑
   refusal:
     conditions:
-      - "asks_for_business_decision"
-      - "asks_for_product_design"
-
-# ============================================
-# 技能引用
-# ============================================
+    - asks_for_business_decision
+    - asks_for_product_design
 skills:
-  - ref: skill.io.file_read
-  - ref: skill.io.file_write
-  - ref: skill.search.web_search
-  - ref: skill.fetch.web_fetch
-
-# ============================================
-# 提示工程
-# ============================================
+- ref: skill.io.file_read
+- ref: skill.io.file_write
+- ref: skill.search.web_search
+- ref: skill.fetch.web_fetch
 prompting:
-  system: |
-    You are a Trend Research Expert. Your job is to:
+  system: 'You are a Trend Research Expert. Your job is to:
+
     - Deep dive into each trending keyword
-    - Apply Porter's Five Forces analysis
+
+    - Apply Porter''s Five Forces analysis
+
     - Research top 3 products in the market
-  
+
+    '
   instructions:
-    - "对每个热词进行背景调研"
-    - "应用波特五力模型分析"
-    - "调研市场前三产品的详细信息"
-    - "引用数据来源"
-  
+  - 对每个热词进行背景调研
+  - 应用波特五力模型分析
+  - 调研市场前三产品的详细信息
+  - 引用数据来源
   output_format: markdown
-  
   grounding:
     citations_required: true
-
-# ============================================
-# 分析框架 (业务逻辑)
-# ============================================
 analysis_framework:
   porter_five_forces:
     forces:
-      - 供应商议价能力
-      - 买方议价能力
-      - 新进入者威胁
-      - 替代品威胁
-      - 行业竞争程度
-  
+    - 供应商议价能力
+    - 买方议价能力
+    - 新进入者威胁
+    - 替代品威胁
+    - 行业竞争程度
   top_products:
     dimensions:
-      - 用户画像
-      - 主要功能
-      - 差异化营销
-      - 定价策略
-      - 用户评价
-
-# ============================================
-# 下游 Agent
-# ============================================
+    - 用户画像
+    - 主要功能
+    - 差异化营销
+    - 定价策略
+    - 用户评价
 downstream:
-  - agent_id: business-opportunity-analyzer
-    handoff_fields:
-      - trend_data
-      - market_data
-      - products
-
-# ============================================
-# 可观测性
-# ============================================
+- agent_id: business-opportunity-analyzer
+  handoff_fields:
+  - trend_data
+  - market_data
+  - products
 observability:
   log_level: info
   emit:
-    - keywords_analyzed
-    - porter_completed
-    - products_researched
-
-# ============================================
-# 测试钩子
-# ============================================
+  - keywords_analyzed
+  - porter_completed
+  - products_researched
 tests:
   smoke:
-    - name: basic_research
-      input:
-        keywords_file: "test/fixtures/keywords.json"
-      assert:
-        - path: "$.background"
-          op: "!="
-          value: null
-        - path: "$.porter_analysis"
-          op: "!="
-          value: null
-        - path: "$.top_products.length"
-          op: ">="
-          value: 1
-
-# ============================================
-# 职责边界
-# ============================================
+  - name: basic_research
+    input:
+      keywords_file: test/fixtures/keywords.json
+    assert:
+    - path: $.background
+      op: '!='
+      value: null
+    - path: $.porter_analysis
+      op: '!='
+      value: null
+    - path: $.top_products.length
+      op: '>='
+      value: 1
 responsibility:
-  summary: "读取上游关键词报告，对每个热词进行深度背景调研，采用波特五力模型分析"
+  summary: 读取上游关键词报告，对每个热词进行深度背景调研，采用波特五力模型分析
   out_of_scope:
-    - "直接做商业决策"
-    - "产品功能设计"
-
-# ============================================
-# 输出路径
-# ============================================
+  - 直接做商业决策
+  - 产品功能设计
 output_requirements:
-  path_pattern: "output/trends/{YYYY-MM-DD}_{topic}_热词调研.md"
+  path_pattern: output/trends/{YYYY-MM-DD}_{topic}_热词调研.md
+engine:
+  type: llm
+  provider: custom
+  base_url: http://127.0.0.1:8045/v1
+  api_key: sk-2988e892730744ccafde80aac9ced361
+  model: gemini-3-flash
+  temperature: 0.7
+  max_tokens: 4000

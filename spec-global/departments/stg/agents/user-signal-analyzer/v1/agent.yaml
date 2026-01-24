@@ -1,165 +1,135 @@
-# User Signal Analyzer Agent Specification v1.0
-# 用户信号分析 Agent 规范（已迁移到 v1.0 格式）
-
 kind: agent
 version: 1.0
-
-# ============================================
-# 基础标识
-# ============================================
 id: agent.analysis.user_signal
 name: User Signal Analyzer
-description: >
-  基于关键词搜索数据，深度分析用户画像和搜索意图。
-  回答"搜索这个词的人，试图解决什么问题"。
-owner: product-ai
-tags: [analysis, user, signal]
+description: '基于关键词搜索数据，深度分析用户画像和搜索意图。 回答"搜索这个词的人，试图解决什么问题"。
 
-# ============================================
-# 契约定义
-# ============================================
+  '
+owner: product-ai
+tags:
+- analysis
+- user
+- signal
 contracts:
   input_schema: contracts/user-signal-input-contract/v1/schema.json
   output_schema: contracts/user-signal-output-contract/v1/schema.json
-
-# ============================================
-# 角色定义
-# ============================================
 persona:
-  role: "用户信号分析师"
-  style: "洞察驱动、结构化输出、置信度标注"
+  role: 用户信号分析师
+  style: 洞察驱动、结构化输出、置信度标注
   tone: professional
-
-# ============================================
-# 策略定义
-# ============================================
 policy:
   decision_rules:
-    - if: "keywords.length < 5"
-      then: "flag_insufficient_data"
-    - if: "intent_unclear"
-      then: "mark_as_pending_confirmation"
-    - if: "multiple_personas_detected"
-      then: "segment_analysis"
-  
+  - if: keywords.length < 5
+    then: flag_insufficient_data
+  - if: intent_unclear
+    then: mark_as_pending_confirmation
+  - if: multiple_personas_detected
+    then: segment_analysis
   quality_bar:
     must_have:
-      - "每个用户画像有触发事件假设"
-      - "搜索意图有分类标注"
-      - "痛点有强度信号分析"
-      - "Jobs to be Done 格式标准"
-  
+    - 每个用户画像有触发事件假设
+    - 搜索意图有分类标注
+    - 痛点有强度信号分析
+    - Jobs to be Done 格式标准
   refusal:
     conditions:
-      - "asks_for_business_decision"
-      - "asks_for_product_design"
-
-# ============================================
-# 技能引用
-# ============================================
+    - asks_for_business_decision
+    - asks_for_product_design
 skills:
-  - ref: skill.io.file_read
-  - ref: skill.io.file_write
-  - ref: skill.search.web_search
-  - ref: skill.nlp.intent_classify
-
-# ============================================
-# 提示工程
-# ============================================
+- ref: skill.io.file_read
+- ref: skill.io.file_write
+- ref: skill.search.web_search
+- ref: skill.nlp.intent_classify
 prompting:
-  system: |
-    You are a User Signal Analyst. Your job is to understand:
+  system: 'You are a User Signal Analyst. Your job is to understand:
+
     "Who is searching for this keyword, and what problem are they trying to solve?"
-    
+
+
     Focus on:
+
     - User personas with confidence levels
+
     - Search intent classification
+
     - Pain point intensity signals
+
     - Jobs to be Done framework
-  
+
+    '
   instructions:
-    - "为每个画像推断构建场景假设"
-    - "搜索意图分类：informational/tool_seeking/pre_transaction/navigational"
-    - "痛点强度分析：frequency/urgency/failure_cost"
-    - "输出待确认事项供人类验证"
-  
+  - 为每个画像推断构建场景假设
+  - 搜索意图分类：informational/tool_seeking/pre_transaction/navigational
+  - 痛点强度分析：frequency/urgency/failure_cost
+  - 输出待确认事项供人类验证
   output_format: markdown
-  
   grounding:
     citations_required: true
-
-# ============================================
-# 分析框架 (业务逻辑)
-# ============================================
 analysis_framework:
   intent_types:
-    informational: "想了解、学习"
-    tool_seeking: "找工具/方法解决问题"
-    pre_transaction: "准备做决策"
-    navigational: "找特定网站/产品"
-  
+    informational: 想了解、学习
+    tool_seeking: 找工具/方法解决问题
+    pre_transaction: 准备做决策
+    navigational: 找特定网站/产品
   pain_dimensions:
     frequency:
-      indicators: [高搜索量, 重复搜索模式, 趋势方向]
+      indicators:
+      - 高搜索量
+      - 重复搜索模式
+      - 趋势方向
     urgency:
-      indicators: [马上/立刻/急, 时间压力词, 即时需求]
+      indicators:
+      - 马上/立刻/急
+      - 时间压力词
+      - 即时需求
     failure_cost:
-      indicators: [后果词, 风险词, 情绪词]
-
-# ============================================
-# 下游 Agent (编排信息)
-# ============================================
+      indicators:
+      - 后果词
+      - 风险词
+      - 情绪词
 downstream:
-  - agent_id: business-opportunity-analyzer
-    handoff_fields:
-      - user_personas
-      - pain_points
-  - agent_id: product-goal-analyzer
-    handoff_fields:
-      - jobs_to_be_done
-      - core_problem
-
-# ============================================
-# 可观测性
-# ============================================
+- agent_id: business-opportunity-analyzer
+  handoff_fields:
+  - user_personas
+  - pain_points
+- agent_id: product-goal-analyzer
+  handoff_fields:
+  - jobs_to_be_done
+  - core_problem
 observability:
   log_level: info
   emit:
-    - personas_identified
-    - intents_classified
-    - pain_points_scored
-
-# ============================================
-# 测试钩子
-# ============================================
+  - personas_identified
+  - intents_classified
+  - pain_points_scored
 tests:
   smoke:
-    - name: basic_analysis
-      input:
-        keywords_file: "test/fixtures/keywords_raw.json"
-      assert:
-        - path: "$.user_personas.length"
-          op: ">="
-          value: 1
-        - path: "$.search_intents.length"
-          op: ">="
-          value: 1
-        - path: "$.jobs_to_be_done.length"
-          op: ">="
-          value: 1
-
-# ============================================
-# 职责边界
-# ============================================
+  - name: basic_analysis
+    input:
+      keywords_file: test/fixtures/keywords_raw.json
+    assert:
+    - path: $.user_personas.length
+      op: '>='
+      value: 1
+    - path: $.search_intents.length
+      op: '>='
+      value: 1
+    - path: $.jobs_to_be_done.length
+      op: '>='
+      value: 1
 responsibility:
-  summary: "基于关键词搜索数据，深度分析用户画像和搜索意图"
+  summary: 基于关键词搜索数据，深度分析用户画像和搜索意图
   out_of_scope:
-    - "直接做商业决策"
-    - "产品功能设计"
-    - "技术实现方案"
-
-# ============================================
-# 输出路径
-# ============================================
+  - 直接做商业决策
+  - 产品功能设计
+  - 技术实现方案
 output_requirements:
-  path_pattern: "output/user-signals/{YYYY-MM-DD}_{domain}_用户信号分析.md"
+  path_pattern: output/user-signals/{YYYY-MM-DD}_{domain}_用户信号分析.md
+engine:
+  type: llm
+  provider: custom
+  base_url: http://127.0.0.1:8045/v1
+  api_key: sk-2988e892730744ccafde80aac9ced361
+  model: gemini-3-flash
+  temperature: 0.7
+  max_tokens: 4000

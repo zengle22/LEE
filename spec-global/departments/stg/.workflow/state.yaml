@@ -1,0 +1,150 @@
+version: '1.1'
+run_id: RUN-20260123231419-50fdb234
+workflow_id: workflow.stg.opportunity_discovery
+workflow_name: 商业机会发现工作流
+run_state: created
+created_at: '2026-01-23T23:14:19.711157'
+updated_at: '2026-01-23T23:14:19.711166'
+current_step: null
+steps:
+  search_signals:
+    step_id: search_signals
+    state: pending
+    agent_id: null
+    started_at: null
+    completed_at: null
+    token: null
+    inputs_hash: null
+    outputs: []
+    outputs_hash: null
+    validation_result: null
+    gate_id: null
+    gate_status: null
+    error: null
+    mandatory: false
+    required_outputs:
+    - contracts/search_signals/v1/signals.yaml
+  analyze_user_signals:
+    step_id: analyze_user_signals
+    state: pending
+    agent_id: null
+    started_at: null
+    completed_at: null
+    token: null
+    inputs_hash: null
+    outputs: []
+    outputs_hash: null
+    validation_result: null
+    gate_id: null
+    gate_status: null
+    error: null
+    mandatory: false
+    required_outputs:
+    - contracts/user_hypothesis/v1/hypothesis.yaml
+  analyze_industry_structure:
+    step_id: analyze_industry_structure
+    state: pending
+    agent_id: null
+    started_at: null
+    completed_at: null
+    token: null
+    inputs_hash: null
+    outputs: []
+    outputs_hash: null
+    validation_result: null
+    gate_id: null
+    gate_status: null
+    error: null
+    mandatory: false
+    required_outputs:
+    - contracts/industry_structure/v1/structure.yaml
+  analyze_supply_competition:
+    step_id: analyze_supply_competition
+    state: pending
+    agent_id: null
+    started_at: null
+    completed_at: null
+    token: null
+    inputs_hash: null
+    outputs: []
+    outputs_hash: null
+    validation_result: null
+    gate_id: null
+    gate_status: null
+    error: null
+    mandatory: false
+    required_outputs:
+    - contracts/supply_gap/v1/gap.yaml
+  freeze_market_signals:
+    step_id: freeze_market_signals
+    state: pending
+    agent_id: null
+    started_at: null
+    completed_at: null
+    token: null
+    inputs_hash: null
+    outputs: []
+    outputs_hash: null
+    validation_result: null
+    gate_id: null
+    gate_status: null
+    error: null
+    mandatory: false
+    required_outputs:
+    - contracts/market_signal_freeze/v1/freeze.yaml
+  build_business_opportunity:
+    step_id: build_business_opportunity
+    state: pending
+    agent_id: null
+    started_at: null
+    completed_at: null
+    token: null
+    inputs_hash: null
+    outputs: []
+    outputs_hash: null
+    validation_result: null
+    gate_id: null
+    gate_status: null
+    error: null
+    mandatory: false
+    required_outputs:
+    - contracts/business_opportunity/v1/opportunity.yaml
+  product_handoff:
+    step_id: product_handoff
+    state: pending
+    agent_id: null
+    started_at: null
+    completed_at: null
+    token: null
+    inputs_hash: null
+    outputs: []
+    outputs_hash: null
+    validation_result: null
+    gate_id: null
+    gate_status: null
+    error: null
+    mandatory: false
+    required_outputs:
+    - contracts/product_handoff/v1/handoff.yaml
+_deps:
+  search_signals: []
+  analyze_user_signals:
+  - search_signals
+  analyze_industry_structure:
+  - search_signals
+  analyze_supply_competition:
+  - search_signals
+  freeze_market_signals:
+  - analyze_user_signals
+  - analyze_industry_structure
+  - analyze_supply_competition
+  build_business_opportunity:
+  - freeze_market_signals
+  product_handoff:
+  - build_business_opportunity
+gates: {}
+artifacts: {}
+metadata: {}
+loops: {}
+external_waits: {}
+loop_back_targets: {}

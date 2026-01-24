@@ -1,0 +1,236 @@
+# Gate Review Skill Specification v1.0
+# 审核门禁技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.cross.gate_review
+name: Gate Review
+description: >
+  快速审核待审批的 human gates。
+
+  功能：
+  - 列出所有待审批的 gates
+  - 显示每个 gate 的关键决策内容
+  - 提供上游分析结果摘要
+  - 支持快速审批决策
+  - 生成决策报告
+
+owner: cross-governance
+tags: [skill, cross, gate, review, approval, workflow]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: []
+    properties:
+      project_dir:
+        type: string
+        description: "项目目录路径（默认：当前目录）"
+        default: "."
+      gate_id:
+        type: string
+        description: "指定要查看的 gate ID（可选）"
+      action:
+        type: string
+        enum: [list, show, decide, report]
+        description: "执行的动作"
+        default: "list"
+      decision:
+        type: string
+        enum: [approve, reject, revise]
+        description: "审批决策（action=decide 时必需）"
+      comment:
+        type: string
+        description: "审批意见（action=decide 时推荐）"
+      checklist:
+        type: array
+        description: "检查清单结果（可选）"
+        items:
+          type: object
+          properties:
+            item:
+              type: string
+            ok:
+              type: boolean
+            note:
+              type: string
+
+  outputs:
+    type: object
+    required: [action, result]
+    properties:
+      action:
+        type: string
+        description: "执行的动作"
+      result:
+        type: object
+        description: "执行结果"
+      pending_gates:
+        type: array
+        description: "待审批 gates 列表（action=list 时）"
+      gate_details:
+        type: object
+        description: "gate 详情（action=show 时）"
+      decision_result:
+        type: object
+        description: "决策结果（action=decide 时）"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: llm
+  handler: flowcore.api:gate_review_handler
+  timeout_ms: 30000
+  retries: 1
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: false
+  side_effects: state_change  # 修改 gate 状态
+  pii: forbidden
+
+# ============================================
+# 质量标准
+# ============================================
+quality_bar:
+  output_format:
+    - "必须使用清晰的 Markdown 格式"
+    - "必须包含上游分析摘要"
+    - "必须提供决策建议"
+
+  decision_support:
+    - "必须显示完整的检查清单"
+    - "必须显示审批标准"
+    - "必须显示拒绝标准"
+
+  user_experience:
+    - "支持交互式审批流程"
+    - "提供清晰的下一步指引"
+    - "显示审批历史"
+
+# ============================================
+# 禁止行为
+# ============================================
+forbidden_behaviors:
+  - id: "auto_approve"
+    name: "自动审批"
+    description: "不允许自动审批，必须等待用户明确决策"
+
+  - id: "skip_checklist"
+    name: "跳过检查清单"
+    description: "不允许跳过或忽略检查清单项"
+
+  - id: "modify_closed"
+    name: "修改已关闭 gate"
+    description: "不允许修改状态为 closed 的 gate"
+
+# ============================================
+# 使用示例
+# ============================================
+examples:
+  - |
+    # 列出所有待审批的 gates
+    /gate-review
+
+  - |
+    # 查看特定 gate 的详情
+    /gate-review freeze_market_signals
+
+  - |
+    # 快速审批
+    /gate-review --approve freeze_market_signals
+
+  - |
+    # 拒绝并给出理由
+    /gate-review --reject freeze_market_signals --comment "置信度不足"
+
+  - |
+    # 要求修订
+    /gate-review --revise freeze_market_signals
+
+# ============================================
+# 输出模板
+# ============================================
+output_template: |
+  # 🚪 Gate Review Report
+
+  ## Pending Gates
+  {% for gate in pending_gates %}
+  - **{{ gate.gate_id }}** ({{ gate.step_name }})
+    - Status: {{ gate.status }}
+    - Dependencies: {{ gate.depends_on | join(', ') }}
+  {% endfor %}
+
+  ## Gate Details
+  ### {{ gate_details.gate_id }}
+  - **Status**: {{ gate_details.status }}
+  - **Step**: {{ gate_details.step_name }}
+  - **Description**: {{ gate_details.description }}
+
+  ### Approval Criteria
+  {% for criterion in gate_details.approval_criteria %}
+  - [ ] {{ criterion.label }}: {{ criterion.criteria }}
+  {% endfor %}
+
+  ### Upstream Artifacts
+  {% for artifact in gate_details.upstream_artifacts %}
+  - {{ artifact.type }}: {{ artifact.path }}
+  {% endfor %}
+
+  ## Recommendation
+  {{ recommendation }}
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: list_pending_gates
+      input:
+        action: "list"
+        project_dir: "."
+      assert:
+        - path: "$.action"
+          op: "=="
+          value: "list"
+        - path: "$.result"
+          op: "exists"
+          value: true
+
+    - name: show_gate_details
+      input:
+        action: "show"
+        gate_id: "freeze_market_signals"
+        project_dir: "."
+      assert:
+        - path: "$.action"
+          op: "=="
+          value: "show"
+        - path: "$.result.gate_id"
+          op: "=="
+          value: "freeze_market_signals"
+
+    - name: decide_gate
+      input:
+        action: "decide"
+        gate_id: "test_gate"
+        decision: "approve"
+        comment: "Test approval"
+        project_dir: "."
+      assert:
+        - path: "$.action"
+          op: "=="
+          value: "decide"
+        - path: "$.result.status"
+          op: "=="
+          value: "approved"

@@ -1,185 +1,172 @@
-# Search Agent Specification v1.0
-# 搜索采集 Agent - 事实采集层
-
-kind: agent
-version: 1.0
-
-# ============================================
-# 基础标识
-# ============================================
-id: agent.stg.search_agent
-name: Search Agent
-description: >
-  找到正在显性发生的市场信号。负责搜索关键词采集、趋势识别，
-  输出结构化的市场信号数据，但不进行价值判断。
-
-owner: stg-governance
-tags: [agent, stg, search, market-research, data-collection]
-
-# ============================================
-# 核心约束
-# ============================================
 constraints:
-  non_goals:
-    - 不判断用户是谁
-    - 不分析商业价值
-    - 不合并相似关键词
-    - 不做趋势预测
-
   hard_rules:
-    - 只输出客观事实数据
-    - 必须保留原始搜索链接
-    - 不允许发明数据点
-
-# ============================================
-# 契约定义
-# ============================================
+  - 只输出客观事实数据
+  - 必须保留原始搜索链接
+  - 不允许发明数据点
+  non_goals:
+  - 不判断用户是谁
+  - 不分析商业价值
+  - 不合并相似关键词
+  - 不做趋势预测
 contracts:
   input_schema:
-    type: object
-    required:
-      - industry
-      - region
-      - time_window
     properties:
       industry:
+        description: 行业或领域关键词
+        example: AI SaaS
         type: string
-        description: "行业或领域关键词"
-        example: "AI SaaS"
       region:
+        description: 地理区域
+        example: US
         type: string
-        description: "地理区域"
-        example: "US"
       time_window:
+        description: 时间窗口
+        example: 30d
         type: string
-        description: "时间窗口"
-        example: "30d"
-
-  output_schema:
-    type: object
     required:
-      - keyword
-      - trend
-      - volume_range
-      - geo
-      - time_window
-      - source_links
+    - industry
+    - region
+    - time_window
+    type: object
+  output_schema:
     properties:
-      keyword:
-        type: string
-        description: "搜索关键词"
-      trend:
-        type: string
-        enum: [up, flat, down]
-        description: "搜索趋势方向"
-      volume_range:
-        type: string
-        description: "搜索量级范围"
-        example: "10k-50k/month"
       geo:
-        type: array
+        description: 地理分布
         items:
           type: string
-        description: "地理分布"
-      time_window:
+        type: array
+      keyword:
+        description: 搜索关键词
         type: string
-        description: "观察时间窗口"
       source_links:
-        type: array
+        description: 原始数据来源链接
         items:
           type: string
-        description: "原始数据来源链接"
+        type: array
+      time_window:
+        description: 观察时间窗口
+        type: string
+      trend:
+        description: 搜索趋势方向
+        enum:
+        - up
+        - flat
+        - down
+        type: string
+      volume_range:
+        description: 搜索量级范围
+        example: 10k-50k/month
+        type: string
+    required:
+    - keyword
+    - trend
+    - volume_range
+    - geo
+    - time_window
+    - source_links
+    type: object
+description: '找到正在显性发生的市场信号。负责搜索关键词采集、趋势识别， 输出结构化的市场信号数据，但不进行价值判断。
 
-# ============================================
-# 引擎配置
-# ============================================
+  '
 engine:
+  api_key: 06bc11ad44e3431d8f685bfe3405284e.KlPI5clCIbAb4aOa
+  base_url: https://open.bigmodel.cn/api/paas/v4
+  max_tokens: 4000
+  model: glm-4-flash
+  provider: custom
+  temperature: 0.7
   type: llm
-  provider: openai
-  model: gpt-4.1-mini
-  api_key: ${OPENAI_API_KEY}
-
-# ============================================
-# System Prompt
-# ============================================
-system_prompt: |
-  你是一个专业的市场数据采集 Agent，负责搜索和采集显性的市场信号。
-
-  ## 你的职责
-  1. 基于给定的行业/主题，搜索相关的关键词和搜索趋势
-  2. 识别哪些关键词正在被搜索
-  3. 记录搜索量级、趋势方向、地理分布
-  4. 保留所有原始数据来源链接
-
-  ## 你的约束（严格遵守）
-  - ❌ 不判断"用户是谁" - 那是下一层 User Signal Agent 的事
-  - ❌ 不分析"商业价值" - 那是 Business Opportunity Agent 的事
-  - ❌ 不"合并相似关键词" - 保持原始粒度
-  - ❌ 不做"趋势预测" - 只报告当前观察到的事实
-
-  ## 你只关心
-  - 市场在搜什么（keywords）
-  - 搜得有多多（volume）
-  - 搜得在变多还是变少（trend）
-  - 人在哪里搜（geo）
-  - 数据从哪来（sources）
-
-  ## 输出格式
-  严格按照 output_schema 输出 JSON，包含所有必需字段。
-
-# ============================================
-# Instructions
-# ============================================
+forbidden_behaviors:
+- description: 不允许分析用户画像或用户意图
+  id: user_analysis
+  name: 用户分析
+- description: 不允许判断商业价值或机会大小
+  id: value_judgment
+  name: 价值判断
+- description: 不允许预测未来趋势，只报告当前数据
+  id: trend_prediction
+  name: 趋势预测
+- description: 不允许合并相似关键词，保持原始粒度
+  id: keyword_merge
+  name: 关键词合并
+id: agent.stg.search_agent
 instructions:
-  - "使用 Google Trends API 或类似工具获取搜索数据"
-  - "记录至少 10-20 个相关关键词"
-  - "对于每个关键词，记录完整的数据字段"
-  - "保留所有原始数据来源，确保可追溯"
-  - "如果某个字段无法获取，标注为 'unknown' 而不是发明数据"
-
-# ============================================
-# Quality Bar
-# ============================================
+- 使用 Google Trends API 或类似工具获取搜索数据
+- 记录至少 10-20 个相关关键词
+- 对于每个关键词，记录完整的数据字段
+- 保留所有原始数据来源，确保可追溯
+- 如果某个字段无法获取，标注为 'unknown' 而不是发明数据
+kind: agent
+name: Search Agent
+output_example:
+  geo:
+  - US
+  - UK
+  - CA
+  keyword: AI sales assistant
+  source_links:
+  - https://trends.google.com/...
+  - https://keywordtool.io/...
+  time_window: 2025-01-01 to 2025-01-23
+  trend: up
+  volume_range: 10k-50k/month
+owner: stg-governance
 quality_bar:
   data_integrity:
-    - "所有数据点必须有可验证的来源"
-    - "不允许编造或推断数据"
-    - "空值标注为 'unknown'"
-
+  - 所有数据点必须有可验证的来源
+  - 不允许编造或推断数据
+  - 空值标注为 'unknown'
   output_format:
-    - "必须完全符合 output_schema"
-    - "所有 required 字段必须存在"
-    - "数组类型不能为空（至少一个元素）"
+  - 必须完全符合 output_schema
+  - 所有 required 字段必须存在
+  - 数组类型不能为空（至少一个元素）
+system_prompt: '你是一个专业的市场数据采集 Agent，负责搜索和采集显性的市场信号。
 
-# ============================================
-# Forbidden Behaviors
-# ============================================
-forbidden_behaviors:
-  - id: "user_analysis"
-    name: "用户分析"
-    description: "不允许分析用户画像或用户意图"
 
-  - id: "value_judgment"
-    name: "价值判断"
-    description: "不允许判断商业价值或机会大小"
+  ## 你的职责
 
-  - id: "trend_prediction"
-    name: "趋势预测"
-    description: "不允许预测未来趋势，只报告当前数据"
+  1. 基于给定的行业/主题，搜索相关的关键词和搜索趋势
 
-  - id: "keyword_merge"
-    name: "关键词合并"
-    description: "不允许合并相似关键词，保持原始粒度"
+  2. 识别哪些关键词正在被搜索
 
-# ============================================
-# 输出示例
-# ============================================
-output_example:
-  keyword: "AI sales assistant"
-  trend: "up"
-  volume_range: "10k-50k/month"
-  geo: ["US", "UK", "CA"]
-  time_window: "2025-01-01 to 2025-01-23"
-  source_links:
-    - "https://trends.google.com/..."
-    - "https://keywordtool.io/..."
+  3. 记录搜索量级、趋势方向、地理分布
+
+  4. 保留所有原始数据来源链接
+
+
+  ## 你的约束（严格遵守）
+
+  - ❌ 不判断"用户是谁" - 那是下一层 User Signal Agent 的事
+
+  - ❌ 不分析"商业价值" - 那是 Business Opportunity Agent 的事
+
+  - ❌ 不"合并相似关键词" - 保持原始粒度
+
+  - ❌ 不做"趋势预测" - 只报告当前观察到的事实
+
+
+  ## 你只关心
+
+  - 市场在搜什么（keywords）
+
+  - 搜得有多多（volume）
+
+  - 搜得在变多还是变少（trend）
+
+  - 人在哪里搜（geo）
+
+  - 数据从哪来（sources）
+
+
+  ## 输出格式
+
+  严格按照 output_schema 输出 JSON，包含所有必需字段。
+
+  '
+tags:
+- agent
+- stg
+- search
+- market-research
+- data-collection
+version: 1.0
