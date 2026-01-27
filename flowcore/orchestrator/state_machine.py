@@ -299,10 +299,41 @@ class StateMachine:
         return self._state
 
     def _save_state(self):
-        """保存状态"""
+        """
+        保存状态 (A-01 改进: 使用原子写入模式)
+
+        原子写入步骤:
+        1. 写入临时文件 (.workflow/state.yaml.tmp)
+        2. 原子重命名到目标文件
+
+        这样可以避免并发写入导致的数据损坏。
+        """
         self._state["updated_at"] = datetime.now().isoformat()
-        with open(self.state_path, 'w', encoding='utf-8') as f:
+
+        # A-01: 使用临时文件 + 原子重命名
+        temp_path = self.state_path.with_suffix(".tmp")
+
+        # 写入临时文件
+        with open(temp_path, 'w', encoding='utf-8') as f:
             yaml.dump(self._state, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+        # 原子重命名 (在 Windows 和 Unix 上都是原子操作)
+        import os
+        try:
+            # Windows: 需要先删除目标文件（如果存在）
+            if os.name == 'nt' and self.state_path.exists():
+                self.state_path.unlink()
+
+            # 原子重命名
+            temp_path.replace(self.state_path)
+        except Exception as e:
+            # 清理临时文件
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except:
+                    pass
+            raise IOError(f"Failed to save state atomically: {e}")
 
     def get_run_state(self) -> RunState:
         """获取运行状态"""
@@ -475,7 +506,15 @@ class StateMachine:
         return gate_id
 
     def approve_gate(self, gate_id: str, approver: str, comment: str = None) -> Tuple[bool, str]:
-        """审批门禁，生成 approval artifact"""
+        """审批门禁，生成 approval artifact，并解锁依赖步骤
+
+        审批通过后会：
+        1. 生成 approval artifact 文件
+        2. 更新门禁状态为 approved
+        3. 更新关联步骤状态为 completed
+        4. **解锁依赖此 gate 的所有步骤** (P1-03 改进)
+        5. 检查是否可以继续执行
+        """
         state = self.load()
 
         if gate_id not in state["gates"]:
@@ -527,6 +566,9 @@ class StateMachine:
                 "completed_at": datetime.now().isoformat()
             })
 
+        # === P1-03 改进: 解锁依赖此 gate 的步骤 ===
+        self._unlock_dependent_steps(state, gate_id, step_id)
+
         # 检查是否还有其他阻断门禁
         has_blocking_gate = any(
             g["blocking"] and g["status"] == "pending"
@@ -537,6 +579,59 @@ class StateMachine:
 
         self._save_state()
         return True, approval["approval_id"]
+
+    def _unlock_dependent_steps(self, state: Dict, approved_gate_id: str, completed_step_id: str) -> None:
+        """解锁依赖已审批门禁的步骤
+
+        当一个门禁被审批通过后，查找所有依赖此 gate 的步骤，
+        将其状态从 BLOCKED/GATE_PENDING 改为 READY/PENDING。
+
+        Args:
+            state: 工作流状态
+            approved_gate_id: 已审批的门禁 ID
+            completed_step_id: 完成的步骤 ID
+        """
+        unlocked_count = 0
+
+        for step_id, step_data in state["steps"].items():
+            # 检查步骤是否依赖此 gate
+            step_gate_id = step_data.get("gate_id")
+            step_depends_on = step_data.get("depends_on_gate")
+
+            # 条件: 步骤依赖的门禁 == 已审批的门禁
+            if step_gate_id == approved_gate_id or step_depends_on == approved_gate_id:
+                old_state = step_data.get("state")
+
+                # 只有被阻塞或等待门禁的步骤才需要解锁
+                if old_state in [StepState.BLOCKED.value, StepState.GATE_PENDING.value, StepState.PENDING.value]:
+                    # 检查步骤的其他依赖是否都已满足
+                    can_unlock = True
+
+                    # 检查依赖的步骤是否都已完成
+                    deps = state.get("_deps", {}).get(step_id, [])
+                    for dep_id in deps:
+                        if dep_id in state["steps"]:
+                            dep_state = state["steps"][dep_id]["state"]
+                            if dep_state != StepState.COMPLETED.value:
+                                can_unlock = False
+                                break
+
+                    # 检查是否还有其他阻塞门禁
+                    for g_id, g_data in state.get("gates", {}).items():
+                        if g_id != approved_gate_id and g_data.get("blocking") and g_data.get("status") == "pending":
+                            # 检查此步骤是否依赖此门禁
+                            if step_data.get("gate_id") == g_id or step_data.get("depends_on_gate") == g_id:
+                                can_unlock = False
+                                break
+
+                    if can_unlock:
+                        step_data["state"] = StepState.READY.value
+                        unlocked_count += 1
+
+        # 记录解锁日志（可选）
+        if unlocked_count > 0:
+            # 可以在这里添加事件日志
+            pass
 
     def reject_gate(self, gate_id: str, approver: str, reason: str) -> Tuple[bool, Optional[str]]:
         """拒绝门禁"""

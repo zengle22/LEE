@@ -1,0 +1,116 @@
+# 使用 LLM Executor 的工作流模板
+
+---
+
+# L3: 任务级模板 - LLM 代码生成
+name: task_llm_code_generation
+description: "使用 LLM 生成 Python 代码"
+
+executor: llm
+
+steps:
+  - name: "设计代码结构"
+    executor: llm
+    input:
+      prompt: "设计一个 Todo List 应用的代码结构，包含模型、视图、控制器"
+      system_message: "你是一个软件架构师"
+      profile: zhipu
+
+  - name: "实现数据模型"
+    executor: llm
+    input:
+      prompt: "基于之前的结构设计，实现 Todo Item 的数据模型"
+      system_message: "你是一个 Python 后端工程师"
+      profile: zhipu
+    depends_on: ["设计代码结构"]
+
+  - name: "实现 API 接口"
+    executor: llm
+    input:
+      prompt: "基于数据模型，实现 RESTful API 接口（增删改查）"
+      system_message: "你是一个 API 设计专家"
+      profile: zhipu
+    depends_on: ["实现数据模型"]
+
+completion_criteria:
+  all_steps_completed: true
+
+---
+
+# L3: 任务级模板 - LLM 文档生成
+name: task_llm_documentation
+description: "使用 LLM 生成 API 文档"
+
+executor: llm
+
+steps:
+  - name: "生成 API 文档"
+    executor: llm
+    input:
+      prompt: "为以下 API 生成详细的文档，包括请求参数、响应格式、错误码：\n\nGET /api/todos - 获取所有待办事项\nPOST /api/todos - 创建新待办事项\nPUT /api/todos/{id} - 更新待办事项\nDELETE /api/todos/{id} - 删除待办事项"
+      system_message: "你是一个技术文档撰写专家"
+      profile: zhipu
+      max_tokens: 3000
+
+  - name: "生成使用示例"
+    executor: llm
+    input:
+      prompt: "为上述 API 生成 Python 和 JavaScript 的调用示例代码"
+      system_message: "你是一个技术文档撰写专家"
+      profile: zhipu
+      max_tokens: 2000
+    depends_on: ["生成 API 文档"]
+
+completion_criteria:
+  all_steps_completed: true
+
+---
+
+# L2: 部门级模板 - LLM 辅助开发
+name: dept_llm_assisted_development
+description: "使用 LLM 辅助的开发部门"
+
+variables:
+  dept_name: "LLM 辅助开发部门"
+  lead: "AI 助手"
+
+tasks:
+  - name: "代码生成"
+    template: task_llm_code_generation
+    priority: "P0"
+    depends_on: []
+    data:
+      task_name: "代码生成任务"
+      assignee: "LLM"
+      estimated_hours: 2
+
+  - name: "文档生成"
+    template: task_llm_documentation
+    priority: "P1"
+    depends_on: ["代码生成"]
+    data:
+      task_name: "文档生成任务"
+      assignee: "LLM"
+      estimated_hours: 1
+
+completion_criteria:
+  all_tasks_completed: true
+
+---
+
+# L1: 项目级模板 - LLM 驱动项目
+name: project_llm_driven
+description: "完全由 LLM 驱动的项目"
+
+variables:
+  project_name: "AI Todo List"
+  tech_stack: ["Python", "Flask", "SQLite"]
+
+departments:
+  - name: "AI 开发部门"
+    template: dept_llm_assisted_development
+    data:
+      dept_name: "AI 开发部门"
+
+completion_criteria:
+  all_departments_completed: true

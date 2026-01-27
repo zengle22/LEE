@@ -1527,6 +1527,264 @@ def cmd_trace(args):
     return 0
 
 
+def cmd_validate_workflow(args):
+    """验证 workflow.yaml 配置
+
+    P2-08 改进: 新增 workflow 校验命令
+
+    检查:
+    - YAML 格式正确性
+    - 必需字段完整性
+    - 依赖关系完整性
+    - agent_id 引用有效性
+    - 契约路径存在性
+    - 循环依赖检测
+    """
+    workflow_path = args.workflow
+
+    print_header("Workflow Validation")
+
+    # 1. 加载并解析 YAML
+    print(f"  Validating: {workflow_path}")
+
+    try:
+        with open(workflow_path, 'r', encoding='utf-8') as f:
+            workflow = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        print_error(f"Invalid YAML: {e}")
+        return 1
+    except FileNotFoundError:
+        print_error(f"File not found: {workflow_path}")
+        return 1
+
+    print_success("YAML format is valid")
+
+    # 2. 验证必需字段
+    errors = []
+    warnings = []
+
+    required_fields = ["id", "name", "version"]
+    for field in required_fields:
+        if field not in workflow:
+            errors.append(f"Missing required field: {field}")
+
+    if errors:
+        print_error("Required fields validation failed:")
+        for err in errors:
+            print(f"    {RED}- {err}{RESET}")
+        return 1
+
+    print_success("Required fields present")
+
+    # 3. 验证步骤定义
+    steps = workflow.get("steps", [])
+    if not steps:
+        errors.append("No steps defined in workflow")
+
+    step_ids = set()
+    for step in steps:
+        step_id = step.get("id")
+        if not step_id:
+            errors.append(f"Step missing 'id' field: {step.get('name', 'Unknown')}")
+        else:
+            if step_id in step_ids:
+                errors.append(f"Duplicate step ID: {step_id}")
+            step_ids.add(step_id)
+
+        # 验证 agent_id
+        run_ref = step.get("run", "")
+        if isinstance(run_ref, dict):
+            run_ref = run_ref.get("fallback", "")
+        if not run_ref:
+            warnings.append(f"Step '{step_id}' has no agent_id (run field)")
+
+        # 验证输出路径
+        outputs = step.get("outputs", [])
+        if not outputs:
+            warnings.append(f"Step '{step_id}' has no outputs defined")
+
+    if errors:
+        print_error("Steps validation failed:")
+        for err in errors:
+            print(f"    {RED}- {err}{RESET}")
+        return 1
+
+    print_success(f"Steps validation passed ({len(steps)} steps)")
+
+    # 4. 验证依赖关系
+    deps_errors = []
+    dependency_graph = {}
+
+    for step in steps:
+        step_id = step.get("id")
+        deps = step.get("depends_on", [])
+        dependency_graph[step_id] = deps
+
+        # 检查依赖的步骤是否存在
+        for dep_id in deps:
+            if dep_id not in step_ids:
+                deps_errors.append(f"Step '{step_id}' depends on non-existent step '{dep_id}'")
+
+    if deps_errors:
+        print_error("Dependency validation failed:")
+        for err in deps_errors:
+            print(f"    {RED}- {err}{RESET}")
+        return 1
+
+    # 检测循环依赖
+    has_cycle, cycle_path = _detect_circular_dependency(dependency_graph)
+    if has_cycle:
+        print_error("Circular dependency detected:")
+        print(f"    {RED}- {' -> '.join(cycle_path)}{RESET}")
+        return 1
+
+    print_success("Dependency validation passed")
+
+    # 5. 验证契约路径
+    contract_errors = []
+
+    for step in steps:
+        step_id = step.get("id")
+
+        # 检查 output_validation.contract_ref
+        validation = step.get("output_validation", {})
+        contract_ref = validation.get("contract_ref")
+        if contract_ref:
+            # 解析路径
+            base_dir = Path(workflow_path).parent
+            contract_path = base_dir / contract_ref
+            if not contract_path.exists():
+                contract_errors.append(f"Step '{step_id}': Contract not found: {contract_ref}")
+
+        # 检查输出契约中的 schema 引用
+        for output in step.get("outputs", []):
+            if isinstance(output, dict):
+                schema_ref = output.get("schema")
+                if schema_ref:
+                    base_dir = Path(workflow_path).parent
+                    schema_path = base_dir / schema_ref
+                    if not schema_path.exists():
+                        contract_errors.append(f"Step '{step_id}': Schema not found: {schema_ref}")
+
+    if contract_errors:
+        print_warning("Contract path validation (some files may be generated later):")
+        for err in contract_errors:
+            print(f"    {YELLOW}- {err}{RESET}")
+
+    # 6. 验证 agent_id 引用 (如果有 agent_resources 定义)
+    agents_defined = set()
+    for layer_name, layer in workflow.get("agent_resources", {}).items():
+        if isinstance(layer, list):
+            for agent in layer:
+                agents_defined.add(agent.get("id"))
+
+    agent_warnings = []
+    for step in steps:
+        step_id = step.get("id")
+        run_ref = step.get("run", "")
+        if isinstance(run_ref, dict):
+            run_ref = run_ref.get("fallback", "")
+
+        # 只检查引用到 agent_resources 的 agent_id
+        if run_ref and "/" in run_ref:
+            # 看起来像是一个资源引用 (如 agent.dev.tech_lead)
+            if run_ref not in agents_defined:
+                agent_warnings.append(f"Step '{step_id}' references undefined agent: {run_ref}")
+
+    if agent_warnings:
+        print_warning("Agent references (may be loaded from ai-spec):")
+        for warn in agent_warnings:
+            print(f"    {YELLOW}- {warn}{RESET}")
+
+    # 7. 验证门禁配置
+    gate_errors = []
+    gates_defined = {}
+
+    for gate in workflow.get("human_in_the_loop", []):
+        gate_id = gate.get("id")
+        if not gate_id:
+            gate_errors.append("Gate missing 'id' field")
+        else:
+            if gate_id in gates_defined:
+                gate_errors.append(f"Duplicate gate ID: {gate_id}")
+            gates_defined[gate_id] = gate
+
+    # 检查步骤引用的门禁是否存在
+    for step in steps:
+        step_id = step.get("id")
+        human_gate = step.get("human_gate")
+        if human_gate and human_gate is not True:
+            gate_id = str(human_gate)
+            if gate_id not in gates_defined:
+                # 允许隐式定义的门禁
+                warnings.append(f"Step '{step_id}' references undefined gate: {gate_id} (will use default config)")
+
+    if gate_errors:
+        print_error("Gate validation failed:")
+        for err in gate_errors:
+            print(f"    {RED}- {err}{RESET}")
+        return 1
+
+    print_success("Gate validation passed")
+
+    # 汇总
+    print()
+    print_header("Validation Summary")
+    print_success("All critical checks passed!")
+    print(f"  Steps: {len(steps)}")
+    print(f"  Gates: {len(gates_defined)}")
+    print(f"  Agents defined: {len(agents_defined)}")
+
+    if warnings:
+        print(f"\n  {YELLOW}Warnings: {len(warnings)}{RESET}")
+        for warn in warnings[:5]:  # 只显示前 5 个
+            print(f"    {YELLOW}- {warn}{RESET}")
+        if len(warnings) > 5:
+            print(f"    ... and {len(warnings) - 5} more")
+
+    return 0
+
+
+def _detect_circular_dependency(graph: Dict[str, List[str]]) -> tuple[bool, List[str]]:
+    """
+    检测循环依赖
+
+    Args:
+        graph: 依赖图 {step_id: [dep_ids]}
+
+    Returns:
+        (has_cycle, cycle_path) 元组
+    """
+    visited = set()
+    rec_stack = set()
+    path = []
+
+    def dfs(node):
+        visited.add(node)
+        rec_stack.add(node)
+        path.append(node)
+
+        for neighbor in graph.get(node, []):
+            if neighbor not in visited:
+                if dfs(neighbor):
+                    return True
+            elif neighbor in rec_stack:
+                # 找到循环
+                cycle_start = path.index(neighbor)
+                return True
+
+        path.pop()
+        rec_stack.remove(node)
+        return False
+
+    for node in graph:
+        if node not in visited:
+            if dfs(node):
+                return True, path
+
+    return False, []
+
+
 def cmd_validate_project(args):
     """验证项目配置 (project.yaml)
 
@@ -2215,6 +2473,11 @@ def main():
                                                help="Validate project.yaml configuration")
     p_validate_project.add_argument("project_dir", help="Project directory (or phase directory)")
 
+    # validate-workflow (P2-08 - workflow 校验命令)
+    p_validate_workflow = subparsers.add_parser("validate-workflow",
+                                                help="Validate workflow.yaml configuration (P2-08)")
+    p_validate_workflow.add_argument("workflow", help="Path to workflow.yaml file")
+
     # ============================================
     # 统一 Engine 接口命令 (新推荐)
     # ============================================
@@ -2305,6 +2568,7 @@ def main():
         "detailed-log": cmd_detailed_log,
         "context": cmd_context,
         "validate-project": cmd_validate_project,
+        "validate-workflow": cmd_validate_workflow,  # P2-08
         # 统一 Engine 接口命令（新推荐）
         "run-engine": cmd_run_engine,
         # 测试流程扩展命令

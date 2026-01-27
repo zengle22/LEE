@@ -7,6 +7,7 @@ Workflow Parser - 工作流解析器
 - 验证器配置
 - 门禁配置
 - 路径别名解析 (通过 ProjectConfig)
+- 模板变量解析 (P2-06 改进: 集成 TemplateResolver)
 """
 
 import yaml
@@ -16,6 +17,9 @@ from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
     from .project_config import ProjectConfig
+
+# 导入模板解析器
+from .template_resolver import TemplateResolver, create_resolver_from_workflow_state
 
 
 @dataclass
@@ -95,7 +99,8 @@ class WorkflowParser:
     """工作流解析器"""
 
     def __init__(self, workflow_path: str = None, workflow_dict: Dict = None,
-                 project_config: "ProjectConfig" = None):
+                 project_config: "ProjectConfig" = None,
+                 template_context: Dict[str, Any] = None):
         if workflow_path:
             with open(workflow_path, encoding='utf-8') as f:
                 self.workflow = yaml.safe_load(f)
@@ -107,6 +112,12 @@ class WorkflowParser:
         self.base_path = Path(workflow_path).parent if workflow_path else Path(".")
         self.project_config = project_config
 
+        # P2-06: 模板变量上下文
+        self.template_context = template_context or {}
+        # 从 workflow.yaml 中读取 context 定义
+        if "context" in self.workflow:
+            self.template_context.update(self.workflow["context"])
+
         # 如果没有提供 project_config，尝试自动加载
         if not self.project_config and workflow_path:
             try:
@@ -115,10 +126,26 @@ class WorkflowParser:
             except Exception:
                 pass  # 没有 project.yaml，使用原始路径
 
+        # P2-06: 创建模板解析器
+        self.template_resolver = TemplateResolver(self.template_context)
+
     def resolve_path(self, path: str) -> str:
-        """解析输出路径 (支持别名和变量)"""
+        """
+        解析输出路径 (支持别名和变量)
+
+        P2-06 改进: 先解析模板变量，再解析路径别名
+        """
         if not path:
             return path
+
+        # P2-06: 先解析模板变量 (如 {bug_id}, {round_num})
+        try:
+            path = self.template_resolver.resolve(path)
+        except ValueError:
+            # 如果模板变量解析失败，保持原样
+            pass
+
+        # 然后解析路径别名
         if self.project_config:
             return self.project_config.resolve_path(path, self.base_path)
         # 如果没有 project_config，返回相对于 workflow 的路径

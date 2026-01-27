@@ -146,8 +146,9 @@ class AgentSpecInvalid(Exception):
 class AgentLoader:
     """Agent Spec 加载器
 
-    加载和解析 Agent YAML 规范文件。不使用持久化缓存，
-    每次加载都从文件系统读取，确保 spec 更新立即生效。
+    加载和解析 Agent YAML 规范文件。
+
+    P2-01 改进: 添加内存缓存，避免重复加载相同的 agent spec。
     """
 
     # 必填字段
@@ -155,6 +156,9 @@ class AgentLoader:
 
     # 建议字段 (缺失时警告)
     RECOMMENDED_FIELDS = ["persona", "prompting", "responsibility"]
+
+    # 类级别缓存 (所有实例共享)
+    _cache: Dict[str, AgentSpec] = {}
 
     def __init__(self, project_root: str, spec_root: str = None):
         """初始化加载器
@@ -168,8 +172,63 @@ class AgentLoader:
         self._debug = os.environ.get("ORCHESTRATOR_DEBUG_AGENT") == "1"
         self._strict = os.environ.get("ORCHESTRATOR_STRICT_AGENT") == "1"
 
+        # 环境变量控制是否启用缓存
+        self._cache_enabled = os.environ.get("ORCHESTRATOR_AGENT_CACHE_ENABLED", "1") == "1"
+
+    @classmethod
+    def invalidate_cache(cls, agent_ref: str = None) -> None:
+        """清除缓存
+
+        Args:
+            agent_ref: 要清除的 agent 引用，如果为 None 则清除所有缓存
+        """
+        if agent_ref is None:
+            cls._cache.clear()
+            if os.environ.get("ORCHESTRATOR_DEBUG_AGENT") == "1":
+                print(f"[DEBUG] Cleared all agent cache")
+        else:
+            if agent_ref in cls._cache:
+                del cls._cache[agent_ref]
+                if os.environ.get("ORCHESTRATOR_DEBUG_AGENT") == "1":
+                    print(f"[DEBUG] Cleared cache for: {agent_ref}")
+
+    @classmethod
+    def get_cache_stats(cls) -> Dict[str, Any]:
+        """获取缓存统计信息"""
+        return {
+            "cache_size": len(cls._cache),
+            "cached_agents": list(cls._cache.keys()),
+        }
+
+    def _get_cache_key(self, agent_ref: str) -> str:
+        """生成缓存键
+
+        Args:
+            agent_ref: agent 引用
+
+        Returns:
+            缓存键 (结合项目路径和 agent ref 确保唯一性)
+        """
+        project_key = str(self.project_root.resolve())
+        return f"{project_key}:{agent_ref}"
+
+    def _is_cached(self, cache_key: str) -> bool:
+        """检查是否已缓存"""
+        return cache_key in self._cache
+
+    def _get_from_cache(self, cache_key: str) -> Optional[AgentSpec]:
+        """从缓存获取"""
+        return self._cache.get(cache_key)
+
+    def _set_cache(self, cache_key: str, spec: AgentSpec) -> None:
+        """设置缓存"""
+        if self._cache_enabled:
+            self._cache[cache_key] = spec
+
     def load(self, agent_ref: str) -> AgentSpec:
         """加载 Agent 规范
+
+        P2-01 改进: 先检查缓存，命中则直接返回，否则从文件加载并缓存。
 
         Args:
             agent_ref: agent 引用 (如 agent.dev.tech_lead)
@@ -181,6 +240,13 @@ class AgentLoader:
             AgentSpecNotFound: spec 文件不存在 (严格模式)
             AgentSpecInvalid: spec 格式无效
         """
+        # P2-01: 检查缓存
+        cache_key = self._get_cache_key(agent_ref)
+        if self._cache_enabled and self._is_cached(cache_key):
+            if self._debug:
+                print(f"[DEBUG] Agent spec cache hit: {agent_ref}")
+            return self._get_from_cache(cache_key)
+
         # 解析引用到路径
         spec_path = self.resolver.resolve(agent_ref)
 
@@ -191,7 +257,15 @@ class AgentLoader:
                 print(f"[DEBUG] Agent spec not found: {agent_ref}, using default")
             return AgentSpec.default()
 
-        return self.load_from_path(spec_path)
+        spec = self.load_from_path(spec_path)
+
+        # P2-01: 缓存结果
+        if spec is not None:
+            self._set_cache(cache_key, spec)
+            if self._debug and self._cache_enabled:
+                print(f"[DEBUG] Agent spec cached: {agent_ref}")
+
+        return spec
 
     def load_from_path(self, spec_path: Path) -> AgentSpec:
         """从文件路径加载 Agent 规范

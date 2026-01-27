@@ -184,5 +184,29 @@
     }
   },
   "active": "6ef1094d94498758",
-  "lastOpenFiles": []
+  "lastOpenFiles": [
+    "examples/version_comparison_report.md",
+    "examples/version_comparison_report.md.tmp.32820.1769447587571",
+    "examples/llm_metagpt_final_report.md",
+    "examples/llm_metagpt_final_report.md.tmp.32820.1769447309622",
+    "examples/test_llm_workflow.db-journal",
+    "examples/test_llm_workflow.db",
+    "examples/demo_llm_workflow.py",
+    "examples/demo_llm_workflow.py.tmp.32820.1769447251178",
+    "examples/templates_llm.yaml",
+    "examples/templates_llm.yaml.tmp.32820.1769447222589",
+    "examples/llm_metagpt_integration_report.md",
+    "examples/llm_metagpt_integration_report.md.tmp.32820.1769447205076",
+    "examples/llm_metagpt_guide.md",
+    "examples/llm_metagpt_guide.md.tmp.32820.1769447151971",
+    "examples/test_report_template_execution.md",
+    "examples/demo_report.md",
+    "docs/three-level-orchestrator/development-plan-simple.md",
+    "docs/three-level-orchestrator/development-plan-review-v2.md",
+    "docs/three-level-orchestrator/development-plan-review.md",
+    "docs/three-level-orchestrator/development-plan.md",
+    "docs/three-level-orchestrator/architecture-review.md",
+    "docs/three-level-orchestrator/architecture-design.md",
+    "docs/three-level-orchestrator/PRD.md"
+  ]
 }
