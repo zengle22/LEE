@@ -1,0 +1,172 @@
+# DevOps Execution Contract
+# DevOps 执行契约 - AI 权限边界定义
+
+kind: contract
+id: contract.devops.execution
+name: DevOps 执行契约
+version: "1.0.0"
+department: devops
+
+description: >
+  这是 DevOps Agent 的"宪法级"权限定义。
+
+  核心原则：
+  - DevOps Agent 只写「代码 + 配置模板 + 执行计划」
+  - 真实凭证永远由人类注入
+  - 生产环境必须经过 Human Gate 审批
+
+# ============================================
+# AI 必须遵守的约束（硬规则）
+# ============================================
+ai_must_not:
+  - description: "不得在生产环境创建/删除任何真实账号"
+    code: "NO_PROD_ACCOUNT_MUTATION"
+    severity: "critical"
+    penalty: "workflow_abort"
+
+  - description: "不得生成真实 token/密钥，仅可输出占位符"
+    code: "NO_REAL_SECRETS"
+    severity: "critical"
+    penalty: "workflow_abort"
+
+  - description: "不得绕过 human gate 对生产执行变更"
+    code: "NO_PROD_WITHOUT_HUMAN_GATE"
+    severity: "critical"
+    penalty: "workflow_abort"
+
+  - description: "不得直接对生产数据库做 DML（业务数据）"
+    code: "NO_PROD_DML"
+    severity: "critical"
+    penalty: "workflow_abort"
+
+  - description: "不得修改生产环境现有配置"
+    code: "NO_PROD_CONFIG_MODIFICATION"
+    severity: "critical"
+    penalty: "workflow_abort"
+
+ai_must:
+  - description: "所有命令必须在执行前输出审计日志"
+    code: "MUST_LOG_COMMANDS"
+    severity: "required"
+    validation: "每条命令必须有对应的审计记录"
+
+  - description: "必须为每一个变更提供回滚方案"
+    code: "MUST_PROVIDE_ROLLBACK"
+    severity: "required"
+    validation: "每个 deploy 操作必须有对应的 rollback 脚本"
+
+  - description: "必须使用占位符标记所有配置和凭证字段"
+    code: "MUST_USE_PLACEHOLDERS"
+    severity: "required"
+    validation: "所有敏感字段必须使用 ${PLACEHOLDER} 格式"
+
+  - description: "必须输出可追溯的执行计划"
+    code: "MUST_PROVIDE_EXECUTION_PLAN"
+    severity: "required"
+    validation: "执行计划必须包含：目标、步骤、回滚方案"
+
+# ============================================
+# 环境策略
+# ============================================
+environment_policy:
+  dev:
+    auto_apply: true
+    require_human_gate: false
+    description: "开发环境可自动部署，无需人工审批"
+
+  test:
+    auto_apply: true
+    require_human_gate: false
+    description: "测试环境可自动部署，无需人工审批"
+
+  staging:
+    auto_apply: false
+    require_human_gate: true
+    required_approvers:
+      - devops_lead
+      - product_lead
+    description: "预发布环境需要人工审批"
+
+  prod:
+    auto_apply: false
+    require_human_gate: true
+    required_approvers:
+      - devops_lead
+      - tech_lead
+      - product_owner
+    description: "生产环境需要高级别审批"
+
+# ============================================
+# 占位符规范
+# ============================================
+placeholder_rules:
+  pattern: "${VARIABLE_NAME}"
+  description: "所有敏感配置必须使用此格式的占位符"
+
+  examples:
+    - placeholder: "${DB_PASSWORD}"
+      description: "数据库密码"
+      human_action: "人类注入真实密码"
+
+    - placeholder: "${API_TOKEN}"
+      description: "API Token"
+      human_action: "人类注入真实 Token"
+
+    - placeholder: "${EXTERNAL_API_KEY}"
+      description: "外部 API 密钥"
+      human_action: "人类注入真实密钥"
+
+# ============================================
+# 审计要求
+# ============================================
+audit_requirements:
+  command_logging:
+    enabled: true
+    format: "[$TIMESTAMP] $ENVIRONMENT $COMMAND $USER"
+    retention_days: 365
+
+  change_tracking:
+    enabled: true
+    required_fields:
+      - timestamp
+      - environment
+      - change_type
+      - operator
+      - rollback_plan
+
+  approval_tracking:
+    enabled: true
+    required_fields:
+      - approver
+      - approval_timestamp
+      - approval_comment
+
+# ============================================
+# 违约处理
+# ============================================
+violation_handling:
+  on_contract_violation:
+    action: "immediate_stop"
+    notification:
+      - devops_lead
+      - tech_lead
+    escalation: "human_intervention_required"
+
+  on_boundary_violation:
+    action: "rollback_and_report"
+    notification:
+      - devops_lead
+      - security_team
+    escalation: "security_incident"
+
+# ============================================
+# 版本历史
+# ============================================
+changelog:
+  - version: "1.0.0"
+    date: "2026-01-29"
+    changes:
+      - "初始版本：定义 DevOps 执行契约"
+      - "设置 AI 权限边界"
+      - "定义环境策略"
+      - "建立审计要求"

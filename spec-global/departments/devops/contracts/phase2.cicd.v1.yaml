@@ -1,0 +1,292 @@
+# Phase 2 CI/CD 实现验证契约
+# DevOps 部署工作流 - Phase 2
+
+kind: contract
+id: devops.phase2.cicd.v1
+version: "1.0.0"
+name: "Phase 2 CI/CD 实现验证契约"
+department: devops
+
+description: >
+  这是 DevOps Phase 2（基础设施与 CI/CD 实现）的验证契约。
+
+  核心原则：
+  - IaC 代码必须可执行且符合最佳实践
+  - CI/CD Pipeline 必须完整且可运行
+  - 部署脚本必须安全且包含回滚逻辑
+
+# ============================================
+# 目标工作流和步骤
+# ============================================
+target:
+  workflow: "workflow.devops.deployment"
+  phase: "p2_infra_code"
+  step: "devops_cicd_impl"
+
+# ============================================
+# 验收产物定义
+# ============================================
+artifacts:
+  - id: docker_compose
+    name: "Docker Compose 配置"
+    path: "devops/phase2/docker-compose.yml"
+    required: true
+    description: "Docker Compose 编排配置"
+
+  - id: deploy_script
+    name: "部署脚本"
+    path: "devops/phase2/deploy/deploy-dev-test.sh"
+    required: true
+    description: "Dev/Test 环境部署脚本"
+
+  - id: rollback_script
+    name: "回滚脚本"
+    path: "devops/phase2/deploy/rollback-dev-test.sh"
+    required: true
+    description: "Dev/Test 环境回滚脚本"
+
+  - id: cicd_pipeline
+    name: "CI/CD Pipeline 配置"
+    path: "devops/phase2/cicd/cicd-pipeline.yaml"
+    required: true
+    description: "CI/CD 流水线配置"
+
+# ============================================
+# 验证检查清单
+# ============================================
+checks:
+  # ============================================
+  # 1. 程序型检查：文件存在性
+  # ============================================
+  - id: file_exists
+    name: "产物文件存在性检查"
+    type: program
+    script: "verifier/rules/devops_phase2_structure.py"
+    params:
+      check_type: "file_exists"
+      required_files:
+        - "devops/phase2/docker-compose.yml"
+        - "devops/phase2/deploy/deploy-dev-test.sh"
+        - "devops/phase2/deploy/rollback-dev-test.sh"
+        - "devops/phase2/cicd/cicd-pipeline.yaml"
+    severity: error
+    description: "检查所有必需的产物文件是否存在"
+
+  # ============================================
+  # 2. 程序型检查：脚本可执行性
+  # ============================================
+  - id: script_executable
+    name: "Shell 脚本可执行性检查"
+    type: program
+    script: "verifier/rules/devops_phase2_structure.py"
+    params:
+      check_type: "script_executable"
+      scripts:
+        - "devops/phase2/deploy/deploy-dev-test.sh"
+        - "devops/phase2/deploy/rollback-dev-test.sh"
+    severity: error
+    description: "检查 Shell 脚本具有执行权限且语法正确"
+
+  # ============================================
+  # 3. 程序型检查：Docker Compose 有效性
+  # ============================================
+  - id: docker_compose_valid
+    name: "Docker Compose 配置有效性检查"
+    type: program
+    script: "verifier/rules/devops_phase2_structure.py"
+    params:
+      check_type: "docker_compose_valid"
+      compose_file: "devops/phase2/docker-compose.yml"
+      required_services:
+        - "app"
+        - "db"
+        - "redis"
+      required_sections:
+        - "version"
+        - "services"
+        - "networks"
+        - "volumes"
+    severity: error
+    description: "验证 Docker Compose 配置正确且完整"
+
+  # ============================================
+  # 4. 程序型检查：安全最佳实践
+  # ============================================
+  - id: security_best_practices
+    name: "安全最佳实践检查"
+    type: program
+    script: "verifier/rules/devops_phase2_structure.py"
+    params:
+      check_type: "security_practices"
+      checks:
+        - no_hardcoded_secrets:
+            files:
+              - "devops/phase2/docker-compose.yml"
+              - "devops/phase2/deploy/deploy-dev-test.sh"
+            patterns:
+              - "password:"
+              - "api_key:"
+              - "secret:"
+            allowed_placeholders:
+              - "${PLACEHOLDER}"
+              - "${VAR_NAME}"
+
+        - health_checks_enabled:
+            compose_file: "devops/phase2/docker-compose.yml"
+            require_all: true
+
+        - rollback_exists:
+            file: "devops/phase2/deploy/rollback-dev-test.sh"
+    severity: error
+    description: "检查安全最佳实践：无硬编码密钥、健康检查、回滚脚本"
+
+  # ============================================
+  # 5. 程序型检查：部署脚本完整性
+  # ============================================
+  - id: deploy_script_completeness
+    name: "部署脚本完整性检查"
+    type: program
+    script: "verifier/rules/devops_phase2_structure.py"
+    params:
+      check_type: "deploy_script_structure"
+      script_file: "devops/phase2/deploy/deploy-dev-test.sh"
+      required_functions:
+        - "check_prerequisites"
+        - "backup_current_deployment"
+        - "load_environment_config"
+        - "stop_existing_services"
+        - "start_services"
+        - "verify_deployment"
+      required_error_handling:
+        - "set -e"
+        - "trap"
+    severity: error
+    description: "检查部署脚本包含所有必需函数和错误处理"
+
+  # ============================================
+  # 6. AI 语义检查：CI/CD Pipeline 完整性
+  # ============================================
+  - id: cicd_pipeline_semantic
+    name: "CI/CD Pipeline 完整性检查"
+    type: ai
+    agent: "devops-reviewer-agent"
+    spec: "agents/devops/devops-reviewer-acceptance.md"
+    params:
+      review_type: "cicd_pipeline"
+      min_score: 0.8
+      evaluation_criteria:
+        - "包含构建步骤"
+        - "包含测试步骤"
+        - "包含安全扫描"
+        - "包含部署步骤"
+        - "包含环境隔离"
+        - "包含人工审批点"
+    severity: error
+    description: "AI 审查 CI/CD Pipeline 的完整性"
+
+  # ============================================
+  # 7. AI 语义检查：代码质量
+  # ============================================
+  - id: code_quality
+    name: "生成代码质量检查"
+    type: ai
+    agent: "devops-reviewer-agent"
+    spec: "agents/devops/devops-reviewer-acceptance.md"
+    params:
+      review_type: "code_quality"
+      min_score: 0.7
+      evaluation_criteria:
+        - "代码结构清晰"
+        - "注释完整"
+        - "错误处理完善"
+        - "日志记录充分"
+        - "符合最佳实践"
+    severity: warning
+    description: "AI 评估生成代码的质量（warning 级别）"
+
+  # ============================================
+  # 8. 程序型检查：环境变量占位符
+  # ============================================
+  - id: placeholder_consistency
+    name: "环境变量占位符一致性检查"
+    type: program
+    script: "verifier/rules/devops_phase2_structure.py"
+    params:
+      check_type: "placeholder_consistency"
+      reference_file: "devops/phase1/env-matrix.yaml"
+      target_files:
+        - "devops/phase2/docker-compose.yml"
+    severity: warning
+    description: "检查环境变量占位符与环境矩阵一致"
+
+# ============================================
+# 验证策略
+# ============================================
+validation_strategy:
+  # 执行顺序
+  execution_order:
+    - "file_exists"
+    - "script_executable"
+    - "docker_compose_valid"
+    - "security_best_practices"
+    - "deploy_script_completeness"
+    - "cicd_pipeline_semantic"
+    - "code_quality"
+    - "placeholder_consistency"
+
+  # 快速失败：遇到第一个 error 就停止
+  fail_fast: true
+
+  # 失败后的行为
+  on_failure:
+    error:
+      - action: auto_retry
+        max_retries: 1
+        retry_delay_seconds: 10
+
+      - action: request_human_review
+        assignee_role: "devops_lead"
+        note: "CI/CD 实现验证未通过，需要人工审查"
+
+    warning:
+      - action: log_warning
+        destination: "devops/phase2/verification-warnings.log"
+
+      - action: continue
+        note: "存在警告但不阻断流程"
+
+# ============================================
+# 输出格式
+# ============================================
+output_format:
+  result_file: "devops/phase2/verification-result.yaml"
+  report_file: "devops/phase2/verification-report.md"
+
+  # 结果数据结构（用于文档说明，非 YAML schema）
+  result_fields:
+    contract_id: "string - 契约 ID"
+    verification_time: "string - 验证时间（ISO 8601）"
+    overall_status: "enum - pass, fail, warning"
+    check_results: "array - 检查结果列表"
+    total_checks: "int - 总检查数"
+    passed_checks: "int - 通过的检查数"
+    failed_checks: "int - 失败的检查数"
+    warning_checks: "int - 警告的检查数"
+    summary: "string - 摘要"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_at: "2026-01-29T00:00:00Z"
+  created_by: "lee-orchestrator"
+  version: "1.0.0"
+
+  changelog:
+    - version: "1.0.0"
+      date: "2026-01-29"
+      changes:
+        - "初始版本：定义 Phase 2 CI/CD 实现验证契约"
+        - "包含 8 项检查：文件、脚本、Docker、安全、Pipeline、质量"
+        - "重点关注安全最佳实践"
+        - "定义失败后的处理策略"

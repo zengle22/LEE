@@ -1,0 +1,251 @@
+# Phase 1 架构设计验证契约
+# DevOps 部署工作流 - Phase 1
+
+kind: contract
+id: devops.phase1.architecture.v1
+version: "1.0.0"
+name: "Phase 1 架构设计验证契约"
+department: devops
+
+description: >
+  这是 DevOps Phase 1（架构设计）的验证契约。
+
+  核心原则：
+  - 架构文档必须完整且结构化
+  - 发布策略必须明确且可执行
+  - AI 生成的产物必须通过验收才能进入下一阶段
+
+# ============================================
+# 目标工作流和步骤
+# ============================================
+target:
+  workflow: "workflow.devops.deployment"
+  phase: "p1_architecture"
+  step: "devops_arch_design"
+
+# ============================================
+# 验收产物定义
+# ============================================
+artifacts:
+  - id: architecture_doc
+    name: "架构设计文档"
+    path: "devops/phase1/infra-architecture.yaml"
+    required: true
+    description: "基础设施架构设计文档"
+
+  - id: env_matrix
+    name: "环境配置矩阵"
+    path: "devops/phase1/env-matrix.yaml"
+    required: true
+    description: "环境配置矩阵文档"
+
+  - id: release_strategy
+    name: "发布策略文档"
+    path: "devops/phase1/release-strategy.md"
+    required: true
+    description: "发布策略和回滚计划"
+
+# ============================================
+# 验证检查清单
+# ============================================
+checks:
+  # ============================================
+  # 1. 程序型检查：文件存在性
+  # ============================================
+  - id: file_exists
+    name: "产物文件存在性检查"
+    type: program
+    script: "verifier/rules/devops_phase1_structure.py"
+    params:
+      check_type: "file_exists"
+      required_files:
+        - "devops/phase1/infra-architecture.yaml"
+        - "devops/phase1/env-matrix.yaml"
+        - "devops/phase1/release-strategy.md"
+    severity: error
+    description: "检查所有必需的产物文件是否存在"
+
+  # ============================================
+  # 2. 程序型检查：YAML 格式有效性
+  # ============================================
+  - id: yaml_valid
+    name: "YAML 格式有效性检查"
+    type: program
+    script: "verifier/rules/devops_phase1_structure.py"
+    params:
+      check_type: "yaml_valid"
+      yaml_files:
+        - "devops/phase1/infra-architecture.yaml"
+        - "devops/phase1/env-matrix.yaml"
+    severity: error
+    description: "验证 YAML 文件格式正确，可以正常解析"
+
+  # ============================================
+  # 3. 程序型检查：架构文档结构完整性
+  # ============================================
+  - id: architecture_structure
+    name: "架构文档结构完整性检查"
+    type: program
+    script: "verifier/rules/devops_phase1_structure.py"
+    params:
+      check_type: "architecture_structure"
+      required_sections:
+        - "kind"
+        - "version"
+        - "project"
+        - "service_topology"
+        - "network_architecture"
+        - "storage_architecture"
+        - "security_architecture"
+        - "monitoring_architecture"
+    severity: error
+    description: "检查架构文档包含所有必需章节"
+
+  # ============================================
+  # 4. 程序型检查：环境矩阵完整性
+  # ============================================
+  - id: env_matrix_structure
+    name: "环境矩阵完整性检查"
+    type: program
+    script: "verifier/rules/devops_phase1_structure.py"
+    params:
+      check_type: "env_matrix_structure"
+      required_environments:
+        - "dev"
+        - "test"
+      required_fields:
+        - "environments"
+        - "configuration_matrix"
+        - "credential_management"
+    severity: error
+    description: "检查环境矩阵包含 dev 和 test 环境"
+
+  # ============================================
+  # 5. AI 语义检查：架构设计合理性
+  # ============================================
+  - id: architecture_semantic
+    name: "架构设计语义合理性检查"
+    type: ai
+    agent: "devops-reviewer-agent"
+    spec: "agents/devops/devops-reviewer-acceptance.md"
+    params:
+      review_type: "architecture"
+      min_score: 0.8
+      evaluation_criteria:
+        - "服务拓扑设计合理"
+        - "网络架构清晰"
+        - "存储策略可行"
+        - "安全考虑充分"
+        - "监控方案完整"
+    severity: error
+    description: "AI 审查架构设计的合理性和完整性"
+
+  # ============================================
+  # 6. AI 语义检查：运维可落地性
+  # ============================================
+  - id: ops_feasibility
+    name: "运维可落地性检查"
+    type: ai
+    agent: "devops-reviewer-agent"
+    spec: "agents/devops/devops-reviewer-acceptance.md"
+    params:
+      review_type: "ops_feasibility"
+      min_score: 0.6
+      evaluation_criteria:
+        - "部署流程可执行"
+        - "回滚方案可行"
+        - "监控指标可观测"
+        - "资源配比合理"
+        - "备份策略完整"
+    severity: warning
+    description: "AI 评估运维方案的可行性（warning 级别）"
+
+  # ============================================
+  # 7. 程序型检查：关键字段一致性
+  # ============================================
+  - id: cross_reference_consistency
+    name: "跨文档引用一致性检查"
+    type: program
+    script: "verifier/rules/devops_phase1_structure.py"
+    params:
+      check_type: "cross_reference"
+      references:
+        - source: "devops/phase1/env-matrix.yaml"
+          source_field: "environments.dev.ports.app"
+          target: "devops/phase1/infra-architecture.yaml"
+          target_field: "service_topology.app.port"
+    severity: warning
+    description: "检查不同文档间关键配置的一致性"
+
+# ============================================
+# 验证策略
+# ============================================
+validation_strategy:
+  # 执行顺序
+  execution_order:
+    - "file_exists"
+    - "yaml_valid"
+    - "architecture_structure"
+    - "env_matrix_structure"
+    - "architecture_semantic"
+    - "ops_feasibility"
+    - "cross_reference_consistency"
+
+  # 快速失败：遇到第一个 error 就停止
+  fail_fast: true
+
+  # 失败后的行为
+  on_failure:
+    # 如果是 error 级别失败，执行以下策略
+    error:
+      - action: auto_retry
+        max_retries: 1
+        retry_delay_seconds: 5
+
+      - action: request_human_review
+        assignee_role: "devops_lead"
+        note: "架构设计验证未通过，需要人工审查和修正"
+
+    # 如果是 warning 级别失败
+    warning:
+      - action: log_warning
+        destination: "devops/phase1/verification-warnings.log"
+
+      - action: continue
+        note: "存在警告但不阻断流程"
+
+# ============================================
+# 输出格式
+# ============================================
+output_format:
+  result_file: "devops/phase1/verification-result.yaml"
+  report_file: "devops/phase1/verification-report.md"
+
+  # 结果数据结构（用于文档说明，非 YAML schema）
+  result_fields:
+    contract_id: "string - 契约 ID"
+    verification_time: "string - 验证时间（ISO 8601）"
+    overall_status: "enum - pass, fail, warning"
+    check_results: "array - 检查结果列表"
+    total_checks: "int - 总检查数"
+    passed_checks: "int - 通过的检查数"
+    failed_checks: "int - 失败的检查数"
+    warning_checks: "int - 警告的检查数"
+    summary: "string - 摘要"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_at: "2026-01-29T00:00:00Z"
+  created_by: "lee-orchestrator"
+  version: "1.0.0"
+
+  changelog:
+    - version: "1.0.0"
+      date: "2026-01-29"
+      changes:
+        - "初始版本：定义 Phase 1 架构设计验证契约"
+        - "包含 7 项检查：文件存在性、格式、结构、语义、可行性"
+        - "区分 error 和 warning 级别"
+        - "定义失败后的处理策略"

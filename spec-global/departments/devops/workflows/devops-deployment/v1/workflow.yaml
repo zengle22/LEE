@@ -1,0 +1,554 @@
+# DevOps Deployment Workflow v1.0
+# DevOps 部署工作流 - DevOps 部门主流程
+
+kind: workflow
+id: workflow.devops.deployment
+name: DevOps 部署工作流
+version: "1.1"
+department: devops
+
+description: >
+  这是 DevOps 部门的 L2 主流程，负责从架构设计到部署验证的完整闭环。
+
+  **v1.1 更新**：集成 Verifier System
+  - Phase 1 和 Phase 2 增加自动验证机制
+  - 引入 Contract 验证契约
+  - 支持程序型检查和 AI 语义检查
+  - 验证失败后可自动重试或请求人工审查
+
+  核心思想：
+  - AI 只负责生成方案和代码
+  - 真实凭证由人类注入
+  - 生产环境必须经过 Human Gate 审批
+  - 每个变更都有回滚方案
+  - **[新增]** AI 产物必须通过验证才能进入下一阶段
+
+  流程概览：
+  Phase 1: 架构设计（architect agent）
+  Phase 2: 实施代码生成（implementation agent）
+  Phase 3: 人类注入配置（Human Gate）
+  Phase 4: 部署到 dev/test（program runner）
+  Phase 5: 环境验收（verification agent）
+  Phase 6: 版本冻结（verification agent + Human Gate）
+
+# ============================================
+# 工作流步骤
+# ============================================
+steps:
+  # ============================================
+  # Phase 1: 环境与发布架构设计
+  # ============================================
+  - id: p1_architecture
+    name: 环境与发布架构设计
+    kind: agent
+    agent: agent.devops.architect
+    description: |
+      DevOps 架构师设计环境拓扑和发布策略。
+
+      输出：
+      - infra-architecture.yaml - 基础设施架构设计
+      - env-matrix.yaml - 环境配置矩阵
+      - release-strategy.md - 发布策略文档
+
+      约束：
+      - 不生成任何具体 secret/token
+      - 只输出设计方案和配置模板
+
+    inputs:
+      - system_arch.md
+      - non_functional_requirements.yaml
+
+    outputs:
+      - path: devops/infra-architecture.yaml
+        required: true
+        description: 基础设施架构设计
+
+      - path: devops/env-matrix.yaml
+        required: true
+        description: 环境配置矩阵
+
+      - path: devops/release-strategy.md
+        required: true
+        description: 发布策略文档
+
+    # ============================================
+    # Verifier System 集成
+    # ============================================
+    verify:
+      contract: devops.phase1.architecture.v1
+      enabled: true
+      description: |
+        自动验证架构设计产物的完整性、格式和语义。
+
+        验证包括：
+        - 文件存在性和 YAML 格式检查（程序型）
+        - 架构文档结构完整性检查（程序型）
+        - 架构设计语义合理性检查（AI 型）
+        - 运维可落地性检查（AI 型，warning 级别）
+
+      on_fail:
+        # 自动重试 1 次
+        - action: auto_retry
+          max_retries: 1
+          retry_delay_seconds: 5
+
+        # 重试后仍不通过，请求人工审查
+        - action: request_human_review
+          assignee_role: devops_lead
+          gate_message: "架构设计验证未通过，需要人工审查和修正"
+          create_gate: true
+
+        # 人工审查后仍不通过，中止流程
+        - action: abort
+          reason: "架构设计验证失败，且人工审查未通过，中止工作流"
+
+    gate:
+      type: human_gate
+      reviewers:
+        - role: devops_lead
+          description: "DevOps 负责人"
+        - role: tech_lead
+          description: "技术负责人"
+
+      approval_criteria:
+        - label: "架构合理性"
+          criteria: "架构设计合理、可行"
+          required: true
+
+        - label: "发布策略完整性"
+          criteria: "发布策略包含回滚方案"
+          required: true
+
+        - label: "环境配置完整性"
+          criteria: "环境配置矩阵完整"
+          required: true
+
+  # ============================================
+  # Phase 2: 基础设施与 CI/CD 实现
+  # ============================================
+  - id: p2_infra_code
+    name: 基础设施与 CI/CD 实现
+    kind: agent
+    agent: agent.devops.implementation
+    depends_on:
+      - p1_architecture
+    description: |
+      DevOps 实施工程师生成 IaC 代码和 CI/CD 配置。
+
+      输出：
+      - infra/ - IaC 代码目录
+      - cicd/ - CI/CD 配置目录
+      - deploy/ - 部署脚本目录
+      - scripts/ - 辅助脚本目录
+      - release/ - 发布包目录
+
+      约束：
+      - 不执行任何真实命令
+      - 使用占位符标记所有敏感配置
+
+    inputs:
+      - from_step: p1_architecture
+        contract: devops/infra-architecture.yaml
+
+      - from_step: p1_architecture
+        contract: devops/env-matrix.yaml
+
+      - from_step: p1_architecture
+        contract: devops/release-strategy.md
+
+    outputs:
+      - path: devops/infra/
+        required: true
+        description: IaC 代码目录
+
+      - path: devops/cicd/
+        required: true
+        description: CI/CD 配置目录
+
+      - path: devops/deploy/
+        required: true
+        description: 部署脚本目录
+
+      - path: devops/scripts/
+        required: true
+        description: 辅助脚本目录
+
+    # ============================================
+    # Verifier System 集成
+    # ============================================
+    verify:
+      contract: devops.phase2.cicd.v1
+      enabled: true
+      description: |
+        自动验证 CI/CD 实现产物的完整性、格式和质量。
+
+        验证包括：
+        - 文件存在性和脚本可执行性检查（程序型）
+        - Docker Compose 配置有效性检查（程序型）
+        - 安全最佳实践检查（程序型）
+        - CI/CD Pipeline 完整性检查（AI 型）
+        - 代码质量检查（AI 型，warning 级别）
+
+      on_fail:
+        # 自动重试 1 次
+        - action: auto_retry
+          max_retries: 1
+          retry_delay_seconds: 10
+
+        # 重试后仍不通过，请求人工审查
+        - action: request_human_review
+          assignee_role: devops_lead
+          gate_message: "CI/CD 实现验证未通过，需要人工审查和修正"
+          create_gate: true
+
+        # 人工审查后仍不通过，中止流程
+        - action: abort
+          reason: "CI/CD 实现验证失败，且人工审查未通过，中止工作流"
+
+  # ============================================
+  # Phase 3: 人类注入环境配置与凭证
+  # ============================================
+  - id: p3_env_config
+    name: 人类注入环境配置与凭证
+    kind: human_gate
+    depends_on:
+      - p2_infra_code
+    description: |
+      人类根据模板填写真实配置（host、端口、账号、token、密钥等）。
+
+      这是**安全边界**：
+      - AI 不生成任何真实凭证
+      - 所有敏感信息由人类注入
+      - 注入后需要审批确认
+
+    inputs_required:
+      - path: devops/env/env-config.dev.yaml
+        required: true
+        description: 开发环境配置
+
+      - path: devops/env/env-config.test.yaml
+        required: true
+        description: 测试环境配置
+
+      - path: devops/env/env-config.staging.yaml
+        required: false
+        description: 预发布环境配置（可选）
+
+      - path: devops/env/env-config.prod.yaml
+        required: false
+        description: 生产环境配置（可选）
+
+    gate_rules:
+      reviewers:
+        - role: devops_lead
+          description: "DevOps 负责人"
+
+      approval_criteria:
+        - label: "配置完整性"
+          criteria: "所有必需配置已填写"
+          required: true
+
+        - label: "凭证安全性"
+          criteria: "无硬编码密钥、使用占位符"
+          required: true
+
+        - label: "环境隔离"
+          criteria: "各环境配置正确隔离"
+          required: true
+
+  # ============================================
+  # Phase 4: 部署到 dev/test
+  # ============================================
+  - id: p4_deploy_dev_test
+    name: 部署到 dev/test
+    kind: program
+    runner: shell
+    depends_on:
+      - p3_env_config
+    description: |
+      使用生成的部署脚本部署到 dev 和 test 环境。
+
+      约束：
+      - dev/test 环境可自动部署
+      - 不需要 Human Gate 审批
+      - 所有操作记录审计日志
+
+    execution:
+      dev:
+        command: "cd devops && ./deploy/deploy-dev-test.sh dev"
+        timeout: 600
+
+      test:
+        command: "cd devops && ./deploy/deploy-deploy-test.sh test"
+        timeout: 600
+
+    outputs:
+      - path: devops/logs/deploy/dev.log
+        required: true
+        description: 开发环境部署日志
+
+      - path: devops/logs/deploy/test.log
+        required: true
+        description: 测试环境部署日志
+
+  # ============================================
+  # Phase 5: 环境与发布包验收
+  # ============================================
+  - id: p5_verification
+    name: 环境与发布包验收
+    kind: agent
+    agent: agent.devops.verification
+    depends_on:
+      - p4_deploy_dev_test
+    description: |
+      DevOps 验收工程师验证部署质量和发布包完整性。
+
+      输出：
+      - deployment-checklist.md - 部署验收清单
+      - release-manifest.yaml - 发布清单
+
+      验证项：
+      - 所有服务是否正常运行
+      - 环境配置是否正确应用
+      - 数据库是否可访问
+      - API 端点是否正常响应
+      - 发布包是否完整
+
+    inputs:
+      - from_step: p4_deploy_dev_test
+        contract: devops/logs/deploy/
+
+      - from_step: p3_env_config
+        contract: devops/env/env-config.*.yaml
+
+      - from_step: p1_architecture
+        contract: devops/infra-architecture.yaml
+
+      - from_step: p2_infra_code
+        contract: devops/release/
+
+    outputs:
+      - path: devops/deployment-checklist.md
+        required: true
+        description: 部署验收清单
+
+      - path: devops/release-manifest.yaml
+        required: true
+        description: 发布清单
+
+    gate:
+      type: human_gate
+      reviewers:
+        - role: devops_lead
+          description: "DevOps 负责人"
+        - role: qa_lead
+          description: "测试负责人"
+
+      approval_criteria:
+        - label: "部署成功"
+          criteria: "所有关键服务正常运行"
+          required: true
+
+        - label: "配置正确"
+          criteria: "环境配置正确应用"
+          required: true
+
+        - label: "发布包完整"
+          criteria: "发布包包含所有必需文件"
+          required: true
+
+        - label: "回滚方案可行"
+          criteria: "回滚方案已验证可行"
+          required: true
+
+  # ============================================
+  # Phase 6: 版本冻结
+  # ============================================
+  - id: p6_release_freeze
+    name: 版本冻结
+    kind: agent
+    agent: agent.devops.verification
+    depends_on:
+      - p5_verification
+    description: |
+      生成版本冻结报告，确认可以正式发布。
+
+      这是**最终质量门控**：
+      - 所有验证检查通过
+      - 发布包完整且可审计
+      - 有明确的回滚方案
+      - 需要最终 Human Gate 审批
+
+    inputs:
+      - from_step: p5_verification
+        contract: devops/deployment-checklist.md
+
+      - from_step: p5_verification
+        contract: devops/release-manifest.yaml
+
+    outputs:
+      - path: devops/freeze-report.md
+        required: true
+        description: 版本冻结报告
+
+      - path: devops/audit-trail.yaml
+        required: true
+        description: 审计跟踪记录
+
+    gate:
+      type: human_gate
+      reviewers:
+        - role: devops_lead
+          description: "DevOps 负责人"
+        - role: tech_lead
+          description: "技术负责人"
+        - role: product_owner
+          description: "产品负责人（最终审批）"
+
+      approval_criteria:
+        - label: "所有检查通过"
+          criteria: "所有验证检查项通过"
+          required: true
+
+        - label: "审计跟踪完整"
+          criteria: "审计跟踪记录完整"
+          required: true
+
+        - label: "可追溯性"
+          criteria: "所有变更可追溯"
+          required: true
+
+        - label: "回滚准备就绪"
+          criteria: "回滚方案和脚本准备就绪"
+          required: true
+
+# ============================================
+# 工作流配置
+# ============================================
+config:
+  execution_mode: serial  # 串行执行
+  timeout:
+    p1_architecture: 3600        # 1 hour
+    p2_infra_code: 7200          # 2 hours
+    p3_env_config: 86400         # 24 hours (人类填写配置)
+    p4_deploy_dev_test: 1200     # 20 minutes
+    p5_verification: 1800        # 30 minutes
+    p6_release_freeze: 3600       # 1 hour
+
+# ============================================
+# 质量门控
+# ============================================
+quality_gates:
+  - name: "架构设计完整性"
+    at_step: p1_architecture
+    checks:
+      - type: "required_outputs"
+        required: [infra-architecture.yaml, env-matrix.yaml, release-strategy.md]
+
+      - type: "has_rollback_plan"
+        description: "发布策略必须包含回滚方案"
+
+  - name: "IaC 代码完整性"
+    at_step: p2_infra_code
+    checks:
+      - type: "required_directories"
+        required: [infra/, cicd/, deploy/, scripts/]
+
+      - type: "has_deploy_and_rollback"
+        description: "必须同时包含部署和回滚脚本"
+
+  - name: "配置安全性"
+    at_step: p3_env_config
+    checks:
+      - type: "no_hardcoded_secrets"
+        description: "不允许硬编码密钥"
+
+      - type: "placeholders_used"
+        description: "敏感字段必须使用占位符"
+
+  - name: "部署成功"
+    at_step: p5_verification
+    checks:
+      - type: "all_services_running"
+        description: "所有关键服务必须正常运行"
+
+      - type: "release_bundle_complete"
+        description: "发布包必须完整"
+
+  - name: "版本冻结完整性"
+    at_step: p6_release_freeze
+    checks:
+      - type: "all_checks_passed"
+        description: "所有验证检查必须通过"
+
+      - type: "audit_trail_complete"
+        description: "审计跟踪必须完整"
+
+# ============================================
+# 输出产物清单
+# ============================================
+artifacts:
+  - name: "基础设施架构设计"
+    path: devops/infra-architecture.yaml
+    description: "环境拓扑和基础设施架构"
+
+  - name: "环境配置矩阵"
+    path: devops/env-matrix.yaml
+    description: "多环境配置差异定义"
+
+  - name: "发布策略"
+    path: devops/release-strategy.md
+    description: "发布策略和回滚方案"
+
+  - name: "IaC 代码"
+    path: devops/infra/
+    description: "基础设施即代码"
+
+  - name: "CI/CD 配置"
+    path: devops/cicd/
+    description: "持续集成和部署配置"
+
+  - name: "部署脚本"
+    path: devops/deploy/
+    description: "部署和回滚脚本"
+
+  - name: "环境配置"
+    path: devops/env/env-config.*.yaml
+    description: "各环境实际配置（人类注入）"
+
+  - name: "部署验收清单"
+    path: devops/deployment-checklist.md
+    description: "部署验收检查项"
+
+  - name: "发布清单"
+    path: devops/release-manifest.yaml
+    description: "发布版本清单"
+
+  - name: "冻结报告"
+    path: devops/freeze-report.md
+    description: "版本冻结报告"
+
+  - name: "审计跟踪"
+    path: devops/audit-trail.yaml
+    description: "完整的审计跟踪记录"
+
+# ============================================
+# 版本历史
+# ============================================
+changelog:
+  - version: "1.1"
+    date: "2026-01-29"
+    changes:
+      - "集成 Verifier System：Phase 1 和 Phase 2 增加自动验证"
+      - "引入 Contract 验证契约：devops.phase1.architecture.v1 和 devops.phase2.cicd.v1"
+      - "支持程序型检查（文件存在、格式、结构）"
+      - "支持 AI 语义检查（架构合理性、代码质量）"
+      - "验证失败策略：自动重试 → 人工审查 → 中止"
+      - "新增 devops-reviewer-agent 用于 AI 验收"
+
+  - version: "1.0"
+    date: "2026-01-29"
+    changes:
+      - "初始版本：定义 DevOps 部署工作流"
+      - "定义 6 个阶段：架构设计 → 实施 → 配置注入 → 部署 → 验收 → 冻结"
+      - "建立 3 个 Agent + 4 个 Human Gate 的完整流程"
