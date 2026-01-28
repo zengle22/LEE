@@ -34,7 +34,8 @@ LEE 框架是一个通用的 AI 工作流编排系统，用于管理和执行复
 - **多引擎支持**：MetaGPT、单 Agent、Python/CLI
 - **人工门禁**：工作流中的审批节点
 - **规范管理**：全局规范模板 + 产品专属规范
-- **部门化组织**：按 PM/Dev/QA/Ops 部门组织规范
+- **部门化组织**：按 PM/Dev/QA/DevOps 部门组织规范
+- **Verifier System**：AI 产物质量验证系统
 - **可扩展**：标准化的接口，易于扩展新引擎
 
 ## 目录结构
@@ -49,7 +50,14 @@ LEE/
 │   └── cli/                      # 命令行工具
 ├── spec-global/                  # 全局规范模板（按部门组织）
 │   ├── core/                     # 平台级基础规范
-│   ├── departments/              # 按部门组织（pm/dev/qa/ops）
+│   ├── departments/              # 按部门组织（pm/dev/qa/devops）
+│   │   ├── dev/                  # 开发部门
+│   │   ├── prd/                  # 产品部门
+│   │   ├── qa/                   # 质量保证部门
+│   │   ├── ui/                   # UI/UX 设计部门
+│   │   ├── stg/                  # 策略部门
+│   │   ├── devops/               # DevOps 部门（含 Verifier System）
+│   │   └── office/               # 办公室
 │   └── cross/                    # 跨部门流程和接口
 ├── config/                       # 配置模板
 ├── docs/                         # 框架文档
@@ -139,6 +147,14 @@ python -m flowcore.cli.main log
 - [编排器指南](docs/Orchestrator-Guide.md)
 - [Workspace 配置](docs/Workspace-Config.md)
 - [Spec 组织结构](docs/Spec-Organization.md)
+- [工作流汇总](spec-global/WORKFLOWS.md) - 所有工作流概览
+
+### Spec-Global 文档
+
+- [Spec-Global 迁移报告](spec-global/README.md)
+- [工作流汇总](spec-global/WORKFLOWS.md)
+- [DevOps 部门文档](spec-global/departments/devops/README.md)
+- [Verifier System 快速开始](spec-global/departments/devops/docs/verifier-quickstart.md)
 
 ### 模块级文档
 

@@ -1,36 +1,38 @@
 # LEE Framework Spec-Global 迁移完成报告
 
 **迁移日期**: 2025-01-23
+**更新日期**: 2026-01-29
 **状态**: ✅ 完成
-**迁移文件数**: 134 个
+**迁移文件数**: 134 个 + DevOps 部门新增
 
 ---
 
 ## 迁移统计
 
 ### 总体统计
-| 类型 | 原始数量 | 已迁移 |
-|------|----------|--------|
-| agents | 76 | 76 |
-| skills | 18 | 18 |
-| workflows | 11 | 11 |
-| gates | 9 | 9 |
-| contracts | 7 | 7 |
-| protocols | 2 | 2 |
-| 其他 (schema, template, integration等) | 11 | 11 |
-| **总计** | **134** | **134** |
+| 类型 | 原始数量 | 已迁移 | 新增 |
+|------|----------|--------|------|
+| agents | 76 | 76 | 4 |
+| skills | 18 | 18 | 0 |
+| workflows | 11 | 11 | 2 |
+| gates | 9 | 9 | 0 |
+| contracts | 7 | 7 | 3 |
+| protocols | 2 | 2 | 0 |
+| 其他 (schema, template, integration等) | 11 | 11 | 4 |
+| **总计** | **134** | **134** | **13** |
 
 ### 按目录统计
-| 目录 | 文件数 |
-|------|--------|
-| core/ | 11 |
-| cross/ | 8 |
-| departments/dev/ | 37 |
-| departments/prd/ | 8 |
-| departments/qa/ | 35 |
-| departments/ui/ | 24 |
-| departments/stg/ | 7 |
-| departments/office/ | 4 |
+| 目录 | 文件数 | 说明 |
+|------|--------|------|
+| core/ | 11 | 核心基础设施 |
+| cross/ | 8 | 跨部门协作 |
+| departments/dev/ | 37 | 开发部门 |
+| departments/prd/ | 8 | 产品部门 |
+| departments/qa/ | 35 | 质量保证部门 |
+| departments/ui/ | 24 | UI/UX 设计部门 |
+| departments/stg/ | 7 | 策略部门 |
+| departments/office/ | 4 | 办公室 |
+| **departments/devops/** | **~30** | **DevOps 部门（新增）** |
 
 ---
 
@@ -182,6 +184,48 @@ spec-global/
     │       ├── product-goal-analysis/
     │       └── value-analysis-guide/
     │
+    ├── devops/                     # DevOps 部门 (30+) 【新增】
+    │   ├── agents/                 # 5 个 agents
+    │   │   ├── devops-architect.agent.yaml        # 架构师
+    │   │   ├── devops-implementation.agent.yaml   # 实施工程师
+    │   │   ├── devops-verification.agent.yaml    # 验收工程师
+    │   │   └── devops-reviewer.agent.yaml        # AI 审查 Agent
+    │   ├── contracts/              # 3 个 contracts
+    │   │   ├── phase1.architecture.v1.yaml       # Phase 1 验证契约
+    │   │   ├── phase2.cicd.v1.yaml               # Phase 2 验证契约
+    │   │   └── devops-execution.contract.yaml    # 执行契约
+    │   ├── verifier/               # Verifier System 【新增】
+    │   │   ├── engine.py                        # 验证引擎
+    │   │   ├── config.yaml                       # 引擎配置
+    │   │   └── rules/                            # 验证规则
+    │   │       ├── devops_phase1_structure.py   # Phase 1 规则
+    │   │       └── devops_phase2_structure.py   # Phase 2 规则
+    │   ├── workflows/              # 1 个 workflow
+    │   │   └── devops-deployment/v1/workflow.yaml # L2 部署工作流
+    │   ├── checklists/             # 2 个 checklists
+    │   │   ├── devops-human-gate.checklist.yaml
+    │   │   └── devops-release-freeze.checklist.yaml
+    │   ├── templates/              # 4 个 templates
+    │   │   ├── env-config.template.yaml
+    │   │   ├── release-version.template.yaml
+    │   │   ├── deploy-plan.template.md
+    │   │   └── rollback-plan.template.md
+    │   ├── examples/               # 6 个 examples
+    │   │   ├── docker-compose.yml
+    │   │   ├── env-config.dev.yaml
+    │   │   ├── env-config.test.yaml
+    │   │   ├── deploy-dev-test.sh
+    │   │   ├── rollback-dev-test.sh
+    │   │   └── ci-cd-github-actions.yaml
+    │   ├── demo/                   # 演示文件
+    │   │   ├── 00-inputs/
+    │   │   ├── 01-architecture/
+    │   │   └── test-phase1/
+    │   └── docs/                   # 文档
+    │       ├── orchestrator-integration.md
+    │       ├── verifier-quickstart.md
+    │       └── verifier-system-integration.md
+    │
     └── office/                     # 办公室 (4)
         ├── agents/                 # 1 个 agent
         │   └── approval-reviewer/
@@ -274,6 +318,24 @@ spec-global/departments/dev/agents/ai-engineer/v1/agent.yaml
 | common/* (审批相关) | office | `departments/office/` |
 | common/* (基础设施) | core | `core/` |
 | common/* (跨部门) | cross | `cross/` |
+| - | devops | `departments/devops/` (新增) |
+
+### DevOps 部门 (新增)
+
+DevOps 部门负责基础设施和 CI/CD 相关的规范和流程。
+
+**核心特性**:
+- **Verifier System**: AI 产物质量验证系统
+- **三 Agent 模型**: Architect → Implementation → Verification
+- **六阶段工作流**: 从架构设计到版本冻结的完整流程
+- **安全边界**: AI 生成模板，人类注入凭证
+
+**主要组件**:
+- **Agents**: `devops-architect`, `devops-implementation`, `devops-verification`, `devops-reviewer`
+- **Workflow**: `workflow.devops.deployment` (L2 部署工作流)
+- **Verifier System**: 自动验证 AI 生成的架构和代码产物
+- **Contracts**: 验证契约定义验证规则和标准
+- **Examples**: Docker Compose, CI/CD Pipeline, 部署脚本示例
 
 ---
 
