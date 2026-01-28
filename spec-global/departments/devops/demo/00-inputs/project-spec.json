@@ -1,0 +1,95 @@
+{
+  "project": {
+    "name": "task-manager",
+    "version": "1.0.0",
+    "description": "任务管理系统 - 团队协作任务跟踪平台",
+    "type": "web-application",
+    "repository": "https://github.com/myorg/task-manager"
+  },
+  "deployment_requirements": {
+    "target_environments": ["dev", "test"],
+    "deployment_type": "docker-compose",
+    "availability_requirement": "high",
+    "recovery_time_objective": "15m",
+    "backup_requirement": "daily"
+  },
+  "tech_stack": {
+    "backend": {
+      "language": "go",
+      "version": "1.21",
+      "framework": "gin"
+    },
+    "frontend": {
+      "language": "typescript",
+      "framework": "react",
+      "version": "18"
+    },
+    "database": {
+      "type": "postgresql",
+      "version": "15"
+    },
+    "cache": {
+      "type": "redis",
+      "version": "7"
+    },
+    "web_server": {
+      "type": "nginx",
+      "version": "alpine"
+    }
+  },
+  "infrastructure_requirements": {
+    "containers": {
+      "app": {
+        "replicas": 1,
+        "resources": {
+          "memory": "512M",
+          "cpu": "0.5"
+        }
+      },
+      "db": {
+        "replicas": 1,
+        "resources": {
+          "memory": "1G",
+          "cpu": "0.5"
+        },
+        "persistence": true,
+        "backup_enabled": true
+      },
+      "redis": {
+        "replicas": 1,
+        "resources": {
+          "memory": "256M",
+          "cpu": "0.25"
+        }
+      },
+      "nginx": {
+        "replicas": 1,
+        "resources": {
+          "memory": "128M",
+          "cpu": "0.25"
+        }
+      }
+    },
+    "networking": {
+      "network_type": "bridge",
+      "subnet": "172.20.0.0/16"
+    },
+    "storage": {
+      "type": "local",
+      "backup_schedule": "0 2 * * *"
+    }
+  },
+  "security_requirements": {
+    "env_isolation": true,
+    "credential_management": "human_injected",
+    "audit_logging": true,
+    "https_required": ["test", "staging", "prod"],
+    "health_checks_enabled": true
+  },
+  "monitoring_requirements": {
+    "health_check_endpoint": "/health",
+    "metrics_enabled": true,
+    "logging_level": "info",
+    "log_output": ["console", "file"]
+  }
+}

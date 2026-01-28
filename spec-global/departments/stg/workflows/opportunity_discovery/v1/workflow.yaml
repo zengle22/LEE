@@ -1,18 +1,19 @@
-# Opportunity Discovery Workflow v1.0
+# Opportunity Discovery Workflow v1.1
 # 商业机会发现工作流 - 策略部门主流程
 
 kind: workflow
 id: workflow.stg.opportunity_discovery
 name: 商业机会发现工作流
-version: "1.0"
+version: "1.1"
 
 description: >
-  这是一个"可冻结、可复盘、可移交"的需求发现流水线。
-  从市场信号采集到商业机会交付，完整的 5 层流程。
+  这是一个"可冻结、可复盘"的商业机会发现流水线。
+  从市场信号采集到商业机会冻结，完整的 6 层流程。
 
   核心思想：
   - 分析必须在 freeze 层收敛
-  - 机会必须在 handoff 层"对产品部门负责"
+  - 机会构建后必须经过 human gate 冻结
+  - 输出"商业机会冻结包"作为下游 L2 流程的输入
 
 # ============================================
 # 工作流步骤
@@ -236,25 +237,28 @@ steps:
         description: 商业机会假设
 
   # ============================================
-  # Step 7: 产品部门交付（交付层）
+  # Step 7: 商业机会冻结（冻结层）
   # ============================================
-  - id: product_handoff
-    name: 产品部门交付
-    kind: skill
-    skill: product_handoff_generator
+  - id: freeze_business_opportunity
+    name: 商业机会冻结
+    kind: human_gate
+    description: |
+      这是商业机会的最终冻结点！
+
+      冻结商业机会构建的所有结论，确保：
+      - 机会假设完整且可验证
+      - 风险已充分识别
+      - Reasons NOT to Do 已诚实列出
+      - 可以作为下游 L2 流程的可靠输入
+
+      需要人工审核：
+      - 机会价值是否足够？
+      - 时机是否合适（Why Now）？
+      - 风险是否可接受？
+      - 验证路径是否清晰？
+
     depends_on:
       - build_business_opportunity
-    description: |
-      将商业机会转化为标准的产品交付文档。
-
-      核心原则：
-      - 清晰区分"相信的"和"不知道的"
-      - 明确"现在不要做什么"
-      - 给出可执行的验证建议
-
-      目的：
-      - 减少产品对"上游胡扯"的不信任
-      - 提供清晰的验证路径
 
     inputs:
       - from_step: build_business_opportunity
@@ -263,9 +267,39 @@ steps:
         contract: contracts/market_signal_freeze/v1/freeze.yaml
 
     outputs:
-      - path: contracts/product_handoff/v1/handoff.yaml
+      - path: contracts/business_opportunity_freeze/v1/freeze.yaml
         required: true
-        description: 产品交付文档
+        description: 商业机会冻结包
+
+    gate_rules:
+      reviewers:
+        - role: stg_lead
+          description: "策略部门负责人"
+        - role: product_lead
+          description: "产品部门负责人（共同审核）"
+
+      approval_criteria:
+        - label: "机会价值"
+          criteria: "一句话机会定义清晰、目标用户明确"
+          required: true
+
+        - label: "时机合适"
+          criteria: "Why Now 理由充分、市场时机成熟"
+          required: true
+
+        - label: "风险识别"
+          criteria: "Reasons NOT to Do 至少 3 条、风险可接受"
+          required: true
+
+        - label: "可验证性"
+          criteria: "验证路径清晰、假设可测试"
+          required: true
+
+      rejection_criteria:
+        - "机会定义模糊、目标用户不明确"
+        - "时机不成熟、缺乏 Why Now 理由"
+        - "风险未充分识别、 Reasons NOT to Do 不够诚实"
+        - "验证路径不清晰、假设不可测试"
 
 # ============================================
 # 工作流配置
@@ -279,7 +313,7 @@ config:
     analyze_supply_competition: 1800
     freeze_market_signals: 86400  # 24 hours (human review)
     build_business_opportunity: 1800
-    product_handoff: 600
+    freeze_business_opportunity: 86400  # 24 hours (human review with product lead)
 
 # ============================================
 # 质量门控
@@ -302,6 +336,15 @@ quality_gates:
 
       - type: "risk_honesty"
         description: "Reasons NOT to Do 必须至少 3 条"
+
+  - name: "商业机会冻结完整性"
+    at_step: freeze_business_opportunity
+    checks:
+      - type: "required_fields"
+        required: [one_liner, target_user, why_now, differentiation, reasons_not_to_do, validation_path]
+
+      - type: "freeze_package_complete"
+        description: "商业机会冻结包包含所有必需字段"
 
 # ============================================
 # 输出产物清单
@@ -331,9 +374,9 @@ artifacts:
     path: contracts/business_opportunity/v1/opportunity.yaml
     description: "可验证的机会假设"
 
-  - name: "产品交付文档"
-    path: contracts/product_handoff/v1/handoff.yaml
-    description: "向产品部门交付的最终文档"
+  - name: "商业机会冻结包"
+    path: contracts/business_opportunity_freeze/v1/freeze.yaml
+    description: "商业机会冻结包 - 下游 L2 流程的输入"
 
 # ============================================
 # 重启和恢复策略
@@ -347,14 +390,22 @@ recovery:
   low_confidence:
     action: "扩大搜索范围或延长时间窗口，重新采集"
 
-  # 如果产品部门拒绝机会
-  product_rejection:
-    action: "记录拒绝原因，更新冻结层，重新构建机会"
+  # 如果商业机会 Gate 被拒绝
+  opportunity_rejection:
+    action: "记录拒绝原因，更新市场信号冻结，重新构建机会"
 
 # ============================================
 # 版本历史
 # ============================================
 changelog:
+  - version: "1.1"
+    date: "2026-01-28"
+    changes:
+      - "删除 Step 7: product_handoff（产品部门交付）"
+      - "新增 Step 7: freeze_business_opportunity（商业机会冻结 Human Gate）"
+      - "输出改为'商业机会冻结包'，作为下游 L2 流程输入"
+      - "增加 product_lead 作为联合审核角色"
+
   - version: "1.0"
     date: "2025-01-23"
     changes:
