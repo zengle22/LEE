@@ -1,0 +1,244 @@
+"""
+LLM Executor - 直接调用大模型 API
+
+支持多种 Provider：
+- OpenAI (GPT-4, GPT-3.5)
+- Anthropic (Claude)
+- Azure OpenAI
+- 其他兼容 OpenAI API 的服务
+- 自定义反代服务（如 antigravity, 智谱 GLM）
+"""
+
+import os
+import asyncio
+import aiohttp
+import yaml
+from typing import Dict, Any, Optional
+from pathlib import Path
+from datetime import datetime
+
+
+class LLMConfig:
+    """LLM 配置管理"""
+
+    def __init__(self, config_path: Optional[str] = None):
+        """
+        初始化 LLM 配置
+
+        Args:
+            config_path: 配置文件路径，默认为 config/llm_config.yaml
+        """
+        if config_path is None:
+            # 默认配置文件路径
+            project_root = Path(__file__).parent.parent.parent.parent.parent
+            config_path = project_root / "config" / "llm_config.yaml"
+
+        self.config_path = Path(config_path)
+        self.configs = self._load_config()
+
+    def _load_config(self) -> Dict[str, Any]:
+        """加载 YAML 配置文件"""
+        if not self.config_path.exists():
+            return {}
+
+        with open(self.config_path, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f) or {}
+
+    def get_config(self, profile: str = "default") -> Dict[str, Any]:
+        """
+        获取指定配置
+
+        Args:
+            profile: 配置名称（default, antigravity, zhipu, agent.prd, agent.dev）
+
+        Returns:
+            配置字典
+        """
+        config = self.configs.get(profile, {})
+
+        # 环境变量替换
+        config = self._resolve_env_vars(config)
+
+        return config
+
+    def _resolve_env_vars(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """解析环境变量"""
+        resolved = {}
+
+        for key, value in config.items():
+            if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
+                env_var = value[2:-1]
+                resolved[key] = os.getenv(env_var, value)
+            else:
+                resolved[key] = value
+
+        return resolved
+
+
+class LLMExecutor:
+    """
+    LLM 执行器
+
+    执行 LLM 相关任务（如代码生成、文本分析等）
+    """
+
+    def __init__(self, profile: str = "antigravity", config_path: Optional[str] = None):
+        """
+        初始化 LLM 执行器
+
+        Args:
+            profile: 配置文件名称（default, antigravity, zhipu, agent.prd, agent.dev）
+            config_path: 配置文件路径
+        """
+        self.config_manager = LLMConfig(config_path)
+        self.profile = profile
+        self.config = self.config_manager.get_config(profile)
+
+        # 验证必要配置
+        if not self.config.get("api_key"):
+            raise ValueError(f"LLM config '{profile}' missing api_key")
+
+    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        执行 LLM 任务
+
+        Args:
+            input_data: 应包含 prompt, system_message 等字段
+
+        Returns:
+            包含 generated_text, tokens_used 等字段
+        """
+        prompt = input_data.get("prompt", "")
+        system_message = input_data.get("system_message", "You are a helpful assistant.")
+
+        # 从 input_data 获取参数（允许覆盖配置）
+        temperature = input_data.get("temperature", self.config.get("temperature", 0.7))
+        max_tokens = input_data.get("max_tokens", self.config.get("max_tokens", 4000))
+
+        try:
+            # 调用 LLM API
+            response_text = await self._call_with_retry(
+                self._call_llm,
+                system_message,
+                prompt
+            )
+
+            return {
+                "generated_text": response_text,
+                "model": self.config.get("model", "unknown"),
+                "provider": self.config.get("provider", "custom"),
+                "tokens_used": len(response_text.split()),  # 粗略估算
+                "status": "completed",
+            }
+
+        except Exception as e:
+            return {
+                "generated_text": "",
+                "error": str(e),
+                "status": "failed",
+            }
+
+    async def _call_with_retry(
+        self,
+        call_func,
+        system_prompt: str,
+        user_message: str,
+        max_retries: int = 3,
+        initial_delay: float = 1.0
+    ) -> str:
+        """
+        带重试的 LLM API 调用
+
+        处理：
+        - HTTP 429 (Too Many Requests) - 速率限制
+        - HTTP 500/502/503/504 - 服务器错误
+        - 网络超时
+        """
+        import random
+
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                return await call_func(system_prompt, user_message)
+
+            except aiohttp.ClientResponseError as e:
+                last_error = e
+
+                # 检查是否为可重试的瞬态错误
+                if e.status in [429, 500, 502, 503, 504]:
+                    if attempt < max_retries - 1:
+                        # 指数退避 + 抖动
+                        delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
+                        delay = min(delay, 30)  # 最多等待 30 秒
+
+                        print(f"[LLM Executor] API error {e.status} (attempt {attempt + 1}/{max_retries}), retrying in {delay:.1f}s...")
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        raise ValueError(f"LLM API failed after {max_retries} attempts. Last error: {e.status} {e.message}")
+                else:
+                    # 非瞬态错误，不重试
+                    raise ValueError(f"LLM API error: {e.status} {e.message}")
+
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                last_error = e
+
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
+                    delay = min(delay, 30)
+
+                    print(f"[LLM Executor] Network error (attempt {attempt + 1}/{max_retries}), retrying in {delay:.1f}s...")
+                    await asyncio.sleep(delay)
+                else:
+                    raise ValueError(f"LLM API network error after {max_retries} attempts: {str(e)}")
+
+        raise ValueError(f"LLM API call failed: {str(last_error)}")
+
+    async def _call_llm(
+        self,
+        system_prompt: str,
+        user_message: str
+    ) -> str:
+        """调用 LLM API（兼容 OpenAI 格式）"""
+        api_key = self.config.get("api_key")
+        base_url = self.config.get("base_url", "https://api.openai.com/v1")
+        model = self.config.get("model", "gpt-4")
+        temperature = self.config.get("temperature", 0.7)
+        max_tokens = self.config.get("max_tokens", 4000)
+        provider = self.config.get("provider", "custom")
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{base_url}/chat/completions",
+                headers=headers,
+                json=payload
+            ) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                return data["choices"][0]["message"]["content"]
+
+    def get_info(self) -> Dict[str, Any]:
+        """获取执行器信息"""
+        return {
+            "type": "llm",
+            "profile": self.profile,
+            "provider": self.config.get("provider", "custom"),
+            "model": self.config.get("model", "unknown"),
+            "base_url": self.config.get("base_url", ""),
+        }
