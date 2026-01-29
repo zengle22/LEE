@@ -72,7 +72,7 @@ runtime/runs/
 
 # LEE 项目输出目录 (project-specific outputs)
 contracts/
-docs/
+# docs/  # Uncomment to ignore docs directory
 outputs/
 specs/
 # src/   # Uncomment to track src directory
