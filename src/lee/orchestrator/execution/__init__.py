@@ -7,6 +7,7 @@ from lee.orchestrator.execution.state_machine import WorkflowStateMachine, State
 from lee.orchestrator.execution.template_manager import TemplateManager
 from lee.orchestrator.execution.gate_api import GateAPI
 from lee.orchestrator.execution.executors import ExecutorFactory, BaseExecutor
+from lee.orchestrator.execution.langgraph_executor import LangGraphExecutor, register_langgraph_executor
 
 # Agent 系统（从 v1 迁移）
 from lee.orchestrator.execution.agent_loader import AgentLoader, AgentSpec
@@ -36,6 +37,8 @@ __all__ = [
     "GateAPI",
     "ExecutorFactory",
     "BaseExecutor",
+    "LangGraphExecutor",
+    "register_langgraph_executor",
     # Agent 系统
     "AgentLoader",
     "AgentSpec",
@@ -68,3 +71,6 @@ __all__ = [
     "can_retry_step",
     "prepare_step_retry",
 ]
+
+# 自动注册 LangGraph 执行器
+register_langgraph_executor()
