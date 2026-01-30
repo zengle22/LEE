@@ -1,0 +1,48 @@
+# Inventory 使用记录
+# 自动生成于部署过程
+
+deployment:
+  timestamp: "2026-01-30T10:55:00Z"
+  phase: p4_deploy_dev_test
+  workflow_version: "1.2"
+
+  # v1.2 资源绑定约束
+  resource_binding:
+    type: ansible_inventory
+    contract_ref: contract.devops.execution
+
+  # 使用的 inventory
+  uses_inventory:
+    - dev
+    - test
+
+  dev_deployment:
+    inventory_path: ./00-inventory/dev
+    hosts_deployed:
+      - "dev-api-1 (10.0.1.10)"
+      - "dev-db-1 (10.0.1.11)"
+      - "dev-redis-1 (10.0.1.12)"
+    status: success
+    completed_at: "2026-01-30T10:40:16Z"
+
+  test_deployment:
+    inventory_path: ./00-inventory/test
+    hosts_deployed:
+      - "test-api-1 (10.0.2.10)"
+      - "test-db-1 (10.0.2.11)"
+      - "test-redis-1 (10.0.2.12)"
+    status: success
+    completed_at: "2026-01-30T10:45:10Z"
+
+  constraints_satisfied:
+    - code: MUST_USE_INVENTORY
+      status: satisfied
+      evidence: "通过 inventory 引用服务器，未硬编码 IP"
+
+    - code: NO_RESOURCE_PROVISIONING
+      status: satisfied
+      evidence: "未创建任何云资源，仅部署到既有服务器"
+
+    - code: MUST_LOG_COMMANDS
+      status: satisfied
+      evidence: "所有命令已记录到 deploy-*.log"

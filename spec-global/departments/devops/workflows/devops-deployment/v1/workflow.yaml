@@ -4,7 +4,7 @@
 kind: workflow
 id: workflow.devops.deployment
 name: DevOps 部署工作流
-version: "1.1"
+version: "1.2"
 department: devops
 
 description: >
@@ -30,6 +30,21 @@ description: >
   Phase 4: 部署到 dev/test（program runner）
   Phase 5: 环境验收（verification agent）
   Phase 6: 版本冻结（verification agent + Human Gate）
+
+# ============================================
+# 资源绑定（v1.2 新增）
+# ============================================
+resource_binding:
+  type: ansible_inventory
+  description: >
+    部署只能通过指定的 inventory 触达机器，不允许临时创造资源。
+    所有服务器引用必须通过 inventory 名称或资源标签。
+  contract_ref: contract.devops.execution
+  inventories:
+    dev: project/${PROJECT_NAME}/devops/ansible/inventory/dev
+    test: project/${PROJECT_NAME}/devops/ansible/inventory/test
+    staging: project/${PROJECT_NAME}/devops/ansible/inventory/staging
+    prod: project/${PROJECT_NAME}/devops/ansible/inventory/prod
 
 # ============================================
 # 工作流步骤
@@ -279,8 +294,13 @@ steps:
         timeout: 600
 
       test:
-        command: "cd devops && ./deploy/deploy-deploy-test.sh test"
+        command: "cd devops && ./deploy/deploy-dev-test.sh test"
         timeout: 600
+
+    # v1.2 新增：显式声明使用的 inventory
+    uses_inventory:
+      - dev
+      - test
 
     outputs:
       - path: devops/logs/deploy/dev.log
@@ -536,6 +556,14 @@ artifacts:
 # 版本历史
 # ============================================
 changelog:
+  - version: "1.2"
+    date: "2026-01-30"
+    changes:
+      - "新增 resource_binding 部分：显式声明 inventory 绑定"
+      - "Phase 4 新增 uses_inventory：明确部署只能使用指定 inventory"
+      - "引用 contract.devops.execution 资源策略"
+      - "修复 test 环境部署命令拼写错误"
+
   - version: "1.1"
     date: "2026-01-29"
     changes:

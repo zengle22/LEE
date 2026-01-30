@@ -1,0 +1,82 @@
+# Running Coach - 发布清单
+# Phase 5 输出 by agent.devops.verification
+
+kind: release_manifest
+version: "1.0.0"
+project: running-coach
+status: verified
+
+# ============================================
+# 版本信息
+# ============================================
+release:
+  version: "1.0.0"
+  codename: "First Release"
+  created_at: "2026-01-30T11:00:00Z"
+  environments_deployed:
+    - dev
+    - test
+
+# ============================================
+# 产物清单
+# ============================================
+artifacts:
+  - name: docker-compose.yml
+    path: 02-implementation/docker-compose.yml
+    checksum: "sha256:abc123..."
+
+  - name: deploy-dev.sh
+    path: 02-implementation/deploy/deploy-dev.sh
+    checksum: "sha256:def456..."
+
+  - name: deploy-test.sh
+    path: 02-implementation/deploy/deploy-test.sh
+    checksum: "sha256:ghi789..."
+
+  - name: rollback.sh
+    path: 02-implementation/deploy/rollback.sh
+    checksum: "sha256:jkl012..."
+
+  - name: deploy.yml (ansible)
+    path: 02-implementation/ansible/playbooks/deploy.yml
+    checksum: "sha256:mno345..."
+
+# ============================================
+# inventory 绑定（v1.2）
+# ============================================
+inventory_binding:
+  dev:
+    path: 00-inventory/dev
+    hosts_count: 3
+
+  test:
+    path: 00-inventory/test
+    hosts_count: 3
+
+# ============================================
+# 部署状态
+# ============================================
+deployment_status:
+  dev:
+    status: success
+    deployed_at: "2026-01-30T10:50:00Z"
+    services:
+      - running-coach-api: healthy
+      - running-coach-db: healthy
+      - running-coach-redis: healthy
+
+  test:
+    status: success
+    deployed_at: "2026-01-30T10:55:00Z"
+    services:
+      - running-coach-api: healthy
+      - running-coach-db: healthy
+      - running-coach-redis: healthy
+
+# ============================================
+# 回滚信息
+# ============================================
+rollback:
+  script: 02-implementation/deploy/rollback.sh
+  previous_version: null  # 首次部署
+  rto_target: "5 minutes"

@@ -4,7 +4,7 @@
 kind: contract
 id: contract.devops.execution
 name: DevOps 执行契约
-version: "1.0.0"
+version: "1.1.0"
 department: devops
 
 description: >
@@ -44,6 +44,11 @@ ai_must_not:
     severity: "critical"
     penalty: "workflow_abort"
 
+  - description: "不得通过任何形式主动创建/删除云资源（包括但不限于 VM、磁盘、负载均衡）"
+    code: "NO_RESOURCE_PROVISIONING"
+    severity: "critical"
+    penalty: "workflow_abort"
+
 ai_must:
   - description: "所有命令必须在执行前输出审计日志"
     code: "MUST_LOG_COMMANDS"
@@ -64,6 +69,11 @@ ai_must:
     code: "MUST_PROVIDE_EXECUTION_PLAN"
     severity: "required"
     validation: "执行计划必须包含：目标、步骤、回滚方案"
+
+  - description: "在引用服务器时必须使用 inventory / 标签，而不是硬编码 IP"
+    code: "MUST_USE_INVENTORY"
+    severity: "required"
+    validation: "所有服务器引用必须通过 Ansible inventory 名称或资源标签"
 
 # ============================================
 # 环境策略
@@ -95,6 +105,42 @@ environment_policy:
       - tech_lead
       - product_owner
     description: "生产环境需要高级别审批"
+
+# ============================================
+# 资源策略（v1.1.0 新增）
+# ============================================
+resource_policy:
+  hardware_resources:
+    managed_by: human
+    description: >
+      硬件级资源（云服务器、磁盘、带宽、负载均衡等）由人类规划与创建，
+      DevOps 与 Agent 仅可在既有资源上进行部署与配置，不得申请或销毁资源。
+    allowed_operations:
+      - deploy_to_existing_server
+      - configure_existing_server
+      - rollback_deployment
+    forbidden_operations:
+      - create_cloud_vm
+      - delete_cloud_vm
+      - modify_server_spec
+      - create_load_balancer
+      - modify_billing
+
+  iac_tools:
+    allowed:
+      - ansible
+    future:
+      - terraform
+    note: >
+      Terraform 等 IaC 工具的引入需单独立项与审批，
+      初期仅允许在 dev/test 环境试点，并由人类发起执行。
+
+  inventory_binding:
+    type: ansible_inventory
+    description: >
+      所有部署操作必须通过 Ansible inventory 引用目标服务器，
+      不允许硬编码 IP 或临时指定服务器。
+    reference: "spec-global/departments/devops/resource-tags.yaml"
 
 # ============================================
 # 占位符规范
@@ -163,6 +209,14 @@ violation_handling:
 # 版本历史
 # ============================================
 changelog:
+  - version: "1.1.0"
+    date: "2026-01-30"
+    changes:
+      - "新增 NO_RESOURCE_PROVISIONING 规则：禁止创建/删除云资源"
+      - "新增 MUST_USE_INVENTORY 规则：必须通过 inventory 引用服务器"
+      - "新增 resource_policy 部分：定义资源管理策略"
+      - "引用 resource-tags.yaml 标签规范"
+
   - version: "1.0.0"
     date: "2026-01-29"
     changes:

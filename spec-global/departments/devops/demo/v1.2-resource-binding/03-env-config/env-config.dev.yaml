@@ -1,0 +1,47 @@
+# Running Coach - Dev 环境配置
+# Phase 3 输出 - 人类填写
+
+# ============================================
+# 应用配置
+# ============================================
+app:
+  env: dev
+  port: 8080
+  log_level: debug
+  debug_mode: true
+
+# ============================================
+# 数据库配置（敏感信息已填写）
+# ============================================
+database:
+  host: dev-db-1  # 引用 inventory 中的主机名
+  port: 5432
+  name: running_coach_dev
+  user: dev_user
+  password: "dev_secret_password_123"  # 人类填写
+  ssl_mode: disable
+  max_connections: 20
+
+# ============================================
+# Redis 配置
+# ============================================
+redis:
+  host: dev-redis-1  # 引用 inventory 中的主机名
+  port: 6379
+  password: "dev_redis_password"  # 人类填写
+  db: 0
+
+# ============================================
+# Docker 配置
+# ============================================
+docker:
+  registry: registry.example.com
+  image_tag: "1.0.0-dev"
+
+# ============================================
+# 填写记录
+# ============================================
+_metadata:
+  filled_by: "张运维 (devops_lead)"
+  filled_at: "2026-01-30T10:30:00Z"
+  verified: true
