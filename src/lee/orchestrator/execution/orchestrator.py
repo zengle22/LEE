@@ -22,6 +22,7 @@ LEE Orchestrator v3.0 - 核心调度器
 
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from lee.orchestrator.storage.models import (
@@ -34,11 +35,15 @@ from lee.orchestrator.storage.models import (
     WorkflowState,
     StepResult,
     ExecutionSummary,
+    GateInfo,
 )
 from lee.orchestrator.storage.sqlite_store import SQLiteStore
 from lee.orchestrator.execution.state_machine import WorkflowStateMachine, StateTransition
 from lee.orchestrator.execution.template_manager import TemplateManager
 from lee.orchestrator.execution.executors import ExecutorFactory
+from lee.orchestrator.execution.agent_context_builder import AgentContextBuilder
+from lee.orchestrator.execution.agent_loader import AgentLoader
+from lee.orchestrator.execution.file_output_handler import FileOutputHandler
 
 
 # ========================================================================
@@ -72,6 +77,7 @@ class Orchestrator:
         self,
         store: SQLiteStore,
         template_manager: Optional[TemplateManager] = None,
+        project_root: Optional[str] = None,
     ):
         """
         初始化 Orchestrator
@@ -79,11 +85,27 @@ class Orchestrator:
         Args:
             store: SQLite 存储层
             template_manager: 模板管理器（可选）
+            project_root: 项目根目录（用于文件路径解析）
         """
         self.store = store
         self.state_machine = WorkflowStateMachine(store)
         self.template_manager = template_manager or TemplateManager()
         self.executor_factory = ExecutorFactory
+
+        # v1.5: 创建 AgentLoader 用于加载 agent spec
+        # spec_root 默认为 {project_root}/lee/spec-global
+        spec_root = str(Path(project_root) / "lee" / "spec-global") if project_root else None
+        agent_loader = AgentLoader(project_root or ".", spec_root=spec_root)
+
+        # v1.4 新增组件
+        self.agent_context_builder = AgentContextBuilder(
+            agent_loader=agent_loader,
+            project_root=project_root
+        )
+        self.file_output_handler = FileOutputHandler(
+            project_root=project_root
+        )
+        self.project_root = project_root
 
     # ============ 工作流管理 ============
 
@@ -261,6 +283,12 @@ class Orchestrator:
                 message=f"Workflow not found: {workflow_id}",
             )
 
+        # 自动启动工作流：如果状态是 PENDING，先转换为 RUNNING
+        # 这样 get_ready_steps() 才能正确返回就绪步骤
+        if instance.status == WorkflowStatus.PENDING:
+            await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
+            instance = await self.store.get_workflow(workflow_id)  # 刷新实例状态
+
         # 获取可执行步骤
         ready_steps = await self.get_ready_steps(workflow_id)
 
@@ -291,30 +319,40 @@ class Orchestrator:
             # 执行第一个就绪步骤
             step_to_execute = ready_steps[0]
 
-        # 更新工作流状态为 RUNNING（如果尚未运行）
-        if instance.status != WorkflowStatus.RUNNING:
-            await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
-
         # 开始步骤
         await self.state_machine.start_step(workflow_id, step_to_execute.id)
 
-        # 执行步骤
+        # 根据 step.kind 分支处理（v1.4）
         try:
-            executor = self.executor_factory.create(step_to_execute.executor_type)
-            input_data = step_to_execute.input or {}
-            output = await executor.execute(input_data)
+            if step_to_execute.kind == "human_gate":
+                # Human Gate：不调用 Executor，直接暂停等待人工审批
+                return await self._handle_human_gate(workflow_id, step_to_execute)
 
-            # 完成步骤
-            result = await self.state_machine.complete_step(
-                workflow_id,
-                step_to_execute.id,
-                output
-            )
+            elif step_to_execute.kind == "agent":
+                # Agent 步骤：调用 LLM Executor
+                return await self._run_agent_step(workflow_id, step_to_execute)
 
-            # 检查工作流是否完成
-            await self._check_workflow_completion(workflow_id)
+            elif step_to_execute.kind == "skill":
+                # Skill 步骤：调用对应 Executor（Shell/MCP 等）
+                return await self._run_skill_step(workflow_id, step_to_execute)
 
-            return result
+            else:
+                # 其他类型：保持原有逻辑
+                executor = self.executor_factory.create(step_to_execute.executor_type or "llm")
+                input_data = step_to_execute.input or {}
+                output = await executor.execute(input_data)
+
+                # 完成步骤
+                result = await self.state_machine.complete_step(
+                    workflow_id,
+                    step_to_execute.id,
+                    output
+                )
+
+                # 检查工作流是否完成
+                await self._check_workflow_completion(workflow_id)
+
+                return result
 
         except Exception as e:
             # 步骤失败
@@ -324,6 +362,302 @@ class Orchestrator:
                 step_id=step_to_execute.id,
                 workflow_id=workflow_id,
                 message=f"Step execution failed: {e}",
+            )
+
+    async def _handle_human_gate(
+        self,
+        workflow_id: str,
+        step
+    ) -> StepResult:
+        """
+        处理 Human Gate 步骤
+
+        Human Gate 不调用 Executor，而是暂停工作流等待人工审批。
+        """
+        from lee.orchestrator.storage.models import WorkflowStatus, GateApproval, GateStatus
+
+        # 暂停工作流
+        await self.store.update_workflow_status(workflow_id, WorkflowStatus.PAUSED)
+
+        # 提取 gate 配置（从独立 gate 或 post_gate）
+        gate_config = step.config.get("gate", {})
+        if not gate_config and hasattr(step, 'gate_id'):
+            # 从 workflow.yaml 的 gate 节点获取配置
+            gate_config = {
+                "id": step.gate_id,
+                "reviewers": step.config.get("reviewers", []),
+                "approval_criteria": step.config.get("approval_criteria", []),
+            }
+
+        # 创建门禁审批记录
+        gate_approval = GateApproval(
+            workflow_id=workflow_id,
+            gate_id=step.gate_id or f"gate_{step.id}",
+            step_id=step.id,
+            status=GateStatus.PENDING,
+            approval_criteria=gate_config.get("approval_criteria", []),
+            reviewers=gate_config.get("reviewers", []),
+        )
+        await self.store.create_gate_approval(gate_approval)
+
+        return StepResult(
+            status="blocked",
+            blocked_reason="human_gate",
+            step_id=step.id,
+            workflow_id=workflow_id,
+            message=f"Waiting for human approval at gate: {step.gate_id or step.id}",
+            next_steps=[],
+        )
+
+    async def _run_agent_step(
+        self,
+        workflow_id: str,
+        step
+    ) -> StepResult:
+        """
+        运行 Agent 步骤
+
+        v1.5: 添加 task_execution 记录
+        v1.4: 从 agent spec 加载 prompt，执行后处理输出文件
+        """
+        from lee.orchestrator.storage.models import TaskExecution, TaskExecutionStatus
+        import uuid
+        from datetime import datetime
+
+        # 获取工作流上下文
+        instance = await self.store.get_workflow(workflow_id)
+        workflow_context = {
+            "workflow_id": workflow_id,
+            "project_name": instance.data.get("project_name", "ai-marathon-coach"),
+            "data": instance.data,
+        }
+
+        # 1. 构建 Agent 执行上下文（包含 prompt）
+        ctx = await self.agent_context_builder.build(step, workflow_context)
+
+        # 2. 调用 LLM Executor
+        # 使用 zhipu profile (GLM API 可用)
+        executor = self.executor_factory.create(
+            step.executor_type or "llm",
+            profile="zhipu"  # 使用可用的 GLM API
+        )
+
+        # 构建输入数据（包含 system_message 和 prompt）
+        input_data = {
+            "system_message": ctx.system_prompt,
+            "prompt": ctx.user_prompt,
+            "temperature": ctx.temperature,
+            "max_tokens": ctx.max_tokens,
+        }
+
+        # 创建 task_execution 记录
+        execution_id = uuid.uuid4().hex
+        execution = TaskExecution(
+            id=execution_id,
+            workflow_id=workflow_id,
+            step_name=step.id,
+            executor_type=step.executor_type or "llm",
+            input_data=input_data,
+            status=TaskExecutionStatus.RUNNING,
+            started_at=datetime.now(),
+        )
+        await self.store.create_task_execution(execution)
+
+        try:
+            llm_output = await executor.execute(input_data)
+
+            # 检查 LLM 调用是否成功
+            if llm_output.get("status") == "failed":
+                # LLM 调用失败
+                error_msg = llm_output.get("error", "Unknown error")
+                await self.state_machine.fail_step(workflow_id, step.id, error_msg)
+                await self.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    error_message=error_msg,
+                    completed_at=datetime.now()
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=f"LLM execution failed: {error_msg}",
+                )
+
+            generated_text = llm_output.get("generated_text", "")
+
+            # 检查是否生成了内容
+            if not generated_text or not generated_text.strip():
+                await self.state_machine.fail_step(workflow_id, step.id, "LLM returned empty response")
+                await self.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    error_message="LLM returned empty response",
+                    completed_at=datetime.now()
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message="LLM returned empty response",
+                )
+
+            # 3. 处理输出文件
+            written_files = []
+            if step.outputs:
+                try:
+                    written_files = await self.file_output_handler.handle(
+                        generated_text,
+                        step.outputs,
+                        workflow_context
+                    )
+                except Exception as e:
+                    # 输出处理失败，记录但不终止步骤
+                    print(f"[FileOutputHandler] Warning: {e}")
+
+            # 4. 完成步骤
+            output_data = {
+                "generated_text": generated_text,
+                "written_files": written_files,
+                "agent_id": step.agent_id,
+            }
+
+            result = await self.state_machine.complete_step(
+                workflow_id,
+                step.id,
+                output_data
+            )
+
+            # 更新 task_execution 记录
+            await self.store.update_task_execution(
+                execution_id,
+                TaskExecutionStatus.COMPLETED,
+                output_data=output_data,
+                completed_at=datetime.now()
+            )
+
+            # 检查工作流是否完成
+            await self._check_workflow_completion(workflow_id)
+
+            # 返回结果，包含写入的文件信息
+            if written_files:
+                result.message = f"Step {step.id} completed. Files written: {', '.join(written_files)}"
+            else:
+                result.message = f"Step {step.id} completed. No files written (outputs may be empty)"
+
+            return result
+
+        except Exception as e:
+            # 捕获未预期的异常
+            await self.state_machine.fail_step(workflow_id, step.id, str(e))
+            await self.store.update_task_execution(
+                execution_id,
+                TaskExecutionStatus.FAILED,
+                error_message=str(e),
+                completed_at=datetime.now()
+            )
+            return StepResult(
+                status="failed",
+                step_id=step.id,
+                workflow_id=workflow_id,
+                message=f"Unexpected error: {e}",
+            )
+
+        return result
+
+    async def _run_skill_step(
+        self,
+        workflow_id: str,
+        step
+    ) -> StepResult:
+        """
+        运行 Skill 步骤
+
+        v1.5: 添加 task_execution 记录
+        v1.4: 从 inputs.params 和 config.execution 构建命令
+        """
+        from lee.orchestrator.storage.models import TaskExecution, TaskExecutionStatus
+        import uuid
+        from datetime import datetime
+
+        # 构建输入数据
+        # 优先使用 input.params，其次使用 config.execution
+        params = step.input.get("params", {}) if step.input else {}
+        execution_config = step.config.get("execution", {})
+
+        # 合并配置
+        input_data = {**params, **execution_config}
+
+        # 创建 task_execution 记录
+        execution_id = uuid.uuid4().hex
+        execution = TaskExecution(
+            id=execution_id,
+            workflow_id=workflow_id,
+            step_name=step.id,
+            executor_type=step.executor_type or "shell",
+            input_data=input_data,
+            status=TaskExecutionStatus.RUNNING,
+            started_at=datetime.now(),
+        )
+        await self.store.create_task_execution(execution)
+
+        try:
+            # 根据配置构建命令
+            if "commands" in input_data:
+                # 多命令执行（如 dev/test 分别执行）
+                results = []
+                for env, command in input_data["commands"].items():
+                    command_input = {
+                        "command": command,
+                        "timeout": input_data.get("timeout", 600),
+                    }
+                    result = await self.executor_factory.create("shell").execute(command_input)
+                    results.append(result)
+
+                # 合并结果
+                combined_output = "\n".join([
+                    f"=== {env} ===\n{r.get('stdout', '')}" for r in results
+                ])
+                output = {"stdout": combined_output, "status": "completed"}
+            else:
+                # 单命令执行
+                executor = self.executor_factory.create(step.executor_type or "shell")
+                output = await executor.execute(input_data)
+
+            # 完成步骤
+            result = await self.state_machine.complete_step(
+                workflow_id,
+                step.id,
+                output
+            )
+
+            # 更新 task_execution 记录
+            await self.store.update_task_execution(
+                execution_id,
+                TaskExecutionStatus.COMPLETED,
+                output_data=output,
+                completed_at=datetime.now()
+            )
+
+            # 检查工作流是否完成
+            await self._check_workflow_completion(workflow_id)
+
+            return result
+
+        except Exception as e:
+            # 捕获未预期的异常
+            await self.state_machine.fail_step(workflow_id, step.id, str(e))
+            await self.store.update_task_execution(
+                execution_id,
+                TaskExecutionStatus.FAILED,
+                error_message=str(e),
+                completed_at=datetime.now()
+            )
+            return StepResult(
+                status="failed",
+                step_id=step.id,
+                workflow_id=workflow_id,
+                message=f"Unexpected error: {e}",
             )
 
     async def run_until_blocked(
@@ -411,6 +745,132 @@ class Orchestrator:
             workflow_id: 工作流 ID
         """
         await self.state_machine.resume_workflow(workflow_id)
+
+    # ============ Gate API ============
+
+    async def approve_gate(
+        self,
+        workflow_id: str,
+        gate_id: str,
+        approver: str,
+        comments: str = ""
+    ) -> StepResult:
+        """
+        批准人工门禁，恢复工作流执行
+
+        Args:
+            workflow_id: 工作流 ID
+            gate_id: 门禁 ID
+            approver: 审批人
+            comments: 审批意见
+
+        Returns:
+            步骤执行结果
+        """
+        from lee.orchestrator.storage.models import GateStatus, WorkflowStatus
+
+        # 更新门禁审批状态
+        gate_approval = await self.store.update_gate_approval(
+            workflow_id,
+            gate_id,
+            GateStatus.APPROVED,
+            approver,
+            comments
+        )
+
+        # 恢复工作流状态
+        await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
+
+        # 完成门禁步骤
+        result = await self.state_machine.complete_step(
+            workflow_id,
+            gate_approval.step_id,
+            {"gate_approved": True, "approver": approver, "comments": comments}
+        )
+
+        # 检查工作流是否完成
+        await self._check_workflow_completion(workflow_id)
+
+        return StepResult(
+            status="success",
+            step_id=gate_approval.step_id,
+            workflow_id=workflow_id,
+            message=f"Gate {gate_id} approved by {approver}",
+            output={"gate_approved": True, "approver": approver},
+        )
+
+    async def reject_gate(
+        self,
+        workflow_id: str,
+        gate_id: str,
+        rejecter: str,
+        reason: str
+    ) -> StepResult:
+        """
+        拒绝人工门禁，终止工作流
+
+        Args:
+            workflow_id: 工作流 ID
+            gate_id: 门禁 ID
+            rejecter: 拒绝人
+            reason: 拒绝原因
+
+        Returns:
+            步骤执行结果
+        """
+        from lee.orchestrator.storage.models import GateStatus, WorkflowStatus
+
+        # 更新门禁审批状态
+        gate_approval = await self.store.update_gate_approval(
+            workflow_id,
+            gate_id,
+            GateStatus.REJECTED,
+            rejecter,
+            reason
+        )
+
+        # 将工作流标记为失败
+        await self.store.update_workflow_status(workflow_id, WorkflowStatus.FAILED)
+
+        return StepResult(
+            status="failed",
+            step_id=gate_approval.step_id,
+            workflow_id=workflow_id,
+            message=f"Gate {gate_id} rejected by {rejecter}: {reason}",
+        )
+
+    async def get_pending_gates(
+        self,
+        workflow_id: str
+    ) -> List:
+        """
+        获取工作流的待审批门禁列表
+
+        Args:
+            workflow_id: 工作流 ID
+
+        Returns:
+            待审批门禁列表
+        """
+        from lee.orchestrator.storage.models import GateInfo
+
+        gate_approvals = await self.store.get_pending_gates(workflow_id)
+
+        return [
+            GateInfo(
+                gate_id=g.gate_id,
+                workflow_id=g.workflow_id,
+                step_id=g.step_id,
+                status=g.status,
+                reviewers=g.reviewers,
+                approval_criteria=g.approval_criteria,
+                approver=g.approver,
+                comments=g.comments,
+                created_at=g.created_at,
+                decided_at=g.decided_at,
+            )
+            for g in gate_approvals
+        ]
 
     # ============ 辅助方法 ============
 

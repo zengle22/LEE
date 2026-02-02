@@ -387,7 +387,14 @@ class TemplateManager:
 
     def _parse_step(self, step_data: Dict[str, Any]) -> Step:
         """
-        解析单个步骤
+        解析单个步骤（v1.4 更新）
+
+        支持新规范：
+        - kind=agent → 读取 agent 字段
+        - kind=skill → 读取 skill 字段
+        - kind=human_gate → 读取 gate.id 字段
+        - outputs → 解析为 OutputSpec 列表
+        - post_gate → 提取 gate_id
 
         Args:
             step_data: 步骤数据
@@ -395,14 +402,101 @@ class TemplateManager:
         Returns:
             Step 对象
         """
+        from lee.orchestrator.storage.models import OutputSpec
+
+        step_id = step_data.get("id", "")
+        kind = step_data.get("kind", "agent")
+
+        # 解析 agent/skill/gate 引用
+        agent_id = step_data.get("agent")  # kind=agent 时
+        skill_id = step_data.get("skill")  # kind=skill 时
+
+        # 解析 gate_id（从 post_gate 或独立的 gate）
+        gate_id = None
+        if "post_gate" in step_data:
+            gate_id = step_data["post_gate"].get("id")
+        elif kind == "human_gate" and "gate" in step_data:
+            gate_id = step_data["gate"].get("id")
+
+        # 解析 executor_type（v1.4：不再从 workflow 直接读取，由 runtime 决定）
+        # 保留兼容性：如果指定了 executor 则使用，否则根据 kind 默认
+        executor_type = step_data.get("executor")
+        if not executor_type:
+            if kind == "agent":
+                executor_type = "llm"  # 默认使用 LLM
+            elif kind == "skill":
+                executor_type = "shell"  # 默认使用 Shell
+            elif kind == "human_gate":
+                executor_type = None  # human_gate 不需要 executor
+
+        # 解析 outputs
+        outputs_raw = step_data.get("outputs", [])
+        outputs = []
+        for output_item in outputs_raw:
+            if isinstance(output_item, dict):
+                # 兼容旧格式：{path, required, description}
+                if "type" not in output_item:
+                    # 根据 path 判断类型
+                    path = output_item.get("path", "")
+                    if path.endswith("/"):
+                        output_type = "dir"
+                    else:
+                        output_type = "file"
+
+                    outputs.append(OutputSpec(
+                        type=output_type,
+                        path=path,
+                        format=self._infer_format(path),
+                        required=output_item.get("required", True),
+                        description=output_item.get("description", ""),
+                    ))
+                else:
+                    # 新格式：{type, path, format, required, description}
+                    outputs.append(OutputSpec(
+                        type=output_item.get("type", "file"),
+                        path=output_item.get("path", ""),
+                        format=output_item.get("format", "text"),
+                        required=output_item.get("required", True),
+                        description=output_item.get("description", ""),
+                    ))
+
         return Step(
-            id=step_data.get("id", ""),
-            kind=step_data.get("kind", "agent"),
-            executor_type=step_data.get("executor", "llm"),
+            id=step_id,
+            kind=kind,
+            executor_type=executor_type,
+            agent_id=agent_id,
+            skill_id=skill_id,
+            gate_id=gate_id,
             depends_on=step_data.get("depends_on", []),
-            input=step_data.get("input", {}),
-            config=step_data.get("config", {}),
+            input=step_data.get("inputs", step_data.get("input", {})),
+            outputs=outputs,
+            config=self._build_step_config(step_data, kind),
         )
+
+    def _build_step_config(self, step_data: Dict[str, Any], kind: str) -> Dict[str, Any]:
+        """
+        构建步骤配置
+
+        对于 human_gate，需要将 gate 配置合并到 config 中
+        """
+        config = step_data.get("config", {}).copy()
+
+        # 对于 human_gate，将 gate 配置合并到 config 中
+        if kind == "human_gate" and "gate" in step_data:
+            config["gate"] = step_data["gate"]
+
+        return config
+
+    def _infer_format(self, path: str) -> str:
+        """根据文件扩展名推断格式"""
+        if path.endswith(".yaml") or path.endswith(".yml"):
+            return "yaml"
+        elif path.endswith(".json"):
+            return "json"
+        elif path.endswith(".md"):
+            return "markdown"
+        else:
+            return "text"
 
     def _step_to_dict(self, step: Step) -> Dict[str, Any]:
         """

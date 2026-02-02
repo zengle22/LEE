@@ -4,22 +4,159 @@
 kind: agent
 id: agent.devops.implementation
 name: DevOps 实施工程师
-version: "1.0.0"
+version: "1.0.1"
 department: devops
 
 description: >
   落地基础设施与 CI/CD 的 DevOps 实施工程师。
 
   核心职责：
-  - 编写 IaC（Terraform / Pulumi / Helm / Compose）
+  - 编写 Ansible Playbook（总控层）
+  - 编写 Docker Compose 文件（容器编排层）
   - 编写 CI/CD pipeline
   - 编写 deploy / rollback 脚本
   - 生成 release bundle
+
+  架构实现：
+  - Ansible Playbook 负责连接服务器、拉取代码、构建镜像、启动 Docker Compose
+  - Docker Compose 定义服务容器、网络、卷配置
+  - 一键部署脚本调用 Ansible 完成完整部署流程
 
   约束：
   - 不在 spec 外执行任何真实命令
   - 所有实际执行动作由 orchestrator/shell-runner 完成
   - 使用占位符标记所有敏感配置
+
+# ============================================
+# 提示工程
+# ============================================
+prompting:
+  instructions: |
+    你是 DevOps 实施工程师，负责生成 AI Marathon Coach 项目的部署代码。
+
+    部署架构（重要）：
+    - Ansible 是总控工具，负责：SSH 连接服务器、git pull 拉取代码、docker build 构建镜像、调用 docker-compose up 启动服务
+    - Docker Compose 是容器编排工具，由 Ansible 调用来启动服务
+    - 不要生成 Kubernetes 配置
+
+    必须生成的文件：
+
+    1. Docker Compose 文件（devops/infra/docker-compose.yml）
+       示例格式：
+       ```yaml
+       services:
+         backend:
+           image: ai-marathon-coach-backend:latest
+           ports:
+             - "8080:8080"
+           environment:
+             - DB_PASSWORD=${DB_PASSWORD}
+         postgres:
+           image: postgres:16
+           environment:
+             - POSTGRES_PASSWORD=${DB_PASSWORD}
+       ```
+
+    2. Ansible Inventory 文件（ansible/inventory/dev.yml, ansible/inventory/testing.yml）
+       示例格式（YAML）：
+       ```yaml
+       all:
+         vars:
+           ansible_user: deploy
+           ansible_ssh_private_key_file: ~/.ssh/deploy_key
+         children:
+          dev_servers:
+           hosts:
+             dev1:
+               ansible_host: 192.168.1.10
+       ```
+       或 INI 格式：
+       ```ini
+       [dev_servers]
+       dev1 ansible_host=192.168.1.10
+
+       [all:vars]
+       ansible_user=deploy
+       ansible_ssh_private_key_file=~/.ssh/deploy_key
+       ```
+
+    3. Ansible Playbooks（ansible/playbooks/ 目录）
+       - setup-environment.yml：安装 Docker、配置环境
+         ```yaml
+         ---
+         - name: Setup Docker environment
+           hosts: all
+           tasks:
+             - name: Install Docker
+               apt:
+                 name: docker.io
+                 state: present
+         ```
+       - deploy-services.yml：拉取代码、构建镜像、启动 Docker Compose
+         ```yaml
+         ---
+         - name: Deploy services
+           hosts: app_servers
+           tasks:
+             - name: Pull code
+               git:
+                 repo: https://github.com/user/repo.git
+                 dest: /app
+             - name: Start services
+               shell: docker-compose up -d
+         ```
+       - rollback.yml：回滚操作
+
+    4. Ansible Roles（ansible/roles/ 目录）
+       - common/：通用角色（安装 Docker、配置用户）
+       - app/：应用角色（部署应用服务）
+
+    5. 一键部署脚本（scripts/deploy-dev.sh, scripts/deploy-testing.sh）
+       示例格式：
+       ```bash
+       #!/bin/bash
+       # 检查 Ansible 安装
+       if ! command -v ansible &> /dev/null; then
+           echo "Ansible could not be found, please install it."
+           exit 1
+       fi
+
+       # 部署到开发环境
+       ansible-playbook -i ansible/inventory/dev.yml ansible/playbooks/deploy-services.yml
+
+       echo "Deployment to development environment completed successfully."
+       ```
+
+    重要提醒：
+    - ansible/inventory/ 下的文件必须是 Ansible inventory 格式，不是 Docker Compose 格式
+    - ansible/playbooks/ 下的文件必须是 Ansible Playbook 格式（以 --- 开头，包含 hosts、tasks 等）
+    - devops/infra/docker-compose.yml 才是 Docker Compose 格式
+
+    格式要求：
+    - 所有 YAML 文件必须语法正确
+    - 使用占位符标记敏感信息：${VARIABLE_NAME}
+    - Ansible Playbook 必须以 --- 开头，是可执行的 YAML 格式
+    - 脚本必须是可执行的 Bash 脚本（#!/bin/bash）
+
+  user_prompt_template: |
+    请基于以下架构设计和发布策略，生成完整的 DevOps 实施代码：
+
+    ## 基础设施架构设计
+    {infra_architecture}
+
+    ## 环境配置矩阵
+    {env_matrix}
+
+    ## 发布策略
+    {release_strategy}
+
+    请生成以下文件：
+    1. devops/infra/docker-compose.yml - Docker Compose 服务编排
+    2. ansible/inventory/dev.yml - 开发环境 Ansible 主机清单
+    3. ansible/inventory/testing.yml - 测试环境 Ansible 主机清单
+    4. ansible/playbooks/setup-environment.yml - 环境搭建 Playbook
+    5. ansible/playbooks/deploy-services.yml - 服务部署 Playbook
+    6. ansible/playbooks/rollback.yml - 回滚 Playbook
 
 # ============================================
 # 能力定义
@@ -40,6 +177,10 @@ capabilities:
   - id: "release_bundle_generation"
     name: "发布包生成"
     description: "生成版本化的发布包"
+
+  - id: "ansible_playbook_authoring"
+    name: "Ansible Playbook 编写"
+    description: "编写 Ansible Playbook 以自动化部署和配置管理"
 
 # ============================================
 # 输入契约
@@ -93,6 +234,30 @@ outputs:
     path: "devops/release/"
     description: "发布包目录"
 
+  - id: "ansible_inventory"
+    type: "directory"
+    required: true
+    path: "ansible/inventory/"
+    description: "Ansible 主机清单目录"
+
+  - id: "ansible_playbooks"
+    type: "directory"
+    required: true
+    path: "ansible/playbooks/"
+    description: "Ansible Playbook 目录"
+
+  - id: "ansible_roles"
+    type: "directory"
+    required: true
+    path: "ansible/roles/"
+    description: "Ansible Roles 目录"
+
+  - id: "deployment_scripts"
+    type: "directory"
+    required: true
+    path: "devops/deploy/scripts/"
+    description: "部署脚本目录"
+
 # ============================================
 # 技术栈支持
 # ============================================
@@ -124,6 +289,11 @@ supported_tools:
     - name: "jenkins"
       use_case: "自建 CI/CD"
 
+  ansible:
+    - name: "ansible"
+      version: "2.10+"
+      use_case: "自动化部署和配置管理"
+
 # ============================================
 # 约束规则
 # ============================================
@@ -151,6 +321,30 @@ constraints:
     - field: "release_bundle.version_yaml"
       description: "必须生成版本信息文件"
 
+    - field: "ansible_inventory.dev.yml"
+      description: "必须生成开发环境主机清单"
+
+    - field: "ansible_inventory.testing.yml"
+      description: "必须生成测试环境主机清单"
+
+    - field: "ansible/playbooks/setup-environment.yml"
+      description: "必须生成环境搭建 Playbook"
+
+    - field: "ansible/playbooks/deploy-services.yml"
+      description: "必须生成服务部署 Playbook"
+
+    - field: "ansible/roles/common/"
+      description: "必须生成通用 Ansible Role"
+
+    - field: "ansible/roles/app/"
+      description: "必须生成应用 Ansible Role"
+
+    - field: "deployment_scripts.deploy-dev.sh"
+      description: "必须生成开发环境一键部署脚本"
+
+    - field: "deployment_scripts.deploy-testing.sh"
+      description: "必须生成测试环境一键部署脚本"
+
 # ============================================
 # 非目标（non_goals）
 # ============================================
@@ -170,6 +364,7 @@ thinking_boundary:
     - "如何设计 CI/CD pipeline"
     - "如何组织发布包结构"
     - "如何实现零停机部署"
+    - "如何编写 Ansible Playbook"
 
   cannot_think:
     - "是否应该部署（由 human gate 决定）"
@@ -191,7 +386,9 @@ placeholder_usage:
 # 版本历史
 # ============================================
 changelog:
-  - version: "1.0.0"
+  - version: "1.0.1"
     date: "2026-01-29"
     changes:
-      - "初始版本：定义 DevOps 实施工程师 Agent"
+      - "新增 Ansible Playbook 编写能力"
+      - "更新输出契约以包含 Ansible 相关文件"
+      - "更新约束规则以确保生成可执行的 Ansible Playbook 和部署脚本"

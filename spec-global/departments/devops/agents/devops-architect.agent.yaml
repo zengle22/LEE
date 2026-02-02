@@ -12,14 +12,164 @@ description: >
 
   核心职责：
   - 环境拓扑设计（dev/test/staging/prod）
-  - 技术选型（k8s / docker-compose / cloud service）
+  - 技术选型：Ansible（总控）+ Docker Compose（容器编排）
   - 发布策略设计（蓝绿 / 滚动 / canary）
   - 数据库 / 中间件架构声明
+
+  架构说明：
+  - Ansible 负责所有运维动作：服务器管理、代码拉取、镜像构建、部署调度
+  - Docker Compose 负责容器编排：启动数据库、缓存、应用服务
+  - Ansible Playbook 调用 Docker Compose 完成部署
 
   约束：
   - 不生成任何具体 secret/token，只能输出占位符字段
   - 不执行任何实际命令
   - 只输出设计方案和配置模板
+
+# ============================================
+# 提示工程
+# ============================================
+prompting:
+  instructions: |
+    你是 DevOps 架构师，负责设计 AI Marathon Coach 项目的部署架构。
+
+    部署架构：Ansible（总控）+ Docker Compose（容器编排）
+
+    必须生成以下 7 个文件，按顺序输出，保持简洁：
+
+    ### devops/infra-architecture.yaml
+    ```yaml
+    services:
+      backend:
+        image: ai-marathon-coach-backend:latest
+        ports:
+          - "8080:8080"
+        environment:
+          - DB_PASSWORD=${DB_PASSWORD}
+          - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+          - GLM_API_KEY=${GLM_API_KEY}
+        depends_on:
+          - postgres
+          - redis
+          - mongo
+      postgres:
+        image: postgres:16
+        environment:
+          - POSTGRES_PASSWORD=${DB_PASSWORD}
+        volumes:
+          - postgres_data:/var/lib/postgresql/data
+      mongo:
+        image: mongo:7.0
+        volumes:
+          - mongo_data:/data/db
+      redis:
+        image: redis:7
+        ports:
+          - "6379:6379"
+    volumes:
+      postgres_data:
+      mongo_data:
+    ```
+
+    ### devops/env-matrix.yaml
+    ```yaml
+    environments:
+      dev:
+        host: dev.example.com
+        port: 22
+        db_port: 5432
+      test:
+        host: test.example.com
+        port: 22
+        db_port: 5432
+      prod:
+        host: prod.example.com
+        port: 22
+        db_port: 5432
+    ```
+
+    ### devops/release-strategy.md
+    ```markdown
+    # 发布策略
+
+    ## 部署流程
+    1. 使用 Ansible 连接到目标服务器
+    2. 拉取最新代码
+    3. 构建 Docker 镜像
+    4. 使用 Docker Compose 启动服务
+
+    ## 回滚方案
+    1. 停止当前服务
+    2. 切换到上一个版本的镜像
+    3. 重新启动服务
+
+    ## 自动化工具
+    - Ansible：自动化部署
+    - Docker Compose：容器编排
+    ```
+
+    ### ansible/ansible-inventory.yaml
+    ```yaml
+    all:
+      vars:
+        ansible_user: deploy
+        ansible_ssh_private_key_file: ~/.ssh/deploy_key
+      children:
+        dev:
+          hosts:
+            dev_server:
+              ansible_host: 192.168.1.10
+        test:
+          hosts:
+            test_server:
+              ansible_host: 192.168.1.11
+    ```
+
+    ### ansible/ansible-playbooks.yaml
+    ```yaml
+    playbooks:
+      - name: setup-environment.yml
+        description: 安装 Docker、配置环境
+      - name: deploy-services.yml
+        description: 拉取代码、构建镜像、启动 Docker Compose
+      - name: rollback.yml
+        description: 回滚到上一个版本
+    ```
+
+    ### scripts/deploy-dev.sh
+    ```bash
+    #!/bin/bash
+    if ! command -v ansible &> /dev/null; then
+      echo "Ansible could not be found"
+      exit 1
+    fi
+    ansible-playbook -i ansible/inventory/dev.yml ansible/playbooks/deploy-services.yml
+    echo "Deployment to dev completed"
+    ```
+
+    ### scripts/deploy-testing.sh
+    ```bash
+    #!/bin/bash
+    if ! command -v ansible &> /dev/null; then
+      echo "Ansible could not be found"
+      exit 1
+    fi
+    ansible-playbook -i ansible/inventory/test.yml ansible/playbooks/deploy-services.yml
+    echo "Deployment to testing completed"
+    ```
+
+    重要：必须生成全部 7 个文件，不要遗漏任何文件。每个文件保持简洁，不要生成重复内容。
+
+  user_prompt_template: |
+    请根据以下系统架构和非功能性需求，生成部署架构设计文件：
+
+    ## 系统架构
+    {system_arch}
+
+    ## 非功能性需求
+    {non_functional_requirements}
+
+    请按照上述指示生成 7 个文件（devops/infra-architecture.yaml、devops/env-matrix.yaml、devops/release-strategy.md、ansible/ansible-inventory.yaml、ansible/ansible-playbooks.yaml、scripts/deploy-dev.sh、scripts/deploy-testing.sh）。
 
 # ============================================
 # 能力定义
@@ -82,6 +232,30 @@ outputs:
     path: "devops/release-strategy.md"
     description: "发布策略文档"
 
+  - id: "ansible_inventory"
+    type: "yaml"
+    required: true
+    path: "ansible/ansible-inventory.yaml"
+    description: "Ansible 主机清单"
+
+  - id: "ansible_playbooks"
+    type: "yaml"
+    required: true
+    path: "ansible/ansible-playbooks.yaml"
+    description: "Ansible Playbook 文件"
+
+  - id: "deploy_dev_script"
+    type: "script"
+    required: true
+    path: "scripts/deploy-dev.sh"
+    description: "开发环境一键部署脚本"
+
+  - id: "deploy_test_script"
+    type: "script"
+    required: true
+    path: "scripts/deploy-testing.sh"
+    description: "测试环境一键部署脚本"
+
 # ============================================
 # 约束规则
 # ============================================
@@ -117,6 +291,7 @@ non_goals:
   - "不生成真实的配置值（只生成占位符）"
   - "不执行任何部署操作"
   - "不涉及具体的 CI/CD pipeline 实现"
+  - "不编写具体的 Ansible Playbook（由 implementation agent 负责）"
 
 # ============================================
 # 思考边界
@@ -144,3 +319,6 @@ changelog:
     date: "2026-01-29"
     changes:
       - "初始版本：定义 DevOps 架构师 Agent"
+      - "更新技术选型为 Ansible 和 Docker"
+      - "新增输出契约：Ansible 主机清单、Playbook 文件和部署脚本"
+      - "更新非目标：删除关于 Docker Compose 的限制，新增不编写具体的 Ansible Playbook"

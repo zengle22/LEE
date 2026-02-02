@@ -1,11 +1,18 @@
-# DevOps Deployment Workflow v1.0
+# DevOps Deployment Workflow v1.4
 # DevOps 部署工作流 - DevOps 部门主流程
+#
+# v1.4 更新：恢复 Agent 规范集成，修复 orchestrator 兼容性
+# - 恢复 `agent: agent.devops.xxx` 字段，恢复 Agent 身份
+# - 统一 inputs 结构为 `context_files` + `params`
+# - 统一 outputs 结构为 `type/path/format`
+# - 区分独立步骤 `kind: human_gate` 和步骤后的 `post_gate`
+# - 将 `kind: skill` 用于 Shell 执行类步骤
+# - 添加 `contracts.output` 引用验证契约
 
-kind: workflow
 id: workflow.devops.deployment
+level: department
 name: DevOps 部署工作流
-version: "1.2"
-department: devops
+version: "1.4"
 
 description: >
   这是 DevOps 部门的 L2 主流程，负责从架构设计到部署验证的完整闭环。
@@ -70,24 +77,61 @@ steps:
       - 只输出设计方案和配置模板
 
     inputs:
-      - system_arch.md
-      - non_functional_requirements.yaml
+      context_files:
+        - path: devops/system_arch.md
+          required: true
+        - path: devops/non_functional_requirements.yaml
+          required: true
 
     outputs:
-      - path: devops/infra-architecture.yaml
+      - type: file
+        path: devops/infra-architecture.yaml
+        format: yaml
         required: true
         description: 基础设施架构设计
 
-      - path: devops/env-matrix.yaml
+      - type: file
+        path: devops/env-matrix.yaml
+        format: yaml
         required: true
         description: 环境配置矩阵
 
-      - path: devops/release-strategy.md
+      - type: file
+        path: devops/release-strategy.md
+        format: markdown
         required: true
         description: 发布策略文档
 
+      # v1.5: 添加 Ansible 相关输出
+      - type: file
+        path: ansible/ansible-inventory.yaml
+        format: yaml
+        required: true
+        description: Ansible 主机清单
+
+      - type: file
+        path: ansible/ansible-playbooks.yaml
+        format: yaml
+        required: true
+        description: Ansible Playbook 文件
+
+      - type: file
+        path: scripts/deploy-dev.sh
+        format: text
+        required: true
+        description: 开发环境一键部署脚本
+
+      - type: file
+        path: scripts/deploy-testing.sh
+        format: text
+        required: true
+        description: 测试环境一键部署脚本
+
+    contracts:
+      output: contract.devops.phase1.architecture.v1
+
     # ============================================
-    # Verifier System 集成
+    # Verifier System 集成（保留，v3.2 实现）
     # ============================================
     verify:
       contract: devops.phase1.architecture.v1
@@ -117,7 +161,9 @@ steps:
         - action: abort
           reason: "架构设计验证失败，且人工审查未通过，中止工作流"
 
-    gate:
+    # 步骤后的审批门禁（不作为独立步骤）
+    post_gate:
+      id: gate.devops.phase1_review
       type: human_gate
       reviewers:
         - role: devops_lead
@@ -162,31 +208,42 @@ steps:
       - 使用占位符标记所有敏感配置
 
     inputs:
-      - from_step: p1_architecture
-        contract: devops/infra-architecture.yaml
+      context_files:
+        - path: devops/infra-architecture.yaml
+          required: true
+          from_step: p1_architecture
 
-      - from_step: p1_architecture
-        contract: devops/env-matrix.yaml
+        - path: devops/env-matrix.yaml
+          required: true
+          from_step: p1_architecture
 
-      - from_step: p1_architecture
-        contract: devops/release-strategy.md
+        - path: devops/release-strategy.md
+          required: true
+          from_step: p1_architecture
 
     outputs:
-      - path: devops/infra/
+      - type: dir
+        path: devops/infra/
         required: true
         description: IaC 代码目录
 
-      - path: devops/cicd/
+      - type: dir
+        path: devops/cicd/
         required: true
         description: CI/CD 配置目录
 
-      - path: devops/deploy/
+      - type: dir
+        path: devops/deploy/
         required: true
         description: 部署脚本目录
 
-      - path: devops/scripts/
+      - type: dir
+        path: devops/scripts/
         required: true
         description: 辅助脚本目录
+
+    contracts:
+      output: contract.devops.phase2.cicd.v1
 
     # ============================================
     # Verifier System 集成
@@ -253,7 +310,8 @@ steps:
         required: false
         description: 生产环境配置（可选）
 
-    gate_rules:
+    gate:
+      id: gate.devops.env_config
       reviewers:
         - role: devops_lead
           description: "DevOps 负责人"
@@ -276,8 +334,8 @@ steps:
   # ============================================
   - id: p4_deploy_dev_test
     name: 部署到 dev/test
-    kind: program
-    runner: shell
+    kind: skill
+    skill: skill.devops.deploy_dev_test
     depends_on:
       - p3_env_config
     description: |
@@ -288,28 +346,47 @@ steps:
       - 不需要 Human Gate 审批
       - 所有操作记录审计日志
 
-    execution:
-      dev:
-        command: "cd devops && ./deploy/deploy-dev-test.sh dev"
+    inputs:
+      params:
+        inventories:
+          - dev
+          - test
+        commands:
+          dev: "cd devops && ./deploy/deploy-dev-test.sh dev"
+          test: "cd devops && ./deploy/deploy-dev-test.sh test"
         timeout: 600
-
-      test:
-        command: "cd devops && ./deploy/deploy-dev-test.sh test"
-        timeout: 600
-
-    # v1.2 新增：显式声明使用的 inventory
-    uses_inventory:
-      - dev
-      - test
 
     outputs:
-      - path: devops/logs/deploy/dev.log
+      - type: file
+        path: devops/logs/deploy/dev.log
+        format: text
         required: true
         description: 开发环境部署日志
 
-      - path: devops/logs/deploy/test.log
+      - type: file
+        path: devops/logs/deploy/test.log
+        format: text
         required: true
         description: 测试环境部署日志
+
+    # 部署后的审批门禁
+    post_gate:
+      id: gate.devops.deploy_verification
+      type: human_gate
+      reviewers:
+        - role: devops_lead
+          description: "DevOps 负责人"
+        - role: qa_lead
+          description: "测试负责人"
+
+      approval_criteria:
+        - label: "部署成功"
+          criteria: "所有关键服务正常运行"
+          required: true
+
+        - label: "配置正确"
+          criteria: "环境配置正确应用"
+          required: true
 
   # ============================================
   # Phase 5: 环境与发布包验收
@@ -317,7 +394,7 @@ steps:
   - id: p5_verification
     name: 环境与发布包验收
     kind: agent
-    agent: agent.devops.verification
+    agent: agent.devops.verifier
     depends_on:
       - p4_deploy_dev_test
     description: |
@@ -335,28 +412,39 @@ steps:
       - 发布包是否完整
 
     inputs:
-      - from_step: p4_deploy_dev_test
-        contract: devops/logs/deploy/
+      context_files:
+        - path: devops/logs/deploy/
+          required: true
+          from_step: p4_deploy_dev_test
 
-      - from_step: p3_env_config
-        contract: devops/env/env-config.*.yaml
+        - path: devops/env/
+          required: true
+          pattern: "env-config.*.yaml"
+          from_step: p3_env_config
 
-      - from_step: p1_architecture
-        contract: devops/infra-architecture.yaml
+        - path: devops/infra-architecture.yaml
+          required: true
+          from_step: p1_architecture
 
-      - from_step: p2_infra_code
-        contract: devops/release/
+        - path: devops/release/
+          required: true
+          from_step: p2_infra_code
 
     outputs:
-      - path: devops/deployment-checklist.md
+      - type: file
+        path: devops/deployment-checklist.md
+        format: markdown
         required: true
         description: 部署验收清单
 
-      - path: devops/release-manifest.yaml
+      - type: file
+        path: devops/release-manifest.yaml
+        format: yaml
         required: true
         description: 发布清单
 
-    gate:
+    post_gate:
+      id: gate.devops.verification
       type: human_gate
       reviewers:
         - role: devops_lead
@@ -387,7 +475,7 @@ steps:
   - id: p6_release_freeze
     name: 版本冻结
     kind: agent
-    agent: agent.devops.verification
+    agent: agent.devops.verifier
     depends_on:
       - p5_verification
     description: |
@@ -400,22 +488,30 @@ steps:
       - 需要最终 Human Gate 审批
 
     inputs:
-      - from_step: p5_verification
-        contract: devops/deployment-checklist.md
+      context_files:
+        - path: devops/deployment-checklist.md
+          required: true
+          from_step: p5_verification
 
-      - from_step: p5_verification
-        contract: devops/release-manifest.yaml
+        - path: devops/release-manifest.yaml
+          required: true
+          from_step: p5_verification
 
     outputs:
-      - path: devops/freeze-report.md
+      - type: file
+        path: devops/freeze-report.md
+        format: markdown
         required: true
         description: 版本冻结报告
 
-      - path: devops/audit-trail.yaml
+      - type: file
+        path: devops/audit-trail.yaml
+        format: yaml
         required: true
         description: 审计跟踪记录
 
-    gate:
+    post_gate:
+      id: gate.devops.release_freeze
       type: human_gate
       reviewers:
         - role: devops_lead
@@ -556,6 +652,27 @@ artifacts:
 # 版本历史
 # ============================================
 changelog:
+  - version: "1.4"
+    date: "2026-01-30"
+    changes:
+      - "恢复 Agent 规范集成，修复 orchestrator 兼容性"
+      - "恢复 `agent: agent.devops.xxx` 字段，解决 Agent 身份丢失问题"
+      - "统一 inputs 结构为 `context_files` + `params`，提升语义表达"
+      - "统一 outputs 结构为 `type/path/format`，支持文件/目录区分"
+      - "区分独立步骤 `kind: human_gate` 和步骤后的 `post_gate`"
+      - "将 Shell 执行改为 `kind: skill`，由 skill spec 定义执行细节"
+      - "添加 `contracts.output` 引用验证契约"
+      - "修复 Orchestrator 中 PENDING 状态无法启动的 bug"
+
+  - version: "1.3"
+    date: "2026-01-30"
+    changes:
+      - "适配新 orchestrator 格式"
+      - "将 `department: devops` 改为 `level: department`"
+      - "将 `agent: agent.devops.architect` 改为 `executor: llm`"
+      - "将 `kind: program` + `runner: shell` 改为 `kind: agent` + `executor: shell`"
+      - "简化步骤结构以匹配新 orchestrator 的预期格式"
+
   - version: "1.2"
     date: "2026-01-30"
     changes:

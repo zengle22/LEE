@@ -144,9 +144,26 @@ class Template:
 
 
 @dataclass
+class OutputSpec:
+    """
+    输出规格定义
+    """
+    type: str  # file | dir
+    path: str
+    format: str  # yaml | json | markdown | text
+    required: bool = True
+    description: str = ""
+
+
+@dataclass
 class Step:
     """
     步骤定义（来自 Template）
+
+    v1.4 更新：
+    - 添加 agent_id/skill_id/gate_id 支持
+    - 添加 outputs 规格支持
+    - 保留 executor_type 用于运行时
     """
 
     # 标识
@@ -155,14 +172,29 @@ class Step:
     # 类型
     kind: str  # agent | skill | human_gate | marker
 
-    # 执行器
-    executor_type: str  # llm | shell | mcp | metagpt
+    # 执行器类型（运行时决定，或由 agent/skill 映射）
+    executor_type: Optional[str] = None  # llm | shell | mcp | metagpt
+
+    # Agent/Skill/Gate 引用（v1.4 新增）
+    agent_id: Optional[str] = None
+    skill_id: Optional[str] = None
+    gate_id: Optional[str] = None  # post_gate 的 ID
 
     # 依赖
     depends_on: List[str] = field(default_factory=list)
 
-    # 输入
+    # 输入（v1.4 统一结构）
     input: Dict[str, Any] = field(default_factory=dict)
+    # input 结构示例：
+    # {
+    #   "context_files": [
+    #     {"path": "...", "required": True, "from_step": "..."}
+    #   ],
+    #   "params": {...}
+    # }
+
+    # 输出规格（v1.4 新增）
+    outputs: List[OutputSpec] = field(default_factory=list)
 
     # 配置
     config: Dict[str, Any] = field(default_factory=dict)
@@ -196,6 +228,7 @@ class StepResult:
     step_id: Optional[str]
     workflow_id: str
     message: str
+    blocked_reason: Optional[str] = None  # v1.4: 阻塞原因
     next_steps: List[str] = field(default_factory=list)
     output: Optional[Dict[str, Any]] = None
 
@@ -211,3 +244,51 @@ class ExecutionSummary:
     blocked_at: Optional[str]  # 阻塞的 step ID
     status: str
     duration_seconds: float
+
+
+# ========================================================================
+# Gate 相关数据模型
+# ========================================================================
+
+class GateStatus(str, Enum):
+    """门禁状态"""
+    PENDING = "pending"      # 待审批
+    APPROVED = "approved"    # 已批准
+    REJECTED = "rejected"    # 已拒绝
+
+
+@dataclass
+class GateApproval:
+    """
+    门禁审批记录
+    """
+    workflow_id: str
+    gate_id: str
+    step_id: str
+    status: GateStatus = GateStatus.PENDING
+    approver: Optional[str] = None
+    comments: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.now)
+    decided_at: Optional[datetime] = None
+
+    # 审批标准（从 workflow.yaml 复制）
+    approval_criteria: List[Dict[str, Any]] = field(default_factory=list)
+    # 审批人列表（从 workflow.yaml 复制）
+    reviewers: List[Dict[str, str]] = field(default_factory=list)
+
+
+@dataclass
+class GateInfo:
+    """
+    门禁信息（对外查询用）
+    """
+    gate_id: str
+    workflow_id: str
+    step_id: str
+    status: GateStatus
+    reviewers: List[Dict[str, str]]
+    approval_criteria: List[Dict[str, Any]]
+    approver: Optional[str] = None
+    comments: Optional[str] = None
+    created_at: Optional[datetime] = None
+    decided_at: Optional[datetime] = None

@@ -168,6 +168,7 @@ class AgentLoader:
             spec_root: spec 根目录 (默认为 project_root/ai-spec)
         """
         self.project_root = Path(project_root)
+        self.spec_root = Path(spec_root) if spec_root else self.project_root / "ai-spec"
         self.resolver = AgentResolver(project_root, spec_root)
         self._debug = os.environ.get("ORCHESTRATOR_DEBUG_AGENT") == "1"
         self._strict = os.environ.get("ORCHESTRATOR_STRICT_AGENT") == "1"
@@ -229,6 +230,7 @@ class AgentLoader:
         """加载 Agent 规范
 
         P2-01 改进: 先检查缓存，命中则直接返回，否则从文件加载并缓存。
+        v1.5: 添加对 LEE 项目目录结构的支持 ({department}/agents/{name}.agent.yaml)
 
         Args:
             agent_ref: agent 引用 (如 agent.dev.tech_lead)
@@ -250,6 +252,10 @@ class AgentLoader:
         # 解析引用到路径
         spec_path = self.resolver.resolve(agent_ref)
 
+        # v1.5: 如果标准解析失败，尝试 LEE 项目目录结构
+        if spec_path is None:
+            spec_path = self._try_lee_project_path(agent_ref)
+
         if spec_path is None:
             if self._strict:
                 raise AgentSpecNotFound(agent_ref, [])
@@ -266,6 +272,41 @@ class AgentLoader:
                 print(f"[DEBUG] Agent spec cached: {agent_ref}")
 
         return spec
+
+    def _try_lee_project_path(self, agent_ref: str) -> Optional[Path]:
+        """
+        尝试从 LEE 项目的目录结构加载 agent spec
+
+        LEE 项目结构: {spec_root}/departments/{department}/agents/{department}-{name}.agent.yaml
+
+        Args:
+            agent_ref: agent 引用 (如 agent.devops.architect)
+
+        Returns:
+            spec 文件路径，找不到返回 None
+        """
+        # 解析 agent 引用
+        parts = agent_ref.split(".")
+
+        # 提取 domain 和 name
+        domain = parts[1] if len(parts) >= 2 else None
+        name = parts[2] if len(parts) >= 3 else parts[1] if len(parts) == 2 else None
+
+        if not domain or not name:
+            return None
+
+        # 尝试 LEE 项目路径: departments/{domain}/agents/{domain}-{name}.agent.yaml
+        lee_path = self.spec_root / "departments" / domain / "agents" / f"{domain}-{name}.agent.yaml"
+
+        if self._debug:
+            print(f"[DEBUG] Trying LEE project path: {lee_path}")
+
+        if lee_path.exists():
+            if self._debug:
+                print(f"[DEBUG] Found agent spec at LEE path: {lee_path}")
+            return lee_path
+
+        return None
 
     def load_from_path(self, spec_path: Path) -> AgentSpec:
         """从文件路径加载 Agent 规范

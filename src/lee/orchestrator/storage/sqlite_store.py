@@ -23,6 +23,8 @@ from lee.orchestrator.storage.models import (
     TaskExecution,
     TaskExecutionStatus,
     Template,
+    GateApproval,
+    GateStatus,
 )
 
 
@@ -134,6 +136,30 @@ class SQLiteStore:
         await self._conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_template_level
             ON templates(level)
+        """)
+
+        # 门禁审批表
+        await self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS gate_approvals (
+                workflow_id TEXT NOT NULL,
+                gate_id TEXT NOT NULL,
+                step_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                approver TEXT,
+                comments TEXT,
+                created_at TEXT,
+                decided_at TEXT,
+                approval_criteria TEXT,
+                reviewers TEXT,
+
+                PRIMARY KEY (workflow_id, gate_id),
+                FOREIGN KEY (workflow_id) REFERENCES workflow_instances(id)
+            )
+        """)
+
+        await self._conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_gate_status
+            ON gate_approvals(status)
         """)
 
         await self._conn.commit()
@@ -304,6 +330,47 @@ class SQLiteStore:
         rows = await cursor.fetchall()
         return [self._row_to_task_execution(row) for row in rows]
 
+    async def update_task_execution(
+        self,
+        execution_id: str,
+        status: TaskExecutionStatus,
+        output_data: Optional[Dict[str, Any]] = None,
+        error_message: Optional[str] = None,
+        completed_at: Optional[datetime] = None
+    ) -> Optional[TaskExecution]:
+        """更新任务执行记录"""
+        # 构建更新语句
+        set_clauses = ["status = ?"]
+        params = [status.value]
+
+        if output_data is not None:
+            set_clauses.append("output_data = ?")
+            params.append(json.dumps(output_data))
+
+        if error_message is not None:
+            set_clauses.append("error_message = ?")
+            params.append(error_message)
+
+        if completed_at is not None:
+            set_clauses.append("completed_at = ?")
+            params.append(completed_at.isoformat())
+
+        params.append(execution_id)
+
+        await self._conn.execute(f"""
+            UPDATE task_executions
+            SET {', '.join(set_clauses)}
+            WHERE id = ?
+        """, params)
+        await self._conn.commit()
+
+        # 返回更新后的记录（需要查询获取）
+        cursor = await self._conn.execute("""
+            SELECT * FROM task_executions WHERE id = ?
+        """, (execution_id,))
+        row = await cursor.fetchone()
+        return self._row_to_task_execution(row) if row else None
+
     # ========================================================================
     # Template 操作
     # ========================================================================
@@ -382,4 +449,104 @@ class SQLiteStore:
             error_message=row[7],
             started_at=datetime.fromisoformat(row[8]) if row[8] else None,
             completed_at=datetime.fromisoformat(row[9]) if row[9] else None,
+        )
+
+    # ========================================================================
+    # GateApproval 操作
+    # ========================================================================
+
+    async def create_gate_approval(
+        self,
+        gate: GateApproval
+    ) -> GateApproval:
+        """创建门禁审批记录"""
+        await self._conn.execute("""
+            INSERT INTO gate_approvals
+            (workflow_id, gate_id, step_id, status, approver, comments,
+             created_at, decided_at, approval_criteria, reviewers)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            gate.workflow_id,
+            gate.gate_id,
+            gate.step_id,
+            gate.status.value,
+            gate.approver,
+            gate.comments,
+            gate.created_at.isoformat(),
+            gate.decided_at.isoformat() if gate.decided_at else None,
+            json.dumps(gate.approval_criteria),
+            json.dumps(gate.reviewers),
+        ))
+        await self._conn.commit()
+        return gate
+
+    async def get_gate_approval(
+        self,
+        workflow_id: str,
+        gate_id: str
+    ) -> Optional[GateApproval]:
+        """获取门禁审批记录"""
+        cursor = await self._conn.execute("""
+            SELECT * FROM gate_approvals
+            WHERE workflow_id = ? AND gate_id = ?
+        """, (workflow_id, gate_id))
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        return self._row_to_gate_approval(row)
+
+    async def update_gate_approval(
+        self,
+        workflow_id: str,
+        gate_id: str,
+        status: GateStatus,
+        approver: Optional[str] = None,
+        comments: Optional[str] = None
+    ) -> GateApproval:
+        """更新门禁审批状态"""
+        decided_at = datetime.now()
+        await self._conn.execute("""
+            UPDATE gate_approvals
+            SET status = ?, approver = ?, comments = ?, decided_at = ?
+            WHERE workflow_id = ? AND gate_id = ?
+        """, (
+            status.value,
+            approver,
+            comments,
+            decided_at.isoformat(),
+            workflow_id,
+            gate_id,
+        ))
+        await self._conn.commit()
+
+        # 返回更新后的记录
+        return await self.get_gate_approval(workflow_id, gate_id)
+
+    async def get_pending_gates(
+        self,
+        workflow_id: str
+    ) -> List[GateApproval]:
+        """获取工作流的待审批门禁列表"""
+        cursor = await self._conn.execute("""
+            SELECT * FROM gate_approvals
+            WHERE workflow_id = ? AND status = 'pending'
+            ORDER BY created_at ASC
+        """, (workflow_id,))
+        rows = await cursor.fetchall()
+        return [self._row_to_gate_approval(row) for row in rows]
+
+    @staticmethod
+    def _row_to_gate_approval(row) -> GateApproval:
+        """将数据库行转换为 GateApproval"""
+        return GateApproval(
+            workflow_id=row[0],
+            gate_id=row[1],
+            step_id=row[2],
+            status=GateStatus(row[3]),
+            approver=row[4],
+            comments=row[5],
+            created_at=datetime.fromisoformat(row[6]),
+            decided_at=datetime.fromisoformat(row[7]) if row[7] else None,
+            approval_criteria=json.loads(row[8]) if row[8] else [],
+            reviewers=json.loads(row[9]) if row[9] else [],
         )
