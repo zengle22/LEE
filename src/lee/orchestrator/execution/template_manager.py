@@ -171,8 +171,14 @@ class TemplateManager:
         """
         获取模板
 
+        支持多种查找方式：
+        1. 从缓存中查找
+        2. 作为完整文件路径加载
+        3. 从模板目录中按 ID 查找
+        4. 从模板目录的子目录中递归查找 workflow.yaml
+
         Args:
-            template_id: 模板 ID
+            template_id: 模板 ID 或文件路径
 
         Returns:
             WorkflowTemplate，不存在返回 None
@@ -181,33 +187,92 @@ class TemplateManager:
         if template_id in self._cache:
             return self._cache[template_id]
 
-        # 尝试从文件加载 - 支持子目录搜索
-        # 1. 首先尝试直接路径
+        # 尝试作为完整文件路径加载
+        if template_id.endswith(".yaml") or template_id.endswith(".yml"):
+            template_path = Path(template_id)
+            if template_path.exists():
+                return self._load_template_from_file(template_path, template_id)
+
+        # 尝试从模板目录直接加载
         template_file = self.template_dir / f"{template_id}.yaml"
+        if template_file.exists():
+            return self._load_template_from_file(template_file, template_id)
 
-        # 2. 如果不存在，递归搜索子目录
-        if not template_file.exists():
-            for yaml_file in self.template_dir.rglob("workflow.yaml"):
-                # 检查 YAML 文件中的 id 是否匹配
-                try:
-                    docs = self.load_yaml_template(str(yaml_file))
-                    if docs and docs[0].get("id") == template_id:
-                        template_file = yaml_file
-                        break
-                except Exception:
-                    continue
+        # 尝试在模板目录的子目录中递归查找
+        # 支持格式：workflow.prd.product_to_dev_pipeline → departments/prd/workflows/product-to-dev-pipeline/v1/workflow.yaml
+        found_file = self._find_template_file(template_id)
+        if found_file:
+            return self._load_template_from_file(found_file, template_id)
 
-        if not template_file.exists():
-            return None
+        # 兜底：逐个解析 workflow.yaml，确保能找到非标准路径
+        for yaml_file in self.template_dir.rglob("workflow.yaml"):
+            try:
+                docs = self.load_yaml_template(str(yaml_file))
+                for doc in docs:
+                    if doc and doc.get("id") == template_id:
+                        return self._load_template_from_file(yaml_file, template_id)
+            except Exception:
+                continue
 
+        return None
+
+    def _load_template_from_file(
+        self,
+        file_path: Path,
+        template_id: str
+    ) -> Optional[WorkflowTemplate]:
+        """从文件加载模板"""
         try:
-            docs = self.load_yaml_template(str(template_file))
+            docs = self.load_yaml_template(str(file_path))
             if docs:
                 template = self._parse_template_doc(docs[0], template_id)
                 self._cache[template_id] = template
+                # 也用文档中的 ID 作为缓存键
+                if template.id != template_id:
+                    self._cache[template.id] = template
                 return template
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Warning: Failed to load template {file_path}: {e}")
+        return None
+
+    def _find_template_file(self, template_id: str) -> Optional[Path]:
+        """
+        在模板目录中查找模板文件
+
+        支持的查找策略：
+        1. 按 ID 中的路径部分查找（workflow.prd.xxx → departments/prd/workflows/xxx）
+        2. 递归搜索所有 workflow.yaml 文件
+        """
+        # 策略 1：解析 ID 结构
+        # 格式：workflow.{department}.{workflow_name}
+        parts = template_id.split(".")
+        if len(parts) >= 3 and parts[0] == "workflow":
+            dept = parts[1]
+            workflow_name = "_".join(parts[2:])
+            # 转换下划线为连字符
+            workflow_name_hyphen = workflow_name.replace("_", "-")
+
+            # 尝试多个可能的路径
+            possible_paths = [
+                self.template_dir / "departments" / dept / "workflows" / workflow_name_hyphen / "v1" / "workflow.yaml",
+                self.template_dir / "departments" / dept / "workflows" / workflow_name / "v1" / "workflow.yaml",
+                self.template_dir / "cross" / "workflows" / workflow_name_hyphen / "v1" / "workflow.yaml",
+            ]
+
+            for path in possible_paths:
+                if path.exists():
+                    return path
+
+        # 策略 2：递归搜索
+        for workflow_file in self.template_dir.rglob("workflow.yaml"):
+            try:
+                with open(workflow_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # 简单检查 ID 是否在文件中
+                    if f"id: {template_id}" in content:
+                        return workflow_file
+            except Exception:
+                pass
 
         return None
 
@@ -390,6 +455,10 @@ class TemplateManager:
         """
         解析模板文档
 
+        支持两种格式：
+        1. 旧格式：level 字段指定层级
+        2. 新格式：kind: workflow，从 overview.stages 推断层级
+
         Args:
             doc: YAML 文档字典
             template_id: 模板 ID
@@ -397,37 +466,61 @@ class TemplateManager:
         Returns:
             WorkflowTemplate 对象
         """
-        level_str = doc.get("level", "task")
-        try:
-            level = WorkflowLevel(level_str)
-        except ValueError:
-            level = WorkflowLevel.TASK
+        # 检测文档格式
+        kind = doc.get("kind", "")
+
+        if kind == "workflow":
+            # 新格式：从 overview 推断 level
+            # 有 stages 的通常是 department 级别流程
+            overview = doc.get("overview", {})
+            stages = overview.get("stages", [])
+
+            if stages:
+                level = WorkflowLevel.DEPARTMENT
+            else:
+                level = WorkflowLevel.TASK
+        else:
+            # 旧格式：直接读取 level
+            level_str = doc.get("level", "task")
+            try:
+                level = WorkflowLevel(level_str)
+            except ValueError:
+                level = WorkflowLevel.TASK
 
         steps_data = doc.get("steps", [])
         steps = [self._parse_step(s) for s in steps_data]
 
+        # 从 completion 字段提取完成条件
+        completion = doc.get("completion", {})
+        completion_criteria = completion if completion else doc.get("completion_criteria", {})
+
         return WorkflowTemplate(
-            id=template_id,
+            id=doc.get("id", template_id),
             level=level,
             name=doc.get("name", template_id),
             description=doc.get("description", ""),
             steps=steps,
             departments=doc.get("departments", []),
             tasks=doc.get("tasks", []),
-            completion_criteria=doc.get("completion_criteria", {}),
+            completion_criteria=completion_criteria,
             config=doc.get("config", {}),
         )
 
     def _parse_step(self, step_data: Dict[str, Any]) -> Step:
         """
-        解析单个步骤（v1.4 更新）
+        解析单个步骤（v1.5 更新）
 
         支持新规范：
         - kind=agent → 读取 agent 字段
         - kind=skill → 读取 skill 字段
-        - kind=human_gate → 读取 gate.id 字段
+        - kind=human_gate → 读取 human_gate 或 gate.id 字段
         - outputs → 解析为 OutputSpec 列表
         - post_gate → 提取 gate_id
+
+        自动推断 kind：
+        - 有 agent 字段 → agent
+        - 有 skill 字段 → skill
+        - 有 human_gate 字段 → human_gate
 
         Args:
             step_data: 步骤数据
@@ -438,15 +531,29 @@ class TemplateManager:
         from lee.orchestrator.storage.models import OutputSpec
 
         step_id = step_data.get("id", "")
-        kind = step_data.get("kind", "agent")
+
+        # 自动推断 kind（如果没有显式指定）
+        kind = step_data.get("kind")
+        if not kind:
+            if "human_gate" in step_data:
+                kind = "human_gate"
+            elif "skill" in step_data:
+                kind = "skill"
+            elif "agent" in step_data:
+                kind = "agent"
+            else:
+                # 默认为 agent
+                kind = "agent"
 
         # 解析 agent/skill/gate 引用
         agent_id = step_data.get("agent")  # kind=agent 时
         skill_id = step_data.get("skill")  # kind=skill 时
 
-        # 解析 gate_id（从 post_gate 或独立的 gate）
+        # 解析 gate_id（从 human_gate、post_gate 或独立的 gate）
         gate_id = None
-        if "post_gate" in step_data:
+        if "human_gate" in step_data:
+            gate_id = step_data["human_gate"]
+        elif "post_gate" in step_data:
             gate_id = step_data["post_gate"].get("id")
         elif kind == "human_gate" and "gate" in step_data:
             gate_id = step_data["gate"].get("id")
@@ -510,13 +617,41 @@ class TemplateManager:
         """
         构建步骤配置
 
-        对于 human_gate，需要将 gate 配置合并到 config 中
+        包含：
+        - 步骤名称和描述
+        - 阶段信息
+        - 门禁配置
+        - 其他元数据
         """
         config = step_data.get("config", {}).copy()
 
+        # 添加步骤名称和描述
+        if "name" in step_data:
+            config["name"] = step_data["name"]
+        if "description" in step_data:
+            config["description"] = step_data["description"]
+        if "phase" in step_data:
+            config["phase"] = step_data["phase"]
+
         # 对于 human_gate，将 gate 配置合并到 config 中
-        if kind == "human_gate" and "gate" in step_data:
-            config["gate"] = step_data["gate"]
+        if kind == "human_gate":
+            if "gate" in step_data:
+                config["gate"] = step_data["gate"]
+            # 也可能直接有 reviewers 等字段
+            if "reviewers" in step_data:
+                config["reviewers"] = step_data["reviewers"]
+            if "approval_criteria" in step_data:
+                config["approval_criteria"] = step_data["approval_criteria"]
+
+        # 添加非目标和思考边界（用于 agent）
+        if "non_goals" in step_data:
+            config["non_goals"] = step_data["non_goals"]
+        if "thinking_boundary" in step_data:
+            config["thinking_boundary"] = step_data["thinking_boundary"]
+
+        # 添加成功后执行的步骤
+        if "on_success" in step_data:
+            config["on_success"] = step_data["on_success"]
 
         return config
 
