@@ -203,8 +203,19 @@ class AgentContextBuilder:
         if outputs_desc:
             system_prompt += "\n\n" + "\n".join(outputs_desc)
 
+        # 提取 user_prompt_template
+        user_prompt_template = None
+        if spec.prompting:
+            user_prompt_template = spec.prompting.get("user_prompt_template")
+
+        # 如果没有找到，尝试从 raw_data 中提取
+        if not user_prompt_template and raw_data:
+            prompting_data = raw_data.get("prompting", {})
+            user_prompt_template = prompting_data.get("user_prompt_template")
+
         return {
             "system_prompt": system_prompt,
+            "user_prompt_template": user_prompt_template,
             "model": "gpt-4",
             "temperature": 0.7,
             "max_tokens": 4000,
