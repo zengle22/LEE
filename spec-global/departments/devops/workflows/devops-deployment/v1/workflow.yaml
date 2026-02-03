@@ -413,20 +413,27 @@ steps:
 
     inputs:
       context_files:
-        - path: devops/logs/deploy/
+        - path: devops/logs/deploy/dev.log
           required: true
           from_step: p4_deploy_dev_test
 
-        - path: devops/env/
+        - path: devops/logs/deploy/test.log
           required: true
-          pattern: "env-config.*.yaml"
+          from_step: p4_deploy_dev_test
+
+        - path: devops/env/env-config.dev.yaml
+          required: true
+          from_step: p3_env_config
+
+        - path: devops/env/env-config.testing.yaml
+          required: true
           from_step: p3_env_config
 
         - path: devops/infra-architecture.yaml
           required: true
           from_step: p1_architecture
 
-        - path: devops/release/
+        - path: devops/release/manifest.yaml
           required: true
           from_step: p2_infra_code
 

@@ -1,0 +1,167 @@
+# Style Validation Skill Specification v1.0
+# 样式验证技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.media.style_validation
+name: Style Validation
+description: >
+  验证格式化内容的样式一致性。
+  确保所有颜色来自主题文件，不使用未定义的样式。
+owner: media-ai
+tags: [media, style, validation, consistency]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [formatted_content, theme_colors]
+    properties:
+      formatted_content:
+        type: string
+        description: 格式化的 HTML 内容
+
+      theme_colors:
+        type: object
+        description: 主题中定义的颜色值
+        properties:
+          primary:
+            type: string
+          background:
+            type: string
+          border:
+            type: string
+          text:
+            type: string
+          code_background:
+            type: string
+          code_text:
+            type: string
+          quote_background:
+            type: string
+          quote_text:
+            type: string
+          emphasis_high:
+            type: string
+          emphasis_critical_bg:
+            type: string
+          emphasis_critical_text:
+            type: string
+
+      allow_extra_colors:
+        type: boolean
+        default: false
+        description: 是否允许主题外的颜色
+
+  outputs:
+    type: object
+    required: [is_valid, violations]
+    properties:
+      is_valid:
+        type: boolean
+        description: 样式是否有效
+
+      violations:
+        type: array
+        description: 违规项列表
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [undefined_color, class_name, external_style]
+            description:
+              type: string
+            location:
+              type: string
+            found_value:
+              type: string
+
+      colors_used:
+        type: object
+        description: 实际使用的颜色统计
+        properties:
+          from_theme:
+            type: object
+            additionalProperties:
+              type: integer
+          not_in_theme:
+            type: object
+            additionalProperties:
+              type: integer
+
+# ============================================
+# 验证规则
+# ============================================
+validation_rules:
+  color_validation:
+    - "从 HTML 中提取所有 color 值"
+    - "将每个颜色值与主题颜色对比"
+    - "报告不在主题中的颜色"
+    - "统计颜色使用频率"
+
+  style_validation:
+    - "检查是否使用 class 属性"
+    - "检查是否引用外部 CSS"
+    - "检查内联样式长度"
+
+  pattern_matching:
+    color_pattern: "#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}|rgb\\(\\s*\\d+\\s*,\\s*\\d+\\s*,\\s*\\d+\\s*\\)|rgba\\("
+    class_pattern: "class\\s*=\\s*[\"'][^\"']+[\"']"
+    external_css_pattern: "<link|<style"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: script
+  timeout_ms: 10000
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: none
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: validate_theme_colors
+      input:
+        formatted_content: '<span style="color:#ff4d4f">text</span>'
+        theme_colors:
+          primary: "#ff4d4f"
+        allow_extra_colors: false
+      assert:
+        - path: "$.is_valid"
+          op: "=="
+          value: true
+        - path: "$.violations"
+          op: "=="
+          value: []
+
+    - name: detect_undefined_color
+      input:
+        formatted_content: '<span style="color:#123456">text</span>'
+        theme_colors:
+          primary: "#ff4d4f"
+        allow_extra_colors: false
+      assert:
+        - path: "$.is_valid"
+          op: "=="
+          value: false
+        - path: "$.violations[0].type"
+          op: "=="
+          value: "undefined_color"
+        - path: "$.violations[0].found_value"
+          op: "=="
+          value: "#123456"

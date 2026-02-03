@@ -1,0 +1,242 @@
+# Content Layout Pipeline Workflow v1.0
+# 内容排版流水线 - 从原始文章到平台就绪内容
+
+kind: workflow
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: workflow.media.content_layout_pipeline
+name: Content Layout Pipeline
+description: >
+  媒体部门的完整工作流程。
+  将原始文章转换为平台就绪的格式化内容。
+  包含结构抽取、可读性排版、平台安全渲染、媒体审核、内容校对。
+owner: media-ai
+tags: [media, workflow, layout, formatting]
+
+# ============================================
+# 流水线概览
+# ============================================
+overview:
+  input: contracts/article-structure-contract/v1/schema.yaml#input_schema
+  output: contracts/formatted-content-contract/v1/schema.yaml
+
+  stages:
+    - id: structure_extraction
+      name: "结构抽取"
+      agent: agent.media.structure_extractor
+      freeze: false
+
+    - id: readable_layout
+      name: "可读性排版"
+      agent: agent.media.readable_color_layout
+      freeze: false
+
+    - id: platform_render
+      name: "平台安全渲染"
+      skill: skill.media.md_to_wechat_richtext
+      freeze: false
+
+    - id: media_review
+      name: "媒体审核"
+      agent: agent.media.media_reviewer
+      freeze: false
+
+    - id: content_proofreading
+      name: "内容校对"
+      skill: skill.media.content_proofreading
+      freeze: true
+
+    - id: final_freeze
+      name: "最终冻结"
+      agent: agent.governance.approval_reviewer
+      freeze: true
+
+# ============================================
+# 详细步骤定义
+# ============================================
+steps:
+  # Stage 1: 结构抽取
+  - id: extract_structure
+    stage: structure_extraction
+    agent: agent.media.structure_extractor
+
+    metadata:
+      name: "文章结构抽取"
+      stage_id: "1.1"
+      description: >
+        从原始文章中抽取结构化信息，生成与样式分离的中间表示。
+        不做任何样式判断，只识别层级、区块类型和重要性级别。
+
+    input:
+      - source: external
+        contract: contracts/article-structure-contract/v1/schema.yaml#input_schema
+        required: true
+
+    output:
+      contract: contracts/article-structure-contract/v1/schema.yaml#output_schema
+      freeze: false
+
+    non_goals:
+      - 应用样式
+      - 生成 HTML
+      - 平台适配
+
+    thinking_boundary: |
+      ✅ 可以思考：标题层级、区块类型、重要性级别、代码语言
+      ❌ 禁止思考：用什么颜色、怎么排版、平台兼容性
+
+  # Stage 2: 可读性排版
+  - id: apply_layout
+    stage: readable_layout
+    agent: agent.media.readable_color_layout
+
+    metadata:
+      name: "可读性排版"
+      stage_id: "2.1"
+      description: >
+        根据文章结构和主题配置，生成具有清晰层级、颜色强调的格式化内容。
+        遵循「样式可配置、结果稳定」原则。
+
+    input:
+      - source: extract_structure
+        required: true
+      - source: external
+        name: theme_config
+        description: "主题配置（red/blue/minimal）"
+        required: true
+      - source: external
+        name: platform
+        description: "目标平台（wechat/xhs/notion/feishu）"
+        required: true
+
+    output:
+      contract: contracts/formatted-content-contract/v1/schema.yaml
+      freeze: false
+
+    non_goals:
+      - 修改文章结构
+      - 发明新的样式规则
+      - 内容审核
+
+    thinking_boundary: |
+      ✅ 可以思考：如何应用主题样式、平台安全规范、渲染模板选择
+      ❌ 禁止思考：修改内容结构、改变重要性判断、发明新颜色
+
+  # Stage 3: 媒体审核
+  - id: review_content
+    stage: media_review
+    agent: agent.media.media_reviewer
+
+    metadata:
+      name: "媒体内容审核"
+      stage_id: "3.1"
+      description: >
+        审核格式化内容的质量、平台合规性、样式一致性。
+        生成审核报告供人类确认。
+
+    input:
+      - source: apply_layout
+        required: true
+      - source: external
+        name: platform
+        required: true
+
+    output:
+      contract: contracts/media-review-contract/v1/schema.yaml
+      freeze: false
+
+    review_criteria:
+      - name: "平台合规性"
+        description: "检查 HTML 标签是否符合目标平台规范"
+        severity: blocker
+
+      - name: "样式一致性"
+        description: "检查所有颜色是否来自主题文件"
+        severity: major
+
+      - name: "内容完整性"
+        description: "检查是否有内容丢失"
+        severity: blocker
+
+      - name: "可读性"
+        description: "检查层级是否清晰、重点是否突出"
+        severity: minor
+
+    non_goals:
+      - 修改内容
+      - 改变样式
+
+  # Stage 3-Freeze: 内容发布冻结
+  - id: content_freeze
+    stage: media_review
+    agent: agent.governance.approval_reviewer
+
+    metadata:
+      name: "内容发布冻结"
+      stage_id: "3.1-freeze"
+      description: "人类确认内容可以发布"
+
+    input:
+      - source: review_content
+        required: true
+      - source: apply_layout
+        required: true
+
+    output:
+      contract: contracts/content-publish-freeze/v1/schema.yaml
+      freeze: true
+
+    human_role:
+      type: decision
+      actions:
+        - approve: "确认内容，准备发布"
+        - request_revision: "返回修改"
+        - reject: "终止流程"
+
+# ============================================
+# 流水线约束
+# ============================================
+constraints:
+  serial_execution: |
+    所有 Agent 必须串行执行，通过 Contract 传递数据。
+    禁止跳过任何步骤。
+
+  theme_immutability: |
+    主题配置一旦选定，整个流程必须使用该主题。
+    修改主题需要重新运行整个流程。
+
+  platform_safety: |
+    所有输出必须符合目标平台的安全规范。
+    不符合平台规范的输出必须被拒绝。
+
+    # 公众号安全约束
+    wechat_html_constraints:
+      forbid_tags: [div, section, article, script, style, link, iframe]
+      allow_tags: [p, span, h1, h2, h3, strong, em, blockquote, pre, code, ul, ol, li, br]
+      css_mode: inline_only
+      max_style_length: 1000
+
+  consistency_requirement: |
+    同一输入内容多次运行，输出结构必须完全一致。
+    颜色、布局、区块类型不应有任何变化。
+
+  output_directory_rule: |
+    所有输出文件应放置在输入文件所在目录的 output 子目录中。
+    例如：输入文件为 /path/to/article.md，输出目录为 /path/to/output/
+    这确保输出文件与输入文件在同一个项目中，便于管理和版本控制。
+
+# ============================================
+# 完成条件
+# ============================================
+completion:
+  required_outputs:
+    - contracts/content-publish-freeze/v1
+
+  handoff_options:
+    - to: agent.media.media_publisher
+      description: "直接发布到目标平台"
+    - to: human
+      description: "人工复制粘贴到平台"

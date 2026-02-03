@@ -1,0 +1,303 @@
+# Red Theme Configuration v1.0
+# 红色强调主题 - 公众号安全版
+# 限制使用公众号编辑器不支持的标签，确保复制粘贴不崩
+
+kind: theme
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: theme.media.red
+name: Red Theme (WeChat Safe)
+name_zh: 红色强调主题（公众号安全版）
+description: >
+  使用红色系作为强调色，专为公众号优化。
+  只使用公众号编辑器支持的标签和内联样式，确保复制粘贴不崩。
+owner: media-ai
+tags: [red, wechat, safe, inline_only]
+
+# ============================================
+# 平台兼容性
+# ============================================
+platform_compatibility:
+  wechat:
+    supported: true
+    notes: "完全支持，仅使用公众号安全标签"
+  xhs:
+    supported: true
+    notes: "完全支持"
+  notion:
+    supported: false
+    notes: "Notion 不支持内联样式，建议使用 minimal 主题"
+  feishu:
+    supported: true
+    notes: "部分支持"
+  generic:
+    supported: true
+    notes: "通用支持"
+
+# ============================================
+# HTML 标签白名单（公众号安全）
+# ============================================
+html_tags:
+  allowed:
+    - p          # 段落
+    - br         # 换行
+    - strong     # 加粗
+    - b          # 加粗
+    - em         # 斜体
+    - i          # 斜体
+    - span       # 内联容器（关键！用于强调色）
+    - blockquote # 引用块
+    - pre        # 代码块容器
+    - code       # 行内代码
+    - ul         # 无序列表
+    - ol         # 有序列表
+    - li         # 列表项
+    - h1         # 一级标题
+    - h2         # 二级标题
+    - h3         # 三级标题
+
+  forbidden:
+    - div        # ❌ 公众号不支持
+    - section    # ❌ 公众号不支持
+    - article    # ❌ 公众号不支持
+    - script     # ❌ 安全风险
+    - style      # ❌ 公众号会移除外部样式
+    - link       # ❌ 公众号会移除外部链接
+    - iframe     # ❌ 安全风险
+
+# ============================================
+# CSS 约束
+# ============================================
+css_constraints:
+  mode: inline_only    # 只使用内联样式
+  max_style_length: 1000  # 单个样式最大长度
+  external_css: false  # 禁止外部 CSS
+  class_names: false   # 禁止使用 class（公众号会移除）
+
+# ============================================
+# 颜色定义
+# ============================================
+colors:
+  # 主色
+  primary: "#ff4d4f"
+  primary_light: "#ff7875"
+  primary_dark: "#cf1322"
+
+  # 文字色
+  text: "#262626"
+  text_secondary: "#595959"
+
+  # 强调色
+  emphasis_high: "#fa541c"
+  emphasis_critical_bg: "#fff1f0"
+  emphasis_critical_text: "#cf1322"
+
+  # 引用块
+  quote_text: "#595959"
+  quote_border: "#d9d9d9"
+
+  # 警告
+  warning: "#faad14"
+  warning_bg: "#fffbe6"
+
+  # 代码块
+  code_bg: "#f6f8fa"
+  code_text: "#24292e"
+
+# ============================================
+# 样式定义（公众号安全版）
+# ============================================
+styles:
+  # 标题样式
+  heading:
+    h1:
+      color: "{{colors.primary}}"
+      font_size: "20px"
+      font_weight: "bold"
+      text_align: "center"
+      margin_bottom: "16px"
+
+    h2:
+      color: "{{colors.primary_dark}}"
+      font_size: "18px"
+      font_weight: "bold"
+      border_bottom: "2px solid {{colors.primary}}"
+      padding_bottom: "8px"
+      margin_top: "20px"
+      margin_bottom: "12px"
+
+    h3:
+      color: "{{colors.primary}}"
+      font_size: "16px"
+      font_weight: "bold"
+      margin_top: "16px"
+      margin_bottom: "8px"
+
+  # 普通段落
+  paragraph:
+    color: "{{colors.text}}"
+    font_size: "15px"
+    line_height: "1.8"
+    margin_bottom: "12px"
+
+  # 强调文本（使用 span）
+  emphasis:
+    high:
+      color: "{{colors.emphasis_high}}"
+      font_weight: "bold"
+
+    critical:
+      background: "{{colors.emphasis_critical_bg}}"
+      color: "{{colors.emphasis_critical_text}}"
+      font_weight: "bold"
+      padding: "2px 6px"
+
+  # 引用块
+  blockquote:
+    color: "{{colors.quote_text}}"
+    background: "#f5f5f5"
+    border_left: "4px solid {{colors.quote_border}}"
+    padding: "12px 16px"
+    margin: "16px 0"
+
+  # 代码块
+  code_inline:
+    background: "{{colors.code_bg}}"
+    color: "{{colors.code_text}}"
+    padding: "2px 6px"
+    font_family: "monospace"
+    font_size: "14px"
+
+  code_block:
+    background: "{{colors.code_bg}}"
+    color: "{{colors.code_text}}"
+    padding: "12px"
+    font_family: "monospace"
+    font_size: "14px"
+    border: "1px solid #e1e4e8"
+    overflow_x: "auto"
+
+  # 列表
+  list:
+    bullet_color: "{{colors.emphasis_high}}"
+    font_size: "15px"
+    line_height: "1.8"
+    margin_left: "20px"
+
+  # 警告强调（使用 section 的替代方案）
+  warning:
+    title_color: "{{colors.warning}}"
+    text_color: "{{colors.text}}"
+
+# ============================================
+# 渲染模板（公众号安全版）
+# ============================================
+# 注意：不使用 div，全部用 p + span 组合
+templates:
+  # H1 标题
+  h1: |
+    <h1 style="color:{{colors.primary}};font-size:{{styles.heading.h1.font_size}};font-weight:{{styles.heading.h1.font_weight}};text-align:{{styles.heading.h1.text_align}};margin-bottom:{{styles.heading.h1.margin_bottom}}">{{{text}}}</h1>
+
+  # H2 标题
+  h2: |
+    <h2 style="color:{{colors.primary_dark}};font-size:{{styles.heading.h2.font_size}};font-weight:{{styles.heading.h2.font_weight}};border-bottom:{{styles.heading.h2.border_bottom}};padding-bottom:{{styles.heading.h2.padding_bottom}};margin-top:{{styles.heading.h2.margin_top}};margin-bottom:{{styles.heading.h2.margin_bottom}}">{{{text}}}</h2>
+
+  # H3 标题
+  h3: |
+    <h3 style="color:{{colors.primary}};font-size:{{styles.heading.h3.font_size}};font-weight:{{styles.heading.h3.font_weight}};margin-top:{{styles.heading.h3.margin_top}};margin-bottom:{{styles.heading.h3.margin_bottom}}">{{{text}}}</h3>
+
+  # 强调区块（使用 p + span，不使用 div）
+  highlight_section: |
+    {{#if title}}
+    <p style="color:{{colors.primary_dark}};font-weight:bold;font-size:16px;margin:16px 0 8px">{{{title}}}</p>
+    {{/if}}
+    {{#each blocks}}
+    <p style="color:{{colors.emphasis_high}};font-size:15px;margin:4px 0">
+    <span style="color:{{colors.emphasis_high}}">●</span>
+    <span style="color:{{colors.text}}">{{{text}}}</span>
+    </p>
+    {{/each}}
+
+  # 引用块
+  quote_block: |
+    <blockquote style="color:{{colors.quote_text}};background:#f5f5f5;border-left:4px solid {{colors.quote_border}};padding:12px 16px;margin:16px 0">
+    {{{content}}}
+    </blockquote>
+
+  # 代码块
+  code_block: |
+    <pre style="background:{{colors.code_bg}};color:{{colors.code_text}};padding:12px;font-family:monospace;font-size:14px;border:1px solid #e1e4e8;overflow-x:auto"><code>{{{content}}}</code></pre>
+
+  # 行内代码
+  code_inline: |
+    <code style="background:{{colors.code_bg}};color:{{colors.code_text}};padding:2px 6px;font-family:monospace;font-size:14px">{{{text}}}</code>
+
+  # 强调文本
+  emphasis_high: |
+    <span style="color:{{colors.emphasis_high}};font-weight:bold">{{{text}}}</span>
+
+  emphasis_critical: |
+    <span style="background:{{colors.emphasis_critical_bg}};color:{{colors.emphasis_critical_text}};font-weight:bold;padding:2px 6px">{{{text}}}</span>
+
+# ============================================
+# 公众号安全验证规则
+# ============================================
+verification_rules:
+  # 禁止的标签检查
+  forbidden_tags_check:
+    - "<div"
+    - "<section"
+    - "<article"
+    - "<script"
+    - "<style"
+    - "<link"
+
+  # 禁止的外部资源
+  external_resources_check:
+    - "href=\"http"
+    - "src=\"http"
+    - "url("
+
+  # 样式长度检查
+  max_style_length: 1000
+
+# ============================================
+# 使用建议
+# ============================================
+usage_recommendations:
+  best_for:
+    - "微信公众号（复制粘贴直接可用）"
+    - "小红书"
+    - "需要视觉冲击力的内容"
+
+  not_recommended_for:
+    - "Notion（不支持内联样式）"
+    - "需要 div 布局的场景"
+
+  tips:
+    - "生成后直接用浏览器打开，全选复制粘贴到公众号后台"
+    - "不使用 div，确保在公众号编辑器中不崩"
+    - "全部使用内联样式，不依赖外部 CSS"
+    - "强调区块使用 p + span 组合，兼容性最好"
+
+# ============================================
+# 工作流集成
+# ============================================
+workflow_integration:
+  renderer: pandoc
+  command_template: |
+    pandoc {input_file} \
+      --from markdown \
+      --to html \
+      --standalone \
+      --no-highlight \
+      -o {output_file}
+
+  post_process:
+    - name: "验证安全标签"
+      command: "grep -vE '<(div|section|script|style)' {output_file}"
+    - name: "验证无外部资源"
+      command: "! grep -E '(href=|src=)\"http' {output_file}"

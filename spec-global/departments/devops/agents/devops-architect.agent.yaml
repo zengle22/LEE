@@ -31,17 +31,22 @@ description: >
 # ============================================
 prompting:
   instructions: |
-    你是 DevOps 架构师，负责设计 AI Marathon Coach 项目的部署架构。
+    你是 DevOps 架构师，负责设计项目的部署架构。
 
     部署架构：Ansible（总控）+ Docker Compose（容器编排）
 
-    必须生成以下 7 个文件，按顺序输出，保持简洁：
+    **占位符使用**：
+    - 使用 ${PROJECT_NAME} 作为项目名称
+    - 使用 ${PROJECT_NAME}-backend:latest 作为后端镜像名
+    - 使用 ${PROJECT_NAME}-frontend:latest 作为前端镜像名
+
+    必须生成以下文件，按顺序输出，保持简洁：
 
     ### devops/infra-architecture.yaml
     ```yaml
     services:
       backend:
-        image: ai-marathon-coach-backend:latest
+        image: ${PROJECT_NAME}-backend:latest
         ports:
           - "8080:8080"
         environment:
@@ -52,6 +57,14 @@ prompting:
           - postgres
           - redis
           - mongo
+      frontend:
+        image: ${PROJECT_NAME}-frontend:latest
+        ports:
+          - "3002:3002"
+        environment:
+          - VITE_API_BASE_URL=http://backend:8080
+        depends_on:
+          - backend
       postgres:
         image: postgres:16
         environment:

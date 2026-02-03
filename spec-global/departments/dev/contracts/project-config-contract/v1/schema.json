@@ -121,18 +121,18 @@
     {
       "kind": "project",
       "version": "1.0",
-      "id": "ai-running-coach",
-      "name": "AI 跑步教练",
+      "id": "example-project",
+      "name": "示例项目",
       "repositories": {
         "frontend": {
           "type": "git",
-          "path": "../../git/ai-marathon-coach-front",
+          "path": "../../git/${PROJECT_NAME}-front",
           "description": "前端仓库 (UniApp)",
           "branch": "main"
         },
         "backend": {
           "type": "git",
-          "path": "../../git/ai-marathon-coach-server",
+          "path": "../../git/${PROJECT_NAME}-server",
           "description": "后端仓库 (Go)",
           "branch": "main"
         }
@@ -142,7 +142,7 @@
         "@backend": "${repositories.backend.path}"
       },
       "metadata": {
-        "team": "running-coach-team",
+        "team": "example-team",
         "created_at": "2026-01-11",
         "tech_stack": {
           "frontend": ["UniApp", "Vue3", "TypeScript"],

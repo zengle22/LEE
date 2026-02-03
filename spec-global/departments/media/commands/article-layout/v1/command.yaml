@@ -1,0 +1,255 @@
+# Article Layout Splash Command v1.0
+# 文章排版命令 - 一键生成格式化文章
+
+kind: command
+version: 1.0
+type: splash
+
+# ============================================
+# 基础标识
+# ============================================
+id: command.media.article_layout
+name: Article Layout
+name_zh: 文章排版
+description: >
+  一键将原始文章转换为格式化的平台就绪内容。
+  支持微信公众号、小红书、Notion、飞书等多平台输出。
+owner: media-ai
+tags: [media, layout, formatting, splash]
+
+# ============================================
+# 命令接口
+# ============================================
+interface:
+  # 命令调用语法
+  invocation:
+    - "/layout <file_path>"
+    - "/layout <file_path> --theme <theme_name>"
+    - "/layout <file_path> --platform <platform>"
+    - "/layout <file_path> --theme <theme_name> --platform <platform>"
+
+  # 参数定义
+  parameters:
+    - name: file_path
+      type: string
+      required: true
+      description: "输入文章的文件路径（支持 .md, .txt）"
+      positional: 0
+      examples:
+        - "articles/my-post.md"
+        - "docs/guide.md"
+        - "./content/draft.md"
+
+    - name: theme
+      type: string
+      flag: --theme
+      required: false
+      default: "wechat_red_safe"
+      description: "排版主题选择"
+      enum:
+        - value: wechat_red_safe
+          description: "公众号安全红色主题（推荐）"
+        - value: blue
+          description: "蓝色主题"
+        - value: minimal
+          description: "极简主题"
+
+    - name: platform
+      type: string
+      flag: --platform
+      required: false
+      default: "wechat"
+      description: "目标平台"
+      enum:
+        - value: wechat
+          description: "微信公众号"
+        - value: xhs
+          description: "小红书"
+        - value: notion
+          description: "Notion"
+        - value: feishu
+          description: "飞书"
+        - value: generic
+          description: "通用 Markdown"
+
+    - name: output_format
+      type: string
+      flag: --format
+      required: false
+      default: "both"
+      description: "输出格式"
+      enum:
+        - value: md
+          description: "仅 Markdown"
+        - value: html
+          description: "仅 HTML"
+        - value: both
+          description: "Markdown + HTML"
+
+    - name: proofread
+      type: boolean
+      flag: --proofread
+      required: false
+      default: true
+      description: "是否自动校对（检测并修复暗色文字）"
+
+# ============================================
+# 执行流程
+# ============================================
+execution:
+  # 关联工作流
+  workflow: workflow.media.content_layout_pipeline
+
+  # 执行步骤
+  steps:
+    - id: validate_input
+      name: "验证输入"
+      description: "检查输入文件是否存在且可读"
+      action: validate_file
+      params:
+        - file_path
+
+    - id: extract_structure
+      name: "结构抽取"
+      description: "从文章中抽取结构化信息"
+      agent: agent.media.structure_extractor
+      input:
+        source_file: file_path
+
+    - id: apply_theme
+      name: "应用主题"
+      description: "根据主题配置生成格式化内容"
+      agent: agent.media.readable_color_layout
+      input:
+        article_structure: extract_structure.output
+        theme_config:
+          theme_name: theme
+        platform: platform
+
+    - id: proofread_content
+      name: "内容校对"
+      description: "检测并修复可读性问题"
+      condition: proofread == true
+      skill: skill.media.content_proofreading
+      input:
+        formatted_content: apply_theme.output
+        platform: platform
+
+    - id: render_output
+      name: "渲染输出"
+      description: "生成最终输出文件"
+      action: render
+      input:
+        content: proofread_content.output || apply_theme.output
+        formats: output_format
+        platform: platform
+
+    - id: save_files
+      name: "保存文件"
+      description: "保存到输出目录"
+      action: save
+      params:
+        output_dir: "{file_path}/output"
+        files: render_output.files
+
+# ============================================
+# 输出规则
+# ============================================
+output:
+  # 输出目录规则
+  directory_rule: >
+    所有输出文件放置在输入文件所在目录的 output 子目录中。
+    例如：输入 articles/my-post.md → 输出 articles/output/my-post_final.md
+
+  # 输出文件命名
+  naming_pattern: "{base_name}_final.{ext}"
+
+  # 输出文件类型
+  file_types:
+    markdown:
+      ext: ".md"
+      description: "Markdown with inline HTML"
+      template: "final"
+
+    html:
+      ext: ".html"
+      description: "独立 HTML 文件，可浏览器预览"
+      template: "standalone"
+
+    report:
+      ext: "_report.json"
+      description: "处理报告（结构、问题、统计）"
+      template: "report"
+
+# ============================================
+# 使用示例
+# ============================================
+examples:
+  - title: "基本用法 - 公众号红色主题"
+    command: "/layout articles/my-post.md"
+    description: "使用默认的公众号红色主题排版"
+
+  - title: "指定平台"
+    command: "/layout articles/my-post.md --platform xhs"
+    description: "生成小红书格式的文章"
+
+  - title: "指定主题"
+    command: "/layout articles/my-post.md --theme blue"
+    description: "使用蓝色主题"
+
+  - title: "仅输出 HTML"
+    command: "/layout articles/my-post.md --format html"
+    description: "只生成 HTML 文件"
+
+  - title: "跳过校对"
+    command: "/layout articles/my-post.md --no-proofread"
+    description: "跳过自动校对步骤"
+
+  - title: "完整配置"
+    command: "/layout articles/my-post.md --theme minimal --platform notion --format both"
+    description: "使用极简主题生成 Notion 格式，输出 MD 和 HTML"
+
+# ============================================
+# 错误处理
+# ============================================
+error_handling:
+  file_not_found:
+    message: "找不到文件：{file_path}"
+    suggestion: "请检查文件路径是否正确，支持相对路径和绝对路径"
+
+  unsupported_format:
+    message: "不支持的文件格式：{ext}"
+    suggestion: "目前支持 .md 和 .txt 格式"
+
+  theme_not_found:
+    message: "主题不存在：{theme}"
+    suggestion: "可用主题：wechat_red_safe, blue, minimal"
+
+  platform_not_supported:
+    message: "平台不支持：{platform}"
+    suggestion: "支持平台：wechat, xhs, notion, feishu, generic"
+
+  proofread_failed:
+    message: "校对发现 {count} 个问题"
+    suggestion: "已自动修复，请检查输出文件"
+
+# ============================================
+# 快捷别名
+# ============================================
+aliases:
+  - "/format"
+  - "/fmt"
+  - "/weatchat"  # 拼写错误兼容
+  - "/weixin"
+
+# ============================================
+# 相关命令
+# ============================================
+related_commands:
+  - command: "/publish <file>"
+    description: "发布文章到平台"
+    workflow: workflow.media.publish_pipeline
+
+  - command: "/review <file>"
+    description: "仅审核不修改"
+    workflow: workflow.media.review_only

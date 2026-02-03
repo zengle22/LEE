@@ -32,87 +32,194 @@ description: >
 # ============================================
 prompting:
   instructions: |
-    你是 DevOps 实施工程师，负责生成 AI Marathon Coach 项目的部署代码。
+    你是 DevOps 实施工程师，负责生成项目的部署代码。
 
     部署架构（重要）：
     - Ansible 是总控工具，负责：SSH 连接服务器、git pull 拉取代码、docker build 构建镜像、调用 docker-compose up 启动服务
     - Docker Compose 是容器编排工具，由 Ansible 调用来启动服务
     - 不要生成 Kubernetes 配置
 
-    必须生成的文件：
+    **多仓库部署规则（固定规则）**：
+    - dev/src/ 下的每个子目录都是独立的 Git 仓库
+    - 每个仓库需要独立拉取、构建、部署
+    - 典型仓库：${BACKEND_REPO_NAME}（后端）、${FRONTEND_REPO_NAME}（前端）
+    - 远程仓库地址通过 `git remote -v` 命令自动获取
+    - 部署时使用相对路径：dev/src/{repo-name}/
 
-    1. Docker Compose 文件（devops/infra/docker-compose.yml）
-       示例格式：
-       ```yaml
-       services:
-         backend:
-           image: ai-marathon-coach-backend:latest
+    **输出格式要求（极其重要）**：
+    每个文件必须使用以下格式（标题括号内是完整文件路径）：
+
+    ### 文件名描述 (devops/infra/docker-compose.yml)
+
+    ```yaml
+    文件内容
+    ```
+
+    注意：标题必须是 ### 开头，括号内是完整的文件路径（包含 devops/ 前缀）
+
+    **项目架构要求（重要）**：
+    根据 system_arch.md，项目通常包含：
+    - **后端服务**: 端口 8080
+    - **前端服务**: 端口 3002（H5）
+
+    必须在 Docker Compose 中定义这两个服务。
+
+    **占位符使用**：
+    - 使用 ${PROJECT_NAME} 作为项目名称
+    - 使用 ${PROJECT_NAME}-backend:latest 作为后端镜像名
+    - 使用 ${PROJECT_NAME}-frontend:latest 作为前端镜像名
+    - 使用 ${BACKEND_REPO_NAME}、${FRONTEND_REPO_NAME} 作为仓库名
            ports:
              - "8080:8080"
            environment:
              - DB_PASSWORD=${DB_PASSWORD}
+             - GLM_API_KEY=${GLM_API_KEY}
+             - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+           depends_on:
+             - postgres
+             - redis
+             - mongo
+
+         frontend:
+           image: -frontend:latest
+           ports:
+             - "3002:3002"
+           environment:
+             - VITE_API_BASE_URL=http://backend:8080
+           depends_on:
+             - backend
+
          postgres:
            image: postgres:16
            environment:
              - POSTGRES_PASSWORD=${DB_PASSWORD}
+           volumes:
+             - postgres_data:/var/lib/postgresql/data
+
+         mongo:
+           image: mongo:7.0
+           volumes:
+             - mongo_data:/data/db
+
+         redis:
+           image: redis:7
+           ports:
+             - "6379:6379"
+
+       volumes:
+         postgres_data:
+         mongo_data:
        ```
 
-    2. Ansible Inventory 文件（ansible/inventory/dev.yml, ansible/inventory/testing.yml）
-       示例格式（YAML）：
+    2. ## devops/infra/ansible/inventory/dev.yml
        ```yaml
-       all:
-         vars:
-           ansible_user: deploy
-           ansible_ssh_private_key_file: ~/.ssh/deploy_key
-         children:
-          dev_servers:
-           hosts:
-             dev1:
-               ansible_host: 192.168.1.10
-       ```
-       或 INI 格式：
-       ```ini
        [dev_servers]
-       dev1 ansible_host=192.168.1.10
-
-       [all:vars]
-       ansible_user=deploy
-       ansible_ssh_private_key_file=~/.ssh/deploy_key
+       dev1 ansible_host=localhost ansible_user=deploy
        ```
 
-    3. Ansible Playbooks（ansible/playbooks/ 目录）
-       - setup-environment.yml：安装 Docker、配置环境
-         ```yaml
-         ---
-         - name: Setup Docker environment
-           hosts: all
-           tasks:
-             - name: Install Docker
-               apt:
-                 name: docker.io
-                 state: present
-         ```
-       - deploy-services.yml：拉取代码、构建镜像、启动 Docker Compose
-         ```yaml
-         ---
-         - name: Deploy services
-           hosts: app_servers
-           tasks:
-             - name: Pull code
-               git:
-                 repo: https://github.com/user/repo.git
-                 dest: /app
-             - name: Start services
-               shell: docker-compose up -d
-         ```
-       - rollback.yml：回滚操作
+    3. ## devops/infra/ansible/inventory/testing.yml
+       ```yaml
+       [test_servers]
+       test1 ansible_host=${TEST_HOST} ansible_user=deploy
+       ```
 
-    4. Ansible Roles（ansible/roles/ 目录）
-       - common/：通用角色（安装 Docker、配置用户）
-       - app/：应用角色（部署应用服务）
+    4. ## devops/infra/ansible/playbooks/setup-environment.yml
+       ```yaml
+       ---
+       - name: Setup Docker environment
+         hosts: all
+         tasks:
+           - name: Install Docker
+             apt:
+               name: docker.io
+               state: present
+       ```
 
-    5. 一键部署脚本（scripts/deploy-dev.sh, scripts/deploy-testing.sh）
-       示例格式：
+    5. ## devops/infra/ansible/playbooks/deploy-services.yml
+       ```yaml
+       ---
+       - name: Deploy ${PROJECT_NAME}
+         hosts: app_servers
+         vars:
+           project_root: /app/${PROJECT_NAME}
+           backend_repo_name: ${BACKEND_REPO_NAME}
+           frontend_repo_name: ${FRONTEND_REPO_NAME}
+
+         tasks:
+           - name: Create project directory
+             file:
+               path: "{{ project_root }}"
+               state: directory
+               mode: '0755'
+
+           - name: Get backend remote URL from local repo
+             local:
+               cmd: git -C dev/src/{{ backend_repo_name }} remote -v | grep "fetch" | awk '{print $2}'
+             register: backend_remote_url
+             changed_when: false
+
+           - name: Pull backend repository
+             git:
+               repo: "{{ backend_remote_url.stdout }}"
+               dest: "{{ project_root }}/backend"
+               force: yes
+               version: main
+
+           - name: Get frontend remote URL from local repo
+             local:
+               cmd: git -C dev/src/{{ frontend_repo_name }} remote -v | grep "fetch" | awk '{print $2}'
+             register: frontend_remote_url
+             changed_when: false
+
+           - name: Pull frontend repository
+             git:
+               repo: "{{ frontend_remote_url.stdout }}"
+               dest: "{{ project_root }}/frontend"
+               force: yes
+               version: main
+
+           - name: Build backend Docker image
+             community.docker.docker_image:
+               name: -backend:latest
+               build:
+                 path: "{{ project_root }}/backend"
+                 dockerfile: Dockerfile
+               source: build
+               state: present
+
+           - name: Build frontend Docker image
+             community.docker.docker_image:
+               name: -frontend:latest
+               build:
+                 path: "{{ project_root }}/frontend"
+                 dockerfile: Dockerfile
+               source: build
+               state: present
+
+           - name: Copy docker-compose.yml to deployment directory
+             copy:
+               src: devops/infra/docker-compose.yml
+               dest: "{{ project_root }}/docker-compose.yml"
+               mode: '0644'
+
+           - name: Start services with Docker Compose
+             community.docker.docker_compose:
+               project_src: "{{ project_root }}"
+               state: present
+               pull: false
+       ```
+
+    6. ## devops/infra/ansible/playbooks/rollback.yml
+       ```yaml
+       ---
+       - name: Rollback services
+         hosts: app_servers
+         tasks:
+           - name: Stop services
+             shell: docker-compose down
+       ```
+
+    7. ## devops/scripts/deploy-dev.sh
        ```bash
        #!/bin/bash
        # 检查 Ansible 安装
@@ -122,41 +229,237 @@ prompting:
        fi
 
        # 部署到开发环境
-       ansible-playbook -i ansible/inventory/dev.yml ansible/playbooks/deploy-services.yml
+       cd devops
+       ansible-playbook -i infra/ansible/inventory/dev.yml infra/ansible/playbooks/deploy-services.yml
 
        echo "Deployment to development environment completed successfully."
        ```
 
+    8. ## devops/scripts/deploy-testing.sh
+       ```bash
+       #!/bin/bash
+       # 检查 Ansible 安装
+       if ! command -v ansible &> /dev/null; then
+           echo "Ansible could not be found, please install it."
+           exit 1
+       fi
+
+       # 部署到测试环境
+       cd devops
+       ansible-playbook -i infra/ansible/inventory/testing.yml infra/ansible/playbooks/deploy-services.yml
+
+       echo "Deployment to testing environment completed successfully."
+       ```
+
     重要提醒：
-    - ansible/inventory/ 下的文件必须是 Ansible inventory 格式，不是 Docker Compose 格式
-    - ansible/playbooks/ 下的文件必须是 Ansible Playbook 格式（以 --- 开头，包含 hosts、tasks 等）
-    - devops/infra/docker-compose.yml 才是 Docker Compose 格式
+    - 所有文件必须使用 ## 文件路径 格式作为标题
+    - devops/infra/ansible/inventory/ 下的文件必须是 Ansible inventory 格式
+    - devops/infra/ansible/playbooks/ 下的文件必须是 Ansible Playbook 格式
+    - devops/infra/docker-compose.yml 是 Docker Compose 格式
 
     格式要求：
     - 所有 YAML 文件必须语法正确
     - 使用占位符标记敏感信息：${VARIABLE_NAME}
-    - Ansible Playbook 必须以 --- 开头，是可执行的 YAML 格式
+    - Ansible Playbook 必须以 --- 开头
     - 脚本必须是可执行的 Bash 脚本（#!/bin/bash）
 
   user_prompt_template: |
-    请基于以下架构设计和发布策略，生成完整的 DevOps 实施代码：
+    你是 DevOps 实施工程师。请基于项目配置生成以下 8 个文件。
 
-    ## 基础设施架构设计
-    {infra_architecture}
+    **重要**：
+    - 不要生成 devops/infra-architecture.yaml、devops/env-matrix.yaml、devops/release-strategy.md（这些已由 p1_architecture 生成）
+    - 请使用 ${PROJECT_NAME} 作为项目名称占位符
+    - 请使用 ${BACKEND_REPO_NAME}、${FRONTEND_REPO_NAME} 作为仓库名称占位符
+    - 镜像名称使用 ${PROJECT_NAME}-backend:latest 和 ${PROJECT_NAME}-frontend:latest
 
-    ## 环境配置矩阵
-    {env_matrix}
+    必须生成的文件（按顺序输出）：
 
-    ## 发布策略
-    {release_strategy}
+    ## devops/infra/docker-compose.yml
+    ```yaml
+    services:
+      backend:
+        image: ${PROJECT_NAME}-backend:latest
+        ports:
+          - "8080:8080"
+        environment:
+          - DB_PASSWORD=${DB_PASSWORD}
+          - GLM_API_KEY=${GLM_API_KEY}
+          - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+        depends_on:
+          - postgres
+          - redis
+          - mongo
 
-    请生成以下文件：
-    1. devops/infra/docker-compose.yml - Docker Compose 服务编排
-    2. ansible/inventory/dev.yml - 开发环境 Ansible 主机清单
-    3. ansible/inventory/testing.yml - 测试环境 Ansible 主机清单
-    4. ansible/playbooks/setup-environment.yml - 环境搭建 Playbook
-    5. ansible/playbooks/deploy-services.yml - 服务部署 Playbook
-    6. ansible/playbooks/rollback.yml - 回滚 Playbook
+      frontend:
+        image: ${PROJECT_NAME}-frontend:latest
+        ports:
+          - "3002:3002"
+        environment:
+          - VITE_API_BASE_URL=http://backend:8080
+        depends_on:
+          - backend
+
+      postgres:
+        image: postgres:16
+        environment:
+          - POSTGRES_PASSWORD=${DB_PASSWORD}
+        volumes:
+          - postgres_data:/var/lib/postgresql/data
+
+      mongo:
+        image: mongo:7.0
+        volumes:
+          - mongo_data:/data/db
+
+      redis:
+        image: redis:7
+        ports:
+          - "6379:6379"
+
+    volumes:
+      postgres_data:
+      mongo_data:
+    ```
+
+    ## devops/infra/ansible/inventory/dev.yml
+    ```ini
+    [dev_servers]
+    dev1 ansible_host=localhost ansible_user=deploy
+    ```
+
+    ## devops/infra/ansible/inventory/testing.yml
+    ```ini
+    [test_servers]
+    test1 ansible_host=${TEST_HOST} ansible_user=deploy
+    ```
+
+    ## devops/infra/ansible/playbooks/setup-environment.yml
+    ```yaml
+    ---
+    - name: Setup Docker environment
+      hosts: all
+      tasks:
+        - name: Install Docker
+          apt:
+            name: docker.io
+            state: present
+    ```
+
+    ## devops/infra/ansible/playbooks/deploy-services.yml
+    ```yaml
+    ---
+    - name: Deploy ${PROJECT_NAME}
+      hosts: app_servers
+      vars:
+        project_root: /app/${PROJECT_NAME}
+        backend_repo_name: ${BACKEND_REPO_NAME}
+        frontend_repo_name: ${FRONTEND_REPO_NAME}
+
+      tasks:
+        - name: Create project directory
+          file:
+            path: "{{ project_root }}"
+            state: directory
+            mode: '0755'
+
+        - name: Get backend remote URL from local repo
+          local:
+            cmd: git -C dev/src/{{ backend_repo_name }} remote -v | grep "fetch" | awk '{print $2}'
+          register: backend_remote_url
+          changed_when: false
+
+        - name: Pull backend repository
+          git:
+            repo: "{{ backend_remote_url.stdout }}"
+            dest: "{{ project_root }}/backend"
+            force: yes
+            version: main
+
+        - name: Get frontend remote URL from local repo
+          local:
+            cmd: git -C dev/src/{{ frontend_repo_name }} remote -v | grep "fetch" | awk '{print $2}'
+          register: frontend_remote_url
+          changed_when: false
+
+        - name: Pull frontend repository
+          git:
+            repo: "{{ frontend_remote_url.stdout }}"
+            dest: "{{ project_root }}/frontend"
+            force: yes
+            version: main
+
+        - name: Build backend Docker image
+          community.docker.docker_image:
+            name: ${PROJECT_NAME}-backend:latest
+            build:
+              path: "{{ project_root }}/backend"
+              dockerfile: Dockerfile
+            source: build
+            state: present
+
+        - name: Build frontend Docker image
+          community.docker.docker_image:
+            name: ${PROJECT_NAME}-frontend:latest
+            build:
+              path: "{{ project_root }}/frontend"
+              dockerfile: Dockerfile
+            source: build
+            state: present
+
+        - name: Copy docker-compose.yml to deployment directory
+          copy:
+            src: devops/infra/docker-compose.yml
+            dest: "{{ project_root }}/docker-compose.yml"
+            mode: '0644'
+
+        - name: Start services with Docker Compose
+          community.docker.docker_compose:
+            project_src: "{{ project_root }}"
+            state: present
+            pull: false
+    ```
+
+    ## devops/infra/ansible/playbooks/rollback.yml
+    ```yaml
+    ---
+    - name: Rollback services
+      hosts: app_servers
+      tasks:
+        - name: Stop services
+          shell: docker-compose down
+    ```
+
+    ## devops/scripts/deploy-dev.sh
+    ```bash
+    #!/bin/bash
+    if ! command -v ansible &> /dev/null; then
+        echo "Ansible could not be found, please install it."
+        exit 1
+    fi
+
+    cd devops
+    ansible-playbook -i infra/ansible/inventory/dev.yml infra/ansible/playbooks/deploy-services.yml
+
+    echo "Deployment to development environment completed successfully."
+    ```
+
+    ## devops/scripts/deploy-testing.sh
+    ```bash
+    #!/bin/bash
+    if ! command -v ansible &> /dev/null; then
+        echo "Ansible could not be found, please install it."
+        exit 1
+    fi
+
+    cd devops
+    ansible-playbook -i infra/ansible/inventory/testing.yml infra/ansible/playbooks/deploy-services.yml
+
+    echo "Deployment to testing environment completed successfully."
+    ```
+
+# ============================================
+# 能力定义
+# ============================================
 
 # ============================================
 # 能力定义

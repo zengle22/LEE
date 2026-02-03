@@ -1,0 +1,327 @@
+# Readable Color Layout Skill Specification v1.1
+# 可读性增强排版技能规范（公众号安全版）
+
+kind: skill
+version: 1.1
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.media.readable_color_layout
+name: Readable Color Layout (WeChat Safe)
+description: >
+  将文章结构转换为具有清晰层级、颜色强调的格式化内容。
+  遵循「先结构化 → 再样式映射 → 最后渲染」的原则。
+  **公众号安全版**：只用 inline style，只用公众号稳定支持的标签，颜色严格受控。
+owner: media-ai
+tags: [media, layout, readability, formatting, wechat_safe]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [article_structure, theme_config]
+    properties:
+      article_structure:
+        type: object
+        description: "文章结构（中间表示）"
+        required: [title, sections]
+
+      theme_config:
+        type: object
+        required: [theme_name]
+        properties:
+          theme_name:
+            type: string
+            enum: [wechat_red_safe, blue, minimal]
+            default: wechat_red_safe
+            description: |
+              主题选择：
+              - wechat_red_safe: 公众号安全红色主题（严格）
+              - blue: 蓝色主题
+              - minimal: 极简主题
+
+      platform:
+        type: string
+        enum: [wechat, xhs, notion, feishu, generic]
+        default: wechat
+
+  outputs:
+    type: object
+    required: [formatted_content, metadata]
+    properties:
+      formatted_content:
+        type: string
+        description: "格式化后的内容（Markdown with inline HTML）"
+
+      metadata:
+        type: object
+        properties:
+          theme_used:
+            type: string
+          platform:
+            type: string
+          sections_count:
+            type: integer
+          highlight_blocks_count:
+            type: integer
+
+# ============================================
+# 公众号安全红色主题（v1.0）
+# ============================================
+wechat_red_theme:
+  # 全局颜色 Token（不可扩展，已调整为更亮的颜色）
+  colors:
+    red_primary: "#ff4d4f"     # 主强调（标题/块边）
+    red_dark: "#cf1322"        # 小标题/强调词
+    red_bg: "#fff1f0"          # 背景块
+    text_main: "#555555"       # 主要文本（中灰，确保可读）
+    text_muted: "#666666"      # 次要文本
+    text_deep: "#4a4a4a"       # 重点内容/重要引用（更深，确保对比度）
+
+  # 标题模板
+  templates:
+    h1: '<h1 style="color:{red_primary};font-weight:700;">{text}</h1>'
+
+    h2: '<h2 style="color:{red_dark};font-weight:600;">{text}</h2>'
+
+    h3: '<h3 style="color:{red_dark};font-weight:600;">{text}</h3>'
+
+  # 红色强调块（唯一允许的"块级强调"）
+  highlight_block: |
+    <blockquote style="
+      background:{red_bg};
+      border-left:4px solid {red_primary};
+      padding:12px 16px;
+      margin:12px 0;
+    ">
+    {title}
+    {content}
+    </blockquote>
+
+  # 行内强调（慎用：一段最多1次）
+  emphasis_inline: '<span style="color:{red_primary};font-weight:600;">{text}</span>'
+
+  # 列表
+  list: |
+    <ul>
+    {items}
+    </ul>
+
+  list_item: '<li><strong>{text}</strong></li>'
+
+  # 代码块（完全不染色）
+  code_block: |
+    <pre><code>
+    {content}
+    </code></pre>
+
+  # 引用块（重点内容使用深色确保对比度）
+  quote_block: |
+    <blockquote style="color:{text_deep};">
+    {content}
+    </blockquote>
+
+# ============================================
+# 渲染规则（严格按照公众号安全规范）
+# ============================================
+rendering_rules:
+  # 标题渲染
+  heading:
+    h1:
+      template: '<h1 style="color:#ff4d4f;font-weight:700;">{text}</h1>'
+      constraints:
+        no_background: true
+        no_center: true
+        max_per_document: 1
+
+    h2:
+      template: '<h2 style="color:#cf1322;font-weight:600;">{text}</h2>'
+      constraints:
+        no_background: true
+
+    h3:
+      template: '<h3 style="color:#cf1322;font-weight:600;">{text}</h3>'
+      constraints:
+        no_background: true
+
+  # 强调区块（必须用 blockquote，禁止 div）
+  highlight_section:
+    template: |
+      <blockquote style="
+        background:#fff1f0;
+        border-left:4px solid #ff4d4f;
+        padding:12px 16px;
+        margin:12px 0;
+      ">
+      {title}
+      {items}
+      </blockquote>
+
+    forbidden_features:
+      - div              # ❌ 禁止使用 div
+      - border_radius    # ❌ 禁止圆角
+      - box_shadow      # ❌ 禁止阴影
+
+  # 行内强调（慎用规则）
+  emphasis_inline:
+    template: '<span style="color:#ff4d4f;font-weight:600;">{text}</span>'
+
+    rules:
+      max_per_paragraph: 1    # 一段最多 1 次
+      no_full_paragraph_red: true  # 不能整段染红
+      no_nesting: true         # 不能嵌套
+
+  # 列表渲染
+  list:
+    template: '<ul>\n{items}\n</ul>'
+
+    item_template: '<li><strong>{text}</strong></li>'
+
+    constraints:
+      no_color_on_li: true      # ❌ 不给 li 单独上色
+      no_emoji: true            # ❌ 不用 emoji
+      use_bold_for_emphasis: true  # ✔ 用粗体承担强调
+
+  # 代码块渲染（完全不上色）
+  code_block:
+    template: |
+      <pre><code>
+      {content}
+      </code></pre>
+
+    constraints:
+      no_highlighting: true     # 不高亮
+      no_coloring: true         # 不上色
+      no_background: false      # 允许默认背景
+
+  # 引用块渲染（使用深色确保对比度）
+  quote_block:
+    template: '<blockquote style="color:#4a4a4a;">{content}</blockquote>'
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  # 颜色约束（严格白名单，已更新为更亮的颜色）
+  color_constraints:
+    mode: whitelist
+    allowed_colors:
+      - "#ff4d4f"  # red_primary
+      - "#cf1322"  # red_dark
+      - "#fff1f0"  # red_bg
+      - "#4a4a4a"  # text_deep（重点内容/重要引用）
+      - "#555555"  # text_main
+      - "#666666"  # text_muted
+
+    forbidden_colors:
+      - "#262626"  # 太暗，已废弃
+      - "#333333"  # 太暗，已废弃
+      - "#8c8c8c"   # 太暗，已废弃
+
+    enforcement: strict
+    violation_action: fail
+
+  # 标签约束
+  tag_constraints:
+    mode: whitelist
+    allowed_tags:
+      - h1, h2, h3         # 标题
+      - p, span, strong     # 文本容器
+      - blockquote         # 特殊容器
+      - pre, code          # 代码块
+      - ul, ol, li          # 列表
+      - br                 # 换行
+
+    forbidden_tags:
+      - div, section, article  # 公众号不支持
+      - style, script         # 会被移除/安全风险
+      - link, iframe         # 外部资源/安全风险
+
+  # 使用约束
+  usage_constraints:
+    max_emphasis_per_paragraph: 1
+    no_full_paragraph_emphasis: true
+    code_no_coloring: true
+
+# ============================================
+# Verifier
+# ============================================
+verifier:
+  # 颜色检查（只允许6种颜色，已更新为更亮的颜色）
+  color_check:
+    allowed_colors:
+      - "#ff4d4f"  # red_primary
+      - "#cf1322"  # red_dark
+      - "#fff1f0"  # red_bg
+      - "#4a4a4a"  # text_deep（重点内容/重要引用）
+      - "#555555"  # text_main
+      - "#666666"  # text_muted
+
+    # 检测并禁止暗色
+    forbidden_colors:
+      - "#262626"  # 太暗，直接拒绝
+      - "#333333"  # 太暗，已弃用
+      - "#8c8c8c"   # 太暗，直接拒绝
+      - "#595959"   # 太暗，直接拒绝
+
+    check_command: |
+      grep -oE "#[0-9a-fA-F]{6}" {output} | \
+      grep -vE "#ff4d4f|#cf1322|#fff1f0|#4a4a4a|#555555|#666666" && exit 1
+
+  # 标签检查
+  tag_check:
+    check_command: |
+      grep -E "<(div|section|style)" {output} && exit 1
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: llm
+  timeout_ms: 30000
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: none
+  pii: forbidden
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: render_with_wechat_red_theme
+      input:
+        article_structure:
+          title:
+            text: "测试标题"
+            level: h1
+          sections:
+            - type: highlight
+              title: "重点内容"
+              blocks:
+                - text: "这是重点"
+                  importance: high
+        theme_config:
+          theme_name: wechat_red_safe
+        platform: wechat
+      assert:
+        - path: "$.formatted_content"
+          op: "contains"
+          value: "<h1 style=\"color:#ff4d4f;font-weight:700;\">"
+
+    - name: verify_no_forbidden_colors
+      input:
+        article_structure: {}
+        theme_config:
+          theme_name: wechat_red_safe
+        platform: wechat
+      assert:
+        - verifier: "color_check"
+          op: "pass"

@@ -20,8 +20,21 @@
               "icon": "lucide-file",
               "title": "README"
             }
+          },
+          {
+            "id": "5b10c8cd92528a38",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.11.5"
+              },
+              "icon": "lucide-book-up",
+              "title": "Release Notes 1.11.5"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -183,7 +196,7 @@
       "bases:Create new base": false
     }
   },
-  "active": "6ef1094d94498758",
+  "active": "5b10c8cd92528a38",
   "lastOpenFiles": [
     "examples/version_comparison_report.md",
     "examples/version_comparison_report.md.tmp.32820.1769447587571",

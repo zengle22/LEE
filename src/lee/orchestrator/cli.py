@@ -17,8 +17,9 @@ from pathlib import Path
 from typing import Optional
 
 # 添加项目路径
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root / "src"))
+# 从 lee/src/lee/orchestrator/cli.py 到项目根目录需要向上 5 级
+project_root = Path(__file__).parent.parent.parent.parent.parent.resolve()
+sys.path.insert(0, str(project_root / "lee" / "src"))
 
 from lee.orchestrator.storage.models import WorkflowLevel, WorkflowStatus
 from lee.orchestrator.storage.sqlite_store import SQLiteStore
@@ -40,8 +41,10 @@ class LEECLI:
         self.store = SQLiteStore(self.db_path)
         await self.store.connect()
 
-        self.tm = TemplateManager()
-        self.orchestrator = Orchestrator(self.store, self.tm)
+        # 设置正确的模板目录：项目根目录/lee/spec-global/departments/devops/workflows
+        template_dir = str(project_root / "lee" / "spec-global" / "departments" / "devops" / "workflows")
+        self.tm = TemplateManager(template_dir=template_dir)
+        self.orchestrator = Orchestrator(self.store, self.tm, project_root=str(project_root))
 
     async def close(self):
         """关闭连接"""

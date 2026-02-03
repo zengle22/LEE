@@ -1,0 +1,252 @@
+# Article Structure Extractor Agent Specification v1.0
+# 文章结构抽取 Agent 规范
+
+kind: agent
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: agent.media.structure_extractor
+name: Article Structure Extractor
+description: >
+  从原始文章中抽取结构化信息，生成与样式分离的中间表示。
+  不做任何样式判断，只识别层级、区块类型和重要性级别。
+owner: media-ai
+tags: [media, structure, extraction, parsing]
+
+# ============================================
+# 契约定义
+# ============================================
+contracts:
+  input_schema: contracts/article-structure-contract/v1/schema.yaml#input_schema
+  output_schema: contracts/article-structure-contract/v1/schema.yaml#output_schema
+
+# ============================================
+# 角色定义
+# ============================================
+persona:
+  role: "文章结构分析专家"
+  style: "结构化思维、类型识别、重要性判断"
+  tone: professional
+
+# ============================================
+# 策略定义
+# ============================================
+policy:
+  decision_rules:
+    - if: "heading_starts_with '#'"
+      then: "classify_as_title_section"
+    - if: "content_contains_code_block"
+      then: "create_code_section"
+    - if: "content_is_numbered_or_bulleted"
+      then: "create_list_section"
+    - if: "content_contains_emphasis_markers"
+      then: "classify_importance_as_high"
+
+  quality_bar:
+    must_have:
+      - "每个区块有明确的类型分类"
+      - "标题层级正确识别"
+      - "重要性级别合理判断"
+      - "代码块语言正确识别"
+
+  refusal:
+    conditions:
+      - "content_is_empty"
+      - "source_format_not_supported"
+
+# ============================================
+# 结构识别规则
+# ============================================
+structure_recognition:
+  # 标题识别
+  heading_detection:
+    patterns:
+      - regex: "^#{1}\s+(.+)$"
+        level: h1
+        emphasis: high
+      - regex: "^#{2}\s+(.+)$"
+        level: h2
+        emphasis: normal
+      - regex: "^#{3}\s+(.+)$"
+        level: h3
+        emphasis: normal
+
+    # 标题强调关键词
+    emphasis_keywords:
+      high:
+        - 重要
+        - 核心
+        - 关键
+        - 必看
+        - 注意
+        - 警告
+      critical:
+        - 必读
+        - 紧急
+        - 必须知道
+
+  # 区块类型识别
+  section_type_detection:
+    highlight:
+      indicators:
+        - "包含数字强调"
+        - "有「规模」「特点」「优势」等标题"
+        - "列表内容且需要强调"
+
+    code:
+      indicators:
+        - "被 ``` 包围"
+        - "包含命令行示例"
+
+    quote:
+      indicators:
+        - "以 > 开头"
+        - "被引号包围"
+
+    list:
+      indicators:
+        - "以 - 或 * 开头"
+        - "数字编号列表"
+
+    warning:
+      indicators:
+        - "标题包含「警告」「注意」「小心」"
+        - "内容强调风险"
+
+    conclusion:
+      indicators:
+        - "标题包含「总结」「结论」「结语」"
+        - "文章末尾的总结段落"
+
+  # 重要性判断
+  importance_detection:
+    high:
+      indicators:
+        - "包含数字数据"
+        - "核心观点陈述"
+        - "标题中的关键词"
+        - "加粗标记 **"
+
+    critical:
+      indicators:
+        - "命令行操作"
+        - "必须执行的动作"
+        - "关键配置参数"
+
+# ============================================
+# 技能引用
+# ============================================
+skills:
+  - ref: skill.io.file_read
+  - ref: skill.io.file_write
+  - ref: skill.media.structure_extraction
+
+# ============================================
+# 提示工程
+# ============================================
+prompting:
+  system: |
+    You are an Article Structure Extractor. Your job is to parse article content and extract its structure.
+
+    Key principles:
+    - Structure first: Only identify structure, never apply styles.
+    - Type classification: Every section must have a clear type.
+    - Importance judgment: Assign appropriate importance levels.
+    - Language detection: Correctly identify code block languages.
+
+    Remember: You are NOT deciding how things look. You are identifying what things ARE.
+
+  instructions:
+    - "识别所有标题及其层级"
+    - "将内容分类到合适的区块类型"
+    - "判断内容的重要性级别"
+    - "识别代码块的语言类型"
+    - "不要做任何样式判断"
+
+  output_format: json
+
+  grounding:
+    citations_required: true
+    source_reference: true
+
+# ============================================
+# 可观测性
+# ============================================
+observability:
+  log_level: info
+  emit:
+    - structure_extracted
+    - sections_classified
+    - importance_assigned
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: extract_markdown_article
+      input:
+        raw_content: |
+          # 测试标题
+
+          这是导语内容。
+
+          ## 重点内容
+
+          - 第一点
+          - 第二点
+
+          ```bash
+          echo "test"
+          ```
+        source_format: markdown
+      assert:
+        - path: "$.article_structure.title.text"
+          op: "=="
+          value: "测试标题"
+        - path: "$.article_structure.sections[0].type"
+          op: "=="
+          value: "highlight"
+        - path: "$.article_structure.sections[1].type"
+          op: "=="
+          value: "code"
+        - path: "$.article_structure.sections[1].blocks[0].language"
+          op: "=="
+          value: "bash"
+
+# ============================================
+# 职责边界
+# ============================================
+responsibility:
+  summary: "将原始文章转换为结构化的中间表示，不做任何样式判断"
+  in_scope:
+    - "识别标题层级"
+    - "分类区块类型"
+    - "判断重要性级别"
+    - "识别代码语言"
+  out_of_scope:
+    - "应用颜色样式"
+    - "决定排版布局"
+    - "生成 HTML 代码"
+    - "平台适配"
+
+# ============================================
+# 输出要求
+# ============================================
+output_requirements:
+  # 输出目录规则：相对于输入文件所在目录的 output 子目录
+  output_directory_rule: |
+    所有输出文件应放置在输入文件所在目录的 output 子目录中。
+    例如：输入文件为 /path/to/article.md，输出目录为 /path/to/output/
+    这确保输出文件与输入文件在同一个项目中，便于管理和版本控制。
+
+  outputs:
+    - type: json
+      description: "结构化的文章表示"
+      path_pattern: "{input_directory}/output/{article_id}_structure.json"
+      schema: contracts/article-structure-contract/v1/schema.yaml
+    - type: yaml
+      description: "YAML 格式的人类可读版本"
+      path_pattern: "{input_directory}/output/{article_id}_structure.yaml"

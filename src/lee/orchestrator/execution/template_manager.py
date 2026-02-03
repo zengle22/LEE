@@ -133,6 +133,8 @@ class TemplateManager:
             return {}
 
         templates = {}
+
+        # 1. 搜索顶层目录的 *.yaml 文件
         for yaml_file in self.template_dir.glob("*.yaml"):
             try:
                 docs = self.load_yaml_template(str(yaml_file))
@@ -141,6 +143,23 @@ class TemplateManager:
                     template = self._parse_template_doc(doc, template_id)
                     templates[template_id] = template
                     self._cache[template_id] = template
+            except Exception as e:
+                print(f"Warning: Failed to load {yaml_file}: {e}")
+
+        # 2. 递归搜索子目录中的 workflow.yaml 文件
+        for yaml_file in self.template_dir.rglob("workflow.yaml"):
+            # 跳过已经在顶层目录处理过的文件
+            if yaml_file.parent == self.template_dir:
+                continue
+            try:
+                docs = self.load_yaml_template(str(yaml_file))
+                for doc in docs:
+                    if doc:  # 确保 doc 不为 None
+                        template_id = doc.get("id")
+                        if template_id:
+                            template = self._parse_template_doc(doc, template_id)
+                            templates[template_id] = template
+                            self._cache[template_id] = template
             except Exception as e:
                 print(f"Warning: Failed to load {yaml_file}: {e}")
 
@@ -162,8 +181,22 @@ class TemplateManager:
         if template_id in self._cache:
             return self._cache[template_id]
 
-        # 尝试从文件加载
+        # 尝试从文件加载 - 支持子目录搜索
+        # 1. 首先尝试直接路径
         template_file = self.template_dir / f"{template_id}.yaml"
+
+        # 2. 如果不存在，递归搜索子目录
+        if not template_file.exists():
+            for yaml_file in self.template_dir.rglob("workflow.yaml"):
+                # 检查 YAML 文件中的 id 是否匹配
+                try:
+                    docs = self.load_yaml_template(str(yaml_file))
+                    if docs and docs[0].get("id") == template_id:
+                        template_file = yaml_file
+                        break
+                except Exception:
+                    continue
+
         if not template_file.exists():
             return None
 

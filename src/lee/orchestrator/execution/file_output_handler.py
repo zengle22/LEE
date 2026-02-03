@@ -184,9 +184,50 @@ class FileOutputHandler:
             # 使用 heading 格式提取
             for match in heading_matches:
                 heading_level = match.group(1)
-                filename = match.group(2).strip()
+                heading_text = match.group(2).strip()
                 lang = match.group(3)
                 content = match.group(4).strip()
+
+                # 尝试从 heading 文本中提取文件路径
+                # 支持格式：
+                # - "devops/infra/docker-compose.yml"
+                # - "1. Docker Compose (devops/infra/docker-compose.yml)"
+                # - "Docker Compose File - devops/infra/docker-compose.yml"
+                filename = None
+
+                # 优先级顺序：
+                # 1. 括号中的完整路径（最高优先级）- 例如: (devops/infra/docker-compose.yml)
+                # 2. 直接就是路径（包含 /）- 例如: devops/infra/docker-compose.yml
+                # 3. 破折号后的路径
+                # 4. 其他路径匹配
+                # 5. heading 文本（最后备选）
+
+                filename = None
+
+                # 模式1: 括号中的完整路径（支持包含 / 和 . 的路径）
+                bracket_match = re.search(r'\(([\w/\-\.]+\.(ya?ml|json|md|txt|sh))\)', heading_text)
+                if bracket_match:
+                    filename = bracket_match.group(1)
+
+                # 模式2: 直接就是路径（包含 / 的完整路径）
+                if not filename and '/' in heading_text and re.search(r'\.(ya?ml|json|md|txt|sh)$', heading_text):
+                    filename = heading_text.strip()
+
+                # 模式3: 破折号后的路径
+                if not filename:
+                    dash_match = re.search(r'[-–]\s*([\w/\-\.]+\.(ya?ml|json|md|txt|sh))\s*$', heading_text)
+                    if dash_match:
+                        filename = dash_match.group(1)
+
+                # 模式4: 查找任何类似文件路径的模式
+                if not filename:
+                    path_match = re.search(r'[\w/]+/[\w\-\.]+\.(ya?ml|json|md|txt|sh)', heading_text)
+                    if path_match:
+                        filename = path_match.group(0)
+
+                # 如果都没找到，使用 heading 文本作为文件名（最后备选）
+                if not filename:
+                    filename = heading_text
 
                 # 标准化格式名称
                 if lang in ["yaml", "yml"]:
@@ -436,7 +477,7 @@ class FileOutputHandler:
 
         Args:
             parsed_outputs: 解析后的输出列表
-            dir_path: 目录路径
+            dir_path: 目录路径（相对于项目根目录，如 devops/cicd/）
             fallback_content: 备用内容（整个 LLM 输出）
 
         Returns:
@@ -444,14 +485,67 @@ class FileOutputHandler:
         """
         files = []
 
-        # 如果解析出的输出有明确的文件名，使用它们
+        # 预处理：获取目录路径的各个组成部分
+        dir_parts = dir_path.rstrip('/').split('/')
+        # 例如 devops/cicd/ -> ['devops', 'cicd']
+
         for output in parsed_outputs:
             if output.filename and output.filename != "output" and output.filename != "file_1":
-                # 使用解析出的文件名
-                files.append({
-                    "filename": output.filename,
-                    "content": output.content
-                })
+                extracted_filename = output.filename
+
+                # 核心逻辑：提取相对于 dir_path 的文件名
+                if dir_path:
+                    normalized_dir = dir_path.rstrip('/') + '/'
+
+                    # 尝试多种模式
+
+                    # 模式1: 直接匹配 - 文件名以目录路径开头
+                    # devops/cicd/infra/xxx.yml -> infra/xxx.yml
+                    if extracted_filename.startswith(normalized_dir):
+                        extracted_filename = extracted_filename[len(normalized_dir):]
+
+                    # 模式2: 去掉 devops/ 前缀，然后重新匹配
+                    # devops/infra/xxx.yml -> infra/xxx.yml (对于 dir_path=devops/)
+                    # devops/cicd/infra/xxx.yml -> infra/xxx.yml (对于 dir_path=devops/cicd/)
+                    elif extracted_filename.startswith('devops/'):
+                        after_devops = extracted_filename[7:]  # 去掉 devops/ (7个字符: d e v o p s /)
+                        # 重新匹配
+                        if after_devops.startswith(normalized_dir):
+                            extracted_filename = after_devops[len(normalized_dir):]
+                        else:
+                            extracted_filename = after_devops
+
+                    # 模式3: 处理重复的目录前缀
+                    # devops/cicd/devops/infra/xxx.yml -> infra/xxx.yml
+                    # 检查是否有 dir_parts 的重复
+                    else:
+                        # 构建可能的重复前缀
+                        # 例如 ['devops', 'cicd'] -> 'devops/cicd/devops/cicd/'
+                        for i in range(len(dir_parts), 0, -1):
+                            prefix = '/'.join(dir_parts[:i]) + '/'  # 'devops/' for i=1
+                            duplicate = '/'.join(dir_parts) + '/' + prefix  # 'devops/cicd/devops/'
+                            if extracted_filename.startswith(duplicate):
+                                extracted_filename = extracted_filename[len(duplicate):]
+                                break
+
+                # 最终清理：如果文件名仍然以目录部分开头，提取最后的部分
+                if '/' in extracted_filename:
+                    # 路径中有多个部分，检查是否可以简化
+                    parts = extracted_filename.split('/')
+                    # 如果第一部分是目录名，可能需要去掉
+                    if len(parts) > 1 and parts[0] in dir_parts:
+                        # 找到第一个不在 dir_parts 中的部分
+                        for i, part in enumerate(parts):
+                            if part not in dir_parts:
+                                extracted_filename = '/'.join(parts[i:])
+                                break
+
+                # 确保文件名是有效的
+                if extracted_filename and extracted_filename not in ['.', '/', '']:
+                    files.append({
+                        "filename": extracted_filename,
+                        "content": output.content
+                    })
             else:
                 # 没有明确文件名，根据内容类型推断
                 ext = self._infer_extension_from_content(output.content)
@@ -460,17 +554,6 @@ class FileOutputHandler:
                     "filename": filename,
                     "content": output.content
                 })
-
-        # 如果没有解析出多个文件，尝试从 fallback 解析
-        if not files and fallback_content:
-            # 尝试从分隔符格式解析
-            separator_files = self._extract_by_separator(fallback_content)
-            if separator_files:
-                for sf in separator_files:
-                    files.append({
-                        "filename": sf.filename,
-                        "content": sf.content
-                    })
 
         return files
 

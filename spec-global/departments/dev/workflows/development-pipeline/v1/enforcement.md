@@ -18,7 +18,7 @@ workflow.yaml 定义了完整的流程规范，但没有运行时强制执行机
 # {project}/execution-state.yaml
 version: 1.0
 workflow_id: workflow.dev.development_pipeline
-project_id: ai-marathon-coach
+project_id: ${PROJECT_ID}
 started_at: 2026-01-09T10:00:00Z
 
 current_phase:

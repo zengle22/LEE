@@ -1,0 +1,291 @@
+# MD to WeChat RichText Skill Specification v0.1
+# Markdown 转 公众号富文本 技能规范
+
+kind: skill
+version: 0.1
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.media.md_to_wechat_richtext
+name: MD to WeChat RichText
+name_zh: Markdown 转 公众号富文本
+description: >
+  发布期 renderer：不碰写作、不碰审美创造，只做一件事——
+  把最终 Markdown 编译成「公众号安全 HTML」。
+  生成后可直接浏览器打开 → 全选 → 复制 → 粘贴公众号后台。
+owner: media-ai
+tags: [media, wechat, renderer, pandoc, html]
+layer: renderer
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [markdown_file]
+    properties:
+      markdown_file:
+        type: string
+        description: Markdown 文件路径
+
+      theme:
+        type: string
+        enum: [red, blue, minimal]
+        default: red
+        description: 主题选择
+
+  outputs:
+    type: object
+    required: [html_file, metadata]
+    properties:
+      html_file:
+        type: string
+        description: 生成的 HTML 文件路径
+
+      metadata:
+        type: object
+        properties:
+          title:
+            type: string
+          word_count:
+            type: integer
+          rendered_at:
+            type: string
+            format: date-time
+          verifier_passed:
+            type: boolean
+
+# ============================================
+# 输入契约
+# ============================================
+input_contract:
+  type: markdown
+  files:
+    - article.md
+
+  format_requirements:
+    - "Markdown 格式规范"
+    - "允许使用有限 HTML（span + inline style）"
+    - "不使用 div / section 等块级容器"
+
+  allowed_inline_html:
+    - '<span style="color:#ff4d4f;font-weight:bold;">文本</span>'
+    - '<span style="background:#fff1f0;color:#cf1322;padding:2px 6px;">文本</span>'
+    - '<strong>**加粗**</strong>'
+    - '<code>`代码`</code>'
+
+# ============================================
+# 输出契约
+# ============================================
+output_contract:
+  type: html
+  files:
+    - wechat.html
+
+  format_requirements:
+    - "只使用公众号安全标签"
+    - "全部使用内联样式"
+    - "不使用外部 CSS/JS"
+    - "可直接复制粘贴到公众号后台"
+
+  usage_flow:
+    - "浏览器打开 wechat.html"
+    - "Ctrl + A 全选"
+    - "Ctrl + C 复制"
+    - "粘贴进公众号后台"
+    - "只调：封面 / 图片 / 分割线"
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  # HTML 标签约束
+  html:
+    allow_tags:
+      - p          # 段落
+      - br         # 换行
+      - strong     # 加粗
+      - b          # 加粗
+      - em         # 斜体
+      - span       # 内联容器（关键！用于强调色）
+      - blockquote # 引用块
+      - pre        # 代码块容器
+      - code       # 行内代码
+      - ul         # 无序列表
+      - ol         # 有序列表
+      - li         # 列表项
+      - h1         # 一级标题
+      - h2         # 二级标题
+      - h3         # 三级标题
+
+    forbid_tags:
+      - div        # ❌ 公众号编辑器不支持
+      - section    # ❌ 公众号编辑器不支持
+      - article    # ❌ 公众号编辑器不支持
+      - script     # ❌ 安全风险
+      - style      # ❌ 公众号会移除外部样式
+      - link       # ❌ 公众号会移除外部链接
+      - iframe     # ❌ 安全风险
+
+  # CSS 约束
+  css:
+    mode: inline_only
+    max_style_length: 1000
+    external_css: false
+    class_names: false
+
+  # 内容约束
+  content:
+    no_external_resources: true
+    no_javascript: true
+    no_iframes: true
+
+# ============================================
+# 技术实现
+# ============================================
+implementation:
+  # 技术选型
+  renderer: pandoc
+
+  # Pandoc 配置
+  pandoc_config:
+    from: markdown
+    to: html
+    standalone: true
+    no_highlight: true
+    template: templates/wechat.html
+
+  # 转换命令模板
+  command_template: |
+    pandoc {input_file} \
+      --from markdown \
+      --to html \
+      --template={template_file} \
+      --standalone \
+      --no-highlight \
+      -o {output_file}
+
+# ============================================
+# HTML 模板（公众号安全版）
+# ============================================
+html_template: |
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <title>$title$</title>
+  </head>
+  <body>
+  $if(title)$
+  <h1 style="color:#ff4d4f;font-weight:bold;font-size:20px;text-align:center;margin-bottom:16px;">$title$</h1>
+  $endif$
+  $body$
+  </body>
+  </html>
+
+# ============================================
+# Verifier（验证器）
+# ============================================
+verifier:
+  checks:
+    - name: "no_external_css"
+      description: "禁止外部 CSS"
+      command: "! grep -E '<link rel=\"stylesheet\"' {output_file}"
+
+    - name: "no_disallowed_tags"
+      description: "禁止使用不允许的标签"
+      command: "! grep -E '<(div|section|script|style)' {output_file}"
+
+    - name: "headings_converted_correctly"
+      description: "标题正确转换"
+      command: "grep -c '<h[123]' {output_file}"
+
+    - name: "code_blocks_preserved"
+      description: "代码块保留"
+      command: "grep -c '<pre' {output_file}"
+
+    - name: "no_external_resources"
+      description: "无外部资源引用"
+      command: "! grep -E '(href=|src=)\"http' {output_file}"
+
+  # 验证失败处理
+  on_failure:
+    action: "report_and_halt"
+    message: "HTML 验证失败，请检查不允许的标签或资源"
+
+# ============================================
+# 工作流集成
+# ============================================
+workflow_integration:
+  # 在整体流水线中的位置
+  position:
+    after: "Readable Layout Skill（加 span / 结构）"
+    before: "Human Publish Gate（复制粘贴）"
+
+  pipeline_context: |
+    Draft Agent（MD）
+       ↓
+    Readable Layout Skill（加 span / 结构）
+       ↓
+    md_to_wechat_richtext  ← 本 skill
+       ↓
+    Human Publish Gate（复制粘贴）
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: script
+  timeout_ms: 30000
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: writes
+  output_directory_rule: |
+    所有输出文件应放置在输入文件所在目录的 output 子目录中。
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: convert_simple_markdown
+      input:
+        markdown_file: "test/fixtures/simple.md"
+        theme: red
+      assert:
+        - path: "$.html_file"
+          op: "exists"
+        - path: "$.metadata.verifier_passed"
+          op: "=="
+          value: true
+
+    - name: verify_no_forbidden_tags
+      input:
+        markdown_file: "test/fixtures/simple.md"
+      assert:
+        - verifier: "no_disallowed_tags"
+          op: "pass"
+
+# ============================================
+# 人工 Gate（你只做这一件事）
+# ============================================
+human_gate:
+  steps:
+    - name: "打开 HTML"
+      action: "用浏览器打开生成的 wechat.html"
+    - name: "全选"
+      action: "Ctrl + A"
+    - name: "复制"
+      action: "Ctrl + C"
+    - name: "粘贴"
+      action: "粘贴进公众号后台"
+    - name: "微调"
+      action: "只调：封面 / 图片 / 分割线"
+
+  promise: "不再返工排版"
