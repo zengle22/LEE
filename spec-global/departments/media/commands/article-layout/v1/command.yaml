@@ -23,10 +23,10 @@ tags: [media, layout, formatting, splash]
 interface:
   # 命令调用语法
   invocation:
-    - "/layout <file_path>"
-    - "/layout <file_path> --theme <theme_name>"
-    - "/layout <file_path> --platform <platform>"
-    - "/layout <file_path> --theme <theme_name> --platform <platform>"
+    - "/lee-layout <file_path>"
+    - "/lee-layout <file_path> --theme <theme_name>"
+    - "/lee-layout <file_path> --platform <platform>"
+    - "/lee-layout <file_path> --theme <theme_name> --platform <platform>"
 
   # 参数定义
   parameters:
@@ -186,27 +186,27 @@ output:
 # ============================================
 examples:
   - title: "基本用法 - 公众号红色主题"
-    command: "/layout articles/my-post.md"
+    command: "/lee-layout articles/my-post.md"
     description: "使用默认的公众号红色主题排版"
 
   - title: "指定平台"
-    command: "/layout articles/my-post.md --platform xhs"
+    command: "/lee-layout articles/my-post.md --platform xhs"
     description: "生成小红书格式的文章"
 
   - title: "指定主题"
-    command: "/layout articles/my-post.md --theme blue"
+    command: "/lee-layout articles/my-post.md --theme blue"
     description: "使用蓝色主题"
 
   - title: "仅输出 HTML"
-    command: "/layout articles/my-post.md --format html"
+    command: "/lee-layout articles/my-post.md --format html"
     description: "只生成 HTML 文件"
 
   - title: "跳过校对"
-    command: "/layout articles/my-post.md --no-proofread"
+    command: "/lee-layout articles/my-post.md --no-proofread"
     description: "跳过自动校对步骤"
 
   - title: "完整配置"
-    command: "/layout articles/my-post.md --theme minimal --platform notion --format both"
+    command: "/lee-layout articles/my-post.md --theme minimal --platform notion --format both"
     description: "使用极简主题生成 Notion 格式，输出 MD 和 HTML"
 
 # ============================================
@@ -237,10 +237,9 @@ error_handling:
 # 快捷别名
 # ============================================
 aliases:
+  - "/lee-fmt"
   - "/format"
   - "/fmt"
-  - "/weatchat"  # 拼写错误兼容
-  - "/weixin"
 
 # ============================================
 # 相关命令

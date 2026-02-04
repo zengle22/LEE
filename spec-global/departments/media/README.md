@@ -195,16 +195,16 @@ themes/{theme_name}/v1/theme.yaml:
 
 媒体部门提供了 **Splash Command**，让你在 Claude Code 中一键完成文章排版。
 
-### /layout - 文章排版命令
+### /lee-layout - 文章排版命令
 
 **基本用法**:
 ```
-/layout <文件路径>
+/lee-layout <文件路径>
 ```
 
 **完整参数**:
 ```
-/layout <文件路径> [--theme <主题>] [--platform <平台>] [--format <格式>]
+/lee-layout <文件路径> [--theme <主题>] [--platform <平台>] [--format <格式>]
 ```
 
 **参数说明**:
@@ -219,19 +219,19 @@ themes/{theme_name}/v1/theme.yaml:
 
 ```bash
 # 基本用法 - 使用默认的公众号红色主题
-/layout articles/my-post.md
+/lee-layout articles/my-post.md
 
 # 指定平台
-/layout articles/my-post.md --platform xhs
+/lee-layout articles/my-post.md --platform xhs
 
 # 指定主题
-/layout articles/my-post.md --theme blue
+/lee-layout articles/my-post.md --theme blue
 
 # 仅输出 HTML
-/layout articles/my-post.md --format html
+/lee-layout articles/my-post.md --format html
 
 # 完整配置
-/layout articles/my-post.md --theme minimal --platform notion --format both
+/lee-layout articles/my-post.md --theme minimal --platform notion --format both
 ```
 
 **输出位置**:
@@ -243,8 +243,9 @@ articles/my-post.md
 ```
 
 **快捷别名**:
-- `/format` - 与 `/layout` 相同
-- `/fmt` - 简写形式
+- `/lee-fmt` - 简写形式
+- `/format` - 通用别名
+- `/fmt` - 最短别名
 
 **错误处理**:
 - 文件不存在：提示检查路径

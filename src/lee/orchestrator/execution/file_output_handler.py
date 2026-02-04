@@ -253,10 +253,20 @@ class FileOutputHandler:
             return outputs
 
         # 如果没有找到 heading 格式，使用原来的方法
-        # 更宽松的模式，支持在代码块开始后指定文件名
-        pattern = r"```(yaml|yml|json|markdown|md|text|bash|sh|shell)(?:\n?[^\n]*)?\n(.*?)```"
+        # 但首先尝试提取所有 ## 文件路径 模式
+        heading_filenames = []
+        for line in text.split('\n'):
+            line = line.strip()
+            if line.startswith('##'):
+                # 提取文件路径
+                filename_match = re.search(r'##\s*([\w/\-\.]+\.(ya?ml|json|md|txt|sh|ini))\s*', line)
+                if filename_match:
+                    heading_filenames.append(filename_match.group(1))
 
-        matches = re.finditer(pattern, text, re.DOTALL)
+        # 更宽松的模式，支持在代码块开始后指定文件名
+        pattern = r"```(yaml|yml|json|markdown|md|text|bash|sh|shell|ini)(?:\n?[^\n]*)?\n(.*?)```"
+
+        matches = list(re.finditer(pattern, text, re.DOTALL))
 
         for i, match in enumerate(matches):
             lang = match.group(1)
@@ -266,20 +276,23 @@ class FileOutputHandler:
             filename = self._extract_filename_from_content(full_content, lang)
             content = full_content
 
-            # 如果没有找到文件名，从内容中移除注释
+            # 如果没有找到文件名，尝试从提取的 heading_filenames 中获取
             if not filename or filename.startswith("file_"):
-                # 尝试从第一行提取文件名注释
-                lines = full_content.split('\n')
-                if lines and lines[0].strip().startswith('#'):
-                    first_line = lines[0].strip()
-                    # 检查是否包含文件名模式
-                    if 'file:' in first_line.lower() or 'filename:' in first_line.lower():
-                        filename = first_line.split(':', 1)[1].strip()
-                        content = '\n'.join(lines[1:]).strip()
+                if i < len(heading_filenames):
+                    filename = heading_filenames[i]
+                else:
+                    # 最后的备选方案：从第一行提取文件名注释
+                    lines = full_content.split('\n')
+                    if lines and lines[0].strip().startswith('#'):
+                        first_line = lines[0].strip()
+                        # 检查是否包含文件名模式
+                        if 'file:' in first_line.lower() or 'filename:' in first_line.lower():
+                            filename = first_line.split(':', 1)[1].strip()
+                            content = '\n'.join(lines[1:]).strip()
+                        else:
+                            filename = f"file_{i+1}"
                     else:
                         filename = f"file_{i+1}"
-                else:
-                    filename = f"file_{i+1}"
 
             # 标准化格式名称
             if lang in ["yaml", "yml"]:
@@ -293,6 +306,8 @@ class FileOutputHandler:
                 # 如果文件名没有扩展名，添加 .sh
                 if not filename.endswith('.sh'):
                     filename = f"{filename}.sh"
+            elif lang == "ini":
+                format_type = "text"
             else:
                 format_type = "text"
 
