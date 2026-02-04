@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Article Layout Splash Command Executor
 文章排版命令执行器
@@ -19,13 +20,42 @@ import argparse
 import json
 import os
 import sys
+import asyncio
 from pathlib import Path
 from datetime import datetime
 
 # 添加项目根目录到 Python 路径
-project_root = Path(__file__).parent.parent.parent.parent.parent
-spec_global_root = Path(__file__).parent.parent.parent.parent
+# executor.py 位于: E:/ai/lee/spec-global/departments/media/commands/article-layout/v1/
+# project_root 应该是: E:/ai/lee/
+project_root = Path(__file__).parent.parent.parent.parent.parent.parent.parent  # 到 E:/ai/lee (7级向上)
+spec_global_root = project_root / "spec-global"
 sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / "src"))
+
+# 导入 LLM 执行器和基于规则的排版处理器
+LLM_AVAILABLE = False
+try:
+    from lee.orchestrator.execution.llm_executor import LLMExecutor
+    LLM_AVAILABLE = True
+    print(f"   ✓ LLM 执行器导入成功")
+except ImportError as e:
+    print(f"   ⚠ LLM 执行器导入失败: {e}")
+    print(f"   将使用基于规则的排版")
+
+# 导入基于规则的排版处理器（从本地文件导入）
+RULE_BASED_LAYOUT_AVAILABLE = False
+try:
+    import importlib.util
+    rule_based_path = Path(__file__).parent / "rule_based_layout.py"
+    if rule_based_path.exists():
+        spec = importlib.util.spec_from_file_location("rule_based_layout", rule_based_path)
+        rule_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rule_module)
+        apply_rule_based_layout = rule_module.apply_rule_based_layout
+        RULE_BASED_LAYOUT_AVAILABLE = True
+except Exception as e:
+    if "--no-llm" not in sys.argv:
+        print(f"   ⚠ 基于规则的排版处理器导入失败: {e}")
 
 
 class ArticleLayoutCommand:
@@ -33,12 +63,28 @@ class ArticleLayoutCommand:
 
     def __init__(self, file_path: str, theme: str = "wechat_red_safe",
                  platform: str = "wechat", output_format: str = "both",
-                 proofread: bool = True):
+                 proofread: bool = True, use_llm: bool = True):
         self.file_path = Path(file_path)
         self.theme = theme
         self.platform = platform
         self.output_format = output_format
         self.proofread = proofread
+        # 默认使用 LLM（DeepSeek）进行排版
+        self.use_llm = use_llm and LLM_AVAILABLE
+        self.use_rule_based = RULE_BASED_LAYOUT_AVAILABLE
+
+        # LLM 执行器
+        self.llm_executor = None
+        if self.use_llm:
+            try:
+                self.llm_executor = LLMExecutor(profile="deepseek")
+                print(f"   ✓ DeepSeek LLM 初始化成功")
+            except Exception as e:
+                print(f"   ⚠ LLM 初始化失败: {e}，使用基于规则的排版")
+                self.use_llm = False
+                self.use_rule_based = RULE_BASED_LAYOUT_AVAILABLE
+        else:
+            print(f"   ℹ LLM 排版已禁用，使用基于规则的排版")
 
         # 输出目录
         self.output_dir = self.file_path.parent / "output"
@@ -104,56 +150,271 @@ class ArticleLayoutCommand:
         """
         应用排版样式
 
-        这是一个简化的实现，实际应该调用 agent.media.readable_color_layout
+        优先级：
+        1. LLM 排版（DeepSeek - 高质量）
+        2. 基于规则的排版（稳定输出）
+        3. 简单的 Markdown 转换
         """
-        # 读取颜色配置
-        colors = theme_config.get("colors", {})
+        # 优先使用 LLM 排版
+        if self.use_llm:
+            print("   使用 DeepSeek LLM 生成带强调效果的排版...")
+            try:
+                return asyncio.run(self._llm_layout(article_content, theme_config))
+            except Exception as e:
+                print(f"   ⚠ LLM 排版失败: {e}，使用基于规则的排版")
 
-        # 替换标题
+        # 回退到基于规则的排版
+        if self.use_rule_based:
+            print("   使用基于规则的排版处理器（稳定输出）...")
+            try:
+                # 使用本地导入的函数
+                import importlib.util
+                rule_based_path = Path(__file__).parent / "rule_based_layout.py"
+                spec = importlib.util.spec_from_file_location("rule_based_layout", rule_based_path)
+                rule_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(rule_module)
+                return rule_module.apply_rule_based_layout(article_content)
+            except Exception as e:
+                print(f"   ⚠ 基于规则的排版失败: {e}")
+
+        # 使用 markdown 库进行完整转换
+        try:
+            import markdown
+            md = markdown.Markdown(extensions=['nl2br', 'sane_lists'])
+            html_content = md.convert(article_content)
+            return html_content
+        except ImportError:
+            print("   ⚠ markdown 库未安装，使用简化转换")
+            return self._simple_markdown_to_html(article_content, theme_config)
+
+    async def _llm_layout(self, article_content: str, theme_config: dict) -> str:
+        """
+        使用 DeepSeek LLM 生成带强调效果的排版
+        """
+        system_prompt = """你是一个专业的文章排版专家。你的任务是将 Markdown 文章转换为符合微信公众号安全红色主题的格式化 HTML。
+
+**排版规则（严格遵循）**：
+
+1. **整体结构**：
+   - 使用简单的 HTML 标签（`<h1>`, `<h2>`, `<h3>`, `<p>`, `<blockquote>`, `<ul>`, `<li>`）
+   - 标题后添加 `<hr>` 分隔线
+   - 普通段落使用 `<p>` 标签
+
+2. **标题样式**：
+   - H1: `<h1>标题</h1>`
+   - H2: `<h2>标题</h2>`
+   - H3: `<h3>标题</h3>`
+
+3. **引用块规则（重要）**：
+   - 普通引用：`<blockquote>内容</blockquote>`
+   - 高亮引用（重要结论、关键点）：`<blockquote class="highlight">内容</blockquote>`
+   - 多行引用用 `<br>` 连接
+   - **重要**：只有明确的引用内容（如引用某人的话、重要结论）才放入引用块，普通陈述句不要放入引用块
+
+4. **列表样式**：
+   - 编号列表：使用 `<ul><li>项目</li></ul>` 格式
+   - 圆点列表：使用 `<p>● <span class="text">内容</span></p>` 格式
+   - 中文数字列表（如"第一、"）：使用 `<p>第一，<span class="text">内容</span></p>` 格式
+
+5. **重点标题 + 列表组合**（如"核心特点"后面跟列表）：
+   ```
+   <blockquote class="highlight">
+   <strong style="color:#cf1322;">核心特点</strong><br>
+   ● <span class="text">内容1</span><br>
+   ● <span class="text">内容2</span>
+   </blockquote>
+   ```
+
+6. **独立的重点标题**（后面不跟列表）：
+   - `<p style="color:#cf1322;font-weight:bold;font-size:16px;margin:16px 0;">标题</p>`
+
+7. **行内强调**：
+   - 使用 `<span class="emphasis">关键词</span>` 来强调重点词汇
+   - 一段话最多使用 1-2 次强调
+
+8. **分隔线**：使用 `<hr>`
+
+**禁止**：
+- 不要给普通陈述句添加引用块样式
+- 不要给列表项添加额外内容（如解释性文字）
+- 不要使用内联样式（除了重点标题和引用块）
+
+**输出要求**：
+- 保持原文内容和结构完整
+- 识别重点内容并应用相应样式
+- 输出纯 HTML 格式"""
+
+        user_prompt = f"""请将以下文章按照公众号安全红色主题进行排版（严格按照昨天的格式）：
+
+```markdown
+{article_content}
+```
+
+**严格格式要求**：
+
+1. **重点标题 + 列表组合**（如"核心特点"后面跟列表）：
+   - 必须将标题和列表全部包裹在同一个 `<blockquote class="highlight">` 中
+   - 格式：
+     ```
+     <blockquote class="highlight">
+     <strong style="color:#cf1322;">核心特点</strong><br>
+     ● <span class="text">内容1</span><br>
+     ● <span class="text">内容2</span>
+     </blockquote>
+     ```
+
+2. **中文数字列表**（如"第一，...第二，..."）：
+   - 使用 `<ul><li>第一，...</li><li>第二，...</li></ul>` 格式
+   - 不要添加额外内容
+
+3. **引用块**：
+   - 只有明确的引用内容才放入引用块（如引用某人的话、重要结论）
+   - 普通陈述句使用 `<p>` 标签，不要放入引用块
+
+4. **分隔线**：在每个 H2 标题后添加 `<hr>`
+
+5. **保持原文内容完整**：不要添加或删除任何内容
+
+6. **输出纯 HTML 格式**
+"""
+
+        result = await self.llm_executor.execute({
+            "prompt": user_prompt,
+            "system_message": system_prompt,
+            "temperature": 0.1,
+            "max_tokens": 8000
+        })
+
+        if result.get("status") == "completed":
+            html_content = result.get("generated_text", "")
+            # 提取 HTML 内容（如果被包裹在代码块中）
+            if "```html" in html_content:
+                html_content = html_content.split("```html")[1].split("```")[0].strip()
+            elif "```" in html_content:
+                html_content = html_content.split("```")[1].split("```")[0].strip()
+            return html_content
+        else:
+            raise Exception(result.get("error", "LLM 调用失败"))
+
+    def _simple_markdown_to_html(self, article_content: str, theme_config: dict) -> str:
+        """
+        Simplified Markdown to HTML converter (when markdown library is unavailable)
+        """
+        colors = theme_config.get("colors", {})
         lines = article_content.split("\n")
         result = []
+        in_paragraph = False
+        in_list = False
+        in_blockquote = False
 
-        for line in lines:
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+
+            # 空行处理
+            if not stripped:
+                if in_paragraph:
+                    result.append("</p>")
+                    in_paragraph = False
+                if in_list:
+                    result.append("</ul>")
+                    in_list = False
+                if in_blockquote:
+                    result.append("</blockquote>")
+                    in_blockquote = False
+                i += 1
+                continue
+
             # H1 标题
-            if line.startswith("# "):
-                line = line.replace(
-                    "# ",
-                    f'<h1 style="color:{colors.get("red_primary", "#ff4d4f")};font-weight:700;">',
-                    1
-                ).replace("\n", "</h1>\n")
+            if stripped.startswith("# "):
+                if in_paragraph:
+                    result.append("</p>")
+                    in_paragraph = False
+                content = stripped[2:].strip()
+                result.append(f'<h1>{content}</h1>')
 
             # H2 标题
-            elif line.startswith("## "):
-                line = line.replace(
-                    "## ",
-                    f'<h2 style="color:{colors.get("red_dark", "#cf1322")};font-weight:600;">',
-                    1
-                ).replace("\n", "</h2>\n")
+            elif stripped.startswith("## "):
+                if in_paragraph:
+                    result.append("</p>")
+                    in_paragraph = False
+                content = stripped[3:].strip()
+                result.append(f'<h2>{content}</h2>')
 
             # H3 标题
-            elif line.startswith("### "):
-                line = line.replace(
-                    "### ",
-                    f'<h3 style="color:{colors.get("red_dark", "#cf1322")};font-weight:600;">',
-                    1
-                ).replace("\n", "</h3>\n")
+            elif stripped.startswith("### "):
+                if in_paragraph:
+                    result.append("</p>")
+                    in_paragraph = False
+                content = stripped[4:].strip()
+                result.append(f'<h3>{content}</h3>')
 
-            result.append(line)
+            # 引用块
+            elif stripped.startswith(">"):
+                if in_paragraph:
+                    result.append("</p>")
+                    in_paragraph = False
+                if not in_blockquote:
+                    in_blockquote = True
+                    # 检查是否是高亮引用
+                    is_highlight = "核心" in stripped or "重点" in stripped or "关键" in stripped
+                    result.append(f'<blockquote class="highlight">' if is_highlight else '<blockquote>')
+                content = stripped[1:].strip()
+                result.append(f'<p>{content}</p>' if content else '<br>')
+
+            # 无序列表
+            elif stripped.startswith("- ") or stripped.startswith("* "):
+                if in_paragraph:
+                    result.append("</p>")
+                    in_paragraph = False
+                if not in_list:
+                    in_list = True
+                    result.append("<ul>")
+                content = stripped[2:].strip()
+                result.append(f'<li>{content}</li>')
+
+            # 分隔线
+            elif stripped == "---" or stripped == "***":
+                if in_paragraph:
+                    result.append("</p>")
+                    in_paragraph = False
+                result.append("<hr>")
+
+            # 普通段落
+            else:
+                if not in_paragraph:
+                    result.append("<p>")
+                    in_paragraph = True
+                else:
+                    result.append("<br>")
+                result.append(stripped)
+
+            i += 1
+
+        # 关闭未闭合的标签
+        if in_paragraph:
+            result.append("</p>")
+        if in_list:
+            result.append("</ul>")
+        if in_blockquote:
+            result.append("</blockquote>")
 
         return "\n".join(result)
 
     def proofread_content(self, content: str) -> tuple:
         """
-        校对内容，修复暗色文字
+        Proofread content, fix dark text colors
+
+        Note: Keep #262626 as deep text color (WeChat-safe color)
 
         Returns:
             (proofread_content, issues_found)
         """
         issues_found = []
 
-        # 检查并替换暗色
+        # 检查并替换过暗的颜色（但不替换 #262626）
         dark_colors = {
-            "#262626": "#4a4a4a",
             "#333333": "#555555",
             "#8c8c8c": "#666666",
         }
@@ -179,13 +440,13 @@ class ArticleLayoutCommand:
                 "type": "quote_block_color",
                 "original": "#666666",
                 "replacement": "#4a4a4a",
-                "reason": "引用块使用更深的颜色确保对比度"
+                "reason": "Use deeper color for quote blocks to ensure contrast"
             })
 
         return content, issues_found
 
     def generate_html(self, markdown_content: str) -> str:
-        """生成独立的 HTML 文件"""
+        """Generate standalone HTML file"""
         return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -306,13 +567,8 @@ class ArticleLayoutCommand:
         print("✨ 应用排版样式...")
         formatted_content = self.apply_layout(article_content, theme_config)
 
-        # 校对
-        proofread_issues = []
-        if self.proofread:
-            print("🔍 自动校对...")
-            formatted_content, proofread_issues = self.proofread_content(formatted_content)
-            if proofread_issues:
-                print(f"   发现 {len(proofread_issues)} 个问题，已自动修复")
+        # 检测是否为完整的 HTML（由 LLM 生成）
+        is_full_html = formatted_content.strip().startswith("<!DOCTYPE html>") or formatted_content.strip().startswith("<html")
 
         # 生成报告
         report = {
@@ -321,9 +577,20 @@ class ArticleLayoutCommand:
             "theme": self.theme,
             "platform": self.platform,
             "output_format": self.output_format,
-            "proofread_issues": proofread_issues,
-            "output_files": []
+            "proofread_issues": [],
+            "output_files": [],
+            "use_llm": self.use_llm,
+            "is_full_html": is_full_html
         }
+
+        # 校对
+        proofread_issues = []
+        if self.proofread:
+            print("🔍 自动校对...")
+            formatted_content, proofread_issues = self.proofread_content(formatted_content)
+            if proofread_issues:
+                print(f"   发现 {len(proofread_issues)} 个问题，已自动修复")
+            report["proofread_issues"] = proofread_issues
 
         # 保存输出
         print("💾 保存输出文件...")
@@ -335,7 +602,11 @@ class ArticleLayoutCommand:
             print(f"   ✓ {self.output_md}")
 
         if self.output_format in ["html", "both"]:
-            html_content = self.generate_html(formatted_content)
+            # 如果 LLM 已经生成了完整 HTML，直接使用；否则包装
+            if is_full_html:
+                html_content = formatted_content
+            else:
+                html_content = self.generate_html(formatted_content)
             with open(self.output_html, "w", encoding="utf-8") as f:
                 f.write(html_content)
             report["output_files"].append(str(self.output_html))
@@ -399,6 +670,12 @@ def main():
         help="跳过自动校对"
     )
 
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="不使用 LLM，使用基于规则的排版"
+    )
+
     args = parser.parse_args()
 
     # 执行排版
@@ -408,7 +685,8 @@ def main():
             theme=args.theme,
             platform=args.platform,
             output_format=args.format,
-            proofread=not args.no_proofread
+            proofread=not args.no_proofread,
+            use_llm=not args.no_llm  # 默认使用 LLM，除非明确指定 --no-llm
         )
         command.run()
 

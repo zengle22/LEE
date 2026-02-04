@@ -30,6 +30,16 @@ zhipu:
   temperature: 0.7
   max_tokens: 8000
 
+# DeepSeek 配置
+deepseek:
+  type: llm
+  provider: custom
+  base_url: https://api.deepseek.com
+  api_key: sk-9fa1f5838ab042c09bcf712de0d55119
+  model: deepseek-chat
+  temperature: 0.3
+  max_tokens: 8000
+
 # Agent 示例配置
 agent.prd:
   type: llm
