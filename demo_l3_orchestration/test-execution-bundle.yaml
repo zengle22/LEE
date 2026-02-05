@@ -1,0 +1,174 @@
+# Test Execution Bundle - Demo for L3 Orchestration
+# 测试执行输入包 - L3 测试编排工作流示例
+
+bundle_id: "TEB-2026-0001"
+name: "用户功能模块测试执行包"
+description: "包含登录、跑者画像等核心功能的测试用例"
+target_version: "v1.0.0-rc1"
+target_environment: test
+
+# 测试用例清单
+test_cases:
+  # ========== 冒烟测试 (P0) ==========
+  - case_id: "F-BASE-002"
+    title: "开发测试登录 - 验证快速登录流程"
+    suite: smoke
+    priority: P0
+    type: positive
+    tags: ["login", "smoke", "core-flow"]
+    execution_config:
+      automated: true
+      script_path: "tests/e2e/login.spec.ts"
+      framework: playwright
+      timeout_seconds: 60
+    description: "验证用户可以通过开发测试快速登录"
+    steps:
+      - step_num: 1
+        action: "访问登录页面"
+        expected: "页面加载成功"
+      - step_num: 2
+        action: "点击开发测试登录按钮"
+        expected: "触发登录请求"
+      - step_num: 3
+        action: "等待页面跳转"
+        expected: "跳转到跑者画像页面"
+
+  - case_id: "F-BASE-005"
+    title: "用户登出 - 验证登出功能正常"
+    suite: smoke
+    priority: P0
+    type: positive
+    tags: ["logout", "smoke"]
+    execution_config:
+      automated: true
+      script_path: "tests/e2e/logout.spec.ts"
+      framework: playwright
+      timeout_seconds: 30
+
+  # ========== 核心功能 (P1) ==========
+  - case_id: "F-P1-001"
+    title: "跑者画像 - 数据保存功能"
+    suite: e2e_chrome
+    priority: P1
+    type: positive
+    tags: ["runner-profile", "data-save"]
+    execution_config:
+      automated: true
+      script_path: "tests/e2e/runner-profile.spec.ts"
+      framework: playwright
+      timeout_seconds: 120
+    description: "验证用户可以保存跑者画像数据"
+
+  - case_id: "F-P1-002"
+    title: "跑者画像 - 年龄边界值验证"
+    suite: e2e_chrome
+    priority: P1
+    type: boundary
+    tags: ["runner-profile", "validation"]
+    execution_config:
+      automated: true
+      script_path: "tests/e2e/runner-profile-boundary.spec.ts"
+      framework: playwright
+    description: "验证年龄输入的边界值处理（最小值、最大值）"
+
+  - case_id: "F-P1-003"
+    title: "跑者画像 - 必填字段验证"
+    suite: e2e_chrome
+    priority: P1
+    type: negative
+    tags: ["runner-profile", "validation"]
+    execution_config:
+      automated: true
+      script_path: "tests/e2e/runner-profile-validation.spec.ts"
+      framework: playwright
+    description: "验证必填字段未填写时显示错误提示"
+
+  # ========== 次要功能 (P2) ==========
+  - case_id: "F-P2-001"
+    title: "个人中心 - 头像上传功能"
+    suite: e2e_chrome
+    priority: P2
+    type: positive
+    tags: ["user-center", "upload"]
+    execution_config:
+      automated: false
+      framework: manual
+    description: "验证用户可以上传个人头像"
+
+  - case_id: "F-P2-002"
+    title: "个人中心 - 昵称修改功能"
+    suite: e2e_chrome
+    priority: P2
+    type: positive
+    tags: ["user-center"]
+    execution_config:
+      automated: true
+      script_path: "tests/e2e/nickname.spec.ts"
+      framework: playwright
+    description: "验证用户可以修改昵称"
+
+  # ========== API 测试 ==========
+  - case_id: "API-AUTH-001"
+    title: "登录 API - 正常登录请求"
+    suite: api
+    priority: P1
+    type: positive
+    tags: ["api", "auth"]
+    execution_config:
+      automated: true
+      script_path: "tests/api/login-api.spec.ts"
+      framework: pytest
+    description: "验证登录 API 正常返回 token"
+
+  - case_id: "API-AUTH-002"
+    title: "登录 API - 错误密码处理"
+    suite: api
+    priority: P1
+    type: negative
+    tags: ["api", "auth"]
+    execution_config:
+      automated: true
+      script_path: "tests/api/login-api.spec.ts"
+      framework: pytest
+    description: "验证错误密码时返回 401"
+
+# 执行配置
+execution_config:
+  execution_mode: hybrid
+  parallelism: 3
+  continue_on_failure: true
+
+  suite_filter:
+    include: [smoke, e2e_chrome, api]
+
+  priority_filter:
+    include: [P0, P1, P2]
+
+# 环境配置
+environment_config:
+  base_url: "http://localhost:3000"
+  browser: chrome
+  headless: true
+  viewport:
+    width: 1920
+    height: 1080
+  timeouts:
+    default: 30000
+    navigation: 60000
+    response: 30000
+
+# 报告配置
+report_config:
+  generate_html: true
+  generate_json: true
+  generate_junit: false
+  include_screenshots: true
+  include_videos: false
+  include_logs: true
+
+# 元数据
+metadata:
+  created_by: "qa-engineer"
+  created_at: "2026-02-05T10:00:00Z"
+  tags: ["user-module", "regression"]
+  notes: "用户模块首次完整功能验证"

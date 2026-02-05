@@ -1,0 +1,4 @@
+# L3 Test Orchestration Demo Requirements
+# Python 3.10+ required
+
+pyyaml>=6.0
