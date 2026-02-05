@@ -1,0 +1,310 @@
+# PRD Markdown to Contract Converter Skill v1.0
+# PRD Markdown 到契约转换技能
+#
+# 此 Skill 提供将 PRD Markdown 文档转换为 frozen-detailed-prd-contract 格式的能力，
+# 支持从结构化的 Markdown 文档自动提取产品需求信息并生成契约格式。
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.prd.markdown_to_contract
+name: PRD Markdown to Contract Converter
+description: >
+  将 PRD Markdown 文档转换为 frozen-detailed-prd-contract JSON 格式，
+  支持自动提取功能点、验收标准、用户流程等信息。
+owner: prd-team
+tags: [prd, markdown, contract, conversion, parsing]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [markdown_path]
+    properties:
+      markdown_path:
+        type: string
+        description: "PRD Markdown 文档路径（相对于项目根目录）"
+      contract_id:
+        type: string
+        description: "契约 ID（可选，默认自动生成）"
+      product_name:
+        type: string
+        description: "产品名称（可选，默认从文档提取）"
+      freeze_immediately:
+        type: boolean
+        default: false
+        description: "是否立即标记为冻结状态"
+      skip_validation:
+        type: boolean
+        default: false
+        description: "是否跳过 schema 验证"
+
+  outputs:
+    type: object
+    required: [contract, metadata]
+    properties:
+      contract:
+        type: object
+        description: "生成的 frozen-detailed-prd-contract JSON 对象"
+        properties:
+          contract_type:
+            type: string
+            const: "frozen-detailed-prd"
+          contract_version:
+            type: string
+            pattern: "^\\d+\\.\\d+\\.\\d+$"
+          metadata:
+            type: object
+            properties:
+              contract_id:
+                type: string
+                pattern: "^FDPRD-\\d{8}-\\d{3}$"
+              product_name:
+                type: string
+              version:
+                type: string
+              created_date:
+                type: string
+                format: date-time
+              status:
+                type: string
+                enum: [DRAFT, PENDING_CONFIRMATION, FROZEN]
+              is_frozen:
+                type: boolean
+          product_overview:
+            type: object
+            properties:
+              background:
+                type: string
+              objectives:
+                type: array
+                items:
+                  type: string
+          functional_details:
+            type: object
+            properties:
+              features:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    priority:
+                      type: string
+                      enum: [P0, P1, P2]
+                    description:
+                      type: string
+                    business_rules:
+                      type: array
+                      items:
+                        type: string
+                    acceptance_criteria:
+                      type: array
+                      items:
+                        type: string
+                    exception_handling:
+                      type: array
+                      items:
+                        type: string
+              user_flows:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    mermaid_code:
+                      type: string
+
+      metadata:
+        type: object
+        required: [timestamp, conversion_version, source_file]
+        properties:
+          timestamp:
+            type: string
+            description: "转换时间戳（ISO 8601）"
+          conversion_version:
+            type: string
+            description: "转换器版本"
+          source_file:
+            type: object
+            properties:
+              path:
+                type: string
+              size:
+                type: integer
+              checksum:
+                type: string
+          statistics:
+            type: object
+            properties:
+              total_features:
+                type: integer
+              total_acceptance_criteria:
+                type: integer
+              total_user_flows:
+                type: integer
+              conversion_warnings:
+                type: integer
+          warnings:
+            type: array
+            items:
+              type: object
+              properties:
+                level:
+                  type: string
+                  enum: [info, warning, error]
+                message:
+                  type: string
+                location:
+                  type: string
+                  description: "Markdown 文档中的位置"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: sync
+  timeout_ms: 60000  # 60 秒
+  retries: 2
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true    # 相同输入产生相同输出
+  side_effects: write    # 会写入契约文件
+  pii: forbidden         # 禁止使用 PII
+
+# ============================================
+# Markdown 结构规范
+# ============================================
+markdown_spec:
+  required_sections:
+    - "# 产品名称"          # 一级标题
+    - "## 背景与目标"       # 二级标题
+    - "## 功能列表"         # 二级标题
+    - "### 功能点 {N}"      # 三级标题
+    - "#### 验收标准"       # 四级标题
+    - "## 用户流程"         # 二级标题（可选）
+
+  feature_template: |
+    ### 功能点 {N}: {功能名称}
+
+    **优先级**: P0/P1/P2
+    **描述**: {功能描述}
+
+    **业务规则**:
+    - 规则 1
+    - 规则 2
+
+    **验收标准**:
+    - Given {前置条件}
+    - When {触发条件}
+    - Then {预期结果}
+
+    **异常处理**:
+    - 异常情况 1
+    - 异常情况 2
+
+  user_flow_template: |
+    ### 用户流程: {流程名称}
+
+    ```mermaid
+    flowchart TD
+        A[开始] --> B[步骤1]
+        B --> C[步骤2]
+        C --> D[结束]
+    ```
+
+# ============================================
+# 提示工程
+# ============================================
+prompting:
+  system: |
+    You are a PRD to Contract Converter. Your job is to parse a PRD Markdown document
+    and convert it into a frozen-detailed-prd-contract JSON format.
+
+    Key principles:
+    - Accuracy: Preserve all information from the source document
+    - Completeness: Extract all features, acceptance criteria, and user flows
+    - Validation: Ensure the output matches the schema requirements
+    - Traceability: Track the source location for each extracted item
+
+    Extraction rules:
+    1. Product Overview: Extract from the background and objectives sections
+    2. Features: Extract from feature sections (### 标题)
+    3. Priority: Extract from **优先级** markers (default to P1 if not specified)
+    4. Acceptance Criteria: Extract from #### 验收标准 sections
+    5. Business Rules: Extract from **业务规则** lists
+    6. Exception Handling: Extract from **异常处理** lists
+    7. User Flows: Extract from ## 用户流程 sections and mermaid diagrams
+
+    ID generation:
+    - Feature ID: F{number} (e.g., F001, F002)
+    - Contract ID: FDPRD-{YYYYMMDD}-{sequence}
+
+    Validation:
+    - Ensure all required fields are present
+    - Verify priority values are P0/P1/P2
+    - Check acceptance criteria follow Given/When/Then format
+    - Validate mermaid code syntax
+
+  instructions:
+    - "读取 PRD Markdown 文档"
+    - "解析文档结构，识别功能点、验收标准、用户流程"
+    - "生成符合 schema 的 JSON 契约"
+    - "验证输出格式"
+    - "生成转换报告（包含警告和统计信息）"
+
+  output_format: json
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: basic_prd_conversion
+      input:
+        markdown_path: "examples/prd/sample-product.md"
+      assert:
+        - path: "$.contract.contract_type"
+          op: "=="
+          value: "frozen-detailed-prd"
+        - path: "$.contract.functional_details.features"
+          op: "typeof"
+          value: "array"
+        - path: "$.metadata.statistics.total_features"
+          op: ">"
+          value: 0
+
+    - name: conversion_with_freeze
+      input:
+        markdown_path: "examples/prd/sample-product.md"
+        freeze_immediately: true
+      assert:
+        - path: "$.contract.metadata.is_frozen"
+          op: "=="
+          value: true
+        - path: "$.contract.metadata.status"
+          op: "=="
+          value: "FROZEN"
+
+# ============================================
+# 版本历史
+# ============================================
+version_history:
+  - version: "1.0.0"
+    date: "2026-02-05"
+    changes:
+      - "初始版本"
+      - "支持 PRD Markdown 到契约的转换"
+      - "支持功能点、验收标准、用户流程提取"
