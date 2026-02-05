@@ -1,0 +1,398 @@
+# Test Execution Gate Rules v1.0
+# 测试执行门禁规则 - 用于 L3 测试编排工作流
+
+kind: gate_rules
+version: 1.0
+
+# ============================================
+# 基础信息
+# ============================================
+gate_id: gate.test.test_execution_gate
+name: Test Execution Gate
+description: >
+  测试执行门禁规则，用于 L3 测试编排工作流：
+  - 验证测试执行完整性
+  - 评估测试质量指标
+  - 判定是否满足出测标准
+  - 支持有条件通过（需人类审批）
+
+owner: test-governance
+tags: [gate, test-execution, L3, quality-bar, exit-criteria]
+
+# ============================================
+# 强制标准（0 容忍，不可豁免）
+# ============================================
+mandatory_criteria:
+  - criterion_id: C001
+    name: "P0 Bug 清零"
+    description: "所有 P0 Bug 必须为零"
+    rule: "p0_bugs == 0"
+    severity: blocker
+    exemption: false
+    rationale: "P0 阻塞核心流程，绝对不可放行"
+
+  - criterion_id: C002
+    name: "冒烟测试 100% 通过"
+    description: "冒烟测试套件必须全部通过"
+    rule: "smoke_pass_rate == 100"
+    severity: blocker
+    exemption: false
+    rationale: "冒烟失败说明基础功能有问题"
+
+  - criterion_id: C003
+    name: "核心流程 100% 通过"
+    description: "核心业务流程用例必须全部通过"
+    rule: "core_flow_pass_rate == 100"
+    severity: blocker
+    exemption: false
+    rationale: "核心流程代表最小可用产品"
+    note: "核心流程用例由 suite=smoke 或 priority=P0 标记"
+
+  - criterion_id: C004
+    name: "P0/P1 执行完整性"
+    description: "所有 P0 和 P1 用例必须执行"
+    rule: "p0_p1_missing == 0"
+    severity: blocker
+    exemption: false
+    rationale: "P0/P1 用例代表关键功能，必须验证"
+
+# ============================================
+# 阈值标准（数据驱动，可配置）
+# ============================================
+threshold_criteria:
+  - criterion_id: T001
+    name: "P1 Bug 阈值"
+    description: "P1 Bug 数量不超过阈值"
+    rule: "p1_bugs <= p1_threshold"
+    default_threshold: 3
+    severity: major
+    exemption_condition: "有规避方案且风险评估通过"
+
+  - criterion_id: T002
+    name: "整体通过率阈值"
+    description: "整体测试通过率不低于阈值"
+    rule: "overall_pass_rate >= pass_rate_threshold"
+    default_threshold: 90
+    severity: major
+    exemption_condition: "失败用例均为 P2/P3 且有规避"
+
+  - criterion_id: T003
+    name: "P0 通过率阈值"
+    description: "P0 用例通过率必须 100%"
+    rule: "p0_pass_rate == 100"
+    severity: blocker
+    exemption: false
+
+  - criterion_id: T004
+    name: "P1 通过率阈值"
+    description: "P1 用例通过率不低于阈值"
+    rule: "p1_pass_rate >= p1_pass_rate_threshold"
+    default_threshold: 95
+    severity: major
+    exemption_condition: "失败场景为边缘情况"
+
+  - criterion_id: T005
+    name: "P2 Bug 阈值"
+    description: "P2 Bug 数量不超过阈值"
+    rule: "p2_bugs <= p2_threshold"
+    default_threshold: 10
+    severity: minor
+    exemption_condition: "不影响主要功能"
+
+# ============================================
+# 质量增强标准（推荐，不强制）
+# ============================================
+quality_enhancement_criteria:
+  - criterion_id: Q001
+    name: "证据完整性"
+    description: "失败用例应提供充分证据"
+    rule: "failed_cases_with_evidence_rate >= 80"
+    severity: info
+    note: "P0/P1 失败必须有证据，P2/P3 推荐"
+
+  - criterion_id: Q002
+    name: "Bug 关联完整性"
+    description: "所有失败用例应关联 Bug"
+    rule: "bugs_created == failed_cases"
+    severity: info
+    note: "确保每个失败都有对应的 Bug 跟踪"
+
+  - criterion_id: Q003
+    name: "P3 用例覆盖"
+    description: "建议执行 P3 用例以获得完整覆盖"
+    rule: "p3_executed_rate >= 50"
+    severity: info
+    note: "P3 用例为边缘场景，可根据时间选择执行"
+
+# ============================================
+# 风险可接受标准（需人类签字）
+# ============================================
+risk_acceptance_criteria:
+  - criterion_id: R001
+    name: "已知 P1 Bug 已记录"
+    description: "所有未关闭的 P1 Bug 必须有文档记录"
+    rule: "ALL(open_p1_bugs) HAVE documentation_complete == true"
+    required_fields: [title, impact_assessment, workaround, defer_reason]
+    severity: major
+
+  - criterion_id: R002
+    name: "规避方案可用"
+    description: "未修复的 P1 Bug 必须有可用的规避方案"
+    rule: "ALL(open_p1_bugs) HAVE workaround_available == true"
+    verification: "QA 验证规避方案可行"
+    severity: major
+
+  - criterion_id: R003
+    name: "风险评估完成"
+    description: "所有遗留风险必须有评估"
+    rule: "risk_assessment_completed == true"
+    required_approvers: [qa_lead, tech_lead]
+    severity: major
+
+  - criterion_id: R004
+    name: "回滚计划就绪"
+    description: "必须有回滚计划"
+    rule: "rollback_plan_exists == true"
+    required_artifacts:
+      - "rollback-plan.md"
+    severity: minor
+
+# ============================================
+# 门禁判定逻辑
+# ============================================
+gate_verdict:
+  PASS:
+    condition: >
+      ALL(mandatory_criteria) == MET
+      AND ALL(threshold_criteria) == MET
+    action: allow_proceed
+    next_state: COMPLETED
+    message: "满足所有出测标准，可以继续"
+
+  CONDITIONAL_PASS:
+    condition: >
+      ALL(mandatory_criteria) == MET
+      AND MOST(threshold_criteria) == MET (with documented exemptions)
+      AND ALL(risk_acceptance_criteria) == DOCUMENTED_AND_SIGNED
+    action: human_decision_required
+    required_approvers: [qa_lead, pm]
+    next_state: COMPLETED (pending approval)
+    message: "基本满足标准，但存在风险，需要人类审批"
+
+  FAIL:
+    condition: >
+      ANY(mandatory_criteria) == NOT_MET
+      OR (too_many_threshold_violations AND no_valid_exemptions)
+    action: block_and_return
+    next_state: FAILED
+    message: "不满足出测标准，需要修复并重新测试"
+
+  BLOCKED:
+    condition: >
+      critical_blocker_detected
+      OR execution_incomplete
+    action: abort_and_escalate
+    next_state: BLOCKED
+    message: "存在阻塞性问题，需要处理后继续"
+
+# ============================================
+# 阈值配置
+# ============================================
+thresholds:
+  default:
+    p1_threshold: 3
+    p2_threshold: 10
+    p3_threshold: 50
+    pass_rate_threshold: 90
+    p1_pass_rate_threshold: 95
+    p0_pass_rate_threshold: 100
+
+  conservative:
+    p1_threshold: 1
+    p2_threshold: 5
+    p3_threshold: 20
+    pass_rate_threshold: 95
+    p1_pass_rate_threshold: 98
+    p0_pass_rate_threshold: 100
+
+  aggressive:
+    p1_threshold: 5
+    p2_threshold: 20
+    p3_threshold: 100
+    pass_rate_threshold: 85
+    p1_pass_rate_threshold: 90
+    p0_pass_rate_threshold: 100
+
+# ============================================
+# 豁免管理
+# ============================================
+exemption_policy:
+  allowed_exemptions:
+    - criterion: T001 (P1 threshold)
+      max_exemptions: 2
+      requires_approval: qa_lead + pm
+      requires_documentation: true
+      requires_workaround: true
+
+    - criterion: T002 (pass rate threshold)
+      max_exemptions: 1
+      requires_approval: qa_lead
+      condition: "failed_cases are all P2/P3"
+
+    - criterion: T004 (P1 pass rate)
+      max_exemptions: 1
+      requires_approval: qa_lead + tech_lead
+      condition: "failure is edge case"
+
+  forbidden_exemptions:
+    - criterion: C001 (P0 清零)
+    - criterion: C002 (冒烟 100%)
+    - criterion: C003 (核心流程 100%)
+    - criterion: C004 (P0/P1 完整性)
+    - criterion: T003 (P0 通过率)
+
+# ============================================
+# 人类签字要求
+# ============================================
+signoff_requirements:
+  conditional_pass_signoff:
+    required_approvers:
+      - role: qa_lead
+        responsibility: "质量背书"
+      - role: pm
+        responsibility: "产品接受"
+
+    optional_approvers:
+      - role: tech_lead
+        condition: "涉及技术风险"
+
+    approval_sla: 24h
+
+    inputs_to_review:
+      - "test-report.md"
+      - "bugs/ (所有 open 状态的 P1)"
+      - "risk-assessment.md (如有)"
+
+    approval_checklist:
+      - "遗留 Bug 已有规避方案"
+      - "风险评估已完成"
+      - "业务影响可接受"
+      - "回滚计划已准备"
+
+# ============================================
+# 判定示例
+# ============================================
+verdict_examples:
+  - scenario: "perfect_pass"
+    description: "完美通过场景"
+    input:
+      p0_bugs: 0
+      p1_bugs: 0
+      p2_bugs: 2
+      smoke_pass_rate: 100
+      core_flow_pass_rate: 100
+      overall_pass_rate: 98
+      p0_pass_rate: 100
+      p1_pass_rate: 100
+    verdict: PASS
+    rationale: "满足所有强制标准和阈值标准"
+
+  - scenario: "p1_bug_threshold_pass"
+    description: "P1 Bug 数量在阈值内通过"
+    input:
+      p0_bugs: 0
+      p1_bugs: 3
+      p2_bugs: 5
+      smoke_pass_rate: 100
+      core_flow_pass_rate: 100
+      overall_pass_rate: 92
+      p0_pass_rate: 100
+      p1_pass_rate: 96
+    verdict: PASS
+    rationale: "P1 Bug 数量等于阈值，其他标准满足"
+
+  - scenario: "p1_bug_threshold_fail"
+    description: "P1 Bug 数量超过阈值失败"
+    input:
+      p0_bugs: 0
+      p1_bugs: 5
+      p2_bugs: 8
+      smoke_pass_rate: 100
+      core_flow_pass_rate: 100
+      overall_pass_rate: 88
+      p0_pass_rate: 100
+      p1_pass_rate: 92
+    verdict: FAIL
+    rationale: "P1 Bug 数量超过阈值 (5 > 3)"
+
+  - scenario: "conditional_pass_with_risk_acceptance"
+    description: "有条件通过，需人类审批"
+    input:
+      p0_bugs: 0
+      p1_bugs: 3
+      p2_bugs: 8
+      smoke_pass_rate: 100
+      core_flow_pass_rate: 100
+      overall_pass_rate: 89
+      p0_pass_rate: 100
+      p1_pass_rate: 94
+      risk_acceptance:
+        documented: true
+        workarounds_available: true
+        risk_assessment_completed: true
+    verdict: CONDITIONAL_PASS
+    rationale: "通过率略低于阈值，但风险已评估并有规避方案"
+
+  - scenario: "p0_bug_fail"
+    description: "存在 P0 Bug 失败"
+    input:
+      p0_bugs: 1
+      p1_bugs: 0
+      smoke_pass_rate: 95
+      core_flow_pass_rate: 98
+    verdict: FAIL
+    rationale: "存在 P0 Bug，且冒烟未 100% 通过"
+
+  - scenario: "smoke_fail"
+    description: "冒烟测试失败"
+    input:
+      p0_bugs: 0
+      smoke_pass_rate: 90
+      core_flow_pass_rate: 100
+    verdict: FAIL
+    rationale: "冒烟测试未 100% 通过"
+
+# ============================================
+# 可观测性
+# ============================================
+metrics:
+  - gate_pass_rate
+  - conditional_pass_rate
+  - fail_rate
+  - exemption_usage_rate
+  - human_signoff_rate
+
+dashboards:
+  - test_execution_gate_progress
+  - criteria_compliance_heatmap
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  version: 1.0
+  created: "2026-02-05"
+  level: L3
+  category: orchestration
+  dependencies:
+    - departments/qa/contracts/test-result/v1/schema.yaml
+    - departments/qa/contracts/test-round/v1/schema.yaml
+
+  changelog:
+    - version: "1.0.0"
+      date: "2026-02-05"
+      changes:
+        - "初始版本：测试执行门禁规则"
+        - "支持强制标准、阈值标准、风险可接受标准"
+        - "支持有条件通过（需人类审批）"
+        - "提供多组阈值配置（保守/默认/激进）"

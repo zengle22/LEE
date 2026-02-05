@@ -1,0 +1,101 @@
+# Bundle Validation Gate Rules v1.0
+# 测试执行包验证门禁规则
+
+kind: gate_rules
+version: 1.0
+
+# ============================================
+# 基础信息
+# ============================================
+gate_id: gate.test.bundle_validation
+name: Bundle Validation Gate
+description: "验证测试执行输入包的完整性和有效性"
+
+owner: test-governance
+tags: [gate, validation, bundle-input]
+
+# ============================================
+# 强制标准
+# ============================================
+mandatory_criteria:
+  - criterion_id: B001
+    name: "执行包存在"
+    description: "test-execution-bundle.yaml 文件必须存在"
+    rule: "bundle_file_exists == true"
+    severity: blocker
+    exemption: false
+
+  - criterion_id: B002
+    name: "基础字段完整"
+    description: "bundle_id, target_version, test_cases 必须存在"
+    rule: "bundle HAS [bundle_id, target_version, test_cases]"
+    severity: blocker
+    exemption: false
+
+  - criterion_id: B003
+    name: "用例清单非空"
+    description: "至少包含一个测试用例"
+    rule: "COUNT(test_cases) >= 1"
+    severity: blocker
+    exemption: false
+
+  - criterion_id: B004
+    name: "用例 ID 唯一"
+    description: "用例 ID 不能重复"
+    rule: "COUNT(UNIQUE(test_cases.case_id)) == COUNT(test_cases.case_id)"
+    severity: blocker
+    exemption: false
+
+  - criterion_id: B005
+    name: "版本号格式有效"
+    description: "版本号符合语义化版本规范"
+    rule: "target_version MATCHES '^v?[0-9]+\\.[0-9]+\\.[0-9]+'"
+    severity: blocker
+    exemption: false
+
+# ============================================
+# 质量增强标准
+# ============================================
+quality_enhancement_criteria:
+  - criterion_id: Q001
+    name: "用例描述完整"
+    description: "每个用例应有描述"
+    rule: "ALL(test_cases) HAVE description NOT EMPTY"
+    severity: info
+
+  - criterion_id: Q002
+    name: "步骤定义完整"
+    description: "关键用例应有步骤定义"
+    rule: "ALL(test_cases WHERE priority IN [P0, P1]) HAVE steps NOT EMPTY"
+    severity: warning
+
+# ============================================
+# 门禁判定逻辑
+# ============================================
+gate_verdict:
+  PASS:
+    condition: "ALL(mandatory_criteria) == MET"
+    action: allow_proceed
+
+  FAIL:
+    condition: "ANY(mandatory_criteria) == NOT_MET"
+    action: block_and_report
+
+# ============================================
+# 错误消息
+# ============================================
+error_messages:
+  bundle_file_missing: "找不到 test-execution-bundle.yaml 文件"
+  bundle_id_missing: "缺少 bundle_id 字段"
+  target_version_missing: "缺少 target_version 字段"
+  test_cases_missing: "缺少 test_cases 字段"
+  test_cases_empty: "test_cases 为空，至少需要一个用例"
+  duplicate_case_id: "存在重复的用例 ID: {duplicate_ids}"
+  invalid_version_format: "版本号格式无效，应为 vx.y.z 或 x.y.z 格式"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  version: 1.0
+  created: "2026-02-05"
