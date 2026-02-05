@@ -224,7 +224,7 @@ required_artifacts:
       - has_core_paths
     source: "design-team"
 
-  optional_artifacts:
+optional_artifacts:
     - artifact: "api-docs.yaml"
       description: "API 接口文档"
       value: "接口测试设计"

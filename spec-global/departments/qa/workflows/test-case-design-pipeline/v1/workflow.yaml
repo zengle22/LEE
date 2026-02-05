@@ -335,12 +335,12 @@ stages:
         outputs:
           - path: "test-cases/functional/branch-coverage/"
             format: yaml
-          structure: |
-            branch-coverage/
-            ├── flow-{flow_id}/
-            │   ├── main-path.yaml
-            │   ├── branch-{branch_id}.yaml
-            │   └── edge-cases.yaml
+            structure: |
+              branch-coverage/
+              ├── flow-{flow_id}/
+              │   ├── main-path.yaml
+              │   ├── branch-{branch_id}.yaml
+              │   └── edge-cases.yaml
 
   # ========== Stage 5: 专项测试用例设计 ==========
   - id: s5_specialized_tests
@@ -452,7 +452,7 @@ stages:
           action: request_revision
           outputs:
             - path: "review/test-case-review-feedback.yaml"
-            include:
+              include:
               - feedback_items: "反馈项列表"
               - required_changes: "必需修改"
               - revision_deadline: "修订截止时间"
@@ -486,19 +486,19 @@ stages:
         outputs:
           - path: "e2e-scripts/playwright/specs/"
             format: typescript
-          structure: |
-            specs/
-            ├── smoke/
-            │   ├── core-flow.spec.ts
-            │   └── authentication.spec.ts
-            ├── functional/
-            │   ├── feature-{feature-id}.spec.ts
-            │   └── branch-coverage/
-            │       └── flow-{flow-id}.spec.ts
-            └── specialized/
-                ├── performance.spec.ts
-                ├── security.spec.ts
-                └── accessibility.spec.ts
+            structure: |
+              specs/
+              ├── smoke/
+              │   ├── core-flow.spec.ts
+              │   └── authentication.spec.ts
+              ├── functional/
+              │   ├── feature-{feature-id}.spec.ts
+              │   └── branch-coverage/
+              │       └── flow-{flow-id}.spec.ts
+              └── specialized/
+                  ├── performance.spec.ts
+                  ├── security.spec.ts
+                  └── accessibility.spec.ts
 
       - id: s7_2_generate_helpers
         name: "生成辅助函数"
@@ -509,12 +509,12 @@ stages:
           - common_patterns: "extracted_from_test_cases"
         outputs:
           - path: "e2e-scripts/playwright/helpers/"
-          structure: |
-            helpers/
-            ├── page-objects.ts
-            ├── api-helpers.ts
-            ├── test-data-helpers.ts
-            └── assertion-helpers.ts
+            structure: |
+              helpers/
+              ├── page-objects.ts
+              ├── api-helpers.ts
+              ├── test-data-helpers.ts
+              └── assertion-helpers.ts
 
       - id: s7_3_generate_config
         name: "生成配置文件"
@@ -523,11 +523,11 @@ stages:
           - test_environments: "$inputs.technical_architecture.environments"
         outputs:
           - path: "e2e-scripts/playwright/config/"
-          structure: |
-            config/
-            ├── playwright.config.ts
-            ├── environments.ts
-            └── test-config.ts
+            structure: |
+              config/
+              ├── playwright.config.ts
+              ├── environments.ts
+              └── test-config.ts
 
       - id: s7_4_generate_test_data
         name: "生成测试数据"
@@ -537,11 +537,11 @@ stages:
           - data_requirements: "extracted_from_cases"
         outputs:
           - path: "e2e-scripts/test-data/"
-          structure: |
-            test-data/
-            ├── users.json
-            ├── scenarios.json
-            └── edge-cases.json
+            structure: |
+              test-data/
+              ├── users.json
+              ├── scenarios.json
+              └── edge-cases.json
 
       - id: s7_5_validate_scripts
         name: "验证脚本质量"
@@ -586,14 +586,14 @@ stages:
           - review_artifacts: "review/"
         outputs:
           - path: "delivery/test-case-design-package/"
-          structure: |
-            test-case-design-package/
-            ├── README.md
-            ├── test-case-design/
-            ├── test-cases/
-            ├── e2e-scripts/
-            ├── review/
-            └── delivery-manifest.yaml
+            structure: |
+              test-case-design-package/
+              ├── README.md
+              ├── test-case-design/
+              ├── test-cases/
+              ├── e2e-scripts/
+              ├── review/
+              └── delivery-manifest.yaml
 
       - id: s8_2_generate_metrics
         name: "生成指标报告"
