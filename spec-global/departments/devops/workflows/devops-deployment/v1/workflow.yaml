@@ -1,3 +1,7 @@
+# Migrated to spec-global format on 2026-02-05
+# Original format: orchestrator-legacy-template
+#
+
 # DevOps Deployment Workflow v1.4
 # DevOps 部署工作流 - DevOps 部门主流程
 #
@@ -8,6 +12,7 @@
 # - 区分独立步骤 `kind: human_gate` 和步骤后的 `post_gate`
 # - 将 `kind: skill` 用于 Shell 执行类步骤
 # - 添加 `contracts.output` 引用验证契约
+kind: workflow
 
 id: workflow.devops.deployment
 level: department
