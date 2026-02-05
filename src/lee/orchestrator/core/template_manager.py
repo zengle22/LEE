@@ -8,6 +8,7 @@ import yaml
 import os
 from typing import Dict, Any, List, Optional
 from pathlib import Path
+from types import SimpleNamespace
 
 from lee.orchestrator.storage.models import Template, WorkflowLevel
 
@@ -66,6 +67,31 @@ class TemplateManager:
                     return template
 
         return None
+
+    def get_template(self, template_id: str) -> Optional[Any]:
+        """
+        获取模板（返回兼容 Orchestrator 的对象）
+
+        Args:
+            template_id: 模板 ID 或名称
+
+        Returns:
+            模板对象（带有 departments, tasks 等属性），不存在返回 None
+        """
+        content = self.get_template_content(template_id)
+        if not content:
+            return None
+
+        # 转换为具有属性的对象（兼容 Orchestrator）
+        return SimpleNamespace(
+            id=content.get("id") or content.get("name", ""),
+            name=content.get("name", ""),
+            description=content.get("description", ""),
+            steps=content.get("steps", []),
+            departments=content.get("departments", []),
+            tasks=content.get("tasks", []),
+            completion_criteria=content.get("completion_criteria", {}),
+        )
 
     def get_steps(self, template_id: str) -> List[Dict[str, Any]]:
         """获取模板的步骤列表"""

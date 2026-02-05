@@ -88,6 +88,7 @@ class Orchestrator:
             project_root: 项目根目录（用于文件路径解析）
         """
         self.store = store
+        self.db = store  # 兼容 Runners 的 db 属性
         self.state_machine = WorkflowStateMachine(store)
         self.template_manager = template_manager or TemplateManager()
         self.executor_factory = ExecutorFactory
@@ -152,18 +153,22 @@ class Orchestrator:
         # 如果是 L1/L2，自动创建子工作流
         if level == WorkflowLevel.PROJECT and template.departments:
             for dept_config in template.departments:
+                # 支持 template 和 template_id 两种键名
+                dept_template_id = dept_config.get("template_id") or dept_config.get("template")
                 await self.spawn_workflow(
                     parent_id=workflow_id,
                     level=WorkflowLevel.DEPARTMENT,
-                    template_id=dept_config["template_id"],
+                    template_id=dept_template_id,
                     data=dept_config.get("data", {}),
                 )
         elif level == WorkflowLevel.DEPARTMENT and template.tasks:
             for task_config in template.tasks:
+                # 支持 template 和 template_id 两种键名
+                task_template_id = task_config.get("template_id") or task_config.get("template")
                 await self.spawn_workflow(
                     parent_id=workflow_id,
                     level=WorkflowLevel.TASK,
-                    template_id=task_config["template_id"],
+                    template_id=task_template_id,
                     data=task_config.get("data", {}),
                 )
 
@@ -745,6 +750,42 @@ class Orchestrator:
             workflow_id: 工作流 ID
         """
         await self.state_machine.resume_workflow(workflow_id)
+
+    # ============ 完成/失败 ============
+
+    async def complete_workflow(
+        self,
+        workflow_id: str
+    ) -> None:
+        """
+        完成工作流
+
+        Args:
+            workflow_id: 工作流 ID
+        """
+        await self.store.update_workflow_status(workflow_id, WorkflowStatus.COMPLETED)
+
+    async def fail_workflow(
+        self,
+        workflow_id: str,
+        error_message: str
+    ) -> None:
+        """
+        失败工作流
+
+        Args:
+            workflow_id: 工作流 ID
+            error_message: 错误信息
+        """
+        # 获取当前工作流
+        instance = await self.store.get_workflow(workflow_id)
+        if not instance:
+            raise ValueError(f"Workflow not found: {workflow_id}")
+
+        # 将错误信息存储在 data 中
+        instance.data["error"] = error_message
+        await self.store.update_workflow_data(workflow_id, instance.data)
+        await self.store.update_workflow_status(workflow_id, WorkflowStatus.FAILED)
 
     # ============ Gate API ============
 
