@@ -292,11 +292,11 @@ stages:
           - page_mapping: "$s3_3_map_to_pages.mapping"
         outputs:
           - path: "test-case-design/feature-calibration.yaml"
-          include:
-            - coverage_matrix: "覆盖矩阵"
-            - uncovered_features: "未覆盖功能点"
-            - orphan_components: "孤立组件（无功能点对应）"
-            - orphan_pages: "孤立页面（无功能点对应）"
+            include:
+              - coverage_matrix: "覆盖矩阵"
+              - uncovered_features: "未覆盖功能点"
+              - orphan_components: "孤立组件（无功能点对应）"
+              - orphan_pages: "孤立页面（无功能点对应）"
 
   # ========== Stage 4: 分支覆盖用例设计 ==========
   - id: s4_branch_coverage
