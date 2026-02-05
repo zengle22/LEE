@@ -1,3 +1,10 @@
+# status: legacy
+# format: orchestrator-legacy-template
+# NOTE:
+#   - New workflows MUST use spec-global format.
+#   - This file exists only for backward compatibility and migration.
+#   - Use 'lee migrate-workflow <template_id>' to migrate to spec-global.
+#
 # 模板定义示例
 # 展示工作流模板的 YAML 格式
 

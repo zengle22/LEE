@@ -264,6 +264,85 @@ black flowcore/
 
 查看 [changelogs/](changelogs/) 了解各版本的详细变更。
 
+---
+
+## 工作流定义规范
+
+**重要**: LEE 框架统一使用 spec-global 格式定义工作流。
+
+### 规范说明
+
+- **唯一格式**: 所有新工作流必须使用 `spec-global` 格式
+- **工作流文件**: 存放在 `spec-global/departments/{department}/workflows/{name}/v1/workflow.yaml`
+- **格式标识**: 文件必须以 `kind: workflow` 开头
+- **版本管理**: 使用 `version: 1.0` 标识格式版本
+
+### spec-global 格式特点
+
+```yaml
+kind: workflow
+version: 1.0
+id: workflow.{department}.{workflow_name}
+
+# 核心定义
+contracts:
+  inputs:
+    - prd:
+        path: "path/to/prd-contract.json"
+        required: true
+  outputs:
+    - test_cases:
+        path: "path/to/test-cases/"
+
+# 状态机
+state_machine:
+  states:
+    - INIT: "初始化"
+    - RUNNING: "执行中"
+    - COMPLETED: "完成"
+  transitions:
+    INIT:
+      - to: RUNNING
+        trigger: "workflow_started"
+
+# 流程步骤
+stages:
+  - id: stage_1
+    name: "第一阶段"
+    steps:
+      - id: step_1
+        run: agent.qa.xxx
+        inputs:
+          - prd: "$inputs.prd"
+        outputs:
+          - path: "output/result.yaml"
+```
+
+### 旧格式状态
+
+`examples/templates.yaml` 中的模板为 **legacy 格式**，仅用于：
+- 向后兼容已有项目
+- 迁移参考
+- 学习 spec-global 格式
+
+**禁止新增** 旧格式工作流定义。
+
+### 迁移工具
+
+使用迁移工具将旧格式转换为 spec-global：
+
+```bash
+# 迁移单个模板
+lee migrate-workflow <template_id> --output spec-global/workflows/
+
+# 迁移所有模板
+lee migrate-workflow --all
+```
+
+详细迁移指南请参考：[docs/spec-global-orchestrator-compatibility.md](docs/spec-global-orchestrator-compatibility.md)
+
+---
+
 ## 贡献
 
 欢迎贡献！请查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详情。
