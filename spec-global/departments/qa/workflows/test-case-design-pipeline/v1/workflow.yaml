@@ -234,10 +234,10 @@ stages:
           - ui_page: "$inputs.ui_page"
         outputs:
           - path: "test-case-design/requirement-alignment.yaml"
-          include:
-            - consistency_matrix: "三方一致性矩阵"
-            - gaps_identified: "识别的缺口"
-            - recommendations: "修复建议"
+            include:
+              - consistency_matrix: "三方一致性矩阵"
+              - gaps_identified: "识别的缺口"
+              - recommendations: "修复建议"
 
       - id: s2_2_resolve_conflicts
         name: "解决冲突"
