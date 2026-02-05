@@ -381,6 +381,7 @@ specs/org/testing/
 │
 ├── workflows/                   # 工作流定义
 │   ├── test-main-pipeline/v2/   # 主流程 v2.0
+│   ├── test-orchestration-pipeline/v1/  # L3 测试编排工作流 v1.0
 │   └── bug-sub-workflow/v1/     # Bug子流程 v1.0
 │
 ├── guides/                      # 使用指南
@@ -446,16 +447,21 @@ project/my-project/testing/
 | 文档 | 路径 | 用途 |
 |------|------|------|
 | Test Main Pipeline v2.0 | `workflows/test-main-pipeline/v2/workflow.yaml` | 主流程定义 |
+| Test Orchestration Pipeline v1.0 (L3) | `workflows/test-orchestration-pipeline/v1/workflow.yaml` | 测试编排与结果收敛 |
 | Bug Sub-workflow v1.0 | `workflows/bug-sub-workflow/v1/workflow.yaml` | Bug子流程 |
 | Bug Contract Schema | `contracts/bug-contract/v1/schema.yaml` | Bug契约格式 |
 | Test Case Schema | `contracts/test-case/v1/schema.yaml` | 测试用例格式 |
+| Test Result Schema | `contracts/test-result/v1/schema.yaml` | 测试执行结果格式 |
+| Test Execution Bundle Schema | `contracts/test-execution-bundle/v1/schema.yaml` | 测试执行输入包格式 |
 | Exit Gate v2.0 | `gates/exit-gate/v2/gate.yaml` | 出测标准 |
+| Test Execution Gate v1.0 | `gates/test-execution-gate/v1/gate.yaml` | 测试执行门禁规则 |
 
 ### 使用指南
 
 | 文档 | 字数 | 内容 |
 |------|------|------|
 | [Workflow USAGE-GUIDE](workflows/test-main-pipeline/v2/USAGE-GUIDE.md) | 10,000+ | 双流程架构、7个阶段详解 |
+| [L3 Test Orchestration USAGE-GUIDE](workflows/test-orchestration-pipeline/v1/USAGE-GUIDE.md) | 8,000+ | 测试编排与结果收敛工作流使用指南 |
 | [Test Case Management Guide](guides/test-case-management-guide.md) | 15,000+ | 需求→用例全流程 |
 
 ---
