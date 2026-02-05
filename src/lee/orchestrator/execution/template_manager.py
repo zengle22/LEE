@@ -68,6 +68,7 @@ class TemplateManager:
     - 解析模板内容为 WorkflowTemplate
     - 缓存已加载的模板
     - 提供模板查询接口
+    - 支持 spec-global 格式（kind: workflow）
     """
 
     def __init__(self, template_dir: str = "specs/workflows"):
@@ -79,6 +80,10 @@ class TemplateManager:
         """
         self.template_dir = Path(template_dir)
         self._cache: Dict[str, WorkflowTemplate] = {}
+
+        # 延迟导入 spec-global 解析器（避免循环依赖）
+        self._spec_global_parser = None
+        self._ir_converter = None
 
     # ============ 模板加载 ============
 
@@ -455,9 +460,10 @@ class TemplateManager:
         """
         解析模板文档
 
-        支持两种格式：
-        1. 旧格式：level 字段指定层级
-        2. 新格式：kind: workflow，从 overview.stages 推断层级
+        支持三种格式：
+        1. spec-global 格式：kind: workflow，完整的工作流定义
+        2. 旧格式：level 字段指定层级
+        3. 新格式：kind: workflow，从 overview.stages 推断层级
 
         Args:
             doc: YAML 文档字典
@@ -469,6 +475,12 @@ class TemplateManager:
         # 检测文档格式
         kind = doc.get("kind", "")
 
+        # spec-global 格式检测
+        if kind == "workflow" and "stages" in doc:
+            # 使用 spec-global 解析器
+            return self._parse_spec_global_format(doc, template_id)
+
+        # 其他格式处理（保持原有逻辑）
         if kind == "workflow":
             # 新格式：从 overview 推断 level
             # 有 stages 的通常是 department 级别流程
@@ -504,6 +516,73 @@ class TemplateManager:
             tasks=doc.get("tasks", []),
             completion_criteria=completion_criteria,
             config=doc.get("config", {}),
+        )
+
+    def _parse_spec_global_format(
+        self,
+        doc: Dict[str, Any],
+        template_id: str
+    ) -> WorkflowTemplate:
+        """
+        解析 spec-global 格式的工作流文档
+
+        spec-global 格式特点：
+        - kind: workflow
+        - stages/steps 嵌套结构
+        - 完整的状态机、门禁、契约定义
+
+        Args:
+            doc: YAML 文档字典
+            template_id: 模板 ID
+
+        Returns:
+            WorkflowTemplate 对象
+        """
+        # 延迟导入 spec-global 解析器
+        if self._spec_global_parser is None:
+            from lee.orchestrator.execution.spec_global_parser import SpecGlobalParser
+            from lee.orchestrator.ir.converter import IRConverter
+
+            self._spec_global_parser = SpecGlobalParser(workflow_base_dir=str(self.template_dir))
+            self._ir_converter = IRConverter()
+
+        # 使用 spec-global 解析器解析为 IR
+        workflow_ir = self._spec_global_parser.parse_workflow(doc, Path(self.template_dir) / f"{template_id}.yaml")
+
+        # 将 IR 转换为模板字典
+        template_dict = self._ir_converter.ir_to_template_dict(workflow_ir)
+
+        # 构建 WorkflowTemplate
+        level = WorkflowLevel(template_dict["level"])
+        steps = [self._dict_to_step(s) for s in template_dict["steps"]]
+
+        template = WorkflowTemplate(
+            id=template_dict["id"],
+            level=level,
+            name=template_dict["name"],
+            description=template_dict["description"],
+            steps=steps,
+            departments=template_dict.get("departments", []),
+            tasks=template_dict.get("tasks", []),
+            completion_criteria=template_dict.get("completion_criteria", {}),
+            config=template_dict.get("config", {}),
+        )
+
+        return template
+
+    def _dict_to_step(self, step_dict: Dict[str, Any]) -> Step:
+        """将字典转换为 Step 对象"""
+        return Step(
+            id=step_dict["id"],
+            kind=step_dict.get("kind", "agent"),
+            executor_type=step_dict.get("executor_type"),
+            agent_id=step_dict.get("agent_id"),
+            skill_id=step_dict.get("skill_id"),
+            gate_id=step_dict.get("gate_id"),
+            depends_on=step_dict.get("depends_on", []),
+            input=step_dict.get("input", {}),
+            outputs=[],
+            config=step_dict.get("config", {}),
         )
 
     def _parse_step(self, step_data: Dict[str, Any]) -> Step:
