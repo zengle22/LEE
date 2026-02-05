@@ -321,7 +321,7 @@ stages:
           - ui_page: "$inputs.ui_page"
         outputs:
           - path: "test-case-design/decision-points.yaml"
-          include:
+            include:
             - decision_tree: "决策树"
             - branch_paths: "分支路径"
             - edge_cases: "边界情况"
@@ -334,7 +334,7 @@ stages:
           - branch_paths: "$s4_2_identify_decision_points.paths"
         outputs:
           - path: "test-cases/functional/branch-coverage/"
-          format: yaml
+            format: yaml
           structure: |
             branch-coverage/
             ├── flow-{flow_id}/
@@ -356,7 +356,7 @@ stages:
           - prd: "$inputs.prd"
         outputs:
           - path: "test-cases/performance/"
-          include:
+            include:
             - load_tests: "负载测试"
             - stress_tests: "压力测试"
             - latency_tests: "延迟测试"
@@ -370,7 +370,7 @@ stages:
           - feature_calibration: "$s3_4_generate_calibration_report.calibration_report"
         outputs:
           - path: "test-cases/security/"
-          include:
+            include:
             - authentication: "认证测试"
             - authorization: "授权测试"
             - injection_attacks: "注入攻击测试"
@@ -385,7 +385,7 @@ stages:
           - ui_prototype: "$inputs.ui_prototype"
         outputs:
           - path: "test-cases/accessibility/"
-          include:
+            include:
             - wcag_compliance: "WCAG合规性测试"
             - screen_reader: "屏幕阅读器测试"
             - keyboard_navigation: "键盘导航测试"
@@ -418,7 +418,7 @@ stages:
           - specialized_tests: "$s5_4_assemble_specialized_report.report"
         outputs:
           - path: "review/test-case-review-package.yaml"
-          include:
+            include:
             - summary: "评审摘要"
             - test_case_inventory: "用例清单"
             - coverage_metrics: "覆盖指标"
@@ -485,7 +485,7 @@ stages:
           - ui_prototype: "$inputs.ui_prototype"
         outputs:
           - path: "e2e-scripts/playwright/specs/"
-          format: typescript
+            format: typescript
           structure: |
             specs/
             ├── smoke/
@@ -552,7 +552,7 @@ stages:
           - config: "$s7_3_generate_config.config"
         outputs:
           - path: "e2e-scripts/validation-report.yaml"
-          include:
+            include:
             - syntax_check: "语法检查"
             - best_practices: "最佳实践检查"
             - maintainability_index: "可维护性指数"
@@ -565,7 +565,7 @@ stages:
           - all_scripts: "e2e-scripts/"
         outputs:
           - path: "e2e-scripts/README.md"
-          include:
+            include:
             - setup_instructions: "设置说明"
             - execution_guide: "执行指南"
             - troubleshooting: "故障排除"
@@ -602,7 +602,7 @@ stages:
           - all_artifacts: "delivery/test-case-design-package/"
         outputs:
           - path: "delivery/metrics.yaml"
-          include:
+            include:
             - total_test_cases: "总用例数"
             - coverage_percentage: "覆盖百分比"
             - branch_coverage_count: "分支用例数"
