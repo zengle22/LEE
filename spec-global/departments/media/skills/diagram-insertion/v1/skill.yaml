@@ -1,0 +1,222 @@
+# Diagram Insertion Skill v1.0
+# 图表插入 Skill - 在文章中插入占位提示
+
+kind: skill
+version: 1.0
+
+id: skill.media.diagram_insertion
+name: Diagram Insertion Skill
+description: >
+  将图表占位提示插入到文章指定位置。
+  不插入实际的 Markdown 图片语法，只插入人类可识别的占位标记。
+  
+  核心原则：
+  1. 图片作为"媒体资产"，不作为正文的一部分
+  2. 占位提示供人类在公众号后台参考
+  3. 保持文章结构完整，便于发布前人工处理
+
+owner: media-ai
+tags: [media, diagram, insertion, placeholder]
+
+# 输入输出契约
+input:
+  type: object
+  required:
+    - article_md
+    - diagram_assets
+  properties:
+    article_md:
+      type: string
+      description: 原始文章 Markdown
+    
+    diagram_assets:
+      type: array
+      description: 生成的图表资产列表
+      items:
+        $ref: "../../../contracts/diagram-asset-contract/v1/schema.yaml#/output_schema/properties/assets/items"
+
+output:
+  type: object
+  required:
+    - article_with_placeholders
+    - insertion_report
+  properties:
+    article_with_placeholders:
+      type: string
+      description: 插入占位提示后的文章
+    
+    insertion_report:
+      type: object
+      properties:
+        total_placeholders:
+          type: integer
+        placeholders:
+          type: array
+          items:
+            type: object
+            properties:
+              position:
+                type: object
+              placeholder_text:
+                type: string
+              asset_id:
+                type: string
+
+# 执行逻辑
+execution:
+  type: deterministic
+  language: python
+  
+  # 插入规则
+  insertion_rules:
+    # 规则 1：在指定段落后插入
+    - id: insert_after_paragraph
+      condition: placement.after_paragraph exists
+      action: |
+        找到第 N 个段落（按 \n\n 分割）
+        在该段落后插入占位提示
+    
+    # 规则 2：在指定标题后插入
+    - id: insert_after_heading
+      condition: placement.after_heading exists
+      action: |
+        找到匹配的标题行
+        在该标题后的第一个段落前插入占位提示
+
+# 占位提示模板
+placeholder_templates:
+  # 标准占位提示
+  standard: |
+    
+    <!-- DIAGRAM:{{asset_id}} -->
+    【结构图：{{caption}}】
+    
+    > 📎 发布前操作：
+    > 1. 打开文件：`{{png_path}}`
+    > 2. 上传到公众号素材库
+    > 3. 删除本占位提示，插入图片
+    
+  
+  # 简洁占位提示（用于密集内容）
+  minimal: |
+    【图：{{caption}}】({{png_path}})
+  
+  # 详细占位提示（用于复杂图表）
+  detailed: |
+    
+    ---
+    **图表占位：{{caption}}**
+    
+    - 文件位置：`{{png_path}}`
+    - Mermaid 源码：`{{mmd_path}}`
+    - 建议宽度：800px
+    
+    发布后请删除此区块。
+    ---
+    
+
+# 默认配置
+defaults:
+  template: standard
+  add_newlines: true
+  preserve_structure: true
+
+# 完整示例
+example:
+  input:
+    article_md: |
+      # 文章标题
+      
+      第一段内容...
+      
+      第二段内容...
+      
+      第三段内容，提到治理闭环...
+    
+    diagram_assets:
+      - id: diagram_001
+        caption: 治理闭环结构图
+        files:
+          png:
+            path: images/diagram_001.png
+          mmd:
+            path: images/diagram_001.mmd
+        insertion_guide:
+          suggested_position:
+            after_paragraph: 3
+  
+  output:
+    article_with_placeholders: |
+      # 文章标题
+      
+      第一段内容...
+      
+      第二段内容...
+      
+      第三段内容，提到治理闭环...
+      
+      <!-- DIAGRAM:diagram_001 -->
+      【结构图：治理闭环结构图】
+      
+      > 📎 发布前操作：
+      > 1. 打开文件：`images/diagram_001.png`
+      > 2. 上传到公众号素材库
+      > 3. 删除本占位提示，插入图片
+      
+    insertion_report:
+      total_placeholders: 1
+      placeholders:
+        - position:
+            after_paragraph: 3
+          placeholder_text: "【结构图：治理闭环结构图】"
+          asset_id: "diagram_001"
+
+# 约束与验证
+constraints:
+  - id: no_md_image_syntax
+    description: 禁止使用 Markdown 图片语法 ![alt](path)
+    check: output does not match pattern "!\\[.*?\\]\\(.*?\\)"
+  
+  - id: clear_asset_reference
+    description: 占位提示必须清晰引用资产 ID
+    check: placeholder contains "DIAGRAM:{asset_id}" or clear caption
+  
+  - id: preserve_article_structure
+    description: 保持文章原有结构不被破坏
+    check: |
+      - 所有原有段落保留
+      - 标题层级不变
+      - 列表结构完整
+
+# 错误处理
+error_handling:
+  - condition: 指定的段落号超出文章实际段落数
+    action: 在文章末尾插入，并记录警告
+  
+  - condition: 指定的标题不存在
+    action: 尝试模糊匹配，若失败则在文章开头插入，并记录警告
+  
+  - condition: 多个图表指定同一位置
+    action: 按顺序插入，保持顺序，并记录警告
+
+# 使用说明
+usage: |
+  这是一个确定性 Skill，负责最后的"文章组装"。
+  
+  调用方式：
+  ```yaml
+  skill: skill.media.diagram_insertion
+  input:
+    article_md: <原始文章>
+    diagram_assets: <来自 diagram_render_mcp 的资产列表>
+  ```
+  
+  注意事项：
+  1. 输出文章中的占位提示需要人类在发布前手动处理
+  2. 不要尝试自动替换为 Markdown 图片语法
+  3. 保持文章原有结构，确保其他处理流程不受影响
+  
+  发布流程：
+  1. 生成文章（含占位提示）
+  2. 人工审核图表必要性
+  3. 发布前：上传图片到公众号后台，替换占位提示

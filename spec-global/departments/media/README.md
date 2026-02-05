@@ -20,26 +20,36 @@ departments/media/
 │   ├── article-structure-extractor/v1/    # 文章结构抽取 Agent
 │   ├── readable-color-layout/v1/          # 可读性排版 Agent
 │   ├── media-publisher/v1/                # 媒体发布 Agent
-│   └── media-reviewer/v1/                 # 媒体审核 Agent
+│   ├── media-reviewer/v1/                 # 媒体审核 Agent
+│   ├── diagram-analysis-agent/v1/         # 图表分析 Agent（新增）
+│   └── diagram-planner-agent/v1/          # 图表规划 Agent（新增）
 ├── commands/                  # Splash Commands（快速命令）
 │   └── article-layout/v1/                 # 文章排版命令 /layout
 ├── contracts/                 # 媒体阶段特有的契约定义
 │   ├── article-structure-contract/v1/     # 文章结构契约
 │   ├── layout-theme-contract/v1/          # 排版主题契约
 │   ├── formatted-content-contract/v1/     # 格式化内容契约
-│   └── media-publish-contract/v1/         # 发布契约
+│   ├── media-publish-contract/v1/         # 发布契约
+│   ├── diagram-opportunity-contract/v1/   # 图表机会识别契约（新增）
+│   ├── diagram-plan-contract/v1/          # 图表规划契约（新增）
+│   └── diagram-asset-contract/v1/         # 图表资产契约（新增）
 ├── skills/                    # 媒体技能规范
 │   ├── readable-color-layout/v1/          # 可读性排版技能
 │   ├── structure-extraction/v1/           # 结构抽取技能
 │   ├── platform-safe-rendering/v1/        # 平台安全渲染技能
 │   ├── md-to-wechat-richtext/v1/          # Markdown 转 公众号富文本
-│   └── content-proofreading/v1/            # 内容校对技能
+│   ├── content-proofreading/v1/           # 内容校对技能
+│   ├── diagram-generation/v1/             # 图表生成技能（新增）
+│   └── diagram-insertion/v1/              # 图表插入技能（新增）
 ├── themes/                    # 排版主题定义
 │   ├── wechat-red-theme/v1/               # 公众号安全红色主题
 │   ├── blue-theme/v1/                     # 蓝色主题
 │   └── minimal-theme/v1/                  # 极简主题
 ├── workflows/                  # 媒体流水线定义
-│   └── content-layout-pipeline/v1/        # 内容排版流水线
+│   ├── content-layout-pipeline/v1/        # 内容排版流水线
+│   └── diagram-insertion-pipeline/v1/     # 图表插入流水线（新增）
+├── tools/                      # MCP 工具
+│   └── diagram-render-mcp/v1/             # Mermaid 渲染 MCP（新增）
 └── README.md                  # 本说明文件
 ```
 
@@ -88,6 +98,114 @@ departments/media/
 * **Agent**: `agent.media.media_publisher`
 * **输入**: 冻结的内容
 * **输出**: 发布状态
+
+## 📊 文章结构图插入流水线 (Diagram Insertion Pipeline)
+
+**这是 Media 部门新增的生产线，用于为成稿在需要的地方配上结构图。**
+
+### 设计理念
+
+> **AI 决定"该不该有图 + 图的结构"，程序决定"图长什么样 + 怎么落地"。**
+
+采用「媒体资产池」模式：
+- 图片作为独立的媒体资产生成
+- 文章中插入占位提示而非实际图片
+- 人类在公众号后台手动上传并插入
+- 完全遵守 LEE 三方协作哲学：人类/程序/AI 各司其职
+
+### 为什么不用 Base64 或本地路径？
+
+| 方案 | 问题 | 我们的选择 |
+|------|------|-----------|
+| Base64 | 体积大、公众号不稳定、无法人工修正 | ❌ 不使用 |
+| 本地路径 `![图](path)` | 公众号不认、发布前必须手动处理 | ❌ 不作为最终格式 |
+| Mermaid 源码 | 把渲染压力推回给人 | ❌ 仅作为溯源 |
+| **媒体资产池** | 人类保留发布控制权 | ✅ **采用** |
+
+### 流水线阶段
+
+#### 阶段 1：结构分析 (Structure Analysis)
+* **Agent**: `agent.media.diagram_analyzer`
+* **职责**: 判断"哪里需要结构图"
+* **输入**: 成稿文章 (MD)
+* **输出**: 图表机会列表 (Diagram Opportunities)
+* **关键**: 认知判断层，不输出视觉决策
+
+#### 阶段 2：图表规划 (Diagram Planning)
+* **Agent**: `agent.media.diagram_planner`
+* **职责**: 规划"用什么类型的图"
+* **输入**: 图表机会 + 文章内容
+* **输出**: Structure DSL（节点、关系，无视觉描述）
+* **关键**: 编辑能力层，只输出结构
+
+#### 阶段 3：图表生成 (Diagram Generation)
+* **Skill**: `skill.media.diagram_generation`
+* **职责**: DSL → Mermaid 文本
+* **关键**: 纯确定性转换，不调用 LLM
+
+#### 阶段 4：图表渲染 (Diagram Rendering)
+* **MCP**: `mcp.media.diagram_renderer`
+* **职责**: Mermaid → PNG
+* **关键**: 「去 AI 化」步骤，程序渲染，AI 不碰像素
+
+#### 阶段 5：占位插入 (Placeholder Insertion)
+* **Skill**: `skill.media.diagram_insertion`
+* **职责**: 在文章中插入占位提示
+* **输出示例**:
+  ```markdown
+  <!-- DIAGRAM:diagram_001 -->
+  【结构图：治理闭环】
+  
+  > 📎 发布前操作：
+  > 1. 打开文件：`images/diagram_001.png`
+  > 2. 上传到公众号素材库
+  > 3. 删除本占位提示，插入图片
+  ```
+
+#### 阶段 6：人工审核 (Human Gate)
+* **检查点**:
+  1. 这些图真的有必要吗？
+  2. 结构有没有误导？
+  3. 会不会抢了文字的风头？
+* **注意**: 不需要改 Mermaid 语法，最多删除不需要的图
+
+### 使用场景
+
+```yaml
+workflow: workflow.media.diagram_insertion_pipeline
+input:
+  article_md: "articles/my-article.md"
+```
+
+**适用情况**:
+- 文章包含抽象概念密集段
+- 需要展示流程、架构、层级关系
+- 文字成本高，图能显著提升理解
+
+**不适用情况**:
+- 案例叙述/情绪段落
+- 内容已经充分展开，无需辅助
+- 过于简单的关系
+
+### 输出文件结构
+
+```
+output/
+├── article_with_diagrams.md      # 带占位提示的文章
+├── diagram_report.json           # 处理报告
+└── images/
+    ├── diagram_001.png           # 高清 PNG（2x 缩放）
+    ├── diagram_001.mmd           # Mermaid 源码（溯源）
+    ├── diagram_002.png
+    └── diagram_002.mmd
+```
+
+### 完整发布流程
+
+1. **运行 Diagram Insertion Pipeline** → 生成带占位提示的文章和图片
+2. **（可选）运行 Content Layout Pipeline** → 排版美化
+3. **人工审核** → 确认图表必要性
+4. **公众号发布** → 上传图片，替换占位提示，发布
 
 ## 🎨 排版主题系统
 

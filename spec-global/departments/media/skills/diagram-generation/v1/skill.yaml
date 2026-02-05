@@ -1,0 +1,177 @@
+# Diagram Generation Skill v1.0
+# 图表生成 Skill - 将 Structure DSL 转换为 Mermaid 文本
+
+kind: skill
+version: 1.0
+
+id: skill.media.diagram_generation
+name: Diagram Generation Skill
+description: >
+  纯确定性 Skill，将结构 DSL 转换为有效的 Mermaid 语法。
+  不做任何创意决策，只保证结构正确、语法正确。
+  
+  核心原则：
+  1. 输入的结构 DSL 完全决定输出
+  2. 不添加任何视觉样式
+  3. 生成的 Mermaid 可直接渲染
+
+owner: media-ai
+tags: [media, diagram, generation, mermaid, deterministic]
+
+# 输入输出契约
+input:
+  contract: contracts/diagram-plan-contract/v1/schema.yaml#output_schema
+
+output:
+  contract: contracts/diagram-asset-contract/v1/schema.yaml#input_schema
+  format:
+    - mermaid_source: string
+    - diagram_plan: object
+
+# 执行逻辑
+execution:
+  type: deterministic
+  language: python
+  
+  # 转换规则
+  transformation_rules:
+    # 规则 1：确定图表类型
+    - id: determine_chart_type
+      condition: diagram.type
+      mapping:
+        governance_loop: flowchart
+        execution_pipeline: flowchart
+        system_architecture: flowchart
+        decision_tree: flowchart
+        hierarchy: flowchart
+        workflow: flowchart
+        state_machine: stateDiagram
+        data_flow: flowchart
+        concept_map: flowchart
+        comparison_matrix: flowchart
+    
+    # 规则 2：生成节点定义
+    - id: generate_nodes
+      template: |
+        {{node.id}}["{{node.label}}"]
+      variations:
+        - condition: node.type == "actor"
+          template: '{{node.id}}["{{node.label}}"]'
+        - condition: node.type == "decision"
+          template: '{{node.id}}{"{{node.label}}"}'
+        - condition: node.type == "terminator"
+          template: '{{node.id}}(["{{node.label}}"])'
+        - default:
+          template: '{{node.id}}["{{node.label}}"]'
+    
+    # 规则 3：生成边定义
+    - id: generate_edges
+      template: |
+        {{edge.from}} --> {{edge.to}}
+      variations:
+        - condition: edge.label exists
+          template: '{{edge.from}} -->|"{{edge.label}}"| {{edge.to}}'
+    
+    # 规则 4：添加方向声明
+    - id: add_direction
+      template: |
+        flowchart {{direction}}
+
+# 输出模板
+output_template: |
+  ```mermaid
+  {{chart_type}} {{direction}}
+    {{node_definitions}}
+    {{edge_definitions}}
+  ```
+
+# 完整示例
+example:
+  input:
+    diagram:
+      id: diagram_001
+      type: governance_loop
+      structure_dsl:
+        direction: TD
+        nodes:
+          - id: Human
+            label: 人类目标
+            type: actor
+          - id: Program
+            label: 传统程序
+            type: process
+          - id: Agent
+            label: AI Agent
+            type: process
+          - id: Gate
+            label: 验证 Gate
+            type: decision
+        edges:
+          - from: Human
+            to: Program
+          - from: Program
+            to: Agent
+          - from: Agent
+            to: Gate
+          - from: Gate
+            to: Human
+            label: 反馈
+  
+  output:
+    mermaid_source: |
+      flowchart TD
+        Human["人类目标"]
+        Program["传统程序"]
+        Agent["AI Agent"]
+        Gate{"验证 Gate"}
+        
+        Human --> Program
+        Program --> Agent
+        Agent --> Gate
+        Gate -->|"反馈"| Human
+
+# 约束与验证
+constraints:
+  - id: no_style_injection
+    description: 禁止注入任何样式（颜色、类定义、CSS）
+    check: output does not contain "classDef" or "style" or "fill:" or "stroke:"
+  
+  - id: valid_mermaid_syntax
+    description: 输出必须是有效的 Mermaid 语法
+    validation: |
+      - 图表类型声明正确
+      - 节点定义语法正确
+      - 边定义语法正确
+      - 没有语法错误
+  
+  - id: deterministic_output
+    description: 相同输入必须产生相同输出
+    test: |
+      对相同的 structure_dsl 运行 10 次，输出完全一致
+
+# 错误处理
+error_handling:
+  - condition: 节点 ID 包含非法字符
+    action: 将非法字符替换为下划线，并记录警告
+  
+  - condition: 节点 label 包含引号
+    action: 转义引号，确保 Mermaid 语法正确
+  
+  - condition: 边的 from/to 节点不存在
+    action: 报错，要求检查输入的 structure_dsl
+
+# 使用说明
+usage: |
+  这是一个纯确定性的转换 Skill，不调用 LLM。
+  
+  调用方式：
+  ```yaml
+  skill: skill.media.diagram_generation
+  input:
+    diagram: <来自 diagram_planner 的 structure_dsl>
+  ```
+  
+  注意事项：
+  1. 输入必须严格符合 diagram-plan-contract
+  2. 输出只保证语法正确，不保证视觉美观
+  3. 视觉渲染由 MCP 工具负责
