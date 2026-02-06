@@ -1,8 +1,8 @@
-# Bug Fix Workflow v1.0
+# Bug Fix Workflow v1.1
 # 开发 Bug 修复工作流
 
 kind: workflow
-version: 1.0
+version: 1.1
 
 # ============================================
 # 基础标识
@@ -212,7 +212,7 @@ stages:
           requires: [s3_3_fix_plan_gate]
         decision_logic: |
           IF root_cause.analysis_state == "cannot_reproduce":
-            next_stage = s6_finalize
+            next_stage = s7_finalize
           ELSE:
             next_step = s4_1_fix_code
 
@@ -341,13 +341,149 @@ stages:
           - path: "output/technical-debt.yaml"
             contract: ../../contracts/technical-debt-contract/v1/schema.json
 
-  # ========== Stage 6: 收尾与沉淀 ==========
-  - id: s6_finalize
+  # ========== Stage 6: 单元测试 ==========
+  - id: s6_unit_test
+    name: "单元测试"
+    description: "运行单元测试，按需增加测试用例，确保覆盖率≥80%且通过率100%"
+
+    steps:
+      - id: s6_1_run_unit_tests
+        name: "运行单元测试"
+        description: "执行现有单元测试，收集覆盖率报告"
+        run: agent.dev.unit_test_runner
+        execution:
+          model: prompt_switch
+          timeout: 30m
+
+        dependencies:
+          requires: [s5_3_review_verify]
+
+        inputs:
+          - fix_plan: "output/bug-fix-plan.yaml"
+          - code_changes: "output/fix-commit-summary.yaml"
+
+        outputs:
+          - path: "output/unit-test-result.yaml"
+            contract: ../../contracts/unit-test-result-contract/v1/schema.json
+
+      - id: s6_2_coverage_check
+        name: "覆盖率检查"
+        type: decision
+        dependencies:
+          requires: [s6_1_run_unit_tests]
+        decision_logic: |
+          IF test_result.pass_rate == 100% AND test_result.coverage >= 80%:
+            next_stage = s7_finalize
+          ELIF test_result.pass_rate < 100%:
+            next_step = s6_4_fix_failing_tests
+          ELSE:
+            next_step = s6_3_add_unit_tests
+
+      - id: s6_3_add_unit_tests
+        name: "增加单元测试"
+        description: "按需增加单元测试用例以提高覆盖率至80%"
+        run: agent.dev.unit_test_writer
+        execution:
+          model: prompt_switch
+          timeout: 60m
+
+        dependencies:
+          requires: [s6_2_coverage_check]
+
+        condition: "test_result.coverage < 80%"
+
+        inputs:
+          - fix_plan: "output/bug-fix-plan.yaml"
+          - code_changes: "output/fix-commit-summary.yaml"
+          - test_result: "output/unit-test-result.yaml"
+          - target_coverage: 80
+
+        outputs:
+          - path: "output/added-tests-summary.yaml"
+
+      - id: s6_4_fix_failing_tests
+        name: "修复失败测试"
+        description: "修复未通过的单元测试"
+        run: agent.dev.bug_fix_implementer
+        execution:
+          model: prompt_switch
+          timeout: 45m
+
+        dependencies:
+          requires: [s6_2_coverage_check]
+
+        condition: "test_result.pass_rate < 100%"
+
+        inputs:
+          - test_result: "output/unit-test-result.yaml"
+          - code_changes: "output/fix-commit-summary.yaml"
+
+        outputs:
+          - path: "output/test-fix-summary.yaml"
+
+      - id: s6_5_rerun_unit_tests
+        name: "重新运行单元测试"
+        description: "增加测试或修复后重新运行，验证覆盖率≥80%且通过率100%"
+        run: agent.dev.unit_test_runner
+        execution:
+          model: prompt_switch
+          timeout: 30m
+
+        dependencies:
+          requires:
+            any_of: [s6_3_add_unit_tests, s6_4_fix_failing_tests]
+
+        inputs:
+          - fix_plan: "output/bug-fix-plan.yaml"
+          - code_changes: "output/fix-commit-summary.yaml"
+          - added_tests: "output/added-tests-summary.yaml"
+
+        outputs:
+          - path: "output/unit-test-result.yaml"
+            contract: ../../contracts/unit-test-result-contract/v1/schema.json
+
+      - id: s6_6_test_verify_decision
+        name: "测试验证判定"
+        type: decision
+        dependencies:
+          requires: [s6_5_rerun_unit_tests]
+        decision_logic: |
+          IF test_result.pass_rate == 100% AND test_result.coverage >= 80%:
+            next_stage = s7_finalize
+          ELIF test_attempts < 5:
+            next_step = s6_2_coverage_check
+          ELSE:
+            action = "trigger_human_gate"
+
+      - id: s6_7_test_human_gate
+        name: "测试人类门禁"
+        kind: human_gate
+        description: "单元测试多次未达标，需人类介入"
+        condition: "test_attempts >= 5"
+        depends_on:
+          - s6_6_test_verify_decision
+
+        gate_rules:
+          reviewers:
+            - role: tech_lead
+              description: "技术负责人"
+            - role: qa_lead
+              description: "测试负责人"
+          approval_criteria:
+            - label: "测试充分"
+              criteria: "测试覆盖关键修复代码"
+              required: true
+            - label: "例外可接受"
+              criteria: "覆盖率不足有合理原因"
+              required: false
+
+  # ========== Stage 7: 收尾与沉淀 ==========
+  - id: s7_finalize
     name: "提交与沉淀"
     description: "提交代码并沉淀知识"
 
     steps:
-      - id: s6_0_non_repro_close
+      - id: s7_0_non_repro_close
         name: "不可复现收尾"
         description: "无法复现时收尾，输出最终状态"
         run: agent.dev.bug_fix_verifier
@@ -368,24 +504,33 @@ stages:
           - path: "output/bug-fix-status.yaml"
             contract: ../../contracts/bug-fix-status-contract/v1/schema.json
 
-      - id: s6_1_git_commit
+      - id: s7_1_git_commit
         name: "提交 Git"
-        run: agent.dev.bug_fix_implementer
+        description: "提交修复代码和新增单元测试到 Git 仓库"
+        run: agent.dev.git_committer
         execution:
           model: prompt_switch
           timeout: 20m
 
         dependencies:
-          requires: [s5_3_review_verify]
+          requires:
+            any_of: [s6_2_coverage_check, s6_6_test_verify_decision, s6_7_test_human_gate]
 
         inputs:
           - fix_summary: "output/fix-commit-summary.yaml"
           - review_fix_summary: "output/review-fix-summary.yaml"
+          - test_result: "output/unit-test-result.yaml"
+          - added_tests: "output/added-tests-summary.yaml"
 
         outputs:
           - path: "output/git-commit.yaml"
 
-      - id: s6_2_knowledge_capture
+        validation:
+          pre_commit_checks:
+            - "unit_test_pass_rate == 100%"
+            - "unit_test_coverage >= 80%"
+
+      - id: s7_2_knowledge_capture
         name: "知识沉淀"
         run: agent.dev.bug_knowledge_curator
         execution:
@@ -393,7 +538,7 @@ stages:
           timeout: 20m
 
         dependencies:
-          requires: [s6_1_git_commit]
+          requires: [s7_1_git_commit]
 
         inputs:
           - bug_status: "output/bug-fix-status.yaml"
@@ -403,7 +548,7 @@ stages:
           - path: "output/knowledge-capture.yaml"
             contract: ../../contracts/knowledge-capture-contract/v1/schema.json
 
-      - id: s6_3_fix_experience
+      - id: s7_3_fix_experience
         name: "修复经验输出"
         run: agent.dev.bug_knowledge_curator
         execution:
@@ -411,7 +556,7 @@ stages:
           timeout: 10m
 
         dependencies:
-          requires: [s6_2_knowledge_capture]
+          requires: [s7_2_knowledge_capture]
 
         inputs:
           - knowledge: "output/knowledge-capture.yaml"
@@ -427,7 +572,7 @@ loop_control:
     max_attempts: 10
     on_exhausted:
       action: "mark_cannot_reproduce"
-      next_stage: s6_finalize
+      next_stage: s7_finalize
 
   fix_verification:
     max_attempts: 10
@@ -440,6 +585,14 @@ loop_control:
     on_exhausted:
       action: "trigger_human_gate"
       human_gate: s3_4_risk_human_gate
+
+  unit_test:
+    max_attempts: 5
+    coverage_threshold: 80
+    pass_rate_threshold: 100
+    on_exhausted:
+      action: "trigger_human_gate"
+      human_gate: s6_7_test_human_gate
 
 # ============================================
 # 退出条件
@@ -467,6 +620,10 @@ outputs_contract:
       schema: "development/contracts/bug-root-cause-contract/v1/schema.json"
     - file: "output/bug-fix-plan.yaml"
       schema: "development/contracts/bug-fix-plan-contract/v1/schema.json"
+    - file: "output/unit-test-result.yaml"
+      schema: "development/contracts/unit-test-result-contract/v1/schema.json"
+    - file: "output/git-commit.yaml"
+      schema: "development/contracts/git-commit-contract/v1/schema.json"
 
   optional:
     - file: "output/technical-debt.yaml"
@@ -475,6 +632,10 @@ outputs_contract:
       schema: "development/contracts/knowledge-capture-contract/v1/schema.json"
     - file: "output/fix-experience.md"
       description: "修复经验总结"
+    - file: "output/added-tests-summary.yaml"
+      description: "新增单元测试摘要"
+    - file: "output/test-fix-summary.yaml"
+      description: "修复失败测试摘要"
 
 # ============================================
 # Agent 资源池
@@ -498,6 +659,12 @@ agent_resources:
     spec: ../../agents/tech-architect/v1/agent.yaml
   - id: agent.dev.code_reviewer
     spec: ../../agents/code-reviewer/v1/agent.yaml
+  - id: agent.dev.unit_test_runner
+    spec: ../../agents/unit-test-runner/v1/agent.yaml
+  - id: agent.dev.unit_test_writer
+    spec: ../../agents/unit-test-writer/v1/agent.yaml
+  - id: agent.dev.git_committer
+    spec: ../../agents/git-committer/v1/agent.yaml
 
 # ============================================
 # 门禁资源池
@@ -512,10 +679,20 @@ gate_resources:
 metadata:
   created_by: "dev-workflow-architect"
   created_at: "2026-02-06"
-  version: "1.0"
+  version: "1.1"
   last_updated: "2026-02-06"
 
   changelog:
+    - version: "1.1"
+      date: "2026-02-06"
+      changes:
+        - "新增 Stage 6: 单元测试阶段"
+        - "支持运行单元测试、按需增加测试用例"
+        - "强制覆盖率≥80%、通过率100%"
+        - "新增 unit_test_runner、unit_test_writer、git_committer Agent"
+        - "Stage 7 整合 Git 提交与测试验证"
+        - "新增单元测试循环控制与人类门禁"
+
     - version: "1.0"
       date: "2026-02-06"
       changes:
