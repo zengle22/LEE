@@ -1,676 +1,424 @@
-# Migrated to spec-global format on 2026-02-05
-# Original format: orchestrator-legacy-template
-# v1.1 updated: 2026-02-06 - 新增单主路径原则、AI盲跑验证
+# UI Design Pipeline v1.2
+# UI 设计流水线 - 从 PRD 冻结包到 UI 冻结包
+# v1.2 调整：明确职责边界，UI Gate 后交付给 Dev 部门
 
 id: workflow.ui.ui_design_pipeline
-version: v1.1
+version: v1.2
 metadata:
   name: UI Design Pipeline
   name_zh: UI 设计流水线
-  description: 'UI design to production pipeline with quality gates.
+  description: |
+    从 PRD 冻结包到 UI/原型冻结包的设计流水线。
 
-    从 UI 设计到生产发布的完整流水线，包含三级质量门禁。
+    职责边界：
+    - 输入：PRD 冻结包（来自 PRD 部门）
+    - 输出：UI 冻结包（交付给 Dev 部门）
+    - 终点：UI Gate 通过后，流程结束
 
-    v1.1 新增：单主路径验证、AI盲跑测试、User Flow Contract。
+    流程概览：
+    PRD冻结包 → 契约生成 → 契约验证 → 用户流生成 → AI盲跑验证 → UX审查 → UI Gate → UI冻结包
 
-
-    流程概览:
-
-    设计阶段 → User Flow 生成 → AI 盲跑验证 → UI Gate → 研发阶段 → Dev Gate → 发布阶段 → Release Gate → 生产
-
-
-    核心组件:
-
+    核心组件：
     - UI Contracts: 页面/组件/Tokens/A11y/User Flow 契约
-
-    - Quality Gates: UI Gate / Dev Gate / Release Gate
-
-    - Test Generation: 从契约生成测试用例
-
     - AI Walkthrough: AI 盲跑验证主路径
+    - UI Gate: 设计质量门禁（唯一Gate）
 
-    '
   prerequisites:
-  - description: 必须存在已冻结的 UI 原型
-  - required_files:
-    - '*-ui-prototype-freeze.md'
-  - gate_check: '进入 UI 设计流水线前，必须确认：
+    - description: 必须存在已冻结的 PRD
+    - required_files:
+        - '{project}-prd-freeze.md'
+    - gate_check: |
+        进入 UI 设计流水线前，必须确认：
+        1. PRD 已冻结并获得产品团队确认
+        2. 核心用户故事已明确
+        3. 功能范围已确定
 
-      1. UI 原型已冻结并获得设计团队确认
+  # 输入：PRD 冻结包
+  inputs:
+    - file: '{project}-prd-freeze.md'
+      source: prd_department
+      description: PRD 冻结包
+      required: true
+    - file: 'figma_design_url'
+      source: design_team
+      description: Figma 设计稿链接
+      required: true
+    - file: 'design_tokens.json'
+      source: design_team
+      description: 设计 Token 文件
+      required: false
 
-      2. Figma 设计稿已完成核心页面
-
-      3. 设计 Token 已定义
-
-      '
+  # 输出：UI 冻结包
   outputs:
-  - file: output/ui-frozen/{project}-ui-freeze.md
-    description: UI 设计阶段总冻结文件
+    - file: 'output/ui-frozen/{project}-ui-freeze.md'
+      description: UI 设计阶段总冻结文件
+    - file: 'spec/ui/ui.map.yaml'
+      description: UI 契约索引
+    - file: 'spec/ui/flows/*.flow.yaml'
+      description: 用户流契约
+    - file: 'spec/ui/pages/*.page.yaml'
+      description: 页面契约
+    - file: 'spec/ui/components/*.component.yaml'
+      description: 组件契约
+
+# ============================================
+# 步骤定义
+# ============================================
 steps:
-- id: contract_generation
-  agent: ui_contract_generator@v1
-  contract: ui_page_contract@v1
-  metadata:
-    name: UI Contract Generation
-    name_zh: UI 契约生成
-    stage_id: '1.1'
-    description: 'Generate UI contracts from Figma designs.
+  # ------------------------------------------
+  # 1.1 UI 契约生成
+  # ------------------------------------------
+  - id: contract_generation
+    agent: ui_contract_generator@v1
+    contract: ui_page_contract@v1
+    metadata:
+      name: UI Contract Generation
+      name_zh: UI 契约生成
+      stage_id: '1.1'
+      description: |
+        从 PRD 冻结包和 Figma 设计稿生成标准化的 UI 契约。
+    input:
+      - file: '{project}-prd-freeze.md'
+        source: prd_department
+        required: true
+      - file: figma_design_url
+        source: design_team
+        required: true
+      - file: design_tokens.json
+        source: design_team
+        required: false
+    output:
+      file: spec/ui/ui.map.yaml
+      freeze: false
+      includes:
+        - 页面索引 (ui.map.yaml)
+        - 页面契约 (*.page.yaml)
+        - 组件契约 (*.component.yaml)
+        - 设计 Token (tokens.json)
+    non_goals:
+      - implement_components
+      - write_tests
+    thinking_boundary: |
+      ✅ 可以思考：页面结构、组件层级、状态定义、交互绑定、埋点配置、a11y 配置
+      ❌ 禁止思考：如何实现组件、测试如何编写、部署如何配置
+    on_failure:
+      retry: 2
+      fallback: human_review
 
-      从 Figma 设计稿生成标准化的 UI 契约。
+  # ------------------------------------------
+  # 1.2 UI 契约验证
+  # ------------------------------------------
+  - id: contract_validation
+    agent: ui_contract_validator@v1
+    contract: null
+    metadata:
+      name: UI Contract Validation
+      name_zh: UI 契约验证
+      stage_id: '1.2'
+      description: |
+        验证 UI 契约的完整性和一致性。
+    input:
+      - source: contract_generation
+        required: true
+    output:
+      file: output/validation-reports/ui-contract-validation.md
+      freeze: false
+    non_goals:
+      - fix_contracts
+      - generate_contracts
+    thinking_boundary: |
+      ✅ 可以思考：契约是否符合 schema、状态是否完整、引用是否有效
+      ❌ 禁止思考：如何生成契约、如何修复问题
+    on_failure:
+      retry: 1
+      fallback: human_review
 
-      '
-  input:
-  - file: figma_design_url
-    source: design_team
-    required: true
-  - file: design_tokens.json
-    source: design_team
-    required: true
-  output:
-    file: spec/ui/ui.map.yaml
-    freeze: false
-    includes:
-    - 页面索引 (ui.map.yaml)
-    - 页面契约 (*.page.yaml)
-    - 组件契约 (*.component.yaml)
-    - 设计 Token (tokens.json)
-  non_goals:
-  - implement_components
-  - write_tests
-  - deploy_to_staging
-  thinking_boundary: '✅ 可以思考：页面结构、组件层级、状态定义、交互绑定、埋点配置、a11y 配置
+  # ------------------------------------------
+  # 1.3 用户流契约生成
+  # ------------------------------------------
+  - id: user_flow_generation
+    agent: prototype_designer@v1.1
+    contract: user_flow_contract@v1
+    metadata:
+      name: User Flow Generation
+      name_zh: 用户流契约生成
+      stage_id: '1.3'
+      description: |
+        遵循单主路径原则，生成用户流契约。
 
-    ❌ 禁止思考：如何实现组件、测试如何编写、部署如何配置
+        核心检查：
+        - 每个功能只有一条主路径
+        - 所有前置条件在入口处解决
+        - 所有状态可识别
+        - 定义禁止的路径模式
+    input:
+      - source: contract_validation
+        required: true
+      - file: spec/ui/ui.map.yaml
+        required: true
+      - file: spec/ui/pages/*.page.yaml
+        required: true
+    output:
+      file: spec/ui/flows/
+      freeze: false
+      includes:
+        - 用户流契约 (*.flow.yaml)
+        - 路径枚举文档
+    quality_bar:
+      must_have:
+        - 每个功能只有一条主路径
+        - 所有步骤有明确前置条件
+        - 完成态明确定义
+        - 至少一个合法退出点
+        - 禁止模式已定义
+    non_goals:
+      - implement_ui
+      - write_tests
+    thinking_boundary: |
+      ✅ 可以思考：用户路径、入口条件、步骤序列、退出点、禁止模式
+      ❌ 禁止思考：如何实现组件、测试如何编写
+    on_failure:
+      retry: 2
+      fallback: human_review
 
-    '
-  on_failure:
-    retry: 2
-    fallback: human_review
-- id: contract_validation
-  agent: ui_contract_validator@v1
-  contract: null
-  metadata:
-    name: UI Contract Validation
-    name_zh: UI 契约验证
-    stage_id: '1.2'
-    description: 'Validate UI contracts for completeness and consistency.
+  # ------------------------------------------
+  # 1.4 AI 盲跑验证
+  # ------------------------------------------
+  - id: ai_walkthrough_validation
+    agent: ai_walkthrough_validator@v1
+    contract: null
+    metadata:
+      name: AI Walkthrough Validation
+      name_zh: AI 盲跑验证
+      stage_id: '1.4'
+      description: |
+        验证 AI 能否仅凭 UI 顺序盲跑通过主路径。
+        这是设计验收的硬标准。
 
-      验证 UI 契约的完整性和一致性。
+        验证维度：
+        - 路径清晰度（每步只有一个下一步）
+        - 状态可识别度
+        - 恢复路径完整度
+        - 入口可达性
+    input:
+      - source: user_flow_generation
+        required: true
+      - file: spec/ui/flows/*.flow.yaml
+        required: true
+      - file: spec/ui/pages/*.page.yaml
+        required: true
+    output:
+      file: output/reports/ai-walkthrough-{timestamp}.json
+      freeze: false
+      includes:
+        - AI 友好度评分
+        - 路径记录
+        - 问题列表
+        - 改进建议
+    gate_config:
+      pass_criteria:
+        ai_friendly_score: 80
+        walkthrough_passed: true
+    non_goals:
+      - fix_design
+      - generate_ui
+    thinking_boundary: |
+      ✅ 可以思考：路径是否清晰、状态是否可识别、能否盲跑通过
+      ❌ 禁止思考：业务逻辑、用户意图
+    on_failure:
+      retry: 1
+      fallback: human_review
 
-      '
-  input:
-  - source: contract_generation
-    required: true
-  output:
-    file: output/validation-reports/ui-contract-validation.md
-    freeze: false
-  non_goals:
-  - fix_contracts
-  - generate_contracts
-  thinking_boundary: '✅ 可以思考：契约是否符合 schema、状态是否完整、引用是否有效
+  # ------------------------------------------
+  # 1.5 UX 可用性审查
+  # ------------------------------------------
+  - id: ux_review
+    agent: ux_reviewer@v1
+    contract: ux-review-contract@v1
+    metadata:
+      name: UX Usability Review
+      name_zh: UX 可用性审查
+      stage_id: '1.5'
+      description: |
+        基于 ui-ux-pro-max-skill 审查 UI 契约的可用性问题。
 
-    ❌ 禁止思考：如何生成契约、如何修复问题
+        审查维度：
+        - Nielsen 启发式 (可见性、一致性、错误预防等)
+        - 信息架构合理性
+        - 交互一致性
+        - 可访问性 (WCAG AA)
+        - 状态完整性 (default/loading/empty/error)
+        - 单主路径原则符合度
+        - 前置条件入口处解决
+    input:
+      - source: ai_walkthrough_validation
+        required: true
+      - file: spec/ui/ui.map.yaml
+        required: true
+      - file: spec/ui/pages/*.page.yaml
+        required: false
+      - file: spec/ui/components/*.component.yaml
+        required: false
+    output:
+      file: output/review-reports/ux-review-{timestamp}.md
+      freeze: false
+    skill_integration:
+      skill: ui-ux-pro-max
+      search_commands:
+        - python .claude/skills/ui-ux-pro-max/scripts/search.py '{product_type}' --domain ux
+        - python .claude/skills/ui-ux-pro-max/scripts/search.py 'accessibility' --domain ux
+    gate_config:
+      pass_criteria:
+        ux_blocker: 0
+        ux_major: 3
+    non_goals:
+      - generate_ui
+      - fix_contracts
+      - replace_designer
+    thinking_boundary: |
+      ✅ 可以思考：可用性问题、信息架构、交互一致性、可访问性、状态完整性
+      ❌ 禁止思考：如何生成 UI、如何实现组件、视觉设计细节
+    on_failure:
+      retry: 1
+      fallback: human_review
 
-    '
-  on_failure:
-    retry: 1
-    fallback: human_review
+  # ------------------------------------------
+  # 1.6 UI Gate（流程终点）
+  # ------------------------------------------
+  - id: ui_gate
+    agent: ui_gate_runner@v1
+    contract: null
+    metadata:
+      name: UI Gate
+      name_zh: UI 设计门禁
+      stage_id: '1.6-gate'
+      description: |
+        UI 设计质量门禁检查。
+        这是 UI 部门流程的终点，通过后交付给 Dev 部门。
+
+        门禁检查包含：
+        - 契约完整性检查
+        - 单主路径验证
+        - AI 盲跑验证结果
+        - UX 审查结果检查 (ux_blocker=0, ux_major<=3)
+    input:
+      - source: ux_review
+        required: true
+      - file: spec/ui/ui.map.yaml
+        required: true
+      - file: spec/ui/flows/*.flow.yaml
+        required: true
+      - file: output/reports/ai-walkthrough-*.json
+        required: true
+      - file: output/review-reports/ux-review-*.md
+        required: true
+    output:
+      file: output/gate-reports/ui-gate-{timestamp}.md
+      freeze: true  # Gate 通过后冻结
+    gate_config:
+      gate_type: ui
+      pass_criteria:
+        blocker: 0
+        major: 0
+        minor: null
+        ux_blocker: 0
+        ux_major: 3
+        ai_friendly_score: 80
+    human_role:
+      type: gate_approval
+      actions:
+        - approve: 通过门禁，生成 UI 冻结包，交付 Dev 部门
+        - reject: 返回设计修改
+        - reject_ux: 返回 UX 审查修复
+    on_failure:
+      retry: 0
+      fallback: human_review
 
 # ============================================
-# v1.1 新增：用户流契约生成
+# 约束条件
 # ============================================
-- id: user_flow_generation
-  agent: prototype_designer@v1.1
-  contract: user_flow_contract@v1
-  metadata:
-    name: User Flow Generation
-    name_zh: 用户流契约生成
-    stage_id: '1.2b'
-    description: 'Generate User Flow Contracts following Single Main Path principle.
-
-      遵循单主路径原则，生成用户流契约。
-
-      核心检查:
-
-      - 每个功能只有一条主路径
-
-      - 所有前置条件在入口处解决
-
-      - 所有状态可识别
-
-      - 定义禁止的路径模式
-
-      '
-  input:
-  - source: contract_validation
-    required: true
-  - file: spec/ui/ui.map.yaml
-    required: true
-  - file: spec/ui/pages/*.page.yaml
-    required: true
-  output:
-    file: spec/ui/flows/
-    freeze: false
-    includes:
-    - 用户流契约 (*.flow.yaml)
-    - 路径枚举文档
-  non_goals:
-  - implement_ui
-  - write_tests
-  thinking_boundary: '✅ 可以思考：用户路径、入口条件、步骤序列、退出点、禁止模式
-
-    ❌ 禁止思考：如何实现组件、测试如何编写
-
-    '
-  quality_bar:
-    must_have:
-    - 每个功能只有一条主路径
-    - 所有步骤有明确前置条件
-    - 完成态明确定义
-    - 至少一个合法退出点
-    - 禁止模式已定义
-  on_failure:
-    retry: 2
-    fallback: human_review
-
-# ============================================
-# v1.1 新增：AI 盲跑验证
-# ============================================
-- id: ai_walkthrough_validation
-  agent: ai_walkthrough_validator@v1
-  contract: null
-  metadata:
-    name: AI Walkthrough Validation
-    name_zh: AI 盲跑验证
-    stage_id: '1.2c'
-    description: 'Validate that AI can blindly walk through main path.
-
-      验证 AI 能否仅凭 UI 顺序盲跑通过主路径。
-
-      这是设计验收的硬标准。
-
-      验证维度:
-
-      - 路径清晰度（每步只有一个下一步）
-
-      - 状态可识别度
-
-      - 恢复路径完整度
-
-      - 入口可达性
-
-      '
-  input:
-  - source: user_flow_generation
-    required: true
-  - file: spec/ui/flows/*.flow.yaml
-    required: true
-  - file: spec/ui/pages/*.page.yaml
-    required: true
-  output:
-    file: output/reports/ai-walkthrough-{timestamp}.json
-    freeze: false
-    includes:
-    - AI 友好度评分
-    - 路径记录
-    - 问题列表
-    - 改进建议
-  gate_config:
-    pass_criteria:
-      ai_friendly_score: 80
-      walkthrough_passed: true
-  non_goals:
-  - fix_design
-  - generate_ui
-  thinking_boundary: '✅ 可以思考：路径是否清晰、状态是否可识别、能否盲跑通过
-
-    ❌ 禁止思考：业务逻辑、用户意图
-
-    '
-  on_failure:
-    retry: 1
-    fallback: human_review
-
-- id: ux_review
-  agent: ux_reviewer@v1
-  contract: ux-review-contract@v1
-  metadata:
-    name: UX Usability Review
-    name_zh: UX 可用性审查
-    stage_id: 1.2d
-    description: 'Review UI contracts for usability issues.
-
-      基于 ui-ux-pro-max-skill 审查 UI 契约的可用性问题。
-
-
-      审查维度:
-
-      - Nielsen 启发式 (可见性、一致性、错误预防等)
-
-      - 信息架构合理性
-
-      - 交互一致性
-
-      - 可访问性 (WCAG AA)
-
-      - 状态完整性 (default/loading/empty/error)
-
-      - v1.1: 单主路径原则符合度
-
-      - v1.1: 前置条件入口处解决
-
-      '
-  input:
-  - source: ai_walkthrough_validation
-    required: true
-  - file: spec/ui/ui.map.yaml
-    required: true
-  - file: spec/ui/pages/*.page.yaml
-    required: false
-  - file: spec/ui/components/*.component.yaml
-    required: false
-  output:
-    file: output/review-reports/ux-review-{timestamp}.md
-    freeze: false
-  skill_integration:
-    skill: ui-ux-pro-max
-    search_commands:
-    - python .claude/skills/ui-ux-pro-max/scripts/search.py '{product_type}' --domain
-      ux
-    - python .claude/skills/ui-ux-pro-max/scripts/search.py 'accessibility' --domain
-      ux
-  gate_config:
-    pass_criteria:
-      ux_blocker: 0
-      ux_major: 3
-  non_goals:
-  - generate_ui
-  - fix_contracts
-  - replace_designer
-  thinking_boundary: '✅ 可以思考：可用性问题、信息架构、交互一致性、可访问性、状态完整性
-
-    ❌ 禁止思考：如何生成 UI、如何实现组件、视觉设计细节
-
-    '
-  on_failure:
-    retry: 1
-    fallback: human_review
-- id: ui_gate
-  agent: ui_gate_runner@v1
-  contract: null
-  metadata:
-    name: UI Gate
-    name_zh: UI 设计门禁
-    stage_id: 1.3-gate
-    description: 'Execute UI Gate checks before entering development.
-
-      进入研发前的 UI 设计质量门禁检查。
-
-
-      门禁检查包含:
-
-      - 契约完整性检查
-
-      - UX 审查结果检查 (ux_blocker=0, ux_major<=3)
-
-      '
-  input:
-  - source: ux_review
-    required: true
-  - file: spec/ui/ui.map.yaml
-    required: true
-  - file: output/review-reports/ux-review-*.md
-    required: true
-  output:
-    file: output/gate-reports/ui-gate-{timestamp}.md
-    freeze: false
-  gate_config:
-    gate_type: ui
-    pass_criteria:
-      blocker: 0
-      major: 0
-      minor: null
-      ux_blocker: 0
-      ux_major: 3
-  human_role:
-    type: gate_approval
-    actions:
-    - approve: 进入研发阶段
-    - reject: 返回设计修改
-    - reject_ux: 返回 UX 审查修复
-  on_failure:
-    retry: 0
-    fallback: human_review
-- id: test_generation
-  agent: ui_test_generator@v1
-  contract: null
-  metadata:
-    name: Test Generation
-    name_zh: 测试生成
-    stage_id: '2.1'
-    description: 'Generate tests from UI contracts.
-
-      从 UI 契约生成测试用例和测试代码。
-
-      '
-  input:
-  - source: ui_gate
-    required: true
-    condition: gate_passed
-  - file: spec/ui/ui.map.yaml
-    required: true
-  output:
-    freeze: false
-    includes:
-    - Storybook stories (*.stories.tsx)
-    - 单元测试 (*.test.tsx)
-    - E2E 测试 (*.spec.ts)
-    - 可访问性测试 (*.a11y.ts)
-  non_goals:
-  - implement_components
-  - run_tests
-  thinking_boundary: '✅ 可以思考：测试用例设计、状态覆盖、边界条件、a11y 测试点
-
-    ❌ 禁止思考：组件如何实现、测试如何运行
-
-    '
-  on_failure:
-    retry: 2
-    fallback: human_review
-- id: development
-  agent: null
-  contract: ui_component_contract@v1
-  metadata:
-    name: Development
-    name_zh: 研发实现
-    stage_id: '2.2'
-    description: 'Human developers implement UI components based on contracts.
-
-      开发者根据契约实现 UI 组件。
-
-      '
-  input:
-  - source: test_generation
-    required: true
-  - file: spec/ui/ui.map.yaml
-    required: true
-  output:
-    freeze: false
-    includes:
-    - 组件实现代码
-    - 页面实现代码
-    - 样式文件
-  human_role:
-    type: implementation
-    guidance: '开发者应该：
-
-      1. 根据 page/component 契约实现组件
-
-      2. 确保所有状态都有实现
-
-      3. 使用 Tokens 替代硬编码值
-
-      4. 实现契约中定义的交互
-
-      5. 遵循 a11y 配置
-
-      '
-- id: dev_gate
-  agent: ui_gate_runner@v1
-  contract: null
-  metadata:
-    name: Dev Gate
-    name_zh: 开发门禁
-    stage_id: 2.3-gate
-    description: 'Execute Dev Gate checks before merging to main.
-
-      代码合并前的开发质量门禁检查。
-
-      '
-  input:
-  - source: development
-    required: true
-  - file: spec/ui/ui.map.yaml
-    required: true
-  output:
-    file: output/gate-reports/dev-gate-{pr_number}.md
-    freeze: false
-  gate_config:
-    gate_type: dev
-    pass_criteria:
-      blocker: 0
-      major: 3
-      minor: null
-  human_role:
-    type: code_review
-    actions:
-    - approve: 合并代码
-    - request_changes: 返回修改
-  on_failure:
-    retry: 0
-    fallback: human_review
-- id: staging_deployment
-  agent: null
-  contract: null
-  metadata:
-    name: Staging Deployment
-    name_zh: Staging 部署
-    stage_id: '3.1'
-    description: 'Deploy to staging environment for final testing.
-
-      部署到 Staging 环境进行最终测试。
-
-      '
-  input:
-  - source: dev_gate
-    required: true
-    condition: gate_passed
-  output:
-    staging_url: $STAGING_URL
-    freeze: false
-  human_role:
-    type: monitoring
-    guidance: '运维应该：
-
-      1. 监控部署过程
-
-      2. 确认部署成功
-
-      3. 验证基本功能可用
-
-      '
-- id: release_gate
-  agent: ui_gate_runner@v1
-  contract: null
-  metadata:
-    name: Release Gate
-    name_zh: 发布门禁
-    stage_id: 3.2-gate
-    description: 'Execute Release Gate checks before production deployment.
-
-      发布到生产环境前的最终质量门禁检查。
-
-      '
-  input:
-  - source: staging_deployment
-    required: true
-  - file: spec/ui/ui.map.yaml
-    required: true
-  - staging_url: $STAGING_URL
-    required: true
-  output:
-    file: output/gate-reports/release-gate-{version}.md
-    freeze: false
-  gate_config:
-    gate_type: release
-    pass_criteria:
-      blocker: 0
-      major: 0
-      minor: null
-  manual_checklist:
-  - id: product_signoff
-    name: 产品验收确认
-    assignee: product-manager
-    required: true
-  - id: design_signoff
-    name: 设计验收确认
-    assignee: ui-designer
-    required: true
-  - id: qa_signoff
-    name: QA 验收确认
-    assignee: qa-engineer
-    required: true
-  human_role:
-    type: final_approval
-    actions:
-    - approve: 发布到生产
-    - reject: 返回修复
-  on_failure:
-    retry: 0
-    fallback: human_review
-- id: production_release
-  agent: null
-  contract: null
-  metadata:
-    name: Production Release
-    name_zh: 生产发布
-    stage_id: '3.3'
-    description: 'Deploy to production environment.
-
-      发布到生产环境。
-
-      '
-  input:
-  - source: release_gate
-    required: true
-    condition: gate_passed AND manual_checklist_complete
-  output:
-    file: output/releases/{version}/RELEASE_NOTES.md
-    freeze: true
-  human_role:
-    type: monitoring
-    guidance: '运维应该：
-
-      1. 监控发布过程
-
-      2. 验证生产环境功能
-
-      3. 监控错误告警
-
-      4. 准备回滚方案
-
-      '
 constraints:
-  gate_blocking: '每个 Gate 都是硬性阻断点：
-
+  gate_blocking: |
+    UI Gate 是硬性阻断点：
     - AI Walkthrough 失败 → 不能进入 UX 审查
+    - UI Gate 失败 → 不能生成 UI 冻结包
+    - UI Gate 失败 → 不能交付给 Dev 部门
 
-    - UI Gate 失败 → 不能进入研发
+  contract_driven: |
+    所有 UI 设计必须基于契约：
+    - 页面设计参考 page 契约
+    - 组件设计参考 component 契约
+    - 样式设计参考 tokens 契约
+    - 用户流设计参考 user-flow 契约
 
-    - Dev Gate 失败 → 不能合并代码
-
-    - Release Gate 失败 → 不能发布生产
-
-    '
-  contract_driven: '所有 UI 实现必须基于契约：
-
-    - 组件实现参考 component 契约
-
-    - 页面实现参考 page 契约
-
-    - 样式实现参考 tokens 契约
-
-    - 测试生成参考 a11y 契约
-
-    - v1.1: 用户流实现参考 user-flow 契约
-
-    '
-  state_completeness: '必须实现四种必需状态：
-
+  state_completeness: |
+    必须定义四种必需状态：
     - default: 正常状态
-
     - loading: 加载中状态
-
     - empty: 空数据状态
-
     - error: 错误状态
 
-    '
-  single_main_path: 'v1.1 新增 - 单主路径原则（不可违背）：
-
+  single_main_path: |
+    单主路径原则（不可违背）：
     - 每个功能在 V1 必须只有一条强制闭合的主路径
-
     - 不存在「走一半再去干别的」
-
     - 不存在「完成 B 后再回来继续 A」
-
     - 违反即视为设计缺陷，不进入实现阶段
 
-    '
-  preconditions_at_entry: 'v1.1 新增 - 前置条件入口处解决：
-
+  preconditions_at_entry: |
+    前置条件入口处解决：
     - 条件不满足 → 不显示入口 或 显式引导
-
     - 禁止：点进去才告诉你「不行」
 
-    '
-  ai_friendly: 'v1.1 新增 - AI 友好性：
-
+  ai_friendly: |
+    AI 友好性：
     - AI 必须能仅凭 UI 顺序盲跑通过主路径
-
     - 每一步只有一个明确的「下一步」
-
     - 状态可通过 UI 元素识别
-
     - AI 友好度评分必须 >= 80
 
-    '
+# ============================================
+# 完成条件
+# ============================================
 completion:
   required_outputs:
-  - spec/ui/ui.map.yaml
-  - spec/ui/flows/*.flow.yaml  # v1.1 新增
-  - output/reports/ai-walkthrough-*.json  # v1.1 新增
-  - output/gate-reports/ui-gate-*.md
-  - output/gate-reports/dev-gate-*.md
-  - output/gate-reports/release-gate-*.md
-  - output/releases/{version}/RELEASE_NOTES.md
+    - spec/ui/ui.map.yaml
+    - spec/ui/flows/*.flow.yaml
+    - spec/ui/pages/*.page.yaml
+    - output/reports/ai-walkthrough-*.json
+    - output/review-reports/ux-review-*.md
+    - output/gate-reports/ui-gate-*.md
+
   final_output:
     file: output/ui-frozen/{project}-ui-freeze.md
-    description: UI 设计阶段总冻结文件
+    description: UI 冻结包（交付给 Dev 部门）
+    freeze: true
     includes:
-    - UI 契约索引
-    - User Flow 契约  # v1.1 新增
-    - AI 盲跑验证报告  # v1.1 新增
-    - Gate 检查报告
-    - 发布说明
-  gate_to_next:
-    description: '当 Release Gate 通过且所有人工验收完成后，
+      - UI 契约索引 (ui.map.yaml)
+      - User Flow 契约 (*.flow.yaml)
+      - 页面契约 (*.page.yaml)
+      - 组件契约 (*.component.yaml)
+      - AI 盲跑验证报告
+      - UX 审查报告
+      - UI Gate 检查报告
 
-      可以发布到生产环境。
+  handoff:
+    to: dev_department
+    artifact: '{project}-ui-freeze.md'
+    description: |
+      UI Gate 通过后，将 UI 冻结包交付给 Dev 部门。
+      Dev 部门根据 UI 冻结包进行前端开发。
 
-      '
-rollback:
-  trigger:
-  - production_error_rate: '> 1%'
-  - critical_bug_found: true
-  actions:
-  - revert_deployment:
-      to: previous_version
-  - notify:
-      channel: release
-      message: 生产回滚：{version} → {previous_version}
-  - create_issue:
-      title: 生产回滚：{version}
-      labels:
-      - rollback
-      - urgent
+# ============================================
+# 元数据
+# ============================================
 kind: workflow
 owner: ui-ai
 tags:
-- ui
-- workflow
-- design
-- figma
-- quality-gate
-- single-main-path  # v1.1 新增
-- ai-friendly  # v1.1 新增
+  - ui
+  - workflow
+  - design
+  - figma
+  - quality-gate
+  - single-main-path
+  - ai-friendly
