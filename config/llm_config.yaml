@@ -5,9 +5,10 @@
 default:
   type: llm
   provider: custom
-  base_url: ${OPENAI_BASE_URL}
-  api_key: ${OPENAI_API_KEY}
-  model: ${OPENAI_MODEL}
+  # 默认仍保留为可配置的 OpenAI-compatible endpoint
+  base_url: ${LLM_BASE_URL}
+  api_key: ${LLM_API_KEY}
+  model: ${LLM_MODEL}
   temperature: 0.7
   max_tokens: 4000
 
@@ -15,18 +16,19 @@ default:
 antigravity:
   type: llm
   provider: custom
-  base_url: http://127.0.0.1:8045/v1
-  api_key: sk-2988e892730744ccafde80aac9ced361
-  model: gemini-3-flash
+  base_url: ${ANTIGRAVITY_BASE_URL}
+  api_key: ${ANTIGRAVITY_API_KEY}
+  model: ${ANTIGRAVITY_MODEL}
   temperature: 0.7
   max_tokens: 8000
 
 zhipu:
   type: llm
   provider: custom
-  base_url: https://open.bigmodel.cn/api/paas/v4
-  api_key: 06bc11ad44e3431d8f685bfe3405284e.KlPI5clCIbAb4aOa
-  model: glm-4-flash
+  # 智谱 GLM（coding endpoint）
+  base_url: ${ZHIPU_BASE_URL}
+  api_key: ${ZHIPU_API_KEY}
+  model: ${ZHIPU_MODEL}
   temperature: 0.7
   max_tokens: 8000
 
@@ -34,9 +36,9 @@ zhipu:
 deepseek:
   type: llm
   provider: custom
-  base_url: https://api.deepseek.com
-  api_key: sk-9fa1f5838ab042c09bcf712de0d55119
-  model: deepseek-chat
+  base_url: ${DEEPSEEK_BASE_URL}
+  api_key: ${DEEPSEEK_API_KEY}
+  model: ${DEEPSEEK_MODEL}
   temperature: 0.3
   max_tokens: 8000
 
@@ -44,17 +46,17 @@ deepseek:
 agent.prd:
   type: llm
   provider: custom
-  base_url: http://127.0.0.1:8045/v1
-  api_key: sk-2988e892730744ccafde80aac9ced361
-  model: gemini-3-flash
+  base_url: ${LLM_BASE_URL}
+  api_key: ${LLM_API_KEY}
+  model: ${LLM_MODEL}
   temperature: 0.7
   max_tokens: 4000
 
 agent.dev:
   type: llm
   provider: custom
-  base_url: http://127.0.0.1:8045/v1
-  api_key: sk-2988e892730744ccafde80aac9ced361
-  model: glm-4-flash
+  base_url: ${LLM_BASE_URL}
+  api_key: ${LLM_API_KEY}
+  model: ${LLM_MODEL}
   temperature: 0.5
   max_tokens: 8000

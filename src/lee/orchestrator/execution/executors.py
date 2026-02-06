@@ -204,8 +204,8 @@ class ExecutorFactory:
             raise ValueError(f"Unknown executor type: {executor_type}")
 
         if executor_type == "llm" and "profile" not in kwargs:
-            # Allow environment override for LLM profile (e.g., zhipu)
-            kwargs["profile"] = os.getenv("LLM_PROFILE", "antigravity")
+            # Default to zhipu for debugging; can be overridden via env var.
+            kwargs["profile"] = os.getenv("LLM_PROFILE", "zhipu")
 
         return executor_class(**kwargs)
 
