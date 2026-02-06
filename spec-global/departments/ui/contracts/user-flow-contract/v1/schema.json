@@ -1,0 +1,417 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "user-flow-contract/v1/schema.json",
+  "title": "User Flow Contract",
+  "description": "用户流契约 - 定义功能的强制闭合主路径，实现'单主路径原则'和'路径可枚举'",
+  "type": "object",
+  "required": ["id", "name", "entry", "main_path", "exit_points"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^flow\\.[a-z_]+$",
+      "description": "用户流唯一标识，格式: flow.{name}"
+    },
+    "name": {
+      "type": "string",
+      "description": "用户流名称"
+    },
+    "description": {
+      "type": "string",
+      "description": "用户流描述"
+    },
+    "version": {
+      "type": "string",
+      "enum": ["v1"],
+      "description": "功能版本，V1阶段只允许一条主路径"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["P0", "P1", "P2"],
+      "description": "优先级"
+    },
+    "entry": {
+      "$ref": "#/definitions/EntryPoint",
+      "description": "功能入口点定义"
+    },
+    "main_path": {
+      "$ref": "#/definitions/MainPath",
+      "description": "强制闭合的主路径"
+    },
+    "exit_points": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/ExitPoint"
+      },
+      "description": "合法退出点列表"
+    },
+    "blocked_patterns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/BlockedPattern"
+      },
+      "description": "禁止的路径模式"
+    },
+    "recovery_strategies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RecoveryStrategy"
+      },
+      "description": "错误恢复策略"
+    },
+    "ai_walkthrough": {
+      "$ref": "#/definitions/AIWalkthrough",
+      "description": "AI盲跑验证配置"
+    }
+  },
+  "definitions": {
+    "EntryPoint": {
+      "type": "object",
+      "required": ["page_ref", "trigger"],
+      "properties": {
+        "page_ref": {
+          "type": "string",
+          "pattern": "^page\\.[a-z_]+$",
+          "description": "入口页面引用"
+        },
+        "trigger": {
+          "type": "string",
+          "description": "入口触发方式，如 click(button_id) 或 route(/path)"
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Precondition"
+          },
+          "description": "进入该流程的前置条件"
+        },
+        "visibility_rule": {
+          "$ref": "#/definitions/VisibilityRule",
+          "description": "入口可见性规则 - 条件不满足时隐藏入口"
+        },
+        "disabled_rule": {
+          "$ref": "#/definitions/DisabledRule",
+          "description": "入口禁用规则 - 条件不满足时灰掉+文案"
+        }
+      }
+    },
+    "MainPath": {
+      "type": "object",
+      "required": ["steps", "completion"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/PathStep"
+          },
+          "description": "主路径步骤序列，必须顺序执行"
+        },
+        "completion": {
+          "$ref": "#/definitions/Completion",
+          "description": "完成态定义"
+        },
+        "max_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "最大步骤数限制（V1建议不超过5步）"
+        },
+        "allow_back": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否允许返回上一步"
+        },
+        "force_sequential": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否强制顺序执行（不允许跳步）"
+        }
+      }
+    },
+    "PathStep": {
+      "type": "object",
+      "required": ["id", "page_ref", "action"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "步骤唯一标识"
+        },
+        "page_ref": {
+          "type": "string",
+          "pattern": "^page\\.[a-z_]+$",
+          "description": "该步骤关联的页面"
+        },
+        "action": {
+          "type": "string",
+          "description": "用户需要完成的动作描述"
+        },
+        "trigger": {
+          "type": "string",
+          "description": "触发进入下一步的交互"
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Precondition"
+          },
+          "description": "执行该步骤的前置条件"
+        },
+        "validation": {
+          "type": "object",
+          "properties": {
+            "required_fields": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "rules": {
+              "type": "array",
+              "items": { "type": "object" }
+            }
+          },
+          "description": "该步骤的验证规则"
+        },
+        "on_failure": {
+          "$ref": "#/definitions/FailureHandler",
+          "description": "失败处理"
+        },
+        "is_optional": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否可选步骤（V1建议都设为false）"
+        }
+      }
+    },
+    "Precondition": {
+      "type": "object",
+      "required": ["id", "condition", "not_met_action"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "前置条件标识"
+        },
+        "condition": {
+          "type": "string",
+          "description": "条件表达式"
+        },
+        "not_met_action": {
+          "type": "string",
+          "enum": ["hide", "disable", "redirect", "show_guide"],
+          "description": "条件不满足时的处理方式"
+        },
+        "message_key": {
+          "type": "string",
+          "description": "不满足时的提示文案key"
+        },
+        "guide_to": {
+          "type": "string",
+          "description": "引导跳转目标（当not_met_action为redirect或show_guide时）"
+        }
+      }
+    },
+    "VisibilityRule": {
+      "type": "object",
+      "required": ["condition"],
+      "properties": {
+        "condition": {
+          "type": "string",
+          "description": "可见条件表达式"
+        },
+        "hidden_reason": {
+          "type": "string",
+          "description": "隐藏原因（用于调试和文档）"
+        }
+      }
+    },
+    "DisabledRule": {
+      "type": "object",
+      "required": ["condition", "message_key"],
+      "properties": {
+        "condition": {
+          "type": "string",
+          "description": "禁用条件表达式"
+        },
+        "message_key": {
+          "type": "string",
+          "description": "禁用时显示的文案key"
+        },
+        "tooltip": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否显示tooltip说明"
+        }
+      }
+    },
+    "Completion": {
+      "type": "object",
+      "required": ["state", "feedback"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["success", "partial_success"],
+          "description": "完成状态"
+        },
+        "feedback": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["toast", "page", "modal", "redirect"]
+            },
+            "message_key": { "type": "string" },
+            "redirect_to": { "type": "string" }
+          },
+          "description": "完成反馈"
+        },
+        "next_action": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["stay", "redirect", "close"]
+            },
+            "target": { "type": "string" }
+          },
+          "description": "完成后的下一步动作"
+        }
+      }
+    },
+    "ExitPoint": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "退出点标识"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["complete", "cancel", "timeout", "error"],
+          "description": "退出类型"
+        },
+        "from_step": {
+          "type": "string",
+          "description": "从哪个步骤退出（不填表示任意步骤）"
+        },
+        "confirmation_required": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否需要确认"
+        },
+        "confirmation_message_key": {
+          "type": "string",
+          "description": "确认弹窗文案key"
+        },
+        "data_preservation": {
+          "type": "string",
+          "enum": ["discard", "save_draft", "prompt_user"],
+          "description": "退出时数据处理方式"
+        }
+      }
+    },
+    "BlockedPattern": {
+      "type": "object",
+      "required": ["id", "pattern", "reason"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "禁止模式标识"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "禁止的路径模式描述"
+        },
+        "reason": {
+          "type": "string",
+          "description": "禁止原因"
+        },
+        "enforcement": {
+          "type": "string",
+          "enum": ["hide_entry", "disable_entry", "block_navigation", "show_warning"],
+          "description": "如何执行禁止"
+        }
+      }
+    },
+    "RecoveryStrategy": {
+      "type": "object",
+      "required": ["error_type", "recovery_action"],
+      "properties": {
+        "error_type": {
+          "type": "string",
+          "description": "错误类型"
+        },
+        "recovery_action": {
+          "type": "string",
+          "enum": ["retry", "back_to_step", "restart", "show_error", "redirect"],
+          "description": "恢复动作"
+        },
+        "target_step": {
+          "type": "string",
+          "description": "恢复目标步骤（当recovery_action为back_to_step时）"
+        },
+        "max_retries": {
+          "type": "integer",
+          "default": 3,
+          "description": "最大重试次数"
+        },
+        "message_key": {
+          "type": "string",
+          "description": "恢复提示文案key"
+        }
+      }
+    },
+    "FailureHandler": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["show_inline_error", "show_toast", "block_progress", "auto_retry"],
+          "description": "失败处理动作"
+        },
+        "message_key": {
+          "type": "string",
+          "description": "错误文案key"
+        },
+        "recovery_hint_key": {
+          "type": "string",
+          "description": "恢复提示key"
+        }
+      }
+    },
+    "AIWalkthrough": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否启用AI盲跑验证"
+        },
+        "expected_steps": {
+          "type": "integer",
+          "description": "预期步骤数（用于验证AI是否走了最短路径）"
+        },
+        "hints_allowed": {
+          "type": "boolean",
+          "default": false,
+          "description": "AI盲跑时是否允许提示（V1应为false）"
+        },
+        "success_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "成功标准列表"
+        },
+        "forbidden_actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "AI不应执行的动作（用于验证路径唯一性）"
+        }
+      }
+    }
+  }
+}
