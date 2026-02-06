@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "ui-page-contract/v1/schema.json",
   "title": "UI Page Contract",
-  "description": "页面契约规范 - 定义页面应该长什么样、有哪些状态、有哪些交互、哪些校验",
+  "description": "页面契约规范 v1.1 - 定义页面应该长什么样、有哪些状态、有哪些交互、哪些校验。新增：用户流关联、前置条件、显隐规则、恢复路径",
   "type": "object",
   "required": ["id", "route", "states"],
   "properties": {
@@ -64,6 +64,38 @@
     "seo": {
       "$ref": "#/definitions/SeoConfig",
       "description": "SEO 配置"
+    },
+    "flow_binding": {
+      "$ref": "#/definitions/FlowBinding",
+      "description": "v1.1 新增：用户流关联配置"
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Precondition"
+      },
+      "description": "v1.1 新增：页面的前置条件列表"
+    },
+    "visibility_rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/VisibilityRule"
+      },
+      "description": "v1.1 新增：页面/组件的显隐规则"
+    },
+    "disabled_rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/DisabledRule"
+      },
+      "description": "v1.1 新增：页面/组件的禁用规则"
+    },
+    "recovery_paths": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RecoveryPath"
+      },
+      "description": "v1.1 新增：错误恢复路径定义"
     }
   },
   "definitions": {
@@ -266,6 +298,139 @@
         },
         "canonical": { "type": "string" },
         "noindex": { "type": "boolean" }
+      }
+    },
+    "FlowBinding": {
+      "type": "object",
+      "description": "v1.1 新增：页面与用户流的关联",
+      "properties": {
+        "flow_ref": {
+          "type": "string",
+          "pattern": "^flow\\.[a-z_]+$",
+          "description": "关联的用户流 ID"
+        },
+        "step_id": {
+          "type": "string",
+          "description": "该页面在用户流中对应的步骤 ID"
+        },
+        "is_entry_page": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否是用户流的入口页面"
+        },
+        "is_completion_page": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否是用户流的完成页面"
+        }
+      }
+    },
+    "Precondition": {
+      "type": "object",
+      "description": "v1.1 新增：前置条件定义（在入口处解决）",
+      "required": ["id", "condition", "not_met_action"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "前置条件唯一标识"
+        },
+        "condition": {
+          "type": "string",
+          "description": "条件表达式"
+        },
+        "not_met_action": {
+          "type": "string",
+          "enum": ["hide", "disable", "redirect", "show_guide"],
+          "description": "条件不满足时的处理方式"
+        },
+        "message_key": {
+          "type": "string",
+          "description": "不满足时的提示文案 key"
+        },
+        "guide_to": {
+          "type": "string",
+          "description": "引导跳转目标（当 not_met_action 为 redirect 或 show_guide 时）"
+        },
+        "target": {
+          "type": "string",
+          "description": "作用目标（page 或 component_id）"
+        }
+      }
+    },
+    "VisibilityRule": {
+      "type": "object",
+      "description": "v1.1 新增：显隐规则（条件不满足时隐藏入口）",
+      "required": ["target", "condition"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "作用目标（component_id 或 'page'）"
+        },
+        "condition": {
+          "type": "string",
+          "description": "可见条件表达式（true 时可见）"
+        },
+        "hidden_reason": {
+          "type": "string",
+          "description": "隐藏原因（用于调试和文档）"
+        }
+      }
+    },
+    "DisabledRule": {
+      "type": "object",
+      "description": "v1.1 新增：禁用规则（条件不满足时灰掉 + 文案）",
+      "required": ["target", "condition", "message_key"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "作用目标（component_id）"
+        },
+        "condition": {
+          "type": "string",
+          "description": "禁用条件表达式（true 时禁用）"
+        },
+        "message_key": {
+          "type": "string",
+          "description": "禁用时显示的文案 key"
+        },
+        "tooltip": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否显示 tooltip 说明"
+        }
+      }
+    },
+    "RecoveryPath": {
+      "type": "object",
+      "description": "v1.1 新增：错误恢复路径定义",
+      "required": ["error_state", "recovery_action"],
+      "properties": {
+        "error_state": {
+          "type": "string",
+          "description": "错误状态名称或错误码"
+        },
+        "recovery_action": {
+          "type": "string",
+          "enum": ["retry", "back_to_previous", "redirect", "show_help", "contact_support"],
+          "description": "恢复动作"
+        },
+        "target": {
+          "type": "string",
+          "description": "恢复目标（页面或步骤）"
+        },
+        "message_key": {
+          "type": "string",
+          "description": "恢复提示文案 key"
+        },
+        "cta_key": {
+          "type": "string",
+          "description": "恢复按钮文案 key"
+        },
+        "max_retries": {
+          "type": "integer",
+          "default": 3,
+          "description": "最大重试次数"
+        }
       }
     }
   }
