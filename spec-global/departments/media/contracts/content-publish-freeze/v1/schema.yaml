@@ -1,0 +1,199 @@
+# Content Publish Freeze Contract
+# 内容发布冻结契约
+
+id: content-publish-freeze
+version: "1.0.0"
+
+metadata:
+  name: Content Publish Freeze Contract
+  name_zh: 内容发布冻结契约
+  description: |
+    定义内容发布冻结的结构。
+    这是人类确认后可以发布的内容契约。
+
+# ===========================================
+# 冻结契约结构
+# ===========================================
+schema:
+  type: object
+  required:
+    - freeze_id
+    - frozen_content
+    - approval
+  properties:
+
+    # 冻结标识
+    freeze_id:
+      type: string
+      description: 冻结唯一标识
+      pattern: "^FREEZE-[0-9]{8}-[A-Z0-9]{6}$"
+
+    # 冻结时间
+    frozen_at:
+      type: string
+      format: date-time
+      description: 冻结时间
+
+    # 冻结人
+    frozen_by:
+      type: string
+      description: 冻结人（人类）
+
+    # 冻结的内容
+    frozen_content:
+      type: object
+      required:
+        - formatted_content
+        - metadata
+      properties:
+
+        formatted_content:
+          type: string
+          description: 格式化后的内容
+
+        metadata:
+          type: object
+          properties:
+            theme_used:
+              type: string
+            platform:
+              type: string
+            article_id:
+              type: string
+
+    # 审核记录
+    approval:
+      type: object
+      required:
+        - reviewed_by
+        - approved_at
+        - decision
+      properties:
+
+        reviewed_by:
+          type: string
+          description: 审核人（Agent ID）
+
+        reviewed_at:
+          type: string
+          format: date-time
+          description: 审核时间
+
+        decision:
+          type: string
+          enum: [approved, revision_required, rejected]
+          description: 审核决定
+
+        issues_summary:
+          type: object
+          properties:
+            total_issues:
+              type: integer
+            pass_gate:
+              type: boolean
+            overall_score:
+              type: number
+
+        human_approval:
+          type: object
+          properties:
+            approved_by:
+              type: string
+              description: 批准人
+            approved_at:
+              type: string
+              format: date-time
+            comments:
+              type: string
+              description: 批准意见
+
+    # 发布配置
+    publish_config:
+      type: object
+      properties:
+        target_platform:
+          type: string
+          enum: [wechat, xhs, notion, feishu, generic]
+
+        publish_mode:
+          type: string
+          enum: [api, manual, preview]
+
+        scheduled_at:
+          type: string
+          format: date-time
+          description: 计划发布时间（可选）
+
+    # 发布状态
+    publish_status:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, published, failed]
+
+        published_at:
+          type: string
+          format: date-time
+
+        published_url:
+          type: string
+
+        published_by:
+          type: string
+
+# ===========================================
+# 状态转换
+# ===========================================
+state_transitions:
+  - from: draft
+    to: frozen
+    trigger: human_approval
+    condition: "人类确认内容可以发布"
+
+  - from: frozen
+    to: published
+    trigger: publish_action
+    condition: "发布操作成功"
+
+  - from: frozen
+    to: draft
+    trigger: human_revision_request
+    condition: "人类要求修改"
+
+# ===========================================
+# 示例
+# ===========================================
+examples:
+  - name: 已冻结的内容
+    value:
+      freeze_id: "FREEZE-20250115-ABC123"
+      frozen_at: "2025-01-15T10:30:00Z"
+      frozen_by: "user@example.com"
+
+      frozen_content:
+        formatted_content: "<h1>...</h1>"
+        metadata:
+          theme_used: red
+          platform: wechat
+          article_id: "article-001"
+
+      approval:
+        reviewed_by: "agent.media.media_reviewer"
+        reviewed_at: "2025-01-15T10:25:00Z"
+        decision: approved
+        issues_summary:
+          total_issues: 0
+          pass_gate: true
+          overall_score: 95
+        human_approval:
+          approved_by: "user@example.com"
+          approved_at: "2025-01-15T10:30:00Z"
+          comments: "内容确认无误，可以发布"
+
+      publish_config:
+        target_platform: wechat
+        publish_mode: manual
+
+      publish_status:
+        status: pending

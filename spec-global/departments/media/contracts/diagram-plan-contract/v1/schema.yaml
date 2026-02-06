@@ -1,0 +1,175 @@
+# Diagram Plan Contract v1.0
+# 图表规划契约 - 定义"用什么类型的图"
+
+kind: contract
+version: 1.0
+
+id: contract.media.diagram_plan
+name: Diagram Plan Contract
+description: >
+  定义图表的结构规划（Structure DSL 层）。
+  由 Diagram Planning Agent 生成，只包含结构信息，不含视觉描述。
+
+input_schema:
+  type: object
+  required:
+    - diagram_opportunities
+    - article_context
+  properties:
+    diagram_opportunities:
+      type: array
+      description: 来自 Structure Analysis Agent 的机会列表
+      items:
+        $ref: "../diagram-opportunity-contract/v1/schema.yaml#/output_schema/properties/diagram_opportunities/items"
+    
+    article_context:
+      type: object
+      properties:
+        title:
+          type: string
+        topic:
+          type: string
+        target_audience:
+          type: string
+
+output_schema:
+  type: object
+  required:
+    - diagrams
+  properties:
+    diagrams:
+      type: array
+      description: 图表规划列表
+      items:
+        type: object
+        required:
+          - id
+          - type
+          - placement
+          - structure_dsl
+          - caption
+        properties:
+          id:
+            type: string
+            description: 图表唯一标识
+            example: "diagram_001"
+          
+          type:
+            type: string
+            description: 图表类型（来自机会的 intent）
+            enum:
+              - governance_loop
+              - execution_pipeline
+              - system_architecture
+              - decision_tree
+              - comparison_matrix
+              - hierarchy
+              - workflow
+              - state_machine
+              - data_flow
+              - concept_map
+          
+          placement:
+            type: object
+            description: 插入位置（继承自 opportunity）
+            properties:
+              after_paragraph:
+                type: integer
+              after_heading:
+                type: string
+          
+          structure_dsl:
+            type: object
+            description: 结构 DSL（纯结构，无视觉信息）
+            required:
+              - nodes
+              - edges
+            properties:
+              direction:
+                type: string
+                description: 图表方向（仅适用于 flowchart）
+                enum: [TD, LR, RL, BT]
+                default: TD
+              
+              nodes:
+                type: array
+                description: 节点列表
+                items:
+                  type: object
+                  required:
+                    - id
+                    - label
+                  properties:
+                    id:
+                      type: string
+                      description: 节点标识符
+                      example: "Human"
+                    label:
+                      type: string
+                      description: 节点显示文本
+                      example: "人类目标"
+                    type:
+                      type: string
+                      description: 节点类型（语义层，非视觉层）
+                      enum: [actor, process, decision, data, terminator]
+                      default: process
+              
+              edges:
+                type: array
+                description: 边/关系列表
+                items:
+                  type: object
+                  required:
+                    - from
+                    - to
+                  properties:
+                    from:
+                      type: string
+                      description: 源节点 ID
+                    to:
+                      type: string
+                      description: 目标节点 ID
+                    label:
+                      type: string
+                      description: 边标签（可选）
+          
+          caption:
+            type: string
+            description: 图表说明文字（将显示在图下方）
+            example: "治理闭环结构图"
+          
+          estimated_complexity:
+            type: string
+            description: 预估复杂度
+            enum: [simple, moderate, complex]
+
+# 约束规则
+constraints:
+  - id: no_visual_description
+    description: 禁止出现视觉描述（颜色、字体、布局）
+    severity: error
+    check: >
+      structure_dsl 中不得包含 color, style, font, classDef 等视觉属性
+  
+  - id: node_limit
+    description: 单个图表节点数限制（避免过于复杂）
+    severity: warning
+    condition: nodes.length <= 12
+  
+  - id: edge_clarity
+    description: 边关系必须清晰明确
+    severity: error
+    check: >
+      每个 from/to 必须在 nodes 中存在对应的 id
+
+# 使用提示
+usage_notes: |
+  本契约是「编辑能力」层，负责将"需要图"变成"用什么图"。
+  
+  Agent 职责边界：
+  - ✅ 可以决定：节点有哪些、它们的关系、整体结构
+  - ❌ 禁止出现：颜色值、字体大小、布局坐标、样式类名
+  
+  关键原则：
+  structure_dsl 必须可以被完全确定性地转换为 Mermaid 语法，
+  不需要任何 AI 创意或视觉判断。

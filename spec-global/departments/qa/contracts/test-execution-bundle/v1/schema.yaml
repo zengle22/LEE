@@ -1,0 +1,587 @@
+# Test Execution Bundle Contract Schema v1.0
+# 测试执行输入包契约标准
+
+kind: contract_schema
+version: 1.0
+
+schema:
+  type: object
+  required:
+    - bundle_id
+    - target_version
+    - test_cases
+
+  properties:
+    # ========== 包信息 ==========
+    bundle_id:
+      type: string
+      pattern: "^TEB-[0-9]{4}-[0-9]{4}$"
+      description: "测试执行包唯一标识"
+      example: "TEB-2026-0001"
+
+    name:
+      type: string
+      description: "执行包名称"
+      example: "登录模块测试执行包"
+
+    description:
+      type: string
+      description: "执行包描述"
+
+    # ========== 目标信息 ==========
+    target_version:
+      type: string
+      description: "测试目标版本"
+      example: "v1.0.0-rc1"
+
+    target_environment:
+      type: string
+      enum: [dev, test, staging, prod]
+      description: "测试目标环境"
+      default: test
+
+    # ========== 测试用例清单 ==========
+    test_cases:
+      type: array
+      description: "待执行的测试用例清单"
+      items:
+        type: object
+        required:
+          - case_id
+          - title
+          - suite
+          - priority
+
+        properties:
+          # 基础信息
+          case_id:
+            type: string
+            pattern: "^(F|NF|P|S)-[A-Z0-9]+-[0-9]{3}$"
+            description: "用例唯一标识"
+            example: "F-BASE-002"
+
+          title:
+            type: string
+            minLength: 10
+            maxLength: 200
+            description: "用例标题"
+
+          suite:
+            type: string
+            enum:
+              - smoke
+              - api
+              - e2e_chrome
+              - e2e_wechat
+              - performance
+              - security
+              - regression
+              - integration
+            description: "所属测试套件"
+
+          priority:
+            type: string
+            enum: [P0, P1, P2, P3]
+            description: "用例优先级"
+
+          type:
+            type: string
+            enum:
+              - positive
+              - negative
+              - boundary
+              - exception
+            description: "用例类型"
+
+          # 执行配置
+          execution_config:
+            type: object
+            description: "执行配置"
+            properties:
+              automated:
+                type: boolean
+                description: "是否已自动化"
+                default: false
+
+              script_path:
+                type: string
+                description: "自动化脚本路径"
+
+              framework:
+                type: string
+                enum: [playwright, jest, pytest, postman, manual]
+                description: "执行框架"
+
+              timeout_seconds:
+                type: integer
+                description: "执行超时时间（秒）"
+                default: 300
+
+              retry_count:
+                type: integer
+                description: "失败重试次数"
+                default: 0
+
+          # 依赖关系
+          dependencies:
+            type: array
+            items:
+              type: string
+            description: "依赖的其他用例 ID"
+
+          # 标签
+          tags:
+            type: array
+            items:
+              type: string
+            description: "标签"
+
+          # 描述信息
+          description:
+            type: string
+            description: "用例描述"
+
+          preconditions:
+            type: array
+            items:
+              type: string
+            description: "前置条件"
+
+          steps:
+            type: array
+            description: "测试步骤"
+            items:
+              type: object
+              properties:
+                step_num:
+                  type: integer
+                action:
+                  type: string
+                expected:
+                  type: string
+
+          expected_result:
+            type: string
+            description: "预期结果"
+
+    # ========== 执行配置 ==========
+    execution_config:
+      type: object
+      description: "整体执行配置"
+      properties:
+        execution_mode:
+          type: string
+          enum:
+            - sequential     # 顺序执行
+            - parallel       # 并行执行
+            - hybrid         # 混合模式
+          description: "执行模式"
+          default: sequential
+
+        parallelism:
+          type: integer
+          description: "并行度（仅 parallel 模式）"
+          default: 1
+
+        continue_on_failure:
+          type: boolean
+          description: "失败后是否继续"
+          default: true
+
+        # 套件过滤
+        suite_filter:
+          type: object
+          description: "套件过滤配置"
+          properties:
+            include:
+              type: array
+              items:
+                type: string
+              description: "包含的套件"
+
+            exclude:
+              type: array
+              items:
+                type: string
+              description: "排除的套件"
+
+        # 优先级过滤
+        priority_filter:
+          type: object
+          description: "优先级过滤配置"
+          properties:
+            include:
+              type: array
+              items:
+                type: string
+                enum: [P0, P1, P2, P3]
+              description: "包含的优先级"
+
+            exclude:
+              type: array
+              items:
+                type: string
+                enum: [P0, P1, P2, P3]
+              description: "排除的优先级"
+
+        # 标签过滤
+        tag_filter:
+          type: object
+          description: "标签过滤配置"
+          properties:
+            include:
+              type: array
+              items:
+                type: string
+              description: "包含的标签"
+
+            exclude:
+              type: array
+              items:
+                type: string
+              description: "排除的标签"
+
+    # ========== 环境配置 ==========
+    environment_config:
+      type: object
+      description: "环境配置"
+      properties:
+        base_url:
+          type: string
+          description: "基础 URL"
+
+        browser:
+          type: string
+          enum: [chrome, firefox, edge, safari, wechat]
+          description: "浏览器类型"
+
+        browser_version:
+          type: string
+          description: "浏览器版本"
+
+        headless:
+          type: boolean
+          description: "是否无头模式"
+          default: true
+
+        viewport:
+          type: object
+          description: "视口配置"
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+
+        # 测试数据
+        test_data:
+          type: object
+          description: "测试数据配置"
+          properties:
+            data_set:
+              type: string
+              description: "数据集名称"
+
+            data_path:
+              type: string
+              description: "数据文件路径"
+
+        # 超时配置
+        timeouts:
+          type: object
+          description: "超时配置"
+          properties:
+            default:
+              type: integer
+              description: "默认超时（毫秒）"
+              default: 30000
+
+            navigation:
+              type: integer
+              description: "导航超时（毫秒）"
+              default: 60000
+
+            response:
+              type: integer
+              description: "响应超时（毫秒）"
+              default: 30000
+
+    # ========== 通知配置 ==========
+    notification_config:
+      type: object
+      description: "通知配置"
+      properties:
+        on_completion:
+          type: boolean
+          description: "完成后是否通知"
+          default: true
+
+        on_failure:
+          type: boolean
+          description: "失败时是否通知"
+          default: true
+
+        notify_channels:
+          type: array
+          items:
+            type: string
+            enum: [email, slack, webhook]
+          description: "通知渠道"
+
+        notify_recipients:
+          type: array
+          items:
+            type: string
+          description: "通知接收者"
+
+    # ========== 报告配置 ==========
+    report_config:
+      type: object
+      description: "报告配置"
+      properties:
+        generate_html:
+          type: boolean
+          description: "是否生成 HTML 报告"
+          default: true
+
+        generate_json:
+          type: boolean
+          description: "是否生成 JSON 报告"
+          default: true
+
+        generate_junit:
+          type: boolean
+          description: "是否生成 JUnit 报告"
+          default: false
+
+        include_screenshots:
+          type: boolean
+          description: "报告中是否包含截图"
+          default: true
+
+        include_videos:
+          type: boolean
+          description: "报告中是否包含录屏"
+          default: false
+
+        include_logs:
+          type: boolean
+          description: "报告中是否包含日志"
+          default: true
+
+    # ========== 元数据 ==========
+    metadata:
+      type: object
+      description: "元数据"
+      properties:
+        created_by:
+          type: string
+          description: "创建者"
+
+        created_at:
+          type: string
+          format: date-time
+          description: "创建时间"
+
+        updated_at:
+          type: string
+          format: date-time
+          description: "更新时间"
+
+        tags:
+          type: array
+          items:
+            type: string
+          description: "标签"
+
+        notes:
+          type: string
+          description: "备注"
+
+# ========== 验证规则 ==========
+validation_rules:
+  - rule: "case_id_unique"
+    description: "用例 ID 必须唯一"
+    check: "COUNT(test_cases.case_id) == COUNT(UNIQUE(test_cases.case_id))"
+    error_message: "用例 ID 重复"
+
+  - rule: "smoke_cases_must_be_p0_p1"
+    description: "冒烟用例必须是 P0 或 P1"
+    check: "ALL(test_cases WHERE suite=smoke) SATISFY priority IN [P0, P1]"
+    error_message: "冒烟用例必须是 P0 或 P1 优先级"
+
+  - rule: "automated_cases_must_have_script_path"
+    description: "自动化用例必须有脚本路径"
+    check: "ALL(test_cases WHERE execution_config.automated=true) SATISFY execution_config.script_path IS NOT NULL"
+    error_message: "自动化用例必须指定脚本路径"
+
+# ========== 示例 ==========
+examples:
+  - name: "最小化执行包"
+    description: "仅包含必需字段的最小化配置"
+    data:
+      bundle_id: "TEB-2026-0001"
+      target_version: "v1.0.0-rc1"
+      test_cases:
+        - case_id: "F-BASE-002"
+          title: "开发测试登录 - 验证快速登录流程"
+          suite: smoke
+          priority: P0
+        - case_id: "F-P1-001"
+          title: "跑者画像 - 保存功能"
+          suite: e2e_chrome
+          priority: P1
+
+  - name: "完整执行包"
+    description: "包含所有配置字段的完整示例"
+    data:
+      bundle_id: "TEB-2026-0001"
+      name: "登录模块测试执行包"
+      description: "包含登录和用户相关功能的测试用例"
+      target_version: "v1.0.0-rc1"
+      target_environment: test
+
+      test_cases:
+        - case_id: "F-BASE-002"
+          title: "开发测试登录 - 验证快速登录流程"
+          suite: smoke
+          priority: P0
+          type: positive
+          tags: ["login", "smoke", "core-flow"]
+
+          execution_config:
+            automated: true
+            script_path: "tests/e2e/login.spec.ts"
+            framework: playwright
+            timeout_seconds: 60
+            retry_count: 2
+
+          description: "验证用户可以通过开发测试快速登录"
+          preconditions:
+            - "前后端服务均已启动"
+            - "用户未登录状态"
+          steps:
+            - step_num: 1
+              action: "访问登录页面"
+              expected: "页面加载成功"
+            - step_num: 2
+              action: "点击开发测试登录按钮"
+              expected: "触发登录请求"
+            - step_num: 3
+              action: "等待页面跳转"
+              expected: "跳转到跑者画像页面"
+          expected_result: "用户成功登录并进入跑者画像页面"
+
+        - case_id: "F-P1-001"
+          title: "跑者画像 - 数据保存功能"
+          suite: e2e_chrome
+          priority: P1
+          type: positive
+          tags: ["runner-profile", "data-save"]
+
+          execution_config:
+            automated: true
+            script_path: "tests/e2e/runner-profile.spec.ts"
+            framework: playwright
+            timeout_seconds: 120
+
+          description: "验证用户可以保存跑者画像数据"
+
+        - case_id: "F-P1-002"
+          title: "跑者画像 - 年龄边界值验证"
+          suite: e2e_chrome
+          priority: P1
+          type: boundary
+          tags: ["runner-profile", "validation"]
+
+          execution_config:
+            automated: true
+            script_path: "tests/e2e/runner-profile-boundary.spec.ts"
+            framework: playwright
+
+          description: "验证年龄输入的边界值处理"
+
+      execution_config:
+        execution_mode: parallel
+        parallelism: 3
+        continue_on_failure: true
+
+        suite_filter:
+          include: [smoke, e2e_chrome]
+
+        priority_filter:
+          include: [P0, P1]
+
+      environment_config:
+        base_url: "http://localhost:3000"
+        browser: chrome
+        browser_version: "120"
+        headless: true
+        viewport:
+          width: 1920
+          height: 1080
+
+        timeouts:
+          default: 30000
+          navigation: 60000
+          response: 30000
+
+      notification_config:
+        on_completion: true
+        on_failure: true
+        notify_channels: [slack, email]
+        notify_recipients: ["qa-team@example.com"]
+
+      report_config:
+        generate_html: true
+        generate_json: true
+        generate_junit: true
+        include_screenshots: true
+        include_videos: false
+        include_logs: true
+
+      metadata:
+        created_by: "qa-engineer"
+        created_at: "2026-02-05T10:00:00Z"
+        tags: ["login", "regression"]
+        notes: "本次执行包含登录模块的回归测试"
+
+  - name: "仅手动测试执行包"
+    description: "仅包含手工测试用例的执行包"
+    data:
+      bundle_id: "TEB-2026-0002"
+      name: "手工测试执行包"
+      target_version: "v1.0.0-rc1"
+
+      test_cases:
+        - case_id: "F-P2-001"
+          title: "UI 美观度检查"
+          suite: e2e_chrome
+          priority: P2
+          type: positive
+
+          execution_config:
+            automated: false
+            framework: manual
+
+          description: "验证页面 UI 美观度和布局"
+
+        - case_id: "F-P2-002"
+          title: "文案正确性检查"
+          suite: e2e_chrome
+          priority: P2
+          type: positive
+
+          execution_config:
+            automated: false
+            framework: manual
+
+          description: "验证页面文案正确无误"
+
+      execution_config:
+        execution_mode: sequential
+        continue_on_failure: true
+
+      report_config:
+        generate_html: false
+        generate_json: true

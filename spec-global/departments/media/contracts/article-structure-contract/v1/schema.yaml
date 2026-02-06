@@ -1,0 +1,354 @@
+# Article Structure Contract
+# 文章结构契约定义
+
+id: article-structure-contract
+version: "1.0.0"
+
+metadata:
+  name: Article Structure Contract
+  name_zh: 文章结构契约
+  description: |
+    定义文章的中间表示结构。
+    这是「先结构化 → 再样式映射」原则的核心，
+    确保内容结构与样式完全分离。
+
+# ===========================================
+# 输入契约
+# ===========================================
+input_schema:
+  type: object
+  required:
+    - raw_content
+    - source_format
+  properties:
+    raw_content:
+      type: string
+      description: 原始文章内容
+      minLength: 1
+
+    source_format:
+      type: string
+      enum: [markdown, plain_text, html, wechat_draft, xhs_draft]
+      description: 原始内容格式
+
+    context:
+      type: object
+      description: 上下文信息（可选）
+      properties:
+        original_title:
+          type: string
+          description: 原始标题
+        author:
+          type: string
+          description: 作者
+        platform:
+          type: string
+          description: 来源平台
+        tags:
+          type: array
+          items:
+            type: string
+          description: 标签
+
+# ===========================================
+# 输出契约（中间表示）
+# ===========================================
+output_schema:
+  type: object
+  required:
+    - article_structure
+    - metadata
+  properties:
+    article_structure:
+      type: object
+      description: 文章结构（中间表示）
+      required:
+        - title
+        - sections
+      properties:
+
+        # 标题
+        title:
+          type: object
+          description: 文章标题
+          required: [text, level]
+          properties:
+            text:
+              type: string
+              description: 标题文本
+            level:
+              type: string
+              enum: [h1, h2, h3]
+              description: 标题级别
+            emphasis:
+              type: string
+              enum: [normal, high, critical]
+              default: normal
+              description: 强调级别
+
+        # 导语/摘要
+        intro:
+          type: object
+          description: 导语（可选）
+          properties:
+            text:
+              type: string
+            emphasis:
+              type: string
+              enum: [normal, high]
+              default: normal
+
+        # 内容区块列表
+        sections:
+          type: array
+          description: 内容区块
+          items:
+            type: object
+            required: [type, blocks]
+            properties:
+
+              # 区块类型
+              type:
+                type: string
+                enum:
+                  - intro            # 导语
+                  - highlight        # 重点强调
+                  - list             # 列表
+                  - code             # 代码块
+                  - quote            # 引用
+                  - example          # 示例
+                  - warning          # 警告/注意
+                  - conclusion       # 结论
+                description: 区块类型
+
+              # 区块标题（可选）
+              title:
+                type: string
+                description: 区块标题
+
+              # 区块标题强调级别
+              title_emphasis:
+                type: string
+                enum: [normal, high, critical]
+                default: normal
+
+              # 内容块列表
+              blocks:
+                type: array
+                description: 内容块
+                items:
+                  type: object
+                  required: [text]
+                  properties:
+                    text:
+                      type: string
+                      description: 内容文本
+
+                    importance:
+                      type: string
+                      enum: [normal, high, critical]
+                      default: normal
+                      description: 重要性级别
+
+                    # 代码块专用
+                    language:
+                      type: string
+                      description: 代码语言（仅代码块）
+                      enum: [bash, python, javascript, typescript, java, go, rust, yaml, json, sql, other]
+
+                    # 列表项专用
+                    bullet_type:
+                      type: string
+                      enum: [disc, circle, square, number, check, cross]
+                      description: 列表符号类型
+
+                    # 嵌套内容
+                    nested:
+                      type: array
+                      description: 嵌套内容块
+                      items:
+                        type: object
+                        # 递归结构
+
+              # 区块级别的元数据
+              metadata:
+                type: object
+                properties:
+                  icon:
+                    type: string
+                    description: 区块图标（可选）
+                  background_emphasis:
+                    type: boolean
+                    description: 是否使用背景强调
+                  border_emphasis:
+                    type: boolean
+                    description: 是否使用边框强调
+
+        # 结论/总结
+        conclusion:
+          type: object
+          description: 结论（可选）
+          properties:
+            text:
+              type: string
+            emphasis:
+              type: string
+              enum: [normal, high]
+              default: normal
+
+        # 元数据
+        metadata:
+          type: object
+          description: 文章元数据
+          properties:
+            word_count:
+              type: integer
+            reading_time_minutes:
+              type: integer
+            sections_count:
+              type: integer
+            highlight_sections_count:
+              type: integer
+            code_blocks_count:
+              type: integer
+            extracted_at:
+              type: string
+              format: date-time
+
+    # 契约元数据
+    metadata:
+      type: object
+      properties:
+        extracted_at:
+          type: string
+          format: date-time
+        extracted_by:
+          type: string
+          default: "agent.media.structure_extractor"
+        source_format:
+          type: string
+        structure_version:
+          type: string
+          default: "1.0.0"
+
+# ===========================================
+# 区块类型定义
+# ===========================================
+section_types:
+  intro:
+    description: 导语区块
+    typical_use: 文章开头的引导性内容
+    style_hint: 简洁、引出主题
+
+  highlight:
+    description: 重点强调区块
+    typical_use: 核心观点、重要信息
+    style_hint: 使用背景色、边框强调
+
+  list:
+    description: 列表区块
+    typical_use: 条目式内容
+    style_hint: 清晰的列表符号
+
+  code:
+    description: 代码块
+    typical_use: 技术内容、命令示例
+    style_hint: 等宽字体、语法高亮
+
+  quote:
+    description: 引用区块
+    typical_use: 引用他人观点、强调内容
+    style_hint: 斜体、特殊边框
+
+  example:
+    description: 示例区块
+    typical_use: 具体案例、演示
+    style_hint: 可包含代码或文本
+
+  warning:
+    description: 警告/注意区块
+    typical_use: 注意事项、警告信息
+    style_hint: 警告色（黄/橙）
+
+  conclusion:
+    description: 结论区块
+    typical_use: 总结、行动号召
+    style_hint: 简洁、有力
+
+# ===========================================
+# 重要性级别定义
+# ===========================================
+importance_levels:
+  normal:
+    description: 普通内容
+    visual_hint: 默认样式
+
+  high:
+    description: 重要内容
+    visual_hint: 颜色强调、加粗
+
+  critical:
+    description: 关键内容
+    visual_hint: 背景色、边框、最大字号
+
+# ===========================================
+# 示例
+# ===========================================
+examples:
+  - name: 技术文章结构示例
+    input:
+      raw_content: |
+        # 另一个选择：wshobson/agents 生态
+
+        如果你不想用隐藏功能，还有一个更成熟的方案。
+
+        ## 规模惊人
+
+        这个生态有：
+        - 108 个专业代理
+        - 15 个工作流协调器
+
+        ## 安装方式
+
+        ```bash
+        /plugin marketplace add wshobson/agents
+        /plugin install python-development
+        ```
+      source_format: markdown
+
+    output:
+      article_structure:
+        title:
+          text: "另一个选择：wshobson/agents 生态"
+          level: h1
+          emphasis: high
+
+        intro:
+          text: "如果你不想用隐藏功能，还有一个更成熟的方案。"
+          emphasis: normal
+
+        sections:
+          - type: highlight
+            title: "规模惊人"
+            title_emphasis: high
+            metadata:
+              background_emphasis: true
+              border_emphasis: true
+            blocks:
+              - text: "108 个专业代理"
+                importance: high
+              - text: "15 个工作流协调器"
+                importance: high
+
+          - type: code
+            title: "安装方式"
+            blocks:
+              - text: "/plugin marketplace add wshobson/agents\n/plugin install python-development"
+                language: bash
+
+        metadata:
+          word_count: 45
+          reading_time_minutes: 1
+          sections_count: 2
+          highlight_sections_count: 1
+          code_blocks_count: 1

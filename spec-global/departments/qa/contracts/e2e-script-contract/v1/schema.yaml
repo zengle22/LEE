@@ -1,0 +1,505 @@
+# E2E Script Contract Schema v1.0
+# E2E 测试脚本契约标准
+
+kind: contract_schema
+version: 1.0
+
+schema:
+  type: object
+  required:
+    - script_type
+    - framework
+    - target_environment
+    - generated_files
+    - statistics
+
+  properties:
+    # ========== 基础标识 ==========
+    script_type:
+      type: string
+      enum: [e2e_test]
+      description: "脚本类型标识"
+
+    framework:
+      type: string
+      enum: [playwright]
+      description: "测试框架"
+
+    target_environment:
+      type: string
+      enum: [chrome]
+      description: "目标测试环境"
+
+    # ========== 生成文件清单 ==========
+    generated_files:
+      type: object
+      required: [test_specs]
+      properties:
+        test_specs:
+          type: array
+          description: "测试规格文件列表"
+          items:
+            type: object
+            required: [path, name, test_cases_count]
+            properties:
+              path:
+                type: string
+                description: "文件相对路径"
+                example: "tests/e2e/login.spec.ts"
+
+              name:
+                type: string
+                description: "测试规格名称"
+                example: "Login Test Suite"
+
+              test_cases_count:
+                type: integer
+                description: "包含的测试用例数量"
+                minimum: 1
+
+        page_objects:
+          type: array
+          description: "页面对象模型文件列表"
+          items:
+            type: object
+            required: [path, page_name]
+            properties:
+              path:
+                type: string
+                description: "页面对象文件路径"
+                example: "tests/pages/LoginPage.ts"
+
+              page_name:
+                type: string
+                description: "页面名称"
+                example: "LoginPage"
+
+        configs:
+          type: array
+          description: "配置文件列表"
+          items:
+            type: string
+          examples:
+            - "playwright.config.ts"
+            - "tests/.env.test"
+
+        test_data:
+          type: array
+          description: "测试数据文件列表"
+          items:
+            type: string
+          examples:
+            - "tests/data/users.json"
+            - "tests/data/scenarios.csv"
+
+        helpers:
+          type: array
+          description: "辅助工具文件列表"
+          items:
+            type: string
+          examples:
+            - "tests/helpers/selector-helper.ts"
+            - "tests/helpers/api-mock.ts"
+
+    # ========== 统计信息 ==========
+    statistics:
+      type: object
+      required: [total_files, total_test_cases]
+      properties:
+        total_files:
+          type: integer
+          description: "生成文件总数"
+          minimum: 1
+
+        total_test_cases:
+          type: integer
+          description: "测试用例总数"
+          minimum: 1
+
+        total_page_objects:
+          type: integer
+          description: "页面对象总数"
+          default: 0
+
+        lines_of_code:
+          type: integer
+          description: "代码总行数"
+          minimum: 0
+
+        estimated_execution_time:
+          type: string
+          description: "预估执行时间"
+          example: "5m 30s"
+
+    # ========== 质量指标 ==========
+    quality_metrics:
+      type: object
+      properties:
+        has_page_objects:
+          type: boolean
+          description: "是否使用页面对象模型"
+
+        has_assertions:
+          type: boolean
+          description: "所有测试是否包含断言"
+
+        has_error_handling:
+          type: boolean
+          description: "所有测试是否有错误处理"
+
+        selector_strategy:
+          type: string
+          enum: [data-testid, role, aria-label, css, xpath, hybrid]
+          description: "选择器策略"
+
+        selector_stability_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: "选择器稳定性评分（1.0 = 最稳定）"
+
+        code_coverage_estimate:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: "预估代码覆盖率（%）"
+
+        uses_data_driven:
+          type: boolean
+          description: "是否使用数据驱动测试"
+
+        has_accessibility_tests:
+          type: boolean
+          description: "是否包含可访问性测试"
+
+    # ========== 配置信息 ==========
+    configuration:
+      type: object
+      properties:
+        browser:
+          type: string
+          enum: [chromium, firefox, webkit]
+          description: "目标浏览器"
+          default: chromium
+
+        headless:
+          type: boolean
+          description: "是否无头模式运行"
+          default: true
+
+        base_url:
+          type: string
+          format: uri
+          description: "测试基础URL"
+          example: "http://localhost:3002"
+
+        timeout:
+          type: integer
+          description: "默认超时时间（毫秒）"
+          default: 30000
+
+        screenshot:
+          type: string
+          enum: [only-on-failure, always, never]
+          description: "截图策略"
+          default: only-on-failure
+
+        video:
+          type: string
+          enum: [retain-on-failure, on, off]
+          description: "视频录制策略"
+          default: retain-on-failure
+
+        retry:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+              description: "是否启用重试"
+            max_retries:
+              type: integer
+              description: "最大重试次数"
+              minimum: 0
+              maximum: 3
+
+    # ========== 追溯信息 ==========
+    traceability:
+      type: object
+      properties:
+        source_test_cases:
+          type: array
+          description: "源测试用例ID列表"
+          items:
+            type: string
+          examples:
+            - "F-BASE-002"
+            - "F-P1-001"
+
+        source_ui_contracts:
+          type: array
+          description: "源UI契约ID列表"
+          items:
+            type: string
+
+        requirements:
+          type: array
+          description: "关联需求ID列表"
+          items:
+            type: string
+          examples:
+            - "REQ-2026-001"
+            - "REQ-2026-005"
+
+    # ========== 元数据 ==========
+    metadata:
+      type: object
+      properties:
+        contract_id:
+          type: string
+          pattern: "^E2E-SCRIPT-[0-9]{8}-[0-9]{3}$"
+          description: "契约唯一标识"
+          example: "E2E-SCRIPT-20260204-001"
+
+        version:
+          type: string
+          pattern: "^\\d+\\.\\d+\\.\\d+$"
+          description: "契约版本"
+          example: "1.0.0"
+
+        generated_by:
+          type: string
+          description: "生成者（Agent名称）"
+          example: "agent.qa.e2e_script_generator"
+
+        generated_at:
+          type: string
+          format: date-time
+          description: "生成时间"
+
+        language:
+          type: string
+          enum: [typescript, javascript]
+          description: "编程语言"
+          default: typescript
+
+        description:
+          type: string
+          description: "脚本集描述"
+
+# ========== 验证规则 ==========
+validation_rules:
+  - rule: "must_have_page_objects"
+    description: "E2E测试必须使用页面对象模型"
+    check: "quality_metrics.has_page_objects == true"
+    error_message: "E2E测试脚本必须使用页面对象模型以提高可维护性"
+
+  - rule: "must_have_assertions"
+    description: "所有测试必须有断言"
+    check: "quality_metrics.has_assertions == true"
+    error_message: "测试用例必须包含断言，否则无法验证结果"
+
+  - rule: "preferred_selector_strategy"
+    description: "优先使用稳定的选择器"
+    check: "quality_metrics.selector_strategy IN ['data-testid', 'role', 'aria-label']"
+    warning_message: "建议使用 data-testid、role 或 aria-label 选择器以提高测试稳定性"
+
+  - rule: "reasonable_execution_time"
+    description: "预估执行时间应合理"
+    check: "statistics.estimated_execution_time <= '60m'"
+    warning_message: "预估执行时间过长，建议拆分测试套件"
+
+  - rule: "sufficient_code_coverage"
+    description: "代码覆盖率应达标"
+    check: "quality_metrics.code_coverage_estimate >= 80"
+    warning_message: "代码覆盖率低于80%，建议增加测试用例"
+
+# ========== 示例 ==========
+examples:
+  - name: "基础登录E2E脚本集"
+    data:
+      script_type: e2e_test
+      framework: playwright
+      target_environment: chrome
+
+      generated_files:
+        test_specs:
+          - path: "tests/e2e/login.spec.ts"
+            name: "Login Test Suite"
+            test_cases_count: 3
+
+          - path: "tests/e2e/runner-profile.spec.ts"
+            name: "Runner Profile Test Suite"
+            test_cases_count: 5
+
+        page_objects:
+          - path: "tests/pages/BasePage.ts"
+            page_name: "BasePage"
+
+          - path: "tests/pages/LoginPage.ts"
+            page_name: "LoginPage"
+
+          - path: "tests/pages/RunnerProfilePage.ts"
+            page_name: "RunnerProfilePage"
+
+        configs:
+          - "playwright.config.ts"
+          - "tests/.env.test"
+
+        test_data:
+          - "tests/data/valid-users.json"
+          - "tests/data/invalid-users.json"
+
+        helpers:
+          - "tests/helpers/selector-helper.ts"
+          - "tests/helpers/api-client.ts"
+
+      statistics:
+        total_files: 10
+        total_test_cases: 8
+        total_page_objects: 3
+        lines_of_code: 450
+        estimated_execution_time: "3m 45s"
+
+      quality_metrics:
+        has_page_objects: true
+        has_assertions: true
+        has_error_handling: true
+        selector_strategy: data-testid
+        selector_stability_score: 0.95
+        code_coverage_estimate: 85
+        uses_data_driven: true
+        has_accessibility_tests: false
+
+      configuration:
+        browser: chromium
+        headless: true
+        base_url: "http://localhost:3002"
+        timeout: 30000
+        screenshot: only-on-failure
+        video: retain-on-failure
+        retry:
+          enabled: true
+          max_retries: 2
+
+      traceability:
+        source_test_cases:
+          - "F-BASE-002"
+          - "F-P1-001"
+          - "F-P1-002"
+        requirements:
+          - "REQ-2026-001"
+          - "REQ-2026-005"
+
+      metadata:
+        contract_id: "E2E-SCRIPT-20260204-001"
+        version: "1.0.0"
+        generated_by: "agent.qa.e2e_script_generator"
+        generated_at: "2026-02-04T10:30:00Z"
+        language: typescript
+        description: "AI Marathon Coach 登录和跑者画像模块的E2E测试脚本"
+
+  - name: "完整用户路径E2E脚本集"
+    data:
+      script_type: e2e_test
+      framework: playwright
+      target_environment: chrome
+
+      generated_files:
+        test_specs:
+          - path: "tests/e2e/complete-journey.spec.ts"
+            name: "Complete User Journey"
+            test_cases_count: 12
+
+          - path: "tests/e2e/plan-generation.spec.ts"
+            name: "Plan Generation Tests"
+            test_cases_count: 8
+
+        page_objects:
+          - path: "tests/pages/BasePage.ts"
+            page_name: "BasePage"
+
+          - path: "tests/pages/LoginPage.ts"
+            page_name: "LoginPage"
+
+          - path: "tests/pages/RunnerProfilePage.ts"
+            page_name: "RunnerProfilePage"
+
+          - path: "tests/pages/RaceGoalPage.ts"
+            page_name: "RaceGoalPage"
+
+          - path: "tests/pages/PlanGenerationPage.ts"
+            page_name: "PlanGenerationPage"
+
+          - path: "tests/pages/PlanIntroPage.ts"
+            page_name: "PlanIntroPage"
+
+        configs:
+          - "playwright.config.ts"
+          - "tests/.env.test"
+          - "tsconfig.json"
+
+        test_data:
+          - "tests/data/users.json"
+          - "tests/data/race-goals.csv"
+          - "tests/data/training-plans.json"
+
+        helpers:
+          - "tests/helpers/selector-helper.ts"
+          - "tests/helpers/api-client.ts"
+          - "tests/helpers/test-data-builder.ts"
+
+      statistics:
+        total_files: 18
+        total_test_cases: 20
+        total_page_objects: 6
+        lines_of_code: 1200
+        estimated_execution_time: "12m 30s"
+
+      quality_metrics:
+        has_page_objects: true
+        has_assertions: true
+        has_error_handling: true
+        selector_strategy: hybrid
+        selector_stability_score: 0.88
+        code_coverage_estimate: 92
+        uses_data_driven: true
+        has_accessibility_tests: true
+
+      configuration:
+        browser: chromium
+        headless: false
+        base_url: "http://localhost:3002"
+        timeout: 60000
+        screenshot: always
+        video: on
+        retry:
+          enabled: true
+          max_retries: 1
+
+      traceability:
+        source_test_cases:
+          - "F-BASE-002"
+          - "F-P1-001"
+          - "F-P1-002"
+          - "F-P1-003"
+          - "F-P1-004"
+          - "F-P1-005"
+          - "Path-1"
+          - "Path-2"
+          - "Path-3"
+        source_ui_contracts:
+          - "UI-CONTRACT-LOGIN-001"
+          - "UI-CONTRACT-PROFILE-001"
+          - "UI-CONTRACT-PLAN-001"
+        requirements:
+          - "REQ-2026-001"
+          - "REQ-2026-005"
+          - "REQ-2026-010"
+
+      metadata:
+        contract_id: "E2E-SCRIPT-20260204-002"
+        version: "1.0.0"
+        generated_by: "agent.qa.e2e_script_generator"
+        generated_at: "2026-02-04T14:20:00Z"
+        language: typescript
+        description: "完整用户路径E2E测试：从登录到计划生成的全流程覆盖"

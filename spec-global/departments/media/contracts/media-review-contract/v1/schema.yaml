@@ -1,0 +1,242 @@
+# Media Review Contract
+# 媒体审核契约定义
+
+id: media-review-contract
+version: "1.0.0"
+
+metadata:
+  name: Media Review Contract
+  name_zh: 媒体审核契约
+  description: |
+    定义媒体内容审核的输入输出格式。
+    确保审核结果可验证、可追踪。
+
+# ===========================================
+# 输入契约
+# ===========================================
+input_schema:
+  type: object
+  required:
+    - formatted_content
+    - platform
+  properties:
+    formatted_content:
+      $ref: ../formatted-content-contract/v1/schema.yaml#/output_schema
+
+    platform:
+      type: string
+      enum: [wechat, xhs, notion, feishu, generic]
+
+    review_criteria:
+      type: array
+      description: 审核标准（可选，默认全部）
+      items:
+        type: string
+        enum:
+          - platform_compliance    # 平台合规性
+          - style_consistency     # 样式一致性
+          - content_completeness   # 内容完整性
+          - readability           # 可读性
+
+# ===========================================
+# 输出契约
+# ===========================================
+output_schema:
+  type: object
+  required:
+    - summary
+    - issues
+    - recommendation
+  properties:
+
+    # 审核摘要
+    summary:
+      type: object
+      required:
+        - total_issues
+        - by_severity
+        - pass_gate
+        - overall_score
+      properties:
+
+        total_issues:
+          type: integer
+          description: 问题总数
+
+        by_severity:
+          type: object
+          properties:
+            blocker:
+              type: integer
+              description: 阻断级问题
+            major:
+              type: integer
+              description: 严重问题
+            minor:
+              type: integer
+              description: 轻微问题
+            enhancement:
+              type: integer
+              description: 优化建议
+
+        pass_gate:
+          type: boolean
+          description: 是否通过门禁
+
+        overall_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: 综合评分
+
+    # 问题清单
+    issues:
+      type: array
+      description: 问题清单
+      items:
+        type: object
+        required:
+          - id
+          - severity
+          - category
+          - description
+          - recommendation
+        properties:
+
+          id:
+            type: string
+            pattern: "^MEDIA-[0-9]{3}$"
+            description: 问题编号
+
+          severity:
+            type: string
+            enum: [blocker, major, minor, enhancement]
+
+          category:
+            type: string
+            enum:
+              - platform_compliance
+              - style_consistency
+              - content_completeness
+              - readability
+
+          description:
+            type: string
+            description: 问题描述
+
+          location:
+            type: string
+            description: 问题位置
+
+          recommendation:
+            type: string
+            description: 修复建议
+
+          evidence:
+            type: object
+            properties:
+              snippet:
+                type: string
+              expected:
+                type: string
+              actual:
+                type: string
+
+    # 整体建议
+    recommendation:
+      type: object
+      properties:
+
+        decision:
+          type: string
+          enum: [approve, request_revision, reject]
+
+        must_fix:
+          type: array
+          items:
+            type: string
+          description: 必须修复
+
+        should_fix:
+          type: array
+          items:
+            type: string
+          description: 建议修复
+
+        nice_to_have:
+          type: array
+          items:
+            type: string
+          description: 可以优化
+
+        next_steps:
+          type: array
+          items:
+            type: string
+          description: 后续步骤
+
+    # 元数据
+    metadata:
+      type: object
+      properties:
+        reviewed_at:
+          type: string
+          format: date-time
+
+        reviewed_by:
+          type: string
+
+        platform:
+          type: string
+
+        review_duration_ms:
+          type: integer
+
+# ===========================================
+# 门禁规则
+# ===========================================
+gate_rules:
+  pass_criteria:
+    blocker: 0
+    major: 3
+    minor: null
+    enhancement: null
+
+  blocking_categories:
+    - platform_compliance
+
+# ===========================================
+# 示例
+# ===========================================
+examples:
+  - name: 公众号内容审核
+    input:
+      formatted_content:
+        formatted_content: "<h1>...</h1>"
+        metadata:
+          platform: wechat
+      platform: wechat
+
+    output:
+      summary:
+        total_issues: 2
+        by_severity:
+          blocker: 0
+          major: 1
+          minor: 1
+          enhancement: 0
+        pass_gate: true
+        overall_score: 85
+
+      issues:
+        - id: "MEDIA-001"
+          severity: major
+          category: style_consistency
+          description: "发现未在主题中定义的颜色 #123456"
+          recommendation: "使用主题文件中定义的颜色"
+
+      recommendation:
+        decision: approve
+        must_fix: []
+        should_fix: ["修复未定义的颜色"]
+        next_steps: ["内容可以发布"]

@@ -1,0 +1,236 @@
+# Layout Theme Contract
+# 排版主题契约定义
+
+id: layout-theme-contract
+version: "1.0.0"
+
+metadata:
+  name: Layout Theme Contract
+  name_zh: 排版主题契约
+  description: |
+    定义排版主题的结构和内容。
+    确保所有样式来自主题文件，而非 Agent 自由发挥。
+
+# ===========================================
+# 主题契约结构
+# ===========================================
+schema:
+  type: object
+  required:
+    - theme_id
+    - theme_name
+    - colors
+    - styles
+  properties:
+
+    # 基础标识
+    theme_id:
+      type: string
+      description: 主题唯一标识
+      pattern: "^theme\\.media\\.[a-z_]+$"
+
+    theme_name:
+      type: string
+      description: 主题名称
+
+    theme_name_zh:
+      type: string
+      description: 主题中文名称
+
+    version:
+      type: string
+      description: 主题版本
+      pattern: "^\\d+\\.\\d+\\.\\d+$"
+
+    # 平台兼容性
+    platform_compatibility:
+      type: object
+      description: 平台兼容性声明
+      properties:
+        wechat:
+          type: object
+          properties:
+            supported:
+              type: boolean
+            notes:
+              type: string
+        xhs:
+          type: object
+          properties:
+            supported:
+              type: boolean
+            notes:
+              type: string
+        notion:
+          type: object
+          properties:
+            supported:
+              type: boolean
+            notes:
+              type: string
+        feishu:
+          type: object
+          properties:
+            supported:
+              type: boolean
+            notes:
+              type: string
+
+    # 颜色定义（核心）
+    colors:
+      type: object
+      description: 颜色定义
+      required:
+        - primary
+        - text
+        - background
+        - border
+      properties:
+        primary:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+          description: 主色
+
+        text:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+          description: 文字颜色
+
+        background:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+          description: 背景颜色
+
+        border:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+          description: 边框颜色
+
+        # 可选颜色
+        code_background:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+
+        code_text:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+
+        quote_background:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+
+        quote_text:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+
+        emphasis_high:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+
+        emphasis_critical_bg:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+
+        emphasis_critical_text:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+
+    # 样式定义
+    styles:
+      type: object
+      description: 样式规则
+      properties:
+        heading:
+          type: object
+          properties:
+            h1:
+              type: object
+              properties:
+                color:
+                  type: string
+                font_size:
+                  type: string
+                font_weight:
+                  type: string
+
+        highlight_section:
+          type: object
+          properties:
+            background:
+              type: string
+            border_left:
+              type: string
+            padding:
+              type: string
+
+        code_block:
+          type: object
+          properties:
+            background:
+              type: string
+            border:
+              type: string
+
+    # 渲染模板（可选）
+    templates:
+      type: object
+      description: 渲染模板
+      properties:
+        h1:
+          type: string
+
+        highlight_section:
+          type: string
+
+        code_block:
+          type: string
+
+# ===========================================
+# 主题验证规则
+# ===========================================
+validation_rules:
+  colors:
+    - "所有颜色值必须是有效的 HEX 格式"
+    - "primary 颜色必须与其他颜色有足够对比度"
+    - "text 颜色与 background 颜色对比度 >= 4.5:1"
+
+  styles:
+    - "所有样式值必须是有效的 CSS 属性"
+    - "不允许使用外部 CSS 文件"
+    - "不允许使用 JavaScript"
+
+  platform_safety:
+    - "必须声明平台兼容性"
+    - "不支持的平台必须标注为 supported: false"
+
+# ===========================================
+# 示例
+# ===========================================
+examples:
+  - name: 红色主题示例
+    value:
+      theme_id: "theme.media.red"
+      theme_name: "Red Theme"
+      theme_name_zh: "红色强调主题"
+      version: "1.0.0"
+
+      platform_compatibility:
+        wechat:
+          supported: true
+          notes: "完全支持"
+        notion:
+          supported: false
+          notes: "不支持内联样式"
+
+      colors:
+        primary: "#ff4d4f"
+        text: "#262626"
+        background: "#fff1f0"
+        border: "#ff4d4f"
+
+      styles:
+        heading:
+          h1:
+            color: "#ff4d4f"
+            font_size: "24px"
+            font_weight: "bold"

@@ -1,0 +1,587 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-spec.example.com/contracts/branch-coverage-report/v1/schema.json",
+    "title": "Branch Coverage Report Contract Schema",
+    "description": "Schema for branch coverage analysis and test case design based on user flows",
+    "type": "object",
+    "required": [
+        "contract_type",
+        "contract_version",
+        "metadata",
+        "analysis_report"
+    ],
+    "properties": {
+        "contract_type": {
+            "type": "string",
+            "const": "branch-coverage-report"
+        },
+        "contract_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [
+                "contract_id",
+                "product_name",
+                "created_date",
+                "status",
+                "created_by"
+            ],
+            "properties": {
+                "contract_id": {
+                    "type": "string",
+                    "pattern": "^BCR-\\d{8}-\\d{3}$",
+                    "description": "Unique branch coverage report ID (e.g., BCR-20260204-001)"
+                },
+                "product_name": {
+                    "type": "string",
+                    "description": "Product or feature name being analyzed"
+                },
+                "version": {
+                    "type": "string",
+                    "description": "Report version"
+                },
+                "created_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "ISO 8601 timestamp when report was created"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "DRAFT",
+                        "READY_FOR_REVIEW",
+                        "APPROVED",
+                        "DEPRECATED"
+                    ],
+                    "description": "Current status of the report"
+                },
+                "created_by": {
+                    "type": "string",
+                    "description": "Agent or human who created the report"
+                },
+                "source_test_cases": {
+                    "type": "string",
+                    "description": "Reference to the source test case contract"
+                }
+            }
+        },
+        "analysis_report": {
+            "type": "object",
+            "required": [
+                "decision_points",
+                "coverage_report"
+            ],
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "High-level summary of branch coverage analysis"
+                },
+                "decision_points": {
+                    "type": "array",
+                    "description": "List of all identified decision points",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "decision_point_id",
+                            "type",
+                            "description",
+                            "feature_id",
+                            "branches"
+                        ],
+                        "properties": {
+                            "decision_point_id": {
+                                "type": "string",
+                                "pattern": "^DP-\\d{4}$",
+                                "description": "Unique decision point ID (e.g., DP-0001)"
+                            },
+                            "type": {
+                                "type": "string",
+                                "enum": [
+                                    "conditional",
+                                    "loop",
+                                    "switch",
+                                    "exception",
+                                    "state_machine",
+                                    "complex_condition"
+                                ],
+                                "description": "Type of decision point"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Description of the decision point"
+                            },
+                            "feature_id": {
+                                "type": "string",
+                                "description": "Reference to the feature ID"
+                            },
+                            "feature_name": {
+                                "type": "string",
+                                "description": "Name of the feature"
+                            },
+                            "user_flow_id": {
+                                "type": "string",
+                                "description": "Reference to the user flow ID"
+                            },
+                            "location": {
+                                "type": "string",
+                                "description": "Location in the flow (e.g., 'Step 3: Login validation')"
+                            },
+                            "priority": {
+                                "type": "string",
+                                "enum": [
+                                    "P0",
+                                    "P1",
+                                    "P2"
+                                ],
+                                "description": "Priority level"
+                            },
+                            "branches": {
+                                "type": "array",
+                                "description": "List of all possible branches",
+                                "items": {
+                                    "type": "object",
+                                    "required": [
+                                        "branch_id",
+                                        "description"
+                                    ],
+                                    "properties": {
+                                        "branch_id": {
+                                            "type": "string",
+                                            "pattern": "^B-\\d{4}$",
+                                            "description": "Unique branch ID (e.g., B-0001)"
+                                        },
+                                        "description": {
+                                            "type": "string",
+                                            "description": "Description of the branch path"
+                                        },
+                                        "path_condition": {
+                                            "type": "string",
+                                            "description": "Condition that triggers this branch"
+                                        },
+                                        "expected_outcome": {
+                                            "type": "string",
+                                            "description": "Expected outcome when this branch is taken"
+                                        },
+                                        "risk_level": {
+                                            "type": "string",
+                                            "enum": [
+                                                "critical",
+                                                "high",
+                                                "medium",
+                                                "low"
+                                            ],
+                                            "description": "Risk level if this branch is not tested"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "test_cases": {
+                    "type": "array",
+                    "description": "Branch test cases",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "test_case_id",
+                            "title",
+                            "covered_branches",
+                            "steps"
+                        ],
+                        "properties": {
+                            "test_case_id": {
+                                "type": "string",
+                                "pattern": "^BTC-\\d{4}$",
+                                "description": "Unique branch test case ID (e.g., BTC-0001)"
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "Test case title"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Detailed description of the test case"
+                            },
+                            "covered_branches": {
+                                "type": "array",
+                                "description": "List of branch IDs covered by this test case",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "decision_point_id": {
+                                "type": "string",
+                                "description": "Reference to the decision point ID"
+                            },
+                            "priority": {
+                                "type": "string",
+                                "enum": [
+                                    "P0",
+                                    "P1",
+                                    "P2"
+                                ],
+                                "description": "Priority level"
+                            },
+                            "preconditions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Conditions that must be met before test execution"
+                            },
+                            "test_data": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "value": {},
+                                        "description": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "description": "Test data required for execution"
+                            },
+                            "steps": {
+                                "type": "array",
+                                "description": "Test execution steps",
+                                "items": {
+                                    "type": "object",
+                                    "required": [
+                                        "step_number",
+                                        "action",
+                                        "expected_result"
+                                    ],
+                                    "properties": {
+                                        "step_number": {
+                                            "type": "integer",
+                                            "minimum": 1
+                                        },
+                                        "action": {
+                                            "type": "string",
+                                            "description": "Action to perform"
+                                        },
+                                        "expected_result": {
+                                            "type": "string",
+                                            "description": "Expected result after this step"
+                                        }
+                                    }
+                                }
+                            },
+                            "expected_result": {
+                                "type": "string",
+                                "description": "Overall expected result of the test case"
+                            },
+                            "postconditions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "State verification after test execution"
+                            }
+                        }
+                    }
+                },
+                "coverage_matrix": {
+                    "type": "array",
+                    "description": "Mapping of decision points and branches to test coverage",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "decision_point_id": {
+                                "type": "string"
+                            },
+                            "decision_point_type": {
+                                "type": "string"
+                            },
+                            "total_branches": {
+                                "type": "integer",
+                                "minimum": 1
+                            },
+                            "covered_branches": {
+                                "type": "integer",
+                                "minimum": 0
+                            },
+                            "uncovered_branches": {
+                                "type": "integer",
+                                "minimum": 0
+                            },
+                            "coverage_percentage": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                            },
+                            "test_cases": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "List of test case IDs covering this decision point"
+                            }
+                        }
+                    }
+                },
+                "coverage_report": {
+                    "type": "object",
+                    "required": [
+                        "total_decision_points",
+                        "total_branches",
+                        "covered_branches",
+                        "coverage_percentage"
+                    ],
+                    "properties": {
+                        "total_decision_points": {
+                            "type": "integer",
+                            "description": "Total number of decision points identified"
+                        },
+                        "total_branches": {
+                            "type": "integer",
+                            "description": "Total number of branches across all decision points"
+                        },
+                        "covered_branches": {
+                            "type": "integer",
+                            "description": "Number of branches with test coverage"
+                        },
+                        "uncovered_branches": {
+                            "type": "integer",
+                            "description": "Number of branches without test coverage"
+                        },
+                        "coverage_percentage": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "description": "Overall branch coverage percentage"
+                        },
+                        "coverage_by_priority": {
+                            "type": "object",
+                            "properties": {
+                                "P0": {
+                                    "type": "object",
+                                    "properties": {
+                                        "total_branches": {
+                                            "type": "integer"
+                                        },
+                                        "covered_branches": {
+                                            "type": "integer"
+                                        },
+                                        "coverage_percentage": {
+                                            "type": "number"
+                                        }
+                                    }
+                                },
+                                "P1": {
+                                    "type": "object",
+                                    "properties": {
+                                        "total_branches": {
+                                            "type": "integer"
+                                        },
+                                        "covered_branches": {
+                                            "type": "integer"
+                                        },
+                                        "coverage_percentage": {
+                                            "type": "number"
+                                        }
+                                    }
+                                },
+                                "P2": {
+                                    "type": "object",
+                                    "properties": {
+                                        "total_branches": {
+                                            "type": "integer"
+                                        },
+                                        "covered_branches": {
+                                            "type": "integer"
+                                        },
+                                        "coverage_percentage": {
+                                            "type": "number"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "coverage_by_type": {
+                            "type": "object",
+                            "properties": {
+                                "conditional": {
+                                    "type": "object",
+                                    "properties": {
+                                        "total_branches": {
+                                            "type": "integer"
+                                        },
+                                        "covered_branches": {
+                                            "type": "integer"
+                                        },
+                                        "coverage_percentage": {
+                                            "type": "number"
+                                        }
+                                    }
+                                },
+                                "loop": {
+                                    "type": "object",
+                                    "properties": {
+                                        "total_branches": {
+                                            "type": "integer"
+                                        },
+                                        "covered_branches": {
+                                            "type": "integer"
+                                        },
+                                        "coverage_percentage": {
+                                            "type": "number"
+                                        }
+                                    }
+                                },
+                                "switch": {
+                                    "type": "object",
+                                    "properties": {
+                                        "total_branches": {
+                                            "type": "integer"
+                                        },
+                                        "covered_branches": {
+                                            "type": "integer"
+                                        },
+                                        "coverage_percentage": {
+                                            "type": "number"
+                                        }
+                                    }
+                                },
+                                "exception": {
+                                    "type": "object",
+                                    "properties": {
+                                        "total_branches": {
+                                            "type": "integer"
+                                        },
+                                        "covered_branches": {
+                                            "type": "integer"
+                                        },
+                                        "coverage_percentage": {
+                                            "type": "number"
+                                        }
+                                    }
+                                },
+                                "state_machine": {
+                                    "type": "object",
+                                    "properties": {
+                                        "total_branches": {
+                                            "type": "integer"
+                                        },
+                                        "covered_branches": {
+                                            "type": "integer"
+                                        },
+                                        "coverage_percentage": {
+                                            "type": "number"
+                                        }
+                                    }
+                                },
+                                "complex_condition": {
+                                    "type": "object",
+                                    "properties": {
+                                        "total_branches": {
+                                            "type": "integer"
+                                        },
+                                        "covered_branches": {
+                                            "type": "integer"
+                                        },
+                                        "coverage_percentage": {
+                                            "type": "number"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "gaps": {
+                    "type": "array",
+                    "description": "List of coverage gaps",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "gap_id": {
+                                "type": "string",
+                                "pattern": "^GAP-\\d{4}$"
+                            },
+                            "branch_id": {
+                                "type": "string"
+                            },
+                            "decision_point_id": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            },
+                            "risk_level": {
+                                "type": "string",
+                                "enum": [
+                                    "critical",
+                                    "high",
+                                    "medium",
+                                    "low"
+                                ]
+                            },
+                            "recommendation": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "recommendations": {
+                    "type": "array",
+                    "description": "Recommendations for improving coverage",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "priority": {
+                                "type": "string",
+                                "enum": [
+                                    "high",
+                                    "medium",
+                                    "low"
+                                ]
+                            },
+                            "description": {
+                                "type": "string"
+                            },
+                            "action_items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "approval_record": {
+            "type": "object",
+            "description": "Report approval information",
+            "properties": {
+                "reviewer": {
+                    "type": "string",
+                    "description": "Person who reviewed the report"
+                },
+                "review_date": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "approval_status": {
+                    "type": "string",
+                    "enum": [
+                        "APPROVED",
+                        "CONDITIONAL",
+                        "REJECTED"
+                    ]
+                },
+                "comments": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,139 @@
+# Diagram Opportunity Contract v1.0
+# 图表机会识别契约 - 定义文章中"哪里需要结构图"
+
+kind: contract
+version: 1.0
+
+id: contract.media.diagram_opportunity
+name: Diagram Opportunity Contract
+description: >
+  定义文章中需要插入结构图的机会点。
+  由 Structure Analysis Agent 生成，是认知判断层（非绘图层）。
+
+input_schema:
+  type: object
+  required:
+    - article_md
+  properties:
+    article_md:
+      type: string
+      description: 原始文章 Markdown 内容
+      format: markdown
+
+output_schema:
+  type: object
+  required:
+    - diagram_opportunities
+    - analysis_summary
+  properties:
+    diagram_opportunities:
+      type: array
+      description: 识别出的图表机会列表
+      items:
+        type: object
+        required:
+          - id
+          - location
+          - reason
+          - intent
+          - confidence
+        properties:
+          id:
+            type: string
+            description: 机会点唯一标识
+            example: "opp_001"
+          
+          location:
+            type: object
+            description: 图表插入位置
+            oneOf:
+              - type: object
+                properties:
+                  after_paragraph:
+                    type: integer
+                    description: 在第N段之后插入
+                    minimum: 1
+              - type: object
+                properties:
+                  after_heading:
+                    type: string
+                    description: 在指定标题之后插入
+          
+          reason:
+            type: string
+            description: >
+              为什么这里需要图？
+              基于内容特征的分析说明
+            example: "连续出现'系统/Agent/治理/决策/验证'等抽象概念"
+          
+          intent:
+            type: string
+            description: >
+              图表意图类型（机器可读标签）
+              用于后续 Diagram Planner 选择图表类型
+            enum:
+              - governance_loop      # 治理闭环
+              - execution_pipeline   # 执行流程
+              - system_architecture  # 系统架构
+              - decision_tree        # 决策树
+              - comparison_matrix    # 对比矩阵
+              - hierarchy            # 层级结构
+              - workflow             # 工作流
+              - state_machine        # 状态机
+              - data_flow            # 数据流
+              - concept_map          # 概念地图
+            example: "governance_loop"
+          
+          confidence:
+            type: string
+            description: 信心等级
+            enum: [high, medium, low]
+            example: "high"
+          
+          suggested_complexity:
+            type: string
+            description: 建议图表复杂度
+            enum: [simple, moderate, complex]
+            default: moderate
+    
+    analysis_summary:
+      type: object
+      description: 分析摘要
+      properties:
+        total_opportunities:
+          type: integer
+          description: 识别出的机会总数
+        high_confidence_count:
+          type: integer
+          description: 高信心机会数
+        reasoning:
+          type: string
+          description: 整体分析思路说明
+
+# 约束规则
+constraints:
+  - id: no_case_story_insertion
+    description: 不得在案例叙述/情绪段落中插图
+    severity: error
+    condition: >
+      NOT (location matches "案例" OR location matches "故事" OR 
+           location matches "感受" OR location matches "情绪")
+  
+  - id: avoid_dense_regions
+    description: 避免在已有图表的4段内再插图
+    severity: warning
+    condition: >
+      For each opportunity, distance to nearest other opportunity >= 4 paragraphs
+
+# 使用提示
+usage_notes: |
+  本契约输出的是「认知判断」，不是「图表本身」。
+  
+  Agent 职责边界：
+  - ✅ 可以判断：是否需要图、图的作用、图的位置
+  - ❌ 禁止决定：用什么颜色、节点布局、视觉样式
+  
+  Human Gate 检查点：
+  1. 这个位置真的需要图吗？
+  2. 图会抢了文字的风头吗？
+  3. 如果删除这张图，文章会损失什么？

@@ -1,0 +1,244 @@
+# Formatted Content Contract
+# 格式化内容契约定义
+
+id: formatted-content-contract
+version: "1.0.0"
+
+metadata:
+  name: Formatted Content Contract
+  name_zh: 格式化内容契约
+  description: |
+    定义格式化后的内容结构。
+    这是排版 Agent 的输出契约。
+
+# ===========================================
+# 输入契约
+# ===========================================
+input_schema:
+  type: object
+  required:
+    - article_structure
+    - theme_config
+    - platform
+  properties:
+    article_structure:
+      $ref: ../article-structure-contract/v1/schema.yaml#/output_schema/properties/article_structure
+
+    theme_config:
+      type: object
+      required: [theme_name]
+      properties:
+        theme_name:
+          type: string
+          enum: [red, blue, minimal, custom]
+        custom_theme:
+          type: object
+
+    platform:
+      type: string
+      enum: [wechat, xhs, notion, feishu, generic]
+
+# ===========================================
+# 输出契约
+# ===========================================
+output_schema:
+  type: object
+  required:
+    - formatted_content
+    - metadata
+  properties:
+
+    # 格式化内容
+    formatted_content:
+      type: string
+      description: |
+        Markdown with inline HTML 格式的内容。
+        可直接粘贴到目标平台。
+
+      # 根据平台有不同的格式要求
+      format_requirements:
+        wechat:
+          description: "微信公众号格式"
+          allowed_tags: [div, span, p, h1, h2, h3, strong, em, blockquote, pre, code]
+          max_inline_style_length: 1000
+
+        xhs:
+          description: "小红书格式"
+          allowed_tags: [div, span, p, h1, h2, h3, strong, em, blockquote]
+          class_names_allowed: false
+
+        notion:
+          description: "Notion 格式"
+          format: pure_markdown
+          html_support: false
+
+        feishu:
+          description: "飞书格式"
+          allowed_tags: [div, span, p, h1, h2, h3, strong, em, blockquote, hr]
+
+        generic:
+          description: "通用格式"
+          allowed_tags: [div, span, p, h1, h2, h3, h4, h5, h6, strong, em, blockquote, pre, code, ul, ol, li, hr, br]
+
+    # 元数据
+    metadata:
+      type: object
+      required: [theme_used, platform, generated_at]
+      properties:
+
+        # 使用的主题
+        theme_used:
+          type: string
+          description: 使用的主题名称
+
+        # 目标平台
+        platform:
+          type: string
+          description: 目标平台
+
+        # 生成时间
+        generated_at:
+          type: string
+          format: date-time
+
+        # 生成者
+        generated_by:
+          type: string
+          default: "agent.media.readable_color_layout"
+
+        # 内容统计
+        stats:
+          type: object
+          properties:
+            character_count:
+              type: integer
+              description: 字符数
+
+            word_count:
+              type: integer
+              description: 词数
+
+            sections_count:
+              type: integer
+              description: 区块数量
+
+            highlight_blocks_count:
+              type: integer
+              description: 强调区块数量
+
+            code_blocks_count:
+              type: integer
+              description: 代码块数量
+
+            html_tags_count:
+              type: integer
+              description: HTML 标签数量
+
+        # 使用的颜色统计
+        colors_used:
+          type: object
+          description: 实际使用的颜色
+          properties:
+            primary:
+              type: string
+              description: 主色值
+
+            background:
+              type: string
+              description: 背景色值
+
+            accent_count:
+              type: integer
+              description: 强调色使用次数
+
+        # 平台合规性
+        platform_compliance:
+          type: object
+          properties:
+            passed:
+              type: boolean
+              description: 是否通过平台安全检查
+
+            violations:
+              type: array
+              description: 违规项（如果有）
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [forbidden_tag, excessive_style, class_name]
+                  description:
+                    type: string
+                  location:
+                    type: string
+
+# ===========================================
+# 质量标准
+# ===========================================
+quality_standards:
+  # 一致性要求
+  consistency:
+    - "同一内容多次渲染结果完全一致"
+    - "所有颜色来自主题文件"
+    - "区块类型映射一致"
+
+  # 平台安全要求
+  platform_safety:
+    - "只使用平台允许的 HTML 标签"
+    - "内联样式长度不超过限制"
+    - "不包含外部资源引用"
+    - "不包含 JavaScript"
+
+  # 可读性要求
+  readability:
+    - "标题层级清晰"
+    - "重点内容有视觉强调"
+    - "代码块可读性好"
+    - "间距合理"
+
+# ===========================================
+# 示例
+# ===========================================
+examples:
+  - name: 公众号红色主题输出
+    input:
+      article_structure:
+        title:
+          text: "测试标题"
+          level: h1
+        sections:
+          - type: highlight
+            title: "重点"
+            blocks:
+              - text: "内容"
+                importance: high
+      theme_config:
+        theme_name: red
+      platform: wechat
+
+    output:
+      formatted_content: |
+        <h1 style="color:#ff4d4f;font-size:24px;font-weight:bold;background:rounded;padding:12px 16px;margin-bottom:16px;border-radius:8px">测试标题</h1>
+
+        <div style="background:#fff1f0;border-left:4px solid #ff4d4f;padding:12px 16px;margin:16px 0;border-radius:4px">
+        <p style="color:#cf1322;font-weight:bold;font-size:16px;margin-bottom:8px">重点</p>
+        <p style="color:#fa541c;margin:8px 0;font-size:14px">● <span style="color:#262626">内容</span></p>
+        </div>
+
+      metadata:
+        theme_used: red
+        platform: wechat
+        generated_at: "2025-01-15T10:30:00Z"
+        stats:
+          character_count: 150
+          sections_count: 1
+          highlight_blocks_count: 1
+          html_tags_count: 4
+        colors_used:
+          primary: "#ff4d4f"
+          background: "#fff1f0"
+          accent_count: 3
+        platform_compliance:
+          passed: true
+          violations: []

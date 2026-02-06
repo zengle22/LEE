@@ -1,0 +1,898 @@
+# Test Case Design Contract Schema v1.0
+# 测试用例设计契约标准
+
+kind: contract_schema
+version: 1.0
+
+schema:
+  type: object
+  required:
+    - design_phase
+    - alignment_report
+    - feature_mapping
+    - test_cases
+
+  properties:
+    # ========== 设计阶段 ==========
+    design_phase:
+      type: string
+      enum:
+        - requirement_alignment    # 需求对齐阶段
+        - feature_calibration      # 功能点校准阶段
+        - branch_coverage          # 分支覆盖阶段
+        - specialized_test         # 专项测试阶段
+        - review                   # 评审阶段
+        - completed                # 设计完成
+      description: |
+        当前设计阶段
+        - requirement_alignment: 需求对齐，验证PRD与架构/UI的一致性
+        - feature_calibration: 功能点校准，建立PRD到实现的映射
+        - branch_coverage: 分支覆盖，确保逻辑分支完整
+        - specialized_test: 专项测试，性能/安全/兼容性等
+        - review: 设计评审
+        - completed: 设计完成
+
+    # ========== 需求对齐报告 ==========
+    alignment_report:
+      type: object
+      description: "需求对齐阶段产出：验证PRD与架构/UI的一致性"
+      required:
+        - prd_architecture_aligned
+        - prd_ui_aligned
+        - conflicts
+
+      properties:
+        prd_architecture_aligned:
+          type: boolean
+          description: "PRD功能点是否全部有对应的架构组件支持"
+
+        prd_ui_aligned:
+          type: boolean
+          description: "PRD功能点是否全部有对应的UI页面支持"
+
+        alignment_timestamp:
+          type: string
+          format: date-time
+          description: "对齐检查时间戳"
+
+        conflicts:
+          type: array
+          description: "冲突列表"
+          items:
+            type: object
+            required:
+              - severity
+              - description
+              - source
+
+            properties:
+              severity:
+                type: string
+                enum: [BLOCKER, CRITICAL, MAJOR, MINOR]
+                description: |
+                  冲突严重程度
+                  - BLOCKER: 阻塞性冲突，无法继续设计
+                  - CRITICAL: 严重冲突，影响核心功能
+                  - MAJOR: 重要冲突，影响主要功能
+                  - MINOR: 次要冲突，可后续优化
+
+              description:
+                type: string
+                description: "冲突描述"
+
+              source:
+                type: string
+                description: "冲突来源（PRD/架构/UI）"
+
+              affected_requirements:
+                type: array
+                items:
+                  type: string
+                description: "受影响的需求ID列表"
+
+              resolution:
+                type: string
+                description: "解决方案"
+
+              status:
+                type: string
+                enum: [pending, resolved, deferred]
+                description: "解决状态"
+
+        alignment_summary:
+          type: object
+          description: "对齐总结"
+          properties:
+            total_requirements:
+              type: integer
+              description: "PRD需求总数"
+
+            aligned_requirements:
+              type: integer
+              description: "已对齐需求数"
+
+            architecture_coverage_rate:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 100
+              description: "架构覆盖率（百分比）"
+
+            ui_coverage_rate:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 100
+              description: "UI覆盖率（百分比）"
+
+    # ========== 功能点映射矩阵 ==========
+    feature_mapping:
+      type: object
+      description: "功能点校准阶段产出：建立PRD到实现的映射关系"
+      required:
+        - prd_to_ui
+        - prd_to_architecture
+        - coverage_matrix
+
+      properties:
+        prd_to_ui:
+          type: array
+          description: "PRD功能点到UI页面的映射"
+          items:
+            type: object
+            required:
+              - prd_feature_id
+              - prd_feature_name
+              - ui_page_path
+
+            properties:
+              prd_feature_id:
+                type: string
+                description: "PRD功能点ID"
+
+              prd_feature_name:
+                type: string
+                description: "PRD功能点名称"
+
+              ui_page_path:
+                type: string
+                description: "UI页面路径"
+
+              ui_components:
+                type: array
+                items:
+                  type: string
+                description: "涉及的UI组件"
+
+              coverage_status:
+                type: string
+                enum: [full, partial, none]
+                description: "覆盖状态"
+
+              notes:
+                type: string
+                description: "备注说明"
+
+        prd_to_architecture:
+          type: array
+          description: "PRD功能点到架构组件的映射"
+          items:
+            type: object
+            required:
+              - prd_feature_id
+              - prd_feature_name
+              - architecture_component
+
+            properties:
+              prd_feature_id:
+                type: string
+                description: "PRD功能点ID"
+
+              prd_feature_name:
+                type: string
+                description: "PRD功能点名称"
+
+              architecture_component:
+                type: string
+                description: "架构组件名称"
+
+              service_module:
+                type: string
+                description: "服务模块"
+
+              api_endpoints:
+                type: array
+                items:
+                  type: string
+                description: "涉及的API端点"
+
+              data_entities:
+                type: array
+                items:
+                  type: string
+                description: "涉及的数据实体"
+
+              coverage_status:
+                type: string
+                enum: [full, partial, none]
+                description: "覆盖状态"
+
+        coverage_matrix:
+          type: object
+          description: "覆盖率矩阵"
+          properties:
+            feature_coverage:
+              type: object
+              description: "功能覆盖率统计"
+              additionalProperties:
+                type: number
+                format: float
+                minimum: 0
+                maximum: 100
+              example:
+                login: 100
+                runner_profile: 95
+                training_plan: 80
+
+            module_coverage:
+              type: object
+              description: "模块覆盖率统计"
+              additionalProperties:
+                type: number
+                format: float
+              example:
+                frontend: 90
+                backend: 95
+                database: 85
+
+            risk_areas:
+              type: array
+              description: "风险区域（覆盖率低于阈值的功能）"
+              items:
+                type: object
+                properties:
+                  feature_id:
+                    type: string
+
+                  feature_name:
+                    type: string
+
+                  coverage_rate:
+                    type: number
+
+                  risk_level:
+                    type: string
+                    enum: [high, medium, low]
+
+                  recommendation:
+                    type: string
+
+    # ========== 测试用例列表 ==========
+    test_cases:
+      type: array
+      description: "测试用例列表，引用test-case契约定义"
+      items:
+        $ref: "../../test-case/v1/schema.yaml"
+
+    # ========== 分支覆盖报告 ==========
+    branch_coverage:
+      type: object
+      description: "分支覆盖阶段产出：确保逻辑分支测试完整"
+      required:
+        - decision_points
+        - covered_branches
+        - total_branches
+        - coverage_percentage
+
+      properties:
+        decision_points:
+          type: array
+          description: "决策点列表"
+          items:
+            type: object
+            required:
+              - point_id
+              - location
+              - condition
+
+            properties:
+              point_id:
+                type: string
+                description: "决策点ID"
+
+              location:
+                type: string
+                description: "位置（文件:行号）"
+
+              condition:
+                type: string
+                description: "条件表达式"
+
+              branches:
+                type: array
+                description: "分支列表"
+                items:
+                  type: object
+                  properties:
+                    branch_id:
+                      type: string
+
+                    description:
+                      type: string
+
+                    covered:
+                      type: boolean
+
+                    test_case_id:
+                      type: string
+                      description: "覆盖该分支的测试用例ID"
+
+        covered_branches:
+          type: integer
+          minimum: 0
+          description: "已覆盖的分支数"
+
+        total_branches:
+          type: integer
+          minimum: 0
+          description: "总分支数"
+
+        coverage_percentage:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: "分支覆盖率（百分比）"
+
+        uncovered_branches:
+          type: array
+          description: "未覆盖的分支列表"
+          items:
+            type: object
+            properties:
+              point_id:
+                type: string
+
+              branch_id:
+                type: string
+
+              reason:
+                type: string
+                description: "未覆盖原因"
+
+              action_required:
+                type: string
+                enum: [add_test_case, defer, ignore]
+                description: "需要的动作"
+
+        coverage_targets:
+          type: object
+          description: "覆盖目标"
+          properties:
+            target_percentage:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 100
+              description: "目标覆盖率"
+
+            target_met:
+              type: boolean
+              description: "是否达标"
+
+            gap:
+              type: number
+              format: float
+              description: "差距"
+
+    # ========== 专项测试设计 ==========
+    specialized_tests:
+      type: object
+      description: "专项测试阶段产出：性能/安全/兼容性等专项测试"
+      properties:
+        performance_tests:
+          type: array
+          description: "性能测试设计"
+          items:
+            type: object
+            properties:
+              test_id:
+                type: string
+
+              scenario:
+                type: string
+                description: "测试场景"
+
+              metrics:
+                type: array
+                description: "性能指标"
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+
+                    target_value:
+                      type: number
+
+                    unit:
+                      type: string
+
+              test_case_id:
+                type: string
+                description: "关联的测试用例ID"
+
+        security_tests:
+          type: array
+          description: "安全测试设计"
+          items:
+            type: object
+            properties:
+              test_id:
+                type: string
+
+              vulnerability_type:
+                type: string
+                description: "漏洞类型"
+
+              test_method:
+                type: string
+                description: "测试方法"
+
+              test_case_id:
+                type: string
+
+        compatibility_tests:
+          type: array
+          description: "兼容性测试设计"
+          items:
+            type: object
+            properties:
+              test_id:
+                type: string
+
+              platform:
+                type: string
+
+              browser:
+                type: string
+
+              version:
+                type: string
+
+              test_case_id:
+                type: string
+
+    # ========== 设计评审 ==========
+    review_report:
+      type: object
+      description: "设计评审报告"
+      properties:
+        reviewed_by:
+          type: array
+          items:
+            type: string
+          description: "评审人员"
+
+        review_date:
+          type: string
+          format: date-time
+          description: "评审日期"
+
+        review_comments:
+          type: array
+          description: "评审意见"
+          items:
+            type: object
+            properties:
+              reviewer:
+                type: string
+
+              category:
+                type: string
+                enum: [completeness, correctness, consistency, clarity, traceability]
+
+              comment:
+                type: string
+
+              severity:
+                type: string
+                enum: [must_fix, should_fix, nice_to_have]
+
+              status:
+                type: string
+                enum: [open, resolved, deferred]
+
+        review_result:
+          type: string
+          enum: [approved, conditionally_approved, rejected]
+          description: "评审结果"
+
+        next_steps:
+          type: array
+          items:
+            type: string
+          description: "下一步行动"
+
+    # ========== 元数据 ==========
+    metadata:
+      type: object
+      description: "元数据"
+      properties:
+        design_id:
+          type: string
+          description: "设计ID"
+
+        project_id:
+          type: string
+          description: "项目ID"
+
+        version:
+          type: string
+          description: "版本号"
+
+        created_by:
+          type: string
+          description: "创建者"
+
+        created_at:
+          type: string
+          format: date-time
+          description: "创建时间"
+
+        updated_by:
+          type: string
+          description: "更新者"
+
+        updated_at:
+          type: string
+          format: date-time
+          description: "最后更新时间"
+
+        phase_history:
+          type: array
+          description: "阶段历史记录"
+          items:
+            type: object
+            properties:
+              phase:
+                type: string
+
+              entered_at:
+                type: string
+                format: date-time
+
+              duration_minutes:
+                type: integer
+
+              actor:
+                type: string
+
+              notes:
+                type: string
+
+# ========== 验证规则 ==========
+validation_rules:
+  - rule: "phase_transition_order"
+    description: "设计阶段必须按顺序转换"
+    check: |
+      phase_order = [
+        'requirement_alignment',
+        'feature_calibration',
+        'branch_coverage',
+        'specialized_test',
+        'review',
+        'completed'
+      ]
+      current_phase_index = phase_order.index(design_phase)
+      # 验证所有前置阶段已完成
+
+  - rule: "alignment_required_before_calibration"
+    description: "功能点校准前必须完成需求对齐"
+    check: "IF design_phase IN ['feature_calibration', 'branch_coverage', 'specialized_test', 'review', 'completed'] THEN alignment_report.prd_architecture_aligned == true AND alignment_report.prd_ui_aligned == true"
+    error_message: "需求对齐未完成，无法进入功能点校准阶段"
+
+  - rule: "no_blocker_conflicts"
+    description: "不能有未解决的阻塞性冲突"
+    check: "NOT ANY(conflicts WHERE severity == 'BLOCKER' AND status != 'resolved')"
+    error_message: "存在未解决的阻塞性冲突"
+
+  - rule: "coverage_threshold"
+    description: "覆盖率必须达到最低要求"
+    check: "IF design_phase IN ['review', 'completed'] THEN branch_coverage.coverage_percentage >= 80"
+    error_message: "分支覆盖率必须达到80%以上"
+
+  - rule: "test_cases_required"
+    description: "必须有至少一个测试用例"
+    check: "length(test_cases) > 0"
+    error_message: "必须至少有一个测试用例"
+
+  - rule: "traceability_integrity"
+    description: "测试用例必须追溯到功能点"
+    check: "ALL(test_cases WHERE priority IN [P0, P1] MUST HAVE traceability.feature_id)"
+    error_message: "P0/P1用例必须追溯到功能点"
+
+# ========== 示例 ==========
+examples:
+  - name: "需求对齐阶段示例"
+    data:
+      design_phase: requirement_alignment
+
+      alignment_report:
+        prd_architecture_aligned: true
+        prd_ui_aligned: false
+        alignment_timestamp: "2026-02-04T10:00:00Z"
+
+        conflicts:
+          - severity: CRITICAL
+            description: "PRD中定义的'训练计划导出'功能在UI中未找到对应页面"
+            source: "PRD"
+            affected_requirements:
+              - "REQ-2026-015"
+            resolution: "待UI团队确认"
+            status: pending
+
+        alignment_summary:
+          total_requirements: 25
+          aligned_requirements: 24
+          architecture_coverage_rate: 100
+          ui_coverage_rate: 96
+
+      feature_mapping:
+        prd_to_ui:
+          - prd_feature_id: "FEAT-001"
+            prd_feature_name: "开发测试登录"
+            ui_page_path: "/pages/login/index"
+            ui_components:
+              - "LoginButton"
+              - "WechatAuthButton"
+            coverage_status: full
+
+        prd_to_architecture:
+          - prd_feature_id: "FEAT-001"
+            prd_feature_name: "开发测试登录"
+            architecture_component: "AuthService"
+            service_module: "auth-service"
+            api_endpoints:
+              - "/api/auth/dev-login"
+            data_entities:
+              - "User"
+              - "Token"
+            coverage_status: full
+
+        coverage_matrix:
+          feature_coverage:
+            login: 100
+            runner_profile: 100
+            training_plan: 0
+          module_coverage:
+            frontend: 98
+            backend: 100
+          risk_areas:
+            - feature_id: "training_plan"
+              feature_name: "训练计划导出"
+              coverage_rate: 0
+              risk_level: high
+              recommendation: "需要补充UI页面和API接口"
+
+      test_cases: []
+
+      metadata:
+        design_id: "DESIGN-2026-001"
+        project_id: "ai-marathon-coach"
+        version: "1.0"
+        created_by: "qa-agent"
+        created_at: "2026-02-04T10:00:00Z"
+
+  - name: "分支覆盖阶段示例"
+    data:
+      design_phase: branch_coverage
+
+      alignment_report:
+        prd_architecture_aligned: true
+        prd_ui_aligned: true
+        conflicts: []
+
+      feature_mapping:
+        prd_to_ui: []
+        prd_to_architecture: []
+        coverage_matrix:
+          feature_coverage:
+            login: 100
+            runner_profile: 100
+
+      test_cases:
+        - case_id: "F-BASE-002"
+          title: "开发测试登录 - 验证快速登录流程"
+          suite: smoke
+          priority: P0
+          type: positive
+          traceability:
+            requirement_id: "REQ-2026-001"
+            feature_id: "login"
+          steps:
+            - step_num: 1
+              action: "访问登录页面"
+              expected: "页面加载成功"
+            - step_num: 2
+              action: "点击开发测试登录按钮"
+              expected: "触发登录请求"
+            - step_num: 3
+              action: "等待页面跳转"
+              expected: "跳转到跑者画像页面"
+          expected_result: "用户成功登录"
+          automation:
+            automated: true
+            script_path: "tests/e2e/login.spec.ts"
+            framework: playwright
+          status: approved
+
+      branch_coverage:
+        decision_points:
+          - point_id: "DP-001"
+            location: "auth-service.ts:45"
+            condition: "token && token.valid"
+            branches:
+              - branch_id: "DP-001-T"
+                description: "token存在且有效"
+                covered: true
+                test_case_id: "F-BASE-002"
+              - branch_id: "DP-001-F"
+                description: "token不存在或无效"
+                covered: true
+                test_case_id: "F-BASE-003"
+
+        covered_branches: 18
+        total_branches: 20
+        coverage_percentage: 90.0
+
+        uncovered_branches:
+          - point_id: "DP-005"
+            branch_id: "DP-005-F"
+            reason: "依赖第三方服务，难以模拟"
+            action_required: defer
+
+        coverage_targets:
+          target_percentage: 85
+          target_met: true
+          gap: 0
+
+      metadata:
+        design_id: "DESIGN-2026-001"
+        project_id: "ai-marathon-coach"
+        version: "1.0"
+        created_by: "qa-agent"
+        created_at: "2026-02-04T10:00:00Z"
+        updated_at: "2026-02-04T14:30:00Z"
+
+  - name: "设计完成示例"
+    data:
+      design_phase: completed
+
+      alignment_report:
+        prd_architecture_aligned: true
+        prd_ui_aligned: true
+        conflicts: []
+        alignment_summary:
+          total_requirements: 25
+          aligned_requirements: 25
+          architecture_coverage_rate: 100
+          ui_coverage_rate: 100
+
+      feature_mapping:
+        prd_to_ui:
+          - prd_feature_id: "FEAT-001"
+            prd_feature_name: "开发测试登录"
+            ui_page_path: "/pages/login/index"
+            coverage_status: full
+        prd_to_architecture:
+          - prd_feature_id: "FEAT-001"
+            prd_feature_name: "开发测试登录"
+            architecture_component: "AuthService"
+            coverage_status: full
+        coverage_matrix:
+          feature_coverage:
+            login: 100
+            runner_profile: 100
+            training_plan: 100
+
+      test_cases:
+        - case_id: "F-BASE-002"
+          title: "开发测试登录 - 验证快速登录流程"
+          suite: smoke
+          priority: P0
+          type: positive
+          traceability:
+            requirement_id: "REQ-2026-001"
+            feature_id: "login"
+          steps:
+            - step_num: 1
+              action: "访问登录页面"
+              expected: "页面加载成功"
+          expected_result: "用户成功登录"
+          automation:
+            automated: true
+            script_path: "tests/e2e/login.spec.ts"
+            framework: playwright
+          status: approved
+
+      branch_coverage:
+        covered_branches: 19
+        total_branches: 20
+        coverage_percentage: 95.0
+        uncovered_branches: []
+        coverage_targets:
+          target_percentage: 85
+          target_met: true
+          gap: 0
+
+      specialized_tests:
+        performance_tests:
+          - test_id: "PERF-001"
+            scenario: "登录响应时间"
+            metrics:
+              - name: "response_time"
+                target_value: 500
+                unit: "ms"
+            test_case_id: "P-AUTH-001"
+
+        security_tests:
+          - test_id: "SEC-001"
+            vulnerability_type: "SQL注入"
+            test_method: "输入验证测试"
+            test_case_id: "S-AUTH-001"
+
+      review_report:
+        reviewed_by:
+          - "qa-lead"
+          - "dev-lead"
+        review_date: "2026-02-04T16:00:00Z"
+        review_comments:
+          - reviewer: "qa-lead"
+            category: completeness
+            comment: "覆盖率达标，用例设计完整"
+            severity: nice_to_have
+            status: resolved
+        review_result: approved
+        next_steps:
+          - "执行测试用例"
+          - "生成测试报告"
+
+      metadata:
+        design_id: "DESIGN-2026-001"
+        project_id: "ai-marathon-coach"
+        version: "1.0"
+        created_by: "qa-agent"
+        created_at: "2026-02-04T10:00:00Z"
+        updated_at: "2026-02-04T16:30:00Z"
+        phase_history:
+          - phase: requirement_alignment
+            entered_at: "2026-02-04T10:00:00Z"
+            duration_minutes: 60
+            actor: "qa-agent"
+            notes: "完成需求对齐"
+          - phase: feature_calibration
+            entered_at: "2026-02-04T11:00:00Z"
+            duration_minutes: 90
+            actor: "qa-agent"
+            notes: "完成功能点映射"
+          - phase: branch_coverage
+            entered_at: "2026-02-04T12:30:00Z"
+            duration_minutes: 120
+            actor: "qa-agent"
+            notes: "完成分支覆盖分析"
+          - phase: specialized_test
+            entered_at: "2026-02-04T14:30:00Z"
+            duration_minutes: 60
+            actor: "qa-agent"
+            notes: "完成专项测试设计"
+          - phase: review
+            entered_at: "2026-02-04T15:30:00Z"
+            duration_minutes: 30
+            actor: "qa-lead"
+            notes: "通过评审"
+          - phase: completed
+            entered_at: "2026-02-04T16:00:00Z"
+            duration_minutes: 0
+            actor: "qa-agent"
+            notes: "设计完成"
