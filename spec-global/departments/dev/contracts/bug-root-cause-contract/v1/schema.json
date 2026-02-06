@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/development/bug-root-cause/v1",
+  "title": "Bug Root Cause Analysis Contract",
+  "description": "Bug 原因分析契约 - 记录复现、定位和根因结论",
+  "type": "object",
+  "required": [
+    "bug_id",
+    "analysis_state",
+    "reproduction",
+    "root_cause",
+    "created_at"
+  ],
+  "properties": {
+    "bug_id": {
+      "type": "string",
+      "pattern": "^BUG-[0-9]{4}-[0-9]{4}$"
+    },
+    "analysis_state": {
+      "type": "string",
+      "enum": ["confirmed", "suspected", "cannot_reproduce", "blocked", "needs_info"]
+    },
+    "reproduction": {
+      "type": "object",
+      "required": ["attempts", "reproducible"],
+      "properties": {
+        "attempts": { "type": "integer", "minimum": 0 },
+        "reproducible": { "type": "boolean" },
+        "environment": { "type": "string" },
+        "steps_used": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "root_cause": {
+      "type": "object",
+      "required": ["summary", "category"],
+      "properties": {
+        "summary": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": [
+            "logic",
+            "data",
+            "config",
+            "concurrency",
+            "dependency",
+            "environment",
+            "security",
+            "performance",
+            "unknown"
+          ]
+        },
+        "contributing_factors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "affected_modules": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "log_signals": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "next_actions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "created_by": { "type": "string" }
+  }
+}

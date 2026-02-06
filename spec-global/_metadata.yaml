@@ -126,6 +126,13 @@ workflow_registry:
     description: "Dev 部门 - 代码修复流程"
     v3_1_compatible: true
 
+  - id: workflow.dev.bug_fix
+    path: departments/dev/workflows/bug-fix/v1/workflow.yaml
+    level: task
+    description: "Dev 部门 - Bug 修复工作流"
+    version: "1.0"
+    v3_1_compatible: true
+
   # ============================================
   # QA 部门工作流 (L2 - Department 级)
   # ============================================

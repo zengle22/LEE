@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/development/bug-fix-plan/v1",
+  "title": "Bug Fix Plan Contract",
+  "description": "Bug 修复方案契约 - 根据根因制定修复计划与风险评估",
+  "type": "object",
+  "required": [
+    "plan_id",
+    "bug_id",
+    "root_cause_ref",
+    "fix_goal",
+    "plan_steps",
+    "risk_assessment",
+    "test_plan",
+    "rollback_plan",
+    "created_at"
+  ],
+  "properties": {
+    "plan_id": {
+      "type": "string",
+      "pattern": "^BUGFIX-[0-9]{4}-[0-9]{4}$"
+    },
+    "bug_id": {
+      "type": "string",
+      "pattern": "^BUG-[0-9]{4}-[0-9]{4}$"
+    },
+    "root_cause_ref": { "type": "string" },
+    "fix_goal": { "type": "string" },
+    "plan_steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["step", "action"],
+        "properties": {
+          "step": { "type": "integer", "minimum": 1 },
+          "action": { "type": "string" },
+          "owner": { "type": "string" },
+          "affected_files": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "risk_assessment": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {
+        "level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "risk": { "type": "string" },
+              "impact": { "type": "string" },
+              "mitigation": { "type": "string" }
+            }
+          }
+        },
+        "human_gate_required": { "type": "boolean" }
+      }
+    },
+    "test_plan": {
+      "type": "object",
+      "required": ["strategy"],
+      "properties": {
+        "strategy": { "type": "string" },
+        "tests_to_run": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "new_tests": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "rollback_plan": {
+      "type": "object",
+      "required": ["steps"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "rollback_risks": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "alternatives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "tradeoff": { "type": "string" }
+        }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "created_by": { "type": "string" }
+  }
+}

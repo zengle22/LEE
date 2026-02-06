@@ -96,9 +96,10 @@ spec-global/
     │   │   └── release-gate/
     │   ├── skills/                 # 1 个 skill
     │   │   └── planning-methodology/
-    │   └── workflows/              # 4 个 workflows
+    │   └── workflows/              # 5 个 workflows
     │       ├── development-pipeline/
     │       ├── dev-retest/
+    │       ├── bug-fix/
     │       └── ... (更多)
     │
     ├── prd/                        # 产品部门 (8)

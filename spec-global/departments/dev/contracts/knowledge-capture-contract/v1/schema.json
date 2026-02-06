@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/development/knowledge-capture/v1",
+  "title": "Knowledge Capture Contract",
+  "description": "知识沉淀契约 - 记录可复用的经验与条目",
+  "type": "object",
+  "required": ["knowledge_id", "bug_id", "items", "created_at"],
+  "properties": {
+    "knowledge_id": {
+      "type": "string",
+      "pattern": "^KNOW-[0-9]{4}-[0-9]{4}$"
+    },
+    "bug_id": {
+      "type": "string",
+      "pattern": "^BUG-[0-9]{4}-[0-9]{4}$"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "title", "summary"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["pattern", "anti-pattern", "checklist", "guideline", "tip"]
+          },
+          "title": { "type": "string" },
+          "summary": { "type": "string" },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "file_path": { "type": "string" },
+          "reuse_scope": { "type": "string", "enum": ["project", "team", "org"] }
+        }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "created_by": { "type": "string" }
+  }
+}

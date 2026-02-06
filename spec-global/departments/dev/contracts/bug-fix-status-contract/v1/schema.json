@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-constitution.dev/schemas/development/bug-fix-status/v1",
+  "title": "Bug Fix Status Contract",
+  "description": "Bug 修复状态契约 - 记录修复过程的最终状态与关键指标",
+  "type": "object",
+  "required": [
+    "bug_id",
+    "status",
+    "reproduction",
+    "verification",
+    "updated_at"
+  ],
+  "properties": {
+    "bug_id": {
+      "type": "string",
+      "pattern": "^BUG-[0-9]{4}-[0-9]{4}$",
+      "description": "缺陷唯一标识"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["fixed", "cannot_reproduce", "deferred", "failed", "in_progress"],
+      "description": "修复状态"
+    },
+    "reproduction": {
+      "type": "object",
+      "required": ["attempts", "reproducible"],
+      "properties": {
+        "attempts": { "type": "integer", "minimum": 0 },
+        "reproducible": { "type": "boolean" },
+        "environment": { "type": "string" },
+        "methods_tried": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "last_attempt_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "fix_attempts": { "type": "integer", "minimum": 0 },
+    "plan_rollback_count": { "type": "integer", "minimum": 0 },
+    "verification": {
+      "type": "object",
+      "required": ["status", "attempts"],
+      "properties": {
+        "status": { "type": "string", "enum": ["pass", "fail", "skipped"] },
+        "attempts": { "type": "integer", "minimum": 0 },
+        "environment": { "type": "string" },
+        "last_run_at": { "type": "string", "format": "date-time" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "code_review": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["pass", "needs_fix", "skipped"] },
+        "high_priority_issues": { "type": "integer", "minimum": 0 },
+        "low_priority_issues": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "git": {
+      "type": "object",
+      "properties": {
+        "branch": { "type": "string" },
+        "commit_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "summary": { "type": "string" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "updated_by": { "type": "string" }
+  }
+}
