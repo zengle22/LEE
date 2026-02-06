@@ -72,6 +72,8 @@ runtime/runs/
 
 # LEE 项目输出目录 (project-specific outputs)
 contracts/
+!spec-global/**/contracts/
+!spec-global/**/contracts/**
 # docs/  # Uncomment to ignore docs directory
 outputs/
 specs/

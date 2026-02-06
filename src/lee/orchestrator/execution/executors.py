@@ -24,6 +24,7 @@ Executors - 纯执行器模块
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any
+import os
 import subprocess
 import json
 import asyncio
@@ -201,6 +202,10 @@ class ExecutorFactory:
         executor_class = cls._executors.get(executor_type)
         if executor_class is None:
             raise ValueError(f"Unknown executor type: {executor_type}")
+
+        if executor_type == "llm" and "profile" not in kwargs:
+            # Allow environment override for LLM profile (e.g., zhipu)
+            kwargs["profile"] = os.getenv("LLM_PROFILE", "antigravity")
 
         return executor_class(**kwargs)
 

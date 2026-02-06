@@ -59,6 +59,27 @@ class LLMConfig:
         # 环境变量替换
         config = self._resolve_env_vars(config)
 
+        # 通用环境变量覆盖（避免在配置文件中硬编码密钥）
+        overrides = {
+            "LLM_BASE_URL": "base_url",
+            "LLM_API_KEY": "api_key",
+            "LLM_MODEL": "model",
+            "LLM_TEMPERATURE": "temperature",
+            "LLM_MAX_TOKENS": "max_tokens",
+            "LLM_PROVIDER": "provider",
+        }
+        for env_key, cfg_key in overrides.items():
+            env_val = os.getenv(env_key)
+            if env_val is None:
+                continue
+            if cfg_key in ("temperature", "max_tokens"):
+                try:
+                    config[cfg_key] = float(env_val) if cfg_key == "temperature" else int(env_val)
+                except ValueError:
+                    config[cfg_key] = env_val
+            else:
+                config[cfg_key] = env_val
+
         return config
 
     def _resolve_env_vars(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -188,7 +209,10 @@ class LLMExecutor:
                     delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
                     delay = min(delay, 30)
 
-                    print(f"[LLM Executor] Network error (attempt {attempt + 1}/{max_retries}), retrying in {delay:.1f}s...")
+                    print(
+                        f"[LLM Executor] Network error (attempt {attempt + 1}/{max_retries}): "
+                        f"{type(e).__name__}: {e}. Retrying in {delay:.1f}s..."
+                    )
                     await asyncio.sleep(delay)
                 else:
                     raise ValueError(f"LLM API network error after {max_retries} attempts: {str(e)}")
@@ -223,9 +247,15 @@ class LLMExecutor:
             "max_tokens": max_tokens
         }
 
-        async with aiohttp.ClientSession() as session:
+        # Allow base_url to be either an API root or a full /chat/completions URL.
+        url = base_url.rstrip("/")
+        if not url.endswith("/chat/completions"):
+            url = f"{url}/chat/completions"
+
+        timeout = aiohttp.ClientTimeout(total=float(os.getenv("LLM_TIMEOUT_SECONDS", "60")))
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
-                f"{base_url}/chat/completions",
+                url,
                 headers=headers,
                 json=payload
             ) as resp:
