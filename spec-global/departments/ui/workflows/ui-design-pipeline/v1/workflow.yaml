@@ -1,9 +1,9 @@
 # Migrated to spec-global format on 2026-02-05
 # Original format: orchestrator-legacy-template
-#
+# v1.1 updated: 2026-02-06 - 新增单主路径原则、AI盲跑验证
 
 id: workflow.ui.ui_design_pipeline
-version: v1
+version: v1.1
 metadata:
   name: UI Design Pipeline
   name_zh: UI 设计流水线
@@ -11,19 +11,23 @@ metadata:
 
     从 UI 设计到生产发布的完整流水线，包含三级质量门禁。
 
+    v1.1 新增：单主路径验证、AI盲跑测试、User Flow Contract。
+
 
     流程概览:
 
-    设计阶段 → UI Gate → 研发阶段 → Dev Gate → 发布阶段 → Release Gate → 生产
+    设计阶段 → User Flow 生成 → AI 盲跑验证 → UI Gate → 研发阶段 → Dev Gate → 发布阶段 → Release Gate → 生产
 
 
     核心组件:
 
-    - UI Contracts: 页面/组件/Tokens/A11y 契约
+    - UI Contracts: 页面/组件/Tokens/A11y/User Flow 契约
 
     - Quality Gates: UI Gate / Dev Gate / Release Gate
 
     - Test Generation: 从契约生成测试用例
+
+    - AI Walkthrough: AI 盲跑验证主路径
 
     '
   prerequisites:
@@ -111,13 +115,129 @@ steps:
   on_failure:
     retry: 1
     fallback: human_review
+
+# ============================================
+# v1.1 新增：用户流契约生成
+# ============================================
+- id: user_flow_generation
+  agent: prototype_designer@v1.1
+  contract: user_flow_contract@v1
+  metadata:
+    name: User Flow Generation
+    name_zh: 用户流契约生成
+    stage_id: '1.2b'
+    description: 'Generate User Flow Contracts following Single Main Path principle.
+
+      遵循单主路径原则，生成用户流契约。
+
+      核心检查:
+
+      - 每个功能只有一条主路径
+
+      - 所有前置条件在入口处解决
+
+      - 所有状态可识别
+
+      - 定义禁止的路径模式
+
+      '
+  input:
+  - source: contract_validation
+    required: true
+  - file: spec/ui/ui.map.yaml
+    required: true
+  - file: spec/ui/pages/*.page.yaml
+    required: true
+  output:
+    file: spec/ui/flows/
+    freeze: false
+    includes:
+    - 用户流契约 (*.flow.yaml)
+    - 路径枚举文档
+  non_goals:
+  - implement_ui
+  - write_tests
+  thinking_boundary: '✅ 可以思考：用户路径、入口条件、步骤序列、退出点、禁止模式
+
+    ❌ 禁止思考：如何实现组件、测试如何编写
+
+    '
+  quality_bar:
+    must_have:
+    - 每个功能只有一条主路径
+    - 所有步骤有明确前置条件
+    - 完成态明确定义
+    - 至少一个合法退出点
+    - 禁止模式已定义
+  on_failure:
+    retry: 2
+    fallback: human_review
+
+# ============================================
+# v1.1 新增：AI 盲跑验证
+# ============================================
+- id: ai_walkthrough_validation
+  agent: ai_walkthrough_validator@v1
+  contract: null
+  metadata:
+    name: AI Walkthrough Validation
+    name_zh: AI 盲跑验证
+    stage_id: '1.2c'
+    description: 'Validate that AI can blindly walk through main path.
+
+      验证 AI 能否仅凭 UI 顺序盲跑通过主路径。
+
+      这是设计验收的硬标准。
+
+      验证维度:
+
+      - 路径清晰度（每步只有一个下一步）
+
+      - 状态可识别度
+
+      - 恢复路径完整度
+
+      - 入口可达性
+
+      '
+  input:
+  - source: user_flow_generation
+    required: true
+  - file: spec/ui/flows/*.flow.yaml
+    required: true
+  - file: spec/ui/pages/*.page.yaml
+    required: true
+  output:
+    file: output/reports/ai-walkthrough-{timestamp}.json
+    freeze: false
+    includes:
+    - AI 友好度评分
+    - 路径记录
+    - 问题列表
+    - 改进建议
+  gate_config:
+    pass_criteria:
+      ai_friendly_score: 80
+      walkthrough_passed: true
+  non_goals:
+  - fix_design
+  - generate_ui
+  thinking_boundary: '✅ 可以思考：路径是否清晰、状态是否可识别、能否盲跑通过
+
+    ❌ 禁止思考：业务逻辑、用户意图
+
+    '
+  on_failure:
+    retry: 1
+    fallback: human_review
+
 - id: ux_review
   agent: ux_reviewer@v1
   contract: ux-review-contract@v1
   metadata:
     name: UX Usability Review
     name_zh: UX 可用性审查
-    stage_id: 1.2a
+    stage_id: 1.2d
     description: 'Review UI contracts for usability issues.
 
       基于 ui-ux-pro-max-skill 审查 UI 契约的可用性问题。
@@ -135,9 +255,13 @@ steps:
 
       - 状态完整性 (default/loading/empty/error)
 
+      - v1.1: 单主路径原则符合度
+
+      - v1.1: 前置条件入口处解决
+
       '
   input:
-  - source: contract_validation
+  - source: ai_walkthrough_validation
     required: true
   - file: spec/ui/ui.map.yaml
     required: true
@@ -439,6 +563,8 @@ steps:
 constraints:
   gate_blocking: '每个 Gate 都是硬性阻断点：
 
+    - AI Walkthrough 失败 → 不能进入 UX 审查
+
     - UI Gate 失败 → 不能进入研发
 
     - Dev Gate 失败 → 不能合并代码
@@ -456,6 +582,8 @@ constraints:
 
     - 测试生成参考 a11y 契约
 
+    - v1.1: 用户流实现参考 user-flow 契约
+
     '
   state_completeness: '必须实现四种必需状态：
 
@@ -468,9 +596,40 @@ constraints:
     - error: 错误状态
 
     '
+  single_main_path: 'v1.1 新增 - 单主路径原则（不可违背）：
+
+    - 每个功能在 V1 必须只有一条强制闭合的主路径
+
+    - 不存在「走一半再去干别的」
+
+    - 不存在「完成 B 后再回来继续 A」
+
+    - 违反即视为设计缺陷，不进入实现阶段
+
+    '
+  preconditions_at_entry: 'v1.1 新增 - 前置条件入口处解决：
+
+    - 条件不满足 → 不显示入口 或 显式引导
+
+    - 禁止：点进去才告诉你「不行」
+
+    '
+  ai_friendly: 'v1.1 新增 - AI 友好性：
+
+    - AI 必须能仅凭 UI 顺序盲跑通过主路径
+
+    - 每一步只有一个明确的「下一步」
+
+    - 状态可通过 UI 元素识别
+
+    - AI 友好度评分必须 >= 80
+
+    '
 completion:
   required_outputs:
   - spec/ui/ui.map.yaml
+  - spec/ui/flows/*.flow.yaml  # v1.1 新增
+  - output/reports/ai-walkthrough-*.json  # v1.1 新增
   - output/gate-reports/ui-gate-*.md
   - output/gate-reports/dev-gate-*.md
   - output/gate-reports/release-gate-*.md
@@ -480,6 +639,8 @@ completion:
     description: UI 设计阶段总冻结文件
     includes:
     - UI 契约索引
+    - User Flow 契约  # v1.1 新增
+    - AI 盲跑验证报告  # v1.1 新增
     - Gate 检查报告
     - 发布说明
   gate_to_next:
@@ -511,3 +672,5 @@ tags:
 - design
 - figma
 - quality-gate
+- single-main-path  # v1.1 新增
+- ai-friendly  # v1.1 新增
