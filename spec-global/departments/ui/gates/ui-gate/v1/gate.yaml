@@ -1,8 +1,9 @@
-# UI Gate Specification v1.0
+# UI Gate Specification v1.1
 # UI 门禁规范 - 进入研发前的质量检查
+# v1.1 新增：单主路径原则、AI友好性、前置条件检查
 
 kind: gate
-version: 1.0
+version: 1.1
 
 # ============================================
 # 基础标识
@@ -11,9 +12,10 @@ id: gate.ui.ui_gate
 name: UI Gate
 description: >
   UI 设计进入研发阶段前的质量门禁。
-  确保 Figma 设计稿、UI Contract、状态覆盖等均已就绪。
+  确保 Figma 设计稿、UI Contract、状态覆盖、单主路径原则等均已就绪。
+  v1.1 新增 AI 时代产品与 UE 设计宪法相关检查。
 owner: ui-governance
-tags: [gate, ui, design, quality]
+tags: [gate, ui, design, quality, single-main-path, ai-friendly]
 
 # ============================================
 # 触发条件
@@ -26,6 +28,7 @@ trigger:
     requires:
       - ui_map_file: "spec/ui/ui.map.yaml"
       - tokens_file: "spec/ui/tokens/tokens.json"
+      - flows_dir: "spec/ui/flows/"  # v1.1 新增：用户流契约目录
 
 # ============================================
 # 检查规则
@@ -149,6 +152,161 @@ checks:
         )
     message: "P0 页面未完成审批"
     fix: "确保所有 P0 页面状态为 approved"
+
+  # ============================================
+  # v1.1 新增：单主路径原则检查
+  # ============================================
+
+  # ---------- 用户流契约存在检查 ----------
+  - id: user_flow_contracts_exist
+    name: 用户流契约存在
+    description: 每个功能必须有对应的 User Flow Contract
+    severity: blocker
+    rule: |
+      ui_map.flows?.every(flow =>
+        flow.contract != null
+        && file_exists(flow.contract)
+      ) ?? false
+    message: "功能缺少用户流契约"
+    fix: "为每个功能创建 user-flow-contract"
+
+  # ---------- 单主路径验证 ----------
+  - id: single_main_path_verified
+    name: 单主路径验证
+    description: 是否存在且仅存在一条强制闭合的用户主路径
+    severity: blocker
+    rule: |
+      ui_map.flows?.every(flow => {
+        const contract = load_contract(flow.contract);
+        return contract.main_path != null
+          && contract.main_path.steps?.length >= 1
+          && contract.main_path.completion != null
+          && contract.exit_points?.length >= 1;
+      }) ?? false
+    message: "功能未定义强制闭合的主路径"
+    fix: "在 user-flow-contract 中定义完整的 main_path 和 exit_points"
+
+  # ---------- 前置条件入口处解决检查 ----------
+  - id: preconditions_at_entry
+    name: 前置条件入口处解决
+    description: 所有前置条件必须在入口处处理（hide/disable/redirect），禁止点进去才失败
+    severity: blocker
+    rule: |
+      ui_map.flows?.every(flow => {
+        const contract = load_contract(flow.contract);
+        const entry = contract.entry;
+        // 入口必须有 visibility_rule 或 disabled_rule 或 preconditions
+        return entry?.preconditions?.every(p =>
+          p.not_met_action != null
+          && ['hide', 'disable', 'redirect', 'show_guide'].includes(p.not_met_action)
+        ) ?? true;
+      }) ?? true
+    message: "存在未在入口处解决的前置条件"
+    fix: "为 entry.preconditions 添加 not_met_action（hide/disable/redirect/show_guide）"
+
+  # ---------- 禁止模式定义检查 ----------
+  - id: blocked_patterns_defined
+    name: 禁止模式定义
+    description: 必须明确定义禁止的路径模式（如走一半去干别的）
+    severity: major
+    rule: |
+      ui_map.flows?.every(flow => {
+        const contract = load_contract(flow.contract);
+        return contract.blocked_patterns?.length >= 1;
+      }) ?? false
+    message: "未定义禁止的路径模式"
+    fix: "在 user-flow-contract 中定义 blocked_patterns"
+
+  # ---------- 状态不可隐含检查 ----------
+  - id: no_hidden_state
+    name: 状态不可隐含
+    description: 所有不可执行状态必须有明确原因、明确下一步、回到主路径的方式
+    severity: blocker
+    rule: |
+      ui_map.pages?.every(page => {
+        const contract = load_contract(page.contracts?.page);
+        // 检查所有 error 状态是否有 recovery 信息
+        const errorStates = contract.states?.filter(s => s.name === 'error') ?? [];
+        return errorStates.every(s =>
+          s.messageKey != null
+          && s.errorCodes?.length >= 1
+        );
+      }) ?? true
+    message: "存在隐含状态（无明确原因或下一步）"
+    fix: "为所有 error 状态添加 messageKey 和 errorCodes"
+
+  # ---------- 恢复策略定义检查 ----------
+  - id: recovery_strategies_defined
+    name: 恢复策略定义
+    description: 每个用户流必须定义错误恢复策略
+    severity: major
+    rule: |
+      ui_map.flows?.every(flow => {
+        const contract = load_contract(flow.contract);
+        return contract.recovery_strategies?.length >= 1;
+      }) ?? false
+    message: "未定义错误恢复策略"
+    fix: "在 user-flow-contract 中定义 recovery_strategies"
+
+  # ---------- AI 盲跑配置检查 ----------
+  - id: ai_walkthrough_enabled
+    name: AI 盲跑配置启用
+    description: 每个用户流必须启用 AI 盲跑验证
+    severity: major
+    rule: |
+      ui_map.flows?.every(flow => {
+        const contract = load_contract(flow.contract);
+        return contract.ai_walkthrough?.enabled === true;
+      }) ?? false
+    message: "未启用 AI 盲跑验证"
+    fix: "在 user-flow-contract 中设置 ai_walkthrough.enabled = true"
+
+  # ---------- AI 盲跑通过检查 ----------
+  - id: ai_walkthrough_passed
+    name: AI 盲跑验证通过
+    description: AI 必须能仅凭 UI 顺序盲跑通过主路径
+    severity: blocker
+    rule: |
+      ui_map.flows?.every(flow => {
+        const result = run_ai_walkthrough(flow.contract);
+        return result.passed === true
+          && result.ai_friendly_score >= 80;
+      }) ?? false
+    message: "AI 盲跑验证未通过（分数低于80或路径不可达）"
+    fix: "优化用户流设计，确保路径清晰、状态可识别、无死胡同"
+
+  # ---------- 路径可枚举检查 ----------
+  - id: paths_enumerable
+    name: 路径可枚举
+    description: 所有可能的路径必须是可列举的，不允许隐式路径
+    severity: major
+    rule: |
+      ui_map.flows?.every(flow => {
+        const contract = load_contract(flow.contract);
+        // 主路径 + 所有退出点 = 所有可能路径
+        const mainPathExists = contract.main_path?.steps?.length >= 1;
+        const exitPointsDefined = contract.exit_points?.length >= 1;
+        return mainPathExists && exitPointsDefined;
+      }) ?? false
+    message: "存在未被枚举的隐式路径"
+    fix: "确保 main_path 和 exit_points 覆盖所有可能路径"
+
+  # ---------- 入口可见性规则检查 ----------
+  - id: entry_visibility_rules
+    name: 入口可见性规则
+    description: 功能入口必须有明确的显隐规则
+    severity: major
+    rule: |
+      ui_map.flows?.every(flow => {
+        const contract = load_contract(flow.contract);
+        const entry = contract.entry;
+        // 必须有 visibility_rule 或 disabled_rule
+        return entry?.visibility_rule != null
+          || entry?.disabled_rule != null
+          || entry?.preconditions?.length >= 1;
+      }) ?? true
+    message: "功能入口缺少显隐规则"
+    fix: "为 entry 添加 visibility_rule 或 disabled_rule"
 
 # ============================================
 # 通过条件
