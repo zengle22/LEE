@@ -243,7 +243,7 @@ runtime:
 # ============================================
 # 约束声明
 # ============================================
-constraints:
+runtime_constraints:
   deterministic: true
   side_effects: writes
   output_directory_rule: |

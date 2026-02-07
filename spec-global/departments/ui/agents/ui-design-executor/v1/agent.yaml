@@ -274,7 +274,7 @@ deliverables:
       fullscreen: "全屏错误（网络故障）"
 
   # ---------- Design Token ----------
-  design_tokens:
+  design_token_spec:
     description: "设计令牌（JSON 格式）"
     format: "W3C DTCG 1.0"
     categories:

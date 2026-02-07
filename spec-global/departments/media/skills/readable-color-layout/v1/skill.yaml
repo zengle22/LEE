@@ -286,7 +286,7 @@ runtime:
 # ============================================
 # 约束声明
 # ============================================
-constraints:
+runtime_constraints:
   deterministic: true
   side_effects: none
   pii: forbidden

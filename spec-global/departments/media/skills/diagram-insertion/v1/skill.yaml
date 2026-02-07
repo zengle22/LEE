@@ -87,7 +87,6 @@ execution:
 placeholder_templates:
   # 标准占位提示
   standard: |
-    
     <!-- DIAGRAM:{{asset_id}} -->
     【结构图：{{caption}}】
     
@@ -95,7 +94,6 @@ placeholder_templates:
     > 1. 打开文件：`{{png_path}}`
     > 2. 上传到公众号素材库
     > 3. 删除本占位提示，插入图片
-    
   
   # 简洁占位提示（用于密集内容）
   minimal: |
@@ -103,7 +101,6 @@ placeholder_templates:
   
   # 详细占位提示（用于复杂图表）
   detailed: |
-    
     ---
     **图表占位：{{caption}}**
     
@@ -113,7 +110,6 @@ placeholder_templates:
     
     发布后请删除此区块。
     ---
-    
 
 # 默认配置
 defaults:

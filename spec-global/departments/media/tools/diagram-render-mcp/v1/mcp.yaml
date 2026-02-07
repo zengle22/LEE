@@ -2,7 +2,7 @@
 # 图表渲染 MCP - 将 Mermaid 文本渲染为 PNG 图片
 
 kind: mcp
-version: 1.0
+version: "1.0"
 
 id: mcp.media.diagram_renderer
 name: Diagram Render MCP
@@ -16,7 +16,13 @@ description: >
   不允许 AI 自己画图，不允许 LLM 决定颜色、字体、布局。
 
 owner: media-ai
-tags: [media, mcp, diagram, render, mermaid, png]
+tags:
+  - media
+  - mcp
+  - diagram
+  - render
+  - mermaid
+  - png
 
 # 工具定义
 tools:
@@ -67,10 +73,8 @@ tools:
             
             scale:
               type: number
-              description: 缩放比例
+              description: "缩放比例（默认 2x，生成高清图，适合公众号）"
               default: 2
-              description: >
-                默认 2x 缩放，生成高清图（适合公众号）
     
     output:
       type: object
@@ -195,7 +199,7 @@ usage: |
 # 依赖
 requirements:
   - nodejs >= 16
-  - @mermaid-js/mermaid-cli >= 10.0
+  - "@mermaid-js/mermaid-cli >= 10.0"
   - chromium（puppeteer 依赖）
 
 # 安装说明

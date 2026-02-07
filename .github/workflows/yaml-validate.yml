@@ -1,0 +1,17 @@
+name: YAML Validation
+on:
+  push:
+  pull_request:
+jobs:
+  validate-yaml:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trust PSGallery
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+      - name: Validate YAML in spec-global
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts/validate-yaml.ps1 -Dir spec-global

@@ -17,6 +17,17 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
 
+# 自动加载 .env 文件
+try:
+    from dotenv import load_dotenv
+    # 加载项目根目录的 .env 文件
+    project_root = Path(__file__).parent.parent.parent.parent.parent
+    env_file = project_root / ".env"
+    if env_file.exists():
+        load_dotenv(env_file)
+except ImportError:
+    pass  # 没有安装 python-dotenv 时忽略
+
 
 class LLMConfig:
     """LLM 配置管理"""

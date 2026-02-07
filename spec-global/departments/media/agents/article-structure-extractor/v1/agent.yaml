@@ -63,13 +63,13 @@ structure_recognition:
   # 标题识别
   heading_detection:
     patterns:
-      - regex: "^#{1}\s+(.+)$"
+      - regex: '^#{1}\s+(.+)$'
         level: h1
         emphasis: high
-      - regex: "^#{2}\s+(.+)$"
+      - regex: '^#{2}\s+(.+)$'
         level: h2
         emphasis: normal
-      - regex: "^#{3}\s+(.+)$"
+      - regex: '^#{3}\s+(.+)$'
         level: h3
         emphasis: normal
 

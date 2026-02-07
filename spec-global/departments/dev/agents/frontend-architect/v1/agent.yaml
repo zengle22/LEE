@@ -98,6 +98,23 @@ standards:
         - "[ ] 错误边界与全局异常捕获"
         - "[ ] 敏感数据脱敏 (不记录密码/token)"
 
+    - ref: standard.dev.frontend.testing
+      path: ../../standards/frontend-testing/v1/testid-spec.md
+      role: architect
+      responsibilities:
+        - "确保所有前端项目遵循 data-testid 规范"
+        - "设计测试基础设施架构"
+        - "制定 testid 命名规范"
+        - "建立验证和 CI 检查机制"
+      checklist:
+        - "[ ] 使用 tid() 辅助函数，禁止硬编码"
+        - "[ ] testid 命名符合 {scope}-{type}-{identifier} 规范"
+        - "[ ] 禁止 template 中使用 <!-- #ifdef --> 注释形式"
+        - "[ ] P0 元素 100% testid 覆盖"
+        - "[ ] 生产构建无 data-testid"
+        - "[ ] CI 自动检查配置"
+      enforcement: ../../standards/frontend-testing/v1/enforcement.yaml
+
 # ============================================
 # 技能引用
 # ============================================
@@ -118,6 +135,9 @@ forbidden_behaviors:
   - "忽略浏览器兼容性需求"
   - "不考虑构建性能"
   - "硬编码环境配置"
+  - "硬编码 data-testid 属性 (必须使用 tid() 辅助函数)"
+  - "在 template 中使用 <!-- #ifdef --> 注释形式的条件编译"
+  - "设计不含 testid 的前端架构方案 (必须包含测试基础设施设计)"
 
 # ============================================
 # 职责边界
