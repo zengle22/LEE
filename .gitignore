@@ -89,8 +89,11 @@ MetaGPT/
 
 # LEE 配置和状态文件 (可选，根据需要保留)
 # .project/
-# .workflow/
+.workflow/
 # .projectignore
+
+# 运行证据/产物
+evidence/
 
 # 环境配置文件 (保留示例，忽略实际配置)
 .env
