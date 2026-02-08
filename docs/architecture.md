@@ -1,4 +1,8 @@
-# Flowcore / LEE 执行架构设计（v1.0）
+# LEE Orchestrator 执行架构（v3.x / spec-global）
+
+> **文档版本**: v3.x（与代码同步演进）
+> **最后更新**: 2026-02-06
+> **范围**: 以当前仓库 `src/lee/orchestrator/` 与 `spec-global/` 为准
 
 ## 1. 设计目标
 
@@ -8,7 +12,8 @@
 2. **保证 AI 无法绕过流程直接产生"有效副作用"**。
 3. **支持多种执行形态**：LLM / MetaGPT / Skill / MCP / Shell。
 4. **允许顶层 AI（PM agent）参与决策，但不拥有执行权**。
-5. **在无 Claude Code / 无人值守的情况下，Orchestrator + Executors 仍可独立运行**。
+5. **在无 IDE / 无人值守的情况下，Orchestrator + Executors 仍可独立运行**（CLI / API 驱动）。
+6. **以 spec-global 作为“可执行制度”**：workflow/agent/gate/contract/skill 全部外置为规范文件。
 
 ---
 
@@ -18,11 +23,11 @@
 
 Orchestrator 不负责任何业务逻辑，只负责：
 
-- 解析 `workflow.yaml`
-- 维护 workflow state（ready / running / completed / blocked）
+- 解析 workflow template（来自 `spec-global/**/workflows/**/workflow.yaml` 等）
+- 维护 workflow state（ready / running / completed / paused / failed）
 - 决定「下一步该跑哪个 step」
 - 将 step 转交给对应的 Executor
-- 记录 step 执行结果与 artifacts
+- 记录 step 执行结果与 artifacts（**SQLite 为唯一状态权威**）
 
 Orchestrator **不直接**：
 
@@ -38,9 +43,9 @@ Orchestrator **不直接**：
 
 系统只承认以下行为是"真实发生过的"：
 
-- Orchestrator 将某个 step 标记为 `completed` / `failed`。
-- Orchestrator 在 state 中记录该 step 的 `outputs` / `artifacts`。
-- Orchestrator 写入的 execution log / 状态文件。
+- Orchestrator 将某个 step 标记为 `completed` / `failed` / `paused`。
+- Orchestrator 在 SQLite 状态中记录该 step 的 `outputs`（写入文件、执行日志摘要等）。
+- Orchestrator 记录门禁（gate）审批与阻塞原因（human-in-the-loop）。
 
 任何**未经过 Orchestrator 的行为**（包括 AI 在对话中"声称已经做完某事"）：
 
@@ -51,9 +56,7 @@ Orchestrator **不直接**：
 ### P3. 顶层 AI = 决策者，不是执行者
 
 - 顶层 AI（PM Agent）只负责"看状态 + 做决策"。
-- 顶层 AI 只能通过工具调用 Orchestrator：
-  - 例如：`orchestrator_run_step(project_dir, step_id)`
-  - 例如：`orchestrator_next(project_dir)`
+- 顶层 AI 只能通过 CLI/API 调用 Orchestrator（或通过 IDE 的 tool-wrapper 间接调用）。
 - 顶层 AI **不直接**：
   - 写项目文件
   - 调 shell / CI / K8s
@@ -64,38 +67,98 @@ Orchestrator **不直接**：
 
 ## 3. 分层架构总览
 
+### 3.1 系统架构图（最新）
+
+```mermaid
+flowchart TB
+  Human[Human / Developer]:::actor
+  PM[PM Agent<br/>(Codex CLI / Claude Code)]:::actor
+
+  subgraph Spec["Spec Layer (spec-global/)"]
+    WF["workflows/**/workflow.yaml"]:::spec
+    AG["agents/**/agent.yaml"]:::spec
+    GT["gates/**/gate.yaml"]:::spec
+    CT["contracts/**/schema.json"]:::spec
+    SK["skills/**"]:::spec
+  end
+
+  subgraph Orch["LEE Orchestrator (src/lee/orchestrator)"]
+    TM[TemplateManager]:::orch
+    SGP[SpecGlobalParser + IRConverter]:::orch
+    SM[WorkflowStateMachine]:::orch
+    GE[GateEngine / Human Gate]:::orch
+    ACB[AgentContextBuilder]:::orch
+    EXF[ExecutorFactory]:::orch
+    DB[(SQLiteStore)]:::store
+    OFH[FileOutputHandler]:::orch
+  end
+
+  subgraph Exec["Executors"]
+    LLM[LLMExecutor]:::exec
+    SH[ShellExecutor]:::exec
+    MG[MetaGPTExecutor]:::exec
+  end
+
+  subgraph Ext["External Systems"]
+    LLMAPI["LLM Providers (OpenAI/Claude/...)"]:::ext
+    OS["Shell / CI / local tools"]:::ext
+    MCP["MCP Servers / HTTP APIs"]:::ext
+  end
+
+  subgraph WS["Workspace (Project)"]
+    OUT["Artifacts / output/ ..."]:::ws
+    REPO["Codebase / Docs / Specs"]:::ws
+  end
+
+  PM -->|CLI/API| Orch
+  Human -->|approve / feedback| GE
+
+  WF --> TM
+  AG --> ACB
+  GT --> GE
+  CT --> TM
+  SK --> EXF
+
+  TM --> SGP --> TM
+  TM --> SM
+  SM <--> DB
+  SM --> GE
+  SM -->|ready step| EXF
+  EXF --> LLM --> LLMAPI
+  EXF --> SH --> OS
+  EXF --> MG --> LLMAPI
+  SH --> MCP
+  LLM --> OFH --> OUT
+  SH --> OFH --> OUT
+  REPO --- OUT
+
+  classDef actor fill:#fff,stroke:#555,stroke-width:1px;
+  classDef spec fill:#f8f9ff,stroke:#5a67d8,stroke-width:1px;
+  classDef orch fill:#f0fff4,stroke:#2f855a,stroke-width:1px;
+  classDef exec fill:#fffaf0,stroke:#b7791f,stroke-width:1px;
+  classDef store fill:#f7fafc,stroke:#2d3748,stroke-width:1px;
+  classDef ext fill:#fff5f5,stroke:#c53030,stroke-width:1px;
+  classDef ws fill:#f7fafc,stroke:#4a5568,stroke-width:1px;
 ```
-┌────────────────────────────────┐
-│           PM Agent             │
-│ (Claude Code / LLM Supervisor) │
-│  - 思考 / 决策                  │
-│  - 调 orchestrator_* 工具       │
-└──────────────┬─────────────────┘
-               │ action / command
-               ▼
-┌────────────────────────────────┐
-│           Orchestrator         │
-│  - Workflow State Machine      │
-│  - Step 调度                   │
-│  - Artifact / Log 记账          │
-└──────────────┬─────────────────┘
-               │ StepExecutionRequest
-               ▼
-┌────────────────────────────────┐
-│        Engine / Executors      │
-│  - LLMExecutor                 │
-│  - MetaGPTExecutor             │
-│  - ShellSkillExecutor          │
-│  - MCPSkillExecutor            │
-└──────────────┬─────────────────┘
-               │
-               ▼
-┌────────────────────────────────┐
-│    外部系统 / 工具 / MCP       │
-│  - OpenAI / Claude API         │
-│  - CI / pytest                 │
-│  - Figma / HTTP API / K8s      │
-└────────────────────────────────┘
+
+### 3.2 控制流（概念序列图）
+
+```mermaid
+sequenceDiagram
+  participant PM as PM Agent
+  participant OR as Orchestrator
+  participant DB as SQLiteStore
+  participant EX as Executor
+  participant WS as Workspace
+
+  PM->>OR: run_until_blocked(workflow_id)
+  OR->>DB: load workflow + state
+  OR->>OR: compute ready step
+  OR->>EX: execute(step, context)
+  EX->>WS: write files / run commands
+  EX-->>OR: outputs + status
+  OR->>DB: persist step result + next state
+  OR-->>PM: summary (completed/paused/failed)
 ```
 
 ---
@@ -130,27 +193,27 @@ Orchestrator **不直接**：
 
 ---
 
-### 4.2 Orchestrator（flowcore.orchestrator）
+### 4.2 Orchestrator（`lee.orchestrator`）
 
 **定位**：流程控制系统（公司制度 / 审批流）。
 
 **主要职责**：
 
 1. **加载项目 state**
-   * 从 `project_dir` 读取 workflow 配置和执行状态。
-2. **解析 workflow.yaml**
-   * 构建内部 state machine。
+   * 从 SQLite（`SQLiteStore`）读取 workflow 实例、执行记录、门禁状态。
+2. **加载与解析 workflow template**
+   * `TemplateManager` 从 `spec-global/` 加载 `workflow.yaml`（支持 spec-global 格式与兼容格式）。
+   * spec-global 格式：`SpecGlobalParser` → `WorkflowIR` → `IRConverter` → `WorkflowTemplate`。
 3. **确定 ready steps**
-   * 基于依赖关系和 gate 规则。
-4. **构造 StepExecutionRequest**
-   * 包含 `project_dir`, `step_id`, `agent_or_skill_spec`, `context`。
-5. **调用 EngineFactory 创建 Executor 并执行**
-   * `executor = EngineFactory.create_executor(spec, project_dir)`
-   * `result = await executor.execute(request)`
-6. **更新 state 与产物记录**
+   * 基于依赖关系、条件（condition）、以及 human gate 的阻塞状态。
+4. **构造 Agent/Skill 上下文**
+   * `AgentContextBuilder` 负责加载 agent spec、拼接 prompt/context、注入输入产物引用等。
+5. **调用 Executor 执行**
+   * `ExecutorFactory.create("llm"|"shell"|"metagpt")`
+6. **更新 state 与产物记录（SQLite）**
    * 标记 step 状态（`completed/failed`）。
-   * 记录 `outputs`（文件路径 / artifact id）。
-   * 写执行日志。
+   * 记录 `outputs`（写入文件路径、stdout/stderr 摘要、结构化输出等）。
+   * human gate：暂停工作流并创建 gate 记录，等待审批后恢复执行。
 
 **Orchestrator 不关心**：
 
@@ -167,26 +230,11 @@ Orchestrator **不直接**：
 **统一接口**：
 
 ```python
-@dataclass
-class StepExecutionRequest:
-    project_dir: str
-    step_id: str
-    spec: dict      # agent 或 skill spec
-    context: dict   # workflow 上下文（输入产物、contracts 等）
-
-@dataclass
-class StepExecutionResult:
-    status: Literal["completed", "failed", "skipped"]
-    outputs: list[str]        # 产物路径 / artifact ids
-    messages: list[dict]      # 过程日志（可选）
-    raw: Any                  # 引擎原始响应（可选）
+async def execute(input_data: dict) -> dict:
+    ...
 ```
 
-```python
-class BaseExecutor(Protocol):
-    async def execute(self, req: StepExecutionRequest) -> StepExecutionResult:
-        ...
-```
+（当前实现以 `input_data/output_data` 为主；编排与状态写入仍由 Orchestrator 负责。）
 
 **常见 Executor 类型**：
 
@@ -194,8 +242,8 @@ class BaseExecutor(Protocol):
 | ------------------ | ----------------------- |
 | LLMExecutor        | 文本 / 代码 / 分析类工作         |
 | MetaGPTExecutor    | 多角色、重型开发任务              |
-| ShellSkillExecutor | pytest / build / script |
-| MCPSkillExecutor   | CI / Figma / K8s 等      |
+| ShellExecutor      | pytest / build / script |
+| MCP (via Shell/HTTP) | CI / Figma / K8s 等（通过 Skill/MCP 适配） |
 
 Executor **只能被 Orchestrator 调用**。
 
@@ -221,88 +269,74 @@ Skill 可以是：
 
 ## 5. Spec 建模规范
 
-### 5.1 Workflow Spec（示例）
+### 5.1 spec-global Workflow（示例）
 
 ```yaml
-# ai-spec/workflows/demo/workflow.yaml
+# spec-global/departments/dev/workflows/bug-fix/v1/workflow.yaml
 kind: workflow
-id: demo_flow
-name: Demo Flow
+id: workflow.dev.bug_fix
+version: 1.1
 
-steps:
-  - id: generate_code
-    kind: agent
-    agent: developer
-    description: 生成一个简单的 Python 函数，并保存到 src/demo.py
-    inputs: []
-    outputs:
-      - path: src/demo.py
+stages:
+  - id: s1_reproduce
+    steps:
+      - id: s1_1_reproduce_bug
+        type: agent
+        run: agent.dev.bug_reproducer
+        inputs:
+          - bug_contract: "bugs/*.contract.yaml"
+        outputs:
+          - path: "output/repro-result.yaml"
 
-  - id: run_unit_tests
-    kind: skill
-    skill: ci.run_tests
-    depends_on:
-      - generate_code
-    description: 运行 pytest，生成测试报告
-    outputs:
-      - path: reports/unit_test_report.xml
+  - id: s3_fix_plan
+    steps:
+      - id: s3_3_fix_plan_gate
+        type: gate_decision
+        gate:
+          ref: gate.dev.bugfix_plan_gate
 ```
 
 ### 5.2 Agent Spec（示例）
 
 ```yaml
-# ai-spec/agents/developer/agent.yaml
+# spec-global/departments/ui/agents/prototype-designer/v1/agent.yaml
 kind: agent
-id: developer
-name: 开发者
+id: agent.design.prototype
+name: Prototype Designer
+version: 1.1
 
-engine:
-  type: llm
-  provider: openai
-  model: gpt-4.1-mini
+persona:
+  role: "原型设计师"
 
-system_prompt: |
-  你是一个严谨的后端开发工程师。
-  - 根据步骤描述与输入产物生成代码。
-  - 严格遵守输出路径约定，不要随意创建额外文件。
-  - 代码需可通过基础单元测试。
+prompting:
+  system: |
+    You are a Prototype Designer...
 ```
 
 ### 5.3 Skill Spec（示例）
 
 ```yaml
-# ai-spec/skills/ci.run_tests.yaml
-kind: skill
-id: ci.run_tests
-name: 运行单元测试
-
-engine:
-  type: shell
-  command: |
-    cd {{ project_dir }} && pytest --maxfail=1 --disable-warnings -q \
-      --junitxml=reports/unit_test_report.xml
+# （仓库内 skill 规范随部门存放；执行侧通过 Shell/MCP 适配）
+# spec-global/**/skills/**.yaml
 ```
 
 ---
 
-## 6. Claude Code 的定位与边界
+## 6. IDE / Agent Host 的定位与边界
 
-Claude Code 在本架构中的角色：
+Codex CLI / Claude Code / 其他 IDE Agent Host 在本架构中的角色：
 
 * 顶层 PM Agent 的运行环境（IDE + 对话）。
-* 提供工具给 PM Agent，例如：
-  * `orchestrator_get_state`
-  * `orchestrator_run_step`
-  * （只读）查看项目文件。
+* 提供调用 Orchestrator 的入口（CLI/API/tool-wrapper）。
 * 提供人类协作入口（human gate 决策、查看日志等）。
 
-Claude Code **不是**：
+IDE Agent Host **不是**：
 
 * Orchestrator 的一部分。
 * Executor 的一部分。
 * 系统运行的必需组件。
 
-**未来可以将 PM Agent 从 Claude Code 迁出，改为后端服务调用 LLM API，但 Orchestrator + Executor 的架构不变。**
+**未来可以将 PM Agent 从 IDE 迁出，改为服务端调用 LLM API，但 Orchestrator + Executor 的架构不变。**
 
 ---
 
@@ -319,6 +353,11 @@ Claude Code **不是**：
 
 ---
 
-**文档版本**: v1.0
-**最后更新**: 2025-01-22
-**维护者**: LEE 框架团队
+## 8. 现状说明（与 spec 对齐度）
+
+- `spec-global` 已包含 `gate_decision/decision/conditional` 等 step 类型；当前执行器侧以 `agent/skill/human_gate` 为主，其他类型需要补齐专用执行路径（或在 IR 转换层做降级/展开）。
+- `AgentLoader` 的默认 `spec_root` 仍兼容旧路径（`ai-spec/`）；在 spec-global 迁移场景下应显式配置为仓库内 `spec-global/`。
+
+---
+
+**维护者**: LEE 框架团队（docs + spec-global + orchestrator）
