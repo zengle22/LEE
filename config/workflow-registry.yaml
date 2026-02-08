@@ -1,0 +1,27 @@
+version: "1.0"
+
+workflows:
+  dev.feature:
+    path: spec-global/departments/dev/workflows/feature/v1/workflow.yaml
+    description: "开发特性工作流"
+    required_params:
+      - spec
+
+  dev.bugfix:
+    path: spec-global/departments/dev/workflows/bug-fix/v1/workflow.yaml
+    description: "Bug 修复工作流"
+    required_params:
+      - spec
+
+  qa.regression:
+    path: spec-global/departments/qa/workflows/regression/v1/workflow.yaml
+    description: "回归测试工作流"
+    required_params:
+      - spec
+
+  devops.deploy:
+    path: spec-global/departments/devops/workflows/deploy/v1/workflow.yaml
+    description: "部署工作流"
+    required_params:
+      - env
+      - version

@@ -1,0 +1,117 @@
+# DevOps Deploy L3 Workflow v1.0
+# 部署工作流（L3）
+
+kind: workflow
+version: "1.0"
+
+id: workflow.devops.deploy
+name: DevOps Deploy Workflow (L3)
+description: >
+  脚本化部署并生成部署报告：
+  版本验证 → 环境检查 → 执行部署 → 健康检查 → 冒烟测试 → 报告 → Gate。
+owner: devops
+tags: [workflow, devops, deploy, l3]
+
+contracts:
+  inputs:
+    - deploy_config:
+        path: ../../contracts/deploy-config/v1/schema.json
+        description: 部署配置输入
+  outputs:
+    - health_check_result:
+        path: ../../contracts/health-check-result/v1/schema.json
+        description: 健康检查结果
+    - deploy_report:
+        path: ../../contracts/deploy-report/v1/schema.json
+        description: 部署报告
+
+stages:
+  - id: s1_prepare
+    name: "准备阶段"
+    steps:
+      - id: s1_1_validate_version
+        name: "验证版本"
+        type: skill
+        run: skill.devops.validate_version
+        inputs:
+          - version: "{{params.version}}"
+        outputs:
+          - path: "output/version-check.json"
+
+      - id: s1_2_check_env
+        name: "检查环境"
+        type: skill
+        run: skill.devops.check_env
+        dependencies:
+          requires: [s1_1_validate_version]
+        inputs:
+          - env: "{{params.env}}"
+        outputs:
+          - path: "output/env-check.json"
+
+  - id: s2_deploy
+    name: "部署阶段"
+    steps:
+      - id: s2_1_run_deploy_script
+        name: "执行部署脚本"
+        type: skill
+        run: skill.devops.deploy
+        dependencies:
+          requires: [s1_2_check_env]
+        inputs:
+          - env: "{{params.env}}"
+          - version: "{{params.version}}"
+        outputs:
+          - path: "output/deploy-log.txt"
+
+      - id: s2_2_health_check
+        name: "健康检查"
+        type: skill
+        run: skill.devops.health_check
+        dependencies:
+          requires: [s2_1_run_deploy_script]
+        inputs:
+          - env: "{{params.env}}"
+        outputs:
+          - path: "output/health-check.json"
+            contract: ../../contracts/health-check-result/v1/schema.json
+
+  - id: s3_verify
+    name: "验证阶段"
+    steps:
+      - id: s3_1_smoke_test
+        name: "冒烟测试"
+        type: skill
+        run: skill.devops.smoke_test
+        dependencies:
+          requires: [s2_2_health_check]
+        inputs:
+          - env: "{{params.env}}"
+        outputs:
+          - path: "output/smoke-test.json"
+
+      - id: s3_2_generate_report
+        name: "生成部署报告"
+        type: agent
+        run: agent.devops.deploy_report_generator
+        dependencies:
+          requires: [s3_1_smoke_test]
+        inputs:
+          - deploy_log: "output/deploy-log.txt"
+          - health_check: "output/health-check.json"
+          - smoke_test: "output/smoke-test.json"
+        outputs:
+          - path: "output/deploy-report.json"
+            contract: ../../contracts/deploy-report/v1/schema.json
+
+  - id: s4_gate
+    name: "审批阶段"
+    steps:
+      - id: s4_1_deploy_gate
+        name: "部署审批"
+        type: human_gate
+        dependencies:
+          requires: [s3_2_generate_report]
+        gate:
+          ref: ../../gates/deploy-gate/v1/gate.yaml
+

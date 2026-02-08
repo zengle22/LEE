@@ -1,0 +1,26 @@
+# DevOps Deploy Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.devops.deploy
+name: Deploy
+description: >
+  执行部署脚本。
+owner: devops-team
+tags: [devops, deploy]
+
+interface:
+  inputs:
+    type: object
+    required: [env, version]
+    properties:
+      env:
+        type: string
+      version:
+        type: string
+  outputs:
+    type: object
+    properties:
+      log_path:
+        type: string

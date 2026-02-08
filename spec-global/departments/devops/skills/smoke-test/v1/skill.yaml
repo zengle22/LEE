@@ -1,0 +1,24 @@
+# DevOps Smoke Test Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.devops.smoke_test
+name: Smoke Test
+description: >
+  执行部署后的冒烟测试。
+owner: devops-team
+tags: [devops, deploy]
+
+interface:
+  inputs:
+    type: object
+    required: [env]
+    properties:
+      env:
+        type: string
+  outputs:
+    type: object
+    properties:
+      result_path:
+        type: string

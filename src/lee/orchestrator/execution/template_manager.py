@@ -572,6 +572,32 @@ class TemplateManager:
 
     def _dict_to_step(self, step_dict: Dict[str, Any]) -> Step:
         """将字典转换为 Step 对象"""
+        from lee.orchestrator.storage.models import OutputSpec
+
+        # 解析 outputs（支持旧/新格式）
+        outputs_raw = step_dict.get("outputs", [])
+        outputs = []
+        for output_item in outputs_raw:
+            if isinstance(output_item, dict):
+                if "type" not in output_item:
+                    path = output_item.get("path", "")
+                    output_type = "dir" if path.endswith("/") else "file"
+                    outputs.append(OutputSpec(
+                        type=output_type,
+                        path=path,
+                        format=self._infer_format(path),
+                        required=output_item.get("required", True),
+                        description=output_item.get("description", ""),
+                    ))
+                else:
+                    outputs.append(OutputSpec(
+                        type=output_item.get("type", "file"),
+                        path=output_item.get("path", ""),
+                        format=output_item.get("format", "text"),
+                        required=output_item.get("required", True),
+                        description=output_item.get("description", ""),
+                    ))
+
         return Step(
             id=step_dict["id"],
             kind=step_dict.get("kind", "agent"),
@@ -581,7 +607,7 @@ class TemplateManager:
             gate_id=step_dict.get("gate_id"),
             depends_on=step_dict.get("depends_on", []),
             input=step_dict.get("input", {}),
-            outputs=[],
+            outputs=outputs,
             config=step_dict.get("config", {}),
         )
 
@@ -721,6 +747,12 @@ class TemplateManager:
                 config["reviewers"] = step_data["reviewers"]
             if "approval_criteria" in step_data:
                 config["approval_criteria"] = step_data["approval_criteria"]
+
+        # Verifiers
+        if "verifiers" in step_data:
+            config["verifiers"] = step_data["verifiers"]
+        if "verify" in step_data and "verifiers" not in config:
+            config["verifiers"] = step_data["verify"]
 
         # 添加非目标和思考边界（用于 agent）
         if "non_goals" in step_data:

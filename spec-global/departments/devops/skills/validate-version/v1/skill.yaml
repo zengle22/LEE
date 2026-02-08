@@ -1,0 +1,26 @@
+# DevOps Validate Version Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.devops.validate_version
+name: Validate Version
+description: >
+  校验待部署版本是否存在且满足条件。
+owner: devops-team
+tags: [devops, deploy]
+
+interface:
+  inputs:
+    type: object
+    required: [version]
+    properties:
+      version:
+        type: string
+  outputs:
+    type: object
+    properties:
+      ok:
+        type: boolean
+      message:
+        type: string

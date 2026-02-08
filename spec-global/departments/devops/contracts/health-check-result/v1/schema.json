@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "devops/health-check-result/v1/schema.json",
+  "title": "Health Check Result",
+  "description": "健康检查结果",
+  "type": "object",
+  "required": ["status", "checks"],
+  "properties": {
+    "status": {"type": "string", "enum": ["passed", "failed"]},
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "status"],
+        "properties": {
+          "name": {"type": "string"},
+          "status": {"type": "string", "enum": ["passed", "failed"]},
+          "details": {"type": "string"}
+        }
+      }
+    }
+  }
+}

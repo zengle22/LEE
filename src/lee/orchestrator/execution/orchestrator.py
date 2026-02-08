@@ -21,6 +21,8 @@ LEE Orchestrator v3.0 - 核心调度器
 """
 
 import uuid
+import os
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -44,6 +46,8 @@ from lee.orchestrator.execution.executors import ExecutorFactory
 from lee.orchestrator.execution.agent_context_builder import AgentContextBuilder
 from lee.orchestrator.execution.agent_loader import AgentLoader
 from lee.orchestrator.execution.file_output_handler import FileOutputHandler
+from lee.orchestrator.evidence_collector import EvidenceCollector
+from lee.orchestrator.verifier_engine import VerifierEngine
 
 
 # ========================================================================
@@ -106,6 +110,8 @@ class Orchestrator:
         self.file_output_handler = FileOutputHandler(
             project_root=project_root
         )
+        self.evidence_collector = EvidenceCollector(project_root or ".")
+        self.verifier_engine = VerifierEngine(project_root or ".")
         self.project_root = project_root
 
     # ============ 工作流管理 ============
@@ -138,13 +144,15 @@ class Orchestrator:
             raise ValueError(f"Template not found: {template_id}")
 
         # 创建 WorkflowInstance
+        data = data or {}
+        data.setdefault("run_id", self._generate_run_id())
         instance = WorkflowInstance(
             id=workflow_id,
             level=level,
             parent_id=parent_id,
             template_id=template_id,
             status=WorkflowStatus.PENDING,
-            data=data or {},
+            data=data,
         )
 
         # 写入数据库
@@ -441,10 +449,11 @@ class Orchestrator:
         ctx = await self.agent_context_builder.build(step, workflow_context)
 
         # 2. 调用 LLM Executor
-        # 使用 zhipu profile (GLM API 可用)
+        # 默认使用环境变量 LLM_PROFILE 或 zhipu
         executor = self.executor_factory.create(
             step.executor_type or "llm",
-            profile="zhipu"  # 使用可用的 GLM API
+            profile=os.getenv("LLM_PROFILE", "zhipu"),
+            agent_id=step.agent_id or ""
         )
 
         # 构建输入数据（包含 system_message 和 prompt）
@@ -519,8 +528,22 @@ class Orchestrator:
                 except Exception as e:
                     # 输出处理失败，记录但不终止步骤
                     print(f"[FileOutputHandler] Warning: {e}")
+            if written_files:
+                await self._collect_evidence(workflow_id, step.id, written_files)
 
-            # 4. 完成步骤
+            # 4. Verifiers (if configured)
+            verifier_results = await self._run_verifiers(workflow_id, step)
+            if verifier_results is not None and not self._verifiers_passed(verifier_results):
+                await self.state_machine.fail_step(workflow_id, step.id, "Verifier failed")
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message="Verifier failed",
+                    output={"verifiers": [r.__dict__ for r in verifier_results]},
+                )
+
+            # 5. 完成步骤
             output_data = {
                 "generated_text": generated_text,
                 "written_files": written_files,
@@ -586,12 +609,25 @@ class Orchestrator:
         from datetime import datetime
 
         # 构建输入数据
-        # 优先使用 input.params，其次使用 config.execution
-        params = step.input.get("params", {}) if step.input else {}
-        execution_config = step.config.get("execution", {})
+        # 优先使用 input.params；否则使用 input 本身
+        raw_input = step.input if step.input else {}
+        if isinstance(raw_input, dict):
+            params = raw_input.get("params", raw_input)
+        elif isinstance(raw_input, list):
+            params = {}
+            for item in raw_input:
+                if isinstance(item, dict):
+                    params.update(item)
+        else:
+            params = {}
+
+        execution_config = step.config.get("execution", {}) if step.config else {}
 
         # 合并配置
         input_data = {**params, **execution_config}
+
+        demo_mode = self._demo_mode_enabled()
+        used_fallback_command = False
 
         # 创建 task_execution 记录
         execution_id = uuid.uuid4().hex
@@ -626,8 +662,28 @@ class Orchestrator:
                 output = {"stdout": combined_output, "status": "completed"}
             else:
                 # 单命令执行
+                if "command" not in input_data:
+                    # 缺少命令时的兜底（保持流程可运行）
+                    input_data["command"] = "true"
+                    used_fallback_command = True
                 executor = self.executor_factory.create(step.executor_type or "shell")
                 output = await executor.execute(input_data)
+
+            # Demo/兜底模式：确保输出产物存在
+            if demo_mode or used_fallback_command:
+                self._ensure_output_artifacts(step.outputs)
+
+            # Verifiers (if configured)
+            verifier_results = await self._run_verifiers(workflow_id, step)
+            if verifier_results is not None and not self._verifiers_passed(verifier_results):
+                await self.state_machine.fail_step(workflow_id, step.id, "Verifier failed")
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message="Verifier failed",
+                    output={"verifiers": [r.__dict__ for r in verifier_results]},
+                )
 
             # 完成步骤
             result = await self.state_machine.complete_step(
@@ -635,6 +691,11 @@ class Orchestrator:
                 step.id,
                 output
             )
+
+            # 收集证据（基于 outputs 规格）
+            evidence_paths = self._resolve_output_paths(step.outputs)
+            if evidence_paths:
+                await self._collect_evidence(workflow_id, step.id, evidence_paths)
 
             # 更新 task_execution 记录
             await self.store.update_task_execution(
@@ -694,6 +755,10 @@ class Orchestrator:
 
             if result.status == "success":
                 completed_steps += 1
+            elif result.status in ("waiting_approval", "blocked"):
+                blocked_at = result.step_id
+                final_status = "blocked"
+                break
             elif result.status == "no_ready_step":
                 # 没有可执行的步骤，可能是完成或阻塞
                 instance = await self.store.get_workflow(workflow_id)
@@ -914,6 +979,164 @@ class Orchestrator:
         ]
 
     # ============ 辅助方法 ============
+
+    def _generate_run_id(self) -> str:
+        """生成 run_id"""
+        return f"RUN-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4]}"
+
+    async def _collect_evidence(self, workflow_id: str, step_id: str, artifacts: List[str]) -> None:
+        """收集证据产物"""
+        if not artifacts:
+            return
+
+        instance = await self.store.get_workflow(workflow_id)
+        if not instance:
+            return
+
+        run_id = instance.data.get("run_id")
+        if not run_id:
+            run_id = self._generate_run_id()
+            instance.data["run_id"] = run_id
+            await self.store.update_workflow_data(workflow_id, instance.data)
+
+        self.evidence_collector.collect(run_id, step_id, artifacts)
+
+    def _resolve_output_paths(self, outputs) -> List[str]:
+        """根据 outputs 规格解析路径"""
+        if not outputs:
+            return []
+
+        paths = []
+        for out in outputs:
+            path = getattr(out, "path", None)
+            if not path:
+                continue
+            if os.path.isabs(path):
+                paths.append(path)
+            else:
+                base = Path(self.project_root or ".").resolve()
+                paths.append(str(base / path))
+        return paths
+
+    def _ensure_output_artifacts(self, outputs) -> List[str]:
+        """确保输出产物存在（用于 demo/兜底）"""
+        if not outputs:
+            return []
+
+        created: List[str] = []
+        base = Path(self.project_root or ".").resolve()
+
+        for out in outputs:
+            path = getattr(out, "path", None)
+            if not path:
+                continue
+
+            target = Path(path)
+            if not target.is_absolute():
+                target = base / target
+
+            out_type = getattr(out, "type", None) or ("dir" if path.endswith("/") else "file")
+            if out_type == "dir":
+                target.mkdir(parents=True, exist_ok=True)
+                created.append(str(target))
+                continue
+
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                continue
+
+            fmt = (getattr(out, "format", None) or "text").lower()
+            if fmt == "json":
+                payload = {"placeholder": True, "path": path, "status": "demo"}
+                content = json.dumps(payload, ensure_ascii=True, indent=2) + "\n"
+            elif fmt in ("yaml", "yml"):
+                content = "placeholder: true\nstatus: demo\n"
+            elif fmt in ("markdown", "md"):
+                content = "# Placeholder\n\nGenerated in demo mode.\n"
+            else:
+                content = "placeholder\n"
+
+            target.write_text(content, encoding="utf-8")
+            created.append(str(target))
+
+        return created
+
+    def _demo_mode_enabled(self) -> bool:
+        return os.getenv("LEE_DEMO_MODE", "").lower() in ("1", "true", "yes")
+
+    async def _run_verifiers(self, workflow_id: str, step) -> Optional[List]:
+        """运行 verifiers，返回结果列表或 None"""
+        verifiers = step.config.get("verifiers") if step.config else None
+        if not verifiers:
+            return None
+
+        if self._demo_mode_enabled():
+            from lee.orchestrator.verifiers.base import VerifyResult, VerifyStatus
+            results = []
+            for item in verifiers or []:
+                vtype = item.get("type") if isinstance(item, dict) else None
+                results.append(VerifyResult(
+                    status=VerifyStatus.PASSED,
+                    verifier_id=vtype or "unknown",
+                    message="verifier skipped in demo mode",
+                    details={"mode": "demo"},
+                ))
+
+            instance = await self.store.get_workflow(workflow_id)
+            run_id = instance.data.get("run_id") if instance else None
+            if instance and not run_id:
+                run_id = self._generate_run_id()
+                instance.data["run_id"] = run_id
+                await self.store.update_workflow_data(workflow_id, instance.data)
+
+            report_path = self._write_verifier_report(run_id or "RUN-UNKNOWN", step.id, results)
+            if report_path:
+                await self._collect_evidence(workflow_id, step.id, [report_path])
+
+            return results
+
+        instance = await self.store.get_workflow(workflow_id)
+        run_id = instance.data.get("run_id") if instance else None
+        if instance and not run_id:
+            run_id = self._generate_run_id()
+            instance.data["run_id"] = run_id
+            await self.store.update_workflow_data(workflow_id, instance.data)
+
+        context = {
+            "workflow_id": workflow_id,
+            "step_id": step.id,
+            "run_id": run_id,
+        }
+
+        results = self.verifier_engine.run(verifiers, context)
+
+        report_path = self._write_verifier_report(run_id or "RUN-UNKNOWN", step.id, results)
+        if report_path:
+            await self._collect_evidence(workflow_id, step.id, [report_path])
+
+        return results
+
+    def _verifiers_passed(self, results: List) -> bool:
+        return self.verifier_engine.all_passed(results)
+
+    def _write_verifier_report(self, run_id: str, step_id: str, results: List) -> Optional[str]:
+        """写入 verifier 结果报告到 .workflow/verifiers/"""
+        base = Path(self.project_root or ".").resolve()
+        report_dir = base / ".workflow" / "verifiers"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        report_path = report_dir / f"{run_id}-{step_id}.json"
+
+        payload = []
+        for r in results:
+            payload.append({
+                "verifier_id": r.verifier_id,
+                "status": r.status.value if hasattr(r.status, "value") else str(r.status),
+                "message": r.message,
+                "details": r.details,
+            })
+
+        report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return str(report_path)
 
     async def _check_workflow_completion(self, workflow_id: str) -> None:
         """

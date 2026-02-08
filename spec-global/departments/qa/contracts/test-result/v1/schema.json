@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "qa/test-result/v1/schema.json",
+  "title": "Test Result",
+  "description": "测试结果汇总",
+  "type": "object",
+  "required": ["summary"],
+  "properties": {
+    "summary": {
+      "type": "object",
+      "required": ["passed", "failed", "skipped"],
+      "properties": {
+        "passed": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "skipped": {"type": "integer", "minimum": 0}
+      }
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["case_id", "reason"],
+        "properties": {
+          "case_id": {"type": "string"},
+          "reason": {"type": "string"},
+          "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]}
+        }
+      }
+    }
+  }
+}

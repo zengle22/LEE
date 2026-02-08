@@ -1,0 +1,15 @@
+id: FEAT-0001
+title: "Feature Title"
+description: |
+  Feature description and scope.
+acceptance_criteria:
+  - "AC1: ..."
+  - "AC2: ..."
+interfaces:
+  - name: "example_api"
+    type: "rest_api"
+    spec_path: "spec/dev/api/example.yaml"
+risks:
+  - "Potential impact on ..."
+assumptions:
+  - "Assumption ..."

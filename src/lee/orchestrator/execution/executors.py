@@ -49,6 +49,7 @@ class BaseExecutor(ABC):
 
 # 导入实际的执行器实现
 from lee.orchestrator.execution.llm_executor import LLMExecutor as RealLLMExecutor
+from lee.orchestrator.execution.mock_executor import MockLLMExecutor
 from lee.orchestrator.execution.metagpt_executor import MetaGPTExecutor as RealMetaGPTExecutor
 
 
@@ -203,9 +204,23 @@ class ExecutorFactory:
         if executor_class is None:
             raise ValueError(f"Unknown executor type: {executor_type}")
 
-        if executor_type == "llm" and "profile" not in kwargs:
-            # Default to zhipu for debugging; can be overridden via env var.
-            kwargs["profile"] = os.getenv("LLM_PROFILE", "zhipu")
+        if executor_type == "llm":
+            use_mock = os.getenv("LEE_LLM_MOCK", "").lower() in ("1", "true", "yes") \
+                or os.getenv("LEE_DEMO_MODE", "").lower() in ("1", "true", "yes")
+            if use_mock:
+                return MockLLMExecutor(agent_id=kwargs.get("agent_id", ""))
+
+            if "profile" not in kwargs:
+                # Default to zhipu for debugging; can be overridden via env var.
+                kwargs["profile"] = os.getenv("LLM_PROFILE", "zhipu")
+
+            try:
+                return executor_class(**kwargs)
+            except Exception:
+                # Optional fallback to mock in demo mode
+                if use_mock:
+                    return MockLLMExecutor(agent_id=kwargs.get("agent_id", ""))
+                raise
 
         return executor_class(**kwargs)
 

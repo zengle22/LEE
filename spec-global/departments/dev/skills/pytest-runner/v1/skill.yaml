@@ -1,0 +1,27 @@
+# Pytest Runner Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.test.pytest
+name: Pytest Runner
+description: >
+  运行 pytest 单元测试。
+owner: dev-team
+tags: [test, dev]
+
+interface:
+  inputs:
+    type: object
+    required: [command]
+    properties:
+      command:
+        type: string
+        description: "执行命令"
+  outputs:
+    type: object
+    properties:
+      stdout:
+        type: string
+      stderr:
+        type: string

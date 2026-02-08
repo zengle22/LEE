@@ -461,6 +461,12 @@ class SpecGlobalParser:
         elif isinstance(gate_ref, str):
             gate_ref_str = gate_ref
 
+        step_config = {"description": step_data.get("description")}
+        if "verifiers" in step_data:
+            step_config["verifiers"] = step_data.get("verifiers")
+        if "verify" in step_data:
+            step_config["verifiers"] = step_data.get("verify")
+
         return StepIR(
             id=step_data["id"],
             kind=kind,
@@ -477,7 +483,7 @@ class SpecGlobalParser:
             gate=gate_ir,
             gate_ref=gate_ref_str,
             on_failure=step_data.get("on_failure"),
-            config={"description": step_data.get("description")},
+            config=step_config,
             timeout=step_data.get("timeout"),
         )
 

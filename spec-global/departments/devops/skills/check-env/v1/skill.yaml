@@ -1,0 +1,26 @@
+# DevOps Check Env Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.devops.check_env
+name: Check Environment
+description: >
+  检查目标环境状态。
+owner: devops-team
+tags: [devops, deploy]
+
+interface:
+  inputs:
+    type: object
+    required: [env]
+    properties:
+      env:
+        type: string
+  outputs:
+    type: object
+    properties:
+      ok:
+        type: boolean
+      message:
+        type: string

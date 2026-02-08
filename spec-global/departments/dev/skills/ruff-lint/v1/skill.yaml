@@ -1,0 +1,27 @@
+# Ruff Lint Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.lint.ruff
+name: Ruff Lint
+description: >
+  运行 ruff 静态检查。
+owner: dev-team
+tags: [lint, dev]
+
+interface:
+  inputs:
+    type: object
+    required: [command]
+    properties:
+      command:
+        type: string
+        description: "执行命令"
+  outputs:
+    type: object
+    properties:
+      stdout:
+        type: string
+      stderr:
+        type: string

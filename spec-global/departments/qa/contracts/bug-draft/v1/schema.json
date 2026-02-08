@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "qa/bug-draft/v1/schema.json",
+  "title": "Bug Draft",
+  "description": "Bug 草稿列表",
+  "type": "object",
+  "required": ["bugs"],
+  "properties": {
+    "bugs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "severity", "steps", "expected", "actual"],
+        "properties": {
+          "id": {"type": "string"},
+          "title": {"type": "string"},
+          "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+          "steps": {"type": "array", "items": {"type": "string"}},
+          "expected": {"type": "string"},
+          "actual": {"type": "string"},
+          "evidence": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

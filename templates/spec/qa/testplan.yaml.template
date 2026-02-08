@@ -1,0 +1,12 @@
+id: QA-PLAN-0001
+title: "Regression Plan"
+scope: "Release scope summary"
+environment: "staging"
+cases:
+  - id: TC-0001
+    name: "Critical path"
+    priority: "P0"
+    steps:
+      - "Step 1"
+      - "Step 2"
+    expected: "Expected result"

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dev/change-summary/v1/schema.json",
+  "title": "Change Summary",
+  "description": "变更说明与风险评估",
+  "type": "object",
+  "required": ["summary", "risks", "tests"],
+  "properties": {
+    "summary": {"type": "string"},
+    "scope": {"type": "string"},
+    "risks": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "tests": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "rollback": {"type": "string"}
+  }
+}

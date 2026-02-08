@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "devops/deploy-config/v1/schema.json",
+  "title": "Deploy Config",
+  "description": "部署配置",
+  "type": "object",
+  "required": ["env", "version"],
+  "properties": {
+    "env": {"type": "string", "enum": ["dev", "test", "staging", "production"]},
+    "version": {"type": "string"},
+    "service": {"type": "string"},
+    "rollback_plan": {"type": "string"}
+  }
+}

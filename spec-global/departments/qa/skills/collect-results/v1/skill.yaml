@@ -1,0 +1,25 @@
+# QA Collect Results Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.qa.collect_results
+name: QA Collect Results
+description: >
+  收集测试结果、日志与截图。
+owner: qa-team
+tags: [qa, test]
+
+interface:
+  inputs:
+    type: object
+    required: [raw_results]
+    properties:
+      raw_results:
+        type: string
+        description: "原始测试结果文件"
+  outputs:
+    type: object
+    properties:
+      report_path:
+        type: string

@@ -133,6 +133,13 @@ workflow_registry:
     version: "1.0"
     v3_1_compatible: true
 
+  - id: workflow.dev.feature
+    path: departments/dev/workflows/feature/v1/workflow.yaml
+    level: task
+    description: "Dev 部门 - Feature 开发工作流"
+    version: "1.0"
+    v3_1_compatible: true
+
   # ============================================
   # QA 部门工作流 (L2 - Department 级)
   # ============================================
@@ -171,6 +178,13 @@ workflow_registry:
       相关 Agents:
       - agent.qa.requirement_alignment_agent
       - agent.qa.feature_calibration_agent
+
+  - id: workflow.qa.regression
+    path: departments/qa/workflows/regression/v1/workflow.yaml
+    level: task
+    description: "QA 部门 - 回归测试工作流"
+    version: "1.0"
+    v3_1_compatible: true
       - agent.qa.branch_coverage_agent
       - agent.qa.specialized_test_agent
       - agent.qa.playwright_script_generator
@@ -230,6 +244,13 @@ workflow_registry:
       - 真实凭证由人类注入
       - 生产环境必须经过 Human Gate 审批
       - 每个变更都有回滚方案
+
+  - id: workflow.devops.deploy
+    path: departments/devops/workflows/deploy/v1/workflow.yaml
+    level: task
+    description: "DevOps 部门 - 部署工作流 (L3)"
+    version: "1.0"
+    v3_1_compatible: true
 
 # ============================================
 # Agent 注册表
@@ -426,6 +447,48 @@ agent_registry:
       - 安全检查
       - 性能审查
 
+  - id: agent.dev.feature_spec_parser
+    path: departments/dev/agents/feature-spec-parser/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - Feature Spec 解析
+      - 验收标准提取
+    input_contract: contracts/feature-spec/v1/schema.json
+    output_contract: contracts/feature-spec/v1/schema.json
+
+  - id: agent.dev.feature_coder
+    path: departments/dev/agents/feature-coder/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - Feature 代码实现
+      - 变更清单生成
+    input_contract: contracts/feature-spec/v1/schema.json
+    output_contract: contracts/code-diff/v1/schema.json
+
+  - id: agent.dev.code_self_reviewer
+    path: departments/dev/agents/code-self-reviewer/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - 自审代码质量
+      - 风险识别
+
+  - id: agent.dev.change_summarizer
+    path: departments/dev/agents/change-summarizer/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - 变更说明生成
+      - 风险与测试汇总
+    input_contract: contracts/code-diff/v1/schema.json
+    output_contract: contracts/change-summary/v1/schema.json
+
   # ============================================
   # DevOps 部门 Agents
   # ============================================
@@ -487,6 +550,16 @@ agent_registry:
         - audit_trail_complete
     output_contract: contracts/devops-verification-output/v1/schema.yaml
 
+  - id: agent.devops.deploy_report_generator
+    path: departments/devops/agents/deploy-report-generator/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - 部署报告生成
+      - 健康检查总结
+    output_contract: contracts/deploy-report/v1/schema.json
+
   # ============================================
   # QA 部门 Agents
   # ============================================
@@ -506,6 +579,45 @@ agent_registry:
       - contracts/frozen-technical-architecture-contract/v1/schema.json
       - contracts/frozen-ui-prototype-contract/v1/schema.json
     output_contract: contracts/test-case-design-contract/v1/schema.json
+
+  - id: agent.qa.test_plan_parser
+    path: departments/qa/agents/test-plan-parser/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - 测试计划解析
+      - 测试范围归一化
+    input_contract: contracts/test-plan/v1/schema.json
+    output_contract: contracts/test-plan/v1/schema.json
+
+  - id: agent.qa.test_script_generator
+    path: departments/qa/agents/test-script-generator/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - 测试脚本生成
+      - 执行说明生成
+
+  - id: agent.qa.failure_analyzer
+    path: departments/qa/agents/failure-analyzer/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - 失败分析
+      - 根因归类
+
+  - id: agent.qa.bug_drafter
+    path: departments/qa/agents/bug-drafter/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - Bug 草稿生成
+      - 复现步骤整理
+    output_contract: contracts/bug-draft/v1/schema.json
 
   - id: agent.qa.feature_calibration_agent
     path: departments/qa/agents/feature-calibration-agent/v1/agent.yaml
@@ -650,6 +762,57 @@ contract_registry:
     v3_1_validator: SchemaValidator
     description: "Phase Contract - Phase 配置与输入"
 
+  - id: contract.dev.feature_spec
+    path: departments/dev/contracts/feature-spec/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "Feature Spec Contract - 特性需求与验收标准"
+
+  - id: contract.dev.code_diff
+    path: departments/dev/contracts/code-diff/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "Code Diff Contract - 代码变更补丁"
+
+  - id: contract.dev.change_summary
+    path: departments/dev/contracts/change-summary/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "Change Summary Contract - 变更说明"
+
+  # ============================================
+  # QA 部门 Contracts
+  # ============================================
+  - id: contract.qa.test_plan
+    path: departments/qa/contracts/test-plan/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "Test Plan Contract - 测试计划"
+
+  - id: contract.qa.test_result
+    path: departments/qa/contracts/test-result/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "Test Result Contract - 测试结果"
+
+  - id: contract.qa.bug_draft
+    path: departments/qa/contracts/bug-draft/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "Bug Draft Contract - Bug 草稿列表"
+
+  # ============================================
+  # DevOps 部门 Contracts
+  # ============================================
+  - id: contract.devops.deploy_config
+    path: departments/devops/contracts/deploy-config/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "Deploy Config Contract - 部署配置"
+
+  - id: contract.devops.health_check_result
+    path: departments/devops/contracts/health-check-result/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "Health Check Result Contract - 健康检查结果"
+
+  - id: contract.devops.deploy_report
+    path: departments/devops/contracts/deploy-report/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "Deploy Report Contract - 部署报告"
+
   # ============================================
   # 跨部门 Contracts
   # ============================================
@@ -714,6 +877,18 @@ gate_registry:
     required_roles: [product_owner, tech_lead]
     min_approvals: 2
 
+  - id: gate.dev.feature_gate
+    workflow: workflow.dev.feature
+    step: s4_1_dev_gate
+    type: approval
+    blocking: true
+    path: departments/dev/gates/dev-feature-gate/v1/gate.yaml
+    timeout:
+      duration: 48h
+      action: escalate
+    required_roles: [tech_lead]
+    min_approvals: 1
+
   # ============================================
   # Phase OpenSpec Flow Gates
   # ============================================
@@ -757,6 +932,18 @@ gate_registry:
     required_roles: [qa_lead]
     description: "验证测试用例设计输入是否满足最低标准"
 
+  - id: gate.qa.regression_gate
+    workflow: workflow.qa.regression
+    step: s5_1_qa_gate
+    type: approval
+    blocking: true
+    path: departments/qa/gates/qa-regression-gate/v1/gate.yaml
+    timeout:
+      duration: 48h
+      action: escalate
+    required_roles: [qa_lead]
+    min_approvals: 1
+
   - id: gate.qa.test_case_review_gate
     workflow: workflow.qa.test_case_design_pipeline
     step: s6_2_human_review
@@ -769,6 +956,18 @@ gate_registry:
     required_roles: [qa_lead]
     optional_roles: [tech_lead, pm]
     description: "人类评审测试用例设计质量"
+
+  - id: gate.devops.deploy_gate
+    workflow: workflow.devops.deploy
+    step: s4_1_deploy_gate
+    type: approval
+    blocking: true
+    path: departments/devops/gates/deploy-gate/v1/gate.yaml
+    timeout:
+      duration: 72h
+      action: escalate
+    required_roles: [devops_lead]
+    min_approvals: 1
 
 # ============================================
 # Skill 注册表
@@ -797,6 +996,25 @@ skill_registry:
     capabilities:
       - 合并知识到项目级
       - 去重处理
+
+  - id: skill.git.checkout
+    path: departments/dev/skills/git-checkout/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - 切换分支
+      - 拉取最新代码
+
+  - id: skill.lint.ruff
+    path: departments/dev/skills/ruff-lint/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - Ruff 静态检查
+
+  - id: skill.test.pytest
+    path: departments/dev/skills/pytest-runner/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - Pytest 单元测试执行
 
   # ============================================
   # QA Skills
@@ -827,6 +1045,58 @@ skill_registry:
       - Page Object 模式实现
       - 测试数据配置
       - 断言生成
+
+  - id: skill.qa.run_tests
+    path: departments/qa/skills/run-tests/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - 回归测试执行
+
+  - id: skill.qa.collect_results
+    path: departments/qa/skills/collect-results/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - 测试结果收集
+      - 日志与截图归档
+
+  # ============================================
+  # DevOps Skills
+  # ============================================
+  - id: skill.devops.validate_version
+    path: departments/devops/skills/validate-version/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - 版本校验
+
+  - id: skill.devops.check_env
+    path: departments/devops/skills/check-env/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - 环境检查
+
+  - id: skill.devops.deploy
+    path: departments/devops/skills/deploy/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - 部署执行
+
+  - id: skill.devops.health_check
+    path: departments/devops/skills/health-check/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - 健康检查
+
+  - id: skill.devops.smoke_test
+    path: departments/devops/skills/smoke-test/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - 冒烟测试
+
+  - id: skill.devops.deploy_test_env
+    path: departments/devops/skills/deploy-test-env/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - 部署测试环境
 
   # ============================================
   # PRD Skills

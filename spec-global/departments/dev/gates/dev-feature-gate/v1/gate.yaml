@@ -1,0 +1,41 @@
+# Dev Feature Gate v1.0
+# 开发特性审批门禁
+
+kind: gate
+version: 1.0
+
+id: gate.dev.feature_gate
+name: Dev Feature Gate
+description: >
+  Dev Lead 审批门禁，确保变更说明、评审与测试结果齐备。
+owner: dev-governance
+tags: [gate, dev, feature, approval]
+
+input_contract:
+  ref: ../../contracts/change-summary/v1/schema.json
+  description: "变更说明"
+
+rules:
+  - id: summary_present
+    name: 变更说明存在
+    description: 必须提供变更说明
+    condition: "summary != null"
+    severity: blocker
+    on_fail:
+      verdict: FAIL
+      message: "缺少变更说明"
+      action: reject
+
+verdicts:
+  PASS:
+    conditions:
+      - "summary_present"
+    actions:
+      - continue_to_next_stage
+    message: "变更说明齐备，审批通过"
+  FAIL:
+    conditions:
+      - "!summary_present"
+    actions:
+      - request_changes
+    message: "变更说明缺失，需补充"

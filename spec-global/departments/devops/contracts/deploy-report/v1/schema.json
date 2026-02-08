@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "devops/deploy-report/v1/schema.json",
+  "title": "Deploy Report",
+  "description": "部署报告",
+  "type": "object",
+  "required": ["env", "version", "status"],
+  "properties": {
+    "env": {"type": "string"},
+    "version": {"type": "string"},
+    "status": {"type": "string", "enum": ["success", "failed"]},
+    "health_check": {"type": "string"},
+    "smoke_test": {"type": "string"},
+    "risks": {"type": "array", "items": {"type": "string"}},
+    "rollback": {"type": "string"}
+  }
+}

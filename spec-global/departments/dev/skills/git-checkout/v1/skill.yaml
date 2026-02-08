@@ -1,0 +1,25 @@
+# Git Checkout Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.git.checkout
+name: Git Checkout
+description: >
+  切换/创建目标分支。
+owner: dev-team
+tags: [git, dev]
+
+interface:
+  inputs:
+    type: object
+    required: [branch]
+    properties:
+      branch:
+        type: string
+        description: "目标分支名称"
+  outputs:
+    type: object
+    properties:
+      status:
+        type: string
