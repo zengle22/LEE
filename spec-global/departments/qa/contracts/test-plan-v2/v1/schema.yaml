@@ -1,0 +1,263 @@
+# Test Plan Contract Schema v2.0
+# 测试计划契约标准 - 精简版，人工意图显性化
+
+kind: contract_schema
+version: 2.0
+
+description: |
+  Test Plan 是测试活动的"壳"，管"为什么测、测哪些、什么时候停"。
+  - 人工创建，Agent 不得自行创建
+  - 显性化人工测试意图
+  - 关联 Test Set，定义出入条件
+
+schema:
+  type: object
+  required:
+    - test_plan_id
+    - name
+    - scope
+    - test_sets
+    - exit_criteria
+
+  properties:
+    # ========== 基础标识 ==========
+    test_plan_id:
+      type: string
+      pattern: "^TP-[0-9]{4}-[0-9]{2}-[A-Z0-9-]+$"
+      description: "Test Plan 唯一标识"
+      examples:
+        - "TP-2026-02-RUNNING-MASTER-PHASE0"
+        - "TP-2026-02-FEATURE-LOGIN"
+
+    name:
+      type: string
+      description: "测试计划名称"
+      examples:
+        - "Running Master v1.0 Phase0 测试"
+        - "登录功能迭代测试"
+
+    description:
+      type: string
+      description: "测试计划描述和目标"
+
+    target_release:
+      type: string
+      description: "目标发布版本"
+      examples:
+        - "v1.0.0"
+        - "v1.1.0-rc1"
+
+    # ========== 测试范围 ==========
+    scope:
+      type: array
+      items:
+        type: string
+      minItems: 1
+      description: "测试范围（模块列表）"
+      examples:
+        - "新人评估"
+        - "每日训练建议"
+        - "训练复盘"
+
+    out_of_scope:
+      type: array
+      items:
+        type: string
+      description: "不在测试范围内的模块"
+
+    # ========== 关联 Test Set ==========
+    test_sets:
+      type: array
+      items:
+        type: object
+        required:
+          - test_set_id
+        properties:
+          test_set_id:
+            type: string
+            description: "Test Set ID"
+          critical:
+            type: boolean
+            description: "是否为关键 Test Set（必须通过）"
+            default: false
+          order:
+            type: integer
+            description: "执行顺序（可选）"
+      minItems: 1
+      description: "关联的 Test Set 列表"
+
+    # ========== 风险策略 ==========
+    risk_policy:
+      type: object
+      properties:
+        critical_test_sets_must_pass:
+          type: boolean
+          description: "关键 Test Set 必须全部通过"
+          default: true
+
+        medium_risk_allowed_failures:
+          type: integer
+          description: "中等风险允许的失败 Test Set 数量"
+          default: 1
+
+        p1_bug_threshold:
+          type: integer
+          description: "允许的 P1 Bug 数量上限"
+          default: 3
+
+        p2_bug_threshold:
+          type: integer
+          description: "允许的 P2 Bug 数量上限"
+          default: 10
+
+    # ========== 准入条件 ==========
+    entry_criteria:
+      type: array
+      items:
+        type: string
+      description: "开始测试的准入条件"
+      examples:
+        - "核心功能已联调"
+        - "冒烟测试通过"
+        - "开发自测完成"
+
+    # ========== 出测条件 ==========
+    exit_criteria:
+      type: array
+      items:
+        type: string
+      minItems: 1
+      description: "结束测试的出测条件"
+      examples:
+        - "所有 critical test sets 至少通过一次"
+        - "无 P0 bug 未关闭"
+        - "P1 bug ≤ 3"
+
+    # ========== 执行状态 ==========
+    status:
+      type: string
+      enum:
+        - draft           # 草稿
+        - ready           # 就绪
+        - in_progress     # 执行中
+        - blocked         # 阻塞
+        - completed       # 完成
+        - cancelled       # 取消
+      description: "计划状态"
+      default: draft
+
+    current_round:
+      type: integer
+      description: "当前测试轮次"
+      default: 0
+
+    max_rounds:
+      type: integer
+      description: "最大测试轮次"
+      default: 10
+
+    # ========== 关联的 Test Run ==========
+    test_runs:
+      type: array
+      items:
+        type: string
+      description: "关联的 Test Run ID 列表"
+
+    # ========== 元数据 ==========
+    owner:
+      type: string
+      description: "负责人"
+
+    created_by:
+      type: string
+      description: "创建人（必须是人类）"
+
+    created_at:
+      type: string
+      format: date-time
+      description: "创建时间"
+
+    updated_at:
+      type: string
+      format: date-time
+      description: "最后更新时间"
+
+    scheduled_start:
+      type: string
+      format: date-time
+      description: "计划开始时间"
+
+    scheduled_end:
+      type: string
+      format: date-time
+      description: "计划结束时间"
+
+# ========== 验证规则 ==========
+validation_rules:
+  - rule: "must_have_critical_test_set"
+    description: "至少有一个关键 Test Set"
+    check: "test_sets HAS AT LEAST ONE WHERE critical == true"
+    error_message: "Test Plan 必须至少有一个关键 Test Set"
+
+  - rule: "created_by_human"
+    description: "必须由人类创建"
+    check: "created_by IS NOT NULL AND created_by != 'agent'"
+    error_message: "Test Plan 必须由人类创建，Agent 不得自行创建"
+
+  - rule: "exit_criteria_not_empty"
+    description: "出测条件不能为空"
+    check: "exit_criteria IS NOT EMPTY"
+    error_message: "必须定义出测条件"
+
+# ========== 示例 ==========
+examples:
+  - name: "Running Master Phase0 测试计划"
+    data:
+      test_plan_id: "TP-2026-02-RUNNING-MASTER-PHASE0"
+      name: "Running Master v1.0 Phase0 测试"
+      description: "Running Master 首次发布的测试计划，覆盖核心功能"
+      target_release: "v1.0.0"
+
+      scope:
+        - "新人评估"
+        - "每日训练建议"
+        - "训练复盘"
+
+      out_of_scope:
+        - "社交分享"
+        - "支付功能"
+
+      test_sets:
+        - test_set_id: "TS-SMOKE"
+          critical: true
+          order: 1
+        - test_set_id: "TS-ONBOARDING"
+          critical: true
+          order: 2
+        - test_set_id: "TS-DAILY-PLAN"
+          critical: true
+          order: 3
+        - test_set_id: "TS-POST-RUN"
+          critical: false
+          order: 4
+
+      risk_policy:
+        critical_test_sets_must_pass: true
+        medium_risk_allowed_failures: 1
+        p1_bug_threshold: 3
+        p2_bug_threshold: 10
+
+      entry_criteria:
+        - "核心功能已联调"
+        - "开发自测完成"
+        - "测试环境就绪"
+
+      exit_criteria:
+        - "所有 critical test sets 至少通过一次"
+        - "无 P0 bug 未关闭"
+        - "P1 bug ≤ 3"
+
+      status: ready
+      max_rounds: 5
+      owner: "qa-lead"
+      created_by: "human"

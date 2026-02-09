@@ -1,0 +1,332 @@
+# Test Run Contract Schema v1.0
+# 测试批次契约标准 - 一次"对某个构建的测试尝试"
+
+kind: contract_schema
+version: 1.0
+
+description: |
+  Test Run 是一次测试批次，绑定 Test Plan + Build + Environment。
+  - 每次提测创建一个 Test Run
+  - 一个 Test Run 只能属于一个 Test Plan
+  - 包含多个 Test Set Execution (TSE)
+
+schema:
+  type: object
+  required:
+    - test_run_id
+    - test_plan_id
+    - build
+    - environment
+
+  properties:
+    # ========== 基础标识 ==========
+    test_run_id:
+      type: string
+      pattern: "^TR-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+$"
+      description: "Test Run 唯一标识"
+      examples:
+        - "TR-2026-02-07-rc1"
+        - "TR-2026-02-08-rc2"
+
+    test_plan_id:
+      type: string
+      description: "关联的 Test Plan ID"
+      examples:
+        - "TP-2026-02-RUNNING-MASTER-PHASE0"
+
+    round:
+      type: integer
+      description: "在 Test Plan 中的轮次序号"
+      minimum: 1
+
+    # ========== 绑定构建 ==========
+    build:
+      type: object
+      required:
+        - version
+        - commit
+      properties:
+        version:
+          type: string
+          description: "构建版本号"
+          examples:
+            - "0.1.3"
+            - "1.0.0-rc1"
+
+        commit:
+          type: string
+          description: "Git commit hash"
+          examples:
+            - "abc123def456"
+
+        branch:
+          type: string
+          description: "Git 分支"
+          examples:
+            - "main"
+            - "release/v1.0"
+
+        build_time:
+          type: string
+          format: date-time
+          description: "构建时间"
+
+        changed_areas:
+          type: array
+          items:
+            type: string
+          description: "变更涉及的模块（用于风险回归）"
+
+    # ========== 绑定环境 ==========
+    environment:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: "环境名称"
+          examples:
+            - "test-env-a"
+            - "staging"
+
+        url:
+          type: string
+          description: "环境访问地址"
+
+        stability:
+          type: string
+          enum: [stable, unstable, unknown]
+          description: "环境稳定性"
+          default: unknown
+
+        services:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+                enum: [running, stopped, unknown]
+              version:
+                type: string
+          description: "服务状态"
+
+    # ========== 执行状态 ==========
+    status:
+      type: string
+      enum:
+        - init              # 初始化
+        - env_preparing     # 环境准备中
+        - env_ready         # 环境就绪
+        - in_progress       # 执行中
+        - blocked           # 阻塞（等待人工）
+        - completed         # 完成
+        - failed            # 失败
+        - cancelled         # 取消
+      description: "Test Run 状态"
+      default: init
+
+    # ========== 包含的 TSE ==========
+    executions:
+      type: array
+      items:
+        type: object
+        required:
+          - tse_id
+          - test_set_id
+        properties:
+          tse_id:
+            type: string
+            description: "Test Set Execution ID"
+          test_set_id:
+            type: string
+            description: "对应的 Test Set ID"
+          status:
+            type: string
+            enum: [pending, in_progress, pass, fail, blocked, skipped]
+            description: "执行状态"
+          result_path:
+            type: string
+            description: "结果文件路径"
+      description: "包含的 Test Set Execution 列表"
+
+    # ========== 汇总结果 ==========
+    summary:
+      type: object
+      properties:
+        total_tse:
+          type: integer
+          description: "TSE 总数"
+        passed_tse:
+          type: integer
+          description: "通过的 TSE 数"
+        failed_tse:
+          type: integer
+          description: "失败的 TSE 数"
+        blocked_tse:
+          type: integer
+          description: "阻塞的 TSE 数"
+
+        total_cases:
+          type: integer
+          description: "用例总数"
+        passed_cases:
+          type: integer
+          description: "通过用例数"
+        failed_cases:
+          type: integer
+          description: "失败用例数"
+
+        p0_bugs:
+          type: integer
+          description: "P0 Bug 数"
+        p1_bugs:
+          type: integer
+          description: "P1 Bug 数"
+        p2_bugs:
+          type: integer
+          description: "P2 Bug 数"
+
+        pass_rate:
+          type: number
+          description: "通过率（%）"
+
+    # ========== 关联的 Bug ==========
+    bugs:
+      type: array
+      items:
+        type: string
+      description: "本次 Run 发现的 Bug ID 列表"
+
+    # ========== 出测评估 ==========
+    exit_evaluation:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [pass, fail, conditional_pass, blocked]
+          description: "出测决策"
+
+        blocking_reasons:
+          type: array
+          items:
+            type: string
+          description: "阻塞原因"
+
+        approver:
+          type: string
+          description: "审批人"
+
+        approved_at:
+          type: string
+          format: date-time
+          description: "审批时间"
+
+        notes:
+          type: string
+          description: "备注"
+
+    # ========== 时间线 ==========
+    started_at:
+      type: string
+      format: date-time
+      description: "开始时间"
+
+    completed_at:
+      type: string
+      format: date-time
+      description: "完成时间"
+
+    duration_seconds:
+      type: number
+      description: "执行耗时（秒）"
+
+    # ========== 元数据 ==========
+    created_by:
+      type: string
+      description: "创建人/Agent"
+
+    notes:
+      type: array
+      items:
+        type: string
+      description: "备注"
+
+# ========== 验证规则 ==========
+validation_rules:
+  - rule: "one_plan_one_run"
+    description: "一个 Test Run 只能属于一个 Test Plan"
+    check: "test_plan_id IS NOT NULL"
+    error_message: "Test Run 必须关联一个 Test Plan"
+
+  - rule: "build_required"
+    description: "必须绑定构建信息"
+    check: "build.version IS NOT NULL AND build.commit IS NOT NULL"
+    error_message: "Test Run 必须绑定构建版本和 commit"
+
+# ========== 示例 ==========
+examples:
+  - name: "Running Master 第一轮测试"
+    data:
+      test_run_id: "TR-2026-02-07-rc1"
+      test_plan_id: "TP-2026-02-RUNNING-MASTER-PHASE0"
+      round: 1
+
+      build:
+        version: "0.1.3"
+        commit: "abc123def456"
+        branch: "release/v1.0"
+        changed_areas:
+          - "daily-plan"
+          - "onboarding"
+
+      environment:
+        name: "test-env-a"
+        url: "https://test.example.com"
+        stability: unstable
+        services:
+          - name: "api"
+            status: running
+            version: "0.1.3"
+          - name: "database"
+            status: running
+
+      status: in_progress
+
+      executions:
+        - tse_id: "TSE-TR-2026-02-07-TS-SMOKE"
+          test_set_id: "TS-SMOKE"
+          status: pass
+        - tse_id: "TSE-TR-2026-02-07-TS-ONBOARDING"
+          test_set_id: "TS-ONBOARDING"
+          status: pass
+        - tse_id: "TSE-TR-2026-02-07-TS-DAILY-PLAN"
+          test_set_id: "TS-DAILY-PLAN"
+          status: fail
+        - tse_id: "TSE-TR-2026-02-07-TS-POST-RUN"
+          test_set_id: "TS-POST-RUN"
+          status: pending
+
+      summary:
+        total_tse: 4
+        passed_tse: 2
+        failed_tse: 1
+        blocked_tse: 0
+        total_cases: 25
+        passed_cases: 22
+        failed_cases: 3
+        p0_bugs: 0
+        p1_bugs: 1
+        p2_bugs: 2
+        pass_rate: 88.0
+
+      bugs:
+        - "BUG-2026-0031"
+        - "BUG-2026-0032"
+        - "BUG-2026-0033"
+
+      started_at: "2026-02-07T10:00:00Z"
+      created_by: "orchestrator"

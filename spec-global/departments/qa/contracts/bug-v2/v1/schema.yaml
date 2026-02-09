@@ -1,0 +1,290 @@
+# Bug Contract Schema v2.0
+# Bug 契约标准 - 精简版
+
+kind: contract_schema
+version: 2.0
+
+description: |
+  Bug 契约精简版，极简生命周期：OPEN → FIXED → VERIFIED → CLOSED
+  - Bug 永远挂在 TSE 上
+  - 首发绑定 + 多关联
+  - FIXED = 有 commit
+  - VERIFIED = 在后续 TSE 中未复现
+
+schema:
+  type: object
+  required:
+    - bug_id
+    - title
+    - severity
+    - detected_in
+    - status
+
+  properties:
+    # ========== 基础标识 ==========
+    bug_id:
+      type: string
+      pattern: "^BUG-[0-9]{4}-[0-9]{4}$"
+      description: "Bug 唯一标识"
+      examples:
+        - "BUG-2026-0031"
+        - "BUG-2026-0032"
+
+    title:
+      type: string
+      description: "Bug 标题"
+      examples:
+        - "无历史数据时配速计算崩溃"
+        - "登录超时未提示"
+
+    description:
+      type: string
+      description: "Bug 详细描述"
+
+    # ========== 严重程度 ==========
+    severity:
+      type: string
+      enum: [P0, P1, P2, P3]
+      description: |
+        Bug 严重程度：
+        - P0: 阻塞，核心功能不可用
+        - P1: 严重，主要功能受影响
+        - P2: 一般，次要功能问题
+        - P3: 轻微，体验问题
+
+    # ========== 发现位置（首发绑定）==========
+    detected_in:
+      type: object
+      required:
+        - tse_id
+        - test_run_id
+        - version
+      properties:
+        tse_id:
+          type: string
+          description: "首次发现的 TSE ID"
+
+        test_run_id:
+          type: string
+          description: "首次发现的 Test Run ID"
+
+        version:
+          type: string
+          description: "发现时的构建版本"
+
+        case_id:
+          type: string
+          description: "发现时的用例 ID"
+
+        environment:
+          type: string
+          description: "发现时的环境"
+      description: "首次发现位置"
+
+    # ========== 关联的 TSE（多绑定）==========
+    related_tse:
+      type: array
+      items:
+        type: object
+        properties:
+          tse_id:
+            type: string
+          relation:
+            type: string
+            enum: [detected, reproduced, verified, not_reproduced]
+            description: |
+              关系类型：
+              - detected: 首次发现
+              - reproduced: 复现
+              - verified: 验证（修复后确认）
+              - not_reproduced: 未复现
+          notes:
+            type: string
+      description: "关联的所有 TSE"
+
+    # ========== 生命周期 ==========
+    status:
+      type: string
+      enum:
+        - OPEN        # 新建/打开
+        - FIXED       # 已修复（有 commit）
+        - VERIFIED    # 已验证（后续 TSE 未复现）
+        - CLOSED      # 已关闭
+      description: "Bug 状态"
+      default: OPEN
+
+    # ========== 修复信息 ==========
+    fix_commit:
+      type: string
+      description: "修复的 commit hash"
+      examples:
+        - "def456ghi789"
+
+    fix_version:
+      type: string
+      description: "修复所在版本"
+      examples:
+        - "0.1.4"
+
+    fixed_by:
+      type: string
+      description: "修复人"
+
+    fixed_at:
+      type: string
+      format: date-time
+      description: "修复时间"
+
+    # ========== 验证信息 ==========
+    verified_in:
+      type: string
+      description: "验证的 TSE ID"
+
+    verified_by:
+      type: string
+      description: "验证人/Agent"
+
+    verified_at:
+      type: string
+      format: date-time
+      description: "验证时间"
+
+    # ========== 证据 ==========
+    evidence:
+      type: object
+      properties:
+        reproduction_steps:
+          type: string
+          description: "复现步骤"
+
+        screenshots:
+          type: array
+          items:
+            type: string
+          description: "截图路径"
+
+        log_path:
+          type: string
+          description: "日志路径"
+
+        trace_id:
+          type: string
+          description: "分布式追踪 ID"
+
+        video:
+          type: string
+          description: "录屏路径"
+
+    # ========== 分类 ==========
+    category:
+      type: string
+      enum:
+        - functional      # 功能问题
+        - performance     # 性能问题
+        - security        # 安全问题
+        - data            # 数据问题
+        - ui              # 界面问题
+        - flaky           # 不稳定
+        - env             # 环境问题
+      description: "Bug 分类"
+
+    module:
+      type: string
+      description: "所属模块"
+      examples:
+        - "daily-plan"
+        - "onboarding"
+
+    # ========== 元数据 ==========
+    created_at:
+      type: string
+      format: date-time
+      description: "创建时间"
+
+    updated_at:
+      type: string
+      format: date-time
+      description: "最后更新时间"
+
+    created_by:
+      type: string
+      description: "创建人/Agent"
+
+    notes:
+      type: array
+      items:
+        type: string
+      description: "备注"
+
+# ========== 验证规则 ==========
+validation_rules:
+  - rule: "fixed_must_have_commit"
+    description: "FIXED 状态必须有 commit"
+    check: "IF status == 'FIXED' THEN fix_commit IS NOT NULL"
+    error_message: "FIXED 状态的 Bug 必须关联修复 commit"
+
+  - rule: "verified_must_have_tse"
+    description: "VERIFIED 状态必须有验证 TSE"
+    check: "IF status == 'VERIFIED' THEN verified_in IS NOT NULL"
+    error_message: "VERIFIED 状态的 Bug 必须关联验证的 TSE"
+
+  - rule: "bug_must_link_tse"
+    description: "Bug 必须挂在 TSE 上"
+    check: "detected_in.tse_id IS NOT NULL"
+    error_message: "Bug 必须关联首发的 TSE"
+
+# ========== 示例 ==========
+examples:
+  - name: "配速计算崩溃 Bug"
+    data:
+      bug_id: "BUG-2026-0031"
+      title: "无历史数据时配速计算崩溃"
+      description: |
+        当用户没有历史跑步数据时，进入训练计划页面会导致配速计算崩溃，
+        页面显示空白或报错。
+      severity: P1
+      category: functional
+      module: "daily-plan"
+
+      detected_in:
+        tse_id: "TSE-TR-2026-02-07-TS-DAILY-PLAN"
+        test_run_id: "TR-2026-02-07-rc1"
+        version: "0.1.3"
+        case_id: "GC-002"
+        environment: "test-env-a"
+
+      related_tse:
+        - tse_id: "TSE-TR-2026-02-07-TS-DAILY-PLAN"
+          relation: detected
+          notes: "首次发现"
+        - tse_id: "TSE-TR-2026-02-08-TS-DAILY-PLAN"
+          relation: not_reproduced
+          notes: "修复后验证通过"
+
+      status: VERIFIED
+
+      fix_commit: "def456ghi789"
+      fix_version: "0.1.4"
+      fixed_by: "dev-agent"
+      fixed_at: "2026-02-07T18:00:00Z"
+
+      verified_in: "TSE-TR-2026-02-08-TS-DAILY-PLAN"
+      verified_by: "qa-agent"
+      verified_at: "2026-02-08T10:30:00Z"
+
+      evidence:
+        reproduction_steps: |
+          1. 创建新用户（无跑步历史）
+          2. 登录并进入训练计划页面
+          3. 观察到页面崩溃
+        screenshots:
+          - "screenshots/bug-0031-crash.png"
+        log_path: "logs/bug-0031-error.log"
+        trace_id: "trace-abc123"
+
+      created_at: "2026-02-07T10:20:00Z"
+      created_by: "bug-drafter-agent"
+
+      notes:
+        - "根因：配速计算未处理空数据场景"
+        - "修复方案：添加默认值兜底"

@@ -1,0 +1,312 @@
+# Test Set Contract Schema v1.0
+# 测试集契约标准 - 设计态资产，按模块划分
+
+kind: contract_schema
+version: 1.0
+
+description: |
+  Test Set 是测试设计资产，按模块划分。
+  - 描述"测什么、怎么测"的策略和重点
+  - 不包含具体用例（用例在执行时动态生成）
+  - 长期维护的设计资产
+
+schema:
+  type: object
+  required:
+    - test_set_id
+    - module
+    - strategy
+    - test_focus
+
+  properties:
+    # ========== 基础标识 ==========
+    test_set_id:
+      type: string
+      pattern: "^TS-[A-Z0-9-]+$"
+      description: "Test Set 唯一标识"
+      examples:
+        - "TS-DAILY-PLAN"
+        - "TS-ONBOARDING"
+        - "TS-POST-RUN"
+        - "TS-SMOKE"
+
+    module:
+      type: string
+      description: "对应的功能模块名称"
+      examples:
+        - "每日训练计划"
+        - "新人评估"
+        - "训练复盘"
+
+    description:
+      type: string
+      description: "模块测试目标描述"
+
+    owner:
+      type: string
+      description: "负责人/团队"
+      default: "qa-team"
+
+    # ========== 测试策略 ==========
+    strategy:
+      type: object
+      required:
+        - focus
+      properties:
+        focus:
+          type: array
+          items:
+            type: string
+          description: "测试重点领域"
+          examples:
+            - "计划生成逻辑"
+            - "配速/心率区间计算"
+            - "降级场景"
+
+        risk_areas:
+          type: array
+          items:
+            type: string
+          description: "风险区域，需要重点测试"
+          examples:
+            - "边界值：新手 vs 精英跑者"
+            - "异常：无历史数据时的兜底"
+
+        test_types:
+          type: array
+          items:
+            type: string
+            enum:
+              - api
+              - e2e
+              - unit
+              - integration
+              - performance
+              - security
+          description: "需要的测试类型"
+
+        priority:
+          type: string
+          enum: [P0, P1, P2, P3]
+          description: "Test Set 优先级"
+          default: P1
+
+    # ========== 测试重点（用于动态生成用例）==========
+    test_focus:
+      type: object
+      properties:
+        positive:
+          type: array
+          items:
+            type: string
+          description: "正向测试点"
+          examples:
+            - "正常生成7日计划"
+            - "根据疲劳度调整强度"
+
+        negative:
+          type: array
+          items:
+            type: string
+          description: "负向测试点"
+          examples:
+            - "无跑步历史时的降级"
+            - "配速超出合理范围"
+
+        boundary:
+          type: array
+          items:
+            type: string
+          description: "边界值测试点"
+          examples:
+            - "最小/最大周跑量"
+            - "连续休息天数上限"
+
+        exception:
+          type: array
+          items:
+            type: string
+          description: "异常场景测试点"
+          examples:
+            - "网络超时"
+            - "服务不可用"
+
+    # ========== 执行配置 ==========
+    execution:
+      type: object
+      properties:
+        estimated_duration:
+          type: string
+          description: "预估执行时长"
+          examples:
+            - "30min"
+            - "1h"
+            - "2h"
+
+        requires_env:
+          type: array
+          items:
+            type: string
+          description: "依赖的环境组件"
+          examples:
+            - "api"
+            - "database"
+            - "redis"
+
+        requires_data:
+          type: array
+          items:
+            type: string
+          description: "依赖的测试数据"
+          examples:
+            - "测试用户账号"
+            - "历史跑步记录"
+
+        automation_ready:
+          type: boolean
+          description: "是否可自动化"
+          default: true
+
+    # ========== 追溯性 ==========
+    traceability:
+      type: object
+      properties:
+        requirement_ids:
+          type: array
+          items:
+            type: string
+          description: "关联的需求ID"
+
+        feature_ids:
+          type: array
+          items:
+            type: string
+          description: "关联的功能ID"
+
+        tech_design_ref:
+          type: string
+          description: "技术设计文档引用"
+
+    # ========== 元数据 ==========
+    created_at:
+      type: string
+      format: date-time
+      description: "创建时间"
+
+    updated_at:
+      type: string
+      format: date-time
+      description: "最后更新时间"
+
+    version:
+      type: string
+      description: "版本号"
+      default: "1.0"
+
+    status:
+      type: string
+      enum: [draft, active, deprecated]
+      description: "状态"
+      default: active
+
+# ========== 验证规则 ==========
+validation_rules:
+  - rule: "must_have_test_focus"
+    description: "至少有一个测试重点"
+    check: "test_focus.positive OR test_focus.negative OR test_focus.boundary OR test_focus.exception"
+    error_message: "Test Set 必须至少包含一个测试重点（正向/负向/边界/异常）"
+
+  - rule: "p0_must_have_positive"
+    description: "P0 级别必须有正向测试"
+    check: "IF strategy.priority == 'P0' THEN test_focus.positive IS NOT EMPTY"
+    error_message: "P0 级别 Test Set 必须包含正向测试点"
+
+# ========== 示例 ==========
+examples:
+  - name: "每日训练计划 Test Set"
+    data:
+      test_set_id: "TS-DAILY-PLAN"
+      module: "每日训练计划"
+      description: "测试每日训练计划生成、调整和展示功能"
+      owner: "qa-team"
+
+      strategy:
+        focus:
+          - "计划生成逻辑"
+          - "配速/心率区间计算"
+          - "降级场景"
+        risk_areas:
+          - "边界值：新手 vs 精英跑者"
+          - "异常：无历史数据时的兜底"
+        test_types:
+          - api
+          - e2e
+        priority: P0
+
+      test_focus:
+        positive:
+          - "正常生成7日计划"
+          - "根据疲劳度调整强度"
+          - "显示配速区间"
+        negative:
+          - "无跑步历史时的降级"
+          - "配速超出合理范围的处理"
+        boundary:
+          - "最小周跑量（10km）"
+          - "最大周跑量（200km）"
+          - "连续休息天数上限（3天）"
+        exception:
+          - "API 超时"
+          - "数据库连接失败"
+
+      execution:
+        estimated_duration: "30min"
+        requires_env:
+          - api
+          - database
+        requires_data:
+          - "测试用户账号"
+        automation_ready: true
+
+      traceability:
+        requirement_ids:
+          - "REQ-2026-010"
+          - "REQ-2026-011"
+        feature_ids:
+          - "daily-plan"
+          - "intensity-adjustment"
+
+      status: active
+
+  - name: "冒烟测试 Test Set"
+    data:
+      test_set_id: "TS-SMOKE"
+      module: "核心功能冒烟"
+      description: "快速验证核心功能可用性，作为测试准入门禁"
+      owner: "qa-team"
+
+      strategy:
+        focus:
+          - "登录/注册"
+          - "首页加载"
+          - "核心流程可达"
+        risk_areas:
+          - "服务可用性"
+        test_types:
+          - e2e
+        priority: P0
+
+      test_focus:
+        positive:
+          - "用户可正常登录"
+          - "首页正常加载"
+          - "核心功能入口可达"
+
+      execution:
+        estimated_duration: "10min"
+        requires_env:
+          - api
+          - database
+        automation_ready: true
+
+      status: active

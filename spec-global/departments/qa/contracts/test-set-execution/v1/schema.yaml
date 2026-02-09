@@ -1,0 +1,358 @@
+# Test Set Execution Contract Schema v1.0
+# 用例集执行契约标准 - Test Set × Test Run 的运行态对象
+
+kind: contract_schema
+version: 1.0
+
+description: |
+  Test Set Execution (TSE) 是运行态对象，代表一次 Test Set 在某个 Test Run 中的执行。
+  - Test Set 是长期的设计资产
+  - TSE 是一次性的执行实例
+  - 用例动态生成（ephemeral）
+  - Bug、日志、结论都挂在 TSE 上
+
+schema:
+  type: object
+  required:
+    - tse_id
+    - test_set_id
+    - test_run_id
+
+  properties:
+    # ========== 基础标识 ==========
+    tse_id:
+      type: string
+      pattern: "^TSE-TR-[0-9]{4}-[0-9]{2}-[0-9]{2}-TS-[A-Z0-9-]+$"
+      description: "TSE 唯一标识"
+      examples:
+        - "TSE-TR-2026-02-07-TS-DAILY-PLAN"
+        - "TSE-TR-2026-02-07-TS-SMOKE"
+
+    test_set_id:
+      type: string
+      description: "对应的 Test Set ID"
+      examples:
+        - "TS-DAILY-PLAN"
+
+    test_run_id:
+      type: string
+      description: "对应的 Test Run ID"
+      examples:
+        - "TR-2026-02-07-rc1"
+
+    # ========== 动态生成的用例（ephemeral）==========
+    generated_cases:
+      type: array
+      items:
+        type: object
+        required:
+          - case_id
+          - title
+        properties:
+          case_id:
+            type: string
+            pattern: "^GC-[0-9]{3}$"
+            description: "生成用例 ID"
+            examples:
+              - "GC-001"
+              - "GC-002"
+
+          title:
+            type: string
+            description: "用例标题"
+
+          description:
+            type: string
+            description: "用例描述"
+
+          type:
+            type: string
+            enum: [positive, negative, boundary, exception]
+            description: "用例类型"
+
+          priority:
+            type: string
+            enum: [P0, P1, P2, P3]
+            description: "优先级"
+
+          steps:
+            type: array
+            items:
+              type: object
+              properties:
+                step_num:
+                  type: integer
+                action:
+                  type: string
+                expected:
+                  type: string
+                test_data:
+                  type: string
+            description: "测试步骤"
+
+          result:
+            type: string
+            enum: [pending, pass, fail, blocked, skipped]
+            description: "执行结果"
+
+          bug_id:
+            type: string
+            description: "关联的 Bug ID（如失败）"
+
+          evidence:
+            type: object
+            properties:
+              screenshot:
+                type: string
+              log_path:
+                type: string
+              trace_id:
+                type: string
+            description: "执行证据"
+
+          duration_seconds:
+            type: number
+            description: "执行耗时"
+
+          executed_at:
+            type: string
+            format: date-time
+            description: "执行时间"
+      description: "动态生成的用例列表"
+
+    # ========== 翻译的脚本 ==========
+    test_scripts:
+      type: array
+      items:
+        type: object
+        required:
+          - script_id
+          - case_ids
+        properties:
+          script_id:
+            type: string
+            description: "脚本 ID"
+
+          case_ids:
+            type: array
+            items:
+              type: string
+            description: "覆盖的用例 ID"
+
+          type:
+            type: string
+            enum: [api, e2e, unit, integration]
+            description: "脚本类型"
+
+          path:
+            type: string
+            description: "脚本文件路径"
+
+          framework:
+            type: string
+            enum: [playwright, pytest, jest, custom]
+            description: "测试框架"
+
+          status:
+            type: string
+            enum: [generated, validated, executed, failed]
+            description: "脚本状态"
+      description: "翻译生成的测试脚本"
+
+    # ========== 执行结果 ==========
+    result:
+      type: string
+      enum: [pending, pass, fail, blocked, partial]
+      description: "TSE 整体结果"
+
+    pass_rate:
+      type: number
+      minimum: 0
+      maximum: 100
+      description: "通过率（%）"
+
+    # ========== 统计 ==========
+    statistics:
+      type: object
+      properties:
+        total_cases:
+          type: integer
+          description: "用例总数"
+        passed:
+          type: integer
+          description: "通过数"
+        failed:
+          type: integer
+          description: "失败数"
+        blocked:
+          type: integer
+          description: "阻塞数"
+        skipped:
+          type: integer
+          description: "跳过数"
+
+    # ========== 关联的 Bug ==========
+    bugs:
+      type: array
+      items:
+        type: string
+      description: "本次执行发现的 Bug ID 列表"
+
+    # ========== 执行证据 ==========
+    evidence:
+      type: object
+      properties:
+        log_dir:
+          type: string
+          description: "日志目录"
+
+        screenshots_dir:
+          type: string
+          description: "截图目录"
+
+        report_path:
+          type: string
+          description: "测试报告路径"
+
+        trace_ids:
+          type: array
+          items:
+            type: string
+          description: "分布式追踪 ID"
+
+    # ========== 时间线 ==========
+    status:
+      type: string
+      enum:
+        - pending           # 待执行
+        - case_generating   # 用例生成中
+        - script_translating # 脚本翻译中
+        - executing         # 执行中
+        - completed         # 完成
+        - failed            # 失败
+        - blocked           # 阻塞
+      description: "TSE 状态"
+      default: pending
+
+    started_at:
+      type: string
+      format: date-time
+      description: "开始时间"
+
+    completed_at:
+      type: string
+      format: date-time
+      description: "完成时间"
+
+    duration_seconds:
+      type: number
+      description: "执行耗时"
+
+    # ========== 备注 ==========
+    notes:
+      type: array
+      items:
+        type: string
+      description: "执行备注"
+      examples:
+        - "环境波动，部分场景未执行"
+        - "第一次执行有 flaky，重试后通过"
+
+# ========== 验证规则 ==========
+validation_rules:
+  - rule: "tse_belongs_to_run"
+    description: "TSE 必须属于一个 Test Run"
+    check: "test_run_id IS NOT NULL"
+    error_message: "TSE 必须关联 Test Run"
+
+  - rule: "bug_must_link_tse"
+    description: "Bug 必须关联到 TSE"
+    check: "IF result == 'fail' THEN bugs IS NOT EMPTY"
+    error_message: "失败的 TSE 必须关联 Bug"
+
+# ========== 示例 ==========
+examples:
+  - name: "每日训练计划 TSE"
+    data:
+      tse_id: "TSE-TR-2026-02-07-TS-DAILY-PLAN"
+      test_set_id: "TS-DAILY-PLAN"
+      test_run_id: "TR-2026-02-07-rc1"
+
+      generated_cases:
+        - case_id: "GC-001"
+          title: "正常生成7日计划"
+          type: positive
+          priority: P0
+          steps:
+            - step_num: 1
+              action: "登录测试用户"
+              expected: "登录成功"
+            - step_num: 2
+              action: "进入训练计划页面"
+              expected: "显示7日计划"
+            - step_num: 3
+              action: "检查每日计划内容"
+              expected: "包含配速、距离、心率区间"
+          result: pass
+          duration_seconds: 15.5
+          executed_at: "2026-02-07T10:15:00Z"
+
+        - case_id: "GC-002"
+          title: "无历史数据降级"
+          type: negative
+          priority: P1
+          steps:
+            - step_num: 1
+              action: "使用新用户登录"
+              expected: "登录成功"
+            - step_num: 2
+              action: "进入训练计划页面"
+              expected: "显示降级提示或默认计划"
+          result: fail
+          bug_id: "BUG-2026-0031"
+          evidence:
+            screenshot: "screenshots/gc-002-failure.png"
+            log_path: "logs/gc-002.log"
+          duration_seconds: 12.3
+          executed_at: "2026-02-07T10:16:00Z"
+
+        - case_id: "GC-003"
+          title: "最大周跑量边界"
+          type: boundary
+          priority: P1
+          result: pass
+          duration_seconds: 10.2
+
+      test_scripts:
+        - script_id: "SCR-001"
+          case_ids: ["GC-001", "GC-002", "GC-003"]
+          type: api
+          path: "scripts/test_daily_plan_api.py"
+          framework: pytest
+          status: executed
+
+      result: fail
+      pass_rate: 66.7
+
+      statistics:
+        total_cases: 3
+        passed: 2
+        failed: 1
+        blocked: 0
+        skipped: 0
+
+      bugs:
+        - "BUG-2026-0031"
+
+      evidence:
+        log_dir: "logs/tse-daily-plan/"
+        screenshots_dir: "screenshots/tse-daily-plan/"
+        report_path: "reports/tse-daily-plan-report.html"
+
+      status: completed
+      started_at: "2026-02-07T10:15:00Z"
+      completed_at: "2026-02-07T10:20:00Z"
+      duration_seconds: 300
+
+      notes:
+        - "GC-002 发现 Bug，无历史数据时配速计算崩溃"
