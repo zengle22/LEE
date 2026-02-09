@@ -14,6 +14,7 @@ from lee.cli.commands.status import status
 from lee.cli.commands.approve import approve
 from lee.cli.commands.init import init
 from lee.cli.commands.demo import demo
+from lee.cli.commands.qa import qa
 
 
 @click.group()
@@ -27,6 +28,7 @@ cli.add_command(status)
 cli.add_command(approve)
 cli.add_command(init)
 cli.add_command(demo)
+cli.add_command(qa)
 
 
 def main():
