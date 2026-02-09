@@ -1,0 +1,45 @@
+# Test Plan: Demo Phase0
+# 演示用测试计划
+
+test_plan_id: "TP-DEMO-PHASE0"
+name: "Demo App Phase0 测试计划"
+description: "演示项目首次发布的测试计划"
+target_release: "v1.0.0"
+
+scope:
+  - "每日训练计划"
+  - "核心功能冒烟"
+
+out_of_scope:
+  - "社交分享"
+  - "支付功能"
+
+test_sets:
+  - test_set_id: "TS-SMOKE"
+    critical: true
+    order: 1
+  - test_set_id: "TS-DAILY-PLAN"
+    critical: true
+    order: 2
+
+risk_policy:
+  critical_test_sets_must_pass: true
+  medium_risk_allowed_failures: 0
+  p1_bug_threshold: 2
+  p2_bug_threshold: 5
+
+entry_criteria:
+  - "核心功能已联调"
+  - "开发自测完成"
+  - "测试环境就绪"
+
+exit_criteria:
+  - "所有 critical test sets 至少通过一次"
+  - "无 P0 bug 未关闭"
+  - "P1 bug ≤ 2"
+
+status: ready
+max_rounds: 3
+owner: "qa-lead"
+created_by: "human"
+created_at: "2026-02-09T10:00:00Z"

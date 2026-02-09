@@ -1,0 +1,36 @@
+# Test Set: 冒烟测试
+# 核心功能快速验证
+
+test_set_id: "TS-SMOKE"
+module: "核心功能冒烟"
+description: "快速验证核心功能可用性，作为测试准入门禁"
+owner: "qa-team"
+
+strategy:
+  focus:
+    - "登录/注册"
+    - "首页加载"
+    - "核心流程可达"
+  risk_areas:
+    - "服务可用性"
+    - "基础功能可用"
+  test_types:
+    - e2e
+  priority: P0
+
+test_focus:
+  positive:
+    - "用户可正常登录"
+    - "首页正常加载"
+    - "训练计划页面可访问"
+    - "核心功能入口可达"
+
+execution:
+  estimated_duration: "10min"
+  requires_env:
+    - api
+    - database
+  automation_ready: true
+
+status: active
+version: "1.0"
