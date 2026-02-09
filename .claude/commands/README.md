@@ -20,6 +20,39 @@ Slash commands are user-invocable commands that you type directly into Claude Co
 
 ## Available Commands
 
+### `/lee-qa-test-set`
+Create Test Set from requirement document using QA workflow.
+
+**File**: `lee-qa-test-set.md`
+
+**Features**:
+- Analyze requirement document
+- Design test strategy and risk areas
+- Generate standardized Test Set YAML
+- Review and approve Test Set
+
+**Usage**:
+```bash
+lee qa test-set create <module> --requirement <doc>
+```
+
+### `/lee-qa-test-run`
+Execute Test Plan and run test batch using QA workflow.
+
+**File**: `lee-qa-test-run.md`
+
+**Features**:
+- Create and execute Test Run
+- Generate test cases dynamically
+- Translate to executable scripts
+- Collect results and draft bugs
+- Evaluate exit criteria
+
+**Usage**:
+```bash
+lee qa run <plan-id> --build <version> --commit <hash>
+```
+
 ### `/gate-review`
 Review and approve pending human gates in the LEE workflow system.
 
