@@ -25,3 +25,23 @@ workflows:
     required_params:
       - env
       - version
+
+  # ========== QA 新工作流 ==========
+  qa.test-set-production:
+    path: spec-global/departments/qa/workflows/test-set-production/v1/workflow.yaml
+    description: "生产 Test Set 设计资产"
+    required_params:
+      - module
+      - requirement_doc
+    optional_params:
+      - tech_design
+
+  qa.test-plan-execution:
+    path: spec-global/departments/qa/workflows/test-plan-execution/v1/workflow.yaml
+    description: "执行 Test Plan"
+    required_params:
+      - test_plan_id
+      - build_version
+      - build_commit
+    optional_params:
+      - environment
