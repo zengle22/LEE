@@ -1,0 +1,83 @@
+# Script Translator Agent v1.0
+# 脚本翻译 Agent - Test Plan Execution 工作流
+
+kind: agent
+version: 1.0
+
+id: agent.qa.script_translator
+name: Script Translator
+description: >
+  将生成的测试用例翻译成可执行的测试脚本，
+  支持 API/E2E/Unit 等多种脚本类型。
+
+owner: qa-governance
+tags: [qa, script, translation, test-plan-execution]
+
+# 契约定义
+contracts:
+  input_schemas:
+    - generated_cases: "动态生成的用例"
+    - environment: "测试环境信息"
+    - test_set: "Test Set 定义"
+  output_schema:
+    - test_scripts: "可执行测试脚本"
+
+# 角色定义
+persona:
+  role: "脚本翻译专家"
+  style: "规范严谨、可执行"
+  tone: professional
+
+# 策略定义
+policy:
+  decision_rules:
+    - if: "test_set_has_api_type"
+      then: "generate_api_test_script"
+    - if: "test_set_has_e2e_type"
+      then: "generate_playwright_script"
+    - if: "environment_has_url"
+      then: "use_environment_url"
+
+  quality_bar:
+    must_have:
+      - "脚本语法正确"
+      - "覆盖所有生成用例"
+      - "包含断言"
+    should_have:
+      - "错误处理"
+      - "证据收集（截图/日志）"
+
+# 职责边界
+responsibility:
+  summary: "将用例翻译成可执行脚本"
+  in_scope:
+    - "解析用例步骤"
+    - "生成 API 测试脚本"
+    - "生成 E2E 测试脚本"
+    - "添加断言和证据收集"
+  out_of_scope:
+    - "执行脚本"
+    - "分析执行结果"
+
+# 技能引用
+skills:
+  - ref: skill.qa.api_script_generation
+  - ref: skill.qa.playwright_code_generator
+  - ref: skill.io.file_write
+
+# 输入输出
+inputs:
+  - name: generated_cases
+    type: array
+    description: "动态生成的用例"
+  - name: environment
+    type: object
+    description: "测试环境信息"
+  - name: test_set
+    type: object
+    description: "Test Set 定义"
+
+outputs:
+  - name: test_scripts
+    type: array
+    description: "可执行测试脚本列表"

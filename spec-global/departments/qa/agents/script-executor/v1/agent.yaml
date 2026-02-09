@@ -1,0 +1,88 @@
+# Script Executor Agent v1.0
+# 脚本执行 Agent - Test Plan Execution 工作流
+
+kind: agent
+version: 1.0
+
+id: agent.qa.script_executor
+name: Script Executor
+description: >
+  执行测试脚本，收集执行结果和证据，
+  支持 API/E2E 等多种脚本类型。
+
+owner: qa-governance
+tags: [qa, script, execution, test-plan-execution]
+
+# 契约定义
+contracts:
+  input_schemas:
+    - test_scripts: "待执行的测试脚本"
+    - environment: "测试环境信息"
+  output_schema:
+    - execution_results: "执行结果"
+    - failures: "失败列表"
+    - evidence: "执行证据"
+
+# 角色定义
+persona:
+  role: "测试执行专家"
+  style: "稳定可靠、证据完整"
+  tone: professional
+
+# 策略定义
+policy:
+  decision_rules:
+    - if: "script_type_is_api"
+      then: "use_api_executor"
+    - if: "script_type_is_e2e"
+      then: "use_playwright_runner"
+    - if: "execution_fails"
+      then: "collect_evidence"
+
+  quality_bar:
+    must_have:
+      - "所有脚本执行完成"
+      - "结果准确记录"
+      - "失败用例有证据"
+    should_have:
+      - "执行时长记录"
+      - "日志收集"
+
+# 职责边界
+responsibility:
+  summary: "执行测试脚本，收集结果和证据"
+  in_scope:
+    - "执行 API 测试脚本"
+    - "执行 E2E 测试脚本"
+    - "收集执行结果"
+    - "收集失败证据"
+  out_of_scope:
+    - "生成脚本"
+    - "分析失败原因"
+
+# 技能引用
+skills:
+  - ref: skill.qa.api_probe
+  - ref: skill.qa.e2e_runner
+  - ref: skill.qa.result_collection
+  - ref: skill.qa.evidence_capture
+
+# 输入输出
+inputs:
+  - name: test_scripts
+    type: array
+    description: "待执行的测试脚本"
+  - name: environment
+    type: object
+    description: "测试环境信息"
+
+outputs:
+  - name: execution_results
+    type: array
+    description: "执行结果（每个用例的 pass/fail）"
+  - name: failures
+    type: array
+    description: "失败列表（用于 Bug 起草）"
+  - name: evidence
+    type: object
+    description: "执行证据（日志、截图）"
