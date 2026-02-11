@@ -35,9 +35,26 @@
 # 2. 凡是跨部门但不是大项目主链路、而是一类"可被调用的任务" → 放 cross/workflows/task/
 # 3. 某个部门自己的小任务 → 放 departments/{dept}/workflows/ 下的子目录
 
-version: "1.0"
+version: "1.1"
 orchestrator_version: "3.1"
 compatible_since: "3.1"
+
+# ============================================
+# 执行体分类法（引用宪法定义）
+# ============================================
+# 完整定义见 core/constitution.yaml → execution_taxonomy
+#
+# 速查：
+# | 前缀     | 含义         | Executor       | 示例                          |
+# |----------|-------------|----------------|-------------------------------|
+# | agent.*  | LLM Agent   | LLMExecutor    | agent.dev.tech_lead           |
+# | skill.*  | 传统程序/CLI | ShellExecutor  | skill.devops.deploy           |
+# | gate.*   | 人类决策点   | GateEngine     | gate.dev.h1_plan_review       |
+#
+# 强制规则：
+# - 所有 workflow 的 run: 字段必须使用 agent.* 或 skill.* 前缀
+# - 裸名称（如 run: test_runner）是不合规的
+execution_taxonomy_ref: "core/constitution.yaml#execution_taxonomy"
 
 # ============================================
 # Workflow 注册表
@@ -974,9 +991,10 @@ gate_registry:
 # ============================================
 skill_registry:
   # ============================================
-  # OpenSpec Skills
+  # OpenSpec Skills (kind: process)
   # ============================================
   - id: skill.openspec.initializer
+    kind: process
     path: departments/dev/skills/openspec-initializer/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
@@ -984,6 +1002,7 @@ skill_registry:
       - 创建目录结构
 
   - id: skill.openspec.archiver
+    kind: process
     path: departments/dev/skills/openspec-archiver/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
@@ -991,6 +1010,7 @@ skill_registry:
       - 标记只读
 
   - id: skill.knowledge.merger
+    kind: process
     path: departments/dev/skills/knowledge-merger/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
@@ -998,6 +1018,7 @@ skill_registry:
       - 去重处理
 
   - id: skill.git.checkout
+    kind: process
     path: departments/dev/skills/git-checkout/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
@@ -1005,12 +1026,14 @@ skill_registry:
       - 拉取最新代码
 
   - id: skill.lint.ruff
+    kind: process
     path: departments/dev/skills/ruff-lint/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
       - Ruff 静态检查
 
   - id: skill.test.pytest
+    kind: process
     path: departments/dev/skills/pytest-runner/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
@@ -1020,6 +1043,7 @@ skill_registry:
   # QA Skills
   # ============================================
   - id: skill.qa.ui_contract_analyzer
+    kind: llm_tool
     path: departments/qa/skills/ui-contract-analyzer/v1/skill.yaml
     v3_1_executor: LLMExecutor
     capabilities:
@@ -1029,6 +1053,7 @@ skill_registry:
       - 组件映射
 
   - id: skill.qa.branch_coverage_analyzer
+    kind: llm_tool
     path: departments/qa/skills/branch-coverage-analyzer/v1/skill.yaml
     v3_1_executor: LLMExecutor
     capabilities:
@@ -1038,6 +1063,7 @@ skill_registry:
       - 测试用例生成
 
   - id: skill.qa.playwright_code_generator
+    kind: llm_tool
     path: departments/qa/skills/playwright-code-generator/v1/skill.yaml
     v3_1_executor: LLMExecutor
     capabilities:
@@ -1047,61 +1073,106 @@ skill_registry:
       - 断言生成
 
   - id: skill.qa.run_tests
+    kind: process
     path: departments/qa/skills/run-tests/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
       - 回归测试执行
 
   - id: skill.qa.collect_results
+    kind: process
     path: departments/qa/skills/collect-results/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
       - 测试结果收集
       - 日志与截图归档
 
+  - id: skill.qa.behavior_compliance_checker
+    kind: process
+    path: departments/qa/skills/behavior-compliance-checker/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    capabilities:
+      - AI 行为合规检查
+      - Mock/模拟违规检测
+      - 证据完整性验证
+
   # ============================================
-  # DevOps Skills
+  # Runner Skills (统一执行器)
+  # ============================================
+  - id: skill.runner.test_e2e
+    kind: process
+    path: departments/qa/skills/test-e2e-runner/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    command: "test_runner"
+    args_template: "run --case {{ case_id }} --env {{ env }}"
+    capabilities:
+      - E2E 测试统一执行
+      - 证据收集（日志、截图、网络追踪）
+    sandbox: "container.qa.e2e_runner"
+
+  # ============================================
+  # Env Skills (环境检查工具)
+  # ============================================
+  - id: skill.env.check_tools
+    kind: process
+    path: departments/qa/skills/check-tools/v1/skill.yaml
+    v3_1_executor: ShellExecutor
+    command: "check_env"
+    capabilities:
+      - 命令存在性检查
+      - 服务可达性检查
+      - 目录可写性检查
+
+  # ============================================
+  # DevOps Skills (kind: process)
   # ============================================
   - id: skill.devops.validate_version
+    kind: process
     path: departments/devops/skills/validate-version/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
       - 版本校验
 
   - id: skill.devops.check_env
+    kind: process
     path: departments/devops/skills/check-env/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
       - 环境检查
 
   - id: skill.devops.deploy
+    kind: process
     path: departments/devops/skills/deploy/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
       - 部署执行
 
   - id: skill.devops.health_check
+    kind: process
     path: departments/devops/skills/health-check/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
       - 健康检查
 
   - id: skill.devops.smoke_test
+    kind: process
     path: departments/devops/skills/smoke-test/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
       - 冒烟测试
 
   - id: skill.devops.deploy_test_env
+    kind: process
     path: departments/devops/skills/deploy-test-env/v1/skill.yaml
     v3_1_executor: ShellExecutor
     capabilities:
       - 部署测试环境
 
   # ============================================
-  # PRD Skills
+  # PRD Skills (kind: llm_tool)
   # ============================================
   - id: skill.prd.markdown_to_contract
+    kind: llm_tool
     path: departments/prd/skills/markdown-to-contract/v1/skill.yaml
     v3_1_executor: LLMExecutor
     capabilities:
@@ -1112,9 +1183,10 @@ skill_registry:
       - frozen-detailed-prd-contract 生成
 
   # ============================================
-  # UI Skills
+  # UI Skills (kind: llm_tool)
   # ============================================
   - id: skill.ui.markdown_to_contract
+    kind: llm_tool
     path: departments/ui/skills/markdown-to-contract/v1/skill.yaml
     v3_1_executor: LLMExecutor
     capabilities:
