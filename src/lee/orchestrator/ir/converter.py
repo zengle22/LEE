@@ -94,7 +94,12 @@ class IRConverter:
                 executor_type = "llm"
             elif step_ir.kind == StepKind.SKILL:
                 executor_type = "shell"
-            elif step_ir.kind == StepKind.HUMAN_GATE:
+            elif step_ir.kind in (
+                StepKind.HUMAN_GATE,
+                StepKind.WORKFLOW_SPAWN,
+                StepKind.ORCHESTRATOR_CLI,
+                StepKind.COMPLIANCE_GATE,
+            ):
                 executor_type = None
 
         return {
@@ -148,7 +153,12 @@ class IRConverter:
                 executor_type = "llm"
             elif step_ir.kind == StepKind.SKILL:
                 executor_type = "shell"
-            elif step_ir.kind == StepKind.HUMAN_GATE:
+            elif step_ir.kind in (
+                StepKind.HUMAN_GATE,
+                StepKind.WORKFLOW_SPAWN,
+                StepKind.ORCHESTRATOR_CLI,
+                StepKind.COMPLIANCE_GATE,
+            ):
                 executor_type = None
 
         return Step(
@@ -320,6 +330,12 @@ class TemplateToIRConverter:
             kind = StepKind.SKILL
         elif step.kind == "human_gate":
             kind = StepKind.HUMAN_GATE
+        elif step.kind in ("workflow_spawn", "subworkflow"):
+            kind = StepKind.WORKFLOW_SPAWN
+        elif step.kind == "orchestrator_cli":
+            kind = StepKind.ORCHESTRATOR_CLI
+        elif step.kind == "compliance_gate":
+            kind = StepKind.COMPLIANCE_GATE
         else:
             kind = StepKind.AGENT
 
@@ -333,7 +349,7 @@ class TemplateToIRConverter:
             executor_type=step.executor_type,
             depends_on=step.depends_on,
             config=step.config,
-            gate_id=step.gate_id,
+            human_gate=step.gate_id,
         )
 
     def ir_to_spec_global_yaml(self, ir: WorkflowIR, output_path: str) -> None:
@@ -412,6 +428,20 @@ class TemplateToIRConverter:
         elif step_ir.skill_id:
             doc["run"] = step_ir.skill_id
             doc["type"] = "skill"
+        elif step_ir.kind == StepKind.WORKFLOW_SPAWN:
+            doc["kind"] = "workflow_spawn"
+            subworkflow_ref = step_ir.config.get("subworkflow_ref") if step_ir.config else None
+            if subworkflow_ref:
+                doc["workflow"] = subworkflow_ref
+            subworkflow_level = step_ir.config.get("subworkflow_level") if step_ir.config else None
+            if subworkflow_level:
+                doc["level"] = subworkflow_level
+        elif step_ir.kind == StepKind.HUMAN_GATE:
+            doc["type"] = "human_gate"
+        elif step_ir.kind == StepKind.ORCHESTRATOR_CLI:
+            doc["type"] = "orchestrator_cli"
+        elif step_ir.kind == StepKind.COMPLIANCE_GATE:
+            doc["type"] = "compliance_gate"
 
         # 添加依赖
         if step_ir.depends_on:

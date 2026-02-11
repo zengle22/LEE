@@ -37,6 +37,9 @@ class StepKind(Enum):
     SKILL = "skill"
     HUMAN_GATE = "human_gate"
     CONDITIONAL = "conditional"
+    WORKFLOW_SPAWN = "workflow_spawn"
+    ORCHESTRATOR_CLI = "orchestrator_cli"
+    COMPLIANCE_GATE = "compliance_gate"
     MARKER = "marker"
 
 

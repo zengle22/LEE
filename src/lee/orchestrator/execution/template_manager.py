@@ -638,10 +638,12 @@ class TemplateManager:
         step_id = step_data.get("id", "")
 
         # 自动推断 kind（如果没有显式指定）
-        kind = step_data.get("kind")
+        kind = step_data.get("kind") or step_data.get("type")
         if not kind:
             if "human_gate" in step_data:
                 kind = "human_gate"
+            elif "subworkflow" in step_data or "workflow" in step_data:
+                kind = "workflow_spawn"
             elif "skill" in step_data:
                 kind = "skill"
             elif "agent" in step_data:
@@ -649,6 +651,7 @@ class TemplateManager:
             else:
                 # 默认为 agent
                 kind = "agent"
+        kind = str(kind).lower()
 
         # 解析 agent/skill/gate 引用
         agent_id = step_data.get("agent")  # kind=agent 时
@@ -663,6 +666,27 @@ class TemplateManager:
         elif kind == "human_gate" and "gate" in step_data:
             gate_id = step_data["gate"].get("id")
 
+        # 解析子工作流引用（workflow_spawn/subworkflow）
+        subworkflow_ref = None
+        subworkflow_level = None
+        if kind in ("workflow_spawn", "subworkflow"):
+            subworkflow_data = step_data.get("subworkflow")
+            if isinstance(subworkflow_data, dict):
+                subworkflow_ref = subworkflow_data.get("ref") or subworkflow_data.get("id")
+                subworkflow_level = subworkflow_data.get("level")
+            elif isinstance(subworkflow_data, str):
+                subworkflow_ref = subworkflow_data
+
+            if not subworkflow_ref and isinstance(step_data.get("workflow"), str):
+                subworkflow_ref = step_data.get("workflow")
+
+            run_ref = step_data.get("run")
+            if not subworkflow_ref and isinstance(run_ref, str) and run_ref.startswith("workflow."):
+                subworkflow_ref = run_ref
+
+            if step_data.get("level"):
+                subworkflow_level = step_data.get("level")
+
         # 解析 executor_type（v1.4：不再从 workflow 直接读取，由 runtime 决定）
         # 保留兼容性：如果指定了 executor 则使用，否则根据 kind 默认
         executor_type = step_data.get("executor")
@@ -673,6 +697,8 @@ class TemplateManager:
                 executor_type = "shell"  # 默认使用 Shell
             elif kind == "human_gate":
                 executor_type = None  # human_gate 不需要 executor
+            elif kind in ("workflow_spawn", "subworkflow", "orchestrator_cli", "compliance_gate"):
+                executor_type = None
 
         # 解析 outputs
         outputs_raw = step_data.get("outputs", [])
@@ -705,6 +731,17 @@ class TemplateManager:
                         description=output_item.get("description", ""),
                     ))
 
+        # 兼容 dependencies/depends_on 两种写法
+        depends_on = step_data.get("depends_on")
+        if depends_on is None:
+            dependencies = step_data.get("dependencies", [])
+            if isinstance(dependencies, dict):
+                depends_on = dependencies.get("requires", [])
+            elif isinstance(dependencies, list):
+                depends_on = dependencies
+            else:
+                depends_on = []
+
         return Step(
             id=step_id,
             kind=kind,
@@ -712,13 +749,24 @@ class TemplateManager:
             agent_id=agent_id,
             skill_id=skill_id,
             gate_id=gate_id,
-            depends_on=step_data.get("depends_on", []),
+            depends_on=depends_on,
             input=step_data.get("inputs", step_data.get("input", {})),
             outputs=outputs,
-            config=self._build_step_config(step_data, kind),
+            config=self._build_step_config(
+                step_data,
+                kind,
+                subworkflow_ref=subworkflow_ref,
+                subworkflow_level=subworkflow_level,
+            ),
         )
 
-    def _build_step_config(self, step_data: Dict[str, Any], kind: str) -> Dict[str, Any]:
+    def _build_step_config(
+        self,
+        step_data: Dict[str, Any],
+        kind: str,
+        subworkflow_ref: Optional[str] = None,
+        subworkflow_level: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         构建步骤配置
 
@@ -747,6 +795,25 @@ class TemplateManager:
                 config["reviewers"] = step_data["reviewers"]
             if "approval_criteria" in step_data:
                 config["approval_criteria"] = step_data["approval_criteria"]
+
+        if kind in ("workflow_spawn", "subworkflow"):
+            if subworkflow_ref:
+                config["subworkflow_ref"] = subworkflow_ref
+            if subworkflow_level:
+                config["subworkflow_level"] = subworkflow_level
+            if "subworkflow" in step_data:
+                config["subworkflow"] = step_data["subworkflow"]
+            if "workflow" in step_data:
+                config["workflow"] = step_data["workflow"]
+            if "input_map" in step_data:
+                config["input_map"] = step_data["input_map"]
+            if "output_map" in step_data:
+                config["output_map"] = step_data["output_map"]
+            if "subworkflow_max_steps" in step_data:
+                config["subworkflow_max_steps"] = step_data["subworkflow_max_steps"]
+
+        if "run" in step_data:
+            config["run"] = step_data["run"]
 
         # Verifiers
         if "verifiers" in step_data:

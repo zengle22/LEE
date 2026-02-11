@@ -379,8 +379,20 @@ class SpecGlobalParser:
         Returns:
             StepIR 对象
         """
-        # 推断步骤类型
-        step_type = step_data.get("type", "agent")
+        # 推断步骤类型（兼容 type/kind 两种写法）
+        step_type = step_data.get("kind") or step_data.get("type")
+        if not step_type:
+            if "subworkflow" in step_data or "workflow" in step_data:
+                step_type = "subworkflow"
+            elif "skill" in step_data:
+                step_type = "skill"
+            elif "gate" in step_data:
+                step_type = "human_gate"
+            else:
+                step_type = "agent"
+
+        step_type = str(step_type).lower()
+
         if step_type == "agent":
             kind = StepKind.AGENT
         elif step_type == "skill":
@@ -389,23 +401,33 @@ class SpecGlobalParser:
             kind = StepKind.HUMAN_GATE
         elif step_type == "conditional":
             kind = StepKind.CONDITIONAL
+        elif step_type in ("workflow_spawn", "subworkflow"):
+            kind = StepKind.WORKFLOW_SPAWN
+        elif step_type == "orchestrator_cli":
+            kind = StepKind.ORCHESTRATOR_CLI
+        elif step_type == "compliance_gate":
+            kind = StepKind.COMPLIANCE_GATE
         else:
             kind = StepKind.AGENT
 
-        # 解析依赖关系
-        dependencies = step_data.get("dependencies", [])
-        if isinstance(dependencies, list):
-            # 列表格式: [step1, step2]
-            depends_on = dependencies
-        elif isinstance(dependencies, dict):
-            # 字典格式: {requires: [step1, step2]}
-            depends_on = dependencies.get("requires", [])
+        # 解析依赖关系（兼容 dependencies/depends_on）
+        raw_dependencies = step_data.get("depends_on")
+        if raw_dependencies is None:
+            raw_dependencies = step_data.get("dependencies", [])
+        if isinstance(raw_dependencies, list):
+            depends_on = [dep for dep in raw_dependencies if isinstance(dep, str)]
+        elif isinstance(raw_dependencies, dict):
+            depends_on = [
+                dep for dep in raw_dependencies.get("requires", [])
+                if isinstance(dep, str)
+            ]
         else:
             depends_on = []
+
         run_ref = step_data.get("run", "")
         agent_id = None
         skill_id = None
-        if run_ref:
+        if run_ref and kind != StepKind.WORKFLOW_SPAWN:
             if isinstance(run_ref, str):
                 # 字符串格式
                 if run_ref.startswith("agent."):
@@ -438,16 +460,24 @@ class SpecGlobalParser:
                 # 其他类型，转为字符串
                 agent_id = str(run_ref)
 
-        # 解析依赖关系
-        dependencies = step_data.get("dependencies", [])
-        if isinstance(dependencies, list):
-            # 列表格式: [step1, step2]
-            depends_on = dependencies
-        elif isinstance(dependencies, dict):
-            # 字典格式: {requires: [step1, step2]}
-            depends_on = dependencies.get("requires", [])
-        else:
-            depends_on = []
+        subworkflow_ref = None
+        subworkflow_level = None
+        if kind == StepKind.WORKFLOW_SPAWN:
+            subworkflow_data = step_data.get("subworkflow")
+            if isinstance(subworkflow_data, dict):
+                subworkflow_ref = subworkflow_data.get("ref") or subworkflow_data.get("id")
+                subworkflow_level = subworkflow_data.get("level")
+            elif isinstance(subworkflow_data, str):
+                subworkflow_ref = subworkflow_data
+
+            if not subworkflow_ref and isinstance(step_data.get("workflow"), str):
+                subworkflow_ref = step_data.get("workflow")
+
+            if not subworkflow_ref and isinstance(run_ref, str) and run_ref.startswith("workflow."):
+                subworkflow_ref = run_ref
+
+            if step_data.get("level"):
+                subworkflow_level = step_data.get("level")
 
         # 解析 gate
         gate_ref = step_data.get("gate", {})
@@ -462,6 +492,22 @@ class SpecGlobalParser:
             gate_ref_str = gate_ref
 
         step_config = {"description": step_data.get("description")}
+        if "run" in step_data:
+            step_config["run"] = step_data.get("run")
+        if subworkflow_ref:
+            step_config["subworkflow_ref"] = subworkflow_ref
+        if subworkflow_level:
+            step_config["subworkflow_level"] = subworkflow_level
+        if "workflow" in step_data:
+            step_config["workflow"] = step_data.get("workflow")
+        if "subworkflow" in step_data:
+            step_config["subworkflow"] = step_data.get("subworkflow")
+        if "input_map" in step_data:
+            step_config["input_map"] = step_data.get("input_map")
+        if "output_map" in step_data:
+            step_config["output_map"] = step_data.get("output_map")
+        if "subworkflow_max_steps" in step_data:
+            step_config["subworkflow_max_steps"] = step_data.get("subworkflow_max_steps")
         if "verifiers" in step_data:
             step_config["verifiers"] = step_data.get("verifiers")
         if "verify" in step_data:
