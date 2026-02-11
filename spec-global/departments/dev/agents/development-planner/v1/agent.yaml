@@ -5,6 +5,15 @@ kind: agent
 version: 1.0
 
 # ============================================
+# Dev 部门宪法引用 (强制)
+# ============================================
+constitution:
+  ref: ../../AGENTS.md
+  version: "1.0"
+  mandatory: true
+  compliance_check: true
+
+# ============================================
 # 基础标识
 # ============================================
 id: agent.dev.development_planner

@@ -236,9 +236,12 @@ steps:
       scale: 2
     
     file_organization:
-      base_dir: "output/images"
+      base_dir: "diagrams"
       naming: "{diagram_id}.png"
       also_save_mermaid: true
+      sub_dirs:
+        by_article: false
+        by_date: false
 
   # Stage 5: 占位插入
   - id: insert_placeholders
@@ -386,12 +389,13 @@ constraints:
     输出目录结构：
     ```
     output/
-    ├── article_with_diagrams.md
-    └── images/
-        ├── diagram_001.png
-        ├── diagram_001.mmd
-        ├── diagram_002.png
-        └── diagram_002.mmd
+    └── article_with_diagrams.md
+    
+    diagrams/
+    ├── diagram_001.png
+    ├── diagram_001.mmd
+    ├── diagram_002.png
+    └── diagram_002.mmd
     ```
 
 # ============================================
@@ -412,7 +416,7 @@ completion:
       description: "人工发布到公众号"
       condition: "文章已完成，准备发布"
       instructions: |
-        1. 打开 images/ 目录下的 PNG 文件
+        1. 打开 diagrams/ 目录下的 PNG 文件
         2. 上传到公众号素材库
         3. 在文章中替换占位提示为图片
         4. 发布

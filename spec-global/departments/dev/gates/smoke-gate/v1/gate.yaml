@@ -4,6 +4,14 @@
 kind: gate
 version: 1.0
 
+# ============================================
+# Dev 部门宪法引用 (强制)
+# ============================================
+constitution:
+  ref: ../../AGENTS.md
+  version: "1.0"
+  mandatory: true
+
 id: gate.dev.smoke_gate
 name: Smoke Gate
 description: >

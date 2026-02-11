@@ -4,6 +4,14 @@
 kind: workflow
 version: "1.0"
 
+# ============================================
+# Dev 部门宪法引用 (强制)
+# ============================================
+constitution:
+  ref: ../AGENTS.md
+  version: "1.0"
+  mandatory: true
+
 id: workflow.dev.feature_integration_l3
 name: Feature Integration Workflow (L3)
 description: >
