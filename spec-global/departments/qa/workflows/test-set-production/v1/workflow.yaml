@@ -20,6 +20,23 @@ owner: qa-governance
 tags: [workflow, L3, test-set, design-asset, qa]
 
 # ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.qa.requirement_analyzer    # LLM：分析需求文档
+    - agent.qa.test_strategist         # LLM：设计测试策略
+    - agent.qa.test_set_generator      # LLM：生成 Test Set
+    - agent.qa.test_set_reviewer       # LLM：审评 Test Set
+  skills:
+    - skill.file.read                  # 程序：加载需求/技术文档
+  gates:
+    - gate.qa.analysis_review          # 人类：审核分析结果
+    - gate.qa.strategy_review          # 人类：审核测试策略
+    - gate.qa.test_set_approval        # 人类：最终批准 Test Set
+
+# ============================================
 # 参数定义
 # ============================================
 params:

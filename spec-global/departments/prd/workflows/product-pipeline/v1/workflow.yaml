@@ -24,6 +24,22 @@ owner: product-ai
 tags: [product, workflow, pipeline]
 
 # ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.analysis.product_goal          # LLM：产品价值分析
+    - agent.product.requirement_alignment  # LLM：问题空间翻译
+    - agent.product.requirement_decomposer # LLM：需求单元拆解
+    - agent.review.requirement_reviewer    # LLM：需求价值对齐评审
+    - agent.governance.approval_reviewer   # LLM：冻结审批
+  skills: []
+  gates:
+    - gate.prd.value_freeze                # 人类：产品价值冻结
+    - gate.prd.requirement_freeze          # 人类：需求冻结
+
+# ============================================
 # 流水线概览
 # ============================================
 overview:

@@ -19,6 +19,24 @@ level: department
 name: DevOps 部署工作流
 version: "1.5"
 
+# ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.devops.architect               # LLM：环境与发布架构设计
+    - agent.devops.implementation          # LLM：基础设施与 CI/CD 实现
+    - agent.devops.verifier                # LLM：环境验收 / 版本冻结
+  skills:
+    - skill.devops.deploy_dev_test         # 程序：部署到 dev/test
+  gates:
+    - gate.devops.phase1_review            # 人类：架构设计审批
+    - gate.devops.env_config               # 人类：环境配置注入
+    - gate.devops.deploy_verification      # 人类：部署验证
+    - gate.devops.verification             # 人类：验收审批
+    - gate.devops.release_freeze           # 人类：版本冻结
+
 description: >
   这是 DevOps 部门的 L2 主流程，负责从架构设计到部署验证的完整闭环。
 

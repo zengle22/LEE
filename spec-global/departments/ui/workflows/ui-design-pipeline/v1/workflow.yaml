@@ -4,6 +4,25 @@
 
 id: workflow.ui.ui_design_pipeline
 version: v1.2
+
+# ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.ui.contract_generator          # LLM：契约生成
+    - agent.ui.contract_validator          # LLM：契约验证
+    - agent.ui.user_flow_generator         # LLM：用户流生成
+    - agent.ui.ai_walkthrough              # LLM：AI 盲跑验证
+    - agent.ui.ux_reviewer                 # LLM：UX 审查
+    - agent.ui.gate_runner                 # LLM：门禁检查
+  skills:
+    - skill.ui.markdown_to_contract        # LLM Tool：Markdown 转契约
+    - skill.ui.ux_pro_max                  # LLM Tool：UX 审查知识库
+  gates:
+    - gate.ui.ui_gate                      # 人类：UI 设计门禁
+
 metadata:
   name: UI Design Pipeline
   name_zh: UI 设计流水线
@@ -69,7 +88,7 @@ steps:
   # 1.1 UI 契约生成
   # ------------------------------------------
   - id: contract_generation
-    agent: ui_contract_generator@v1
+    agent: agent.ui.contract_generator
     contract: ui_page_contract@v1
     metadata:
       name: UI Contract Generation
@@ -109,7 +128,7 @@ steps:
   # 1.2 UI 契约验证
   # ------------------------------------------
   - id: contract_validation
-    agent: ui_contract_validator@v1
+    agent: agent.ui.contract_validator
     contract: null
     metadata:
       name: UI Contract Validation
@@ -137,7 +156,7 @@ steps:
   # 1.3 用户流契约生成
   # ------------------------------------------
   - id: user_flow_generation
-    agent: prototype_designer@v1.1
+    agent: agent.ui.user_flow_generator
     contract: user_flow_contract@v1
     metadata:
       name: User Flow Generation
@@ -185,7 +204,7 @@ steps:
   # 1.4 AI 盲跑验证
   # ------------------------------------------
   - id: ai_walkthrough_validation
-    agent: ai_walkthrough_validator@v1
+    agent: agent.ui.ai_walkthrough
     contract: null
     metadata:
       name: AI Walkthrough Validation
@@ -233,7 +252,7 @@ steps:
   # 1.5 UX 可用性审查
   # ------------------------------------------
   - id: ux_review
-    agent: ux_reviewer@v1
+    agent: agent.ui.ux_reviewer
     contract: ux-review-contract@v1
     metadata:
       name: UX Usability Review
@@ -263,7 +282,7 @@ steps:
       file: output/review-reports/ux-review-{timestamp}.md
       freeze: false
     skill_integration:
-      skill: ui-ux-pro-max
+      skill: skill.ui.ux_pro_max
       search_commands:
         - python .claude/skills/ui-ux-pro-max/scripts/search.py '{product_type}' --domain ux
         - python .claude/skills/ui-ux-pro-max/scripts/search.py 'accessibility' --domain ux
@@ -286,7 +305,7 @@ steps:
   # 1.6 UI Gate（流程终点）
   # ------------------------------------------
   - id: ui_gate
-    agent: ui_gate_runner@v1
+    agent: agent.ui.gate_runner
     contract: null
     metadata:
       name: UI Gate

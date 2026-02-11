@@ -31,6 +31,31 @@ owner: qa-governance
 tags: [workflow, L3, test-plan, test-run, execution, qa]
 
 # ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.qa.test_run_initializer    # LLM：创建 Test Run
+    - agent.qa.env_provisioner         # LLM：部署测试环境
+    - agent.qa.case_generator          # LLM：动态生成用例
+    - agent.qa.script_translator       # LLM：翻译用例为脚本
+    - agent.qa.result_judge            # LLM：判定 pass/fail（判断者角色）
+    - agent.qa.tse_assembler           # LLM：组装 TSE
+    - agent.qa.bug_drafter             # LLM：起草 Bug
+    - agent.qa.test_run_updater        # LLM：更新 Test Run 汇总
+    - agent.qa.exit_evaluator          # LLM：评估出测条件
+  skills:
+    - skill.file.read                  # 程序：读取文件
+    - skill.env.check_tools            # 程序：环境/工具检查（Orchestrator 执行）
+    - skill.runner.test_e2e            # 程序：统一 E2E 测试执行器
+    - skill.qa.behavior_compliance_checker  # 程序：AI 行为合规检查
+  gates:
+    - gate.qa.test_case_review_gate    # 人类：用例审核
+    - gate.qa.bug_review_gate          # 人类：Bug 确认
+    - gate.qa.exit_decision_gate       # 人类：出测决策
+
+# ============================================
 # 反 Mock 宪法（Anti-Mock Constitution）
 # ============================================
 constitution:
@@ -344,8 +369,8 @@ stages:
     steps:
       - id: s2_5_1_check_tools
         name: "检查测试工具"
-        type: orchestrator_cli
-        run: check_env
+        type: skill
+        run: skill.env.check_tools
         description: |
           Orchestrator 直接执行，AI 无法干预。
           检查项：playwright, curl, nc 等测试工具是否存在。
@@ -503,8 +528,8 @@ stages:
     steps:
       - id: s5_1_execute_scripts
         name: "执行脚本（通过 test_runner CLI）"
-        type: cli_execution
-        run: test_runner
+        type: skill
+        run: skill.runner.test_e2e
         description: |
           所有 E2E 用例必须通过统一命令执行：
           test_runner run --case {case_id} --env {environment}

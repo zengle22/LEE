@@ -12,6 +12,22 @@ description: >
 owner: devops
 tags: [workflow, devops, deploy, l3]
 
+# ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.devops.deploy_report_generator  # LLM：生成部署报告
+  skills:
+    - skill.devops.validate_version        # 程序：版本校验
+    - skill.devops.check_env               # 程序：环境检查
+    - skill.devops.deploy                  # 程序：执行部署
+    - skill.devops.health_check            # 程序：健康检查
+    - skill.devops.smoke_test              # 程序：冒烟测试
+  gates:
+    - gate.devops.deploy_gate              # 人类：部署审批
+
 contracts:
   inputs:
     - deploy_config:

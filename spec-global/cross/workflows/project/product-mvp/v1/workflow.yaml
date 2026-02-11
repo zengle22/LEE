@@ -29,6 +29,23 @@ description: >
   Step 5: QA 接收"提测冻结包"，产出"可交付版本"
 
 # ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+# 注：L1 工作流不直接包含 Agent/Skill，通过 workflow_spawn 委派给 L2
+roles:
+  workflows:
+    - workflow.stg.opportunity_discovery   # L2：商业机会发现
+    - workflow.product.product_to_dev_pipeline  # L2：产品到研发
+    - workflow.ui.ui_design_pipeline       # L2：UI 设计
+    - workflow.dev.development_pipeline    # L2：研发流水线
+    - workflow.qa.test_plan_execution_v1   # L2：测试执行
+  agents: []
+  skills: []
+  gates:
+    - gate.cross.handoff_gate              # 人类：部门间交接门禁
+
+# ============================================
 # 工作流步骤
 # ============================================
 steps:

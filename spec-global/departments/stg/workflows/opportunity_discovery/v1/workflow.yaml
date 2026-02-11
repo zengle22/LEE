@@ -16,6 +16,22 @@ description: >
   - 输出"商业机会冻结包"作为下游 L2 流程的输入
 
 # ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.stg.search_signal_collector       # LLM：搜索信号采集
+    - agent.stg.user_signal_analyst           # LLM：用户信号分析
+    - agent.stg.industry_structure_analyst    # LLM：行业结构分析
+    - agent.stg.supply_competition_analyst    # LLM：供给竞争分析
+    - agent.stg.business_opportunity_builder  # LLM：商业机会构建
+  skills: []
+  gates:
+    - gate.stg.market_signal_freeze           # 人类：市场信号冻结
+    - gate.stg.business_opportunity_freeze    # 人类：商业机会冻结
+
+# ============================================
 # 工作流步骤
 # ============================================
 steps:
@@ -25,7 +41,7 @@ steps:
   - id: search_signals
     name: 搜索采集
     kind: agent
-    agent: search_agent
+    agent: agent.stg.search_signal_collector
     description: |
       采集市场搜索信号，获取显性发生的市场数据。
 
@@ -53,7 +69,7 @@ steps:
   - id: analyze_user_signals
     name: 用户信号分析
     kind: agent
-    agent: user_signal_agent
+    agent: agent.stg.user_signal_analyst
     depends_on:
       - search_signals
     description: |
@@ -85,7 +101,7 @@ steps:
   - id: analyze_industry_structure
     name: 行业结构分析
     kind: agent
-    agent: industry_structure_agent
+    agent: agent.stg.industry_structure_analyst
     depends_on:
       - search_signals
     description: |
@@ -116,7 +132,7 @@ steps:
   - id: analyze_supply_competition
     name: 供给竞争分析
     kind: agent
-    agent: supply_competition_agent
+    agent: agent.stg.supply_competition_analyst
     depends_on:
       - search_signals
     description: |
@@ -206,7 +222,7 @@ steps:
   - id: build_business_opportunity
     name: 商业机会构建
     kind: agent
-    agent: business_opportunity_agent
+    agent: agent.stg.business_opportunity_builder
     depends_on:
       - freeze_market_signals
     description: |

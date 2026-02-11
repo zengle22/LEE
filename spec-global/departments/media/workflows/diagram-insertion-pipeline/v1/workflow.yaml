@@ -29,6 +29,22 @@ owner: media-ai
 tags: [media, workflow, diagram, illustration, structure]
 
 # ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.media.diagram_analyzer         # LLM：文章结构分析
+    - agent.media.diagram_planner          # LLM：图表结构规划
+  skills:
+    - skill.media.diagram_generation       # 程序：Mermaid 代码生成
+    - skill.media.diagram_insertion        # 程序：占位提示插入
+  mcps:
+    - mcp.media.diagram_renderer           # MCP：图表渲染
+  gates:
+    - gate.media.diagram_review            # 人类：图表审核
+
+# ============================================
 # 流水线概览
 # ============================================
 overview:

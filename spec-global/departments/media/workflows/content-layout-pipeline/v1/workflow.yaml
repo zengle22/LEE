@@ -17,6 +17,22 @@ owner: media-ai
 tags: [media, workflow, layout, formatting]
 
 # ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.media.structure_extractor      # LLM：文章结构抽取
+    - agent.media.readable_color_layout    # LLM：可读性排版
+    - agent.media.media_reviewer           # LLM：媒体内容审核
+    - agent.governance.approval_reviewer   # LLM：内容发布冻结
+  skills:
+    - skill.media.md_to_wechat_richtext    # 程序：平台安全渲染
+    - skill.media.content_proofreading     # 程序：内容校对
+  gates:
+    - gate.media.content_freeze            # 人类：内容发布冻结确认
+
+# ============================================
 # 流水线概览
 # ============================================
 overview:

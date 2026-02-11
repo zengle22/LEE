@@ -13,6 +13,22 @@ id: product_pipeline
 
 version: v1
 
+# ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.analysis.product_goal          # LLM：产品价值分析
+    - agent.product.requirement_alignment  # LLM：问题空间翻译
+    - agent.product.requirement_decomposer # LLM：需求拆解
+    - agent.review.requirement_reviewer    # LLM：需求评审
+    - agent.governance.approval_reviewer   # LLM：冻结审批
+  skills: []
+  gates:
+    - gate.prd.value_freeze                # 人类：价值冻结
+    - gate.prd.requirement_freeze          # 人类：需求冻结
+
 metadata:
   name: Product Decision Pipeline
   name_zh: 产品决策流水线
@@ -45,7 +61,7 @@ steps:
   # Stage 2.1: 价值定义 (Value Definition)
   # ============================================
   - id: product_value
-    agent: product_value_agent@v1
+    agent: agent.analysis.product_goal
     contract: product_value_proposal@v1
 
     metadata:
@@ -80,7 +96,7 @@ steps:
       fallback: human_review
 
   - id: product_value_freeze
-    agent: approval_reviewer@v1
+    agent: agent.governance.approval_reviewer
     contract: frozen_analysis_contract@v1
 
     metadata:
@@ -117,7 +133,7 @@ steps:
   # Stage 2.2: 问题定义 (Problem Definition)
   # ============================================
   - id: requirement_alignment
-    agent: requirement_alignment_agent@v1
+    agent: agent.product.requirement_alignment
     contract: problem_definition@v1
 
     metadata:
@@ -149,7 +165,7 @@ steps:
       fallback: human_review
 
   - id: requirement_breakdown
-    agent: requirement_breakdown_agent@v1
+    agent: agent.product.requirement_decomposer
     contract: requirement_breakdown@v1
 
     metadata:
@@ -181,7 +197,7 @@ steps:
       fallback: human_review
 
   - id: requirement_review
-    agent: requirement_review_agent@v1
+    agent: agent.review.requirement_reviewer
     contract: requirement_review@v1
 
     metadata:
@@ -215,7 +231,7 @@ steps:
       fallback: human_review
 
   - id: requirement_freeze
-    agent: approval_reviewer@v1
+    agent: agent.governance.approval_reviewer
     contract: frozen_analysis_contract@v1
 
     metadata:
@@ -250,7 +266,7 @@ steps:
   # Stage 2.3: 方案设计 (Solution Design)
   # ============================================
   - id: solution_prototype
-    agent: solution_prototype_agent@v1
+    agent: agent.product.solution_prototype
     contract: solution_prototype@v1
 
     metadata:
@@ -283,7 +299,7 @@ steps:
       fallback: human_review
 
   - id: solution_freeze
-    agent: approval_reviewer@v1
+    agent: agent.governance.approval_reviewer
     contract: frozen_analysis_contract@v1
 
     metadata:
@@ -319,7 +335,7 @@ steps:
   # Stage 2.4: 交付规划 (Delivery Planning)
   # ============================================
   - id: delivery_planning
-    agent: pm_planning_agent@v1
+    agent: agent.product.pm_planner
     contract: development_plan@v1
 
     metadata:
@@ -352,7 +368,7 @@ steps:
       fallback: human_review
 
   - id: delivery_review
-    agent: approval_reviewer@v1
+    agent: agent.governance.approval_reviewer
     contract: plan_review@v1
 
     metadata:

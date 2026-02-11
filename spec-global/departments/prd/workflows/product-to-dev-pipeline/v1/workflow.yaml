@@ -33,6 +33,31 @@ owner: product-ai
 tags: [product, workflow, pipeline, dev-freeze]
 
 # ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.analysis.product_goal          # LLM：产品价值分析
+    - agent.product.requirement_alignment  # LLM：问题空间翻译
+    - agent.product.requirement_decomposer # LLM：需求单元拆解
+    - agent.review.requirement_reviewer    # LLM：需求评审
+    - agent.product.prd_writer             # LLM：PRD 编写
+    - agent.dev.tech_architect             # LLM：技术架构设计
+    - agent.design.ui_designer             # LLM：UI/UX 设计
+    - agent.design.ui_design_executor      # LLM：Web 原型生成
+    - agent.dev.freeze_orchestrator        # LLM：研发冻结包组装
+    - agent.governance.approval_reviewer   # LLM：冻结审批（6 次）
+  skills: []
+  gates:
+    - gate.prd.h1_value_freeze             # 人类：产品价值冻结
+    - gate.prd.h2_requirement_freeze       # 人类：需求冻结
+    - gate.prd.h3_prd_freeze               # 人类：PRD 冻结
+    - gate.prd.h4_architecture_freeze      # 人类：技术架构冻结
+    - gate.prd.h5_ui_freeze                # 人类：UI 设计冻结
+    - gate.prd.h6_dev_freeze               # 人类：研发冻结
+
+# ============================================
 # 流水线概览
 # ============================================
 overview:
