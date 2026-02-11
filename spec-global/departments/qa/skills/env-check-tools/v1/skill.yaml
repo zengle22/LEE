@@ -1,0 +1,86 @@
+# Env Check Tools Skill v1.0
+# 检查 QA E2E Runner 所需工具和环境
+#
+# 由 Orchestrator 在 ENV_CHECK 阶段直接执行，AI 无法干预。
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.env.check_tools
+name: Env Check Tools
+description: >
+  检查 QA E2E Runner 所需工具和环境。
+  由 Orchestrator 直接执行，AI 无法干预。
+  检查项：Docker、runner 脚本、Docker 镜像、可选 URL 可达性。
+
+owner: qa-team
+tags: [env, check, tools, qa, orchestrator]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    properties:
+      require_docker:
+        type: boolean
+        default: true
+        description: "是否要求 Docker 存在"
+      require_image:
+        type: string
+        default: "e2e-runner:latest"
+        description: "要求的 Docker 镜像名"
+      base_url:
+        type: string
+        description: "可选：对被测应用 URL 做可达性探测"
+
+  outputs:
+    type: object
+    required: [ok, checks]
+    properties:
+      ok:
+        type: boolean
+        description: "所有检查是否通过"
+      checks:
+        type: array
+        items:
+          type: object
+          required: [name, ok]
+          properties:
+            name:
+              type: string
+              description: "检查项名称"
+            ok:
+              type: boolean
+              description: "是否通过"
+            message:
+              type: string
+              description: "失败时的说明信息"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: cli
+  command: "lee"
+  args_template: "check-env qa-e2e"
+  timeout_ms: 30000  # 30 秒
+
+# ============================================
+# Exit Code 约定
+# ============================================
+exit_codes:
+  0: "所有检查通过"
+  2: "有任何检查项失败"
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: none
+  pii: forbidden

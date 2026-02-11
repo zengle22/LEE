@@ -1,0 +1,114 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "contract.qa.e2e_runner_report.v1",
+    "title": "E2E Runner Report v1",
+    "description": "test_runner CLI 产出的标准化 E2E 执行报告，供 QA L3 workflow 消费。与 e2e-report contract（门禁级报告）不同，此为 runner 级别的原始执行结果。",
+    "type": "object",
+    "required": [
+        "suite",
+        "env",
+        "total",
+        "passed",
+        "failed",
+        "cases"
+    ],
+    "properties": {
+        "suite": {
+            "type": "string",
+            "description": "测试套件名称（如 smoke / regression）"
+        },
+        "env": {
+            "type": "string",
+            "description": "目标测试环境（如 test / staging）"
+        },
+        "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "总用例数"
+        },
+        "passed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "通过用例数"
+        },
+        "failed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "失败用例数"
+        },
+        "cases": {
+            "type": "array",
+            "description": "用例结果列表",
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "status"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "用例 ID（如 TC_LOGIN_001）"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "passed",
+                            "failed",
+                            "skipped"
+                        ],
+                        "description": "用例状态"
+                    },
+                    "error_type": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "enum": [
+                            "assertion_failed",
+                            "script_error",
+                            "infra_error",
+                            null
+                        ],
+                        "description": "错误分类（仅失败用例需要）"
+                    },
+                    "duration_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "用例执行时长（毫秒）"
+                    },
+                    "error_message": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "错误信息（仅失败用例）"
+                    },
+                    "screenshot": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "失败截图路径（相对 artifacts 目录）"
+                    },
+                    "trace": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Trace 文件路径（相对 artifacts 目录）"
+                    },
+                    "logs": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "日志文件路径（相对 artifacts 目录）"
+                    }
+                },
+                "additionalProperties": false
+            }
+        }
+    },
+    "additionalProperties": false
+}

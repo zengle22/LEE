@@ -1,0 +1,93 @@
+# Behavior Compliance Checker Skill v1.0
+# 检查 runner 输出是否符合基本规范
+#
+# v0.1 极简版：校验 report_json 字段完整性。
+# 后续可升级为 AI 行为审计版本。
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.qa.behavior_compliance_checker
+name: Behavior Compliance Checker
+description: >
+  检查 runner 输出是否符合基本规范：
+  - 有没有 report_json
+  - 每条 case 是否有 status/error_type
+  - artifacts 路径是否存在（可选）
+
+  v0.1 不涉及 AI 行为审计，仅做结构化校验。
+
+owner: qa-team
+tags: [qa, compliance, checker, behavior]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [report_json]
+    properties:
+      report_json:
+        type: string
+        description: "e2e-report.json 文件路径"
+      check_artifacts:
+        type: boolean
+        default: false
+        description: "是否检查 artifacts 路径存在"
+      artifacts_base_dir:
+        type: string
+        description: "artifacts 基准目录（用于路径拼接）"
+
+  outputs:
+    type: object
+    required: [compliant, violations]
+    properties:
+      compliant:
+        type: boolean
+        description: "是否合规"
+      violations:
+        type: array
+        items:
+          type: object
+          required: [rule, message]
+          properties:
+            rule:
+              type: string
+              description: "违反的规则 ID"
+            message:
+              type: string
+              description: "违规说明"
+            case_index:
+              type: integer
+              description: "涉及的用例索引（如果有）"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: cli
+  command: "lee"
+  args_template: >
+    behavior-check verify
+    --report-json {{ inputs.report_json }}
+  timeout_ms: 10000  # 10 秒
+
+# ============================================
+# Exit Code 约定
+# ============================================
+exit_codes:
+  0: "合规"
+  1: "不合规（有 violations）"
+  3: "参数错误"
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: none
+  pii: forbidden

@@ -1,0 +1,114 @@
+# Test E2E Runner Skill v1.0
+# 统一 E2E 测试 Runner — 封装 test_runner CLI
+#
+# 接收 suite/env/test-set/artifacts-dir，执行 Playwright E2E，
+# 产出标准化 e2e-report.json。
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.runner.test_e2e
+name: Test E2E Runner
+description: >
+  统一 E2E 测试 Runner。封装 test_runner CLI，
+  接收 suite/env/test-set/artifacts-dir，执行 Playwright E2E，
+  产出标准化 e2e-report.json。
+
+  内部调用链: test_runner CLI → run-e2e-docker.sh → Docker + Playwright
+
+owner: qa-team
+tags: [testing, e2e, runner, playwright, docker]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [suite, env, test_set_path, artifacts_dir]
+    properties:
+      suite:
+        type: string
+        description: "测试套件名称（如 smoke / regression）"
+      env:
+        type: string
+        description: "目标测试环境（如 test / staging）"
+      test_set_path:
+        type: string
+        description: "test-cases.yaml 文件路径（由上游 L3 生成）"
+      artifacts_dir:
+        type: string
+        description: "Artifacts 输出目录"
+      base_url:
+        type: string
+        description: "可选：被测应用 URL（覆盖环境默认值）"
+      docker_image:
+        type: string
+        default: "e2e-runner:latest"
+        description: "Docker 镜像名"
+
+  outputs:
+    type: object
+    required: [report_json, summary]
+    properties:
+      report_json:
+        type: string
+        description: "标准 E2E 报告 JSON 文件路径"
+      summary:
+        type: object
+        required: [total, passed, failed]
+        properties:
+          total:
+            type: integer
+            description: "总用例数"
+          passed:
+            type: integer
+            description: "通过数"
+          failed:
+            type: integer
+            description: "失败数"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: cli
+  command: "lee"
+  args_template: >
+    test-runner run-e2e
+    --suite {{ inputs.suite }}
+    --env {{ inputs.env }}
+    --test-set {{ inputs.test_set_path }}
+    --out-dir {{ inputs.artifacts_dir }}
+    --report-json {{ inputs.artifacts_dir }}/e2e-report.json
+  timeout_ms: 600000  # 10 分钟
+
+# ============================================
+# Exit Code 约定
+# ============================================
+exit_codes:
+  0: "CLI 执行成功，且至少跑过一个用例（不代表所有都 PASS）"
+  1: "E2E 运行完成，有用例失败（正常测试失败）"
+  2: "环境/infra 级错误（Docker 启动失败、Playwright 无法执行）"
+  3: "参数错误/输入不合法"
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: false
+  side_effects: reads
+  pii: forbidden
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: help_works
+      command: "lee test-runner run-e2e --help"
+      assert:
+        - exit_code: 0
