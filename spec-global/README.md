@@ -1,9 +1,9 @@
 # LEE Framework Spec-Global 迁移完成报告
 
 **迁移日期**: 2025-01-23
-**更新日期**: 2026-01-29
+**更新日期**: 2026-02-11
 **状态**: ✅ 完成
-**迁移文件数**: 134 个 + DevOps 部门新增
+**迁移文件数**: 134 个 + DevOps 部门新增 + Dev L2+L3 升级
 
 ---
 
@@ -12,21 +12,21 @@
 ### 总体统计
 | 类型 | 原始数量 | 已迁移 | 新增 |
 |------|----------|--------|------|
-| agents | 76 | 76 | 4 |
+| agents | 76 | 76 | 7 |
 | skills | 18 | 18 | 0 |
-| workflows | 11 | 11 | 2 |
-| gates | 9 | 9 | 0 |
-| contracts | 7 | 7 | 3 |
+| workflows | 11 | 11 | 4 |
+| gates | 9 | 9 | 2 |
+| contracts | 7 | 7 | 6 |
 | protocols | 2 | 2 | 0 |
-| 其他 (schema, template, integration等) | 11 | 11 | 4 |
-| **总计** | **134** | **134** | **13** |
+| 其他 (schema, template, integration等) | 11 | 11 | 5 |
+| **总计** | **134** | **134** | **24** |
 
 ### 按目录统计
 | 目录 | 文件数 | 说明 |
 |------|--------|------|
 | core/ | 11 | 核心基础设施 |
 | cross/ | 8 | 跨部门协作 |
-| departments/dev/ | 37 | 开发部门 |
+| departments/dev/ | 48 | 开发部门 (含 L2+L3 升级) |
 | departments/prd/ | 8 | 产品部门 |
 | departments/qa/ | 35 | 质量保证部门 |
 | departments/ui/ | 24 | UI/UX 设计部门 |
@@ -72,34 +72,48 @@ spec-global/
 │       └── product-pipeline/
 │
 └── departments/                    # 各部门 spec
-    ├── dev/                        # 开发部门 (37)
-    │   ├── agents/                 # 26 个 agents
+    ├── dev/                        # 开发部门 (48, 含 L2+L3 升级)
+    │   ├── rnd_l2_l3_spec.md       # L2+L3 执行规范文档 【新增】
+    │   ├── agents/                 # 29 个 agents (含 3 个新增)
     │   │   ├── acceptance-reviewer/
     │   │   ├── ai-engineer/
     │   │   ├── backend-architect/
+    │   │   ├── bug-triage/          # 【新增】Bug 分流 Agent
     │   │   ├── code-reviewer/
+    │   │   ├── contract-designer/   # 【新增】协议设计 Agent
     │   │   ├── database-engineer/
     │   │   ├── frontend-architect/
-    │   │   ├── go-backend-engineer/
+    │   │   ├── go-backend-engineer/ # 【v1.2 升级】含 contract 约束
     │   │   ├── plan-architect/
     │   │   ├── qa-engineer/
+    │   │   ├── smoke-tester/        # 【新增】冒烟测试 Agent
     │   │   ├── tech-architect/
-    │   │   ├── uniapp-frontend-engineer/
+    │   │   ├── uniapp-frontend-engineer/ # 【v1.3 升级】含 contract 约束
     │   │   └── ... (更多)
-    │   ├── contracts/              # 21 个 contracts
+    │   ├── contracts/              # 24 个 contracts (含 3 个新增)
+    │   │   ├── api-contract/        # 【新增】API 协议 Schema
+    │   │   ├── bug-triage-output/   # 【新增】Bug 分流输出 Schema
     │   │   ├── phase-directory-contract/
     │   │   ├── retest-manifest/
+    │   │   ├── smoke-test-result/   # 【新增】冒烟结果 Schema
     │   │   └── ... (更多)
-    │   ├── gates/                  # 3 个 gates
+    │   ├── gates/                  # 5 个 gates (含 2 个新增)
+    │   │   ├── contract-freeze-gate/ # 【新增】协议冻结门禁
     │   │   ├── dev-gate/
     │   │   ├── phase-gate/
-    │   │   └── release-gate/
+    │   │   ├── release-gate/
+    │   │   └── smoke-gate/          # 【新增】冒烟测试门禁
     │   ├── skills/                 # 1 个 skill
     │   │   └── planning-methodology/
-    │   └── workflows/              # 5 个 workflows
+    │   └── workflows/              # 7 个 workflows (含 2 个 v2)
+    │       ├── bug-fix/v1/          # v1 原始版本
+    │       ├── bug-fix/v2/          # 【v2 新增】含 Bug 分流
     │       ├── development-pipeline/
     │       ├── dev-retest/
-    │       ├── bug-fix/
+    │       ├── feature/v2/          # 【v2 新增】L2 编排 4 阶段
+    │       ├── feature-be-l3/
+    │       ├── feature-fe-l3/
+    │       ├── feature-integration-l3/
     │       └── ... (更多)
     │
     ├── prd/                        # 产品部门 (8)
@@ -337,6 +351,40 @@ DevOps 部门负责基础设施和 CI/CD 相关的规范和流程。
 - **Verifier System**: 自动验证 AI 生成的架构和代码产物
 - **Contracts**: 验证契约定义验证规则和标准
 - **Examples**: Docker Compose, CI/CD Pipeline, 部署脚本示例
+
+### Dev L2+L3 架构升级 (2026-02-11 新增)
+
+开发部门全面引入 **L2+L3 执行规范**，核心变化：
+
+**核心原则**: 协议先行 (Contract-First)
+- Phase 1: Contract 设计 & 冻结
+- Phase 2: 前后端并行开发（强制 contract 约束）
+- Phase 3: 连调验证
+- Phase 4: 冒烟守门（失败不允许 merge）
+
+**新增 Agents (3)**:
+- `contract-designer` — 协议设计与版本管理
+- `smoke-tester` — 主流程冒烟测试 & merge 守门
+- `bug-triage` — Bug 分流（实现 Bug / 协议 Bug）
+
+**升级 Agents (2)**:
+- `go-backend-engineer` v1.2 — 返回数据必须符合 contract schema
+- `uniapp-frontend-engineer` v1.3 — 类型必须从 contract 生成
+
+**新增 Contracts (3)**:
+- `api-contract/v1/schema.json` — API 协议结构定义
+- `smoke-test-result/v1/schema.json` — 冒烟测试结果
+- `bug-triage-output/v1/schema.json` — Bug 分流输出
+
+**新增 Gates (2)**:
+- `contract-freeze-gate` — 协议完整性 & 版本升级检查
+- `smoke-gate` — 冒烟通过才允许 merge
+
+**新增/升级 Workflows (2)**:
+- `feature/v2/workflow.yaml` — L2 主工作流（4 阶段编排）
+- `bug-fix/v2/workflow.yaml` — 含 Bug 分流阶段
+
+**详细规范**: `departments/dev/rnd_l2_l3_spec.md`
 
 ---
 
