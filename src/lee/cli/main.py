@@ -8,6 +8,9 @@ LEE CLI
 - lee test-runner run-e2e ...
 - lee check-env qa-e2e ...
 - lee behavior-check verify ...
+- lee diagram-gen render ...
+- lee diagram-insert insert ...
+- lee md-to-wechat convert ...
 """
 
 import click
@@ -21,6 +24,9 @@ from lee.cli.commands.qa import qa
 from lee.cli.commands.test_runner import test_runner
 from lee.cli.commands.check_env import check_env
 from lee.cli.commands.behavior_compliance_checker import behavior_compliance_checker
+from lee.cli.commands.diagram_gen import diagram_gen
+from lee.cli.commands.diagram_insert import diagram_insert
+from lee.cli.commands.md_to_wechat import md_to_wechat
 
 
 @click.group()
@@ -38,6 +44,9 @@ cli.add_command(qa)
 cli.add_command(test_runner, "test-runner")
 cli.add_command(check_env, "check-env")
 cli.add_command(behavior_compliance_checker, "behavior-check")
+cli.add_command(diagram_gen, "diagram-gen")
+cli.add_command(diagram_insert, "diagram-insert")
+cli.add_command(md_to_wechat, "md-to-wechat")
 
 
 def main():

@@ -22,5 +22,16 @@ interface:
   outputs:
     type: object
     properties:
+      ok:
+        type: boolean
       status:
         type: string
+
+runtime:
+  type: shell
+  script: "scripts/deploy-test-env.sh"
+  args_template: "--env {{ inputs.env }} --version {{ inputs.version }}"
+  exit_codes:
+    0: "测试环境部署成功"
+    1: "测试环境部署失败"
+    2: "参数错误"
