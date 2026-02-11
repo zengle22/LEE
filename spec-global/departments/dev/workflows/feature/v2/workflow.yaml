@@ -1,0 +1,443 @@
+# Feature Development Workflow v2.0
+# 特性开发主工作流（L2 编排）
+#
+# 核心流程：协议冻结 → 前后端并行 → 连调验证 → 冒烟守门
+# 参见：rnd_l2_l3_spec.md
+
+kind: workflow
+version: "2.0"
+
+# ============================================
+# 基础标识
+# ============================================
+id: workflow.dev.feature
+name: Feature Development Workflow (L2)
+description: >
+  研发部 Feature 开发主工作流。
+  核心原则：
+  - 协议先行，冻结后不得私改
+  - 前后端并行开发，强制 contract 约束
+  - 连调验证，发现结构问题打回 Contract-Agent
+  - 冒烟守门，失败不允许 merge
+owner: development
+tags: [workflow, dev, feature, l2, contract-first]
+
+# ============================================
+# 角色地图（Role Map）
+# ============================================
+roles:
+  agents:
+    - agent.dev.contract_designer          # L3：协议设计（Phase 1）
+    - agent.dev.uniapp_frontend_engineer   # L3：前端实现（Phase 2）
+    - agent.dev.go_backend_engineer        # L3：后端实现（Phase 2）
+    - agent.dev.code_self_reviewer         # L3：自检
+    - agent.dev.integration_planner        # L3：连调规划（Phase 3）
+    - agent.dev.bug_fix_verifier           # L3：连调结果分析（Phase 3）
+    - agent.dev.smoke_tester               # L3：冒烟测试（Phase 4）
+    - agent.dev.code_reviewer              # L3：代码审核
+  skills:
+    - skill.git.checkout
+    - skill.lint.ruff
+    - skill.test.pytest
+  gates:
+    - gate.dev.contract_freeze_gate        # 协议冻结门禁
+    - gate.dev.smoke_gate                  # 冒烟门禁
+
+# ============================================
+# 触发条件
+# ============================================
+triggers:
+  - event: "feature-spec-ready"
+    source: "workflow.prd.product_pipeline"
+    conditions:
+      - "feature-spec exists"
+
+  - event: "manual_feature_start"
+    source: "human_developer"
+
+# ============================================
+# 入口门禁
+# ============================================
+entry_gate:
+  name: "Feature Entry Gate"
+  required_inputs:
+    - file: "feature-spec.yaml"
+      schema: ../../contracts/feature-spec/v1/schema.json
+      description: "Feature 需求规格"
+
+# ============================================
+# 工作流阶段
+# ============================================
+stages:
+  # ========== Phase 1: 协议设计与冻结 ==========
+  - id: p1_contract_design
+    name: "Phase 1: 协议设计与冻结"
+    description: >
+      调用 Contract L3 子流程：
+      Contract-Agent 设计 API 协议与 DTO 结构，
+      自检通过后，经冻结门禁进入并行开发。
+
+    steps:
+      - id: p1_1_contract_l3
+        name: "协议设计与冻结"
+        description: "调用 Contract L3 子流程，完成协议设计、自检、冻结"
+        type: sub_workflow
+        run: workflow.dev.feature_contract_l3
+        execution:
+          model: prompt_switch
+          timeout: 120m
+
+        inputs:
+          - feature_spec: "$inputs.feature_spec"
+          - existing_contracts: "$inputs.existing_contracts"
+
+        outputs:
+          - path: "output/api-contract.yaml"
+            contract: ../../contracts/api-contract/v1/schema.json
+          - path: "output/contract-selfcheck.json"
+            contract: ../../contracts/selfcheck/v1/schema.json
+
+  # ========== Phase 2: 前后端并行开发 ==========
+  - id: p2_parallel_development
+    name: "Phase 2: 前后端并行开发"
+    description: >
+      前后端基于冻结的 contract 并行开发。
+      FE-Agent 和 BE-Agent 强制遵守 contract 约束。
+
+    dependencies:
+      requires: [p1_1_contract_l3]
+
+    steps:
+      # --- 前端开发子流程 ---
+      - id: p2_1_fe_development
+        name: "前端开发"
+        description: "调用 FE L3 子流程，强制 contract 约束"
+        type: sub_workflow
+        run: workflow.dev.feature_fe_l3
+        execution:
+          model: prompt_switch
+          timeout: 120m
+
+        inputs:
+          - feature_spec: "$inputs.feature_spec"
+          - api_contract: "output/api-contract.yaml"
+
+        outputs:
+          - path: "output/fe-code-diff.patch"
+            contract: ../../contracts/code-diff/v1/schema.json
+          - path: "output/fe-selfcheck.json"
+            contract: ../../contracts/selfcheck/v1/schema.json
+
+        constraints:
+          contract_binding:
+            source: "output/api-contract.yaml"
+            rules:
+              - "类型必须从 contract 生成"
+              - "不允许手写 interface"
+              - "不允许假设未定义字段"
+              - "接口不匹配必须反馈 Contract-Agent"
+
+      # --- 后端开发子流程 ---
+      - id: p2_2_be_development
+        name: "后端开发"
+        description: "调用 BE L3 子流程，强制 contract 约束"
+        type: sub_workflow
+        run: workflow.dev.feature_be_l3
+        execution:
+          model: prompt_switch
+          timeout: 120m
+
+        inputs:
+          - feature_spec: "$inputs.feature_spec"
+          - api_contract: "output/api-contract.yaml"
+
+        outputs:
+          - path: "output/be-code-diff.patch"
+            contract: ../../contracts/code-diff/v1/schema.json
+          - path: "output/be-selfcheck.json"
+            contract: ../../contracts/selfcheck/v1/schema.json
+
+        constraints:
+          contract_binding:
+            source: "output/api-contract.yaml"
+            rules:
+              - "返回数据必须符合 contract schema"
+              - "不允许新增未定义字段"
+              - "不允许更改字段类型"
+              - "发现结构问题必须反馈 Contract-Agent"
+
+      # --- 并行完成判定 ---
+      - id: p2_3_parallel_complete
+        name: "并行开发完成判定"
+        type: decision
+        dependencies:
+          requires:
+            all_of: [p2_1_fe_development, p2_2_be_development]
+        decision_logic: |
+          IF fe_selfcheck.status == "pass" AND be_selfcheck.status == "pass":
+            next_stage = p3_integration
+          ELIF fe_selfcheck.contract_violation OR be_selfcheck.contract_violation:
+            rollback_to = p1_contract_design
+            message = "检测到 contract 违规，回退到协议设计阶段"
+          ELSE:
+            action = "retry_failed_side"
+
+  # ========== Phase 3: 连调验证 ==========
+  - id: p3_integration
+    name: "Phase 3: 连调验证"
+    description: >
+      Integration-Agent 编写集成测试，验证前后端数据贯通。
+      发现结构问题必须打回 Contract-Agent。
+
+    dependencies:
+      requires: [p2_3_parallel_complete]
+
+    steps:
+      - id: p3_1_integration_test
+        name: "连调验证"
+        description: "调用 Integration L3 子流程"
+        type: sub_workflow
+        run: workflow.dev.feature_integration_l3
+        execution:
+          model: prompt_switch
+          timeout: 90m
+
+        inputs:
+          - feature_spec: "$inputs.feature_spec"
+          - api_contract: "output/api-contract.yaml"
+          - fe_artifact: "output/fe-code-diff.patch"
+          - be_artifact: "output/be-code-diff.patch"
+
+        outputs:
+          - path: "output/integration-report.json"
+            contract: ../../contracts/execution-log-contract/v1/schema.json
+          - path: "output/integration-selfcheck.json"
+            contract: ../../contracts/selfcheck/v1/schema.json
+
+      - id: p3_2_integration_decision
+        name: "连调结果判定"
+        type: decision
+        dependencies:
+          requires: [p3_1_integration_test]
+        decision_logic: |
+          IF integration_selfcheck.status == "pass":
+            next_stage = p4_smoke
+          ELIF integration_selfcheck.structural_issue:
+            rollback_to = p1_contract_design
+            message = "连调发现结构问题，回退到协议设计阶段"
+          ELIF integration_attempts < 3:
+            next_step = p3_1_integration_test
+          ELSE:
+            action = "trigger_human_gate"
+
+  # ========== Phase 4: 主流程冒烟守门 ==========
+  - id: p4_smoke
+    name: "Phase 4: 主流程冒烟守门"
+    description: >
+      Smoke-Agent 执行单测、集成测试、主流程 smoke。
+      冒烟失败不允许 merge，优先级最高。
+
+    dependencies:
+      requires: [p3_2_integration_decision]
+
+    steps:
+      - id: p4_1_smoke_test
+        name: "冒烟测试"
+        description: "执行全套测试：单测 + 集成测试 + 主流程 smoke"
+        type: agent
+        run: agent.dev.smoke_tester
+        execution:
+          model: prompt_switch
+          timeout: 60m
+
+        inputs:
+          - feature_spec: "$inputs.feature_spec"
+          - api_contract: "output/api-contract.yaml"
+          - fe_artifact: "output/fe-code-diff.patch"
+          - be_artifact: "output/be-code-diff.patch"
+          - integration_report: "output/integration-report.json"
+
+        outputs:
+          - path: "output/smoke-test-result.yaml"
+            contract: ../../contracts/smoke-test-result/v1/schema.json
+
+      - id: p4_2_smoke_gate
+        name: "冒烟门禁"
+        type: gate_decision
+        description: "冒烟测试门禁，失败不允许 merge"
+
+        dependencies:
+          requires: [p4_1_smoke_test]
+
+        gate:
+          ref: gate.dev.smoke_gate
+          checks:
+            - "unit_test_pass"
+            - "integration_test_pass"
+            - "smoke_test_pass"
+            - "coverage_threshold"
+
+        on_pass:
+          action: "allow_merge"
+          message: "冒烟测试全部通过，允许 merge"
+
+        on_fail:
+          action: "block_merge"
+          priority: highest
+          message: "冒烟失败，不允许 merge"
+
+      - id: p4_3_code_review
+        name: "代码审核"
+        description: "冒烟通过后执行代码审核"
+        type: agent
+        run: agent.dev.code_reviewer
+        execution:
+          model: prompt_switch
+          timeout: 60m
+
+        dependencies:
+          requires: [p4_2_smoke_gate]
+
+        inputs:
+          - api_contract: "output/api-contract.yaml"
+          - fe_code: "output/fe-code-diff.patch"
+          - be_code: "output/be-code-diff.patch"
+          - smoke_result: "output/smoke-test-result.yaml"
+
+        outputs:
+          - path: "output/code-review-report.yaml"
+
+        review_focus:
+          - "是否违反 contract"
+          - "是否扩大修改范围"
+          - "是否隐式修改字段"
+          - "是否破坏兼容性"
+
+# ============================================
+# 循环控制
+# ============================================
+loop_control:
+  contract_freeze:
+    max_attempts: 5
+    on_exhausted:
+      action: "trigger_human_gate"
+      message: "协议设计 5 次未通过冻结门禁，需人类介入"
+
+  integration:
+    max_attempts: 3
+    on_exhausted:
+      action: "trigger_human_gate"
+      message: "连调 3 次未通过，需人类介入"
+
+  structural_rollback:
+    max_rollbacks: 2
+    on_exhausted:
+      action: "trigger_human_gate"
+      message: "结构问题回滚超过 2 次，需人类介入"
+
+# ============================================
+# 退出条件
+# ============================================
+exit_conditions:
+  success:
+    - condition: "smoke_gate.status == 'passed' AND code_review.verdict == 'approved'"
+      description: "冒烟通过且代码审核批准"
+
+  failure:
+    - condition: "contract_freeze_attempts >= 5"
+      description: "协议设计反复失败"
+      action: "require_human_review"
+    - condition: "structural_rollback_count >= 2"
+      description: "结构问题回滚超限"
+      action: "require_human_review"
+
+# ============================================
+# 产物契约
+# ============================================
+outputs_contract:
+  required:
+    - file: "output/api-contract.yaml"
+      schema: "development/contracts/api-contract/v1/schema.json"
+    - file: "output/fe-code-diff.patch"
+      schema: "development/contracts/code-diff/v1/schema.json"
+    - file: "output/be-code-diff.patch"
+      schema: "development/contracts/code-diff/v1/schema.json"
+    - file: "output/smoke-test-result.yaml"
+      schema: "development/contracts/smoke-test-result/v1/schema.json"
+    - file: "output/code-review-report.yaml"
+
+  optional:
+    - file: "output/integration-report.json"
+      schema: "development/contracts/execution-log-contract/v1/schema.json"
+    - file: "output/fe-selfcheck.json"
+    - file: "output/be-selfcheck.json"
+
+# ============================================
+# Agent 资源池
+# ============================================
+agent_resources:
+  - id: agent.dev.contract_designer
+    spec: ../../agents/contract-designer/v1/agent.yaml
+  - id: agent.dev.uniapp_frontend_engineer
+    spec: ../../agents/uniapp-frontend-engineer/v1/agent.yaml
+  - id: agent.dev.go_backend_engineer
+    spec: ../../agents/go-backend-engineer/v1/agent.yaml
+  - id: agent.dev.code_self_reviewer
+    spec: ../../agents/code-self-reviewer/v1/agent.yaml
+  - id: agent.dev.integration_planner
+    spec: ../../agents/integration-planner/v1/agent.yaml
+  - id: agent.dev.bug_fix_verifier
+    spec: ../../agents/bug-fix-verifier/v1/agent.yaml
+  - id: agent.dev.smoke_tester
+    spec: ../../agents/smoke-tester/v1/agent.yaml
+  - id: agent.dev.code_reviewer
+    spec: ../../agents/code-reviewer/v1/agent.yaml
+
+# ============================================
+# 门禁资源池
+# ============================================
+gate_resources:
+  - id: gate.dev.contract_freeze_gate
+    spec: ../../gates/contract-freeze-gate/v1/gate.yaml
+  - id: gate.dev.smoke_gate
+    spec: ../../gates/smoke-gate/v1/gate.yaml
+
+# ============================================
+# 子工作流资源池
+# ============================================
+sub_workflow_resources:
+  - id: workflow.dev.feature_contract_l3
+    spec: ../feature-contract-l3/v1/workflow.yaml
+  - id: workflow.dev.feature_fe_l3
+    spec: ../feature-fe-l3/v1/workflow.yaml
+  - id: workflow.dev.feature_be_l3
+    spec: ../feature-be-l3/v1/workflow.yaml
+  - id: workflow.dev.feature_integration_l3
+    spec: ../feature-integration-l3/v1/workflow.yaml
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "dev-workflow-architect"
+  created_at: "2026-02-11"
+  version: "2.0"
+  last_updated: "2026-02-11"
+
+  changelog:
+    - version: "2.1"
+      date: "2026-02-11"
+      changes:
+        - "Phase 1 重构为 L3 子流程调用 (feature-contract-l3)"
+        - "新增 contract L3 子流程引用"
+
+    - version: "2.0"
+      date: "2026-02-11"
+      changes:
+        - "新建 Feature 开发 L2 主工作流"
+        - "Phase 1: 协议设计与冻结 (Contract-Agent)"
+        - "Phase 2: 前后端并行开发 (强制 contract 约束)"
+        - "Phase 3: 连调验证 (发现结构问题打回 Phase 1)"
+        - "Phase 4: 冒烟守门 (失败不允许 merge)"
+        - "新增协议冻结门禁 (contract-freeze-gate)"
+        - "新增冒烟门禁 (smoke-gate)"
