@@ -1,0 +1,104 @@
+# Feature BE Development L3 Workflow v1.0
+# 特性后端开发子流程（L3）
+
+kind: workflow
+version: "1.0"
+
+id: workflow.dev.feature_be_l3
+name: Feature Backend Development Workflow (L3)
+description: >
+  聚焦后端实现的子流程：
+  分支准备 → 后端实现 → 静态检查 → 单测 → 自检。
+owner: development
+tags: [workflow, dev, feature, backend, l3]
+
+roles:
+  agents:
+    - agent.dev.go_backend_engineer
+    - agent.dev.code_self_reviewer
+  skills:
+    - skill.git.checkout
+    - skill.lint.ruff
+    - skill.test.pytest
+  gates: []
+
+contracts:
+  inputs:
+    - feature_spec:
+        path: ../../contracts/feature-spec/v1/schema.json
+        description: Feature Spec 输入
+  outputs:
+    - be_code_diff:
+        path: ../../contracts/code-diff/v1/schema.json
+        description: 后端代码差异
+    - be_selfcheck:
+        path: ../../contracts/selfcheck/v1/schema.json
+        description: 后端自检报告
+
+stages:
+  - id: s1_prepare
+    name: "准备阶段"
+    steps:
+      - id: s1_1_checkout
+        name: "切换分支"
+        type: skill
+        run: skill.git.checkout
+        inputs:
+          - branch: "{{params.branch}}"
+        outputs:
+          - path: "output/be-git-status.txt"
+
+  - id: s2_implement
+    name: "实现阶段"
+    steps:
+      - id: s2_1_impl
+        name: "后端实现"
+        type: agent
+        run: agent.dev.go_backend_engineer
+        dependencies:
+          requires: [s1_1_checkout]
+        inputs:
+          - feature_spec: "$inputs.feature_spec"
+          - backend_task_spec: "$inputs.backend_task_spec"
+        outputs:
+          - path: "output/be-code-diff.patch"
+            contract: ../../contracts/code-diff/v1/schema.json
+
+      - id: s2_2_lint
+        name: "后端静态检查"
+        type: skill
+        run: skill.lint.ruff
+        dependencies:
+          requires: [s2_1_impl]
+        inputs:
+          - command: "ruff check ."
+        outputs:
+          - path: "output/be-lint-report.txt"
+
+      - id: s2_3_unit_test
+        name: "后端单元测试"
+        type: skill
+        run: skill.test.pytest
+        dependencies:
+          requires: [s2_2_lint]
+        inputs:
+          - command: "pytest -q"
+        outputs:
+          - path: "output/be-test-report.json"
+          - path: "output/be-coverage.json"
+
+  - id: s3_review
+    name: "自检阶段"
+    steps:
+      - id: s3_1_selfcheck
+        name: "后端自检"
+        type: agent
+        run: agent.dev.code_self_reviewer
+        dependencies:
+          requires: [s2_3_unit_test]
+        inputs:
+          - feature_spec: "$inputs.feature_spec"
+          - test_report: "output/be-test-report.json"
+        outputs:
+          - path: "output/be-selfcheck.json"
+            contract: ../../contracts/selfcheck/v1/schema.json

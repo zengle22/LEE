@@ -1,0 +1,84 @@
+# Feature Integration L3 Workflow v1.0
+# 特性联调验证子流程（L3）
+
+kind: workflow
+version: "1.0"
+
+id: workflow.dev.feature_integration_l3
+name: Feature Integration Workflow (L3)
+description: >
+  聚焦前后端联调验证的子流程：
+  联调计划 → 集成测试执行 → 结果分析与归因。
+owner: development
+tags: [workflow, dev, feature, integration, l3]
+
+roles:
+  agents:
+    - agent.dev.integration_planner
+    - agent.dev.bug_fix_verifier
+  skills:
+    - skill.test.pytest
+  gates: []
+
+contracts:
+  inputs:
+    - feature_spec:
+        path: ../../contracts/feature-spec/v1/schema.json
+        description: Feature Spec 输入
+  outputs:
+    - integration_report:
+        path: ../../contracts/execution-log-contract/v1/schema.json
+        description: 联调执行报告
+    - integration_selfcheck:
+        path: ../../contracts/selfcheck/v1/schema.json
+        description: 联调自检结果
+
+stages:
+  - id: s1_plan
+    name: "联调规划"
+    steps:
+      - id: s1_1_plan
+        name: "生成联调计划"
+        type: agent
+        run: agent.dev.integration_planner
+        inputs:
+          - feature_spec: "$inputs.feature_spec"
+          - integration_task_spec: "$inputs.integration_task_spec"
+          - fe_artifact: "$inputs.fe_artifact"
+          - be_artifact: "$inputs.be_artifact"
+        outputs:
+          - path: "output/integration-plan.json"
+
+  - id: s2_execute
+    name: "联调执行"
+    steps:
+      - id: s2_1_run_tests
+        name: "运行集成测试"
+        type: skill
+        run: skill.test.pytest
+        dependencies:
+          requires: [s1_1_plan]
+        inputs:
+          - command: "pytest -q tests/integration"
+        outputs:
+          - path: "output/integration-test-report.json"
+          - path: "output/integration-log.md"
+
+  - id: s3_analyze
+    name: "结果分析"
+    steps:
+      - id: s3_1_analyze
+        name: "联调结果归因"
+        type: agent
+        run: agent.dev.bug_fix_verifier
+        dependencies:
+          requires: [s2_1_run_tests]
+        inputs:
+          - integration_plan: "output/integration-plan.json"
+          - test_report: "output/integration-test-report.json"
+          - test_log: "output/integration-log.md"
+        outputs:
+          - path: "output/integration-report.json"
+            contract: ../../contracts/execution-log-contract/v1/schema.json
+          - path: "output/integration-selfcheck.json"
+            contract: ../../contracts/selfcheck/v1/schema.json

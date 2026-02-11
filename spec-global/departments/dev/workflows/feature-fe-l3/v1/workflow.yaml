@@ -1,0 +1,104 @@
+# Feature FE Development L3 Workflow v1.0
+# 特性前端开发子流程（L3）
+
+kind: workflow
+version: "1.0"
+
+id: workflow.dev.feature_fe_l3
+name: Feature Frontend Development Workflow (L3)
+description: >
+  聚焦前端实现的子流程：
+  分支准备 → 前端实现 → 静态检查 → 单测 → 自检。
+owner: development
+tags: [workflow, dev, feature, frontend, l3]
+
+roles:
+  agents:
+    - agent.dev.uniapp_frontend_engineer
+    - agent.dev.code_self_reviewer
+  skills:
+    - skill.git.checkout
+    - skill.lint.ruff
+    - skill.test.pytest
+  gates: []
+
+contracts:
+  inputs:
+    - feature_spec:
+        path: ../../contracts/feature-spec/v1/schema.json
+        description: Feature Spec 输入
+  outputs:
+    - fe_code_diff:
+        path: ../../contracts/code-diff/v1/schema.json
+        description: 前端代码差异
+    - fe_selfcheck:
+        path: ../../contracts/selfcheck/v1/schema.json
+        description: 前端自检报告
+
+stages:
+  - id: s1_prepare
+    name: "准备阶段"
+    steps:
+      - id: s1_1_checkout
+        name: "切换分支"
+        type: skill
+        run: skill.git.checkout
+        inputs:
+          - branch: "{{params.branch}}"
+        outputs:
+          - path: "output/fe-git-status.txt"
+
+  - id: s2_implement
+    name: "实现阶段"
+    steps:
+      - id: s2_1_impl
+        name: "前端实现"
+        type: agent
+        run: agent.dev.uniapp_frontend_engineer
+        dependencies:
+          requires: [s1_1_checkout]
+        inputs:
+          - feature_spec: "$inputs.feature_spec"
+          - frontend_task_spec: "$inputs.frontend_task_spec"
+        outputs:
+          - path: "output/fe-code-diff.patch"
+            contract: ../../contracts/code-diff/v1/schema.json
+
+      - id: s2_2_lint
+        name: "前端静态检查"
+        type: skill
+        run: skill.lint.ruff
+        dependencies:
+          requires: [s2_1_impl]
+        inputs:
+          - command: "ruff check ."
+        outputs:
+          - path: "output/fe-lint-report.txt"
+
+      - id: s2_3_unit_test
+        name: "前端单元测试"
+        type: skill
+        run: skill.test.pytest
+        dependencies:
+          requires: [s2_2_lint]
+        inputs:
+          - command: "pytest -q"
+        outputs:
+          - path: "output/fe-test-report.json"
+          - path: "output/fe-coverage.json"
+
+  - id: s3_review
+    name: "自检阶段"
+    steps:
+      - id: s3_1_selfcheck
+        name: "前端自检"
+        type: agent
+        run: agent.dev.code_self_reviewer
+        dependencies:
+          requires: [s2_3_unit_test]
+        inputs:
+          - feature_spec: "$inputs.feature_spec"
+          - test_report: "output/fe-test-report.json"
+        outputs:
+          - path: "output/fe-selfcheck.json"
+            contract: ../../contracts/selfcheck/v1/schema.json
