@@ -1,0 +1,195 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "API Contract",
+    "description": "API 协议契约定义，包含接口、DTO、版本与变更日志",
+    "type": "object",
+    "required": [
+        "api_id",
+        "version",
+        "endpoints",
+        "dtos",
+        "changelog"
+    ],
+    "properties": {
+        "api_id": {
+            "type": "string",
+            "description": "API 协议唯一标识"
+        },
+        "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "description": "语义化版本号 (semver)"
+        },
+        "status": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "frozen",
+                "deprecated"
+            ],
+            "description": "协议状态"
+        },
+        "endpoints": {
+            "type": "array",
+            "description": "API 端点定义列表",
+            "items": {
+                "type": "object",
+                "required": [
+                    "method",
+                    "path",
+                    "request",
+                    "response"
+                ],
+                "properties": {
+                    "method": {
+                        "type": "string",
+                        "enum": [
+                            "GET",
+                            "POST",
+                            "PUT",
+                            "PATCH",
+                            "DELETE"
+                        ]
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "API 路径"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "request": {
+                        "type": "object",
+                        "properties": {
+                            "headers": {
+                                "type": "object"
+                            },
+                            "query": {
+                                "type": "object"
+                            },
+                            "body": {
+                                "type": "object",
+                                "properties": {
+                                    "dto_ref": {
+                                        "type": "string",
+                                        "description": "引用 DTO 名称"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "response": {
+                        "type": "object",
+                        "required": [
+                            "status_codes"
+                        ],
+                        "properties": {
+                            "status_codes": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "object",
+                                    "properties": {
+                                        "dto_ref": {
+                                            "type": "string",
+                                            "description": "引用 DTO 名称"
+                                        },
+                                        "description": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "dtos": {
+            "type": "object",
+            "description": "DTO 定义映射表",
+            "additionalProperties": {
+                "type": "object",
+                "required": [
+                    "fields"
+                ],
+                "properties": {
+                    "description": {
+                        "type": "string"
+                    },
+                    "fields": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object",
+                            "required": [
+                                "type"
+                            ],
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "description": "字段类型 (string, integer, boolean, array, object, etc.)"
+                                },
+                                "required": {
+                                    "type": "boolean",
+                                    "default": false
+                                },
+                                "description": {
+                                    "type": "string"
+                                },
+                                "default": {},
+                                "items": {
+                                    "type": "object",
+                                    "description": "数组元素类型定义"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "changelog": {
+            "type": "array",
+            "description": "变更日志",
+            "items": {
+                "type": "object",
+                "required": [
+                    "version",
+                    "date",
+                    "changes"
+                ],
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "changes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "affected_modules": {
+            "type": "object",
+            "properties": {
+                "frontend": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "backend": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    },
+    "additionalProperties": false
+}

@@ -1,0 +1,97 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Bug Triage Output",
+    "description": "Bug 分流输出契约，判断 Bug 是否涉及协议变更并给出建议流程",
+    "type": "object",
+    "required": [
+        "bug_type",
+        "involves_contract_change",
+        "suggested_flow",
+        "reasoning"
+    ],
+    "properties": {
+        "bug_id": {
+            "type": "string",
+            "description": "Bug 唯一标识"
+        },
+        "bug_type": {
+            "type": "string",
+            "enum": [
+                "implementation",
+                "contract"
+            ],
+            "description": "Bug 类型：实现 Bug 或 协议 Bug"
+        },
+        "involves_contract_change": {
+            "type": "boolean",
+            "description": "是否涉及 contract 修改"
+        },
+        "involves_dto_change": {
+            "type": "boolean",
+            "description": "是否涉及 DTO 修改"
+        },
+        "involves_field_change": {
+            "type": "boolean",
+            "description": "是否涉及字段变更"
+        },
+        "involves_type_change": {
+            "type": "boolean",
+            "description": "是否涉及类型变更"
+        },
+        "affected_fields": {
+            "type": "array",
+            "description": "受影响的字段列表",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "field_name": {
+                        "type": "string"
+                    },
+                    "change_type": {
+                        "type": "string",
+                        "enum": [
+                            "add",
+                            "remove",
+                            "modify_type",
+                            "rename"
+                        ]
+                    },
+                    "contract_ref": {
+                        "type": "string",
+                        "description": "关联的 contract 文件路径"
+                    }
+                }
+            }
+        },
+        "affected_contracts": {
+            "type": "array",
+            "description": "受影响的 contract 列表",
+            "items": {
+                "type": "string"
+            }
+        },
+        "suggested_flow": {
+            "type": "string",
+            "enum": [
+                "fix_flow",
+                "contract_flow"
+            ],
+            "description": "建议修复流程：常规修复 或 协议修复"
+        },
+        "reasoning": {
+            "type": "string",
+            "description": "分流判断理由"
+        },
+        "severity": {
+            "type": "string",
+            "enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+            ],
+            "description": "Bug 严重程度"
+        }
+    },
+    "additionalProperties": false
+}

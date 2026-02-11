@@ -1,0 +1,175 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Smoke Test Result",
+    "description": "冒烟测试结果契约，包含单元测试、集成测试与主流程 smoke 的综合结果",
+    "type": "object",
+    "required": [
+        "unit_test_result",
+        "integration_test_result",
+        "smoke_result",
+        "verdict"
+    ],
+    "properties": {
+        "test_run_id": {
+            "type": "string",
+            "description": "测试运行唯一标识"
+        },
+        "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "测试执行时间"
+        },
+        "unit_test_result": {
+            "type": "object",
+            "required": [
+                "total",
+                "passed",
+                "failed",
+                "pass_rate"
+            ],
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "passed": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "failed": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "skipped": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0
+                },
+                "pass_rate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                },
+                "coverage": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                },
+                "failed_cases": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "test_name": {
+                                "type": "string"
+                            },
+                            "error": {
+                                "type": "string"
+                            },
+                            "file": {
+                                "type": "string"
+                            },
+                            "line": {
+                                "type": "integer"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "integration_test_result": {
+            "type": "object",
+            "required": [
+                "total",
+                "passed",
+                "failed",
+                "pass_rate"
+            ],
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "passed": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "failed": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "pass_rate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                },
+                "failed_cases": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "test_name": {
+                                "type": "string"
+                            },
+                            "error": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "smoke_result": {
+            "type": "object",
+            "required": [
+                "flows_tested",
+                "flows_passed",
+                "flows_failed"
+            ],
+            "properties": {
+                "flows_tested": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "flows_passed": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "flows_failed": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "failed_flows": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "flow_name": {
+                                "type": "string"
+                            },
+                            "step_failed": {
+                                "type": "string"
+                            },
+                            "error": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "verdict": {
+            "type": "string",
+            "enum": [
+                "PASS",
+                "FAIL"
+            ],
+            "description": "最终判定：PASS 或 FAIL"
+        },
+        "failure_summary": {
+            "type": "string",
+            "description": "失败时的汇总说明"
+        }
+    },
+    "additionalProperties": false
+}
