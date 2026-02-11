@@ -19,6 +19,30 @@ owner: development
 tags: [workflow, dev, bugfix, quality]
 
 # ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.dev.bug_reproducer             # LLM：复现 Bug
+    - agent.dev.bug_root_cause_analyst     # LLM：根因定位
+    - agent.dev.bug_fix_planner            # LLM：制定修复方案
+    - agent.dev.tech_architect             # LLM：架构师评审
+    - agent.dev.bug_fix_implementer        # LLM：修复代码
+    - agent.dev.bug_fix_verifier           # LLM：本地验证
+    - agent.dev.code_reviewer              # LLM：代码审核
+    - agent.dev.bug_technical_debt_recorder  # LLM：记录技术债务
+    - agent.dev.unit_test_runner           # LLM：运行单元测试
+    - agent.dev.unit_test_writer           # LLM：增加单元测试
+    - agent.dev.git_committer              # LLM：提交 Git
+    - agent.dev.bug_knowledge_curator      # LLM：知识沉淀
+  skills: []
+  gates:
+    - gate.dev.bugfix_plan_gate            # 自动：修复方案门禁
+    - gate.dev.risk_human_gate             # 人类：高风险门禁
+    - gate.dev.test_human_gate             # 人类：测试人类门禁
+
+# ============================================
 # 触发条件
 # ============================================
 triggers:
