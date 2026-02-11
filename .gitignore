@@ -95,8 +95,9 @@ MetaGPT/
 # 运行证据/产物
 evidence/
 
-# QA 运行时产出 (项目级)
-qa/
+# QA 运行时产出 (项目根目录下的 qa/ 文件夹)
+# 注意：spec-global/departments/qa/ 是工程文件，不忽略
+/qa/
 
 # 环境配置文件 (保留示例，忽略实际配置)
 .env
