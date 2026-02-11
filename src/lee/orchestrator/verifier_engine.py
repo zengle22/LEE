@@ -8,6 +8,8 @@ from lee.orchestrator.verifiers.base import VerifyResult, VerifyStatus
 from lee.orchestrator.verifiers.lint import LintVerifier
 from lee.orchestrator.verifiers.coverage import CoverageVerifier
 from lee.orchestrator.verifiers.commit_format import CommitFormatVerifier
+from lee.orchestrator.verifiers.evidence import EvidenceExistsVerifier, EvidenceReferenceVerifier
+from lee.orchestrator.verifiers.behavior_compliance import BehaviorComplianceVerifier
 
 
 class VerifierEngine:
@@ -17,6 +19,10 @@ class VerifierEngine:
             "lint": LintVerifier,
             "coverage": CoverageVerifier,
             "commit_format": CommitFormatVerifier,
+            # QA 测试执行相关验证器
+            "evidence_exists": EvidenceExistsVerifier,
+            "evidence_reference": EvidenceReferenceVerifier,
+            "behavior_compliance": BehaviorComplianceVerifier,
         }
 
     def run(self, verifiers: List[Dict[str, Any]], context: Dict[str, Any]) -> List[VerifyResult]:

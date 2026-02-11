@@ -336,10 +336,19 @@ class Orchestrator:
         await self.state_machine.start_step(workflow_id, step_to_execute.id)
 
         # 根据 step.kind 分支处理（v1.4）
+        # v1.5: 新增 orchestrator_cli 和 compliance_gate 类型
         try:
             if step_to_execute.kind == "human_gate":
                 # Human Gate：不调用 Executor，直接暂停等待人工审批
                 return await self._handle_human_gate(workflow_id, step_to_execute)
+
+            elif step_to_execute.kind == "orchestrator_cli":
+                # Orchestrator CLI：直接由 Python 执行，AI 无法干预
+                return await self._run_orchestrator_cli_step(workflow_id, step_to_execute)
+
+            elif step_to_execute.kind == "compliance_gate":
+                # 合规门禁：检查 AI 行为是否违规
+                return await self._run_compliance_gate_step(workflow_id, step_to_execute)
 
             elif step_to_execute.kind == "agent":
                 # Agent 步骤：调用 LLM Executor
@@ -592,6 +601,160 @@ class Orchestrator:
             )
 
         return result
+
+    async def _run_orchestrator_cli_step(
+        self,
+        workflow_id: str,
+        step
+    ) -> StepResult:
+        """
+        运行 Orchestrator CLI 步骤
+
+        由 Orchestrator 直接执行，AI 无法干预。
+        用于环境探测、证据收集等安全敏感操作。
+        """
+        from lee.orchestrator.tools.check_env import run_check_env
+
+        # 获取工作流上下文
+        instance = await self.store.get_workflow(workflow_id)
+        workflow_context = {
+            "workflow_id": workflow_id,
+            "data": instance.data if instance else {},
+        }
+
+        # 获取步骤配置
+        step_config = step.config or {}
+        run_command = step.run or step_config.get("run", "")
+
+        try:
+            if run_command == "check_env":
+                # 环境检查
+                checks = []
+                inputs = step.input or []
+                for inp in inputs:
+                    if isinstance(inp, dict) and "checks" in inp:
+                        checks = inp["checks"]
+                        break
+
+                # 构建输出路径
+                run_id = instance.data.get("run_id", "RUN-UNKNOWN") if instance else "RUN-UNKNOWN"
+                output_path = str(Path(self.project_root or ".") / f".workflow/env-check/{run_id}-{step.id}.json")
+
+                # 执行检查
+                result = run_check_env(checks, output_path)
+
+                output_data = {
+                    "all_passed": result.all_passed,
+                    "failures": result.failures,
+                    "output_path": output_path,
+                    "source": "orchestrator",  # 标记来源为 orchestrator
+                }
+
+                # 完成步骤
+                step_result = await self.state_machine.complete_step(
+                    workflow_id,
+                    step.id,
+                    output_data
+                )
+
+                # 收集证据
+                await self._collect_evidence(workflow_id, step.id, [output_path])
+
+                # 检查是否通过
+                if not result.all_passed:
+                    step_result.message = f"Environment check failed: {', '.join(result.failures)}"
+
+                return step_result
+
+            else:
+                # 未知的 orchestrator CLI 命令
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=f"Unknown orchestrator CLI command: {run_command}",
+                )
+
+        except Exception as e:
+            await self.state_machine.fail_step(workflow_id, step.id, str(e))
+            return StepResult(
+                status="failed",
+                step_id=step.id,
+                workflow_id=workflow_id,
+                message=f"Orchestrator CLI execution failed: {e}",
+            )
+
+    async def _run_compliance_gate_step(
+        self,
+        workflow_id: str,
+        step
+    ) -> StepResult:
+        """
+        运行合规门禁步骤
+
+        检查 AI 行为是否违规（mock/借口等）。
+        违规 → 本轮测试无效。
+        """
+        from lee.orchestrator.verifiers.behavior_compliance import BehaviorComplianceVerifier
+
+        # 获取工作流上下文
+        instance = await self.store.get_workflow(workflow_id)
+
+        # 获取输入数据
+        inputs = step.input or []
+        runner_output = {}
+        confirmed_env_errors = []
+
+        for inp in inputs:
+            if isinstance(inp, dict):
+                if "runner_output" in inp:
+                    runner_output = inp["runner_output"]
+                if "confirmed_env_errors" in inp:
+                    confirmed_env_errors = inp["confirmed_env_errors"]
+
+        # 执行合规检查
+        verifier = BehaviorComplianceVerifier()
+        context = {
+            "runner_output": runner_output,
+            "confirmed_env_errors": confirmed_env_errors,
+            "config": step.config.get("config", {}) if step.config else {},
+        }
+        result = verifier.verify(context)
+
+        # 保存检查结果
+        run_id = instance.data.get("run_id", "RUN-UNKNOWN") if instance else "RUN-UNKNOWN"
+        output_path = Path(self.project_root or ".") / f".workflow/compliance/{run_id}-{step.id}.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps({
+            "status": result.status.value,
+            "message": result.message,
+            "details": result.details,
+        }, indent=2, ensure_ascii=False), encoding="utf-8")
+
+        output_data = {
+            "compliant": result.status.value == "passed",
+            "violations": result.details.get("violations", []) if result.details else [],
+            "output_path": str(output_path),
+        }
+
+        if result.status.value == "passed":
+            # 合规通过
+            step_result = await self.state_machine.complete_step(
+                workflow_id,
+                step.id,
+                output_data
+            )
+            return step_result
+        else:
+            # 合规失败 → 标记为 invalid_run
+            await self.state_machine.fail_step(workflow_id, step.id, result.message)
+            return StepResult(
+                status="failed",
+                step_id=step.id,
+                workflow_id=workflow_id,
+                message=f"AI behavior violation detected: {result.message}",
+                output=output_data,
+            )
 
     async def _run_skill_step(
         self,

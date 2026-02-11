@@ -1,8 +1,9 @@
-# Test Plan Execution Workflow v1.0
+# Test Plan Execution Workflow v1.1
 # L3 - 执行 Test Plan 工作流
+# v1.1 新增：反 Mock 约束、证据强制、AI 行为合规 Gate
 
 kind: workflow
-version: 1.0
+version: 1.1
 
 # ============================================
 # 基础标识
@@ -19,8 +20,50 @@ description: >
   - 组装 TSE，起草 Bug
   - 出测评估
 
+  v1.1 改进：
+  - 反 Mock 宪法：禁止 AI 假装执行、模拟网络响应
+  - 证据强制：没有 evidence_bundle = 没执行
+  - 环境检查由 Orchestrator 执行，不由 AI "嘴上说"
+  - AI 行为合规 Gate：拦截 mock/借口等违规行为
+  - 角色拆分：执行者和判断者分开
+
 owner: qa-governance
 tags: [workflow, L3, test-plan, test-run, execution, qa]
+
+# ============================================
+# 反 Mock 宪法（Anti-Mock Constitution）
+# ============================================
+constitution:
+  id: anti_mock_constitution_v1
+  name: "测试执行反 Mock 条款"
+  version: "1.0"
+  description: |
+    在测试执行工作流中：
+    - AI 不允许"假装"执行步骤
+    - AI 不允许"模拟网络响应"
+    - 所有通过/失败判定必须来自真实执行证据
+    - 没有证据的结果 = 无效结果
+
+  principles:
+    - id: no_mock_execution
+      name: "禁止模拟执行"
+      rule: "AI 不得在 case.meta.allow_mock != true 时使用模拟/假设"
+
+    - id: evidence_required
+      name: "证据强制"
+      rule: "所有用例结果必须有 evidence_bundle，否则 status=invalid_run"
+
+    - id: no_fabricated_errors
+      name: "禁止捏造错误"
+      rule: "runtime_errors 只能来自 Runner CLI / Orchestrator 探测 / 人工标记"
+
+    - id: tool_check_by_orchestrator
+      name: "工具检查由 Orchestrator 执行"
+      rule: "环境/工具缺失必须由 check_env CLI 确认，不接受 AI 自述"
+
+  enforcement:
+    violation_handling: "违规用例标记为 invalid_run，本轮测试直接 fail"
+    audit_enabled: true
 
 # ============================================
 # 参数定义
@@ -46,6 +89,16 @@ params:
     required: false
     default: "test"
     description: "测试环境名称"
+
+  target_test_sets:
+    type: array
+    required: false
+    default: []
+    description: |
+      指定要执行的 Test Set ID 列表（可选）
+      - 如果为空：执行 Test Plan 中定义的所有 Test Sets
+      - 如果指定：只执行列表中的 Test Sets
+      用于多模块场景下的按需执行
 
 # ============================================
 # 契约定义
@@ -73,6 +126,7 @@ contracts:
 
     - bugs:
         path: "qa/bugs/"
+        schema: ../../contracts/bug-v2/v1/schema.yaml
         description: "Bug 文件目录"
 
 # ============================================
@@ -88,6 +142,19 @@ runtime:
     type: string
     description: "当前执行的 Test Set ID"
 
+  effective_test_sets:
+    type: array
+    description: |
+      实际执行的 Test Sets 列表（过滤后）
+      - 如果 params.target_test_sets 为空，则使用 test_plan 中的全部 test_sets
+      - 如果 params.target_test_sets 有值，则取交集
+    computed: |
+      IF params.target_test_sets IS EMPTY THEN
+        outputs.s1_1_load_test_plan.test_sets
+      ELSE
+        outputs.s1_1_load_test_plan.test_sets
+          WHERE test_set_id IN params.target_test_sets
+
 # ============================================
 # 状态机定义
 # ============================================
@@ -96,14 +163,18 @@ state_machine:
     - INIT: "初始化"
     - TEST_RUN_INIT: "Test Run 初始化"
     - ENV_PROVISION: "测试环境准备"
+    - ENV_CHECK: "环境探测（Orchestrator 执行）"
     - CASE_GENERATION: "用例生成"
     - SCRIPT_TRANSLATION: "脚本翻译"
-    - SCRIPT_EXECUTION: "脚本执行"
+    - SCRIPT_EXECUTION: "脚本执行（Runner 执行）"
+    - BEHAVIOR_COMPLIANCE: "AI 行为合规检查"
+    - RESULT_JUDGMENT: "结果判定（判断者角色）"
     - TSE_ASSEMBLY: "TSE 组装"
     - BUG_DRAFTING: "Bug 起草"
     - EXIT_EVALUATION: "出测评估"
     - COMPLETED: "完成"
     - FAILED: "失败"
+    - INVALID_RUN: "无效执行（AI 违规）"
 
   transitions:
     INIT:
@@ -117,10 +188,17 @@ state_machine:
         trigger: "test_plan_not_found"
 
     ENV_PROVISION:
-      - to: CASE_GENERATION
-        trigger: "env_ready"
+      - to: ENV_CHECK
+        trigger: "env_provisioned"
       - to: FAILED
         trigger: "env_provision_failed"
+
+    ENV_CHECK:
+      - to: CASE_GENERATION
+        trigger: "env_check_passed"
+      - to: FAILED
+        trigger: "env_check_failed"
+        note: "Orchestrator 确认环境/工具缺失"
 
     CASE_GENERATION:
       - to: SCRIPT_TRANSLATION
@@ -136,10 +214,21 @@ state_machine:
         trigger: "translation_failed"
 
     SCRIPT_EXECUTION:
-      - to: TSE_ASSEMBLY
+      - to: BEHAVIOR_COMPLIANCE
         trigger: "execution_completed"
       - to: FAILED
         trigger: "execution_failed"
+
+    BEHAVIOR_COMPLIANCE:
+      - to: RESULT_JUDGMENT
+        trigger: "behavior_compliant"
+      - to: INVALID_RUN
+        trigger: "behavior_violation"
+        note: "发现 mock/借口等违规行为"
+
+    RESULT_JUDGMENT:
+      - to: TSE_ASSEMBLY
+        trigger: "results_judged"
 
     TSE_ASSEMBLY:
       - to: BUG_DRAFTING
@@ -163,6 +252,11 @@ state_machine:
       - to: COMPLETED
         trigger: "exit_fail"
         note: "即使不通过也完成，记录结论"
+
+    INVALID_RUN:
+      - to: FAILED
+        trigger: "invalid_run_confirmed"
+        note: "AI 违规导致本轮测试无效"
 
 # ============================================
 # 阶段定义
@@ -196,6 +290,11 @@ stages:
             schema: ../../contracts/test-run/v1/schema.yaml
           - var: "test_run"
             trigger: test_run_created
+        verifiers:
+          - type: schema
+            config:
+              schema_path: ../../contracts/test-run/v1/schema.yaml
+              fail_on_error: true
 
   # ========== Stage 2: 测试环境准备 ==========
   - id: s2_env_provision
@@ -215,6 +314,12 @@ stages:
         outputs:
           - var: "environment_info"
           - path: "qa/test-runs/{{ runtime.test_run_id }}/env-health.yaml"
+            schema: ../../contracts/devops-config/v1/template.yaml
+        verifiers:
+          - type: schema
+            config:
+              schema_path: ../../contracts/devops-config/v1/template.yaml
+              fail_on_error: true
 
       - id: s2_2_health_check
         name: "环境健康检查"
@@ -222,11 +327,60 @@ stages:
           type: auto_check
           check: "environment_info.status == 'healthy'"
           on_pass:
-            trigger: env_ready
+            trigger: env_provisioned
           on_fail:
             trigger: env_provision_failed
             action: fail_workflow
             message: "测试环境不健康，无法继续"
+
+  # ========== Stage 2.5: 环境探测（Orchestrator 执行）==========
+  - id: s2_5_env_check
+    name: "环境探测"
+    description: |
+      由 Orchestrator 执行环境/工具检查，不由 AI 自述。
+      这是唯一允许产生 tool_missing / network_error 的步骤。
+    state: ENV_CHECK
+
+    steps:
+      - id: s2_5_1_check_tools
+        name: "检查测试工具"
+        type: orchestrator_cli
+        run: check_env
+        description: |
+          Orchestrator 直接执行，AI 无法干预。
+          检查项：playwright, curl, nc 等测试工具是否存在。
+        inputs:
+          - checks:
+              - type: command_exists
+                commands: ["playwright", "npx", "node"]
+              - type: service_reachable
+                endpoints:
+                  - url: "{{ params.environment }}.test.local"
+                    port: 443
+              - type: directory_writable
+                paths:
+                  - "qa/test-runs/{{ runtime.test_run_id }}/evidence/"
+        outputs:
+          - path: "qa/test-runs/{{ runtime.test_run_id }}/env-check.json"
+          - var: "env_check_result"
+
+      - id: s2_5_2_validate_env_check
+        name: "验证环境检查结果"
+        gate:
+          type: auto_check
+          check: "env_check_result.all_passed == true"
+          on_pass:
+            trigger: env_check_passed
+          on_fail:
+            trigger: env_check_failed
+            action: fail_workflow
+            message: |
+              环境检查失败：{{ env_check_result.failures | join(', ') }}
+              这是 Orchestrator 确认的真实缺失，不是 AI 自述。
+            outputs:
+              - var: "confirmed_env_errors"
+                value: "$env_check_result.failures"
+                description: "Orchestrator 确认的环境问题（唯一合法来源）"
 
   # ========== Stage 3: 用例生成 ==========
   - id: s3_case_generation
@@ -234,7 +388,7 @@ stages:
     description: "根据 Test Set 策略动态生成测试用例"
     state: CASE_GENERATION
     loop:
-      over: "$outputs.s1_1_load_test_plan.test_sets"
+      over: "$runtime.effective_test_sets"
       as: "current_test_set"
 
     steps:
@@ -256,7 +410,13 @@ stages:
               changed_areas: "$outputs.s1_2_create_test_run.test_run.build.changed_areas"
         outputs:
           - path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/cases.yaml"
+            schema: ../../contracts/test-case/v1/schema.yaml
           - var: "generated_cases"
+        verifiers:
+          - type: schema
+            config:
+              schema_path: ../../contracts/test-case/v1/schema.yaml
+              fail_on_error: true
 
       - id: s3_3_review_cases
         name: "人工审核用例"
@@ -278,7 +438,7 @@ stages:
     description: "将用例翻译成可执行脚本"
     state: SCRIPT_TRANSLATION
     loop:
-      over: "$outputs.s1_1_load_test_plan.test_sets"
+      over: "$runtime.effective_test_sets"
       as: "current_test_set"
 
     steps:
@@ -291,7 +451,13 @@ stages:
           - test_set: "$loop_outputs.s3_1_load_test_set[current_test_set.test_set_id]"
         outputs:
           - path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/scripts/"
+            schema: ../../contracts/e2e-script-contract/v1/schema.yaml
           - var: "test_scripts"
+        verifiers:
+          - type: schema
+            config:
+              schema_path: ../../contracts/e2e-script-contract/v1/schema.yaml
+              fail_on_error: true
 
       - id: s4_2_validate_scripts
         name: "脚本语法校验"
@@ -303,28 +469,221 @@ stages:
           on_fail:
             trigger: translation_failed
 
-  # ========== Stage 5: 脚本执行 ==========
+  # ========== Stage 5: 脚本执行（角色拆分：执行者）==========
   - id: s5_script_execution
     name: "脚本执行"
-    description: "执行测试脚本，收集结果"
+    description: |
+      执行测试脚本，收集结果。
+
+      【角色拆分】执行者角色：
+      - 只能调用 test_runner CLI，不许写结论
+      - 必须产出 evidence_bundle（日志、截图、视频）
+      - 不允许模拟执行、不允许假装网络错误
+
+      【证据强制】
+      - 没有 evidence_bundle = status: invalid_run
+      - evidence_bundle 必须包含真实文件引用
     state: SCRIPT_EXECUTION
     loop:
-      over: "$outputs.s1_1_load_test_plan.test_sets"
+      over: "$runtime.effective_test_sets"
       as: "current_test_set"
+
+    # 角色约束：执行者
+    role_constraints:
+      role: executor
+      allowed_actions:
+        - call_test_runner
+        - collect_evidence
+        - report_runner_output
+      forbidden_actions:
+        - judge_pass_fail
+        - fabricate_errors
+        - mock_execution
 
     steps:
       - id: s5_1_execute_scripts
-        name: "执行脚本"
-        run: agent.qa.script_executor
+        name: "执行脚本（通过 test_runner CLI）"
+        type: cli_execution
+        run: test_runner
+        description: |
+          所有 E2E 用例必须通过统一命令执行：
+          test_runner run --case {case_id} --env {environment}
+
+          AI 必须调用此命令才能宣称执行过。
         inputs:
           - test_scripts: "$loop_outputs.s4_1_translate_scripts[current_test_set.test_set_id]"
           - environment: "$outputs.s2_1_provision_env.environment_info"
+          - runner_config:
+              command_template: "test_runner run --case {{ case.case_id }} --env {{ params.environment }}"
+              evidence_dir: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/evidence/"
+              capture:
+                logs: true
+                screenshots: true
+                video: false  # 可选
+                network_trace: true
+        outputs:
+          - path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/runner-output.json"
+            description: "test_runner CLI 的原始输出"
+          - path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/evidence/"
+            description: "执行证据目录（日志、截图等）"
+          - var: "runner_output"
+            description: "Runner CLI 返回的结构化结果"
+          - var: "runtime_errors"
+            description: |
+              只有以下来源的错误才合法：
+              1. Runner CLI 的退出码 + stderr
+              2. Orchestrator 的环境探测（s2_5_1_check_tools）
+              3. 人工明确标记
+
+              禁止 AI 自己造错误理由。
+        verifiers:
+          - type: evidence_exists
+            config:
+              evidence_dir: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/evidence/"
+              required_files:
+                - pattern: "*.log"
+                  description: "执行日志"
+                - pattern: "*.png"
+                  description: "截图（至少一张）"
+                  optional_if: "case.meta.headless == true"
+              fail_on_missing: true
+              error_status: invalid_run
+
+  # ========== Stage 5.5: AI 行为合规检查 ==========
+  - id: s5_5_behavior_compliance
+    name: "AI 行为合规检查"
+    description: |
+      检查 AI 在执行阶段是否有违规行为：
+      - 使用 mock/模拟
+      - 捏造网络错误
+      - 工具缺失借口（未经 Orchestrator 确认）
+
+      违规 → 本轮测试直接 invalid_run
+    state: BEHAVIOR_COMPLIANCE
+    loop:
+      over: "$runtime.effective_test_sets"
+      as: "current_test_set"
+
+    steps:
+      - id: s5_5_1_check_behavior
+        name: "检查 AI 行为"
+        type: compliance_gate
+        run: skill.qa.behavior_compliance_checker
+        inputs:
+          - runner_output: "$loop_outputs.s5_1_execute_scripts[current_test_set.test_set_id].runner_output"
+          - evidence_dir: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/evidence/"
+          - confirmed_env_errors: "$outputs.s2_5_2_validate_env_check.confirmed_env_errors"
+        outputs:
+          - path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/behavior-compliance.yaml"
+          - var: "compliance_result"
+        gate:
+          type: behavior_compliance
+          rules:
+            - id: no_mock_without_flag
+              description: "禁止在未显式允许 mock 的用例中使用模拟执行/模拟响应"
+              check:
+                if: "case.meta.allow_mock != true"
+                then:
+                  assert_not_contains:
+                    target: "runner_output.case_results.*.result_text"
+                    patterns:
+                      - "mock"
+                      - "模拟"
+                      - "假设返回"
+                      - "假定接口返回"
+                      - "simulate"
+                      - "stub"
+
+            - id: no_network_error_without_runtime_error
+              description: "禁止无 runtime_error 时宣称网络错误"
+              check:
+                if: "runner_output.case_results.*.claimed_network_error == true"
+                then:
+                  assert_any:
+                    - "confirmed_env_errors contains 'network'"
+                    - "runner_output.runtime_errors.source == 'runner_cli'"
+                    - "runner_output.runtime_errors.source == 'human_marked'"
+
+            - id: no_tool_missing_without_check
+              description: "禁止未经确认的工具缺失借口"
+              check:
+                if: "runner_output.case_results.*.claimed_tool_missing == true"
+                then:
+                  assert: "confirmed_env_errors contains runner_output.case_results.*.missing_tool"
+
+            - id: evidence_required
+              description: "P0/P1 用例必须有证据"
+              check:
+                if: "case.priority in ['P0', 'P1']"
+                then:
+                  assert_not_null: "runner_output.case_results.*.evidence_bundle"
+
+          on_pass:
+            trigger: behavior_compliant
+          on_fail:
+            trigger: behavior_violation
+            action: mark_invalid_run
+            outputs:
+              - var: "violations"
+                description: "违规详情"
+              - path: "qa/test-runs/{{ runtime.test_run_id }}/behavior-violations.yaml"
+
+  # ========== Stage 5.6: 结果判定（角色拆分：判断者）==========
+  - id: s5_6_result_judgment
+    name: "结果判定"
+    description: |
+      【角色拆分】判断者角色：
+      - 只能读 evidence，不许再调 tool
+      - 根据 evidence_bundle 判定 pass/fail
+      - 不能修改执行结果
+    state: RESULT_JUDGMENT
+    loop:
+      over: "$runtime.effective_test_sets"
+      as: "current_test_set"
+
+    # 角色约束：判断者
+    role_constraints:
+      role: judge
+      allowed_actions:
+        - read_evidence
+        - judge_pass_fail
+        - write_results
+      forbidden_actions:
+        - call_test_runner
+        - modify_evidence
+        - fabricate_evidence
+
+    steps:
+      - id: s5_6_1_judge_results
+        name: "判定用例结果"
+        run: agent.qa.result_judge
+        description: |
+          根据 evidence_bundle 判定每个用例的 pass/fail。
+
+          判定依据：
+          - runner_output 的退出码和 stderr
+          - evidence_bundle 中的日志和截图
+          - 预期结果与实际结果的对比
+        inputs:
+          - runner_output: "$loop_outputs.s5_1_execute_scripts[current_test_set.test_set_id].runner_output"
+          - evidence_dir: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/evidence/"
+          - expected_results: "$loop_outputs.s3_2_generate_cases[current_test_set.test_set_id]"
         outputs:
           - path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/results.yaml"
-          - path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/evidence/"
+            schema: ../../contracts/test-result/v1/schema.yaml
           - var: "execution_results"
           - var: "failures"
-          trigger: execution_completed
+          trigger: results_judged
+        verifiers:
+          - type: schema
+            config:
+              schema_path: ../../contracts/test-result/v1/schema.yaml
+              fail_on_error: true
+          - type: evidence_reference
+            config:
+              description: "每个结果必须引用 evidence_bundle"
+              check: "all(execution_results.cases.*.evidence_bundle != null)"
+              fail_on_error: true
 
   # ========== Stage 6: TSE 组装 ==========
   - id: s6_tse_assembly
@@ -332,7 +691,7 @@ stages:
     description: "组装 Test Set Execution，汇总用例+脚本+结果"
     state: TSE_ASSEMBLY
     loop:
-      over: "$outputs.s1_1_load_test_plan.test_sets"
+      over: "$runtime.effective_test_sets"
       as: "current_test_set"
 
     steps:
@@ -351,6 +710,11 @@ stages:
             schema: ../../contracts/test-set-execution/v1/schema.yaml
           - var: "tse"
           trigger: tse_assembled
+        verifiers:
+          - type: schema
+            config:
+              schema_path: ../../contracts/test-set-execution/v1/schema.yaml
+              fail_on_error: true
 
   # ========== Stage 7: Bug 起草 ==========
   - id: s7_bug_drafting
@@ -367,9 +731,16 @@ stages:
           - failures: "$all_failures"
           - tse_list: "$loop_outputs.s6_1_assemble_tse"
         outputs:
-          - path: "qa/bugs/"
-            description: "Bug 文件目录"
+          - path: "qa/bugs/{{ bug.bug_id }}.yaml"
+            schema: ../../contracts/bug-v2/v1/schema.yaml
+            foreach: bug in draft_bugs
+            description: "Bug 文件，每个 bug 单独一个文件"
           - var: "draft_bugs"
+        verifiers:
+          - type: schema
+            config:
+              schema_path: ../../contracts/bug-v2/v1/schema.yaml
+              fail_on_error: true
 
       - id: s7_2_review_bugs
         name: "人工确认 Bug"
@@ -401,7 +772,13 @@ stages:
           - bugs: "$outputs.s7_1_draft_bugs.draft_bugs"
         outputs:
           - path: "qa/test-runs/{{ runtime.test_run_id }}/test-run.yaml"
+            schema: ../../contracts/test-run/v1/schema.yaml
           - var: "updated_test_run"
+        verifiers:
+          - type: schema
+            config:
+              schema_path: ../../contracts/test-run/v1/schema.yaml
+              fail_on_error: true
 
       - id: s8_2_evaluate_exit
         name: "评估出测条件"
@@ -415,6 +792,16 @@ stages:
           - var: "exit_decision"
           - var: "blocking_reasons"
           - path: "qa/test-runs/{{ runtime.test_run_id }}/exit-evaluation.yaml"
+            # TODO: 需要定义 exit-evaluation 契约 schema
+        verifiers:
+          - type: yaml_structure
+            config:
+              required_fields:
+                - decision
+                - summary
+                - pass_rate
+                - blocking_bugs
+              fail_on_error: true
 
       - id: s8_3_human_decision
         name: "人工最终决策"
@@ -443,11 +830,93 @@ gates:
     type: auto
     timeout: 10m
 
+  env_check:
+    type: orchestrator
+    timeout: 5m
+    description: "Orchestrator 执行的环境探测，AI 无法干预"
+    executor: orchestrator
+    not_ai: true
+
   human_review_cases:
     type: human
     timeout: 24h
     required_approvers:
       - role: qa
+
+  # ========== AI 行为合规门禁（核心新增）==========
+  ai_behavior_compliance:
+    type: auto
+    timeout: 5m
+    description: |
+      AI 行为合规检查门禁：
+      - 先约束 AI 行为，再评价产品质量
+      - 违规 → 本轮测试无效，需人工介入
+
+    rules:
+      - id: no_mock_without_flag
+        description: "禁止在未显式允许 mock 的用例中使用模拟执行/模拟响应"
+        severity: critical
+        check:
+          if: "case.meta.allow_mock != true"
+          then:
+            assert_not_contains:
+              target: "case.result_text"
+              patterns:
+                - "mock"
+                - "模拟"
+                - "假设返回"
+                - "假定接口返回"
+                - "simulate"
+                - "假装"
+                - "跳过执行"
+
+      - id: no_network_error_without_runtime_error
+        description: "禁止无 runtime_error 时宣称网络错误"
+        severity: critical
+        check:
+          if: "case.claimed_network_error == true"
+          then:
+            assert_not_null: "case.runtime_errors"
+            assert_in:
+              value: "case.runtime_errors.source"
+              allowed: ["runner_cli", "orchestrator", "human_marked"]
+
+      - id: no_tool_missing_without_orchestrator_confirm
+        description: "禁止未经 Orchestrator 确认的工具缺失"
+        severity: critical
+        check:
+          if: "case.claimed_tool_missing == true"
+          then:
+            assert: "confirmed_env_errors contains case.missing_tool"
+
+      - id: evidence_required_for_p0_p1
+        description: "P0/P1 用例必须有 evidence_bundle"
+        severity: critical
+        check:
+          if: "case.priority in ['P0', 'P1']"
+          then:
+            assert_not_null: "case.evidence_bundle"
+            assert_not_empty: "case.evidence_bundle.logs"
+
+      - id: no_fabricated_pass
+        description: "禁止无证据的 pass 结论"
+        severity: high
+        check:
+          if: "case.status == 'pass'"
+          then:
+            assert_any:
+              - "case.evidence_bundle.logs is not empty"
+              - "case.evidence_bundle.screenshots is not empty"
+              - "case.meta.evidence_exempt == true"
+
+    on_violation:
+      action: mark_invalid_run
+      outputs:
+        - var: "ai_violations"
+        - path: "qa/test-runs/{{ runtime.test_run_id }}/ai-behavior-violations.yaml"
+      notify:
+        - role: qa_lead
+        - role: devops
 
   human_review_bugs:
     type: human
@@ -463,22 +932,131 @@ gates:
       - role: pm
 
 # ============================================
+# runtime_errors 合法来源定义
+# ============================================
+runtime_error_policy:
+  description: |
+    runtime_errors 只允许三种来源：
+    1. Runner CLI 的退出码 + stderr
+    2. Orchestrator 的环境探测
+    3. 人类明确标记
+
+    禁止 AI 自己造错误理由。
+
+  allowed_sources:
+    - id: runner_cli
+      name: "Runner CLI"
+      description: "test_runner 命令的退出码和 stderr"
+      validation:
+        - "exit_code != 0"
+        - "stderr is not empty"
+
+    - id: orchestrator
+      name: "Orchestrator 环境探测"
+      description: "s2_5_1_check_tools 步骤的输出"
+      validation:
+        - "source_step == 's2_5_1_check_tools'"
+
+    - id: human_marked
+      name: "人工标记"
+      description: "人类通过门禁明确标记的错误"
+      validation:
+        - "marker_role in ['qa', 'qa_lead', 'devops']"
+
+  forbidden_sources:
+    - id: ai_claimed
+      name: "AI 自述"
+      description: "AI 在没有证据的情况下声称的错误"
+      action: reject
+      violation_type: behavior_violation
+
+# ============================================
 # 产出目录结构
 # ============================================
 output_structure: |
   qa/
   ├── test-runs/
   │   └── {test_run_id}/
-  │       ├── test-run.yaml           # Test Run 记录
-  │       ├── env-health.yaml         # 环境健康检查
-  │       ├── exit-evaluation.yaml    # 出测评估
+  │       ├── test-run.yaml                 # Test Run 记录
+  │       ├── env-health.yaml               # 环境健康检查
+  │       ├── env-check.json                # Orchestrator 环境探测结果（新增）
+  │       ├── behavior-violations.yaml      # AI 行为违规记录（新增，如有）
+  │       ├── ai-behavior-violations.yaml   # AI 行为门禁违规详情（新增，如有）
+  │       ├── exit-evaluation.yaml          # 出测评估
   │       ├── tse-{test_set_id}/
-  │       │   ├── cases.yaml          # 生成的用例
-  │       │   ├── scripts/            # 翻译的脚本
-  │       │   ├── results.yaml        # 执行结果
-  │       │   ├── evidence/           # 执行证据
-  │       │   └── tse.yaml            # TSE 汇总
+  │       │   ├── cases.yaml                # 生成的用例
+  │       │   ├── scripts/                  # 翻译的脚本
+  │       │   ├── runner-output.json        # test_runner CLI 原始输出（新增）
+  │       │   ├── behavior-compliance.yaml  # AI 行为合规检查结果（新增）
+  │       │   ├── results.yaml              # 执行结果（判断者产出）
+  │       │   ├── evidence/                 # 执行证据（执行者产出）
+  │       │   │   ├── *.log                 # 执行日志
+  │       │   │   ├── *.png                 # 截图
+  │       │   │   └── network-trace.json    # 网络追踪（可选）
+  │       │   └── tse.yaml                  # TSE 汇总
   │       └── ...
   └── bugs/
       ├── BUG-2026-0031.yaml
       └── ...
+
+# ============================================
+# evidence_bundle 结构定义
+# ============================================
+evidence_bundle_schema:
+  description: |
+    每个用例的执行证据包，是判定 pass/fail 的唯一依据。
+    没有 evidence_bundle = status: invalid_run
+
+  properties:
+    commands:
+      type: array
+      description: "执行的命令列表"
+      example:
+        - "test_runner run --case TC_LOGIN_001 --env test"
+
+    logs:
+      type: string
+      description: "日志文件路径"
+      example: "evidence/tc_login_001.log"
+      required: true
+
+    screenshots:
+      type: array
+      description: "截图路径列表"
+      example:
+        - "evidence/tc_login_001_step1.png"
+        - "evidence/tc_login_001_step2.png"
+
+    video:
+      type: string
+      description: "录屏路径（可选）"
+      example: "evidence/tc_login_001.mp4"
+
+    network_trace:
+      type: string
+      description: "网络追踪文件路径"
+      example: "evidence/tc_login_001_network.json"
+
+    runner_result_ref:
+      type: string
+      description: "runner-output.json 中的结果引用"
+      example: "runner-output.json#TC_LOGIN_001"
+      required: true
+
+    exit_code:
+      type: integer
+      description: "test_runner 命令的退出码"
+      example: 0
+
+    stderr:
+      type: string
+      description: "标准错误输出（如有）"
+
+  validation_rules:
+    - rule: "logs_must_exist"
+      check: "file_exists(evidence_bundle.logs)"
+      error: "日志文件不存在，执行无效"
+
+    - rule: "runner_ref_must_match"
+      check: "runner_output contains evidence_bundle.runner_result_ref"
+      error: "Runner 结果引用无效"

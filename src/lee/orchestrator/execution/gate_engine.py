@@ -170,6 +170,10 @@ class GateEngine:
             "file_exists": self._evaluate_file_exists,
             # 架构一致性
             "architecture_consistency": self._evaluate_architecture_consistency,
+            # v1.5: AI 行为合规检查
+            "pattern_not_contains": self._evaluate_pattern_not_contains,
+            "error_source_valid": self._evaluate_error_source_valid,
+            "evidence_exists": self._evaluate_evidence_exists,
         }
 
     # ========================================================================
@@ -411,6 +415,105 @@ class GateEngine:
         passed = len(conflicts) == 0
 
         return passed, len(conflicts), 0, f"Found {len(conflicts)} conflicts" if conflicts else None
+
+    # ========================================================================
+    # v1.5: AI 行为合规评估器
+    # ========================================================================
+
+    def _evaluate_pattern_not_contains(
+        self,
+        expression: str,
+        context: Dict[str, Any],
+    ) -> tuple[bool, Any, Any, Optional[str]]:
+        """
+        模式不包含评估器
+
+        检查文本是否包含禁止的模式（如 mock 关键词）。
+        表达式格式: "field_path NOT_CONTAINS pattern1,pattern2,..."
+        """
+        import re
+
+        if " NOT_CONTAINS " not in expression:
+            return False, None, None, f"Invalid expression: {expression}"
+
+        field_path, patterns_str = expression.split(" NOT_CONTAINS ", 1)
+        field_path = field_path.strip()
+        patterns = [p.strip() for p in patterns_str.split(",")]
+
+        # 获取字段值
+        text = self._get_nested_value(context, field_path)
+        if text is None:
+            return True, None, patterns, None  # 字段不存在，视为通过
+
+        text = str(text)
+
+        # 检查是否包含禁止模式
+        for pattern in patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return False, f"Found: {pattern}", patterns, f"Text contains forbidden pattern: {pattern}"
+
+        return True, "No forbidden patterns", patterns, None
+
+    def _evaluate_error_source_valid(
+        self,
+        expression: str,
+        context: Dict[str, Any],
+    ) -> tuple[bool, Any, Any, Optional[str]]:
+        """
+        错误来源验证评估器
+
+        检查 runtime_errors 的来源是否合法。
+        合法来源: runner_cli, orchestrator, human_marked
+        """
+        valid_sources = {"runner_cli", "orchestrator", "human_marked"}
+
+        # 表达式格式: "field_path"
+        field_path = expression.strip()
+        source = self._get_nested_value(context, field_path)
+
+        if source is None:
+            return True, None, valid_sources, None  # 无错误，视为通过
+
+        if source in valid_sources:
+            return True, source, valid_sources, None
+
+        return False, source, valid_sources, f"Invalid error source: {source}. Valid sources: {valid_sources}"
+
+    def _evaluate_evidence_exists(
+        self,
+        expression: str,
+        context: Dict[str, Any],
+    ) -> tuple[bool, Any, Any, Optional[str]]:
+        """
+        证据存在评估器
+
+        检查 evidence_bundle 是否存在且非空。
+        """
+        field_path = expression.strip()
+        evidence = self._get_nested_value(context, field_path)
+
+        if evidence is None:
+            return False, None, "evidence_bundle", "Evidence bundle is missing"
+
+        if isinstance(evidence, dict):
+            # 检查是否有 logs 或 screenshots
+            has_logs = bool(evidence.get("logs"))
+            has_screenshots = bool(evidence.get("screenshots"))
+            if has_logs or has_screenshots:
+                return True, evidence, "evidence_bundle", None
+
+        return False, evidence, "evidence_bundle", "Evidence bundle is empty or invalid"
+
+    def _get_nested_value(self, d: Dict[str, Any], path: str) -> Any:
+        """获取嵌套字典值"""
+        keys = path.split(".")
+        value = d
+        for k in keys:
+            if isinstance(value, dict):
+                value = value.get(k)
+            else:
+                return None
+        return value
 
     # ========================================================================
     # 判定逻辑
