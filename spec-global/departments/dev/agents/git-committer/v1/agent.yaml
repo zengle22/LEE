@@ -1,12 +1,15 @@
+# Git 提交者 Spec
+# 自动生成的存根 — 需完善 prompt 和具体能力描述
+
+kind: agent
+version: 1.0
+
 id: agent.dev.git_committer
 name: "Git 提交者"
-version: v1
 description: "Git 提交操作"
 department: dev
 
-# 自动生成的存根 — 需完善 prompt 和具体能力描述
 role: |
   负责代码变更的 git 提交和分支管理
 
-inputs: []
-outputs: []
+capabilities: []

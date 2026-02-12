@@ -1,12 +1,15 @@
+# 单元测试编写者 Spec
+# 自动生成的存根 — 需完善 prompt 和具体能力描述
+
+kind: agent
+version: 1.0
+
 id: agent.dev.unit_test_writer
 name: "单元测试编写者"
-version: v1
 description: "编写单元测试"
 department: dev
 
-# 自动生成的存根 — 需完善 prompt 和具体能力描述
 role: |
   负责根据实现代码编写对应的单元测试
 
-inputs: []
-outputs: []
+capabilities: []

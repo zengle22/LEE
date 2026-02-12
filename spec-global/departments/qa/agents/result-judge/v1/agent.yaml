@@ -1,12 +1,15 @@
+# 结果判定器 Spec
+# 自动生成的存根 — 需完善 prompt 和具体能力描述
+
+kind: agent
+version: 1.0
+
 id: agent.qa.result_judge
 name: "结果判定器"
-version: v1
 description: "测试结果判定"
 department: qa
 
-# 自动生成的存根 — 需完善 prompt 和具体能力描述
 role: |
   负责判定单条测试用例的执行结果
 
-inputs: []
-outputs: []
+capabilities: []

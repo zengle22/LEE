@@ -15,6 +15,10 @@ description: >
   2. 从文章逻辑中提取关系作为边
   3. 不决定颜色、字体、布局
 
+role: |
+  图表结构规划专家。根据图表机会点，选择合适的图表类型并构建 Structure DSL。
+  只输出结构信息（节点、关系），不包含视觉描述。
+
 owner: media-ai
 tags: [media, diagram, planning, structure]
 

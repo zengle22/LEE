@@ -15,6 +15,10 @@ description: >
   2. 不要在案例/情绪段落插图
   3. 优先命中：抽象概念密集段、流程段、对比段
 
+role: |
+  图表需求分析专家。分析文章内容，识别可以通过结构图增强表达力的段落。
+  只输出"是否需要"和"为什么"，不输出图本身。
+
 owner: media-ai
 tags: [media, diagram, analysis, structure]
 
