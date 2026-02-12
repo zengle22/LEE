@@ -62,10 +62,10 @@ responsibility:
     - "执行测试"
 
 # 技能引用
-skills:
-  - ref: skill.io.file_read
-  - ref: skill.qa.requirement_parsing
-  - ref: skill.qa.feature_extraction
+capabilities:
+  - skill.io.file_read
+  - skill.qa.requirement_parsing
+  - skill.qa.feature_extraction
 
 # 输入输出
 inputs:

@@ -57,10 +57,10 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.io.file_read
-  - ref: skill.io.file_write
-  - ref: skill.analysis.value_assess
+capabilities:
+  - skill.io.file_read
+  - skill.io.file_write
+  - skill.analysis.value_assess
 
 # ============================================
 # 提示工程

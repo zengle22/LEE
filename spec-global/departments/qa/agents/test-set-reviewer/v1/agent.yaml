@@ -59,10 +59,10 @@ responsibility:
     - "设计测试策略"
 
 # 技能引用
-skills:
-  - ref: skill.io.file_read
-  - ref: skill.qa.coverage_check
-  - ref: skill.qa.review_report
+capabilities:
+  - skill.io.file_read
+  - skill.qa.coverage_check
+  - skill.qa.review_report
 
 # 输入输出
 inputs:

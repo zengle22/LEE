@@ -57,13 +57,6 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.search.web_search
-  - ref: skill.browser.navigate
-  - ref: skill.browser.snapshot
-  - ref: skill.browser.type
-  - ref: skill.io.file_write
-
 # ============================================
 # 提示工程
 # ============================================

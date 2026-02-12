@@ -1,0 +1,119 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-constitution.dev/schemas/development/test-code-diff/v1",
+    "title": "Test Code Diff Contract",
+    "description": "测试代码差异契约 — TDD 阶段编写的测试代码产物",
+    "type": "object",
+    "required": [
+        "feature_id",
+        "test_files",
+        "coverage_summary",
+        "created_at"
+    ],
+    "properties": {
+        "feature_id": {
+            "type": "string",
+            "description": "关联的 Feature Spec ID"
+        },
+        "test_files": {
+            "type": "array",
+            "description": "测试文件列表",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": [
+                    "file_path",
+                    "action",
+                    "linked_fp_ids"
+                ],
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "测试文件相对路径"
+                    },
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "added",
+                            "modified"
+                        ],
+                        "description": "文件操作类型"
+                    },
+                    "linked_fp_ids": {
+                        "type": "array",
+                        "description": "关联的功能点 ID 列表",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^FP-\\d{3}$"
+                        },
+                        "minItems": 1
+                    },
+                    "test_count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "文件中的测试用例数"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "coverage_summary": {
+            "type": "object",
+            "required": [
+                "total_fp_count",
+                "covered_fp_count",
+                "total_tc_count"
+            ],
+            "properties": {
+                "total_fp_count": {
+                    "type": "integer",
+                    "description": "功能点总数"
+                },
+                "covered_fp_count": {
+                    "type": "integer",
+                    "description": "已覆盖的功能点数"
+                },
+                "total_tc_count": {
+                    "type": "integer",
+                    "description": "测试用例总数"
+                },
+                "by_type": {
+                    "type": "object",
+                    "description": "按用例类型统计",
+                    "properties": {
+                        "happy_path": {
+                            "type": "integer",
+                            "default": 0
+                        },
+                        "error_path": {
+                            "type": "integer",
+                            "default": 0
+                        },
+                        "boundary": {
+                            "type": "integer",
+                            "default": 0
+                        },
+                        "edge_case": {
+                            "type": "integer",
+                            "default": 0
+                        }
+                    }
+                }
+            }
+        },
+        "patch_content": {
+            "type": "string",
+            "description": "diff/patch 内容（可选，大文件时省略）"
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "created_by": {
+            "type": "string"
+        }
+    },
+    "additionalProperties": false
+}

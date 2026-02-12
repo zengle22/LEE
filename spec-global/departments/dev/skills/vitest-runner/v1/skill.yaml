@@ -1,0 +1,59 @@
+# Vitest Runner Skill v1.0
+# 前端单元测试执行器
+
+kind: skill
+version: 1.0
+
+id: skill.test.vitest
+name: Vitest Runner
+description: >
+  运行 Vitest 前端单元测试，产出结构化测试报告。
+  适用于 Vue3 / UniApp / TypeScript 项目。
+owner: dev-team
+tags: [test, dev, frontend, vitest, vue3]
+
+interface:
+  inputs:
+    type: object
+    required: [target]
+    properties:
+      target:
+        type: string
+        description: "测试目录或文件路径"
+        default: "src/"
+      args:
+        type: string
+        description: "额外 vitest 参数，如 '--reporter=json --coverage'"
+        default: ""
+      report_json:
+        type: string
+        description: "JSON 报告输出路径"
+        default: "test-report.json"
+  outputs:
+    type: object
+    properties:
+      exit_code:
+        type: integer
+        description: "0=全部通过, 1=有失败"
+      stdout:
+        type: string
+      report_json:
+        type: string
+        description: "JSON 报告文件路径"
+
+runtime:
+  type: cli
+  command: "npx vitest"
+  args_template: >
+    run
+    {{ inputs.target }}
+    {{ inputs.args }}
+    --reporter=json
+    --outputFile={{ inputs.report_json }}
+  exit_codes:
+    0: "所有测试通过"
+    1: "存在测试失败"
+
+constraints:
+  - must_pass: "exit_code == 0"
+    on_fail: "标记 task FAILED，附上 report_json"

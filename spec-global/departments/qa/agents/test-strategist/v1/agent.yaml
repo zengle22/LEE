@@ -61,10 +61,10 @@ responsibility:
     - "编写测试脚本"
 
 # 技能引用
-skills:
-  - ref: skill.qa.risk_identification
-  - ref: skill.qa.test_focus_extraction
-  - ref: skill.qa.strategy_design
+capabilities:
+  - skill.qa.risk_identification
+  - skill.qa.test_focus_extraction
+  - skill.qa.strategy_design
 
 # 输入输出
 inputs:

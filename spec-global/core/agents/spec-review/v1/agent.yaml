@@ -66,12 +66,6 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.io.yaml_parse
-  - ref: skill.review.schema_validate
-  - ref: skill.review.policy_lint
-  - ref: skill.io.patch_generator
-
 # ============================================
 # 提示工程
 # ============================================

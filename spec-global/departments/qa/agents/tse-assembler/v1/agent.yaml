@@ -62,10 +62,10 @@ responsibility:
     - "起草 Bug"
 
 # 技能引用
-skills:
-  - ref: skill.io.file_write
-  - ref: skill.qa.statistics_calculation
-  - ref: skill.qa.schema_validation
+capabilities:
+  - skill.io.file_write
+  - skill.qa.statistics_calculation
+  - skill.qa.schema_validation
 
 # 输入输出
 inputs:

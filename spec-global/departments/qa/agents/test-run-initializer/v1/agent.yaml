@@ -58,10 +58,10 @@ responsibility:
     - "执行测试"
 
 # 技能引用
-skills:
-  - ref: skill.io.file_read
-  - ref: skill.io.file_write
-  - ref: skill.qa.id_generation
+capabilities:
+  - skill.io.file_read
+  - skill.io.file_write
+  - skill.qa.id_generation
 
 # 输入输出
 inputs:

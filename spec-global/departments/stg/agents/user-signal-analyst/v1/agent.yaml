@@ -1,0 +1,12 @@
+id: agent.stg.user_signal_analyst
+name: "用户信号分析师"
+version: v1
+description: "用户信号分析"
+department: stg
+
+# 自动生成的存根 — 需完善 prompt 和具体能力描述
+role: |
+  负责分析用户行为信号和趋势
+
+inputs: []
+outputs: []

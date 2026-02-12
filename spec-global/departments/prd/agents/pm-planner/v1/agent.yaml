@@ -1,0 +1,12 @@
+id: agent.product.pm_planner
+name: "项目规划师"
+version: v1
+description: "项目计划制定"
+department: prd
+
+# 自动生成的存根 — 需完善 prompt 和具体能力描述
+role: |
+  负责产品迭代的项目规划与排期
+
+inputs: []
+outputs: []

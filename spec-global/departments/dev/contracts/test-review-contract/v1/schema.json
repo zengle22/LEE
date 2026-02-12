@@ -1,0 +1,136 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-constitution.dev/schemas/development/test-review/v1",
+    "title": "Test Review Contract",
+    "description": "测试脚本评审报告契约 — TDD 测试评审阶段的产物",
+    "type": "object",
+    "required": [
+        "feature_id",
+        "status",
+        "coverage_score",
+        "issues",
+        "created_at"
+    ],
+    "properties": {
+        "feature_id": {
+            "type": "string",
+            "description": "关联的 Feature Spec ID"
+        },
+        "status": {
+            "type": "string",
+            "enum": [
+                "pass",
+                "fail",
+                "needs_improvement"
+            ],
+            "description": "评审结果状态"
+        },
+        "coverage_score": {
+            "type": "object",
+            "required": [
+                "fp_coverage_pct",
+                "case_type_coverage"
+            ],
+            "properties": {
+                "fp_coverage_pct": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "description": "功能点覆盖率百分比"
+                },
+                "case_type_coverage": {
+                    "type": "object",
+                    "description": "各用例类型覆盖情况",
+                    "properties": {
+                        "happy_path": {
+                            "type": "boolean"
+                        },
+                        "error_path": {
+                            "type": "boolean"
+                        },
+                        "boundary": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "uncovered_fp_ids": {
+                    "type": "array",
+                    "description": "未覆盖的功能点 ID",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "issues": {
+            "type": "array",
+            "description": "评审发现的问题列表",
+            "items": {
+                "type": "object",
+                "required": [
+                    "issue_id",
+                    "severity",
+                    "category",
+                    "description"
+                ],
+                "properties": {
+                    "issue_id": {
+                        "type": "string",
+                        "pattern": "^TR-\\d{3}$",
+                        "description": "问题 ID"
+                    },
+                    "severity": {
+                        "type": "string",
+                        "enum": [
+                            "blocker",
+                            "major",
+                            "minor",
+                            "suggestion"
+                        ],
+                        "description": "严重级别"
+                    },
+                    "category": {
+                        "type": "string",
+                        "enum": [
+                            "missing_coverage",
+                            "weak_assertion",
+                            "test_coupling",
+                            "naming_convention",
+                            "implementation_dependency",
+                            "missing_boundary",
+                            "other"
+                        ],
+                        "description": "问题类别"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "问题描述"
+                    },
+                    "location": {
+                        "type": "string",
+                        "description": "问题所在位置（文件:行号或测试名）"
+                    },
+                    "suggestion": {
+                        "type": "string",
+                        "description": "改进建议"
+                    }
+                }
+            }
+        },
+        "recommendations": {
+            "type": "array",
+            "description": "综合改进建议",
+            "items": {
+                "type": "string"
+            }
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "reviewed_by": {
+            "type": "string"
+        }
+    },
+    "additionalProperties": false
+}

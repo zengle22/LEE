@@ -149,10 +149,10 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.io.file_read
-  - ref: skill.io.file_write
-  - ref: skill.media.platform_publish
+capabilities:
+  - skill.io.file_read
+  - skill.io.file_write
+  - skill.media.platform_publish
 
 # ============================================
 # 提示工程

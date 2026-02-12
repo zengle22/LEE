@@ -134,11 +134,11 @@ standards:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.review.security_scan
-  - ref: skill.review.code_quality_check
-  - ref: skill.review.performance_analysis
-  - ref: skill.review.test_coverage_analysis
+capabilities:
+  - skill.review.security_scan
+  - skill.review.code_quality_check
+  - skill.review.performance_analysis
+  - skill.review.test_coverage_analysis
 
 # ============================================
 # 禁止行为

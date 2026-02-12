@@ -54,8 +54,8 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.dev.knowledge_extraction
+capabilities:
+  - skill.dev.knowledge_extraction
 
 # ============================================
 # 提示工程

@@ -56,8 +56,8 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.dev.test_driven_development
+capabilities:
+  - skill.dev.test_driven_development
 
 # ============================================
 # 提示工程

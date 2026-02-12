@@ -61,10 +61,10 @@ responsibility:
     - "分析测试结果"
 
 # 技能引用
-skills:
-  - ref: skill.qa.env_provision
-  - ref: skill.qa.health_check
-  - ref: skill.qa.docker_deploy
+capabilities:
+  - skill.qa.env_provision
+  - skill.qa.health_check
+  - skill.qa.docker_deploy
 
 # 输入输出
 inputs:

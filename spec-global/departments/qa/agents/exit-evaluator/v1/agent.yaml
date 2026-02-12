@@ -1,0 +1,12 @@
+id: agent.qa.exit_evaluator
+name: "退出评估器"
+version: v1
+description: "测试退出评估"
+department: qa
+
+# 自动生成的存根 — 需完善 prompt 和具体能力描述
+role: |
+  负责评估测试执行是否满足退出条件
+
+inputs: []
+outputs: []

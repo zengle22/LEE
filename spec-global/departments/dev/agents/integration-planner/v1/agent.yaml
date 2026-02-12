@@ -62,10 +62,10 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.integration.contract_matching
-  - ref: skill.integration.dependency_resolution
-  - ref: skill.integration.rollback_planning
+capabilities:
+  - skill.integration.contract_matching
+  - skill.integration.dependency_resolution
+  - skill.integration.rollback_planning
 
 # ============================================
 # 禁止行为

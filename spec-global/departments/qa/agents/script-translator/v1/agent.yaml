@@ -60,10 +60,10 @@ responsibility:
     - "分析执行结果"
 
 # 技能引用
-skills:
-  - ref: skill.qa.api_script_generation
-  - ref: skill.qa.playwright_code_generator
-  - ref: skill.io.file_write
+capabilities:
+  - skill.qa.api_script_generation
+  - skill.qa.playwright_code_generator
+  - skill.io.file_write
 
 # 输入输出
 inputs:

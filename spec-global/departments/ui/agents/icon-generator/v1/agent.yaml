@@ -197,8 +197,6 @@ output:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.design.icon_svg_generator
     description: "SVG 代码生成技能"
     usage: "生成符合 Token 规范的 SVG 代码"
 

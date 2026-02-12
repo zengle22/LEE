@@ -1,0 +1,12 @@
+id: agent.dev.freeze_orchestrator
+name: "冻结协调者"
+version: v1
+description: "需求冻结流程协调"
+department: dev
+
+# 自动生成的存根 — 需完善 prompt 和具体能力描述
+role: |
+  负责协调需求冻结和版本发布流程
+
+inputs: []
+outputs: []

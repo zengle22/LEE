@@ -60,10 +60,10 @@ responsibility:
     - "执行用例"
 
 # 技能引用
-skills:
-  - ref: skill.qa.case_generation
-  - ref: skill.qa.test_data_generation
-  - ref: skill.io.file_write
+capabilities:
+  - skill.qa.case_generation
+  - skill.qa.test_data_generation
+  - skill.io.file_write
 
 # 输入输出
 inputs:

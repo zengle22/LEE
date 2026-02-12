@@ -7,7 +7,7 @@ version: 1.0
 # ============================================
 # 基础标识
 # ============================================
-id: agent.review.approval_reviewer
+id: agent.governance.approval_reviewer
 name: Approval Reviewer
 description: >
   审批分析报告，用于审批产品目标价值分析报告。
@@ -59,11 +59,6 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.io.file_read
-  - ref: skill.io.file_write
-  - ref: skill.review.quality_check
-
 # ============================================
 # 提示工程
 # ============================================

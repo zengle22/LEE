@@ -1,0 +1,191 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://ai-constitution.dev/schemas/development/requirement-analysis/v1",
+    "title": "Requirement Analysis Contract",
+    "description": "需求分析产物契约 — 功能点列表与测试覆盖矩阵",
+    "type": "object",
+    "required": [
+        "feature_id",
+        "version",
+        "functional_points",
+        "test_coverage_matrix",
+        "created_at"
+    ],
+    "properties": {
+        "feature_id": {
+            "type": "string",
+            "description": "关联的 Feature Spec ID"
+        },
+        "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "description": "分析版本号 (semver)"
+        },
+        "functional_points": {
+            "type": "array",
+            "description": "功能点列表",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": [
+                    "fp_id",
+                    "name",
+                    "description",
+                    "inputs",
+                    "outputs"
+                ],
+                "properties": {
+                    "fp_id": {
+                        "type": "string",
+                        "pattern": "^FP-\\d{3}$",
+                        "description": "功能点唯一标识"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "功能点名称"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "功能点详细描述"
+                    },
+                    "inputs": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "name",
+                                "type"
+                            ],
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "type": {
+                                    "type": "string"
+                                },
+                                "required": {
+                                    "type": "boolean",
+                                    "default": true
+                                },
+                                "description": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "name",
+                                "type"
+                            ],
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "type": {
+                                    "type": "string"
+                                },
+                                "description": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "boundary_conditions": {
+                        "type": "array",
+                        "description": "边界条件列表",
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "condition",
+                                "expected_behavior"
+                            ],
+                            "properties": {
+                                "condition": {
+                                    "type": "string"
+                                },
+                                "expected_behavior": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": [
+                            "critical",
+                            "high",
+                            "medium",
+                            "low"
+                        ],
+                        "default": "medium"
+                    }
+                }
+            }
+        },
+        "test_coverage_matrix": {
+            "type": "array",
+            "description": "功能点 → 测试用例映射矩阵",
+            "items": {
+                "type": "object",
+                "required": [
+                    "fp_id",
+                    "test_cases"
+                ],
+                "properties": {
+                    "fp_id": {
+                        "type": "string",
+                        "description": "关联功能点 ID"
+                    },
+                    "test_cases": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "tc_id",
+                                "name",
+                                "type"
+                            ],
+                            "properties": {
+                                "tc_id": {
+                                    "type": "string",
+                                    "pattern": "^TC-\\d{3}$",
+                                    "description": "测试用例 ID"
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "description": "测试用例名称"
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "happy_path",
+                                        "error_path",
+                                        "boundary",
+                                        "edge_case"
+                                    ],
+                                    "description": "用例类型"
+                                },
+                                "description": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "created_by": {
+            "type": "string"
+        }
+    },
+    "additionalProperties": false
+}

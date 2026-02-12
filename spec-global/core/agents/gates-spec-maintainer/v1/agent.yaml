@@ -61,12 +61,6 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.io.file_read
-  - ref: skill.io.file_write
-  - ref: skill.io.directory_create
-  - ref: skill.governance.gate_validate
-
 # ============================================
 # 提示工程
 # ============================================

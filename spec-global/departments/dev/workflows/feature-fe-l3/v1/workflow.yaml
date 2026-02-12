@@ -30,7 +30,7 @@ roles:
   skills:
     - skill.git.checkout
     - skill.lint.ruff
-    - skill.test.pytest
+    - skill.test.vitest
   gates: []
 
 contracts:
@@ -200,11 +200,11 @@ stages:
         name: "运行单元测试"
         description: "运行所有单元测试，确认实现使全部测试通过"
         type: skill
-        run: skill.test.pytest
+        run: skill.test.vitest
         dependencies:
           requires: [s5_2_lint]
         inputs:
-          - command: "pytest -q"
+          - command: "npx vitest run"
         outputs:
           - path: "output/fe-test-report.json"
           - path: "output/fe-coverage.json"

@@ -1,6 +1,6 @@
 kind: agent
 version: 1.0
-id: agent.planning.opportunity_builder
+id: agent.stg.business_opportunity_builder
 name: Business Opportunity Builder
 description: '基于分析冻结后的合同文件，构建可交给产品部门验证的机会假设。 输出商业机会文档和交付文档。
 

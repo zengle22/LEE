@@ -57,8 +57,8 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.dev.planning_methodology
+capabilities:
+  - skill.dev.planning_methodology
 
 # ============================================
 # 提示工程

@@ -1,0 +1,30 @@
+#!/bin/bash
+# Pre-commit hook: validate spec references when spec-global/ files are modified
+#
+# Install: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# Or:      ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
+
+set -euo pipefail
+
+# Check if any spec-global files are staged
+STAGED_SPECS=$(git diff --cached --name-only --diff-filter=ACMR | grep '^spec-global/' || true)
+
+if [ -z "$STAGED_SPECS" ]; then
+    # No spec files changed, skip validation
+    exit 0
+fi
+
+echo "🔍 spec-global/ changes detected, running spec validation..."
+echo ""
+
+# Run the validator
+if ! python3 scripts/spec_validate.py; then
+    echo ""
+    echo "❌ Spec validation failed. Fix the errors above before committing."
+    echo "   To skip this check: git commit --no-verify"
+    exit 1
+fi
+
+echo ""
+echo "✅ Spec validation passed."
+exit 0

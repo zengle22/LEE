@@ -59,10 +59,10 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
-  - ref: skill.io.file_read
-  - ref: skill.validation.json_schema
-  - ref: skill.validation.reference_resolver
+capabilities:
+  - skill.io.file_read
+  - skill.validation.json_schema
+  - skill.validation.reference_resolver
 
 # ============================================
 # 提示工程

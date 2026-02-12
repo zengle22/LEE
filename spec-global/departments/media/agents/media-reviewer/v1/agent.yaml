@@ -149,9 +149,11 @@ policy:
 # 技能引用
 # ============================================
 skills:
-  - ref: skill.io.file_read
   - ref: skill.media.platform_safe_rendering
   - ref: skill.media.style_validation
+
+capabilities:
+  - skill.io.file_read
 
 # ============================================
 # 提示工程

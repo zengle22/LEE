@@ -1,0 +1,12 @@
+id: agent.stg.search_signal_collector
+name: "搜索信号采集器"
+version: v1
+description: "市场信号采集"
+department: stg
+
+# 自动生成的存根 — 需完善 prompt 和具体能力描述
+role: |
+  负责从搜索数据中采集市场信号
+
+inputs: []
+outputs: []
