@@ -228,20 +228,35 @@ class ArticleLayoutCommand:
 6. **独立的重点标题**（后面不跟列表）：
    - `<p style="color:#cf1322;font-weight:bold;font-size:16px;margin:16px 0;">标题</p>`
 
-7. **行内强调**：
+7. **代码块处理（重要）**：
+   - 保留原 Markdown 代码块，转换为 `<pre><code class="language-xxx">` 格式
+   - xxx 是语言标识（python, javascript, yaml, bash, json, typescript, java, go, rust, text）
+   - 格式：
+     ```
+     <pre><code class="language-python">
+     def hello():
+         print("world")
+     </code></pre>
+     ```
+   - 代码内容需要转义 HTML 特殊字符（<, >, &）
+   - 如果原 Markdown 代码块没有语言标识，使用 `language-text`
+
+8. **行内强调**：
    - 使用 `<span class="emphasis">关键词</span>` 来强调重点词汇
    - 一段话最多使用 1-2 次强调
 
-8. **分隔线**：使用 `<hr>`
+9. **分隔线**：使用 `<hr>`
 
 **禁止**：
 - 不要给普通陈述句添加引用块样式
 - 不要给列表项添加额外内容（如解释性文字）
 - 不要使用内联样式（除了重点标题和引用块）
+- 不要删除或修改代码块内容
 
 **输出要求**：
 - 保持原文内容和结构完整
 - 识别重点内容并应用相应样式
+- 代码块必须保留，并添加正确的 language-xxx 类名
 - 输出纯 HTML 格式"""
 
         user_prompt = f"""请将以下文章按照公众号安全红色主题进行排版（严格按照昨天的格式）：
@@ -273,9 +288,22 @@ class ArticleLayoutCommand:
 
 4. **分隔线**：在每个 H2 标题后添加 `<hr>`
 
-5. **保持原文内容完整**：不要添加或删除任何内容
+5. **代码块处理**（重要）：
+   - 保留 Markdown 中的代码块格式
+   - 使用 `<pre><code class="language-xxx">` 格式，其中 xxx 是语言标识
+   - 支持的语言：python, javascript, yaml, bash, json, typescript, java, go, rust
+   - 如果代码块没有指定语言，使用 `class="language-text"`
+   - 例如：
+     ```
+     <pre><code class="language-python">
+     def hello():
+         print("world")
+     </code></pre>
+     ```
 
-6. **输出纯 HTML 格式**
+6. **保持原文内容完整**：不要添加或删除任何内容
+
+7. **输出纯 HTML 格式**
 """
 
         result = await self.llm_executor.execute({
@@ -453,6 +481,9 @@ class ArticleLayoutCommand:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{self.file_path.stem}</title>
+    <!-- Highlight.js for syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -524,20 +555,133 @@ class ArticleLayoutCommand:
             border-top: 1px solid #e8e8e8;
             margin: 20px 0;
         }}
+        /* Dark code block style - matches screenshot editor look */
         pre {{
-            background: #f5f5f5;
-            padding: 12px;
-            border-radius: 4px;
-            overflow-x: auto;
+            background: #282c34;
+            border-radius: 8px;
+            padding: 0;
+            margin: 16px 0;
+            overflow: hidden;
+            position: relative;
         }}
-        code {{
-            font-family: "Consolas", "Monaco", monospace;
+        .code-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 16px;
+            background: #21252b;
+            border-bottom: 1px solid #181a1f;
+        }}
+        .code-language {{
+            color: #61afef;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }}
+        .code-copy {{
+            color: #abb2bf;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 4px 12px;
+            border: 1px solid #4b5263;
+            border-radius: 4px;
+            background: transparent;
+            transition: all 0.2s;
+        }}
+        .code-copy:hover {{
+            background: #3e4451;
+            color: #fff;
+        }}
+        .code-copy.copied {{
+            background: #98c379;
+            border-color: #98c379;
+            color: #fff;
+        }}
+        pre > code {{
+            display: block;
+            padding: 16px;
+            overflow-x: auto;
+            font-family: "Consolas", "Monaco", "Courier New", monospace;
             font-size: 14px;
+            line-height: 1.6;
+            background: transparent;
+        }}
+        /* Inline code */
+        p > code, li > code, span > code {{
+            background: #f5f5f5;
+            color: #cf1322;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: "Consolas", "Monaco", monospace;
+            font-size: 13px;
+        }}
+        /* Highlight.js overrides for atom-one-dark theme */
+        .hljs {{
+            background: #282c34;
+            color: #abb2bf;
         }}
     </style>
 </head>
 <body>
 {markdown_content}
+<script>
+    // Initialize syntax highlighting
+    document.addEventListener('DOMContentLoaded', function() {{
+        hljs.highlightAll();
+
+        // Add copy button functionality to code blocks
+        document.querySelectorAll('pre > code').forEach(function(block) {{
+            const pre = block.parentElement;
+
+            // Skip if already has header
+            if (pre.querySelector('.code-header')) return;
+
+            // Detect language from class
+            const languageClass = Array.from(block.classList).find(c => c.startsWith('language-'));
+            const language = languageClass ? languageClass.replace('language-', '') : 'text';
+
+            // Create header with language label and copy button
+            const header = document.createElement('div');
+            header.className = 'code-header';
+            header.innerHTML = `
+                <span class="code-language">${{language}}</span>
+                <button class="code-copy" onclick="copyCode(this)">复制代码</button>
+            `;
+
+            pre.insertBefore(header, block);
+        }});
+
+        // Fix spec file blocks (YAML) - convert to proper code blocks
+        document.querySelectorAll('blockquote').forEach(function(block) {{
+            const content = block.textContent.trim();
+            if (content.includes('.yaml:') || content.includes('.yml:') || content.includes('.spec:')) {{
+                // This might be a spec reference, style it differently
+                block.style.borderLeft = '4px solid #e5c07b';
+                block.style.background = '#f9f8f4';
+            }}
+        }});
+    }});
+
+    function copyCode(button) {{
+        const pre = button.closest('pre');
+        const code = pre.querySelector('code');
+        const text = code.textContent;
+
+        navigator.clipboard.writeText(text).then(function() {{
+            button.textContent = '已复制';
+            button.classList.add('copied');
+            setTimeout(function() {{
+                button.textContent = '复制代码';
+                button.classList.remove('copied');
+            }}, 2000);
+        }}).catch(function() {{
+            button.textContent = '复制失败';
+            setTimeout(function() {{
+                button.textContent = '复制代码';
+            }}, 2000);
+        }});
+    }}
+</script>
 </body>
 </html>"""
 

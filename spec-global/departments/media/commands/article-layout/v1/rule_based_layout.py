@@ -23,6 +23,9 @@ class RuleBasedLayoutProcessor:
         """
         处理 Markdown 内容，返回格式化的 HTML
         """
+        # 首先处理代码块，避免被其他规则干扰
+        markdown_content = self._process_code_blocks(markdown_content)
+
         self.lines = markdown_content.split('\n')
         self.result = []
         self.line_index = 0
@@ -35,6 +38,22 @@ class RuleBasedLayoutProcessor:
             self.line_index += skip if skip else 1
 
         return '\n'.join(self.result)
+
+    def _process_code_blocks(self, content: str) -> str:
+        """
+        预处理代码块，转换为 HTML 格式并添加语言标识符
+        """
+        # 匹配 ```language...``` 格式的代码块
+        def replace_code_block(match):
+            language = match.group(1) or 'text'
+            code_content = match.group(2)
+            # 转义 HTML 特殊字符
+            code_content = code_content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            return f'<pre><code class="language-{language}">{code_content}</code></pre>'
+
+        # 使用正则匹配代码块
+        pattern = r'```(\w*)\n(.*?)```'
+        return re.sub(pattern, replace_code_block, content, flags=re.DOTALL)
 
     def _process_line(self, line: str, index: int) -> tuple:
         """

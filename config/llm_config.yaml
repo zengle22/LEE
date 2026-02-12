@@ -1,62 +1,272 @@
-# LLM Executor 配置
-# 使用本地 antigravity tool 反代服务
+# LLM Executor 统一配置
+#
+# 配置说明：
+# 1. 本文件定义所有 LLM Provider 的配置模板
+# 2. 使用环境变量覆盖敏感信息（API Key 等）
+# 3. Profile 通过 profile 名称引用，支持按需扩展
 
+schema_version: 1.0.0
+
+# ============================================
 # 默认配置
+# ============================================
+# 当未指定 profile 时使用此配置
+# 优先级：最低（作为最后兜底）
 default:
   type: llm
-  provider: custom
-  # 默认仍保留为可配置的 OpenAI-compatible endpoint
-  base_url: ${LLM_BASE_URL}
+  provider: openai
+  # 环境变量覆盖优先级: LLM_BASE_URL > default_url
+  base_url: ${LLM_BASE_URL:-https://api.openai.com/v1}
   api_key: ${LLM_API_KEY}
-  model: ${LLM_MODEL}
-  temperature: 0.7
-  max_tokens: 4000
+  model: ${LLM_MODEL:-gpt-4o}
+  temperature: ${LLM_TEMPERATURE:-0.7}
+  max_tokens: ${LLM_MAX_TOKENS:-4000}
+  timeout: ${LLM_TIMEOUT:-60}
+  description: "默认配置，兜底使用"
 
-# 预定义配置
+# ============================================
+# 预定义 Provider 配置
+# ============================================
+
+# 智谱 GLM (coding endpoint)
+# 优先级：低
+zhipu:
+  type: llm
+  provider: zhipu
+  base_url: ${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+  api_key: ${ZHIPU_API_KEY:-06bc11ad44e3431d8f685bfe3405284e.KlPI5clCIbAb4aOa}
+  model: ${ZHIPU_MODEL:-glm-4-plus}
+  temperature: 0.7
+  max_tokens: 8000
+  timeout: 90
+  description: "智谱 GLM 模型 (低优先级)"
+
+# 本地 Ollama (通用 LLM，最低优先级）
+# 优先级：最低（最先尝试）
+ollama:
+  type: llm
+  provider: ollama
+  base_url: ${OLLAMA_BASE_URL:-http://localhost:11434}
+  api_key: ${OLLAMA_API_KEY:-dummy-key}
+  model: ${OLLAMA_MODEL:-qwen2.5}
+  temperature: 0.7
+  max_tokens: 8000
+  timeout: 120
+  description: "本地 Ollama 服务，使用 Qwen2.5 模型（最低优先级，兜底）"
+
+# 本地反代服务（开发/测试用）
+# 优先级：低
 antigravity:
   type: llm
   provider: custom
-  base_url: ${ANTIGRAVITY_BASE_URL}
-  api_key: ${ANTIGRAVITY_API_KEY}
-  model: ${ANTIGRAVITY_MODEL}
+  base_url: ${ANTIGRAVITY_BASE_URL:-http://localhost:8080}
+  api_key: ${ANTIGRAVITY_API_KEY:-dummy-key}
+  model: ${ANTIGRAVITY_MODEL:-llama3-70b}
   temperature: 0.7
   max_tokens: 8000
+  timeout: 120
+  description: "本地 LLM 服务，用于开发调试"
 
-zhipu:
+# 华为 DeepSeek (ModelArts 部署)
+# 优先级：高
+huawei_deepseek:
   type: llm
-  provider: custom
-  # 智谱 GLM（coding endpoint）
-  base_url: ${ZHIPU_BASE_URL}
-  api_key: ${ZHIPU_API_KEY}
-  model: ${ZHIPU_MODEL}
-  temperature: 0.7
-  max_tokens: 8000
-
-# DeepSeek 配置
-deepseek:
-  type: llm
-  provider: custom
-  base_url: ${DEEPSEEK_BASE_URL}
-  api_key: ${DEEPSEEK_API_KEY}
-  model: ${DEEPSEEK_MODEL}
+  provider: huawei_deepseek
+  base_url: ${HUWEI_DEEPSEEK_BASE_URL:-https://api.modelarts-maas.com/v2/chat/completions}
+  api_key: ${HUWEI_DEEPSEEK_API_KEY:-RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ}
+  model: ${HUWEI_DEEPSEEK_MODEL:-DeepSeek-R1}
   temperature: 0.3
   max_tokens: 8000
+  timeout: 90
+  description: "华为 ModelArts 部署的 DeepSeek-R1 模型（高优先级）"
 
-# Agent 示例配置
+# 华为 DeepSeek (ModelArts 部署）
+# 优先级：高
+huawei_deepseek:
+  type: llm
+  provider: huawei_deepseek
+  base_url: ${HUWEI_DEEPSEEK_BASE_URL:-https://api.modelarts-maas.com/v2/chat/completions}
+  api_key: ${HUWEI_DEEPSEEK_API_KEY:-RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ}
+  model: ${HUWEI_DEEPSEEK_MODEL:-DeepSeek-R1}
+  temperature: 0.3
+  max_tokens: 8000
+  timeout: 90
+  description: "华为 ModelArts 部署的 DeepSeek-R1 模型（高优先级）"
+
+# MiniMax (Alibaba)
+# 优先级：高
+minimax:
+  type: llm
+  provider: minimax
+  base_url: ${MINIMAX_BASE_URL:-https://api.minimaxi.com/anthropic}
+  api_key: ${MINIMAX_API_KEY:-sk-cp-0rOf7PG_XXzW0ptsjBGPPaRpcBhcskrm2JmxS0LZctAJs_kT809LxG0mGa5NCjd14-eaRXbR2hJvc5afdsfF-Ve_XBjr-r5iXtbiWo6H6V73S5eNuvnJDDo6gZpDSkeumPMIHU0MlQ}
+  model: ${MINIMAX_MODEL:-MiniMax-M2.1}
+  temperature: 0.7
+  max_tokens: 8000
+  timeout: 90
+  description: "MiniMax 模型（通过 Anthropic 兼容 API）"
+
+# DeepSeek 官方
+# 优先级：高
+deepseek:
+  type: llm
+  provider: deepseek
+  base_url: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+  api_key: ${DEEPSEEK_API_KEY}
+  model: ${DEEPSEEK_MODEL:-deepseek-coder-v2}
+  temperature: 0.3
+  max_tokens: 8000
+  timeout: 90
+  description: "DeepSeek 官方 Coder 模型（高优先级）"
+
+# OpenAI (GPT-4, GPT-3.5)
+# 优先级：高
+openai:
+  type: llm
+  provider: openai
+  base_url: ${OPENAI_BASE_URL:-https://api.minimaxi.com/v1}
+  api_key: ${OPENAI_API_KEY}
+  model: ${OPENAI_MODEL:-gpt-4o}
+  temperature: ${OPENAI_TEMPERATURE:-0.7}
+  max_tokens: ${OPENAI_MAX_TOKENS:-4000}
+  timeout: 60
+  description: "使用 MiniMax API 兼容 OpenAI 格式（高优先级）"
+
+# Anthropic Claude
+# 优先级：高
+anthropic:
+  type: llm
+  provider: anthropic
+  base_url: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com/v1}
+  api_key: ${ANTHROPIC_API_KEY}
+  model: ${ANTHROPIC_MODEL:-claude-sonnet-4-5-20250514}
+  temperature: ${ANTHROPIC_TEMPERATURE:-0.7}
+  max_tokens: ${ANTHROPIC_MAX_TOKENS:-8000}
+  timeout: 90
+  description: "Anthropic Claude 模型（高优先级）"
+
+# Azure OpenAI
+azure_openai:
+  type: llm
+  provider: azure
+  base_url: ${AZURE_OPENAI_BASE_URL}
+  api_key: ${AZURE_OPENAI_API_KEY}
+  model: ${AZURE_OPENAI_MODEL}
+  temperature: ${AZURE_OPENAI_TEMPERATURE:-0.7}
+  max_tokens: ${AZURE_OPENAI_MAX_TOKENS:-4000}
+  timeout: 60
+  description: "Azure OpenAI 服务"
+
+# ============================================
+# Agent 级别配置
+# ============================================
+# 这些配置会覆盖 default 中的对应值
+# 用于为特定 Agent 定制 LLM 行为
+
+# PRD 部门 Agent (需求分析)
 agent.prd:
   type: llm
-  provider: custom
-  base_url: ${LLM_BASE_URL}
+  provider: openai
+  base_url: ${LLM_BASE_URL:-https://api.openai.com/v1}
   api_key: ${LLM_API_KEY}
-  model: ${LLM_MODEL}
-  temperature: 0.7
-  max_tokens: 4000
+  model: ${PRD_MODEL:-gpt-4o}
+  temperature: ${PRD_TEMPERATURE:-0.7}
+  max_tokens: ${PRD_MAX_TOKENS:-4000}
+  timeout: 60
 
+# Dev 部门 Agent (开发实现)
 agent.dev:
   type: llm
-  provider: custom
-  base_url: ${LLM_BASE_URL}
+  provider: openai
+  base_url: ${LLM_BASE_URL:-https://api.openai.com/v1}
   api_key: ${LLM_API_KEY}
-  model: ${LLM_MODEL}
-  temperature: 0.5
-  max_tokens: 8000
+  model: ${DEV_MODEL:-gpt-4o}
+  temperature: ${DEV_TEMPERATURE:-0.5}
+  max_tokens: ${DEV_MAX_TOKENS:-8000}
+  timeout: 90
+  description: "开发部门使用较低温度以获得更稳定的代码输出"
+
+# QA 部门 Agent (测试分析)
+agent.qa:
+  type: llm
+  provider: openai
+  base_url: ${LLM_BASE_URL:-https://api.openai.com/v1}
+  api_key: ${LLM_API_KEY}
+  model: ${QA_MODEL:-gpt-4o}
+  temperature: ${QA_TEMPERATURE:-0.7}
+  max_tokens: ${QA_MAX_TOKENS:-4000}
+  timeout: 60
+
+# UI 部门 Agent (UI 设计)
+agent.ui:
+  type: llm
+  provider: openai
+  base_url: ${LLM_BASE_URL:-https://api.openai.com/v1}
+  api_key: ${LLM_API_KEY}
+  model: ${UI_MODEL:-gpt-4o}
+  temperature: ${UI_TEMPERATURE:-0.8}
+  max_tokens: ${UI_MAX_TOKENS:-4000}
+  timeout: 60
+  description: "UI 部门使用较高温度以获得更多创意"
+
+# DevOps 部门 Agent
+agent.devops:
+  type: llm
+  provider: openai
+  base_url: ${LLM_BASE_URL:-https://api.openai.com/v1}
+  api_key: ${LLM_API_KEY}
+  model: ${DEVOPS_MODEL:-gpt-4o}
+  temperature: ${DEVOPS_TEMPERATURE:-0.3}
+  max_tokens: ${DEVOPS_MAX_TOKENS:-4000}
+  timeout: 60
+  description: "DevOps 使用低温度以获得更精确的配置"
+
+# ============================================
+# 环境变量说明
+# ============================================
+# 通用环境变量 (作用于所有 provider):
+#   LLM_BASE_URL       - API 基础 URL
+#   LLM_API_KEY        - API 密钥
+#   LLM_MODEL          - 模型名称
+#   LLM_TEMPERATURE    - 温度参数 (0.0-1.0)
+#   LLM_MAX_TOKENS     - 最大 token 数
+#   LLM_TIMEOUT        - 请求超时时间(秒)
+#   LLM_PROVIDER       - Provider 类型 (openai, anthropic, custom, etc.)
+#   LLM_PROFILE        - 默认 profile 名称
+#
+# Provider 专用环境变量:
+#   OPENAI_*           - OpenAI 专用配置
+#   ANTHROPIC_*        - Anthropic Claude 专用配置
+#   ZHIPU_*            - 智谱 GLM 专用配置
+#   OLLAMA_*           - 本地 Ollama 专用配置
+#   HUWEI_DEEPSEEK_* - 华为 DeepSeek 专用配置
+#   DEEPSEEK_*         - DeepSeek 官方专用配置
+#   ANTIGRAVITY_*      - 本地反代服务配置
+#   AZURE_OPENAI_*     - Azure OpenAI 专用配置
+#
+# Agent 专用环境变量 (覆盖通用配置):
+#   PRD_MODEL, PRD_TEMPERATURE, PRD_MAX_TOKENS
+#   DEV_MODEL, DEV_TEMPERATURE, DEV_MAX_TOKENS
+#   QA_MODEL, QA_TEMPERATURE, QA_MAX_TOKENS
+#   UI_MODEL, UI_TEMPERATURE, UI_MAX_TOKENS
+#   DEVOPS_MODEL, DEVOPS_TEMPERATURE, DEVOPS_MAX_TOKENS
+#
+# Demo 模式:
+#   LEE_LLM_MOCK       - 设置为 1/true/yes 时启用 Mock Executor
+#   LEE_DEMO_MODE       - 设置为 1/true/yes 时启用 Demo 模式
+
+# ============================================
+# Profile 优先级
+# ============================================
+# 当未指定 LLM_PROFILE 时，Executor 按以下顺序尝试：
+#
+# 1. ollama (本地 Qwen2.5)        - 最低优先级
+# 2. zhipu (智谱 GLM)            - 低优先级
+# 3. antigravity (本地 LLM)        - 低优先级
+# 4. default (OpenAI GPT)           - 兜底配置
+#
+# 高优先级 Provider (需在 Agent spec 中显式指定）：
+# - huawei_deepseek (华为 DeepSeek)
+# - deepseek (DeepSeek 官方)
+# - openai (OpenAI GPT)
+# - anthropic (Anthropic Claude)

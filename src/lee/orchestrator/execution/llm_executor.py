@@ -7,8 +7,8 @@ LLM Executor - 直接调用大模型 API
 - Azure OpenAI
 - 其他兼容 OpenAI API 的服务
 - 自定义反代服务（如 antigravity, 智谱 GLM）
+- MiniMax (通过 Anthropic 兼容 API）
 """
-
 import os
 import asyncio
 import aiohttp
@@ -21,7 +21,7 @@ from datetime import datetime
 try:
     from dotenv import load_dotenv
     # 加载项目根目录的 .env 文件
-    project_root = Path(__file__).parent.parent.parent.parent.parent
+    project_root = Path(__file__).parent.parent.parent.parent
     env_file = project_root / ".env"
     if env_file.exists():
         load_dotenv(env_file)
@@ -41,7 +41,7 @@ class LLMConfig:
         """
         if config_path is None:
             # 默认配置文件路径
-            project_root = Path(__file__).parent.parent.parent.parent.parent
+            project_root = Path(__file__).parent.parent.parent.parent
             config_path = project_root / "config" / "llm_config.yaml"
 
         self.config_path = Path(config_path)
@@ -99,8 +99,17 @@ class LLMConfig:
 
         for key, value in config.items():
             if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
-                env_var = value[2:-1]
-                resolved[key] = os.getenv(env_var, value)
+                # 格式: ${VAR:-default}
+                # 去掉 ${ 和 }
+                env_expr = value[2:-1]
+                # 检查是否包含默认值（:-）
+                if ":-" in env_expr:
+                    env_var, default_val = env_expr.split(":-", 1)
+                    # 使用环境变量，如果不存在则使用默认值
+                    resolved[key] = os.getenv(env_var, default_val)
+                else:
+                    # 没有默认值，直接使用环境变量
+                    resolved[key] = os.getenv(env_var, value)
             else:
                 resolved[key] = value
 
@@ -112,6 +121,8 @@ class LLMExecutor:
     LLM 执行器
 
     执行 LLM 相关任务（如代码生成、文本分析等）
+
+    配置文件: flowcore/engines/llm/config.yaml
     """
 
     def __init__(self, profile: str = "antigravity", config_path: Optional[str] = None):
@@ -213,21 +224,6 @@ class LLMExecutor:
                     # 非瞬态错误，不重试
                     raise ValueError(f"LLM API error: {e.status} {e.message}")
 
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                last_error = e
-
-                if attempt < max_retries - 1:
-                    delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
-                    delay = min(delay, 30)
-
-                    print(
-                        f"[LLM Executor] Network error (attempt {attempt + 1}/{max_retries}): "
-                        f"{type(e).__name__}: {e}. Retrying in {delay:.1f}s..."
-                    )
-                    await asyncio.sleep(delay)
-                else:
-                    raise ValueError(f"LLM API network error after {max_retries} attempts: {str(e)}")
-
         raise ValueError(f"LLM API call failed: {str(last_error)}")
 
     async def _call_llm(
@@ -235,7 +231,7 @@ class LLMExecutor:
         system_prompt: str,
         user_message: str
     ) -> str:
-        """调用 LLM API（兼容 OpenAI 格式）"""
+        """调用 LLM API（兼容 OpenAI/Anthropic/MiniMax 格式）"""
         api_key = self.config.get("api_key")
         base_url = self.config.get("base_url", "https://api.openai.com/v1")
         model = self.config.get("model", "gpt-4")
@@ -258,9 +254,13 @@ class LLMExecutor:
             "max_tokens": max_tokens
         }
 
-        # Allow base_url to be either an API root or a full /chat/completions URL.
+        # 处理不同 provider 的 URL 格式
         url = base_url.rstrip("/")
-        if not url.endswith("/chat/completions"):
+        if provider == "minimax":
+            # MiniMax Anthropic 兼容 API 使用 /messages 端点
+            if not url.endswith("/messages"):
+                url = f"{url}/messages"
+        elif not url.endswith("/chat/completions"):
             url = f"{url}/chat/completions"
 
         timeout = aiohttp.ClientTimeout(total=float(os.getenv("LLM_TIMEOUT_SECONDS", "60")))
@@ -280,6 +280,6 @@ class LLMExecutor:
             "type": "llm",
             "profile": self.profile,
             "provider": self.config.get("provider", "custom"),
-            "model": self.config.get("model", "unknown"),
             "base_url": self.config.get("base_url", ""),
+            "model": self.config.get("model", ""),
         }

@@ -388,6 +388,192 @@ DevOps 部门负责基础设施和 CI/CD 相关的规范和流程。
 
 ---
 
+## 配置系统
+
+LEE 框架使用统一配置文件管理 Executor 和 Agent 的 LLM 配置。
+
+### 配置文件位置
+
+```
+lee/config/llm_config.yaml
+```
+
+### 配置结构
+
+配置文件使用 YAML 格式，包含以下层级：
+
+| 层级 | 说明 | 示例 |
+|------|------|--------|
+| **default** | 默认配置，未指定 profile 时使用 | `gpt-4o` |
+| **provider** | 预定义 Provider 配置 | `openai`, `anthropic`, `zhipu`, `deepseek`, `antigravity` |
+| **agent.* | Agent 级别配置，覆盖 default | `agent.dev`, `agent.prd`, `agent.qa` |
+
+### 环境变量
+
+配置支持通过环境变量覆盖，**优先级：环境变量 > 配置文件默认值**
+
+| 环境变量 | 作用 | 示例 |
+|----------|------|--------|
+| **LLM_BASE_URL** | API 基础 URL | `https://api.openai.com/v1` |
+| **LLM_API_KEY** | API 密钥 | `sk-...` |
+| **LLM_MODEL** | 模型名称 | `gpt-4o` |
+| **LLM_TEMPERATURE** | 温度参数 (0.0-1.0) | `0.7` |
+| **LLM_MAX_TOKENS** | 最大 token 数 | `4000` |
+| **LLM_TIMEOUT** | 请求超时(秒) | `60` |
+| **LLM_PROFILE** | 默认 profile | `dev` |
+
+### Provider 专用环境变量
+
+| Provider | 环境变量前缀 | 说明 |
+|----------|--------------|------|
+| OpenAI | `OPENAI_*` | GPT 模型 |
+| Anthropic | `ANTHROPIC_*` | Claude 模型 |
+| 智谱 GLM | `ZHIPU_*` | 智谱 GLM |
+| DeepSeek | `DEEPSEEK_*` | DeepSeek Coder |
+| 本地反代 | `ANTIGRAVITY_*` | 开发调试用 |
+
+### Agent 级别配置
+
+不同 Agent 可使用专用配置覆盖默认值：
+
+| Agent | 环境变量 | 温度 | 说明 |
+|-------|----------|--------|------|
+| `agent.dev` | `DEV_MODEL`, `DEV_TEMPERATURE` | 开发使用较低温度 (0.5) 获得稳定代码 |
+| `agent.prd` | `PRD_MODEL`, `PRD_TEMPERATURE` | PRD 需求分析 |
+| `agent.qa` | `QA_MODEL`, `QA_TEMPERATURE` | QA 测试分析 |
+| `agent.ui` | `UI_MODEL`, `UI_TEMPERATURE` | UI 使用较高温度 (0.8) 获得创意 |
+| `agent.devops` | `DEVOPS_MODEL`, `DEVOPS_TEMPERATURE` | DevOps 使用低温度 (0.3) 获得精确配置 |
+
+### 使用示例
+
+#### 方式 1: 使用默认配置
+
+```bash
+# 设置通用环境变量
+export LLM_API_KEY="sk-your-api-key"
+export LLM_MODEL="gpt-4o"
+
+# Executor 将使用 default profile
+```
+
+#### 方式 2: 使用指定 Provider
+
+```bash
+# 使用智谱 GLM
+export ZHIPU_API_KEY="your-zhipu-key"
+export LLM_PROFILE="zhipu"
+
+# 使用 DeepSeek
+export DEEPSEEK_API_KEY="your-deepseek-key"
+export LLM_PROFILE="deepseek"
+```
+
+#### 方式 3: Agent 级别配置
+
+```bash
+# 为 Dev 部门 Agent 设置专用模型
+export DEV_MODEL="gpt-4o"
+export DEV_TEMPERATURE="0.3"
+export DEV_MAX_TOKENS="8000"
+
+# Agent executor 会自动使用 agent.dev profile
+```
+
+### Demo 模式
+
+```bash
+# 启用 Mock Executor (跳过真实 LLM 调用)
+export LEE_LLM_MOCK="1"
+
+# 或启用 Demo 模式
+export LEE_DEMO_MODE="1"
+```
+
+### 配置文件示例
+
+```yaml
+# config/llm_config.yaml
+
+default:
+  type: llm
+  provider: openai
+  base_url: ${LLM_BASE_URL:-https://api.openai.com/v1}
+  api_key: ${LLM_API_KEY}
+  model: ${LLM_MODEL:-gpt-4o}
+  temperature: ${LLM_TEMPERATURE:-0.7}
+  max_tokens: ${LLM_MAX_TOKENS:-4000}
+  timeout: ${LLM_TIMEOUT:-60}
+
+# 智谱 GLM (低优先级)
+zhipu:
+  type: llm
+  provider: zhipu
+  api_key: ${ZHIPU_API_KEY:-06bc11ad44e3431d8f685bfe3405284e.KlPI5clCIbAb4aOa}
+  model: ${ZHIPU_MODEL:-glm-4-plus}
+  # ...
+
+# 本地 Ollama (最低优先级，兜底）
+ollama:
+  type: llm
+  provider: ollama
+  base_url: ${OLLAMA_BASE_URL:-http://localhost:11434}
+  model: ${OLLAMA_MODEL:-qwen2.5}
+  # ...
+
+# 华为 DeepSeek (高优先级）
+huawei_deepseek:
+  type: llm
+  provider: huawei_deepseek
+  base_url: ${HUWEI_DEEPSEEK_BASE_URL:-https://api.modelarts-maas.com/v2/chat/completions}
+  api_key: ${HUWEI_DEEPSEEK_API_KEY:-RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ}
+  model: ${HUWEI_DEEPSEEK_MODEL:-DeepSeek-R1}
+  # ...
+
+agent.dev:
+  type: llm
+  provider: openai
+  model: ${DEV_MODEL:-gpt-4o}
+  temperature: ${DEV_TEMPERATURE:-0.5}
+  # ...
+```
+
+### Profile 优先级
+
+当未指定 `LLM_PROFILE` 时，Executor 按以下顺序尝试不同 Provider（从高到低）：
+
+| 顺序 | Provider | 模型 | 说明 |
+|------|----------|------|------|
+| 1 | `huawei_deepseek` | DeepSeek-R1 | 华为 ModelArts（需配置 key） |
+| 2 | `deepseek` | deepseek-coder-v2 | DeepSeek 官方（需配置 key） |
+| 3 | `openai` | gpt-4o | OpenAI GPT-4 |
+| 3 | `anthropic` | claude-sonnet-4-5-20250514 | Anthropic Claude |
+| 4 | `zhipu` | glm-4-plus | 智谱 GLM-4（需配置 key） |
+| 5 | `antigravity` | llama3-70b | 本地反代服务（调试用） |
+| 6 | `ollama` | qwen2.5 | 本地 Ollama（兜底） |
+| 7 | `default` | gpt-4o | 默认 OpenAI 配置（兜底） |
+
+**注意**：
+- 高优先级 Provider (1-4) 需要在 Agent spec 或环境变量中显式指定
+- 低优先级 Provider (5-7) 会自动按顺序尝试
+- 所有 Provider 都需要配置有效的 API Key
+
+### 代码中使用
+
+```python
+from lee.orchestrator.execution.executors import ExecutorFactory
+
+# 使用默认配置
+executor = ExecutorFactory.create("llm", profile="default")
+
+# 使用指定 provider
+executor = ExecutorFactory.create("llm", profile="zhipu")
+
+# Agent executor (自动选择 agent.dev profile)
+executor = ExecutorFactory.create("llm", profile="agent.dev")
+```
+
+---
+
 ## 后续步骤
 
 ### 1. 更新代码引用
