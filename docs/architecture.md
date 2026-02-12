@@ -353,10 +353,84 @@ IDE Agent Host **不是**：
 
 ---
 
-## 8. 现状说明（与 spec 对齐度）
+## 8. Executor 双引擎架构（v3.1 新增）
+
+LEE 采用**渐进式替换策略**：当前引擎与下一代 LangGraph 引擎并行运行。
+
+### 8.1 引擎对比
+
+| 维度 | 当前引擎 (`orchestrator/execution/`) | 下一代引擎 (`runtime/executor/`) |
+|:----:|:----:|:----:|
+| **定位** | 生产引擎 | 下一代引擎 (v0.1.0) |
+| **调度模型** | StateMachine + step-by-step | LangGraph graph.invoke() |
+| **Executor 类型** | llm / shell / metagpt / mock | l3.impl.coding / l3.test.unit |
+| **数据契约** | `Dict[str, Any]` (松散) | `ExecutorTaskSpec` / `ExecutionResult` (强类型) |
+| **追踪** | `trace.py` + `tracing_integration.py` | `SpanBuilder` |
+| **安全** | ToolGuard (token_manager) | `security.py` + `allowed_write_patterns` |
+| **代码量** | ~323K (26 files) | ~50K (14 files) |
+
+### 8.2 适配器桥接
+
+`langgraph_executor.py` 桥接两套引擎，在 `orchestrator.py` 启动时注册：
+
+```
+ExecutorFactory
+    ├── "llm"       → LLMExecutor        当前引擎
+    ├── "shell"     → ShellExecutor       当前引擎
+    ├── "metagpt"   → MetaGPTExecutor     当前引擎
+    └── "langgraph" → LangGraphExecutor   适配器
+                         ↓ (桥接)
+                     runtime/executor/run_task()
+                         ├── graphs/impl_coding   l3.impl.coding
+                         ├── graphs/unit_test     l3.test.unit
+                         ├── tools/               LLM / FS / Shell / Security
+                         └── tracing/             SpanBuilder
+```
+
+Workflow YAML 用法：
+```yaml
+steps:
+  - name: implement_code
+    executor: langgraph
+    execution_context:
+      task_type: l3.impl.coding
+```
+
+### 8.3 迁移路线图
+
+| 阶段 | 内容 | 状态 |
+|:----:|------|:----:|
+| Phase 0 | 适配器实现 + 注册 | ✅ 完成 |
+| Phase 1 | l3.impl.coding + l3.test.unit graph | ✅ 完成 |
+| Phase 2 | 集成测试 | ⬜ 待做 |
+| Phase 3 | 更多 graph (l3.review, l3.deploy) | ⬜ 待做 |
+| Phase 4 | 统一追踪到 SpanBuilder | ⬜ 待做 |
+| Phase 5 | 全面切换，retire 当前引擎 | ⬜ 远期 |
+
+### 8.4 开发者指南：何时用哪个引擎
+
+| 场景 | executor 类型 | 理由 |
+|------|:----:|------|
+| L1/L2 Agent 步骤 | `llm` | 成熟稳定 |
+| L3 代码实现 | `langgraph` + `task_type: l3.impl.coding` | LangGraph DAG |
+| L3 单元测试 | `langgraph` + `task_type: l3.test.unit` | 同上 |
+| Shell 脚本 | `shell` | 直接执行 |
+| MetaGPT 团队任务 | `metagpt` | 多角色 |
+
+新增 Graph Builder：
+```python
+from lee.runtime.executor import register_graph
+def build_my_graph(task: ExecutorTaskSpec) -> StateGraph: ...
+register_graph("l3.my_task", build_my_graph)
+```
+
+---
+
+## 9. 现状说明（与 spec 对齐度）
 
 - `spec-global` 已包含 `gate_decision/decision/conditional` 等 step 类型；当前执行器侧以 `agent/skill/human_gate` 为主，其他类型需要补齐专用执行路径（或在 IR 转换层做降级/展开）。
 - `AgentLoader` 的默认 `spec_root` 仍兼容旧路径（`ai-spec/`）；在 spec-global 迁移场景下应显式配置为仓库内 `spec-global/`。
+- v3.1: LangGraph 执行器已注册到 ExecutorFactory，L3 workflow 可使用 `executor: langgraph`。
 
 ---
 
