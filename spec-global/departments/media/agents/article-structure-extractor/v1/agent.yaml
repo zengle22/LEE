@@ -138,7 +138,7 @@ structure_recognition:
 # ============================================
 # 技能引用
 # ============================================
-skills:
+tools:
   - ref: skill.media.structure_extraction
 
 capabilities:

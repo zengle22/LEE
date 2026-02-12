@@ -134,7 +134,7 @@ prompting:
 # ============================================
 # 技能引用
 # ============================================
-skills:
+tools:
   - ref: skill.test.pytest
   - ref: skill.lint.ruff
 

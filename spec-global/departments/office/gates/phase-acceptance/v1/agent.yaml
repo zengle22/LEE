@@ -55,7 +55,6 @@ directory_contract: ../../../contracts/phase-directory-contract/v1/contract.yaml
 # ============================================
 # 技能引用 (v2.3 新增)
 # ============================================
-skills:
   - id: skill.common.generate_execution_report
     ref: ../../../skills/generate-execution-report/v1/skill.yaml
     usage: |

@@ -45,12 +45,15 @@ principles:
 execution_taxonomy:
   version: "1.0"
   description: |
-    LEE 框架将所有执行体分为三类：
+    LEE 框架将所有执行体分为三大类，其中 Skill 进一步细分为三子类：
     1. Agent (agent.*) - LLM 驱动的 AI 角色，具有推理和决策能力
-    2. Skill (skill.*) - 传统程序 / CLI / 确定性工具，由 Orchestrator 调用
+    2. Skill (skill.*) - 分为三类：
+       a. Tool Skill  — 有 spec + runtime（CLI/MCP），agent.yaml 中声明于 tools:
+       b. Spec Skill  — 有 spec 无 runtime（纯规则），agent.yaml 中声明于 specs:
+       c. Capability   — 无 spec（prompt 知识），agent.yaml 中声明于 capabilities:
     3. Gate (gate.*)   - 人类决策点，需要人工审批或确认
 
-    这一分类是刚性约束，适用于所有 workflow、registry 和 spec 文件。
+    这一分类是刚性约束，由 scripts/spec_validate.py 自动校验。
 
   categories:
     agent:
@@ -70,35 +73,43 @@ execution_taxonomy:
       workflow_field: "run: agent.* 或 agent: agent.*"
       step_type: "kind: agent 或 type: agent"
 
-    skill:
+    # ── Skill 三分法（Three-Category Skill Taxonomy）──
+    # Agent 可引用三类 skill，分别对应 agent.yaml 中的
+    # tools: / specs: / capabilities: 三个字段。
+    # 本分类法是刚性约束，spec_validate.py 自动校验。
+
+    tool_skill:
       prefix: "skill.*"
-      naming: "skill.{department}.{tool_name} 或 skill.{category}.{tool_name}"
+      naming: "skill.{category}.{tool_name}"
+      agent_field: "tools:"
       description: |
-        传统程序 / CLI / 确定性工具。具有：
+        工具型 Skill — 有对应 skill.yaml 且声明了 runtime: 块。
+        由 Orchestrator 通过 CLI / MCP / Shell 调用执行。
+        特征：
         - 确定性执行（相同输入 → 相同输出）
-        - 由 Orchestrator 调用，AI 无法直接绕过
+        - 有 runtime: 配置（command, args_template, exit_codes）
         - 可审计的命令行日志
         - 无推理能力
       executor: ShellExecutor
+      validation:
+        - "必须存在 skill.yaml spec 文件"
+        - "spec 文件必须包含 runtime: 块"
       sub_categories:
         runner:
           naming: "skill.runner.{runner_name}"
           description: "统一执行器（如 test_runner, deploy_runner）"
           examples:
             - "skill.runner.test_e2e"
-            - "skill.runner.deploy"
         env:
           naming: "skill.env.{check_name}"
           description: "环境检查工具"
           examples:
             - "skill.env.check_tools"
-            - "skill.env.check_services"
         file:
           naming: "skill.file.{operation}"
           description: "文件操作工具"
           examples:
             - "skill.file.read"
-            - "skill.file.write"
         lint:
           naming: "skill.lint.{linter}"
           description: "静态检查工具"
@@ -114,8 +125,67 @@ execution_taxonomy:
           description: "Git 操作工具"
           examples:
             - "skill.git.checkout"
+        media:
+          naming: "skill.media.{tool_name}"
+          description: "媒体处理工具"
+          examples:
+            - "skill.media.diagram_generation"
+            - "skill.media.md_to_wechat_richtext"
+        devops:
+          naming: "skill.devops.{operation}"
+          description: "DevOps 操作工具"
+          examples:
+            - "skill.devops.deploy"
+            - "skill.devops.health_check"
       workflow_field: "run: skill.* 或 skill: skill.*"
       step_type: "kind: skill 或 type: skill"
+
+    spec_skill:
+      prefix: "skill.*"
+      naming: "skill.{category}.{spec_name}"
+      agent_field: "specs:"
+      description: |
+        规范型 Skill — 有对应 skill.yaml 但无 runtime: 块。
+        定义了规则、约束、模板或验证标准，Agent 在 prompt 内遵循执行。
+        特征：
+        - 有 spec 文件定义 input/output schema 和 constraints
+        - 无 runtime: 配置（不直接执行命令）
+        - Agent 按规则内嵌执行，不调用外部工具
+        - 产出可通过 spec 中定义的 constraints 验证
+      executor: 无（Agent 内执行）
+      validation:
+        - "必须存在 skill.yaml spec 文件"
+        - "spec 文件不需要 runtime: 块"
+      examples:
+        - "skill.media.content_proofreading"    # 内容校对规则
+        - "skill.media.style_validation"        # 风格校验规则
+        - "skill.media.readable_color_layout"   # 排版规则
+        - "skill.media.platform_safe_rendering" # 平台安全渲染规则
+        - "skill.ui.markdown_to_contract"       # MD→UI 合同转换规则
+
+    capability:
+      prefix: "skill.*"
+      naming: "skill.{domain}.{knowledge_area}"
+      agent_field: "capabilities:"
+      description: |
+        知识型能力声明 — 无 spec 文件，纯 prompt 领域知识。
+        描述 Agent 具备的领域知识或方法论能力。
+        特征：
+        - 无 spec 文件（不需要外部定义）
+        - 无 runtime: 配置
+        - 完全在 Agent LLM 内部执行
+        - 框架不做存在性校验
+      executor: 无（LLM 内在知识）
+      validation:
+        - "不做 spec 文件存在性校验"
+        - "不做 runtime: 校验"
+      examples:
+        - "skill.go.idiomatic_code"             # Go 语言编码知识
+        - "skill.go.concurrency_patterns"       # Go 并发模式
+        - "skill.vue3.composition_api"          # Vue3 Composition API
+        - "skill.qa.case_generation"            # 测试用例生成方法
+        - "skill.dev.architecture_design"       # 架构设计方法论
+        - "skill.review.code_quality_check"     # 代码质量评审知识
 
     gate:
       prefix: "gate.*"
@@ -157,10 +227,12 @@ execution_taxonomy:
       agents:
         - agent.qa.case_generator       # LLM：生成测试用例
         - agent.qa.result_judge         # LLM：判定结果
-      skills:
-        - skill.file.read               # 程序：读取文件
-        - skill.runner.test_e2e         # 程序：统一测试执行器
-        - skill.env.check_tools         # 程序：环境检查
+      tool_skills:
+        - skill.file.read               # 工具型：读取文件
+        - skill.runner.test_e2e         # 工具型：统一测试执行器
+        - skill.env.check_tools         # 工具型：环境检查
+      spec_skills:
+        - skill.media.style_validation  # 规范型：风格校验规则
       gates:
         - gate.qa.test_case_review_gate # 人类：用例评审
 

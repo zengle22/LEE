@@ -105,7 +105,7 @@ style_rules:
 # ============================================
 # 技能引用
 # ============================================
-skills:
+tools:
   - ref: skill.media.readable_color_layout
   - ref: skill.media.platform_safe_rendering
 

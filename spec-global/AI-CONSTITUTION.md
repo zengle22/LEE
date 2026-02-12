@@ -330,27 +330,107 @@ def check_output_path(file_path: str, file_type: str) -> bool:
 
 **目的**: 防止边界塌方 (Boundary Collapse)，确保各组件职责清晰、可组合、可测试。
 
-#### 0.2.1 Skill（技能）
+#### 0.2.1 Skill 三分法（Three-Category Skill Taxonomy）
 
-**定义**: 只做"确定性能力"的原子化功能单元。
+**核心原则**: Skill 根据执行方式分为三类，分别对应 agent.yaml 中的不同字段。
 
-**强约束**:
-- ✅ **只做确定性能力**: 输入确定 → 输出确定（如：格式转换、数据提取、计算）
-- ✅ **无角色/目标**: 不包含"你是…专家"等角色定义
-- ✅ **无长上下文**: 不依赖多轮对话历史
-- ✅ **无决策逻辑**: 不做"下一步应该…"的判断
-- ❌ **禁止**: 包含业务目标、工作流编排、角色扮演
+##### a) Tool Skill（工具型） — `tools:` 字段
 
-**示例**:
+**定义**: 有 spec 文件 **且** 有 `runtime:` 块的可执行工具。
+
+**特征**:
+- ✅ 有 `skill.yaml` spec 文件
+- ✅ spec 中声明了 `runtime:` 块（CLI / MCP / Shell 命令）
+- ✅ 确定性执行（相同输入 → 相同输出）
+- ✅ 由 Orchestrator 调用，可审计
+- ❌ 无推理能力
+
+**Agent 声明格式**:
 ```yaml
-# ✅ 正确的 Skill
-id: extract_keywords_from_text
-input: {text: string}
-output: {keywords: array<string>}
-
-# ❌ 错误的 Skill（包含决策）
-id: analyze_and_decide_next_step  # 违反：包含决策
+tools:
+  - ref: skill.test.pytest
+  - ref: skill.lint.ruff
+  - ref: skill.media.diagram_generation
 ```
+
+**验证规则**: `spec_validate.py` 校验 → 必须有 spec 文件 **且** spec 中有 `runtime:` 块
+
+##### b) Spec Skill（规范型） — `specs:` 字段
+
+**定义**: 有 spec 文件 **但无** `runtime:` 块的规则/约束/模板。
+
+**特征**:
+- ✅ 有 `skill.yaml` spec 文件（定义 input/output schema 和 constraints）
+- ✅ Agent 在 prompt 内按规则执行
+- ❌ 无 `runtime:` 块（不调用外部命令）
+- ❌ 无直接工具执行
+
+**Agent 声明格式**:
+```yaml
+specs:
+  - ref: skill.media.content_proofreading
+  - ref: skill.media.style_validation
+  - ref: skill.ui.markdown_to_contract
+```
+
+**验证规则**: `spec_validate.py` 校验 → 必须有 spec 文件，`runtime:` 可选
+
+##### c) Capability（知识型） — `capabilities:` 字段
+
+**定义**: 无 spec 文件的 prompt 领域知识声明。
+
+**特征**:
+- ❌ 无 spec 文件
+- ❌ 无 `runtime:` 块
+- ✅ 完全在 Agent LLM 内部执行
+- ✅ 描述 Agent 具备的领域知识或方法论
+
+**Agent 声明格式**:
+```yaml
+capabilities:
+  - skill.go.idiomatic_code
+  - skill.go.concurrency_patterns
+  - skill.qa.case_generation
+```
+
+**验证规则**: `spec_validate.py` **不做**存在性校验
+
+##### 三分法速查表
+
+| 类型 | agent.yaml 字段 | spec 文件 | runtime: 块 | 校验规则 |
+|------|:---------------:|:---------:|:-----------:|---------|
+| Tool Skill | `tools:` | ✅ 必须 | ✅ 必须 | E002 + W002 |
+| Spec Skill | `specs:` | ✅ 必须 | ❌ 不需要 | E003 |
+| Capability | `capabilities:` | ❌ 不需要 | ❌ 不需要 | 不校验 |
+
+**示例 — 完整 Agent 声明**:
+```yaml
+# agent.yaml
+id: agent.dev.go_backend_engineer
+
+tools:
+  - ref: skill.test.pytest
+  - ref: skill.lint.ruff
+  - ref: skill.git.checkout
+
+specs:
+  - ref: skill.media.content_proofreading
+
+capabilities:
+  - skill.go.idiomatic_code
+  - skill.go.concurrency_patterns
+  - skill.go.error_handling
+  - skill.go.testing
+  - skill.go.gin_framework
+```
+
+**边界塌方检测**:
+
+| 违规类型 | 示例 | 处理 |
+|---------|------|------|
+| Tool 放入 capabilities | `capabilities: [skill.test.pytest]` | 移入 `tools:` |
+| Capability 放入 tools | `tools: [skill.go.idiomatic_code]` | 移入 `capabilities:` |
+| Spec 放入 tools | `tools: [skill.media.style_validation]` (无 runtime) | 移入 `specs:` |
 
 #### 0.2.2 Agent（智能体）
 

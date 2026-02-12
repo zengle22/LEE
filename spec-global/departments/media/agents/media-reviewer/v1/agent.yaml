@@ -148,7 +148,7 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
-skills:
+tools:
   - ref: skill.media.platform_safe_rendering
   - ref: skill.media.style_validation
 
