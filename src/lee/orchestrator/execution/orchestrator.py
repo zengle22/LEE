@@ -49,10 +49,6 @@ from lee.orchestrator.execution.file_output_handler import FileOutputHandler
 from lee.orchestrator.evidence_collector import EvidenceCollector
 from lee.orchestrator.verifier_engine import VerifierEngine
 
-# v3.1: 注册 LangGraph 执行器，支持 executor: langgraph
-from lee.orchestrator.execution.langgraph_executor import register_langgraph_executor
-register_langgraph_executor()
-
 
 # ========================================================================
 # 核心调度器（Orchestrator）
