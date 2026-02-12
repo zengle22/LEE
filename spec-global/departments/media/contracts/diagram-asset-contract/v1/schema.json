@@ -1,0 +1,88 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Diagram Asset Contract",
+    "description": "图表资产契约 — diagram-generation skill 输出 / diagram-insertion skill 输入",
+    "type": "object",
+    "required": [
+        "assets"
+    ],
+    "properties": {
+        "assets": {
+            "type": "array",
+            "description": "生成的图表资产列表",
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "mermaid_source",
+                    "caption"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "pattern": "^diagram_\\d{3}$",
+                        "description": "图表 ID (与 plan 中的 id 对应)"
+                    },
+                    "mermaid_source": {
+                        "type": "string",
+                        "description": "Mermaid 语法源码"
+                    },
+                    "caption": {
+                        "type": "string",
+                        "description": "图表标题"
+                    },
+                    "insertion_guide": {
+                        "type": "object",
+                        "description": "插入位置指引",
+                        "properties": {
+                            "suggested_position": {
+                                "type": "object",
+                                "properties": {
+                                    "after_paragraph": {
+                                        "type": "integer",
+                                        "description": "在第 N 段之后插入"
+                                    },
+                                    "after_heading": {
+                                        "type": "string",
+                                        "description": "在指定标题之后插入"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "properties": {
+                            "node_count": {
+                                "type": "integer",
+                                "description": "节点数量"
+                            },
+                            "edge_count": {
+                                "type": "integer",
+                                "description": "边数量"
+                            },
+                            "chart_type": {
+                                "type": "string",
+                                "description": "Mermaid 图表类型 (flowchart/stateDiagram)"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "generation_summary": {
+            "type": "object",
+            "properties": {
+                "total_diagrams": {
+                    "type": "integer"
+                },
+                "successful": {
+                    "type": "integer"
+                },
+                "failed": {
+                    "type": "integer"
+                }
+            }
+        }
+    }
+}

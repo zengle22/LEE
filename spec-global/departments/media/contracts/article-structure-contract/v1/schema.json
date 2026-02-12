@@ -1,0 +1,106 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Article Structure Contract",
+    "description": "文章结构提取结果契约 — structure-extraction skill 的输出格式",
+    "type": "object",
+    "required": [
+        "title",
+        "sections"
+    ],
+    "properties": {
+        "title": {
+            "type": "object",
+            "required": [
+                "text",
+                "level"
+            ],
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "文章标题"
+                },
+                "level": {
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2,
+                        3
+                    ],
+                    "description": "标题层级"
+                }
+            }
+        },
+        "sections": {
+            "type": "array",
+            "description": "文章段落/区块列表",
+            "items": {
+                "type": "object",
+                "required": [
+                    "index",
+                    "type",
+                    "content_summary"
+                ],
+                "properties": {
+                    "index": {
+                        "type": "integer",
+                        "description": "段落序号 (0-based)"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "paragraph",
+                            "heading",
+                            "highlight",
+                            "code",
+                            "quote",
+                            "warning",
+                            "conclusion",
+                            "list"
+                        ],
+                        "description": "区块类型"
+                    },
+                    "content_summary": {
+                        "type": "string",
+                        "description": "内容摘要"
+                    },
+                    "importance": {
+                        "type": "string",
+                        "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "critical"
+                        ],
+                        "description": "重要性级别"
+                    },
+                    "keywords": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "关键词列表"
+                    }
+                }
+            }
+        },
+        "metadata": {
+            "type": "object",
+            "properties": {
+                "total_paragraphs": {
+                    "type": "integer"
+                },
+                "total_headings": {
+                    "type": "integer"
+                },
+                "source_format": {
+                    "type": "string",
+                    "enum": [
+                        "markdown",
+                        "plain_text",
+                        "html"
+                    ]
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,148 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Diagram Plan Contract",
+    "description": "图表规划契约 — diagram-analysis-agent 输出 / diagram-generation skill 输入",
+    "type": "object",
+    "required": [
+        "diagrams"
+    ],
+    "properties": {
+        "diagrams": {
+            "type": "array",
+            "description": "图表规划列表",
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "type",
+                    "structure_dsl",
+                    "caption"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "pattern": "^diagram_\\d{3}$",
+                        "description": "图表唯一 ID"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "governance_loop",
+                            "execution_pipeline",
+                            "system_architecture",
+                            "decision_tree",
+                            "hierarchy",
+                            "workflow",
+                            "state_machine",
+                            "data_flow",
+                            "concept_map",
+                            "comparison_matrix"
+                        ],
+                        "description": "图表类型"
+                    },
+                    "placement": {
+                        "type": "object",
+                        "properties": {
+                            "after_paragraph": {
+                                "type": "integer",
+                                "description": "在第 N 段之后插入"
+                            },
+                            "after_heading": {
+                                "type": "string",
+                                "description": "在指定标题之后插入"
+                            }
+                        }
+                    },
+                    "structure_dsl": {
+                        "type": "object",
+                        "required": [
+                            "direction",
+                            "nodes",
+                            "edges"
+                        ],
+                        "properties": {
+                            "direction": {
+                                "type": "string",
+                                "enum": [
+                                    "TD",
+                                    "LR",
+                                    "RL",
+                                    "BT"
+                                ],
+                                "description": "图表方向"
+                            },
+                            "nodes": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "required": [
+                                        "id",
+                                        "label"
+                                    ],
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "description": "节点 ID (英文标识符)"
+                                        },
+                                        "label": {
+                                            "type": "string",
+                                            "description": "节点显示文本"
+                                        },
+                                        "type": {
+                                            "type": "string",
+                                            "enum": [
+                                                "actor",
+                                                "process",
+                                                "decision",
+                                                "data",
+                                                "terminator"
+                                            ],
+                                            "description": "节点类型"
+                                        }
+                                    }
+                                }
+                            },
+                            "edges": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "required": [
+                                        "from",
+                                        "to"
+                                    ],
+                                    "properties": {
+                                        "from": {
+                                            "type": "string",
+                                            "description": "起始节点 ID"
+                                        },
+                                        "to": {
+                                            "type": "string",
+                                            "description": "目标节点 ID"
+                                        },
+                                        "label": {
+                                            "type": "string",
+                                            "description": "边标签"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "caption": {
+                        "type": "string",
+                        "description": "图表标题/说明"
+                    },
+                    "estimated_complexity": {
+                        "type": "string",
+                        "enum": [
+                            "simple",
+                            "moderate",
+                            "complex"
+                        ],
+                        "description": "复杂度评估"
+                    }
+                }
+            }
+        }
+    }
+}
