@@ -291,33 +291,31 @@ class ClaudeCodeExecutor(BaseExecutor):
         max_iterations: int,
     ) -> str:
         """
-        调用 claude CLI
+        调用 claude CLI (v2.x)
 
         使用 --print 模式获取完整输出。
+        工作目录通过 subprocess cwd 参数控制。
+        prompt 通过 stdin 传入以避免 shell 转义问题。
         """
         cmd = [
             self._claude_binary,
             "--print",
-            "--output-format", "text",
-            "--max-turns", str(max_iterations),
-            "--cwd", workspace,
+            "--output-format", "json",
         ]
 
         # 注入系统 prompt
         if system_prompt:
             cmd.extend(["--system-prompt", system_prompt])
 
-        # 注入允许的工具（命令白名单通过 system prompt 约束）
-        # claude CLI 的 --allowedTools 参数用于限制可用工具
+        # 构建工具白名单
+        # claude CLI --allowedTools 接受空格/逗号分隔的工具名
         allowed_tools = ["Read", "Write", "Edit", "MultiEdit"]
         if allowed_commands:
             allowed_tools.append("Bash")
 
-        for tool in allowed_tools:
-            cmd.extend(["--allowedTools", tool])
+        cmd.extend(["--allowedTools", ",".join(allowed_tools)])
 
-        # prompt 通过 stdin 传入
-        cmd.extend(["--prompt", prompt])
+        # prompt 通过 stdin 传入（避免命令行参数过长或转义问题）
 
         loop = asyncio.get_event_loop()
         result = await asyncio.wait_for(
@@ -327,13 +325,14 @@ class ClaudeCodeExecutor(BaseExecutor):
                 cmd,
                 workspace,
                 timeout_seconds,
+                prompt,
             ),
             timeout=timeout_seconds + 30,  # 额外 30s buffer
         )
         return result
 
     def _run_subprocess(
-        self, cmd: List[str], cwd: str, timeout: int
+        self, cmd: List[str], cwd: str, timeout: int, stdin_text: str = ""
     ) -> str:
         """同步执行 subprocess（在线程池中调用）"""
         try:
@@ -343,6 +342,7 @@ class ClaudeCodeExecutor(BaseExecutor):
                 text=True,
                 cwd=cwd,
                 timeout=timeout,
+                input=stdin_text or None,
                 env={**os.environ, "CLAUDE_CODE_ENTRYPOINT": "lee-executor"},
             )
             # 合并 stdout + stderr，确保不丢失任何输出
@@ -359,11 +359,19 @@ class ClaudeCodeExecutor(BaseExecutor):
         """
         解析 claude CLI 输出
 
-        尝试从输出中提取 JSON 结构化结果。
-        如果找不到，退化为文本结果。
+        --output-format json 返回单个 JSON 对象：
+        {
+            "type": "result",
+            "subtype": "success",
+            "num_turns": 6,
+            "result": "文本输出（可能包含 ```json ... ``` 代码块）",
+            "is_error": false,
+            "total_cost_usd": 0.19,
+            ...
+        }
         """
         parsed: Dict[str, Any] = {
-            "result_text": raw_output,
+            "result_text": "",
             "changed_files": [],
             "commands_run": [],
             "test_results": {},
@@ -371,7 +379,40 @@ class ClaudeCodeExecutor(BaseExecutor):
             "error": None,
         }
 
-        # 尝试从输出中找到最后一个 JSON 代码块
+        # 清理 stderr 分隔符之前的内容作为主输出
+        main_output = raw_output.split("\n--- stderr ---\n")[0].strip()
+
+        # 1. 尝试解析 claude CLI JSON 格式输出
+        try:
+            data = json.loads(main_output)
+
+            if isinstance(data, dict):
+                # Claude CLI --output-format json 返回 {"type": "result", ...}
+                if data.get("type") == "result":
+                    return self._parse_result_object(data, raw_output)
+
+                # 消息数组格式（stream-json 等）
+                if isinstance(data, list):
+                    return self._parse_json_messages(data, raw_output)
+
+                # 用户自定义 JSON（直接包含 changed_files 等）
+                parsed["changed_files"] = data.get("changed_files", [])
+                parsed["commands_run"] = data.get("commands_run", [])
+                parsed["test_results"] = data.get("test_results", {})
+                parsed["error"] = data.get("error")
+                parsed["result_text"] = raw_output
+                if data.get("status") == "fail":
+                    parsed["error"] = parsed["error"] or "Task reported failure"
+                return parsed
+
+            elif isinstance(data, list):
+                return self._parse_json_messages(data, raw_output)
+
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # 2. 退化：从文本中提取 JSON 代码块
+        parsed["result_text"] = raw_output
         json_block = self._extract_last_json_block(raw_output)
         if json_block:
             try:
@@ -387,6 +428,197 @@ class ClaudeCodeExecutor(BaseExecutor):
                 pass
 
         return parsed
+
+    def _parse_result_object(
+        self, data: Dict[str, Any], raw_output: str
+    ) -> Dict[str, Any]:
+        """
+        解析 claude CLI --output-format json 的结果对象
+
+        格式：
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": false,
+            "num_turns": 6,
+            "result": "文本输出（包含 ```json ... ```）",
+            "total_cost_usd": 0.19,
+            "usage": {...},
+            "session_id": "...",
+        }
+        """
+        parsed: Dict[str, Any] = {
+            "result_text": "",
+            "changed_files": [],
+            "commands_run": [],
+            "test_results": {},
+            "iterations_used": data.get("num_turns", 1),
+            "error": None,
+            # 额外元数据
+            "cost_usd": data.get("total_cost_usd", 0),
+            "session_id": data.get("session_id", ""),
+            "duration_ms": data.get("duration_ms", 0),
+        }
+
+        # 检查是否报错
+        if data.get("is_error"):
+            parsed["error"] = data.get("result", "") or "Claude reported error"
+
+        # 提取 result 文本
+        result_text = data.get("result", "")
+        parsed["result_text"] = result_text
+
+        # 从 result 文本中提取嵌入的 JSON 代码块
+        if result_text:
+            json_block = self._extract_last_json_block(result_text)
+            if json_block:
+                try:
+                    embedded = json.loads(json_block)
+                    if isinstance(embedded, dict):
+                        parsed["changed_files"] = embedded.get("changed_files", [])
+                        parsed["commands_run"] = embedded.get("commands_run", [])
+                        parsed["test_results"] = embedded.get("test_results", {})
+                        if embedded.get("error"):
+                            parsed["error"] = embedded["error"]
+                        if embedded.get("status") == "fail":
+                            parsed["error"] = parsed["error"] or "Task reported failure"
+                except json.JSONDecodeError:
+                    pass
+
+        return parsed
+
+    def _parse_json_messages(
+        self, messages: List[Dict[str, Any]], raw_output: str
+    ) -> Dict[str, Any]:
+        """
+        解析 claude CLI JSON 消息数组
+
+        每条消息格式：
+        {
+            "type": "result",
+            "subtype": "success",
+            "cost_usd": 0.05,
+            "duration_ms": 12000,
+            "duration_api_ms": 8000,
+            "is_error": false,
+            "num_turns": 3,
+            "result": "最终文本输出..."
+        }
+
+        或 tool_use 消息：
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "tool_use", "name": "Bash", "input": {"command": "pytest"}},
+                    {"type": "text", "text": "..."}
+                ]
+            }
+        }
+        """
+        parsed: Dict[str, Any] = {
+            "result_text": "",
+            "changed_files": [],
+            "commands_run": [],
+            "test_results": {},
+            "iterations_used": 1,
+            "error": None,
+        }
+
+        changed_files_set = set()
+        commands_run = []
+        result_texts = []
+
+        for msg in messages:
+            msg_type = msg.get("type", "")
+
+            # result 类型消息（最终结果）
+            if msg_type == "result":
+                parsed["iterations_used"] = msg.get("num_turns", 1)
+                result_text = msg.get("result", "")
+                if result_text:
+                    result_texts.append(result_text)
+                if msg.get("is_error"):
+                    parsed["error"] = result_text or "Claude reported error"
+                # 从 result text 提取 JSON 代码块
+                if result_text:
+                    json_block = self._extract_last_json_block(result_text)
+                    if json_block:
+                        try:
+                            data = json.loads(json_block)
+                            if isinstance(data, dict):
+                                parsed["changed_files"] = data.get("changed_files", list(changed_files_set))
+                                parsed["test_results"] = data.get("test_results", parsed["test_results"])
+                                if data.get("error"):
+                                    parsed["error"] = data["error"]
+                        except json.JSONDecodeError:
+                            pass
+                continue
+
+            # assistant 消息（可能包含 tool_use）
+            message_obj = msg.get("message", msg)
+            content = message_obj.get("content", [])
+            if isinstance(content, str):
+                result_texts.append(content)
+                continue
+
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+
+                block_type = block.get("type", "")
+
+                if block_type == "text":
+                    result_texts.append(block.get("text", ""))
+
+                elif block_type == "tool_use":
+                    tool_name = block.get("name", "")
+                    tool_input = block.get("input", {})
+
+                    if tool_name == "Bash":
+                        cmd_str = tool_input.get("command", "")
+                        if cmd_str:
+                            commands_run.append({
+                                "cmd": cmd_str,
+                                "exit_code": 0,  # tool_use 不包含 exit code
+                                "stdout_tail": "",
+                            })
+                    elif tool_name in ("Write", "Edit", "MultiEdit"):
+                        file_path = tool_input.get("file_path", "") or tool_input.get("path", "")
+                        if file_path:
+                            changed_files_set.add(file_path)
+
+            # tool_result 消息（Bash 执行结果）
+            if msg_type == "tool_result" or "content" in msg:
+                for block in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        # 提取 bash 命令结果
+                        tool_content = block.get("content", "")
+                        if isinstance(tool_content, str) and ("passed" in tool_content.lower() or "failed" in tool_content.lower()):
+                            # 尝试解析测试结果
+                            self._extract_test_results(tool_content, parsed)
+
+        # 如果从消息中找到了文件但 JSON 块没有覆盖
+        if not parsed["changed_files"] and changed_files_set:
+            parsed["changed_files"] = list(changed_files_set)
+        if not parsed["commands_run"] and commands_run:
+            parsed["commands_run"] = commands_run
+
+        parsed["result_text"] = "\n".join(result_texts) if result_texts else raw_output
+
+        return parsed
+
+    def _extract_test_results(self, output: str, parsed: Dict[str, Any]):
+        """从测试输出中提取 passed/failed 计数"""
+        import re
+        # 匹配 pytest 风格: "5 passed, 1 failed"
+        passed_match = re.search(r"(\d+)\s+passed", output)
+        failed_match = re.search(r"(\d+)\s+failed", output)
+        if passed_match or failed_match:
+            parsed["test_results"] = {
+                "passed": int(passed_match.group(1)) if passed_match else 0,
+                "failed": int(failed_match.group(1)) if failed_match else 0,
+            }
 
     def _extract_last_json_block(self, text: str) -> Optional[str]:
         """从文本中提取最后一个 ```json ... ``` 代码块"""

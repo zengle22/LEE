@@ -220,13 +220,13 @@ class TestIterationLimits:
     """测试迭代上限"""
 
     @pytest.mark.asyncio
-    async def test_max_iterations_passed_to_cli(self, executor, base_input):
-        """max_iterations 应传递给 claude CLI"""
+    async def test_max_iterations_in_system_prompt(self, executor, base_input):
+        """max_iterations 应注入到 system prompt 中"""
         base_input["max_iterations"] = 3
 
         captured_cmd = []
 
-        def mock_subprocess(cmd, cwd, timeout):
+        def mock_subprocess(cmd, cwd, timeout, stdin_text=""):
             captured_cmd.extend(cmd)
             return json.dumps({
                 "status": "success",
@@ -238,9 +238,29 @@ class TestIterationLimits:
 
         with patch.object(executor, '_run_subprocess', side_effect=mock_subprocess):
             await executor.execute(base_input)
-            assert "--max-turns" in captured_cmd
-            idx = captured_cmd.index("--max-turns")
-            assert captured_cmd[idx + 1] == "3"
+            # max_iterations 通过 system prompt 传入
+            system_prompt_idx = captured_cmd.index("--system-prompt")
+            system_prompt = captured_cmd[system_prompt_idx + 1]
+            assert "3" in system_prompt
+            assert "迭代" in system_prompt or "iteration" in system_prompt.lower()
+
+    @pytest.mark.asyncio
+    async def test_allowed_tools_format(self, executor, base_input):
+        """--allowedTools 应使用逗号分隔格式"""
+        captured_cmd = []
+
+        def mock_subprocess(cmd, cwd, timeout, stdin_text=""):
+            captured_cmd.extend(cmd)
+            return '{"status": "success"}'
+
+        with patch.object(executor, '_run_subprocess', side_effect=mock_subprocess):
+            await executor.execute(base_input)
+            assert "--allowedTools" in captured_cmd
+            idx = captured_cmd.index("--allowedTools")
+            tools_str = captured_cmd[idx + 1]
+            assert "Read" in tools_str
+            assert "Write" in tools_str
+            assert "Bash" in tools_str  # base_input has allowed_commands
 
 
 # ========================================================================
