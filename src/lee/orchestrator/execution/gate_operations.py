@@ -80,6 +80,14 @@ class GateOperationsMixin:
         # 恢复工作流状态
         await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
 
+        # v3.2: 记录门禁审批事件
+        self.event_log.log_gate_approved(
+            gate_id=gate_id,
+            step_id=gate_approval.step_id,
+            approver=approver,
+            approval_id=f"{workflow_id}_{gate_id}",
+        )
+
         # 构建输出（包含规则评估结果）
         gate_output = {"gate_approved": True, "approver": approver, "comments": comments}
         if gate_evaluation:
@@ -136,6 +144,14 @@ class GateOperationsMixin:
 
         # 将工作流标记为失败
         await self.store.update_workflow_status(workflow_id, WorkflowStatus.FAILED)
+
+        # v3.2: 记录门禁拒绝事件
+        self.event_log.log_gate_rejected(
+            gate_id=gate_id,
+            step_id=gate_approval.step_id,
+            approver=rejecter,
+            reason=reason,
+        )
 
         return StepResult(
             status="failed",

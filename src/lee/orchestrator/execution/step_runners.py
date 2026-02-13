@@ -718,6 +718,12 @@ class StepRunnerMixin:
                     error_message=error_msg,
                     completed_at=datetime.now(),
                 )
+                # v3.2: 记录步骤失败事件
+                self.event_log.log_step_failed(
+                    step_id=step.id,
+                    agent_id=step.agent_id or "claude_code",
+                    error=error_msg,
+                )
                 return StepResult(
                     status="failed",
                     step_id=step.id,
@@ -763,6 +769,15 @@ class StepRunnerMixin:
                 TaskExecutionStatus.COMPLETED,
                 output_data=output,
                 completed_at=datetime.now(),
+            )
+
+            # v3.2: 记录步骤完成事件
+            changed = output.get("changed_files", [])
+            self.event_log.log_step_completed(
+                step_id=step.id,
+                agent_id=step.agent_id or "claude_code",
+                outputs=changed,
+                outputs_hash=self.event_log._compute_hash(output),
             )
 
             await self._check_workflow_completion(workflow_id)

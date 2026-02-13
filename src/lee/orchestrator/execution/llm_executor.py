@@ -158,19 +158,42 @@ class LLMExecutor:
         temperature = input_data.get("temperature", self.config.get("temperature", 0.7))
         max_tokens = input_data.get("max_tokens", self.config.get("max_tokens", 4000))
 
+        import time as _time
+        call_start = _time.monotonic()
+
         try:
             # 调用 LLM API
-            response_text = await self._call_with_retry(
+            response = await self._call_with_retry(
                 self._call_llm,
                 system_message,
                 prompt
             )
 
+            call_duration = _time.monotonic() - call_start
+
+            # v3.2: 支持增强返回（dict）和旧格式（str）
+            if isinstance(response, dict):
+                response_text = response.get("content", "")
+                model_used = response.get("model", self.config.get("model", "unknown"))
+                input_tokens = response.get("input_tokens", 0)
+                output_tokens = response.get("output_tokens", 0)
+                stop_reason = response.get("stop_reason")
+            else:
+                response_text = response
+                model_used = self.config.get("model", "unknown")
+                input_tokens = 0
+                output_tokens = 0
+                stop_reason = None
+
             return {
                 "generated_text": response_text,
-                "model": self.config.get("model", "unknown"),
+                "model": model_used,
                 "provider": self.config.get("provider", "custom"),
-                "tokens_used": len(response_text.split()),  # 粗略估算
+                "tokens_used": input_tokens + output_tokens,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "duration_seconds": round(call_duration, 3),
+                "stop_reason": stop_reason,
                 "status": "completed",
             }
 
@@ -272,7 +295,17 @@ class LLMExecutor:
             ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                return data["choices"][0]["message"]["content"]
+
+                # v3.2: 返回完整 API 响应元数据
+                content = data["choices"][0]["message"]["content"]
+                usage = data.get("usage", {})
+                return {
+                    "content": content,
+                    "model": data.get("model", model),
+                    "input_tokens": usage.get("prompt_tokens", 0),
+                    "output_tokens": usage.get("completion_tokens", 0),
+                    "stop_reason": data["choices"][0].get("finish_reason"),
+                }
 
     def get_info(self) -> Dict[str, Any]:
         """获取执行器信息"""
