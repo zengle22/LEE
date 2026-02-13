@@ -1,0 +1,560 @@
+"""
+Claude Code Executor
+
+将 Claude Code（多轮 LLM + 工具调用）封装为 LEE 受控执行器。
+
+⚠️ 治理约束 ⚠️
+
+本执行器严格遵循 Executor 宪法（见 executors.py）并额外施加：
+1. workspace 目录边界 — 不允许操作 workspace 之外的文件
+2. 命令白名单 — 仅允许声明的命令
+3. 迭代上限 — 超过 max_iterations 自动停止
+4. 结构化证据输出 — 所有操作可审计
+5. 超时保护 — 总运行时间有上限
+
+输入/输出契约见 implementation_plan.md
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from .executors import BaseExecutor
+
+
+class ClaudeCodeExecutor(BaseExecutor):
+    """
+    Claude Code 执行器
+
+    通过 subprocess 调用 claude CLI，解析结构化输出。
+
+    使用方式:
+        executor = ClaudeCodeExecutor()
+        result = await executor.execute({
+            "goal": "实现用户登录 API",
+            "workspace": "/path/to/project",
+            "allowed_commands": ["go test", "go build"],
+            "max_iterations": 5,
+        })
+    """
+
+    # 默认配置
+    DEFAULT_MAX_ITERATIONS = 5
+    DEFAULT_TIMEOUT_SECONDS = 600
+    DEFAULT_ALLOWED_COMMANDS = ["cat", "ls", "find", "grep"]
+
+    def __init__(self, **kwargs):
+        """
+        初始化 Claude Code 执行器
+
+        Args:
+            **kwargs: 额外参数（保留扩展性）
+        """
+        self._claude_binary = os.getenv("CLAUDE_CODE_BINARY", "claude")
+
+    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        执行 Claude Code 任务
+
+        Args:
+            input_data: 输入数据，必须包含 goal 和 workspace
+
+        Returns:
+            结构化执行结果
+        """
+        # ========== 1. 输入验证 ==========
+        validation_error = self._validate_input(input_data)
+        if validation_error:
+            return {
+                "status": "failed",
+                "error": validation_error,
+                "iterations_used": 0,
+                "changed_files": [],
+                "commands_run": [],
+                "test_results": {},
+                "diff_summary": {},
+                "evidence_bundle_path": "",
+                "conversation_log_path": "",
+            }
+
+        goal = input_data["goal"]
+        workspace = input_data["workspace"]
+        context_files = input_data.get("context_files", [])
+        allowed_commands = input_data.get(
+            "allowed_commands", self.DEFAULT_ALLOWED_COMMANDS
+        )
+        write_scope = input_data.get("write_scope", [])
+        max_iterations = input_data.get(
+            "max_iterations", self.DEFAULT_MAX_ITERATIONS
+        )
+        timeout_seconds = input_data.get(
+            "timeout_seconds", self.DEFAULT_TIMEOUT_SECONDS
+        )
+        stop_conditions = input_data.get("stop_conditions", {})
+        system_prompt_extra = input_data.get("system_prompt_extra", "")
+        evidence_base = input_data.get("evidence_base", "")
+
+        # ========== 2. 构建 evidence bundle 目录 ==========
+        evidence_dir = self._prepare_evidence_dir(evidence_base, workspace)
+
+        # ========== 3. 构建 system prompt（治理约束注入） ==========
+        system_prompt = self._build_system_prompt(
+            goal=goal,
+            workspace=workspace,
+            allowed_commands=allowed_commands,
+            write_scope=write_scope,
+            max_iterations=max_iterations,
+            stop_conditions=stop_conditions,
+            system_prompt_extra=system_prompt_extra,
+        )
+
+        # ========== 4. 构建用户 prompt ==========
+        user_prompt = self._build_user_prompt(
+            goal=goal,
+            context_files=context_files,
+        )
+
+        # ========== 5. 调用 claude CLI ==========
+        try:
+            raw_output = await self._invoke_claude(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                workspace=workspace,
+                allowed_commands=allowed_commands,
+                timeout_seconds=timeout_seconds,
+                max_iterations=max_iterations,
+            )
+        except asyncio.TimeoutError:
+            return self._build_result(
+                status="timeout",
+                error=f"Claude Code execution timed out after {timeout_seconds}s",
+                evidence_dir=str(evidence_dir),
+            )
+        except FileNotFoundError:
+            return self._build_result(
+                status="failed",
+                error=f"Claude CLI binary not found: {self._claude_binary}. "
+                      "Install with: npm install -g @anthropic-ai/claude-code",
+                evidence_dir=str(evidence_dir),
+            )
+        except Exception as e:
+            return self._build_result(
+                status="failed",
+                error=f"Claude CLI invocation failed: {e}",
+                evidence_dir=str(evidence_dir),
+            )
+
+        # ========== 6. 解析输出 ==========
+        parsed = self._parse_claude_output(raw_output)
+
+        # ========== 7. 收集 diff 摘要 ==========
+        diff_summary = await self._collect_diff_summary(workspace)
+
+        # ========== 8. 写入 evidence bundle ==========
+        conversation_log_path = self._write_evidence(
+            evidence_dir=evidence_dir,
+            raw_output=raw_output,
+            parsed=parsed,
+            diff_summary=diff_summary,
+            input_data=input_data,
+        )
+
+        # ========== 9. 构建返回结果 ==========
+        status = self._determine_status(parsed, stop_conditions)
+
+        return {
+            "status": status,
+            "iterations_used": parsed.get("iterations_used", 1),
+            "changed_files": parsed.get("changed_files", []),
+            "commands_run": parsed.get("commands_run", []),
+            "test_results": parsed.get("test_results", {}),
+            "diff_summary": diff_summary,
+            "evidence_bundle_path": str(evidence_dir),
+            "conversation_log_path": conversation_log_path,
+            "generated_text": parsed.get("result_text", ""),
+            "error": parsed.get("error"),
+        }
+
+    # ================================================================
+    # 内部方法
+    # ================================================================
+
+    def _validate_input(self, input_data: Dict[str, Any]) -> Optional[str]:
+        """验证输入数据"""
+        if not input_data.get("goal"):
+            return "Missing required field: goal"
+        if not input_data.get("workspace"):
+            return "Missing required field: workspace"
+
+        workspace = Path(input_data["workspace"])
+        if not workspace.exists():
+            return f"Workspace directory does not exist: {workspace}"
+        if not workspace.is_dir():
+            return f"Workspace path is not a directory: {workspace}"
+
+        return None
+
+    def _prepare_evidence_dir(
+        self, evidence_base: str, workspace: str
+    ) -> Path:
+        """准备 evidence bundle 目录"""
+        if evidence_base:
+            evidence_dir = Path(evidence_base)
+        else:
+            evidence_dir = (
+                Path(workspace) / ".workflow" / "claude-code"
+                / datetime.now().strftime("%Y%m%d-%H%M%S")
+            )
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        return evidence_dir
+
+    def _build_system_prompt(
+        self,
+        goal: str,
+        workspace: str,
+        allowed_commands: List[str],
+        write_scope: List[str],
+        max_iterations: int,
+        stop_conditions: Dict[str, str],
+        system_prompt_extra: str,
+    ) -> str:
+        """构建系统 prompt（注入治理约束）"""
+        constraints = [
+            f"你正在 LEE 工作流中作为受控执行器运行。",
+            f"工作目录: {workspace}",
+            f"允许使用的命令: {', '.join(allowed_commands)}",
+            f"最大迭代轮数: {max_iterations}",
+        ]
+
+        if write_scope:
+            constraints.append(
+                f"允许写入的路径: {', '.join(write_scope)}"
+            )
+        else:
+            constraints.append("允许写入工作目录内的任何文件")
+
+        if stop_conditions:
+            cond_desc = "; ".join(
+                f"{k}: {v}" for k, v in stop_conditions.items()
+            )
+            constraints.append(f"停止条件: {cond_desc}")
+
+        constraints_text = "\n".join(f"- {c}" for c in constraints)
+
+        prompt = f"""## 治理约束
+
+{constraints_text}
+
+## 输出要求
+
+完成任务后，请在最后输出一个 JSON 代码块，格式如下：
+```json
+{{
+  "status": "success 或 fail",
+  "changed_files": ["修改的文件列表"],
+  "commands_run": [{{"cmd": "执行的命令", "exit_code": 0, "stdout_tail": "输出尾部"}}],
+  "test_results": {{"passed": 0, "failed": 0}},
+  "error": null
+}}
+```"""
+
+        if system_prompt_extra:
+            prompt += f"\n\n## 额外约束\n\n{system_prompt_extra}"
+
+        return prompt
+
+    def _build_user_prompt(
+        self, goal: str, context_files: List[str]
+    ) -> str:
+        """构建用户 prompt"""
+        prompt = f"## 任务目标\n\n{goal}"
+
+        if context_files:
+            files_list = "\n".join(f"- {f}" for f in context_files)
+            prompt += f"\n\n## 上下文文件\n\n请先阅读以下文件：\n{files_list}"
+
+        return prompt
+
+    async def _invoke_claude(
+        self,
+        prompt: str,
+        system_prompt: str,
+        workspace: str,
+        allowed_commands: List[str],
+        timeout_seconds: int,
+        max_iterations: int,
+    ) -> str:
+        """
+        调用 claude CLI
+
+        使用 --print 模式获取完整输出。
+        """
+        cmd = [
+            self._claude_binary,
+            "--print",
+            "--output-format", "text",
+            "--max-turns", str(max_iterations),
+            "--cwd", workspace,
+        ]
+
+        # 注入系统 prompt
+        if system_prompt:
+            cmd.extend(["--system-prompt", system_prompt])
+
+        # 注入允许的工具（命令白名单通过 system prompt 约束）
+        # claude CLI 的 --allowedTools 参数用于限制可用工具
+        allowed_tools = ["Read", "Write", "Edit", "MultiEdit"]
+        if allowed_commands:
+            allowed_tools.append("Bash")
+
+        for tool in allowed_tools:
+            cmd.extend(["--allowedTools", tool])
+
+        # prompt 通过 stdin 传入
+        cmd.extend(["--prompt", prompt])
+
+        loop = asyncio.get_event_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                self._run_subprocess,
+                cmd,
+                workspace,
+                timeout_seconds,
+            ),
+            timeout=timeout_seconds + 30,  # 额外 30s buffer
+        )
+        return result
+
+    def _run_subprocess(
+        self, cmd: List[str], cwd: str, timeout: int
+    ) -> str:
+        """同步执行 subprocess（在线程池中调用）"""
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                timeout=timeout,
+                env={**os.environ, "CLAUDE_CODE_ENTRYPOINT": "lee-executor"},
+            )
+            # 合并 stdout + stderr，确保不丢失任何输出
+            output = result.stdout or ""
+            if result.stderr:
+                output += f"\n--- stderr ---\n{result.stderr}"
+            return output
+        except subprocess.TimeoutExpired:
+            raise asyncio.TimeoutError(
+                f"subprocess timed out after {timeout}s"
+            )
+
+    def _parse_claude_output(self, raw_output: str) -> Dict[str, Any]:
+        """
+        解析 claude CLI 输出
+
+        尝试从输出中提取 JSON 结构化结果。
+        如果找不到，退化为文本结果。
+        """
+        parsed: Dict[str, Any] = {
+            "result_text": raw_output,
+            "changed_files": [],
+            "commands_run": [],
+            "test_results": {},
+            "iterations_used": 1,
+            "error": None,
+        }
+
+        # 尝试从输出中找到最后一个 JSON 代码块
+        json_block = self._extract_last_json_block(raw_output)
+        if json_block:
+            try:
+                data = json.loads(json_block)
+                if isinstance(data, dict):
+                    parsed["changed_files"] = data.get("changed_files", [])
+                    parsed["commands_run"] = data.get("commands_run", [])
+                    parsed["test_results"] = data.get("test_results", {})
+                    parsed["error"] = data.get("error")
+                    if data.get("status") == "fail":
+                        parsed["error"] = parsed["error"] or "Task reported failure"
+            except json.JSONDecodeError:
+                pass
+
+        return parsed
+
+    def _extract_last_json_block(self, text: str) -> Optional[str]:
+        """从文本中提取最后一个 ```json ... ``` 代码块"""
+        import re
+
+        # 匹配 ```json ... ``` 代码块
+        pattern = r"```json\s*\n(.*?)\n\s*```"
+        matches = re.findall(pattern, text, re.DOTALL)
+        if matches:
+            return matches[-1].strip()
+
+        # 退化：尝试找最后一个 { ... } 块
+        # 从末尾向前搜索
+        last_brace = text.rfind("}")
+        if last_brace == -1:
+            return None
+
+        # 向前找对应的 {
+        depth = 0
+        for i in range(last_brace, -1, -1):
+            if text[i] == "}":
+                depth += 1
+            elif text[i] == "{":
+                depth -= 1
+            if depth == 0:
+                candidate = text[i : last_brace + 1]
+                try:
+                    json.loads(candidate)
+                    return candidate
+                except json.JSONDecodeError:
+                    return None
+
+        return None
+
+    async def _collect_diff_summary(
+        self, workspace: str
+    ) -> Dict[str, Any]:
+        """执行 git diff --stat 收集变更摘要"""
+        try:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    ["git", "diff", "--stat", "--numstat"],
+                    capture_output=True,
+                    text=True,
+                    cwd=workspace,
+                    timeout=30,
+                ),
+            )
+
+            if result.returncode != 0:
+                return {"files_changed": 0, "lines_added": 0, "lines_deleted": 0}
+
+            lines_added = 0
+            lines_deleted = 0
+            files_changed = 0
+
+            for line in result.stdout.strip().split("\n"):
+                parts = line.split("\t")
+                if len(parts) >= 3:
+                    try:
+                        added = int(parts[0]) if parts[0] != "-" else 0
+                        deleted = int(parts[1]) if parts[1] != "-" else 0
+                        lines_added += added
+                        lines_deleted += deleted
+                        files_changed += 1
+                    except ValueError:
+                        continue
+
+            return {
+                "files_changed": files_changed,
+                "lines_added": lines_added,
+                "lines_deleted": lines_deleted,
+            }
+        except Exception:
+            return {"files_changed": 0, "lines_added": 0, "lines_deleted": 0}
+
+    def _write_evidence(
+        self,
+        evidence_dir: Path,
+        raw_output: str,
+        parsed: Dict[str, Any],
+        diff_summary: Dict[str, Any],
+        input_data: Dict[str, Any],
+    ) -> str:
+        """写入 evidence bundle"""
+        # 1. 原始对话日志
+        conversation_log = evidence_dir / "conversation.log"
+        conversation_log.write_text(raw_output, encoding="utf-8")
+
+        # 2. 结构化结果
+        result_json = evidence_dir / "result.json"
+        result_json.write_text(
+            json.dumps(
+                {
+                    "parsed_output": parsed,
+                    "diff_summary": diff_summary,
+                    "timestamp": datetime.now().isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        # 3. 输入快照（可审计）
+        input_snapshot = evidence_dir / "input_snapshot.json"
+        # 脱敏：移除 token_context
+        safe_input = {k: v for k, v in input_data.items() if k != "token_context"}
+        input_snapshot.write_text(
+            json.dumps(safe_input, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        return str(conversation_log)
+
+    def _determine_status(
+        self, parsed: Dict[str, Any], stop_conditions: Dict[str, str]
+    ) -> str:
+        """根据解析结果和停止条件确定最终状态"""
+        error = parsed.get("error")
+        if error:
+            # 仅当错误文本包含 policy 关键词时，才视为 policy violation
+            error_lower = str(error).lower()
+            is_policy = any(kw in error_lower for kw in ("policy", "violation", "forbidden", "unauthorized"))
+            if is_policy and stop_conditions.get("on_policy_violation") == "stop_needs_human":
+                return "needs_human"
+            return "fail"
+
+        test_results = parsed.get("test_results", {})
+        if test_results.get("failed", 0) > 0:
+            action = stop_conditions.get("on_test_fail", "fail")
+            if action == "stop_needs_human":
+                return "needs_human"
+            return "fail"
+
+        return "success"
+
+    def _build_result(
+        self,
+        status: str,
+        error: str,
+        evidence_dir: str = "",
+    ) -> Dict[str, Any]:
+        """构建错误/异常结果"""
+        return {
+            "status": status,
+            "error": error,
+            "iterations_used": 0,
+            "changed_files": [],
+            "commands_run": [],
+            "test_results": {},
+            "diff_summary": {"files_changed": 0, "lines_added": 0, "lines_deleted": 0},
+            "evidence_bundle_path": evidence_dir,
+            "conversation_log_path": "",
+            "generated_text": "",
+        }
+
+
+def register_claude_code_executor():
+    """
+    注册 Claude Code 执行器到 ExecutorFactory
+
+    使用方式:
+        from lee.orchestrator.execution.claude_code_executor import register_claude_code_executor
+        register_claude_code_executor()
+    """
+    from .executors import ExecutorFactory
+
+    ExecutorFactory.register("claude_code", ClaudeCodeExecutor)

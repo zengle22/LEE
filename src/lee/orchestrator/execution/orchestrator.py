@@ -51,6 +51,7 @@ from lee.orchestrator.verifier_engine import VerifierEngine
 from lee.orchestrator.core.contract_discovery import ContractDiscovery
 from lee.orchestrator.core.token_manager import TokenManager, ToolGuard
 from lee.orchestrator.execution.gate_engine import GateEngine
+from lee.orchestrator.storage.event_log import EventLog
 
 # Mixin 模块
 from lee.orchestrator.execution.step_runners import StepRunnerMixin
@@ -133,6 +134,9 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         self.tool_guard = ToolGuard(self.token_manager)
         self.gate_engine = GateEngine()
 
+        # v3.2: EventLog 事件日志
+        self.event_log = EventLog(project_root or ".", run_id=None)
+
     # ============ 工作流管理 ============
 
     async def create_workflow(
@@ -189,6 +193,10 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
 
         # 写入数据库
         await self.store.create_workflow(instance)
+
+        # v3.2: 记录工作流创建事件
+        self.event_log.run_id = data.get("run_id", workflow_id)
+        self.event_log.log_run_created(workflow_id, template_id)
 
         # 如果是 L1/L2，自动创建子工作流
         if level == WorkflowLevel.PROJECT and template.departments:
@@ -367,6 +375,13 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         # 开始步骤
         await self.state_machine.start_step(workflow_id, step_to_execute.id)
 
+        # v3.2: 记录步骤开始事件
+        self.event_log.run_id = instance.data.get("run_id", workflow_id)
+        self.event_log.log_step_started(
+            step_id=step_to_execute.id,
+            agent_id=getattr(step_to_execute, 'agent_id', None) or step_to_execute.kind,
+        )
+
         # 根据 step.kind 分支处理（v1.4）
         # v1.5: 新增 orchestrator_cli 和 compliance_gate 类型
         try:
@@ -387,6 +402,9 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
                 return await self._run_compliance_gate_step(workflow_id, step_to_execute)
 
             elif step_to_execute.kind == "agent":
+                # v3.3: Claude Code executor — 多轮闭环执行
+                if step_to_execute.executor_type == "claude_code":
+                    return await self._run_claude_code_step(workflow_id, step_to_execute)
                 # Agent 步骤：调用 LLM Executor
                 return await self._run_agent_step(workflow_id, step_to_execute)
 
@@ -415,6 +433,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         except Exception as e:
             # 步骤失败
             await self.state_machine.fail_step(workflow_id, step_to_execute.id, str(e))
+            # v3.2: 记录步骤失败事件
+            self.event_log.log_step_failed(
+                step_id=step_to_execute.id,
+                agent_id=getattr(step_to_execute, 'agent_id', None) or step_to_execute.kind,
+                error=str(e),
+            )
             return StepResult(
                 status="failed",
                 step_id=step_to_execute.id,
@@ -439,6 +463,16 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         """
         start_time = datetime.now()
         total_steps = 0
+
+        # v3.2: 记录 RUN_STARTED
+        run_instance = await self.store.get_workflow(workflow_id)
+        if run_instance:
+            self.event_log.run_id = run_instance.data.get("run_id", workflow_id)
+        from lee.orchestrator.storage.event_log import EventType
+        self.event_log.log(
+            event_type=EventType.RUN_STARTED,
+            data={"workflow_id": workflow_id, "max_steps": max_steps},
+        )
         completed_steps = 0
         blocked_at = None
         final_status = "completed"
@@ -476,6 +510,21 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
             final_status = "completed"
         elif instance.status == WorkflowStatus.FAILED:
             final_status = "failed"
+
+        # v3.2: 记录 RUN 完成/失败事件
+        run_event_type = EventType.RUN_COMPLETED if final_status == "completed" else (
+            EventType.RUN_FAILED if final_status == "failed" else EventType.RUN_PAUSED
+        )
+        self.event_log.log(
+            event_type=run_event_type,
+            data={
+                "workflow_id": workflow_id,
+                "total_steps": total_steps,
+                "completed_steps": completed_steps,
+                "blocked_at": blocked_at,
+                "duration_seconds": duration,
+            },
+        )
 
         return ExecutionSummary(
             workflow_id=workflow_id,

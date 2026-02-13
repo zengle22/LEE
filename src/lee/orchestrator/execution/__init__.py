@@ -8,6 +8,7 @@ from lee.orchestrator.execution.template_manager import TemplateManager
 from lee.orchestrator.execution.gate_api import GateAPI
 from lee.orchestrator.execution.executors import ExecutorFactory, BaseExecutor
 from lee.orchestrator.execution.langgraph_executor import LangGraphExecutor, register_langgraph_executor
+from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor, register_claude_code_executor
 
 # Agent 系统（从 v1 迁移）
 from lee.orchestrator.execution.agent_loader import AgentLoader, AgentSpec
@@ -39,6 +40,8 @@ __all__ = [
     "BaseExecutor",
     "LangGraphExecutor",
     "register_langgraph_executor",
+    "ClaudeCodeExecutor",
+    "register_claude_code_executor",
     # Agent 系统
     "AgentLoader",
     "AgentSpec",
@@ -72,5 +75,6 @@ __all__ = [
     "prepare_step_retry",
 ]
 
-# 自动注册 LangGraph 执行器
+# 自动注册执行器
 register_langgraph_executor()
+register_claude_code_executor()
