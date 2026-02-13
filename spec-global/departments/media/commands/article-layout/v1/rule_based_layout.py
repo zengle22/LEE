@@ -18,13 +18,14 @@ class RuleBasedLayoutProcessor:
         self.lines: List[str] = []
         self.result: List[str] = []
         self.line_index = 0
+        self.code_block_placeholders: dict = {}  # 存储代码块的占位符映射
 
     def process(self, markdown_content: str) -> str:
         """
         处理 Markdown 内容，返回格式化的 HTML
         """
-        # 首先处理代码块，避免被其他规则干扰
-        markdown_content = self._process_code_blocks(markdown_content)
+        # 首先处理代码块，用占位符替换，避免被其他规则干扰
+        markdown_content = self._extract_code_blocks(markdown_content)
 
         self.lines = markdown_content.split('\n')
         self.result = []
@@ -37,23 +38,41 @@ class RuleBasedLayoutProcessor:
                 self.result.append(processed)
             self.line_index += skip if skip else 1
 
-        return '\n'.join(self.result)
+        # 还原代码块
+        result = '\n'.join(self.result)
+        result = self._restore_code_blocks(result)
 
-    def _process_code_blocks(self, content: str) -> str:
+        return result
+
+    def _extract_code_blocks(self, content: str) -> str:
         """
-        预处理代码块，转换为 HTML 格式并添加语言标识符
+        提取代码块并用占位符替换，避免被其他规则干扰
         """
-        # 匹配 ```language...``` 格式的代码块
+        self.code_block_placeholders = {}
+
         def replace_code_block(match):
             language = match.group(1) or 'text'
             code_content = match.group(2)
             # 转义 HTML 特殊字符
             code_content = code_content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            return f'<pre><code class="language-{language}">{code_content}</code></pre>'
+            html_block = f'<pre><code class="language-{language}">{code_content}</code></pre>'
+
+            # 生成唯一占位符
+            placeholder = f'__CODE_BLOCK_{len(self.code_block_placeholders)}__'
+            self.code_block_placeholders[placeholder] = html_block
+            return placeholder
 
         # 使用正则匹配代码块
         pattern = r'```(\w*)\n(.*?)```'
         return re.sub(pattern, replace_code_block, content, flags=re.DOTALL)
+
+    def _restore_code_blocks(self, content: str) -> str:
+        """
+        还原代码块占位符
+        """
+        for placeholder, html_block in self.code_block_placeholders.items():
+            content = content.replace(placeholder, html_block)
+        return content
 
     def _process_line(self, line: str, index: int) -> tuple:
         """
@@ -67,6 +86,10 @@ class RuleBasedLayoutProcessor:
         # 空行
         if not stripped:
             return '', 1
+
+        # 代码块占位符 - 直接返回，不包裹 <p>
+        if stripped.startswith('__CODE_BLOCK_') and stripped.endswith('__'):
+            return stripped, 1
 
         # 分隔线
         if stripped in ('---', '***'):
@@ -89,26 +112,32 @@ class RuleBasedLayoutProcessor:
 
         # 引用块
         if stripped.startswith('>'):
-            return self._process_blockquote(index), 0
+            result, lines_consumed = self._process_blockquote(index)
+            return result, lines_consumed
 
         # 检查是否为重点标题 + 列表组合
-        list_block = self._process_list_block(index)
+        list_block, lines_consumed = self._process_list_block(index)
         if list_block:
-            return list_block, 0
+            return list_block, lines_consumed
+
+        # 检查是否为编号列表（使用 ul/li 格式）
+        numbered_list, lines_consumed = self._process_numbered_list(index)
+        if numbered_list:
+            return numbered_list, lines_consumed
+
+        # 检查是否为简单 - 列表
+        simple_list, lines_consumed = self._process_simple_list(index)
+        if simple_list:
+            return simple_list, lines_consumed
 
         # 检查是否为重点标题（独立）
         if self._is_highlight_title(stripped):
             return f'<p style="color:#cf1322;font-weight:bold;font-size:16px;margin:16px 0;">{stripped}</p>', 1
 
-        # 检查是否为编号列表（使用 ul/li 格式）
-        numbered_list = self._process_numbered_list(index)
-        if numbered_list:
-            return numbered_list, 0
-
         # 普通段落
         return f'<p>{self._process_inline_formatting(stripped)}</p>', 1
 
-    def _process_list_block(self, start_index: int) -> Optional[str]:
+    def _process_list_block(self, start_index: int) -> tuple:
         """
         处理重点标题 + 列表组合（如"核心特点"后面的列表）
 
@@ -118,14 +147,16 @@ class RuleBasedLayoutProcessor:
         ● <span class="text">内容1</span><br>
         ● <span class="text">内容2</span>
         </blockquote>
+
+        Returns:
+            (处理后的内容, 消耗的行数) 或 (None, 0)
         """
-        lines = []
         i = start_index
 
         # 检查第一行是否为重点标题
         first_line = self.lines[i].strip()
         if not self._is_highlight_title(first_line):
-            return None
+            return None, 0
 
         # 收集标题和后续列表项
         title = first_line
@@ -145,7 +176,7 @@ class RuleBasedLayoutProcessor:
 
         # 如果没有列表项，返回 None
         if not list_items:
-            return None
+            return None, 0
 
         # 构建引用块
         result_lines = [f'<blockquote class="highlight">']
@@ -158,10 +189,8 @@ class RuleBasedLayoutProcessor:
 
         result_lines.append('</blockquote>')
 
-        # 更新跳过的行数
-        # 注意：这里需要在调用方处理
-
-        return '\n'.join(result_lines)
+        # 返回内容和消耗的行数 (1 标题 + len(list_items) 列表项)
+        return '\n'.join(result_lines), 1 + len(list_items)
 
     def _is_list_item(self, text: str) -> bool:
         """检查是否为列表项"""
@@ -200,42 +229,95 @@ class RuleBasedLayoutProcessor:
 
         return text
 
-    def _process_numbered_list(self, start_index: int) -> Optional[str]:
+    def _process_numbered_list(self, start_index: int) -> tuple:
         """
-        处理编号列表（使用 ul/li 格式）
+        处理编号列表（使用 ol/li 格式）
 
         格式：
-        <ul>
-        <li><strong>定期拉取平台上的新内容</strong></li>
-        <li><strong>把帖子和评论作为上下文</strong></li>
-        </ul>
+        <ol>
+        <li>内容1</li>
+        <li>内容2</li>
+        </ol>
+
+        Returns:
+            (处理后的内容, 消耗的行数) 或 (None, 0)
         """
         lines = []
         i = start_index
+        lines_consumed = 0
 
-        # 收集连续的编号列表项
+        # 收集连续的编号列表项（允许中间有空行）
         while i < len(self.lines):
             line = self.lines[i].strip()
+            # 跳过空行（列表项之间的空行）
             if not line:
-                break
+                if lines:
+                    i += 1
+                    lines_consumed += 1
+                    continue
+                else:
+                    break
             # 检查是否为编号列表项
             match = re.match(r'^(\d+)[.、]\s*(.+)$', line)
             if match:
                 num, content = match.groups()
-                lines.append(f'<li><strong>{self._process_inline_formatting(content)}</strong></li>')
+                lines.append(f'<li>{self._process_inline_formatting(content)}</li>')
                 i += 1
+                lines_consumed += 1
             else:
                 break
 
         if not lines:
-            return None
+            return None, 0
+
+        result = '<ol>\n' + '\n'.join(lines) + '\n</ol>'
+
+        return result, lines_consumed
+
+    def _process_simple_list(self, start_index: int) -> tuple:
+        """
+        处理简单的 - 列表
+
+        格式：
+        <ul>
+        <li>内容1</li>
+        <li>内容2</li>
+        </ul>
+
+        Returns:
+            (处理后的内容, 消耗的行数) 或 (None, 0)
+        """
+        lines = []
+        i = start_index
+        lines_consumed = 0
+
+        # 收集连续的 - 列表项（允许中间有空行）
+        while i < len(self.lines):
+            line = self.lines[i].strip()
+            # 跳过空行（列表项之间的空行）
+            if not line:
+                # 如果已经收集了列表项，继续查找下一个列表项
+                if lines:
+                    i += 1
+                    lines_consumed += 1
+                    continue
+                else:
+                    break
+            # 检查是否为 - 列表项（以 - 开头，后面跟空格）
+            if re.match(r'^-\s+.+$', line):
+                content = line[1:].strip()
+                lines.append(f'<li>{self._process_inline_formatting(content)}</li>')
+                i += 1
+                lines_consumed += 1
+            else:
+                break
+
+        if not lines:
+            return None, 0
 
         result = '<ul>\n' + '\n'.join(lines) + '\n</ul>'
 
-        # 更新跳过的行数
-        # 注意：这里需要在调用方处理
-
-        return result
+        return result, lines_consumed
 
     def _is_highlight_title(self, text: str) -> bool:
         """检查是否为重点标题"""
@@ -261,8 +343,13 @@ class RuleBasedLayoutProcessor:
         text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
         return text
 
-    def _process_blockquote(self, start_index: int) -> str:
-        """处理引用块（可能是多行）"""
+    def _process_blockquote(self, start_index: int) -> tuple:
+        """
+        处理引用块（可能是多行）
+
+        Returns:
+            (处理后的内容, 消耗的行数)
+        """
         # 收集所有连续的引用行
         lines = []
         i = start_index
@@ -287,9 +374,9 @@ class RuleBasedLayoutProcessor:
         content = '<br>'.join(lines)
 
         if is_highlight:
-            return f'<blockquote class="highlight">{content}</blockquote>'
+            return f'<blockquote class="highlight">{content}</blockquote>', len(lines)
         else:
-            return f'<blockquote>{content}</blockquote>'
+            return f'<blockquote>{content}</blockquote>', len(lines)
 
 
 def apply_rule_based_layout(markdown_content: str) -> str:

@@ -191,7 +191,17 @@ class ArticleLayoutCommand:
         """
         使用 DeepSeek LLM 生成带强调效果的排版
         """
+        # 设置更长的超时时间（5分钟）
+        import os
+        os.environ["LLM_TIMEOUT_SECONDS"] = "300"
+
         system_prompt = """你是一个专业的文章排版专家。你的任务是将 Markdown 文章转换为符合微信公众号安全红色主题的格式化 HTML。
+
+【核心原则 - 最高优先级】
+⚠️ **绝对禁止删除、省略、总结、压缩或改写原文的任何内容！**
+⚠️ **必须逐字逐句完整转换每一行文字！**
+⚠️ **原文有多少行，输出就必须有多少行对应的内容！**
+⚠️ **即使是开头的前言、引入部分，也必须完整保留！**
 
 **排版规则（严格遵循）**：
 
@@ -212,9 +222,9 @@ class ArticleLayoutCommand:
    - **重要**：只有明确的引用内容（如引用某人的话、重要结论）才放入引用块，普通陈述句不要放入引用块
 
 4. **列表样式**：
-   - 编号列表：使用 `<ul><li>项目</li></ul>` 格式
-   - 圆点列表：使用 `<p>● <span class="text">内容</span></p>` 格式
-   - 中文数字列表（如"第一、"）：使用 `<p>第一，<span class="text">内容</span></p>` 格式
+   - 无序列表（- 开头）：使用 `<ul><li>项目</li></ul>` 格式
+   - 有序列表（1. 2. 开头）：使用 `<ol><li>项目</li></ol>` 格式
+   - 多个连续的列表项必须放在同一个 `<ul>` 或 `<ol>` 中
 
 5. **重点标题 + 列表组合**（如"核心特点"后面跟列表）：
    ```
@@ -238,7 +248,7 @@ class ArticleLayoutCommand:
          print("world")
      </code></pre>
      ```
-   - 代码内容需要转义 HTML 特殊字符（<, >, &）
+   - 代码内容需要转义 HTML 特殊字符（< 变成 &lt;, > 变成 &gt;, & 变成 &amp;）
    - 如果原 Markdown 代码块没有语言标识，使用 `language-text`
 
 8. **行内强调**：
@@ -259,51 +269,38 @@ class ArticleLayoutCommand:
 - 代码块必须保留，并添加正确的 language-xxx 类名
 - 输出纯 HTML 格式"""
 
-        user_prompt = f"""请将以下文章按照公众号安全红色主题进行排版（严格按照昨天的格式）：
+        user_prompt = f"""请将以下文章按照公众号安全红色主题进行排版：
 
 ```markdown
 {article_content}
 ```
 
-**严格格式要求**：
+🔴🔴🔴 **最高优先级规则** 🔴🔴🔴
 
-1. **重点标题 + 列表组合**（如"核心特点"后面跟列表）：
+**你必须完整保留原文的每一句话！原文的每一行都必须在输出中找到对应！**
+**禁止删除开头的任何内容（前言、引入、背景等）！**
+**禁止合并、总结或压缩任何段落！**
+
+**格式要求**：
+
+1. **列表处理**：
+   - `- ` 开头的列表：使用 `<ul><li>内容</li></ul>`，多个连续项放同一个 `<ul>` 中
+   - `1. ` `2. ` 开头的列表：使用 `<ol><li>内容</li></ol>`，多个连续项放同一个 `<ol>` 中
+
+2. **重点标题 + 列表组合**（如"核心特点"后面跟列表）：
    - 必须将标题和列表全部包裹在同一个 `<blockquote class="highlight">` 中
-   - 格式：
-     ```
-     <blockquote class="highlight">
-     <strong style="color:#cf1322;">核心特点</strong><br>
-     ● <span class="text">内容1</span><br>
-     ● <span class="text">内容2</span>
-     </blockquote>
-     ```
-
-2. **中文数字列表**（如"第一，...第二，..."）：
-   - 使用 `<ul><li>第一，...</li><li>第二，...</li></ul>` 格式
-   - 不要添加额外内容
 
 3. **引用块**：
-   - 只有明确的引用内容才放入引用块（如引用某人的话、重要结论）
-   - 普通陈述句使用 `<p>` 标签，不要放入引用块
+   - 只有 `>` 开头的内容才放入 `<blockquote>`
+   - 普通陈述句使用 `<p>` 标签
 
-4. **分隔线**：在每个 H2 标题后添加 `<hr>`
+4. **代码块**：
+   - 使用 `<pre><code class="language-xxx">` 格式
+   - 必须转义 HTML 特殊字符（< 变成 &lt;, > 变成 &gt;）
 
-5. **代码块处理**（重要）：
-   - 保留 Markdown 中的代码块格式
-   - 使用 `<pre><code class="language-xxx">` 格式，其中 xxx 是语言标识
-   - 支持的语言：python, javascript, yaml, bash, json, typescript, java, go, rust
-   - 如果代码块没有指定语言，使用 `class="language-text"`
-   - 例如：
-     ```
-     <pre><code class="language-python">
-     def hello():
-         print("world")
-     </code></pre>
-     ```
+5. **分隔线**：在每个 H1 标题后添加 `<hr>`
 
-6. **保持原文内容完整**：不要添加或删除任何内容
-
-7. **输出纯 HTML 格式**
+**输出纯 HTML 格式，不要包裹在代码块中**
 """
 
         result = await self.llm_executor.execute({
@@ -540,6 +537,9 @@ class ArticleLayoutCommand:
         ul {{
             padding-left: 20px;
         }}
+        ol {{
+            padding-left: 24px;
+        }}
         li {{
             margin: 4px 0;
         }}
@@ -667,19 +667,57 @@ class ArticleLayoutCommand:
         const code = pre.querySelector('code');
         const text = code.textContent;
 
-        navigator.clipboard.writeText(text).then(function() {{
-            button.textContent = '已复制';
-            button.classList.add('copied');
-            setTimeout(function() {{
-                button.textContent = '复制代码';
-                button.classList.remove('copied');
-            }}, 2000);
-        }}).catch(function() {{
+        // 尝试使用现代 Clipboard API
+        if (navigator.clipboard && window.isSecureContext) {{
+            navigator.clipboard.writeText(text).then(function() {{
+                showCopySuccess(button);
+            }}).catch(function() {{
+                fallbackCopy(text, button);
+            }});
+        }} else {{
+            // 非安全上下文，使用备用方案
+            fallbackCopy(text, button);
+        }}
+    }}
+
+    function fallbackCopy(text, button) {{
+        // 创建临时 textarea 元素
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+
+        try {{
+            const successful = document.execCommand('copy');
+            if (successful) {{
+                showCopySuccess(button);
+            }} else {{
+                button.textContent = '复制失败';
+                setTimeout(function() {{
+                    button.textContent = '复制代码';
+                }}, 2000);
+            }}
+        }} catch (err) {{
             button.textContent = '复制失败';
             setTimeout(function() {{
                 button.textContent = '复制代码';
             }}, 2000);
-        }});
+        }}
+
+        document.body.removeChild(textarea);
+    }}
+
+    function showCopySuccess(button) {{
+        button.textContent = '已复制';
+        button.classList.add('copied');
+        setTimeout(function() {{
+            button.textContent = '复制代码';
+            button.classList.remove('copied');
+        }}, 2000);
     }}
 </script>
 </body>
