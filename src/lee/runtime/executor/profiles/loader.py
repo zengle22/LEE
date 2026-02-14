@@ -111,8 +111,12 @@ def _load_config_profiles() -> Dict[str, Dict[str, Any]]:
                     if isinstance(profile_config, dict) and profile_config.get("type") == "llm":
                         # 转换配置格式
                         provider = profile_config.get("provider", "custom")
-                        # custom provider 使用 openai client
-                        if provider == "custom":
+                        # 所有使用 OpenAI 兼容 API 的 provider 统一为 openai
+                        openai_compatible = {
+                            "custom", "zhipu", "ollama", "deepseek",
+                            "huawei_deepseek", "minimax", "azure",
+                        }
+                        if provider in openai_compatible:
                             provider = "openai"
 
                         _CONFIG_PROFILES[name] = {

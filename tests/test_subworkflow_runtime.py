@@ -55,91 +55,100 @@ def test_subworkflow_spawn_backfills_parent_output() -> None:
 
 
 async def _run_subworkflow_spawn_backfill_case() -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        db_path = os.path.join(temp_dir, "orchestrator.db")
-        store = SQLiteStore(db_path)
-        await store.connect()
+    # Enable demo mode so skill steps in the child workflow return mock success
+    old_demo = os.environ.get("LEE_DEMO_MODE")
+    os.environ["LEE_DEMO_MODE"] = "1"
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = os.path.join(temp_dir, "orchestrator.db")
+            store = SQLiteStore(db_path)
+            await store.connect()
 
-        tm = TemplateManager()
-        tm._cache["workflow.child"] = tm._parse_template_doc(
-            {
-                "id": "workflow.child",
-                "level": "task",
-                "name": "Child Workflow",
-                "steps": [
-                    {
-                        "id": "child_impl",
-                        "kind": "skill",
-                        "outputs": [{"path": "output/child-result.json"}],
-                    }
-                ],
-            },
-            "workflow.child",
-        )
-        tm._cache["workflow.parent"] = tm._parse_template_doc(
-            {
-                "id": "workflow.parent",
-                "level": "task",
-                "name": "Parent Workflow",
-                "steps": [
-                    {
-                        "id": "spawn_child",
-                        "kind": "workflow_spawn",
-                        "workflow": "workflow.child",
-                        "input_map": {
-                            "source_spec": "$inputs.spec",
-                            "source_branch": "$inputs.branch",
-                            "literal_tag": "feature-l2",
-                        },
-                        "output_map": {
-                            "child_id": "$child.child_workflow_id",
-                            "child_status": "$child.child_status",
-                            "child_run_id": "$child.child_run_id",
-                            "child_completed_steps": "$child.completed_steps",
-                        },
-                    }
-                ],
-            },
-            "workflow.parent",
-        )
+            tm = TemplateManager()
+            tm._cache["workflow.child"] = tm._parse_template_doc(
+                {
+                    "id": "workflow.child",
+                    "level": "task",
+                    "name": "Child Workflow",
+                    "steps": [
+                        {
+                            "id": "child_impl",
+                            "kind": "skill",
+                            "outputs": [{"path": "output/child-result.json"}],
+                        }
+                    ],
+                },
+                "workflow.child",
+            )
+            tm._cache["workflow.parent"] = tm._parse_template_doc(
+                {
+                    "id": "workflow.parent",
+                    "level": "task",
+                    "name": "Parent Workflow",
+                    "steps": [
+                        {
+                            "id": "spawn_child",
+                            "kind": "workflow_spawn",
+                            "workflow": "workflow.child",
+                            "input_map": {
+                                "source_spec": "$inputs.spec",
+                                "source_branch": "$inputs.branch",
+                                "literal_tag": "feature-l2",
+                            },
+                            "output_map": {
+                                "child_id": "$child.child_workflow_id",
+                                "child_status": "$child.child_status",
+                                "child_run_id": "$child.child_run_id",
+                                "child_completed_steps": "$child.completed_steps",
+                            },
+                        }
+                    ],
+                },
+                "workflow.parent",
+            )
 
-        orchestrator = Orchestrator(store, tm, project_root=temp_dir)
+            orchestrator = Orchestrator(store, tm, project_root=temp_dir)
 
-        parent = await orchestrator.create_workflow(
-            level=WorkflowLevel.TASK,
-            template_id="workflow.parent",
-            data={"params": {"spec": "feature.yaml", "branch": "main"}},
-        )
+            parent = await orchestrator.create_workflow(
+                level=WorkflowLevel.TASK,
+                template_id="workflow.parent",
+                data={"params": {"spec": "feature.yaml", "branch": "main"}},
+            )
 
-        result = await orchestrator.run_step(parent.id)
-        assert result.status == "success"
+            result = await orchestrator.run_step(parent.id)
+            assert result.status == "success"
 
-        parent_state = await orchestrator.get_state(parent.id)
-        assert parent_state.status == WorkflowStatus.COMPLETED
+            parent_state = await orchestrator.get_state(parent.id)
+            assert parent_state.status == WorkflowStatus.COMPLETED
 
-        subworkflow_outputs = parent_state.data.get("subworkflow_outputs", {})
-        assert "spawn_child" in subworkflow_outputs
+            subworkflow_outputs = parent_state.data.get("subworkflow_outputs", {})
+            assert "spawn_child" in subworkflow_outputs
 
-        backfill = subworkflow_outputs["spawn_child"]
-        assert backfill["child_template_id"] == "workflow.child"
-        assert backfill["child_status"] == "completed"
-        assert backfill["evidence_refs"]
+            backfill = subworkflow_outputs["spawn_child"]
+            assert backfill["child_template_id"] == "workflow.child"
+            assert backfill["child_status"] == "completed"
+            assert backfill["evidence_refs"]
 
-        child_ids = parent_state.data.get("subworkflow_children", {})
-        child_workflow_id = child_ids.get("spawn_child")
-        assert child_workflow_id
-        child = await store.get_workflow(child_workflow_id)
-        assert child is not None
-        assert child.data.get("params", {}).get("source_spec") == "feature.yaml"
-        assert child.data.get("params", {}).get("source_branch") == "main"
-        assert child.data.get("params", {}).get("literal_tag") == "feature-l2"
+            child_ids = parent_state.data.get("subworkflow_children", {})
+            child_workflow_id = child_ids.get("spawn_child")
+            assert child_workflow_id
+            child = await store.get_workflow(child_workflow_id)
+            assert child is not None
+            assert child.data.get("params", {}).get("source_spec") == "feature.yaml"
+            assert child.data.get("params", {}).get("source_branch") == "main"
+            assert child.data.get("params", {}).get("literal_tag") == "feature-l2"
 
-        artifacts = parent_state.data.get("artifacts", {})
-        assert artifacts.get("child_id") == child_workflow_id
-        assert artifacts.get("child_status") == "completed"
-        assert isinstance(artifacts.get("child_completed_steps"), list)
+            artifacts = parent_state.data.get("artifacts", {})
+            assert artifacts.get("child_id") == child_workflow_id
+            assert artifacts.get("child_status") == "completed"
+            assert isinstance(artifacts.get("child_completed_steps"), list)
 
-        await store.close()
+            await store.close()
+    finally:
+        if old_demo is None:
+            os.environ.pop("LEE_DEMO_MODE", None)
+        else:
+            os.environ["LEE_DEMO_MODE"] = old_demo
 
 
 def test_human_gate_global_blocks_workflow() -> None:

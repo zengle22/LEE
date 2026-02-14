@@ -12,6 +12,7 @@ import asyncio
 import os
 import sys
 import tempfile
+import pytest
 from datetime import datetime
 
 # 设置项目路径
@@ -37,6 +38,7 @@ def print_section(title: str):
     print("=" * 60)
 
 
+@pytest.mark.asyncio
 async def test_workflow_crud():
     """测试工作流 CRUD 操作"""
     print_section("测试 1: 工作流 CRUD 操作")
@@ -147,6 +149,7 @@ async def test_workflow_crud():
                 pass  # Windows 临时文件可能被占用，忽略
 
 
+@pytest.mark.asyncio
 async def test_task_execution():
     """测试任务执行记录"""
     print_section("测试 2: 任务执行记录")
@@ -200,6 +203,7 @@ async def test_task_execution():
                 pass
 
 
+@pytest.mark.asyncio
 async def test_three_layer_hierarchy():
     """测试三层嵌套关系"""
     print_section("测试 3: 三层嵌套关系")

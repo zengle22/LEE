@@ -37,6 +37,9 @@ def test_event_bus():
 
     event_bus = EventBus()
 
+    # Clear any state from previous tests (EventBus is a singleton)
+    event_bus.clear()
+
     # 测试事件订阅和发布
     events_received = []
 
@@ -62,6 +65,10 @@ def test_event_bus():
     events = event_bus.get_events()
     assert len(events) == 1
     print("   ✅ EventBus 事件历史功能正常")
+
+    # Cleanup to avoid leaking into other tests
+    event_bus.unsubscribe(EventType.ROUND_COMPLETED, handler)
+    event_bus.clear()
 
 
 def test_project_config():

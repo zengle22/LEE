@@ -467,6 +467,11 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
             else:
                 result = await _dispatch_step()
 
+            # v3.5.1: 确保所有步骤类型完成后都检查工作流完成状态
+            # （之前只有 default executor 路径调用了 _check_workflow_completion）
+            if result.status == "success":
+                await self._check_workflow_completion(workflow_id)
+
             # v3.4: 完成追踪 Span
             self.trace_log.complete_span(
                 trace_span.span_id,

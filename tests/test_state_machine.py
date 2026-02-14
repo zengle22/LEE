@@ -13,6 +13,7 @@ import asyncio
 import sys
 import os
 import tempfile
+import pytest
 
 # 设置项目路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -44,6 +45,7 @@ def print_section(title: str):
     print("=" * 60)
 
 
+@pytest.mark.asyncio
 async def test_state_transitions():
     """测试状态转换规则"""
     print_section("测试 1: 状态转换规则")
@@ -83,6 +85,7 @@ async def test_state_transitions():
     print("\n✅ 所有状态转换测试通过!")
 
 
+@pytest.mark.asyncio
 async def test_workflow_state_machine():
     """测试工作流状态机"""
     print_section("测试 2: WorkflowStateMachine")
@@ -161,6 +164,7 @@ async def test_workflow_state_machine():
                 pass
 
 
+@pytest.mark.asyncio
 async def test_ready_steps_calculation():
     """测试计算可执行步骤"""
     print_section("测试 3: 计算可执行步骤")
@@ -228,6 +232,7 @@ async def test_ready_steps_calculation():
                 pass
 
 
+@pytest.mark.asyncio
 async def test_template_manager():
     """测试模板管理器"""
     print_section("测试 4: TemplateManager")
@@ -279,6 +284,7 @@ steps:
     print("\n✅ 所有模板管理器测试通过!")
 
 
+@pytest.mark.asyncio
 async def test_template_builder():
     """测试模板构建器"""
     print_section("测试 5: TemplateBuilder")

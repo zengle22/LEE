@@ -12,6 +12,7 @@ import asyncio
 import sys
 import os
 import tempfile
+import pytest
 
 # 设置项目路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,6 +36,7 @@ def print_section(title: str):
     print("=" * 60)
 
 
+@pytest.mark.asyncio
 async def test_cli_interface():
     """测试 CLI 接口"""
     print_section("测试 1: CLI 接口")
@@ -137,6 +139,7 @@ async def test_cli_interface():
                 pass
 
 
+@pytest.mark.asyncio
 async def test_gate_workflow_lifecycle():
     """测试完整的工作流生命周期（含 Gate）"""
     print_section("测试 2: Gate 工作流生命周期")
@@ -159,7 +162,7 @@ async def test_gate_workflow_lifecycle():
                     "steps": [
                         {
                             "id": "prepare",
-                            "kind": "agent",
+                            "kind": "skill",
                             "executor": "shell",
                         },
                         {
@@ -170,7 +173,7 @@ async def test_gate_workflow_lifecycle():
                         },
                         {
                             "id": "execute",
-                            "kind": "agent",
+                            "kind": "skill",
                             "executor": "shell",
                             "depends_on": ["approval"],
                         },
@@ -234,6 +237,7 @@ async def test_gate_workflow_lifecycle():
                 pass
 
 
+@pytest.mark.asyncio
 async def test_gate_rejection():
     """测试 Gate 拒绝流程"""
     print_section("测试 3: Gate 拒绝流程")
