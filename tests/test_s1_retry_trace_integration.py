@@ -429,7 +429,7 @@ class TestOrchestratorS1Init:
         assert isinstance(orch.trace_log, TraceLog)
 
     def test_step_runners_imports_retry(self):
-        """验证 step_runners 导入了 retry 模块"""
-        from lee.orchestrator.execution import step_runners
-        assert hasattr(step_runners, 'AsyncRetryExecutor')
-        assert hasattr(step_runners, 'DEFAULT_RETRY_POLICY')
+        """验证 runner 模块导入了 retry 模块（v3.5: retry 逻辑移至 runners/）"""
+        from lee.orchestrator.execution.runners import llm_runner
+        assert hasattr(llm_runner, 'AsyncRetryExecutor')
+        assert hasattr(llm_runner, 'DEFAULT_RETRY_POLICY')
