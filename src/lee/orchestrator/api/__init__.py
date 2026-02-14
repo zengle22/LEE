@@ -363,6 +363,52 @@ async def api_reject_gate(
     }
 
 
+async def api_pause_workflow(
+    project_dir: str,
+    workflow_id: str,
+) -> Dict[str, Any]:
+    """
+    暂停工作流
+
+    Args:
+        project_dir: 项目目录
+        workflow_id: 工作流 ID
+
+    Returns:
+        操作结果
+    """
+    orchestrator = await _get_orchestrator(project_dir)
+    await orchestrator.pause(workflow_id)
+    return {
+        "workflow_id": workflow_id,
+        "message": f"Workflow {workflow_id} paused",
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+async def api_resume_workflow(
+    project_dir: str,
+    workflow_id: str,
+) -> Dict[str, Any]:
+    """
+    恢复工作流
+
+    Args:
+        project_dir: 项目目录
+        workflow_id: 工作流 ID
+
+    Returns:
+        操作结果
+    """
+    orchestrator = await _get_orchestrator(project_dir)
+    await orchestrator.resume(workflow_id)
+    return {
+        "workflow_id": workflow_id,
+        "message": f"Workflow {workflow_id} resumed",
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
 # ========================================================================
 # pm_workflow_handler - 统一入口（供 MCP 工具调用）
 # ========================================================================
@@ -459,6 +505,16 @@ async def pm_workflow_handler(
                 reason,
             )
 
+        elif action == "pause":
+            if not workflow_id:
+                return {"error": "workflow_id is required for pause"}
+            return await api_pause_workflow(project_dir, workflow_id)
+
+        elif action == "resume":
+            if not workflow_id:
+                return {"error": "workflow_id is required for resume"}
+            return await api_resume_workflow(project_dir, workflow_id)
+
         else:
             return {"error": f"Unknown action: {action}"}
 
@@ -505,6 +561,8 @@ __all__ = [
     "api_run_until_blocked",
     "api_approve_gate",
     "api_reject_gate",
+    "api_pause_workflow",
+    "api_resume_workflow",
     "pm_workflow_handler",
     "pm_workflow",
 ]

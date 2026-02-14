@@ -19,7 +19,7 @@
 **核心原则**: 所有工作流执行**必须**通过 Orchestrator 驱动，禁止手动绕过。
 
 **强约束**:
-- ✅ **必须使用 Orchestrator**: 所有 Phase 执行必须通过 `python -m orchestrator` 命令驱动
+- ✅ **必须使用 Orchestrator**: 所有 Phase 执行必须通过 `lee` CLI 命令驱动
 - ✅ **必须获取 Token**: 执行步骤前必须从 Orchestrator 获取执行令牌
 - ✅ **必须完成验证**: 步骤输出必须通过 Orchestrator 验证
 - ✅ **必须通过门禁**: 人工门禁必须通过 Orchestrator 审批流程
@@ -38,30 +38,37 @@
 ❌ 跳过 orchestrator approve 直接通过门禁
 ```
 
-**唯一合法的状态变更方式**: 通过 `python -m orchestrator` CLI 命令
+**唯一合法的状态变更方式**: 通过 `lee` CLI 命令
 
 **Orchestrator 命令清单**:
 ```bash
 # 初始化
-python -m orchestrator init <project_dir> --workflow <workflow.yaml>
+lee init <project_dir>
 
 # 状态查看
-python -m orchestrator status <project_dir>
+lee status [workflow_id]
 
-# 执行下一步
-python -m orchestrator next <project_dir>
+# 运行工作流
+lee run <workflow_key>
 
-# 完成步骤
-python -m orchestrator complete <project_dir> <step_id> --outputs <files>
-
-# 验证输出
-python -m orchestrator validate <project_dir> <step_id>
+# 执行步骤
+lee workflow run-step <workflow_id> [--step <step_id>]
 
 # 审批门禁
-python -m orchestrator approve <project_dir> <gate_id> --approver <name>
+lee approve <workflow_id> <gate_id> --approver <name>
 
-# 重置步骤（失败后重试）
-python -m orchestrator reset <project_dir> <step_id> --reason <reason>
+# 拒绝门禁
+lee workflow reject <workflow_id> <gate_id> --rejecter <name> --reason <reason>
+
+# 暂停/恢复
+lee workflow pause <workflow_id>
+lee workflow resume <workflow_id>
+
+# 创建工作流
+lee workflow create --level <project|department|task> --template <id>
+
+# 列出工作流
+lee workflow list
 ```
 
 **自动执行原则 (Run-to-Gate)**:
@@ -141,8 +148,8 @@ action: continue | wait_for_approval | workflow_done
 该操作违反 AI 宪法 §-1.1，必须通过 Orchestrator 驱动。
 
 正确做法:
-1. 运行 python -m orchestrator status <project_dir> 查看当前状态
-2. 运行 python -m orchestrator next <project_dir> 执行下一步
+1. 运行 lee status 查看当前状态
+2. 运行 lee run <workflow_key> 运行工作流
 3. 按照 Orchestrator 提示完成操作
 ```
 
@@ -166,10 +173,10 @@ action: continue | wait_for_approval | workflow_done
 Agent 完成步骤
        │
        ▼
-orchestrator complete <step_id> --outputs <files>
+lee workflow run-step <workflow_id> --step <step_id>
        │
        ▼
-orchestrator validate <step_id>
+lee status <workflow_id>
        │
        ▼
 ┌──────────────────────────────────┐
@@ -225,7 +232,7 @@ Agent 完成步骤内容后，**最后的动作不是"写报告"**，而是：
 
 必须补齐所有必需输出后才能通过验证。
 Agent 应立即补齐缺失文件，然后重新运行:
-  python -m orchestrator validate <project_dir> <step_id>
+  lee status <workflow_id>
 ```
 
 **路径精确匹配规则**:

@@ -40,7 +40,6 @@ all = [
 
 [project.scripts]
 lee = "lee.cli.main:main"
-orchestrator = "lee.orchestrator.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

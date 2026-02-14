@@ -5,6 +5,7 @@ LEE CLI
 - lee run <dept>.<workflow>
 - lee status [workflow_id]
 - lee approve <workflow_id> <gate_id>
+- lee workflow create/list/pause/resume/run-step/reject
 - lee test-runner run-e2e ...
 - lee check-env qa-e2e ...
 - lee behavior-check verify ...
@@ -27,6 +28,7 @@ from lee.cli.commands.behavior_compliance_checker import behavior_compliance_che
 from lee.cli.commands.diagram_gen import diagram_gen
 from lee.cli.commands.diagram_insert import diagram_insert
 from lee.cli.commands.md_to_wechat import md_to_wechat
+from lee.cli.commands.orchestrator_cmds import wf
 
 
 @click.group()
@@ -47,6 +49,7 @@ cli.add_command(behavior_compliance_checker, "behavior-check")
 cli.add_command(diagram_gen, "diagram-gen")
 cli.add_command(diagram_insert, "diagram-insert")
 cli.add_command(md_to_wechat, "md-to-wechat")
+cli.add_command(wf, "workflow")
 
 
 def main():
