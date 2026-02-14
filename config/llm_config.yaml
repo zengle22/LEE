@@ -33,9 +33,9 @@ default:
 zhipu:
   type: llm
   provider: zhipu
-  base_url: ${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
-  api_key: ${ZHIPU_API_KEY:-06bc11ad44e3431d8f685bfe3405284e.KlPI5clCIbAb4aOa}
-  model: ${ZHIPU_MODEL:-glm-4-plus}
+  base_url: https://open.bigmodel.cn/api/paas/v4
+  api_key: 8e8961c167f840e3a30e4c4ec9032a57.AlFQ0x9UO7DQYlog
+  model: glm-4-plus
   temperature: 0.7
   max_tokens: 8000
   timeout: 90
@@ -72,26 +72,14 @@ antigravity:
 huawei_deepseek:
   type: llm
   provider: huawei_deepseek
-  base_url: ${HUWEI_DEEPSEEK_BASE_URL:-https://api.modelarts-maas.com/v2/chat/completions}
-  api_key: ${HUWEI_DEEPSEEK_API_KEY:-RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ}
-  model: ${HUWEI_DEEPSEEK_MODEL:-DeepSeek-R1}
-  temperature: 0.3
-  max_tokens: 8000
-  timeout: 90
+  base_url: https://api.modelarts-maas.com/v2/chat/completions
+  api_key: RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ
+  model: DeepSeek-R1
+  temperature: 0.1
+  max_tokens: 16000
+  timeout: 300
   description: "华为 ModelArts 部署的 DeepSeek-R1 模型（高优先级）"
 
-# 华为 DeepSeek (ModelArts 部署）
-# 优先级：高
-huawei_deepseek:
-  type: llm
-  provider: huawei_deepseek
-  base_url: ${HUWEI_DEEPSEEK_BASE_URL:-https://api.modelarts-maas.com/v2/chat/completions}
-  api_key: ${HUWEI_DEEPSEEK_API_KEY:-RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ}
-  model: ${HUWEI_DEEPSEEK_MODEL:-DeepSeek-R1}
-  temperature: 0.3
-  max_tokens: 8000
-  timeout: 90
-  description: "华为 ModelArts 部署的 DeepSeek-R1 模型（高优先级）"
 
 # MiniMax (Alibaba)
 # 优先级：高
@@ -111,12 +99,12 @@ minimax:
 deepseek:
   type: llm
   provider: deepseek
-  base_url: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-  api_key: ${DEEPSEEK_API_KEY}
-  model: ${DEEPSEEK_MODEL:-deepseek-coder-v2}
-  temperature: 0.3
-  max_tokens: 8000
-  timeout: 90
+  base_url: https://api.deepseek.com
+  api_key: sk-32763972ec7841aab1b45af0ca2c97d3
+  model: deepseek-chat
+  temperature: 0.1
+  max_tokens: 8192
+  timeout: 300
   description: "DeepSeek 官方 Coder 模型（高优先级）"
 
 # OpenAI (GPT-4, GPT-3.5)
