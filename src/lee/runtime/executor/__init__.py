@@ -1,6 +1,10 @@
 """
 LEE Executor - 基于 LangGraph 的执行层
 
+⚠️ EXPERIMENTAL — 此模块为实验性路径 (ADR-002)。
+生产工作流请使用 `lee.orchestrator.execution`。
+评估时间线: 2026 Q2，届时决定是否迁移或归档。
+
 提供统一的任务执行接口，支持多种任务类型。
 
 使用方式:
@@ -13,6 +17,14 @@ LEE Executor - 基于 LangGraph 的执行层
     )
     result = run_task(task)
 """
+
+import warnings
+warnings.warn(
+    "lee.runtime.executor is EXPERIMENTAL (see ADR-002). "
+    "For production workflows, use lee.orchestrator.execution.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from .types import (
     TaskStatus,
