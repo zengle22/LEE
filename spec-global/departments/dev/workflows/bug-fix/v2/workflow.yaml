@@ -5,7 +5,7 @@
 # 参见：rnd_l2_l3_spec.md
 
 kind: workflow
-version: "2.0"
+version: "2.1"
 
 # ============================================
 # Dev 部门宪法引用 (强制)
@@ -58,6 +58,7 @@ roles:
     - gate.dev.risk_human_gate              # 人类：高风险门禁
     - gate.dev.test_human_gate              # 人类：测试人类门禁
     - gate.dev.smoke_gate                   # 自动：冒烟门禁（v2 新增）
+    - gate.dev.bug_test_env_human_gate      # 人类：测试环境/外部因素门禁（v2.1 新增）
 
 # ============================================
 # 触发条件
@@ -374,11 +375,82 @@ stages:
             contract: ../../contracts/bug-fix-status-contract/v1/schema.json
           - path: "output/verification-result.yaml"
 
+      # v2.1 新增：运行 Bug 触发的完整测试用例
+      - id: s4_2b_run_bug_tests
+        name: "运行 Bug 触发测试"
+        description: >-
+          在本地开发环境运行 bug-contract 中记录的完整测试用例，
+          确保修复后所有相关测试通过。
+        run: agent.dev.unit_test_runner
+        execution:
+          model: prompt_switch
+          timeout: 30m
+
+        dependencies:
+          requires: [s4_2_verify_local]
+
+        inputs:
+          - bug_contract: "bugs/*.contract.yaml"
+          - fix_plan: "output/bug-fix-plan.yaml"
+          - code_changes: "output/fix-commit-summary.yaml"
+          - verification_result: "output/verification-result.yaml"
+
+        outputs:
+          - path: "output/bug-triggered-test-result.yaml"
+            contract: ../../contracts/unit-test-result-contract/v1/schema.json
+
+      # v2.1 新增：Bug 测试结果判定
+      - id: s4_2c_bug_test_decision
+        name: "Bug 测试结果判定"
+        type: decision
+        description: >-
+          判定 bug 触发测试的执行结果：
+          通过 → 继续验证流程；
+          失败 → 重试修复；
+          环境/外部因素 → 触发人类门禁。
+        dependencies:
+          requires: [s4_2b_run_bug_tests]
+        decision_logic: |
+          IF bug_test_result.status == "pass":
+            next_step = s4_3_verify_decision
+          ELIF bug_test_result.status IN ["env_failure", "external_blocked"]:
+            next_step = s4_2d_env_human_gate
+          ELIF fix_attempts < 10:
+            next_step = s4_1_fix_code
+          ELSE:
+            rollback_to = s3_fix_plan
+
+      # v2.1 新增：环境/外部因素人类门禁
+      - id: s4_2d_env_human_gate
+        name: "测试环境人类门禁"
+        kind: human_gate
+        description: >-
+          当 bug 触发的测试因环境无法搭建或外部因素（如第三方服务不可用、
+          硬件依赖等）无法执行时，触发人类门禁由人类介入处理。
+        condition: "bug_test_result.status IN ['env_failure', 'external_blocked']"
+        depends_on:
+          - s4_2c_bug_test_decision
+
+        gate_rules:
+          reviewers:
+            - role: tech_lead
+              description: "技术负责人"
+            - role: qa_lead
+              description: "测试负责人"
+          approval_criteria:
+            - label: "环境问题已确认"
+              criteria: "确认环境问题真实存在且非代码缺陷"
+              required: true
+            - label: "替代验证方案"
+              criteria: "已提供替代验证方式或人工验证结果"
+              required: true
+
       - id: s4_3_verify_decision
         name: "验证结果判定"
         type: decision
         dependencies:
-          requires: [s4_2_verify_local]
+          requires:
+            any_of: [s4_2c_bug_test_decision, s4_2d_env_human_gate]
         decision_logic: |
           IF verification.status == "pass":
             next_stage = s5_code_review
@@ -738,6 +810,14 @@ loop_control:
       action: "trigger_human_gate"
       human_gate: s3_4_risk_human_gate
 
+  # v2.1 新增：Bug 触发测试循环控制
+  bug_test_verification:
+    max_attempts: 10
+    on_exhausted:
+      action: "trigger_human_gate"
+      human_gate: s4_2d_env_human_gate
+      message: "Bug 触发测试多次未通过，触发人类门禁"
+
   unit_test:
     max_attempts: 5
     coverage_threshold: 80
@@ -844,10 +924,18 @@ gate_resources:
 metadata:
   created_by: "dev-workflow-architect"
   created_at: "2026-02-11"
-  version: "2.0"
-  last_updated: "2026-02-11"
+  version: "2.1"
+  last_updated: "2026-02-14"
 
   changelog:
+    - version: "2.1"
+      date: "2026-02-14"
+      changes:
+        - "Stage 4 验证环节新增 s4_2b_run_bug_tests：在本地运行 bug 触发的完整测试用例"
+        - "Stage 4 新增 s4_2c_bug_test_decision：测试结果判定（通过/失败重试/环境问题）"
+        - "Stage 4 新增 s4_2d_env_human_gate：环境/外部因素人类门禁"
+        - "loop_control 新增 bug_test_verification 循环控制"
+
     - version: "2.0"
       date: "2026-02-11"
       changes:
