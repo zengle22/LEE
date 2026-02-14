@@ -53,6 +53,7 @@ from lee.orchestrator.core.token_manager import TokenManager, ToolGuard
 from lee.orchestrator.execution.gate_engine import GateEngine
 from lee.orchestrator.storage.event_log import EventLog
 from lee.orchestrator.execution.trace import TraceLog, SpanType, Metrics
+from lee.orchestrator.execution.failure_handler import FailureHandler
 
 # Mixin 模块
 from lee.orchestrator.execution.step_runners import StepRunnerMixin
@@ -401,50 +402,61 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
 
         # 根据 step.kind 分支处理（v1.4）
         # v1.5: 新增 orchestrator_cli 和 compliance_gate 类型
+        # v3.5: on_failure 策略包裹
         try:
-            if step_to_execute.kind in ("workflow_spawn", "subworkflow"):
-                # 子工作流步骤：由 orchestrator 负责编排执行
-                result = await self._run_subworkflow_step(workflow_id, step_to_execute)
-
-            elif step_to_execute.kind == "human_gate":
-                # Human Gate：不调用 Executor，直接暂停等待人工审批
-                result = await self._handle_human_gate(workflow_id, step_to_execute)
-
-            elif step_to_execute.kind == "orchestrator_cli":
-                # Orchestrator CLI：直接由 Python 执行，AI 无法干预
-                result = await self._run_orchestrator_cli_step(workflow_id, step_to_execute)
-
-            elif step_to_execute.kind == "compliance_gate":
-                # 合规门禁：检查 AI 行为是否违规
-                result = await self._run_compliance_gate_step(workflow_id, step_to_execute)
-
-            elif step_to_execute.kind == "agent":
-                # v3.3: Claude Code executor — 多轮闭环执行
-                if step_to_execute.executor_type == "claude_code":
-                    result = await self._run_claude_code_step(workflow_id, step_to_execute)
+            # 构建步骤执行器
+            async def _dispatch_step() -> StepResult:
+                if step_to_execute.kind in ("workflow_spawn", "subworkflow"):
+                    return await self._run_subworkflow_step(workflow_id, step_to_execute)
+                elif step_to_execute.kind == "human_gate":
+                    return await self._handle_human_gate(workflow_id, step_to_execute)
+                elif step_to_execute.kind == "orchestrator_cli":
+                    return await self._run_orchestrator_cli_step(workflow_id, step_to_execute)
+                elif step_to_execute.kind == "compliance_gate":
+                    return await self._run_compliance_gate_step(workflow_id, step_to_execute)
+                elif step_to_execute.kind == "agent":
+                    if step_to_execute.executor_type == "claude_code":
+                        return await self._run_claude_code_step(workflow_id, step_to_execute)
+                    else:
+                        return await self._run_agent_step(workflow_id, step_to_execute)
+                elif step_to_execute.kind == "skill":
+                    return await self._run_skill_step(workflow_id, step_to_execute)
                 else:
-                    # Agent 步骤：调用 LLM Executor
-                    result = await self._run_agent_step(workflow_id, step_to_execute)
+                    executor = self.executor_factory.create(step_to_execute.executor_type or "llm")
+                    input_data = step_to_execute.input or {}
+                    output = await executor.execute(input_data)
+                    r = await self.state_machine.complete_step(workflow_id, step_to_execute.id, output)
+                    await self._check_workflow_completion(workflow_id)
+                    return r
 
-            elif step_to_execute.kind == "skill":
-                # Skill 步骤：调用对应 Executor（Shell/MCP 等）
-                result = await self._run_skill_step(workflow_id, step_to_execute)
+            # v3.5: 使用 on_failure 策略包裹执行
+            failure_handler = FailureHandler()
+            if failure_handler.has_policy(step_to_execute):
+                # 定义 human_review fallback 回调
+                async def _on_human_review(step_id: str, message: str) -> StepResult:
+                    from lee.orchestrator.storage.models import WorkflowStatus
+                    await self.store.update_workflow_status(workflow_id, WorkflowStatus.PAUSED)
+                    self.event_log.log_gate_triggered(
+                        gate_id=f"on_failure_{step_id}",
+                        step_id=step_id,
+                        gate_type="on_failure_human_review",
+                        blocking=True,
+                    )
+                    return StepResult(
+                        status="blocked",
+                        blocked_reason="on_failure_human_review",
+                        step_id=step_id,
+                        workflow_id=workflow_id,
+                        message=f"Step failed after retries, awaiting human review: {message}",
+                    )
 
-            else:
-                # 其他类型：保持原有逻辑
-                executor = self.executor_factory.create(step_to_execute.executor_type or "llm")
-                input_data = step_to_execute.input or {}
-                output = await executor.execute(input_data)
-
-                # 完成步骤
-                result = await self.state_machine.complete_step(
-                    workflow_id,
-                    step_to_execute.id,
-                    output
+                result = await failure_handler.execute_with_policy(
+                    step=step_to_execute,
+                    runner_fn=_dispatch_step,
+                    on_human_review=_on_human_review,
                 )
-
-                # 检查工作流是否完成
-                await self._check_workflow_completion(workflow_id)
+            else:
+                result = await _dispatch_step()
 
             # v3.4: 完成追踪 Span
             self.trace_log.complete_span(
