@@ -52,6 +52,7 @@ from lee.orchestrator.core.contract_discovery import ContractDiscovery
 from lee.orchestrator.core.token_manager import TokenManager, ToolGuard
 from lee.orchestrator.execution.gate_engine import GateEngine
 from lee.orchestrator.storage.event_log import EventLog
+from lee.orchestrator.execution.trace import TraceLog, SpanType, Metrics
 
 # Mixin 模块
 from lee.orchestrator.execution.step_runners import StepRunnerMixin
@@ -136,6 +137,9 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
 
         # v3.2: EventLog 事件日志
         self.event_log = EventLog(project_root or ".", run_id=None)
+
+        # v3.4: TraceLog 追踪日志
+        self.trace_log = TraceLog(project_root or ".")
 
     # ============ 工作流管理 ============
 
@@ -382,35 +386,49 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
             agent_id=getattr(step_to_execute, 'agent_id', None) or step_to_execute.kind,
         )
 
+        # v3.4: 开始追踪 Span
+        trace_span = self.trace_log.start_span(
+            span_type=SpanType.ORCHESTRATOR,
+            name=f"step.{step_to_execute.id}",
+            input_data={
+                "step_id": step_to_execute.id,
+                "step_kind": step_to_execute.kind,
+                "executor_type": getattr(step_to_execute, 'executor_type', None),
+                "agent_id": getattr(step_to_execute, 'agent_id', None),
+            },
+            tags=[f"kind:{step_to_execute.kind}"],
+        )
+
         # 根据 step.kind 分支处理（v1.4）
         # v1.5: 新增 orchestrator_cli 和 compliance_gate 类型
         try:
             if step_to_execute.kind in ("workflow_spawn", "subworkflow"):
                 # 子工作流步骤：由 orchestrator 负责编排执行
-                return await self._run_subworkflow_step(workflow_id, step_to_execute)
+                result = await self._run_subworkflow_step(workflow_id, step_to_execute)
 
             elif step_to_execute.kind == "human_gate":
                 # Human Gate：不调用 Executor，直接暂停等待人工审批
-                return await self._handle_human_gate(workflow_id, step_to_execute)
+                result = await self._handle_human_gate(workflow_id, step_to_execute)
 
             elif step_to_execute.kind == "orchestrator_cli":
                 # Orchestrator CLI：直接由 Python 执行，AI 无法干预
-                return await self._run_orchestrator_cli_step(workflow_id, step_to_execute)
+                result = await self._run_orchestrator_cli_step(workflow_id, step_to_execute)
 
             elif step_to_execute.kind == "compliance_gate":
                 # 合规门禁：检查 AI 行为是否违规
-                return await self._run_compliance_gate_step(workflow_id, step_to_execute)
+                result = await self._run_compliance_gate_step(workflow_id, step_to_execute)
 
             elif step_to_execute.kind == "agent":
                 # v3.3: Claude Code executor — 多轮闭环执行
                 if step_to_execute.executor_type == "claude_code":
-                    return await self._run_claude_code_step(workflow_id, step_to_execute)
-                # Agent 步骤：调用 LLM Executor
-                return await self._run_agent_step(workflow_id, step_to_execute)
+                    result = await self._run_claude_code_step(workflow_id, step_to_execute)
+                else:
+                    # Agent 步骤：调用 LLM Executor
+                    result = await self._run_agent_step(workflow_id, step_to_execute)
 
             elif step_to_execute.kind == "skill":
                 # Skill 步骤：调用对应 Executor（Shell/MCP 等）
-                return await self._run_skill_step(workflow_id, step_to_execute)
+                result = await self._run_skill_step(workflow_id, step_to_execute)
 
             else:
                 # 其他类型：保持原有逻辑
@@ -428,9 +446,25 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
                 # 检查工作流是否完成
                 await self._check_workflow_completion(workflow_id)
 
-                return result
+            # v3.4: 完成追踪 Span
+            self.trace_log.complete_span(
+                trace_span.span_id,
+                output_data={
+                    "status": getattr(result, 'status', 'unknown'),
+                    "message": getattr(result, 'message', ''),
+                },
+                tags=[f"result:{getattr(result, 'status', 'unknown')}"],
+            )
+
+            return result
 
         except Exception as e:
+            # v3.4: 失败追踪 Span
+            self.trace_log.fail_span(
+                trace_span.span_id,
+                error_code=type(e).__name__,
+                error_message=str(e),
+            )
             # 步骤失败
             await self.state_machine.fail_step(workflow_id, step_to_execute.id, str(e))
             # v3.2: 记录步骤失败事件

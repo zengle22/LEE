@@ -52,6 +52,7 @@ target-version = ['py38']
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+norecursedirs = [".DS_Store", ".git", ".workflow", "__pycache__", "node_modules", ".venv", "*.egg-info"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

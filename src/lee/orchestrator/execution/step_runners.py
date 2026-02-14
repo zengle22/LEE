@@ -24,6 +24,8 @@ from lee.orchestrator.storage.models import (
     TaskExecutionStatus,
     StepResult,
 )
+from lee.orchestrator.execution.retry import AsyncRetryExecutor, DEFAULT_RETRY_POLICY
+from lee.orchestrator.execution.validators import SchemaValidator, ValidationResult
 
 
 
@@ -168,7 +170,27 @@ class StepRunnerMixin:
         await self.store.create_task_execution(execution)
 
         try:
-            llm_output = await executor.execute(input_data)
+            # v3.4: AsyncRetryExecutor 包裹 LLM 调用
+            retry_executor = AsyncRetryExecutor(policy=DEFAULT_RETRY_POLICY)
+            retry_result = await retry_executor.execute(executor.execute, input_data)
+
+            if not retry_result.success:
+                error_msg = retry_result.final_error or "LLM call failed after retries"
+                await self.state_machine.fail_step(workflow_id, step.id, error_msg)
+                await self.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    error_message=f"Retry exhausted ({retry_result.total_attempts} attempts): {error_msg}",
+                    completed_at=datetime.now()
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=f"LLM execution failed after {retry_result.total_attempts} attempts: {error_msg}",
+                )
+
+            llm_output = retry_result.result
 
             # 检查 LLM 调用是否成功
             if llm_output.get("status") == "failed":
@@ -232,6 +254,22 @@ class StepRunnerMixin:
                     message="Verifier failed",
                     output={"verifiers": [r.__dict__ for r in verifier_results]},
                 )
+
+            # v3.4: 输出 Contract Schema 校验
+            validation_result = self._validate_step_output(step, generated_text)
+            if validation_result and not validation_result.passed:
+                strict = (step.config or {}).get("strict_output_validation", False)
+                if strict:
+                    error_msg = f"Output schema validation failed: {validation_result.errors[0].message if validation_result.errors else 'unknown'}"
+                    await self.state_machine.fail_step(workflow_id, step.id, error_msg)
+                    return StepResult(
+                        status="failed",
+                        step_id=step.id,
+                        workflow_id=workflow_id,
+                        message=error_msg,
+                    )
+                else:
+                    print(f"[OutputValidation] Warning: Step {step.id} output schema validation failed (soft mode)")
 
             # 5. 完成步骤
             output_data = {
@@ -670,9 +708,28 @@ class StepRunnerMixin:
         await self.store.create_task_execution(execution)
 
         try:
-            # 5. 执行
+            # 5. v3.4: AsyncRetryExecutor 包裹 Claude Code 调用
             executor = self.executor_factory.create("claude_code")
-            output = await executor.execute(input_data)
+            retry_executor = AsyncRetryExecutor(policy=DEFAULT_RETRY_POLICY)
+            retry_result = await retry_executor.execute(executor.execute, input_data)
+
+            if not retry_result.success:
+                error_msg = retry_result.final_error or "Claude Code call failed after retries"
+                await self.state_machine.fail_step(workflow_id, step.id, error_msg)
+                await self.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    error_message=f"Retry exhausted ({retry_result.total_attempts} attempts): {error_msg}",
+                    completed_at=datetime.now(),
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=f"Claude Code failed after {retry_result.total_attempts} attempts: {error_msg}",
+                )
+
+            output = retry_result.result
 
             status = output.get("status", "fail")
 
@@ -756,6 +813,23 @@ class StepRunnerMixin:
                     message="Verifier failed",
                     output={"verifiers": [r.__dict__ for r in verifier_results]},
                 )
+
+            # v3.4: 输出 Contract Schema 校验
+            cc_output_text = output.get("raw_output", "") or json.dumps(output)
+            cc_validation = self._validate_step_output(step, cc_output_text)
+            if cc_validation and not cc_validation.passed:
+                strict = (step.config or {}).get("strict_output_validation", False)
+                if strict:
+                    error_msg = f"Output schema validation failed: {cc_validation.errors[0].message if cc_validation.errors else 'unknown'}"
+                    await self.state_machine.fail_step(workflow_id, step.id, error_msg)
+                    return StepResult(
+                        status="failed",
+                        step_id=step.id,
+                        workflow_id=workflow_id,
+                        message=error_msg,
+                    )
+                else:
+                    print(f"[OutputValidation] Warning: Step {step.id} output schema validation failed (soft mode)")
 
             # 11. 完成步骤
             result = await self.state_machine.complete_step(
@@ -891,6 +965,37 @@ class StepRunnerMixin:
 
     def _demo_mode_enabled(self) -> bool:
         return os.getenv("LEE_DEMO_MODE", "").lower() in ("1", "true", "yes")
+
+    def _validate_step_output(self, step, output_data) -> "Optional[ValidationResult]":
+        """v3.4: 验证步骤输出是否符合 Contract Schema
+
+        从 step.config.output_contract 或 step.config.execution.output_contract
+        获取 schema 路径，用 SchemaValidator 做校验。
+
+        Args:
+            step: Step 对象
+            output_data: 输出数据（str 或 dict）
+
+        Returns:
+            ValidationResult 或 None（无 contract 配置时跳过）
+        """
+        config = step.config or {}
+
+        # 查找 output_contract schema 路径
+        schema_path = config.get("output_contract")
+        if not schema_path:
+            execution_config = config.get("execution", {})
+            schema_path = execution_config.get("output_contract") if isinstance(execution_config, dict) else None
+        if not schema_path:
+            return None
+
+        try:
+            validator = SchemaValidator()
+            result = validator.validate(output_data, {"schema_path": schema_path})
+            return result
+        except Exception as e:
+            print(f"[OutputValidation] Error validating step {step.id}: {e}")
+            return None
 
     async def _run_verifiers(self, workflow_id: str, step) -> Optional[List]:
         """运行 verifiers，返回结果列表或 None"""

@@ -5,6 +5,7 @@ P2-04 改进: 提供自动重试逻辑，支持指数退避策略。
 """
 
 import time
+import asyncio
 from typing import Callable, Any, Optional, Tuple, Type, List, Dict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -38,6 +39,7 @@ class RetryResult:
     success: bool
     total_attempts: int
     attempts: List[RetryAttempt] = field(default_factory=list)
+    result: Any = None  # v3.4: 成功时保存函数返回值
     final_error: Optional[str] = None
     final_error_type: Optional[RetryErrorType] = None
     total_duration_seconds: float = 0.0
@@ -200,6 +202,105 @@ class RetryExecutor:
                 delay = self.policy.get_delay(attempt)
                 if delay > 0:
                     time.sleep(delay)
+                    total_duration += delay
+
+        # 所有尝试都失败了
+        last_attempt = attempts[-1]
+        return RetryResult(
+            success=False,
+            total_attempts=len(attempts),
+            attempts=attempts,
+            final_error=last_attempt.error,
+            final_error_type=last_attempt.error_type,
+            total_duration_seconds=total_duration + sum(a.duration_seconds for a in attempts),
+        )
+
+    def _classify_error(self, error: Exception) -> RetryErrorType:
+        """分类错误类型"""
+        error_type_str = type(error).__name__.lower()
+
+        if "validation" in error_type_str or "invalid" in error_type_str:
+            return RetryErrorType.VALIDATION_FAILED
+        elif "token" in error_type_str or "expired" in error_type_str:
+            return RetryErrorType.TOKEN_EXPIRED
+        elif "dependency" in error_type_str:
+            return RetryErrorType.DEPENDENCY_FAILED
+        elif "execution" in error_type_str or "runtime" in error_type_str:
+            return RetryErrorType.STEP_EXECUTION_FAILED
+        else:
+            return RetryErrorType.UNKNOWN_ERROR
+
+
+class AsyncRetryExecutor:
+    """异步重试执行器
+
+    与 RetryExecutor 相同的逻辑，但使用 asyncio.sleep 替代 time.sleep，
+    避免在异步步骤运行器中阻塞事件循环。
+    """
+
+    def __init__(self, policy: RetryPolicy = None):
+        self.policy = policy or RetryPolicy()
+
+    async def execute(
+        self,
+        func: Callable,
+        *args: Any,
+        **kwargs: Any
+    ) -> RetryResult:
+        """
+        异步执行函数，并在失败时按策略重试
+
+        Args:
+            func: 要执行的 async 函数
+            *args: 函数位置参数
+            **kwargs: 函数关键字参数
+
+        Returns:
+            RetryResult 对象
+        """
+        attempts: List[RetryAttempt] = []
+        total_duration = 0.0
+
+        for attempt in range(self.policy.max_retries + 1):
+            attempt_record = RetryAttempt(
+                attempt_number=attempt,
+                started_at=datetime.now().isoformat(),
+            )
+            attempts.append(attempt_record)
+
+            try:
+                start_time = time.time()
+                result = await func(*args, **kwargs)
+                end_time = time.time()
+
+                attempt_record.success = True
+                attempt_record.completed_at = datetime.now().isoformat()
+                attempt_record.duration_seconds = end_time - start_time
+
+                return RetryResult(
+                    success=True,
+                    total_attempts=attempt + 1,
+                    attempts=attempts,
+                    result=result,
+                    total_duration_seconds=total_duration + (end_time - start_time),
+                )
+
+            except Exception as e:
+                end_time = time.time()
+                attempt_record.success = False
+                attempt_record.completed_at = datetime.now().isoformat()
+                attempt_record.error = str(e)
+                attempt_record.error_type = self._classify_error(e)
+                attempt_record.duration_seconds = end_time - start_time
+
+                # 判断是否继续重试
+                if not self.policy.should_retry(e, attempt):
+                    break
+
+                # 计算延迟并异步等待
+                delay = self.policy.get_delay(attempt)
+                if delay > 0:
+                    await asyncio.sleep(delay)
                     total_duration += delay
 
         # 所有尝试都失败了
