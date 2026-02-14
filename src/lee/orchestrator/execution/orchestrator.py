@@ -98,6 +98,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         store: SQLiteStore,
         template_manager: Optional[TemplateManager] = None,
         project_root: Optional[str] = None,
+        config_path: Optional[str] = None,
     ):
         """
         初始化 Orchestrator
@@ -106,7 +107,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
             store: SQLite 存储层
             template_manager: 模板管理器（可选）
             project_root: 项目根目录（用于文件路径解析）
+            config_path: 可选配置文件路径（默认 {project_root}/.lee/config.yaml）
         """
+        # v3.5 M4: 加载项目配置
+        from lee.orchestrator.config_loader import load_config
+        self.config = load_config(project_root, config_path)
+
         self.store = store
         self.db = store  # 兼容 Runners 的 db 属性
         self.state_machine = WorkflowStateMachine(store)
@@ -114,8 +120,11 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         self.executor_factory = ExecutorFactory
 
         # v1.5: 创建 AgentLoader 用于加载 agent spec
-        # spec_root 默认为 {project_root}/lee/spec-global
-        spec_root = str(Path(project_root) / "lee" / "spec-global") if project_root else None
+        # spec_root: 优先使用配置文件中的 spec_root，再使用默认值
+        if self.config.spec_root and project_root:
+            spec_root = str(Path(project_root) / self.config.spec_root)
+        else:
+            spec_root = str(Path(project_root) / "lee" / "spec-global") if project_root else None
         agent_loader = AgentLoader(project_root or ".", spec_root=spec_root)
 
         # v1.4 新增组件
