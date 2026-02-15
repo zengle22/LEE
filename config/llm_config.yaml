@@ -33,9 +33,9 @@ default:
 zhipu:
   type: llm
   provider: zhipu
-  base_url: https://open.bigmodel.cn/api/paas/v4
-  api_key: 8e8961c167f840e3a30e4c4ec9032a57.AlFQ0x9UO7DQYlog
-  model: glm-4-plus
+  base_url: https://open.bigmodel.cn/api/coding/paas/v4
+  api_key: 1db2c215ff504d33a5cd2ff0cb510ea3.xeWYcHcsWoExmg0q
+  model: glm-5
   temperature: 0.7
   max_tokens: 8000
   timeout: 90
