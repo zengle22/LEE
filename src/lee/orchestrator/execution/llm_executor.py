@@ -21,7 +21,9 @@ from datetime import datetime
 try:
     from dotenv import load_dotenv
     # 加载项目根目录的 .env 文件
-    project_root = Path(__file__).parent.parent.parent.parent
+    # llm_executor.py 位于: E:/ai/lee/src/lee/orchestrator/execution/llm_executor.py
+    # 需要向上 5 级到达 E:/ai/lee
+    project_root = Path(__file__).parent.parent.parent.parent.parent
     env_file = project_root / ".env"
     if env_file.exists():
         load_dotenv(env_file)
@@ -41,7 +43,9 @@ class LLMConfig:
         """
         if config_path is None:
             # 默认配置文件路径
-            project_root = Path(__file__).parent.parent.parent.parent
+            # llm_executor.py 位于: E:/ai/lee/src/lee/orchestrator/execution/llm_executor.py
+            # 需要向上 5 级到达 E:/ai/lee
+            project_root = Path(__file__).parent.parent.parent.parent.parent
             config_path = project_root / "config" / "llm_config.yaml"
 
         self.config_path = Path(config_path)

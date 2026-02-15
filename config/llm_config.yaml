@@ -54,18 +54,6 @@ ollama:
   timeout: 120
   description: "本地 Ollama 服务，使用 Qwen2.5 模型（最低优先级，兜底）"
 
-# 本地反代服务（开发/测试用）
-# 优先级：低
-antigravity:
-  type: llm
-  provider: custom
-  base_url: ${ANTIGRAVITY_BASE_URL:-http://localhost:8080}
-  api_key: ${ANTIGRAVITY_API_KEY:-dummy-key}
-  model: ${ANTIGRAVITY_MODEL:-llama3-70b}
-  temperature: 0.7
-  max_tokens: 8000
-  timeout: 120
-  description: "本地 LLM 服务，用于开发调试"
 
 # 华为 DeepSeek (ModelArts 部署)
 # 优先级：高

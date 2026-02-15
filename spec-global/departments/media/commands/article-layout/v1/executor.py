@@ -77,8 +77,8 @@ class ArticleLayoutCommand:
         self.llm_executor = None
         if self.use_llm:
             try:
-                self.llm_executor = LLMExecutor(profile="deepseek")
-                print(f"   ✓ DeepSeek LLM 初始化成功")
+                self.llm_executor = LLMExecutor(profile="huawei_deepseek")
+                print(f"   ✓ Huawei DeepSeek LLM 初始化成功")
             except Exception as e:
                 print(f"   ⚠ LLM 初始化失败: {e}，使用基于规则的排版")
                 self.use_llm = False
