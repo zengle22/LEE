@@ -213,10 +213,18 @@ def _call_openai(
         input_tokens = getattr(response.usage, "prompt_tokens", 0)
         output_tokens = getattr(response.usage, "completion_tokens", 0)
 
-    # 提取内容
+    # 提取内容（兼容推理模型如 glm-5, DeepSeek-R1 等）
     content = ""
     if response.choices and len(response.choices) > 0:
-        content = response.choices[0].message.content or ""
+        msg = response.choices[0].message
+        content = msg.content or ""
+        # 推理模型可能将回答放在 reasoning_content 中
+        if not content:
+            reasoning = getattr(msg, "reasoning_content", None)
+            if not reasoning and hasattr(msg, "model_extra") and msg.model_extra:
+                reasoning = msg.model_extra.get("reasoning_content", "")
+            if reasoning:
+                content = reasoning
 
     # 停止原因
     stop_reason = None
