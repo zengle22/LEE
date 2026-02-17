@@ -3,5 +3,8 @@
     "allow": [
       "Bash(git commit:*)"
     ]
+  },
+  "commands": {
+    "directory": ".claude/commands"
   }
 }
