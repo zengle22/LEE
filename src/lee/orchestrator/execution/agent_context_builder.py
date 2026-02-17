@@ -61,7 +61,8 @@ class AgentContextBuilder:
     async def build(
         self,
         step,
-        workflow_context: Dict[str, Any]
+        workflow_context: Dict[str, Any],
+        loop_context: Optional[Dict[str, Any]] = None,
     ) -> AgentExecutionContext:
         """
         构建 Agent 执行上下文
@@ -120,7 +121,8 @@ class AgentContextBuilder:
         user_prompt = await self._build_user_prompt(
             agent_spec,
             context_files,
-            workflow_context
+            workflow_context,
+            loop_context=loop_context,
         )
 
         # 5. 提取模型配置
@@ -413,7 +415,8 @@ Verification items:
         self,
         agent_spec: Dict[str, Any],
         context_files: Dict[str, str],
-        workflow_context: Dict[str, Any]
+        workflow_context: Dict[str, Any],
+        loop_context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         构建用户消息
@@ -431,20 +434,19 @@ Verification items:
 
         if template and self.template_engine:
             # 使用模板引擎渲染
-            return self.template_engine.render(template, {
+            user_prompt = self.template_engine.render(template, {
                 **context_files,
                 **workflow_context.get("data", {}),
             })
         elif template:
             # 简单字符串替换
-            result = template
+            user_prompt = template
             for path, content in context_files.items():
                 # 使用文件名作为变量名
                 var_name = path.split("/")[-1].replace(".", "_")
-                result = result.replace(f"{{{var_name}}}", content)
-                result = result.replace(f"{{system_arch}}", content)
-                result = result.replace(f"{{non_functional_requirements}}", content)
-            return result
+                user_prompt = user_prompt.replace(f"{{{var_name}}}", content)
+                user_prompt = user_prompt.replace(f"{{system_arch}}", content)
+                user_prompt = user_prompt.replace(f"{{non_functional_requirements}}", content)
         else:
             # 构建默认 prompt
             parts = ["# Task"]
@@ -456,4 +458,16 @@ Verification items:
                     parts.append(f"\n## {path}")
                     parts.append(content[:2000] + "..." if len(content) > 2000 else content)  # 限制长度
 
-            return "\n".join(parts)
+            user_prompt = "\n".join(parts)
+
+        # 追加循环上下文（如果存在）
+        if loop_context:
+            iteration = loop_context.get("iteration", 0)
+            previous_result = loop_context.get("previous_result", "")
+            if iteration > 0 and previous_result:
+                user_prompt += f"\n\n## Previous Iteration Result (Round {iteration})\n"
+                user_prompt += f"The previous attempt failed with the following result:\n"
+                user_prompt += f"```\n{previous_result}\n```\n"
+                user_prompt += f"Please analyze the failure and generate a fix.\n"
+
+        return user_prompt

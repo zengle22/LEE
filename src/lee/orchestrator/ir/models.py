@@ -384,6 +384,9 @@ class StepIR:
     config: Dict[str, Any] = field(default_factory=dict)
     timeout: Optional[int] = None  # 超时时间（秒）
 
+    # L3 跨工作流收敛循环（用于 L2 的 workflow_spawn 步骤）
+    cross_workflow_loop: Optional['CrossWorkflowLoopIR'] = None
+
     def is_ready(self, completed_steps: List[str], context: Dict[str, Any]) -> bool:
         """
         检查步骤是否就绪（可以执行）
@@ -428,6 +431,113 @@ class StepIR:
 
 
 # ========================================================================
+# Loop Config IR
+# ========================================================================
+
+@dataclass
+class LoopConfigIR:
+    """
+    循环配置中间表示
+
+    用于 Stage 级别的自动修复循环：
+    patch → test → analyze → retry，带收敛检测。
+
+    YAML 示例:
+        loop:
+          enabled: true
+          max_iterations: 3
+          stop_on_same_output: true
+          completion_check_step: run_tests
+          completion_status: passed
+    """
+    enabled: bool = False
+    max_iterations: int = 3
+    # 收敛检测
+    stop_on_same_output: bool = True       # 检测到相同输出时停止
+    # 完成条件
+    completion_check_step: Optional[str] = None  # 用哪个步骤的结果判断通过
+    completion_status: str = "passed"             # 期望的通过状态值
+
+
+# ========================================================================
+# Cross-Workflow Loop IR（L3 跨工作流收敛循环）
+# ========================================================================
+
+@dataclass
+class CrossWorkflowLoopConvergenceIR:
+    """
+    收敛判定条件
+
+    决定循环何时停止的标准：
+    - check_phase: 检查哪个 phase 的输出
+    - check_field: 用输出中的哪个字段判定
+    - pass_values: 哪些值视为通过
+    - secondary_check: 辅助收敛条件表达式
+    """
+    check_phase: str = ""                        # 检查哪个 phase 的输出
+    check_field: str = "exit_decision"           # 输出中的判定字段
+    pass_values: List[str] = field(default_factory=lambda: ["pass", "conditional_pass"])
+    secondary_check: Optional[str] = None        # 辅助条件，例如 "open_bug_count == 0"
+
+
+@dataclass
+class CrossWorkflowLoopPhaseIR:
+    """
+    循环中的一个阶段定义
+
+    每个 phase 对应一次 L3 workflow_spawn：
+    - qa_test phase: spawn QA-L3 执行测试
+    - dev_fix phase: spawn Dev-L3 修复 bug
+    """
+    id: str = ""                                 # phase 标识
+    workflow_ref: str = ""                       # 引用的工作流 ID
+    role: str = ""                               # 角色标识 (tester/fixer)
+    condition: Optional[str] = None              # 执行条件表达式
+    inputs_from: List[Dict[str, str]] = field(default_factory=list)
+
+
+@dataclass
+class CrossWorkflowLoopIR:
+    """
+    L3 跨工作流收敛循环配置
+
+    在 L2 层管理 QA-L3 ↔ Dev-L3 的乒乓循环直到 bug 收敛清零。
+
+    YAML 示例:
+        cross_workflow_loop:
+          enabled: true
+          max_rounds: 3
+          phases:
+            - id: qa_test
+              workflow_ref: workflow.qa.test_plan_execution_v1
+              role: tester
+            - id: dev_fix
+              workflow_ref: workflow.dev.bug_fix
+              role: fixer
+              condition: "qa_test.exit_decision == 'fail'"
+          convergence:
+            check_phase: qa_test
+            check_field: exit_decision
+            pass_values: [pass, conditional_pass]
+          on_exceeded:
+            action: human_gate
+    """
+    enabled: bool = False
+    max_rounds: int = 3
+
+    # 循环阶段序列
+    phases: List[CrossWorkflowLoopPhaseIR] = field(default_factory=list)
+
+    # 收敛条件
+    convergence: Optional[CrossWorkflowLoopConvergenceIR] = None
+
+    # 超限行为
+    on_exceeded: str = "human_gate"              # human_gate | abort | skip
+    on_exceeded_message: str = "Bug 收敛循环超过最大轮次，需人类介入"
+    human_gate_ref: Optional[str] = None
+
+
+# ========================================================================
 # Stage IR
 # ========================================================================
 
@@ -446,6 +556,7 @@ class StageIR:
     name: str
     description: str
     steps: List[StepIR] = field(default_factory=list)
+    loop: Optional[LoopConfigIR] = None
 
     def get_step_by_id(self, step_id: str) -> Optional[StepIR]:
         """根据 ID 获取步骤"""

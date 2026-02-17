@@ -423,6 +423,10 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
                     return await self._run_orchestrator_cli_step(workflow_id, step_to_execute)
                 elif step_to_execute.kind == "compliance_gate":
                     return await self._run_compliance_gate_step(workflow_id, step_to_execute)
+                elif step_to_execute.kind == "claude_code":
+                    return await self._run_claude_code_step(workflow_id, step_to_execute)
+                elif step_to_execute.kind == "patch_apply":
+                    return await self._run_patch_apply_step(workflow_id, step_to_execute)
                 elif step_to_execute.kind == "agent":
                     if step_to_execute.executor_type == "claude_code":
                         return await self._run_claude_code_step(workflow_id, step_to_execute)
@@ -505,6 +509,107 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
                 workflow_id=workflow_id,
                 message=f"Step execution failed: {e}",
             )
+
+    # ============ Stage 循环执行 ============
+
+    async def _run_stage_with_loop(
+        self,
+        workflow_id: str,
+        stage,
+    ) -> List[StepResult]:
+        """
+        执行带循环的 Stage
+
+        当 stage.loop.enabled=True 时，执行 patch → test → analyze → retry 的
+        收敛循环，直到满足停止条件。
+
+        Args:
+            workflow_id: 工作流 ID
+            stage: StageIR 对象（需要有 loop、steps 属性）
+
+        Returns:
+            所有迭代中产生的 StepResult 列表
+        """
+        from lee.orchestrator.execution.loop_controller import LoopController
+        from lee.orchestrator.storage.event_log import EventType
+
+        controller = LoopController(
+            config=stage.loop,
+            evidence_collector=self.evidence_collector,
+            run_id=workflow_id,
+        )
+
+        all_results: List[StepResult] = []
+
+        while controller.should_continue():
+            loop_ctx = controller.get_loop_context()
+            iteration = loop_ctx.get("iteration", 0) + 1
+
+            # 记录循环迭代开始
+            self.event_log.log(
+                event_type=EventType.STEP_STARTED,
+                data={
+                    "type": "loop_iteration_start",
+                    "stage_id": stage.id,
+                    "iteration": iteration,
+                    "max_iterations": stage.loop.max_iterations,
+                },
+            )
+
+            # 执行 stage 内的所有步骤
+            stage_results: Dict[str, Any] = {}
+            blocked = False
+
+            for step in stage.steps:
+                result = await self.run_step(workflow_id, step.id)
+                stage_results[step.id] = {
+                    "status": result.status,
+                    "message": getattr(result, "message", ""),
+                    "output": getattr(result, "output", None),
+                }
+                all_results.append(result)
+
+                # Gate 阻塞则暂停循环
+                if result.status in ("blocked", "waiting_approval"):
+                    blocked = True
+                    break
+
+            if blocked:
+                break
+
+            # 记录本轮结果 + 收敛判断
+            decision = controller.record_iteration(stage_results)
+            controller.write_iteration_evidence(
+                controller.state.current_iteration, stage_results
+            )
+
+            # 记录循环迭代完成事件
+            self.event_log.log(
+                event_type=EventType.STEP_COMPLETED,
+                data={
+                    "type": "loop_iteration_end",
+                    "stage_id": stage.id,
+                    "iteration": controller.state.current_iteration,
+                    "decision": decision,
+                    "loop_status": controller.state.status,
+                },
+            )
+
+            if decision != "continue":
+                break
+
+        # 记录循环总结
+        summary = controller.get_summary()
+        self.event_log.log(
+            event_type=EventType.STEP_COMPLETED,
+            data={
+                "type": "loop_summary",
+                "stage_id": stage.id,
+                **summary,
+            },
+        )
+
+        return all_results
 
     async def run_until_blocked(
         self,
