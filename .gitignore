@@ -117,3 +117,5 @@ mcp-server/.pytest_cache/
 examples/*/output/
 examples/*/.project/
 examples/*/.workflow/
+.claude-sandbox/
+tmp-test/

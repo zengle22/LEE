@@ -62,9 +62,11 @@ class StepRunnerRegistry:
         from lee.orchestrator.execution.runners.llm_runner import LLMRunner, ClaudeCodeRunner
         from lee.orchestrator.execution.runners.gate_runner import HumanGateRunner, ComplianceGateRunner
         from lee.orchestrator.execution.runners.shell_runner import SkillRunner, OrchestratorCLIRunner
+        from lee.orchestrator.execution.runners.patch_apply_runner import PatchApplyRunner
 
         self.register(LLMRunner())
         self.register(ClaudeCodeRunner())
+        self.register(PatchApplyRunner())
         self.register(HumanGateRunner())
         self.register(ComplianceGateRunner())
         self.register(SkillRunner())

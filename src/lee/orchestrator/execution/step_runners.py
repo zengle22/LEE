@@ -131,6 +131,17 @@ class StepRunnerMixin:
         runner = registry.get_runner("claude_code")
         return await runner.execute(workflow_id, step, ctx)
 
+    async def _run_patch_apply_step(
+        self,
+        workflow_id: str,
+        step,
+    ) -> StepResult:
+        """运行补丁应用步骤 → 委托给 PatchApplyRunner"""
+        ctx = self._build_runner_context()
+        registry = self._get_runner_registry()
+        runner = registry.get_runner("patch_apply")
+        return await runner.execute(workflow_id, step, ctx)
+
     # ==================================================================
     # 共享工具方法 — 仍通过 Mixin 暴露，内部委托给 StepRunnerBase
     # ==================================================================

@@ -652,6 +652,9 @@ class TemplateManager:
                 # 默认为 agent
                 kind = "agent"
         kind = str(kind).lower()
+        # claude_code / patch_apply 作为一等公民 kind
+        if kind in ("claude_code", "patch_apply"):
+            pass  # 保持原值
 
         # 解析 agent/skill/gate 引用
         agent_id = step_data.get("agent")  # kind=agent 时
@@ -693,6 +696,10 @@ class TemplateManager:
         if not executor_type:
             if kind == "agent":
                 executor_type = "llm"  # 默认使用 LLM
+            elif kind == "claude_code":
+                executor_type = "claude_code"  # Claude Code 执行器
+            elif kind == "patch_apply":
+                executor_type = "patch_apply"  # 补丁应用执行器
             elif kind == "skill":
                 executor_type = "shell"  # 默认使用 Shell
             elif kind == "human_gate":

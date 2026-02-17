@@ -57,6 +57,8 @@ class ClaudeCodeExecutor(BaseExecutor):
             **kwargs: 额外参数（保留扩展性）
         """
         self._claude_binary = os.getenv("CLAUDE_CODE_BINARY", "claude")
+        self._model = os.getenv("CLAUDE_CODE_MODEL", "")  # e.g. "glm-5"
+        self._extra_env = self._load_claude_env_settings()
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -303,6 +305,10 @@ class ClaudeCodeExecutor(BaseExecutor):
             "--output-format", "json",
         ]
 
+        # 指定模型（用于 GLM5 等非 Anthropic 后端）
+        if self._model:
+            cmd.extend(["--model", self._model])
+
         # 注入系统 prompt
         if system_prompt:
             cmd.extend(["--system-prompt", system_prompt])
@@ -331,11 +337,108 @@ class ClaudeCodeExecutor(BaseExecutor):
         )
         return result
 
+    def _load_claude_env_settings(self) -> Dict[str, str]:
+        """
+        构建 subprocess 额外环境变量
+
+        优先级:
+        1. 显式环境变量 (ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL)
+        2. ~/.claude/settings.json 中的 env 配置 (HTTP_PROXY 等)
+        """
+        extra: Dict[str, str] = {}
+
+        # 从 settings.json 读取 (HTTP_PROXY 等)
+        settings_path = Path.home() / ".claude" / "settings.json"
+        if settings_path.exists():
+            try:
+                data = json.loads(settings_path.read_text())
+                extra.update(data.get("env", {}))
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        # 传递 API Key 和 Base URL（支持 GLM5 等非 Anthropic 后端）
+        for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"):
+            val = os.getenv(var)
+            if val:
+                extra[var] = val
+
+        return extra
+
+    def _setup_sandbox_home(self, project_root: str) -> Optional[str]:
+        """
+        检测是否需要沙箱 HOME 环境
+
+        当 Claude CLI 在沙箱中运行时（如 Antigravity agent），
+        无法写入 ~/.claude/debug/ 等目录。此方法在项目目录下
+        创建一个可写的 .claude-sandbox/ 作为 HOME 替代。
+
+        Returns:
+            沙箱 HOME 目录路径，如果不需要返回 None
+        """
+        # 仅当设置了 API Key（绕过 OAuth）时才启用沙箱 HOME
+        if not self._extra_env.get("ANTHROPIC_API_KEY"):
+            return None
+
+        claude_dir = Path.home() / ".claude"
+        if not claude_dir.exists():
+            return None
+
+        # 尝试检测是否需要沙箱（无法写入 debug 目录）
+        test_dir = claude_dir / "debug"
+        try:
+            test_dir.mkdir(exist_ok=True)
+            test_file = test_dir / ".sandbox_test"
+            test_file.write_text("test")
+            test_file.unlink()
+            return None  # 可以正常写入，不需要沙箱
+        except OSError:
+            pass  # EPERM — 需要沙箱
+
+        # 创建沙箱 HOME 目录
+        sandbox_home = Path(project_root) / ".claude-sandbox"
+        sandbox_claude = sandbox_home / ".claude"
+        sandbox_claude.mkdir(parents=True, exist_ok=True)
+
+        # 复制必要的配置文件
+        src_settings = claude_dir / "settings.json"
+        if src_settings.exists():
+            dst = sandbox_claude / "settings.json"
+            if not dst.exists():
+                try:
+                    import shutil
+                    shutil.copy2(src_settings, dst)
+                except OSError:
+                    pass
+
+        # 复制 .claude.json（用户偏好，不含 OAuth token）
+        src_config = Path.home() / ".claude.json"
+        dst_config = sandbox_home / ".claude.json"
+        if src_config.exists() and not dst_config.exists():
+            try:
+                import shutil
+                shutil.copy2(src_config, dst_config)
+            except OSError:
+                pass
+
+        return str(sandbox_home)
+
     def _run_subprocess(
         self, cmd: List[str], cwd: str, timeout: int, stdin_text: str = ""
     ) -> str:
         """同步执行 subprocess（在线程池中调用）"""
         try:
+            # 构建 env: 当前环境 + Claude settings.json env + entrypoint
+            env = {
+                **os.environ,
+                **self._extra_env,
+                "CLAUDE_CODE_ENTRYPOINT": "lee-executor",
+            }
+
+            # 沙箱 HOME 重定向（规避 sandbox EPERM）
+            sandbox_home = self._setup_sandbox_home(cwd)
+            if sandbox_home:
+                env["HOME"] = sandbox_home
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -343,7 +446,7 @@ class ClaudeCodeExecutor(BaseExecutor):
                 cwd=cwd,
                 timeout=timeout,
                 input=stdin_text or None,
-                env={**os.environ, "CLAUDE_CODE_ENTRYPOINT": "lee-executor"},
+                env=env,
             )
             # 合并 stdout + stderr，确保不丢失任何输出
             output = result.stdout or ""
