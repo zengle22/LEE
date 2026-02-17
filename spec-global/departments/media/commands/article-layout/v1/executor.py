@@ -73,12 +73,18 @@ class ArticleLayoutCommand:
         self.use_llm = use_llm and LLM_AVAILABLE
         self.use_rule_based = RULE_BASED_LAYOUT_AVAILABLE
 
-        # LLM 执行器
+        # LLM 执行器 - 使用 deepseek-chat 而不是 DeepSeek-R1
+        # R1 是推理模型，不适合直接生成大量 HTML 内容
         self.llm_executor = None
         if self.use_llm:
             try:
-                self.llm_executor = LLMExecutor(profile="huawei_deepseek")
-                print(f"   ✓ Huawei DeepSeek LLM 初始化成功")
+                # 优先使用 deepseek-chat，回退到 huawei_deepseek
+                try:
+                    self.llm_executor = LLMExecutor(profile="deepseek")
+                    print(f"   ✓ DeepSeek-Chat LLM 初始化成功")
+                except Exception:
+                    self.llm_executor = LLMExecutor(profile="huawei_deepseek")
+                    print(f"   ✓ Huawei DeepSeek LLM 初始化成功")
             except Exception as e:
                 print(f"   ⚠ LLM 初始化失败: {e}，使用基于规则的排版")
                 self.use_llm = False
@@ -146,6 +152,46 @@ class ArticleLayoutCommand:
         with open(self.file_path, "r", encoding="utf-8") as f:
             return f.read()
 
+    def _validate_output_completeness(self, original: str, formatted: str) -> bool:
+        """
+        验证输出是否完整
+
+        检查规则：
+        1. 输出长度不应小于原文的 50%
+        2. 原文的主要章节标题应该出现在输出中
+
+        Returns:
+            True 如果输出看起来完整，False 如果可能不完整
+        """
+        # 计算长度比例（去除空白字符后）
+        orig_len = len(original.strip())
+        fmt_len = len(formatted.strip())
+
+        # 如果输出长度小于原文的 30%，肯定有问题
+        if fmt_len < orig_len * 0.3:
+            print(f"   ⚠ 输出长度异常: 原文 {orig_len} 字符, 输出 {fmt_len} 字符 ({fmt_len*100//orig_len}%)")
+            return False
+
+        # 检查主要章节标题是否保留
+        import re
+        # 提取原文中的所有标题
+        orig_headers = set(re.findall(r'^#+\s+(.+)$', original, re.MULTILINE))
+
+        # 检查至少 80% 的标题出现在输出中
+        if orig_headers:
+            found_count = 0
+            for header in orig_headers:
+                # 标题可能在 HTML 中以不同形式出现
+                if header in formatted or header.replace(' ', '') in formatted.replace(' ', ''):
+                    found_count += 1
+
+            retention_rate = found_count / len(orig_headers)
+            if retention_rate < 0.8:
+                print(f"   ⚠ 标题保留率异常: {retention_rate*100:.0f}% ({found_count}/{len(orig_headers)})")
+                return False
+
+        return True
+
     def apply_layout(self, article_content: str, theme_config: dict) -> str:
         """
         应用排版样式
@@ -159,23 +205,22 @@ class ArticleLayoutCommand:
         if self.use_llm:
             print("   使用 DeepSeek LLM 生成带强调效果的排版...")
             try:
-                return asyncio.run(self._llm_layout(article_content, theme_config))
+                formatted_content = asyncio.run(self._llm_layout(article_content, theme_config))
+
+                # 验证输出完整性
+                if not self._validate_output_completeness(article_content, formatted_content):
+                    print("   ⚠ LLM 输出不完整，回退到基于规则的排版...")
+                    if self.use_rule_based:
+                        return self._fallback_rule_based_layout(article_content)
+
+                return formatted_content
             except Exception as e:
                 print(f"   ⚠ LLM 排版失败: {e}，使用基于规则的排版")
 
         # 回退到基于规则的排版
         if self.use_rule_based:
             print("   使用基于规则的排版处理器（稳定输出）...")
-            try:
-                # 使用本地导入的函数
-                import importlib.util
-                rule_based_path = Path(__file__).parent / "rule_based_layout.py"
-                spec = importlib.util.spec_from_file_location("rule_based_layout", rule_based_path)
-                rule_module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(rule_module)
-                return rule_module.apply_rule_based_layout(article_content)
-            except Exception as e:
-                print(f"   ⚠ 基于规则的排版失败: {e}")
+            return self._fallback_rule_based_layout(article_content)
 
         # 使用 markdown 库进行完整转换
         try:
@@ -186,6 +231,20 @@ class ArticleLayoutCommand:
         except ImportError:
             print("   ⚠ markdown 库未安装，使用简化转换")
             return self._simple_markdown_to_html(article_content, theme_config)
+
+    def _fallback_rule_based_layout(self, article_content: str) -> str:
+        """回退到基于规则的排版"""
+        try:
+            import importlib.util
+            rule_based_path = Path(__file__).parent / "rule_based_layout.py"
+            spec = importlib.util.spec_from_file_location("rule_based_layout", rule_based_path)
+            rule_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(rule_module)
+            return rule_module.apply_rule_based_layout(article_content)
+        except Exception as e:
+            print(f"   ⚠ 基于规则的排版失败: {e}")
+            # 最终回退到简单转换
+            return self._simple_markdown_to_html(article_content, {})
 
     async def _llm_layout(self, article_content: str, theme_config: dict) -> str:
         """
@@ -238,10 +297,14 @@ class ArticleLayoutCommand:
 6. **独立的重点标题**（后面不跟列表）：
    - `<p style="color:#cf1322;font-weight:bold;font-size:16px;margin:16px 0;">标题</p>`
 
-7. **代码块处理（重要）**：
-   - 保留原 Markdown 代码块，转换为 `<pre><code class="language-xxx">` 格式
-   - xxx 是语言标识（python, javascript, yaml, bash, json, typescript, java, go, rust, text）
-   - 格式：
+7. **代码块处理（非常重要）**：
+   - **只有真正的代码才转换为 `<pre><code>` 格式**
+   - 真正的代码特征：有明确的编程语言标识（```python, ```javascript, ```yaml 等）或包含明显代码语法（函数定义、变量赋值、循环等）
+   - **纯文本/流程示意图不要用代码块！** 例如：
+     - 流程箭头图：`人 → 打开AI → 提问 → 得到回答`
+     - 纯文本说明、配置示例、流程步骤
+     - 这些应该用 `<blockquote>` 或普通 `<p>` 段落显示
+   - 真正的代码格式：
      ```
      <pre><code class="language-python">
      def hello():
@@ -249,7 +312,6 @@ class ArticleLayoutCommand:
      </code></pre>
      ```
    - 代码内容需要转义 HTML 特殊字符（< 变成 &lt;, > 变成 &gt;, & 变成 &amp;）
-   - 如果原 Markdown 代码块没有语言标识，使用 `language-text`
 
 8. **行内强调**：
    - 使用 `<span class="emphasis">关键词</span>` 来强调重点词汇
@@ -294,29 +356,71 @@ class ArticleLayoutCommand:
    - 只有 `>` 开头的内容才放入 `<blockquote>`
    - 普通陈述句使用 `<p>` 标签
 
-4. **代码块**：
-   - 使用 `<pre><code class="language-xxx">` 格式
-   - 必须转义 HTML 特殊字符（< 变成 &lt;, > 变成 &gt;）
+4. **代码块（重要）**：
+   - **只有真正的编程代码才用 `<pre><code>` 格式**
+   - **纯文本流程图（如 `人 → AI → 提问`）不要用代码块！用 `<blockquote>` 或 `<p>` 显示**
+   - 真正的代码必须转义 HTML 特殊字符（< 变成 &lt;, > 变成 &gt;）
 
 5. **分隔线**：在每个 H1 标题后添加 `<hr>`
 
 **输出纯 HTML 格式，不要包裹在代码块中**
 """
 
+        # 使用更高的 max_tokens 处理长文章（覆盖配置文件的值）
+        # 对于长文章排版，需要足够的输出空间
         result = await self.llm_executor.execute({
             "prompt": user_prompt,
             "system_message": system_prompt,
             "temperature": 0.1,
-            "max_tokens": 8000
+            "max_tokens": 32000  # 增大到 32000 以处理长文章
         })
 
         if result.get("status") == "completed":
             html_content = result.get("generated_text", "")
+            stop_reason = result.get("stop_reason")
+
+            # 调试信息
+            print(f"   LLM 返回: 输入 {result.get('input_tokens', 0)} tokens, 输出 {result.get('output_tokens', 0)} tokens, stop_reason={stop_reason}")
+
+            # 检测输出是否被截断
+            if stop_reason == "length":
+                print(f"   ⚠ 警告: LLM 输出达到 token 限制，内容可能不完整")
+
+            # 处理 DeepSeek-R1 推理模型的特殊输出格式
+            # R1 模型可能在输出中包含 <think...</think 标签
+            if "<think" in html_content:
+                # 移除 <think 标签内的推理过程
+                import re
+                html_content = re.sub(r'<think[^>]*>.*?</think\s*>', '', html_content, flags=re.DOTALL)
+                html_content = html_content.strip()
+
             # 提取 HTML 内容（如果被包裹在代码块中）
+            # 注意：不要使用 split() 方法，因为它会丢失大部分内容
             if "```html" in html_content:
-                html_content = html_content.split("```html")[1].split("```")[0].strip()
-            elif "```" in html_content:
-                html_content = html_content.split("```")[1].split("```")[0].strip()
+                # 找到 ```html 后的第一个代码块
+                start_idx = html_content.find("```html")
+                if start_idx != -1:
+                    # 找到代码块开始后的内容
+                    content_start = html_content.find("\n", start_idx) + 1
+                    if content_start > 0:
+                        # 找到代码块结束
+                        content_end = html_content.find("\n```", content_start)
+                        if content_end != -1:
+                            html_content = html_content[content_start:content_end].strip()
+                        else:
+                            # 没有结束标记，取到末尾
+                            html_content = html_content[content_start:].strip()
+            elif html_content.strip().startswith("```"):
+                # 处理以 ``` 开头的输出
+                lines = html_content.strip().split("\n")
+                if len(lines) > 1:
+                    # 第一行是 ```language，去掉
+                    # 最后一行是 ```，去掉
+                    if lines[-1].strip() == "```":
+                        html_content = "\n".join(lines[1:-1])
+                    else:
+                        html_content = "\n".join(lines[1:])
+
             return html_content
         else:
             raise Exception(result.get("error", "LLM 调用失败"))
