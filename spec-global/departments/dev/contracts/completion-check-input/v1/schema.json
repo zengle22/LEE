@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "completion-check-input-v1",
+  "title": "Code Completion Check Input Schema",
+  "description": "Input schema for agent.dev.code_completion_checker",
+  "type": "object",
+  "required": ["prd_path", "ui_prototype_path", "api_contract_path"],
+  "properties": {
+    "prd_path": {
+      "type": "string",
+      "description": "Path to PRD document or directory",
+      "examples": ["prd/prd/", "prd/prd/CR-001_首页状态入口与复盘导航栏补充.md"]
+    },
+    "ui_prototype_path": {
+      "type": "string",
+      "description": "Path to UI prototype directory",
+      "examples": ["ui/prototype/"]
+    },
+    "api_contract_path": {
+      "type": "string",
+      "description": "Path to API contract directory",
+      "examples": ["dev/src/api-contract/"]
+    },
+    "backend_src_path": {
+      "type": "string",
+      "description": "Path to backend source code directory",
+      "default": "dev/src/ai-marathon-coach-server/",
+      "examples": ["dev/src/ai-marathon-coach-server/"]
+    },
+    "frontend_src_path": {
+      "type": "string",
+      "description": "Path to frontend source code directory",
+      "default": "dev/src/ai-marathon-coach-front/",
+      "examples": ["dev/src/ai-marathon-coach-front/"]
+    },
+    "feature_id": {
+      "type": "string",
+      "description": "Specific feature ID to check (optional, checks all if not provided)",
+      "examples": ["CR-001", "CR-002"]
+    },
+    "check_all_features": {
+      "type": "boolean",
+      "description": "Whether to check all features",
+      "default": false
+    },
+    "check_backend": {
+      "type": "boolean",
+      "description": "Whether to check backend implementation",
+      "default": true
+    },
+    "check_frontend": {
+      "type": "boolean",
+      "description": "Whether to check frontend implementation",
+      "default": true
+    },
+    "check_integration": {
+      "type": "boolean",
+      "description": "Whether to check frontend-backend integration",
+      "default": true
+    },
+    "output_gaps_only": {
+      "type": "boolean",
+      "description": "Only output gaps (missing items)",
+      "default": false
+    },
+    "create_missing_skills": {
+      "type": "boolean",
+      "description": "Whether to invoke spec maintainers to create missing skills",
+      "default": true
+    },
+    "output_path": {
+      "type": "string",
+      "description": "Custom output path for reports",
+      "default": "dev/src/output/"
+    }
+  },
+  "additionalProperties": false
+}

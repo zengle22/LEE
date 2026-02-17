@@ -1,0 +1,328 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "completion-check-output-v1",
+  "title": "Code Completion Check Output Schema",
+  "description": "Output schema for agent.dev.code_completion_checker",
+  "type": "object",
+  "required": ["summary", "prd_tracing", "gaps", "status"],
+  "properties": {
+    "summary": {
+      "type": "object",
+      "description": "Overall completion summary",
+      "required": ["total_requirements", "implemented", "missing", "completion_rate"],
+      "properties": {
+        "total_requirements": {
+          "type": "integer",
+          "description": "Total number of requirements",
+          "minimum": 0
+        },
+        "implemented": {
+          "type": "integer",
+          "description": "Number of implemented requirements",
+          "minimum": 0
+        },
+        "missing": {
+          "type": "integer",
+          "description": "Number of missing implementations",
+          "minimum": 0
+        },
+        "completion_rate": {
+          "type": "number",
+          "description": "Completion percentage",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "feature_id": {
+          "type": "string",
+          "description": "Feature ID that was checked"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the check"
+        }
+      }
+    },
+    "prd_tracing": {
+      "type": "array",
+      "description": "PRD requirement tracing results",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Requirement ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Requirement name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Requirement description"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["IMPLEMENTED", "PARTIAL", "MISSING", "NOT_APPLICABLE"],
+            "description": "Implementation status"
+          },
+          "api": {
+            "type": "string",
+            "description": "Associated API endpoint ID",
+            "examples": ["TRAIN-009", "TRAIN-010"]
+          },
+          "frontend": {
+            "type": "string",
+            "description": "Associated frontend component",
+            "examples": ["home/index.vue", "body-status-input/index.vue"]
+          },
+          "backend": {
+            "type": "string",
+            "description": "Associated backend handler",
+            "examples": ["GetTodayBodyStatus", "GetSyncedMetrics"]
+          }
+        }
+      }
+    },
+    "api_implementation": {
+      "type": "array",
+      "description": "API implementation status",
+      "items": {
+        "type": "object",
+        "required": ["endpoint_id", "path", "status"],
+        "properties": {
+          "endpoint_id": {
+            "type": "string",
+            "description": "API endpoint ID"
+          },
+          "path": {
+            "type": "string",
+            "description": "API path"
+          },
+          "method": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "description": "HTTP method"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["IMPLEMENTED", "MISSING_HANDLER", "MISSING_ROUTE", "CONTRACT_MISMATCH"],
+            "description": "Implementation status"
+          },
+          "handler": {
+            "type": "string",
+            "description": "Handler function name"
+          },
+          "contract_compliant": {
+            "type": "boolean",
+            "description": "Whether implementation matches contract"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of issues found"
+          }
+        }
+      }
+    },
+    "frontend_implementation": {
+      "type": "array",
+      "description": "Frontend implementation status",
+      "items": {
+        "type": "object",
+        "required": ["component", "status"],
+        "properties": {
+          "component": {
+            "type": "string",
+            "description": "Component path"
+          },
+          "ui_prototype": {
+            "type": "string",
+            "description": "Corresponding UI prototype file"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["MATCHES_PROTOTYPE", "DEVIATION", "MISSING"],
+            "description": "Implementation status vs prototype"
+          },
+          "api_calls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "API endpoints called by this component"
+          },
+          "deviations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "prototype_element": {
+                  "type": "string"
+                },
+                "implementation": {
+                  "type": "string"
+                },
+                "difference": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Deviations from prototype"
+          }
+        }
+      }
+    },
+    "integration_status": {
+      "type": "array",
+      "description": "Frontend-backend integration status",
+      "items": {
+        "type": "object",
+        "required": ["frontend_component", "api_endpoint", "status"],
+        "properties": {
+          "frontend_component": {
+            "type": "string",
+            "description": "Frontend component calling the API"
+          },
+          "api_endpoint": {
+            "type": "string",
+            "description": "API endpoint being called"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["INTEGRATED", "MISSING_BACKEND", "MISSING_FRONTEND", "CONTRACT_MISMATCH"],
+            "description": "Integration status"
+          },
+          "data_flow": {
+            "type": "string",
+            "enum": ["COMPLETE", "PARTIAL", "BROKEN"],
+            "description": "Data flow status"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Integration issues found"
+          }
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "description": "List of gaps (missing implementations)",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "description"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Gap ID"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["MISSING_API", "MISSING_HANDLER", "MISSING_FRONTEND", "MISSING_INTEGRATION", "CONTRACT_MISMATCH", "UI_DEVIATION"],
+            "description": "Type of gap"
+          },
+          "requirement": {
+            "type": "string",
+            "description": "Related requirement ID"
+          },
+          "description": {
+            "type": "string",
+            "description": "Gap description"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["BLOCKER", "MAJOR", "MINOR"],
+            "description": "Gap severity"
+          },
+          "recommendation": {
+            "type": "string",
+            "description": "Recommended fix"
+          },
+          "assignee": {
+            "type": "string",
+            "description": "Suggested assignee type"
+          }
+        }
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "description": "Prioritized recommendations",
+      "items": {
+        "type": "object",
+        "required": ["priority", "task"],
+        "properties": {
+          "priority": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Task priority"
+          },
+          "task": {
+            "type": "string",
+            "description": "Task description"
+          },
+          "assignee": {
+            "type": "string",
+            "description": "Suggested assignee"
+          },
+          "related_gaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Related gap IDs"
+          }
+        }
+      }
+    },
+    "skills_created": {
+      "type": "array",
+      "description": "Skills created during this check",
+      "items": {
+        "type": "object",
+        "properties": {
+          "skill_name": {
+            "type": "string"
+          },
+          "skill_path": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "commands_created": {
+      "type": "array",
+      "description": "Commands created during this check",
+      "items": {
+        "type": "object",
+        "properties": {
+          "command_name": {
+            "type": "string"
+          },
+          "command_path": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PASS", "PARTIAL", "FAIL"],
+      "description": "Overall check status"
+    },
+    "next_steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Suggested next steps"
+    }
+  },
+  "additionalProperties": false
+}
