@@ -4,82 +4,46 @@ description: Write engineering article with structured prompt - provide topic, v
 
 # LEE Article Write
 
-工程文章写作 - 使用结构化 Prompt 创作工程类公众号文章。
+Write an engineering article using structured prompt.
 
-## 用户输入
+## Usage
 
-请按以下格式提供文章要素：
+When user wants to write an engineering article, invoke this command and provide:
 
-```
-【主题】：你的文章主题是什么？
-【核心观点】：一句话概括的核心观点
-【真实场景或案例】：一个具体的工程场景或案例
-【核心结构组件】：3-4个核心组件（用逗号分隔）
-```
+- **Topic**: Article title
+- **Core Viewpoint**: One-sentence core argument
+- **Real Scenario**: A concrete engineering scenario or case
+- **Core Components**: 3-4 core components (comma-separated)
 
-## 写作要求
+## Writing Requirements
 
-### 一、整体风格
-- 理性、克制、冷静
-- 不浮夸，不鸡汤
-- 不堆术语
-- 不空泛总结
-- 保留工程质感
-- 多使用短段落（每段不超过4行）
-- 多换行
-- 至少包含3个"断句式金句"（两行式）
+### Style
+- Rational, restrained, calm
+- No hype, no鸡汤 (chicken soup)
+- No jargon dumping
+- Engineering quality
+- Short paragraphs (max 4 lines each)
+- At least 3 "golden quotes" (two-line format)
 
-### 二、结构必须严格遵循（7步）
+### Structure (7 Steps)
 
-1. **痛点刺入（100-200字）**
-   - 用"你有没有遇到过……"开场
-   - 制造真实共鸣
-   - 不要讲理论
+1. **Pain Point (100-200 chars)**: Start with "你有没有遇到过……"
+2. **Scenario还原**: Use CLI, logs, files, states
+3. **Structural Explanation**: "问题不在模型能力。问题在结构。"
+4. **Component Breakdown**: 3-4 components with examples
+5. **Trend Judgment**: Calm analysis of trends
+6. **Target Audience**: Engineers and entrepreneurs
+7. **Closing Quote**: Two-line golden ending
 
-2. **具体场景还原**
-   - 用流程、CLI、日志、文件、状态等具体画面展开
-   - 必须具体，不能抽象
+### Rules
+- Max 2500 words
+- No "总结如下"
+- No marketing tone
+- No "震撼""颠覆"
 
-3. **结构断层解释**
-   - 上升到一层理论
-   - 用类似句式："问题不在模型能力。问题在结构。"
-   - 解释语义空间 vs 状态空间等概念
+## Example
 
-4. **核心组件拆解（3-4点）**
-   每一点结构：
-   - ## 组件名
-   - 解释其作用
-   - 举一个工程化例子
-   - 给一句可截图金句
-
-5. **上升到趋势判断**
-   - 对模型能力提升、风险放大等趋势做冷静判断
-
-6. **写给谁**（分两段）
-   - 写给工程师：……
-   - 写给创业者：……
-
-7. **收束金句**
-   - 最后用两行式金句结束
-
-### 三、排版规则
-- 多空行
-- 小标题清晰
-- 不超过2500字
-- 不写"总结如下"之类套话
-- 不用营销语气
-- 不用"震撼""颠覆"等词
-
-### 四、风格定位
-- 这是一个长期写 AI 治理与 Agent 工程的人写的文章
-- 读者是工程师和创业者
-- 目标是提升结构认知，而不是博眼球
-
-## 输出要求
-
-写完后，请：
-1. 列出文章的结构章节
-2. 提取3-5个可截图的金句
-3. 统计文章字数
-
-如果用户没有提供完整信息，请追问。
+Topic: 为什么 Spec 不能解决治理问题？
+Core Viewpoint: Spec 是边界描述，不是执行约束。
+Real Scenario: Agent 按 Spec 输出，但运行仍然出错。
+Core Components: 输入契约、输出契约、运行验证、证据系统
