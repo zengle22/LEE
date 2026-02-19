@@ -60,6 +60,10 @@ class ExecutorTaskSpec:
     workspace_root: Optional[str] = None       # 工作区根目录
     allowed_write_patterns: List[str] = field(default_factory=list)
 
+    # Repo 管理
+    repo_id: Optional[str] = None              # 目标 repo_id（由 runtime 解析为 cwd）
+    repo_scope: List[str] = field(default_factory=list)  # 允许的 repo_id 列表
+
 
 @dataclass
 class ExecutionResult:
