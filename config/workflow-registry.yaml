@@ -45,3 +45,16 @@ workflows:
       - build_commit
     optional_params:
       - environment
+
+  # ========== Office 工作流 ==========
+  office.workspace-cleanup:
+    path: spec-global/departments/office/workflows/workspace-cleanup/v1/workflow.yaml
+    description: "工作区整理工作流"
+    required_params: []
+    optional_params:
+      - workspace_path
+      - author_name
+      - exclude_patterns
+      - remote
+      - branch
+      - skip_push
