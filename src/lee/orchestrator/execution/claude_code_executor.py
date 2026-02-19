@@ -22,10 +22,12 @@ import json
 import logging
 import os
 import queue
+import re
 import signal
 import subprocess
 import threading
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -33,6 +35,17 @@ from typing import Any, Dict, List, Optional
 from .executors import BaseExecutor
 
 logger = logging.getLogger(__name__)
+
+
+class BashToolLimitExceeded(RuntimeError):
+    """Raised when bash tool calls exceed configured hard limit."""
+
+    def __init__(self, limit: int, observed: int):
+        self.limit = limit
+        self.observed = observed
+        super().__init__(
+            f"bash tool call limit exceeded: observed={observed}, limit={limit}"
+        )
 
 
 class ClaudeCodeExecutor(BaseExecutor):
@@ -53,13 +66,20 @@ class ClaudeCodeExecutor(BaseExecutor):
 
     # 默认配置
     DEFAULT_MAX_ITERATIONS = 5
-    DEFAULT_TIMEOUT_SECONDS = 300
+    DEFAULT_TIMEOUT_SECONDS = 600
     DEFAULT_TIMEOUT_RETRIES = 1
     DEFAULT_RETRY_BACKOFF_SECONDS = 5
+    DEFAULT_SILENCE_TIMEOUT_SECONDS = 600
+    DEFAULT_SILENCE_GRACE_SECONDS = 20
     DEFAULT_STRICT_MCP_CONFIG = True
     DEFAULT_ALLOWED_COMMANDS = ["cat", "ls", "find", "grep"]
     DEFAULT_HEARTBEAT_SECONDS = 5
     DEFAULT_MODEL = "claude-sonnet-4-6"
+    DEFAULT_MAX_BASH_CALLS = 60
+    DEFAULT_RESUME_ON_RETRY = True
+    BASH_PRE_TOOL_HOOK_PATTERN = re.compile(
+        r"executePreToolHooks called for tool:\s*Bash"
+    )
 
     def __init__(self, **kwargs):
         """
@@ -132,6 +152,14 @@ class ClaudeCodeExecutor(BaseExecutor):
             input_data.get("retry_backoff_seconds"),
             self.DEFAULT_RETRY_BACKOFF_SECONDS,
         )
+        silence_timeout_seconds = self._coerce_non_negative_int(
+            input_data.get("silence_timeout_seconds"),
+            self.DEFAULT_SILENCE_TIMEOUT_SECONDS,
+        )
+        silence_grace_seconds = self._coerce_non_negative_int(
+            input_data.get("silence_grace_seconds"),
+            self.DEFAULT_SILENCE_GRACE_SECONDS,
+        )
         strict_mcp_config = input_data.get(
             "strict_mcp_config", self.DEFAULT_STRICT_MCP_CONFIG
         )
@@ -140,6 +168,13 @@ class ClaudeCodeExecutor(BaseExecutor):
         system_prompt_extra = input_data.get("system_prompt_extra", "")
         evidence_base = input_data.get("evidence_base", "")
         model = str(input_data.get("model") or self._model or "").strip()
+        max_bash_calls = self._coerce_non_negative_int(
+            input_data.get("max_bash_calls"),
+            self.DEFAULT_MAX_BASH_CALLS,
+        )
+        resume_on_retry = bool(
+            input_data.get("resume_on_retry", self.DEFAULT_RESUME_ON_RETRY)
+        )
 
         # ========== 2. 构建 evidence bundle 目录 ==========
         evidence_dir = self._prepare_evidence_dir(evidence_base, workspace)
@@ -151,6 +186,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             allowed_commands=allowed_commands,
             write_scope=write_scope,
             max_iterations=max_iterations,
+            max_bash_calls=max_bash_calls,
             stop_conditions=stop_conditions,
             system_prompt_extra=system_prompt_extra,
         )
@@ -203,19 +239,39 @@ class ClaudeCodeExecutor(BaseExecutor):
                 max_iterations=max_iterations,
                 timeout_retries=timeout_retries,
                 retry_backoff_seconds=retry_backoff_seconds,
+                silence_timeout_seconds=silence_timeout_seconds,
+                silence_grace_seconds=silence_grace_seconds,
                 strict_mcp_config=strict_mcp_config,
                 setting_sources=setting_sources,
                 mcp_config_path=mcp_config_path,
                 model=model,
                 debug_file_path=claude_debug_log_path,
                 live_log_path=conversation_live_log_path,
+                max_bash_calls=max_bash_calls,
+                resume_on_retry=resume_on_retry,
             )
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
+            detail = str(e).strip()
+            if not detail:
+                detail = "timeout"
             return self._build_result(
                 status="timeout",
                 error=(
                     f"Claude Code execution timed out after {timeout_seconds}s "
-                    f"(retries={timeout_retries})"
+                    f"(retries={timeout_retries}, detail={detail})"
+                ),
+                evidence_dir=str(evidence_dir),
+                conversation_log_path=conversation_live_log_path,
+                debug_log_path=claude_debug_log_path,
+                prompt_system_path=prompt_system_path,
+                prompt_user_path=prompt_user_path,
+            )
+        except BashToolLimitExceeded as e:
+            return self._build_result(
+                status="failed",
+                error=(
+                    "Claude Bash tool call limit exceeded: "
+                    f"observed={e.observed}, limit={e.limit}"
                 ),
                 evidence_dir=str(evidence_dir),
                 conversation_log_path=conversation_live_log_path,
@@ -319,6 +375,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         allowed_commands: List[str],
         write_scope: List[str],
         max_iterations: int,
+        max_bash_calls: int,
         stop_conditions: Dict[str, str],
         system_prompt_extra: str,
     ) -> str:
@@ -329,6 +386,8 @@ class ClaudeCodeExecutor(BaseExecutor):
             f"允许使用的命令: {', '.join(allowed_commands)}",
             f"最大迭代轮数: {max_iterations}",
         ]
+        if max_bash_calls > 0:
+            constraints.append(f"Bash 工具调用上限: {max_bash_calls}")
 
         if write_scope:
             constraints.append(
@@ -389,12 +448,16 @@ class ClaudeCodeExecutor(BaseExecutor):
         max_iterations: int,
         timeout_retries: int = DEFAULT_TIMEOUT_RETRIES,
         retry_backoff_seconds: int = DEFAULT_RETRY_BACKOFF_SECONDS,
+        silence_timeout_seconds: int = DEFAULT_SILENCE_TIMEOUT_SECONDS,
+        silence_grace_seconds: int = DEFAULT_SILENCE_GRACE_SECONDS,
         strict_mcp_config: bool = DEFAULT_STRICT_MCP_CONFIG,
         setting_sources: str = "",
         mcp_config_path: str = "",
         model: str = "",
         debug_file_path: str = "",
         live_log_path: str = "",
+        max_bash_calls: int = DEFAULT_MAX_BASH_CALLS,
+        resume_on_retry: bool = DEFAULT_RESUME_ON_RETRY,
     ) -> str:
         """
         调用 claude CLI (v2.x)
@@ -403,7 +466,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         工作目录通过 subprocess cwd 参数控制。
         prompt 通过 stdin 传入以避免 shell 转义问题。
         """
-        cmd = [
+        base_cmd = [
             self._claude_binary,
             "--print",
             "--output-format", "json",
@@ -411,24 +474,24 @@ class ClaudeCodeExecutor(BaseExecutor):
 
         # 记录 claude CLI 原生日志，便于定位网络/鉴权/连接问题
         if debug_file_path:
-            cmd.extend(["--debug-file", debug_file_path])
+            base_cmd.extend(["--debug-file", debug_file_path])
 
         if setting_sources:
-            cmd.extend(["--setting-sources", setting_sources])
+            base_cmd.extend(["--setting-sources", setting_sources])
 
         # 仅使用显式 MCP 配置（默认无配置），避免本地全局 MCP 干扰执行稳定性
         if strict_mcp_config:
-            cmd.append("--strict-mcp-config")
+            base_cmd.append("--strict-mcp-config")
             if mcp_config_path:
-                cmd.extend(["--mcp-config", mcp_config_path])
+                base_cmd.extend(["--mcp-config", mcp_config_path])
 
         # 指定模型（显式传入优先，未传则使用初始化默认）
         if model:
-            cmd.extend(["--model", model])
+            base_cmd.extend(["--model", model])
 
         # 注入系统 prompt
         if system_prompt:
-            cmd.extend(["--system-prompt", system_prompt])
+            base_cmd.extend(["--system-prompt", system_prompt])
 
         # 构建工具白名单
         # claude CLI --allowedTools 接受空格/逗号分隔的工具名
@@ -436,32 +499,47 @@ class ClaudeCodeExecutor(BaseExecutor):
         if allowed_commands:
             allowed_tools.append("Bash")
 
-        cmd.extend(["--allowedTools", ",".join(allowed_tools)])
+        base_cmd.extend(["--allowedTools", ",".join(allowed_tools)])
 
         # prompt 通过 stdin 传入（避免命令行参数过长或转义问题）
 
         last_timeout_error: Optional[Exception] = None
         total_attempts = max(timeout_retries, 0) + 1
+        retry_session_id = str(uuid.uuid4())
 
         for attempt_idx in range(total_attempts):
             cancel_event = threading.Event()
+            attempt_cmd = list(base_cmd)
+            attempt_prompt = prompt
+            if resume_on_retry:
+                if attempt_idx == 0:
+                    attempt_cmd.extend(["--session-id", retry_session_id])
+                else:
+                    attempt_cmd.extend(["--resume", retry_session_id])
+                    attempt_prompt = self._build_retry_prompt(attempt_idx, total_attempts)
             try:
                 loop = asyncio.get_event_loop()
                 result = await asyncio.wait_for(
                     loop.run_in_executor(
                         None,
                         self._run_subprocess,
-                        cmd,
+                        attempt_cmd,
                         workspace,
                         timeout_seconds,
-                        prompt,
+                        attempt_prompt,
                         live_log_path,
                         debug_file_path,
                         cancel_event,
+                        silence_timeout_seconds,
+                        silence_grace_seconds,
+                        max_bash_calls,
                     ),
                     timeout=timeout_seconds + 30,  # 额外 30s buffer
                 )
                 return result
+            except BashToolLimitExceeded:
+                cancel_event.set()
+                raise
             except asyncio.CancelledError:
                 cancel_event.set()
                 logger.warning(
@@ -474,19 +552,30 @@ class ClaudeCodeExecutor(BaseExecutor):
                 cancel_event.set()
                 last_timeout_error = e
                 logger.warning(
-                    "Claude invoke timed out (attempt %s/%s, timeout=%ss)",
+                    "Claude invoke timed out (attempt %s/%s, timeout=%ss): %s",
                     attempt_idx + 1,
                     total_attempts,
                     timeout_seconds,
+                    str(e) or "timeout",
                 )
                 if attempt_idx >= total_attempts - 1:
                     break
+                if live_log_path and resume_on_retry:
+                    self._append_live_log_meta(
+                        live_log_path,
+                        (
+                            "retrying with session resume "
+                            f"(session_id={retry_session_id}, next_attempt={attempt_idx + 2}/{total_attempts})"
+                        ),
+                    )
                 backoff_seconds = max(retry_backoff_seconds, 0) * (2 ** attempt_idx)
                 if backoff_seconds > 0:
                     await asyncio.sleep(backoff_seconds)
 
+        reason = str(last_timeout_error).strip() if last_timeout_error else "timeout"
         raise asyncio.TimeoutError(
-            f"subprocess timed out after {timeout_seconds}s, attempts={total_attempts}"
+            f"subprocess timed out after {timeout_seconds}s, attempts={total_attempts}, "
+            f"last_error={reason}"
         ) from last_timeout_error
 
     def _ensure_minimal_mcp_config(self, evidence_dir: Path) -> str:
@@ -597,6 +686,9 @@ class ClaudeCodeExecutor(BaseExecutor):
         live_log_path: str = "",
         debug_file_path: str = "",
         cancel_event: Optional[threading.Event] = None,
+        silence_timeout_seconds: int = DEFAULT_SILENCE_TIMEOUT_SECONDS,
+        silence_grace_seconds: int = DEFAULT_SILENCE_GRACE_SECONDS,
+        max_bash_calls: int = DEFAULT_MAX_BASH_CALLS,
     ) -> str:
         """同步执行 subprocess（在线程池中调用，实时监控输出）"""
         process: Optional[subprocess.Popen] = None
@@ -674,6 +766,12 @@ class ClaudeCodeExecutor(BaseExecutor):
             _append_meta(f"cmd={' '.join(cmd)}")
             _append_meta(f"cwd={cwd}")
             _append_meta(f"timeout={timeout}")
+            _append_meta(f"silence_timeout={silence_timeout_seconds}")
+            _append_meta(f"silence_grace={silence_grace_seconds}")
+            _append_meta(f"max_bash_calls={max_bash_calls}")
+            _append_meta(
+                f"silence_activity_source={'debug_log' if debug_file_path else 'stdout_stderr'}"
+            )
             _append_meta(f"stdin_prompt_chars={len(stdin_text)}")
 
             process = subprocess.Popen(
@@ -710,29 +808,72 @@ class ClaudeCodeExecutor(BaseExecutor):
 
             start_ts = time.monotonic()
             last_output_ts = start_ts
+            last_debug_growth_ts = start_ts
             last_heartbeat_ts = start_ts
             heartbeat_interval = float(self.DEFAULT_HEARTBEAT_SECONDS)
+            last_debug_size = 0
+            debug_read_offset = 0
+            bash_tool_calls = 0
+            if debug_file_path:
+                try:
+                    last_debug_size = Path(debug_file_path).stat().st_size
+                    debug_read_offset = last_debug_size
+                except OSError:
+                    last_debug_size = 0
+                    debug_read_offset = 0
             while True:
                 drained = _drain_log_queue()
                 now_ts = time.monotonic()
                 if drained > 0:
                     last_output_ts = now_ts
 
+                current_debug_size = last_debug_size
+                if debug_file_path:
+                    try:
+                        current_debug_size = Path(debug_file_path).stat().st_size
+                    except OSError:
+                        current_debug_size = last_debug_size
+                if current_debug_size > last_debug_size:
+                    last_debug_growth_ts = now_ts
+                    last_debug_size = current_debug_size
+                if (
+                    debug_file_path
+                    and max_bash_calls > 0
+                    and current_debug_size >= debug_read_offset
+                ):
+                    debug_read_offset, new_bash_calls = self._scan_bash_calls_from_debug_log(
+                        debug_file_path,
+                        debug_read_offset,
+                    )
+                    if new_bash_calls > 0:
+                        bash_tool_calls += new_bash_calls
+                        _append_meta(
+                            f"bash_tool_calls={bash_tool_calls}/{max_bash_calls}"
+                        )
+                        if bash_tool_calls > max_bash_calls:
+                            _append_meta(
+                                "bash_tool_call_limit_reached "
+                                f"(observed={bash_tool_calls}, limit={max_bash_calls})"
+                            )
+                            raise BashToolLimitExceeded(
+                                limit=max_bash_calls,
+                                observed=bash_tool_calls,
+                            )
+
                 if now_ts - last_heartbeat_ts >= heartbeat_interval:
-                    silent_for = int(now_ts - last_output_ts)
-                    elapsed = int(now_ts - start_ts)
-                    debug_size = 0
                     if debug_file_path:
-                        try:
-                            debug_size = Path(debug_file_path).stat().st_size
-                        except OSError:
-                            debug_size = 0
+                        # Prefer Claude debug file activity as source-of-truth when available.
+                        last_activity_ts = last_debug_growth_ts
+                    else:
+                        last_activity_ts = last_output_ts
+                    silent_for = int(now_ts - last_activity_ts)
+                    elapsed = int(now_ts - start_ts)
                     _append_meta(
                         f"heartbeat elapsed={elapsed}s "
                         f"silent_for={silent_for}s "
                         f"stdout_lines={len(stdout_lines)} "
                         f"stderr_lines={len(stderr_lines)} "
-                        f"debug_log_bytes={debug_size}"
+                        f"debug_log_bytes={last_debug_size}"
                     )
                     last_heartbeat_ts = now_ts
 
@@ -741,6 +882,24 @@ class ClaudeCodeExecutor(BaseExecutor):
                 if cancel_event is not None and cancel_event.is_set():
                     _append_meta("cancellation requested; terminating subprocess")
                     raise asyncio.TimeoutError("subprocess cancelled by caller")
+                if (
+                    silence_timeout_seconds > 0
+                    and now_ts - start_ts >= silence_grace_seconds
+                ):
+                    if debug_file_path:
+                        last_activity_ts = last_debug_growth_ts
+                    else:
+                        last_activity_ts = last_output_ts
+                    silent_for = now_ts - last_activity_ts
+                    if silent_for > silence_timeout_seconds:
+                        _append_meta(
+                            "silence timeout reached "
+                            f"(silent_for={int(silent_for)}s, limit={silence_timeout_seconds}s)"
+                        )
+                        raise asyncio.TimeoutError(
+                            "subprocess stalled with no output/debug activity "
+                            f"for {int(silent_for)}s (limit={silence_timeout_seconds}s)"
+                        )
                 if now_ts - start_ts > timeout:
                     _append_meta(f"timeout reached ({timeout}s)")
                     raise asyncio.TimeoutError(
@@ -773,6 +932,40 @@ class ClaudeCodeExecutor(BaseExecutor):
                     pass
             for t in reader_threads:
                 t.join(timeout=1)
+
+    @classmethod
+    def _scan_bash_calls_from_debug_log(
+        cls,
+        debug_file_path: str,
+        offset: int,
+    ) -> tuple[int, int]:
+        """Read appended debug log chunk and count new Bash pre-tool hook calls."""
+        debug_path = Path(debug_file_path)
+        if not debug_path.exists():
+            return offset, 0
+        try:
+            with debug_path.open("r", encoding="utf-8", errors="ignore") as f:
+                f.seek(max(offset, 0))
+                chunk = f.read()
+                new_offset = f.tell()
+        except OSError:
+            return offset, 0
+        if not chunk:
+            return new_offset, 0
+        return new_offset, len(cls.BASH_PRE_TOOL_HOOK_PATTERN.findall(chunk))
+
+    @staticmethod
+    def _build_retry_prompt(
+        attempt_idx: int,
+        total_attempts: int,
+    ) -> str:
+        """Construct retry prompt that asks Claude to continue prior work."""
+        return (
+            f"Retry attempt {attempt_idx + 1}/{total_attempts}.\n"
+            "Continue the previous session from existing progress.\n"
+            "Do not restart full repository scan; only finish remaining work.\n"
+            "Return only the final required JSON block when done.\n"
+        )
 
     @staticmethod
     def _coerce_positive_int(value: Any, default: int) -> int:

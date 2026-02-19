@@ -54,6 +54,108 @@ class WorkflowTemplate:
     # 其他配置
     config: Dict[str, Any] = field(default_factory=dict)
 
+    # 缓存：步骤执行顺序（v1.1 新增）
+    _step_order_cache: Optional[List[str]] = field(default=None, init=False, repr=False)
+
+    def get_step_order(self) -> List[str]:
+        """
+        获取步骤的执行顺序（拓扑排序）
+
+        对于线性工作流：按 steps 列表顺序
+        对于 DAG 工作流：基于 depends_on 的拓扑排序
+
+        Returns:
+            步骤 ID 列表（按执行顺序）
+
+        Raises:
+            ValueError: 如果检测到循环依赖
+        """
+        # 使用缓存
+        if self._step_order_cache is not None:
+            return self._step_order_cache
+
+        from collections import defaultdict, deque
+
+        # 构建依赖图和入度表
+        in_degree = {}  # step_id -> 入度数
+        adj_list = defaultdict(list)  # step_id -> [依赖它的步骤]
+
+        # 初始化所有步骤
+        for step in self.steps:
+            in_degree[step.id] = len(step.depends_on)
+            for dep in step.depends_on:
+                adj_list[dep].append(step.id)
+
+        # 拓扑排序（Kahn 算法）
+        queue = deque([sid for sid, degree in in_degree.items() if degree == 0])
+        result = []
+
+        while queue:
+            step_id = queue.popleft()
+            result.append(step_id)
+
+            # 减少依赖当前步骤的其他步骤的入度
+            for neighbor in adj_list[step_id]:
+                in_degree[neighbor] -= 1
+                if in_degree[neighbor] == 0:
+                    queue.append(neighbor)
+
+        # 检查是否所有步骤都被处理（检测循环依赖）
+        if len(result) != len(self.steps):
+            # 找出未处理的步骤
+            processed = set(result)
+            unprocessed = [sid for sid in in_degree.keys() if sid not in processed]
+            raise ValueError(
+                f"Circular dependency detected in workflow '{self.id}'. "
+                f"Unprocessed steps: {unprocessed}. "
+                f"Please check the 'depends_on' configuration."
+            )
+
+        # 缓存结果
+        self._step_order_cache = result
+        return result
+
+    def get_steps_after(self, step_id: str) -> List[str]:
+        """
+        获取指定步骤之后的所有步骤
+
+        Args:
+            step_id: 目标步骤 ID
+
+        Returns:
+            在 step_id 之后执行的所有步骤 ID
+
+        Raises:
+            ValueError: 如果 step_id 不在模板中
+        """
+        step_order = self.get_step_order()
+
+        try:
+            index = step_order.index(step_id)
+        except ValueError:
+            raise ValueError(
+                f"Step '{step_id}' not found in workflow '{self.id}'. "
+                f"Available steps: {step_order}"
+            )
+
+        # 返回 index 之后的所有步骤
+        return step_order[index + 1:]
+
+    def get_step_info(self, step_id: str) -> Optional[Step]:
+        """
+        获取步骤信息
+
+        Args:
+            step_id: 步骤 ID
+
+        Returns:
+            Step 对象，不存在返回 None
+        """
+        for step in self.steps:
+            if step.id == step_id:
+                return step
+        return None
+
 
 # ========================================================================
 # 模板管理器
