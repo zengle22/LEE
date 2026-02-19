@@ -117,47 +117,300 @@ class GateOperationsMixin:
         workflow_id: str,
         gate_id: str,
         rejecter: str,
-        reason: str
+        reason: str,
+        action: Optional[str] = None,
+        target_step: Optional[str] = None,
     ) -> StepResult:
         """
-        拒绝人工门禁，终止工作流
+        拒绝人工门禁，执行指定动作（v1.1）
 
         Args:
             workflow_id: 工作流 ID
             gate_id: 门禁 ID
             rejecter: 拒绝人
             reason: 拒绝原因
+            action: 执行动作（rollback/spawn）可选，默认从配置读取
+            target_step: 目标步骤（用于 rollback）
 
         Returns:
             步骤执行结果
-        """
-        from lee.orchestrator.storage.models import GateStatus, WorkflowStatus
 
-        # 更新门禁审批状态
-        gate_approval = await self.store.update_gate_approval(
+        Raises:
+            ValueError: 如果没有指定 action 且配置中也没有默认 action
+        """
+        from lee.orchestrator.storage.models import (
+            GateStatus, WorkflowStatus, ConcurrentDecisionError
+        )
+
+        # 1. 获取 gate 配置（从 DB，不读 template）
+        gate_approval = await self.store.get_gate_approval(workflow_id, gate_id)
+
+        if gate_approval is None:
+            raise ValueError(f"Gate not found: {workflow_id}/{gate_id}")
+
+        # 2. 确定执行 action
+        if action is None:
+            # 使用存储的默认 action
+            default_action = gate_approval.default_reject_action
+            if default_action:
+                action = default_action
+                target_step = target_step or gate_approval.default_reject_target
+
+        if action is None:
+            raise ValueError(
+                f"Reject must specify action. "
+                f"Configure on_reject.action or use --action parameter."
+            )
+
+        # 3. 使用版本检查更新 gate 状态
+        updated_gate = await self.store.update_gate_approval_with_version(
             workflow_id,
             gate_id,
             GateStatus.REJECTED,
             rejecter,
-            reason
+            reason,
+            expected_version=gate_approval.version,
+            decision_action=action,
+            target_step=target_step,
         )
 
-        # 将工作流标记为失败
-        await self.store.update_workflow_status(workflow_id, WorkflowStatus.FAILED)
+        if updated_gate is None:
+            raise ConcurrentDecisionError(
+                f"Gate {gate_id} was modified by another user. "
+                f"Please refresh and try again."
+            )
 
-        # v3.2: 记录门禁拒绝事件
+        # 4. 记录拒绝事件
         self.event_log.log_gate_rejected(
             gate_id=gate_id,
             step_id=gate_approval.step_id,
             approver=rejecter,
             reason=reason,
+            action=action,
+        )
+
+        # 5. 执行动作
+        if action == "rollback":
+            return await self._execute_rollback(
+                workflow_id, gate_id, target_step, rejecter, reason
+            )
+        elif action == "spawn":
+            return await self._execute_spawn_workflow(
+                workflow_id, gate_id, rejecter, reason
+            )
+        else:
+            # 未知 action，标记 FAILED
+            await self.store.update_workflow_status(workflow_id, WorkflowStatus.FAILED)
+            return StepResult(
+                status="failed",
+                step_id=gate_approval.step_id,
+                workflow_id=workflow_id,
+                message=f"Gate {gate_id} rejected with unknown action '{action}': {reason}",
+            )
+
+    async def revise_gate(
+        self,
+        workflow_id: str,
+        gate_id: str,
+        reviewer: str,
+        reason: str,
+        target_step: Optional[str] = None,
+        structured_feedback: Optional[dict] = None,
+    ) -> StepResult:
+        """
+        修订门禁，重试步骤（v1.1 新增）
+
+        Args:
+            workflow_id: 工作流 ID
+            gate_id: 门禁 ID
+            reviewer: 评审人
+            reason: 修改意见
+            target_step: 重试目标步骤
+            structured_feedback: 结构化反馈
+
+        Returns:
+            步骤执行结果
+        """
+        from lee.orchestrator.storage.models import (
+            GateStatus, ConcurrentDecisionError
+        )
+
+        # 1. 获取 gate 配置
+        gate_approval = await self.store.get_gate_approval(workflow_id, gate_id)
+
+        if gate_approval is None:
+            raise ValueError(f"Gate not found: {workflow_id}/{gate_id}")
+
+        # 2. 确定重试目标
+        if target_step is None:
+            # 使用默认 target
+            target_step = gate_approval.default_revise_target or gate_approval.step_id
+
+        # 3. 更新 gate 状态为 REVISED
+        updated_gate = await self.store.update_gate_approval_with_version(
+            workflow_id,
+            gate_id,
+            GateStatus.REVISED,
+            reviewer,
+            reason,
+            expected_version=gate_approval.version,
+            decision_action="retry",
+            target_step=target_step,
+            structured_feedback=structured_feedback,
+        )
+
+        if updated_gate is None:
+            raise ConcurrentDecisionError(
+                f"Gate {gate_id} was modified by another user."
+            )
+
+        # 4. 记录修订事件
+        self.event_log.log_gate_revised(
+            gate_id=gate_id,
+            step_id=gate_approval.step_id,
+            reviewer=reviewer,
+            reason=reason,
+        )
+
+        # 5. 使用 rewind_to 执行重试
+        return await self.state_machine.rewind_to(
+            workflow_id, target_step, mode="retry", reason=reason
+        )
+
+    async def flag_gate(
+        self,
+        workflow_id: str,
+        gate_id: str,
+        reporter: str,
+        issues: list,
+        continue_workflow: bool = True,
+    ) -> StepResult:
+        """
+        标记门禁问题（v1.1 新增）
+
+        Args:
+            workflow_id: 工作流 ID
+            gate_id: 门禁 ID
+            reporter: 报告人
+            issues: 问题列表
+            continue_workflow: 是否继续工作流
+
+        Returns:
+            步骤执行结果
+        """
+        from lee.orchestrator.storage.models import (
+            GateStatus, ConcurrentDecisionError
+        )
+
+        # 1. 获取 gate
+        gate_approval = await self.store.get_gate_approval(workflow_id, gate_id)
+
+        if gate_approval is None:
+            raise ValueError(f"Gate not found: {workflow_id}/{gate_id}")
+
+        # 2. 更新 gate 状态为 FLAGGED
+        updated_gate = await self.store.update_gate_approval_with_version(
+            workflow_id,
+            gate_id,
+            GateStatus.FLAGGED,
+            reporter,
+            "; ".join(issues),
+            expected_version=gate_approval.version,
+            issues=issues,
+        )
+
+        if updated_gate is None:
+            raise ConcurrentDecisionError(
+                f"Gate {gate_id} was modified by another user."
+            )
+
+        # 3. 记录标记事件
+        self.event_log.log_gate_flagged(
+            gate_id=gate_id,
+            step_id=gate_approval.step_id,
+            reporter=reporter,
+            issues=issues,
+        )
+
+        # 4. 根据配置决定工作流状态
+        if continue_workflow:
+            # 恢复工作流运行
+            await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
+
+            # 完成门禁步骤
+            await self.state_machine.complete_step(
+                workflow_id, gate_id,
+                {"flagged": True, "issues": issues}
+            )
+
+            return StepResult(
+                status="flagged",
+                step_id=gate_id,
+                workflow_id=workflow_id,
+                message=f"Gate {gate_id} flagged with {len(issues)} issue(s), workflow continues",
+            )
+        else:
+            # 保持 PAUSED
+            return StepResult(
+                status="paused",
+                step_id=gate_id,
+                workflow_id=workflow_id,
+                message=f"Gate {gate_id} flagged, workflow paused for review",
+            )
+
+    async def _execute_rollback(
+        self,
+        workflow_id: str,
+        gate_id: str,
+        target_step: str,
+        rejecter: str,
+        reason: str,
+    ) -> StepResult:
+        """执行回退动作"""
+        # 使用 state_machine.rewind_to 原语
+        return await self.state_machine.rewind_to(
+            workflow_id, target_step, mode="rollback", reason=reason
+        )
+
+    async def _execute_spawn_workflow(
+        self,
+        workflow_id: str,
+        gate_id: str,
+        requester: str,
+        reason: str,
+    ) -> StepResult:
+        """执行派生新工作流动作"""
+        # 获取当前工作流实例
+        instance = await self.store.get_workflow(workflow_id)
+
+        # 创建新工作流实例
+        new_workflow_id = await self.orchestrator.create_workflow(
+            template_id=instance.template_id,
+            project_dir=getattr(self.orchestrator, 'project_dir', '.'),
+            parent_workflow_id=workflow_id,
+            metadata={
+                "spawned_from_gate": gate_id,
+                "spawn_reason": reason,
+            },
+        )
+
+        # 将原工作流标记为 SUPERSEDED
+        await self.store.update_workflow_status(workflow_id, WorkflowStatus.SUPERSEDED)
+
+        # 记录事件
+        self.event_log.log_workflow_spawned(
+            workflow_id=workflow_id,
+            new_workflow_id=new_workflow_id,
+            gate_id=gate_id,
+            reason=reason,
         )
 
         return StepResult(
-            status="failed",
-            step_id=gate_approval.step_id,
+            status="spawned",
+            step_id=gate_id,
             workflow_id=workflow_id,
-            message=f"Gate {gate_id} rejected by {rejecter}: {reason}",
+            message=f"Spawned new workflow {new_workflow_id} from gate {gate_id}",
+            output={"new_workflow_id": new_workflow_id},
         )
 
     async def get_pending_gates(
