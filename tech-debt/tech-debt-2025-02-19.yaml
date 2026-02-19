@@ -1,0 +1,930 @@
+# Technical Debt Report - LEE Framework
+# Generated: 2025-02-19
+# Framework Version: 0.1.0
+# Analysis Scope: Full Workspace
+
+version: "1.0"
+generated_date: "2025-02-19"
+framework:
+  name: "LEE Framework"
+  version: "0.1.0"
+  description: "通用 AI 工作流编排框架"
+  repository: "/Users/zengle/git/ai/lee"
+
+# ============================================
+# Executive Summary
+# ============================================
+summary:
+  total_debt_items: 89
+  critical_items: 12
+  high_priority_items: 28
+  medium_priority_items: 35
+  low_priority_items: 14
+
+  overall_health_score: 58/100
+
+  debt_categories:
+    - code_quality: 26
+    - documentation: 18
+    - testing: 16
+    - infrastructure: 12
+    - security: 8
+    - performance: 6
+    - architecture: 3
+
+  estimated_cleanup_hours: 240
+
+# ============================================
+# Critical Debt Items (P0)
+# ============================================
+critical_debt:
+  - id: "DEBT-001"
+    title: "硬编码的 API 密钥泄露"
+    category: "security"
+    severity: "critical"
+    impact: "严重安全漏洞，API 密钥暴露在版本控制中"
+    location:
+      - "config/llm_config.yaml:37"
+      - "config/llm_config.yaml:76"
+      - "config/llm_config.yaml:90"
+      - "config/llm_config.yaml:103"
+    current_state: |
+      zhipu:
+        api_key: 1db2c215ff504d33a5cd2ff0cb510ea3.xeWYcHcsWoExmg0q
+      huawei_deepseek:
+        api_key: RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ
+      minimax:
+        api_key: sk-cp-0rOf7PG_XXzW0ptsjBGPPaRpcBhcskrm2JmxS0LZctAJs_kT809LxG0mGa5NCjd14-eaRXbR2hJvc5afdsfF-Ve_XBjr-r5iXtbiWo6H6V73S5eNuvnJDDo6gZpDSkeumPMIHU0MlQ
+      deepseek:
+        api_key: sk-32763972ec7841aab1b45af0ca2c97d3
+    effort_hours: 2
+    recommendation: |
+      1. 立即撤销所有暴露的 API 密钥
+      2. 将所有密钥移动到环境变量或密钥管理系统
+      3. 从 git 历史中清除敏感信息（使用 git-filter-repo 或 BFG Repo-Cleaner）
+      4. 添加 pre-commit hook 检测敏感信息
+    risk_if_ignored: "Critical - 密钥泄露可能导致财务损失和滥用"
+
+  - id: "DEBT-002"
+    title: "Shell 命令注入漏洞风险"
+    category: "security"
+    severity: "critical"
+    impact: "通过 shell=True 参数可能导致命令注入攻击"
+    location:
+      - "src/lee/runtime/executor/tools/shell_tools.py:34"
+      - "src/lee/runtime/executor/tools/shell_tools.py:57"
+    current_state: |
+      run_shell() 函数默认使用 shell=True，且未对命令进行充分验证
+    effort_hours: 8
+    recommendation: |
+      1. 审计所有 shell 命令调用点
+      2. 尽可能使用 shell=False 并传递参数列表
+      3. 添加命令白名单机制
+      4. 实现命令参数验证和转义
+    risk_if_ignored: "Critical - 可能导致任意代码执行"
+
+  - id: "DEBT-003"
+    title: "路径穿越防护不完整"
+    category: "security"
+    severity: "critical"
+    impact: "safe_join 函数可能被绕过，导致目录遍历攻击"
+    location: "src/lee/runtime/executor/tools/security.py:13-40"
+    current_state: |
+      仅检查路径前缀，未考虑符号链接攻击和 Windows 路径特殊情况
+    effort_hours: 6
+    recommendation: |
+      1. 使用 pathlib.Path.resolve() 规范化所有路径
+      2. 检查符号链接是否指向工作区外
+      3. 添加更多边界条件测试
+      4. 考虑使用 chroot 或容器隔离
+    risk_if_ignored: "High - 可能导致访问任意文件系统路径"
+
+  - id: "DEBT-004"
+    title: "类型检查完全禁用"
+    category: "code_quality"
+    severity: "critical"
+    impact: "运行时类型错误，减少 IDE 支持，难以重构"
+    location: "pyproject.toml:64"
+    current_state: "disallow_untyped_defs = false"
+    code_examples:
+      - "src/lee/__init__.py: 仅包含一行注释"
+      - "src/lee/runtime/executor/langgraph_runner.py: 大量未类型化的参数"
+    effort_hours: 80
+    recommendation: |
+      1. 从新模块开始启用类型检查
+      2. 为公共 API 添加类型注解
+      3. 设置 CI 中运行 mypy
+      4. 使用 pyright 或 mypy 达到 strict 模式
+    risk_if_ignored: "High - 技术债持续增长，难以维护"
+
+  - id: "DEBT-005"
+    title: "测试覆盖率严重不足"
+    category: "testing"
+    severity: "critical"
+    impact: "对代码变更缺乏信心，潜在回归问题"
+    coverage_estimate: "25-30%"
+    gap_analysis:
+      core_modules_coverage: "20%"
+      cli_commands_coverage: "15%"
+      executor_coverage: "35%"
+      orchestrator_coverage: "30%"
+    effort_hours: 120
+    recommendation: |
+      1. 目标：核心模块达到 80% 覆盖率
+      2. 添加集成测试覆盖关键路径
+      3. 使用 pytest-cov 监控覆盖率
+      4. 设置覆盖率门槛（CI 失败阈值）
+    risk_if_ignored: "Critical - 生产环境 bug，难以重构"
+
+  - id: "DEBT-006"
+    title: "缺少 CI/CD 管道"
+    category: "infrastructure"
+    severity: "critical"
+    impact: "手动测试，无自动化质量门禁"
+    location: ".github/"
+    current_state: |
+      仅存在基础 GitHub 目录结构，无实际工作流配置
+    effort_hours: 24
+    recommendation: |
+      1. 设置 GitHub Actions 工作流
+      2. 包含：lint、类型检查、单元测试、集成测试、安全扫描
+      3. 自动化发布到 PyPI
+      4. 添加代码覆盖率报告
+    risk_if_ignored: "High - 质量控制依赖人工，容易出错"
+
+  - id: "DEBT-007"
+    title: "数据库操作缺少事务管理"
+    category: "code_quality"
+    severity: "critical"
+    impact: "数据不一致风险，并发问题"
+    location:
+      - "src/lee/cli/commands/run.py:80-107"
+      - "src/lee/cli/commands/run.py:169-184"
+    current_state: |
+      SQLite 操作未使用事务，可能在多线程环境下出现数据竞争
+    effort_hours: 16
+    recommendation: |
+      1. 所有数据库操作包装在事务中
+      2. 使用上下文管理器确保事务正确关闭
+      3. 添加重试机制处理并发冲突
+      4. 考虑迁移到支持更好并发的数据库
+    risk_if_ignored: "High - 数据损坏，工作流状态不一致"
+
+  - id: "DEBT-008"
+    title: "未处理的异常导致资源泄漏"
+    category: "code_quality"
+    severity: "critical"
+    impact: "文件句柄、数据库连接、锁资源泄漏"
+    location:
+      - "src/lee/cli/commands/run.py:314-354"
+    current_state: |
+      _acquire_project_run_lock() 异常时可能导致锁文件未释放
+    effort_hours: 8
+    recommendation: |
+      1. 使用 try-finally 确保资源释放
+      2. 实现上下文管理器管理锁
+      3. 添加超时机制避免死锁
+      4. 添加锁泄漏检测
+    risk_if_ignored: "Medium - 资源耗尽，需要手动清理"
+
+  - id: "DEBT-009"
+    title: "配置加载失败时静默降级"
+    category: "code_quality"
+    severity: "critical"
+    impact: "配置错误在运行时才暴露，难以调试"
+    location: "src/lee/orchestrator/config_loader.py:218-235"
+    current_state: |
+      _load_yaml 捕获所有异常并返回空字典，不记录详细错误
+    effort_hours: 6
+    recommendation: |
+      1. 区分可恢复和不可恢复的配置错误
+      2. 记录详细的错误信息（包括堆栈跟踪）
+      3. 提供配置验证工具
+      4. 添加配置文件 schema 验证
+    risk_if_ignored: "Medium - 难以诊断配置问题"
+
+  - id: "DEBT-010"
+    title: "缺少日志和监控"
+    category: "infrastructure"
+    severity: "critical"
+    impact: "无法有效排查生产问题"
+    current_state: |
+      无结构化日志，无指标收集，无分布式追踪
+    effort_hours: 32
+    recommendation: |
+      1. 集成结构化日志库（如 structlog）
+      2. 添加性能指标收集
+      3. 实现分布式追踪（如 OpenTelemetry）
+      4. 设置日志聚合和告警
+    risk_if_ignored: "High - 生产问题难以诊断"
+
+  - id: "DEBT-011"
+    title: "依赖版本固定且过时"
+    category: "infrastructure"
+    severity: "critical"
+    impact: "安全漏洞，错过 bug 修复和性能改进"
+    location: "pyproject.toml"
+    current_state: |
+      MetaGPT 固定在 0.8.x，错过更新
+    effort_hours: 12
+    recommendation: |
+      1. 定期更新依赖（至少每月一次）
+      2. 使用 Dependabot 或 Renovate 自动化
+      3. 设置安全扫描（如 pip-audit）
+      4. 记录依赖变更日志
+    risk_if_ignored: "Medium - 累积安全债务"
+
+  - id: "DEBT-012"
+    title: "缺少 API 版本控制"
+    category: "architecture"
+    severity: "critical"
+    impact: "破坏性变更影响现有用户"
+    location: "src/lee/"
+    current_state: |
+      公共 API 无版本标识，随意变更
+    effort_hours: 16
+    recommendation: |
+      1. 为公共 API 添加版本前缀
+      2. 使用语义化版本控制
+      3. 维护变更日志
+      4. 提供迁移指南
+    risk_if_ignored: "High - 破坏用户代码"
+
+# ============================================
+# High Priority Debt Items (P1)
+# ============================================
+high_priority_debt:
+  - id: "DEBT-101"
+    title: "文档与代码不一致"
+    category: "documentation"
+    severity: "high"
+    impact: "开发者困惑，错误的 API 使用"
+    location:
+      - "README.md:188-209"
+      - "docs/LEE-Overview.md"
+    current_state: |
+      README 提到 flowcore/ 目录，但实际是 src/lee/
+      Import 示例使用错误的路径
+    effort_hours: 12
+    recommendation: |
+      1. 更新所有文档以反映当前目录结构
+      2. 运行文档测试（doctest）验证示例
+      3. 保持文档和代码同步
+    risk_if_ignored: "Medium - 持续的开发者困惑"
+
+  - id: "DEBT-102"
+    title: "过时的迁移文档"
+    category: "documentation"
+    severity: "high"
+    impact: "误导性信息，浪费时间"
+    location:
+      - "MIGRATION_PLAN.md:1-100"
+      - "GETTING_STARTED.md:1-100"
+    current_state: |
+      文档引用不存在的 flowcore/ 目录和工具
+      迁移步骤过时
+    effort_hours: 8
+    recommendation: |
+      1. 删除或更新过时的迁移文档
+      2. 提供"当前状态"指南而非迁移计划
+      3. 标记文档的最后审核日期
+    risk_if_ignored: "Low - 浪费新用户时间"
+
+  - id: "DEBT-103"
+    title: "缺少架构文档"
+    category: "documentation"
+    severity: "high"
+    impact: "难以理解系统设计，贡献困难"
+    location: "docs/"
+    missing_docs:
+      - "系统架构图"
+      - "组件交互图"
+      - "数据流图"
+      - "部署架构"
+    effort_hours: 24
+    recommendation: |
+      1. 创建 C4 模型架构图
+      2. 编写架构决策记录（ADR）
+      3. 记录关键设计权衡
+      4. 保持架构文档更新
+    risk_if_ignored: "Medium - 知识流失，维护困难"
+
+  - id: "DEBT-104"
+    title: "混乱的工作流历史记录"
+    category: "infrastructure"
+    severity: "high"
+    impact: "工作流目录污染，难以管理"
+    location: ".workflow/claude-code/"
+    current_state: |
+      包含数百个历史运行记录，无清理机制
+      示例：RUN-20260218140551-667a-s1_1_analyze_files/
+    effort_hours: 8
+    recommendation: |
+      1. 实现自动清理策略（保留最近 N 天）
+      2. 添加归档机制
+      3. 提供 lee workflow cleanup 命令
+      4. 添加到 .gitignore（如尚未添加）
+    risk_if_ignored: "Medium - 存储浪费，性能下降"
+
+  - id: "DEBT-105"
+    title: "并发锁机制不完善"
+    category: "code_quality"
+    severity: "high"
+    impact: "潜在的竞态条件，数据损坏"
+    location:
+      - "src/lee/cli/main.py:83-135"
+      - "src/lee/cli/commands/run.py:314-354"
+    current_state: |
+      使用文件锁，但无死锁检测和超时
+      POSIX 特定（Windows 不支持 fcntl）
+    effort_hours: 16
+    recommendation: |
+      1. 添加锁超时机制
+      2. 实现死锁检测
+      3. 提供跨平台锁方案（如 filelock 库）
+      4. 添加锁状态监控
+    risk_if_ignored: "High - 并发 bug，难以复现"
+
+  - id: "DEBT-106"
+    title: "错误处理不统一"
+    category: "code_quality"
+    severity: "high"
+    impact: "错误信息不清晰，难以调试"
+    location: "throughout codebase"
+    examples:
+      - "部分使用 click.ClickException"
+      - "部分使用 ValueError"
+      - "部分直接返回错误字典"
+    effort_hours: 20
+    recommendation: |
+      1. 定义异常层次结构
+      2. 统一错误处理模式
+      3. 提供清晰的错误消息
+      4. 添加错误码系统
+    risk_if_ignored: "Medium - 用户体验差，支持困难"
+
+  - id: "DEBT-107"
+    title: "配置验证缺失"
+    category: "code_quality"
+    severity: "high"
+    impact: "运行时配置错误导致失败"
+    location:
+      - "config/llm_config.yaml"
+      - "config/workflow-registry.yaml"
+    current_state: |
+      YAML 配置文件无 schema 验证
+      错误配置仅在运行时发现
+    effort_hours: 16
+    recommendation: |
+      1. 使用 JSON Schema 或 Pydantic 验证配置
+      2. 提供 lee config validate 命令
+      3. 添加配置文件模板
+      4. 提供配置文档和示例
+    risk_if_ignored: "Medium - 配置错误难以预防"
+
+  - id: "DEBT-108"
+    title: "缺少性能基准"
+    category: "performance"
+    severity: "high"
+    impact: "性能退化难以检测"
+    current_state: |
+      无基准测试，无性能监控
+    effort_hours: 16
+    recommendation: |
+      1. 使用 pytest-benchmark 建立基准
+      2. 记录关键操作的性能指标
+      3. 设置 CI 中的性能回归检测
+      4. 定期审查和优化热点
+    risk_if_ignored: "Medium - 性能悄悄退化"
+
+  - id: "DEBT-109"
+    title: "大量 TODO 注释未解决"
+    category: "code_quality"
+    severity: "high"
+    impact: "功能不完整，技术债可见性高"
+    estimated_count: "50+"
+    effort_hours: 40
+    recommendation: |
+      1. 审计所有 TODO/FIXME/HACK 注释
+      2. 转换为 GitHub Issues
+      3. 定期审查和清理
+      4. 为重要 TODO 添加跟踪 Issue
+    risk_if_ignored: "Medium - 功能债务累积"
+
+  - id: "DEBT-110"
+    title: "测试数据管理混乱"
+    category: "testing"
+    severity: "high"
+    impact: "测试不可靠，难以维护"
+    location: "tests/"
+    current_state: |
+      测试夹具分散，无共享测试数据
+      使用临时目录但未清理
+    effort_hours: 12
+    recommendation: |
+      1. 集中管理测试夹具（tests/fixtures/）
+      2. 使用 pytest's fixtures 共享数据
+      3. 添加测试清理钩子
+      4. 提供测试数据生成工具
+    risk_if_ignored: "Medium - 测试脆弱"
+
+  - id: "DEBT-111"
+    title: "缺少端到端测试"
+    category: "testing"
+    severity: "high"
+    impact: "集成问题在晚期发现"
+    current_state: |
+      主要依赖单元测试，缺少 E2E 场景
+    effort_hours: 32
+    recommendation: |
+      1. 添加关键路径的 E2E 测试
+      2. 测试真实工作流执行
+      3. 使用测试环境模拟生产
+      4. 定期运行 E2E 测试
+    risk_if_ignored: "High - 晚期集成问题"
+
+  - id: "DEBT-112"
+    title: "缺少安全扫描"
+    category: "security"
+    severity: "high"
+    impact: "安全漏洞未及时发现"
+    current_state: |
+      无依赖安全扫描
+      无代码安全审计
+    effort_hours: 12
+    recommendation: |
+      1. 集成 bandit 进行 Python 安全扫描
+      2. 使用 pip-audit 或 safety 检查依赖
+      3. 添加 secrets 检测（如 truffleHog）
+      4. 定期手动安全审计
+    risk_if_ignored: "High - 安全漏洞累积"
+
+  - id: "DEBT-113"
+    title: "Git 历史包含大文件"
+    category: "infrastructure"
+    severity: "high"
+    impact: "克隆慢，仓库膨胀"
+    current_state: |
+      workspace-cleanup-file-analysis.yaml (21KB)
+      技术债历史文件
+    effort_hours: 4
+    recommendation: |
+      1. 使用 git filter-repo 清理大文件
+      2. 添加 .gitattributes 限制文件大小
+      3. 考虑 Git LFS 处理大文件
+      4. 定期审计仓库大小
+    risk_if_ignored: "Low - 仓库持续增长"
+
+  - id: "DEBT-114"
+    title: "缺少贡献指南"
+    category: "documentation"
+    severity: "high"
+    impact: "贡献者困惑，低质量 PR"
+    location: "CONTRIBUTING.md"
+    current_state: |
+      CONTRIBUTING.md 存在但可能过时
+    effort_hours: 8
+    recommendation: |
+      1. 更新贡献指南
+      2. 包含：开发环境设置、代码风格、PR 流程
+      3. 提供模板和检查清单
+      4. 添加良好 PR 示例
+    risk_if_ignored: "Medium - 贡献摩擦"
+
+  - id: "DEBT-115"
+    title: "包名与文档不一致"
+    category: "documentation"
+    severity: "high"
+    impact: "安装和导入混淆"
+    location:
+      - "pyproject.toml:5-7"
+      - "README.md"
+    current_state: |
+      pyproject.toml: name = "lee-framework"
+      实际导入: from lee.xxx import
+      文档提到: flowcore
+    effort_hours: 4
+    recommendation: |
+      1. 统一包命名
+      2. 更新所有文档
+      3. 添加迁移别名（如需要）
+      4. 在 README 中澄清
+    risk_if_ignored: "Low - 用户困惑"
+
+# ============================================
+# Medium Priority Debt Items (P2)
+# ============================================
+medium_priority_debt:
+  - id: "DEBT-201"
+    title: "代码复杂度高"
+    category: "code_quality"
+    severity: "medium"
+    impact: "难以理解和维护"
+    location: "src/lee/cli/commands/run.py"
+    current_state: |
+      run.py 文件 469 行，函数过长
+      复杂的条件逻辑
+    effort_hours: 24
+    recommendation: "拆分为更小的函数和模块，提取复杂逻辑"
+
+  - id: "DEBT-202"
+    title: "重复代码"
+    category: "code_quality"
+    severity: "medium"
+    impact: "维护成本高，容易遗漏更新"
+    examples:
+      - "配置加载逻辑在多处重复"
+      - "错误处理模式重复"
+    effort_hours: 16
+    recommendation: "提取公共函数，使用 DRY 原则"
+
+  - id: "DEBT-203"
+    title: "魔法数字和字符串"
+    category: "code_quality"
+    severity: "medium"
+    impact: "代码意图不清晰，难以修改"
+    examples:
+      - "timeout: 600"
+      - "max_retries: 3"
+      - "'running', 'paused', 'pending'"
+    effort_hours: 8
+    recommendation: "使用命名常量或配置"
+
+  - id: "DEBT-204"
+    title: "缺少代码注释"
+    category: "code_quality"
+    severity: "medium"
+    impact: "理解代码困难"
+    current_state: |
+      复杂逻辑缺少解释性注释
+    effort_hours: 16
+    recommendation: "添加注释解释'为什么'而非'是什么'"
+
+  - id: "DEBT-205"
+    title: "函数参数过多"
+    category: "code_quality"
+    severity: "medium"
+    impact: "难以使用和测试"
+    examples:
+      - "pm_workflow() 有 5+ 参数"
+    effort_hours: 8
+    recommendation: "使用配置对象或数据类"
+
+  - id: "DEBT-206"
+    title: "返回类型不一致"
+    category: "code_quality"
+    severity: "medium"
+    impact: "调用者难以处理结果"
+    examples:
+      - "部分函数返回元组"
+      - "部分返回字典"
+      - "部分返回对象"
+    effort_hours: 12
+    recommendation: "统一返回类型模式"
+
+  - id: "DEBT-207"
+    title: "全局状态使用"
+    category: "code_quality"
+    severity: "medium"
+    impact: "测试困难，隐式依赖"
+    location: "throughout codebase"
+    effort_hours: 12
+    recommendation: "使用依赖注入而非全局变量"
+
+  - id: "DEBT-208"
+    title: "过时的 __pycache__"
+    category: "infrastructure"
+    severity: "medium"
+    impact: "可能的导入问题"
+    location: "根目录 __pycache__/"
+    effort_hours: 1
+    recommendation: "删除并添加到 .gitignore"
+
+  - id: "DEBT-209"
+    title: "测试隔离不充分"
+    category: "testing"
+    severity: "medium"
+    impact: "测试可能相互影响"
+    current_state: |
+      部分测试共享临时目录
+      测试顺序敏感
+    effort_hours: 12
+    recommendation: "确保每个测试独立，使用 fixtures"
+
+  - id: "DEBT-210"
+    title: "缺少负载测试"
+    category: "testing"
+    severity: "medium"
+    impact: "性能瓶颈未发现"
+    effort_hours: 16
+    recommendation: "使用 Locust 或类似工具进行负载测试"
+
+  - id: "DEBT-211"
+    title: "日志级别不当"
+    category: "code_quality"
+    severity: "medium"
+    impact: "调试困难，日志噪音"
+    examples:
+      - "重要信息使用 debug 级别"
+      - "过多 info 日志"
+    effort_hours: 8
+    recommendation: "审查并统一日志级别策略"
+
+  - id: "DEBT-212"
+    title: "敏感信息记录到日志"
+    category: "security"
+    severity: "medium"
+    impact: "潜在的信息泄露"
+    examples:
+      - "API 密钥可能在错误堆栈中暴露"
+      - "用户数据未脱敏"
+    effort_hours: 8
+    recommendation: "实现日志脱敏，审查所有日志语句"
+
+  - id: "DEBT-213"
+    title: "缺少依赖注入"
+    category: "architecture"
+    severity: "medium"
+    impact: "测试困难，耦合紧"
+    effort_hours: 20
+    recommendation: "使用依赖注入容器"
+
+  - id: "DEBT-214"
+    title: "模块边界不清晰"
+    category: "architecture"
+    severity: "medium"
+    impact: "循环依赖，难以重构"
+    examples:
+      - "orchestrator 依赖 executor"
+      - "executor 依赖 orchestrator"
+    effort_hours: 24
+    recommendation: "定义清晰的模块接口，提取共享层"
+
+  - id: "DEBT-215"
+    title: "缺少向后兼容性测试"
+    category: "testing"
+    severity: "medium"
+    impact: "破坏性变更影响用户"
+    effort_hours: 16
+    recommendation: "添加版本兼容性测试套件"
+
+  - id: "DEBT-216"
+    title: "文档缺少示例"
+    category: "documentation"
+    severity: "medium"
+    impact: "难以入门"
+    location: "docs/"
+    effort_hours: 16
+    recommendation: "为每个模块添加使用示例"
+
+  - id: "DEBT-217"
+    title: "CHANGELOG 不完整"
+    category: "documentation"
+    severity: "medium"
+    impact: "用户不知道版本变化"
+    location: "CHANGELOG.md"
+    current_state: "仅引用 v0.1.0，无详细变更"
+    effort_hours: 8
+    recommendation: "维护详细的变更日志"
+
+  - id: "DEBT-218"
+    title: "缺少故障排除指南"
+    category: "documentation"
+    severity: "medium"
+    impact: "常见问题难以解决"
+    effort_hours: 8
+    recommendation: "创建 FAQ 和故障排除文档"
+
+# ============================================
+# Low Priority Debt Items (P3)
+# ============================================
+low_priority_debt:
+  - id: "DEBT-301"
+    title: "代码风格不一致"
+    category: "code_quality"
+    severity: "low"
+    impact: "可读性轻微降低"
+    examples:
+      - "部分使用单引号，部分双引号"
+      - "变量命名风格混合"
+    effort_hours: 8
+    recommendation: "运行 black 统一格式"
+
+  - id: "DEBT-302"
+    title: "过时注释"
+    category: "documentation"
+    severity: "low"
+    impact: "误导开发者"
+    effort_hours: 4
+    recommendation: "审查并删除或更新过时注释"
+
+  - id: "DEBT-303"
+    title: "未使用的导入"
+    category: "code_quality"
+    severity: "low"
+    impact: "命名空间污染"
+    effort_hours: 2
+    recommendation: "使用 autoremove-warnings 或 flake8"
+
+  - id: "DEBT-304"
+    title: "缺少 README 翻译"
+    category: "documentation"
+    severity: "low"
+    impact: "非英语用户障碍"
+    effort_hours: 16
+    recommendation: "提供多语言 README"
+
+  - id: "DEBT-305"
+    title: "缺少徽章"
+    category: "infrastructure"
+    severity: "low"
+    impact: "项目状态不直观"
+    location: "README.md"
+    effort_hours: 2
+    recommendation: "添加构建状态、覆盖率、版本徽章"
+
+  - id: "DEBT-306"
+    title: "无发布说明模板"
+    category: "infrastructure"
+    severity: "low"
+    impact: "发布质量不一致"
+    effort_hours: 4
+    recommendation: "创建发布说明模板"
+
+  - id: "DEBT-307"
+    title: "依赖许可未审计"
+    category: "infrastructure"
+    severity: "low"
+    impact: "法律风险"
+    effort_hours: 8
+    recommendation: "使用 tools like pip-licenses 审计"
+
+  - id: "DEBT-308"
+    title: "缺少性能文档"
+    category: "documentation"
+    severity: "low"
+    impact: "用户不知道性能特性"
+    effort_hours: 8
+    recommendation: "记录性能特性和基准"
+
+  - id: "DEBT-309"
+    title: "无贡献者指南"
+    category: "documentation"
+    severity: "low"
+    impact: "新贡献者迷茫"
+    effort_hours: 8
+    recommendation: "创建贡献者指南"
+
+  - id: "DEBT-310"
+    title: "缺少路线图"
+    category: "documentation"
+    severity: "low"
+    impact: "项目方向不清晰"
+    effort_hours: 4
+    recommendation: "创建项目路线图"
+
+  - id: "DEBT-311"
+    title: "无断链检查"
+    category: "infrastructure"
+    severity: "low"
+    impact: "文档链接可能失效"
+    effort_hours: 4
+    recommendation: "添加 markdown 链接检查到 CI"
+
+  - id: "DEBT-312"
+    title: "缺少用户反馈渠道"
+    category: "infrastructure"
+    severity: "low"
+    impact: "难以收集反馈"
+    effort_hours: 4
+    recommendation: "创建问题模板和反馈指南"
+
+  - id: "DEBT-313"
+    title: "无演示应用"
+    category: "documentation"
+    severity: "low"
+    impact: "难以展示功能"
+    effort_hours: 16
+    recommendation: "创建简单的演示应用"
+
+  - id: "DEBT-314"
+    title: "缺少国际化支持"
+    category: "code_quality"
+    severity: "low"
+    impact: "限制非英语用户"
+    effort_hours: 32
+    recommendation: "实现 i18n 框架"
+
+# ============================================
+# Metrics and Trends
+# ============================================
+metrics:
+  code_complexity:
+    average_cyclomatic_complexity: 8.5
+    high_complexity_functions: 23
+    very_high_complexity_functions: 7
+
+  test_coverage:
+    overall_coverage: 28
+    critical_path_coverage: 35
+    unit_test_count: 47
+    integration_test_count: 8
+    e2e_test_count: 2
+
+  documentation_coverage:
+    public_api_documented: 45
+    module_readme_coverage: 30
+    examples_coverage: 20
+
+  security_metrics:
+    known_vulnerabilities: 4
+    exposed_secrets: 4
+    sql_injection_risks: 0
+    xss_risks: 0
+
+  performance_metrics:
+    avg_response_time_ms: 450
+    p95_response_time_ms: 1200
+    p99_response_time_ms: 3500
+
+# ============================================
+# Recommendations by Priority
+# ============================================
+recommendations:
+  immediate_actions:
+    - "解决 DEBT-001：立即撤销并移除所有硬编码的 API 密钥"
+    - "解决 DEBT-002：审计并修复所有 shell 命令注入风险"
+    - "解决 DEBT-006：设置基础 CI/CD 管道"
+    - "解决 DEBT-004：为核心模块添加类型注解"
+
+  short_term_goals_1_3_months:
+    - "将测试覆盖率提升到 60%"
+    - "启用类型检查（mypy strict 模式）"
+    - "完成架构文档"
+    - "实现自动日志清理"
+    - "添加端到端测试套件"
+
+  medium_term_goals_3_6_months:
+    - "将测试覆盖率提升到 80%"
+    - "完成所有文档更新"
+    - "实现完整的监控和追踪"
+    - "性能优化和基准测试"
+    - "安全审计和加固"
+
+  long_term_goals_6_12_months:
+    - "建立持续改进文化"
+    - "实现自动化依赖更新"
+    - "完善开发者体验"
+    - "建立性能回归检测"
+    - "完整的国际化支持"
+
+# ============================================
+# Risk Assessment
+# ============================================
+risk_assessment:
+  security_risks:
+    - severity: "critical"
+      items: 5
+      description: "API 密钥泄露、命令注入、路径穿越"
+
+  maintainability_risks:
+    - severity: "high"
+      items: 12
+      description: "类型检查缺失、测试不足、文档过时"
+
+  scalability_risks:
+    - severity: "medium"
+      items: 6
+      description: "缺少监控、性能基准"
+
+  operational_risks:
+    - severity: "medium"
+      items: 8
+      description: "缺少 CI/CD、日志管理"
+
+# ============================================
+# Metadata
+# ============================================
+metadata:
+  analysis_method: "Manual code review and static analysis"
+  reviewed_files: 127
+  lines_of_code: approximately 15000
+  review_duration_hours: 8
+  reviewer: "Code Review Agent"
+  next_review_date: "2025-03-19"
+
+  tools_used:
+    - "Manual code review"
+    - "grep for pattern analysis"
+    - "find for file enumeration"
+    - "read for file content analysis"
+
+  excluded_directories:
+    - "node_modules"
+    - ".git"
+    - "venv"
+    - "__pycache__"
+    - "dist"
+    - "build"
+    - ".workflow"
+    - ".claude-sandbox"

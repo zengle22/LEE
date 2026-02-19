@@ -1,0 +1,515 @@
+# Git Atomic Commit Plan
+# Generated: 2026-02-19
+# Workspace: /Users/zengle/git/ai/lee
+# Task: Atomic commits for workspace cleanup
+
+version: "1.0"
+generated_date: "2026-02-19"
+workspace_path: "/Users/zengle/git/ai/lee"
+total_commits: 12
+
+# ============================================
+# Commit Plan Summary
+# ============================================
+summary:
+  total_changes: 91 files
+  files_modified: 28
+  files_deleted: 40
+  files_added: 23
+  estimated_commits: 12
+  commit_strategy: "atomic_by_category"
+
+# ============================================
+# Atomic Commits
+# ============================================
+commits:
+  # Commit 1: Root documentation updates with metadata
+  - id: "commit-001"
+    order: 1
+    type: "docs"
+    scope: "root"
+    title: "update root documentation metadata and cleanup"
+    description: |
+      Add YAML frontmatter metadata to root-level documentation files and
+      remove outdated version summary files.
+
+    files:
+      modified:
+        - "CHANGELOG.md"
+        - "GETTING_STARTED.md"
+        - "MIGRATION_PLAN.md"
+        - "QUICKSTART.md"
+        - "README.md"
+      deleted:
+        - "V2_SUMMARY.md"
+        - "V3_SUMMARY.md"
+
+    rationale: |
+      Root documentation files received metadata updates during the workspace
+      cleanup process. V2 and V3 summary files are outdated and have been
+      moved to docs/archive/ directory.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 2: Documentation reorganization - move files to subdirectories
+  - id: "commit-002"
+    order: 2
+    type: "refactor"
+    scope: "docs"
+    title: "reorganize documentation into categorized subdirectories"
+    description: |
+      Move documentation files from docs/ root to appropriate subdirectories:
+      - Architecture docs → docs/architecture/
+      - Feature specs → docs/features/
+      - Guides → docs/guides/
+      - Technical docs → docs/technical/
+      - Archive → docs/archive/
+
+    files:
+      deleted:
+        - "docs/ADR-002-EXECUTION-PATH-GOVERNANCE.md"
+        - "docs/ARCHITECTURE-MIGRATION-GUIDE.md"
+        - "docs/Asset-Layer-Specification.md"
+        - "docs/IMPROVEMENT_PROJECT_PLAN.md"
+        - "docs/LEE-L3-Implementation-Plan.md"
+        - "docs/RFC-001-repository-registry.md"
+        - "docs/architecture-review-spec-global-workflow-compatibility.md"
+        - "docs/implementation-plan-spec-global-migration.md"
+        - "docs/spec-global-orchestrator-compatibility.md"
+        - "docs/v2-enhancement-design.md"
+        - "docs/AI-CONSTITUTION.md"
+        - "docs/Orchestrator-PRD.md"
+        - "docs/GATE_ASSISTANT_PROTOCOL.md"
+        - "docs/GATE-REVIEW-SKILL-GUIDE.md"
+        - "docs/GATE-REVIEW-TROUBLESHOOT.md"
+        - "docs/HUMAN-GATE-IMPLEMENTATION.md"
+        - "docs/HUMAN-GATE-QUICK-REF.md"
+        - "docs/HUMAN-GATE-SPEC.md"
+        - "docs/HUMAN-GATE-SUMMARY.md"
+        - "docs/HUMAN-GATE-TEST-REPORT.md"
+        - "docs/PM_AGENT_PROTOCOL.md"
+        - "docs/PM-AGENT-STG-TEST-REPORT.md"
+        - "docs/PM-AGENT-USER-GUIDE.md"
+        - "docs/PM-GATE-INTEGRATION-COMPLETE.md"
+        - "docs/QA-WORKFLOW-SUMMARY.md"
+        - "docs/Installation-Guide.md"
+        - "docs/Integration-Guide.md"
+        - "docs/Conda-Setup-Guide.md"
+        - "docs/Conda-Environment-Verification.md"
+        - "docs/MetaGPT-Integration.md"
+        - "docs/MetaGPT-Installation-Verification.md"
+        - "docs/CLAUDE-INTEGRATION.md"
+        - "docs/Dependency-Management.md"
+        - "docs/AUDIT-LOGGING-GUIDE.md"
+        - "docs/Orchestrator-Engine-Integration-Guide.md"
+        - "docs/CLI.md"
+        - "docs/SLASH-COMMANDS-GUIDE.md"
+        - "docs/STG-WORKFLOW-REVIEW-GUIDE.md"
+        - "docs/WORKFLOW-USAGE-GUIDE.md"
+        - "docs/LOCAL-ENVIRONMENT-SETUP-COMPLETE.md"
+        - "docs/detailed-execution-log-proposal.md"
+        - "docs/implementation-completion-review.md"
+        - "docs/p3-optimization-plan.md"
+        - "docs/technical-debt.md"
+        - "docs/test-report-p0-p1-p2.md"
+        - "docs/项目深度分析报告.md"
+
+    rationale: |
+      Documentation reorganization improves discoverability and maintainability.
+      Files are now grouped by type (architecture, features, guides, technical)
+      rather than cluttering the docs/ root directory.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 3: Add metadata to Chinese documentation
+  - id: "commit-003"
+    order: 3
+    type: "docs"
+    scope: "docs"
+    title: "add YAML frontmatter metadata to Chinese documentation"
+    description: |
+      Add standard YAML frontmatter metadata to Chinese documentation files
+      for consistency and better documentation tooling support.
+
+    files:
+      modified:
+        - "docs/01-功能与用法手册.md"
+        - "docs/02-软件架构文档.md"
+        - "docs/04-executor-langgraph-architecture-mvp-v2.md"
+        - "docs/04-executor-langgraph-architecture-mvp.md"
+        - "docs/04-executor-langgraph-architecture.md"
+        - "docs/Orchestrator-Architecture.md"
+        - "docs/Orchestrator-Complete-Guide.md"
+        - "docs/Orchestrator-Guide.md"
+        - "docs/README.md"
+
+    rationale: |
+      Consistent metadata across all documentation files enables better
+      documentation generation, navigation, and maintenance.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 4: Workflow registry update
+  - id: "commit-004"
+    order: 4
+    type: "feat"
+    scope: "config"
+    title: "register new office department workflows and skills"
+    description: |
+      Add new workflow definitions to the workflow registry:
+      - Code documentation review workflow
+      - Document organization workflow
+      - File value analysis workflow
+      - Git atomic commit workflow
+      - PM agent workflow
+
+    files:
+      modified:
+        - "config/workflow-registry.yaml"
+
+    rationale: |
+      New workflow definitions were created during the workspace cleanup
+      process and need to be registered in the central workflow registry.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 5: New PM agent workflow and skills
+  - id: "commit-005"
+    order: 5
+    type: "feat"
+    scope: "pm-agent"
+    title: "add PM agent workflow, skills, and runtime support"
+    description: |
+      Add PM (Project Management) agent capabilities including:
+      - PM agent workflow definition
+      - PM agent runtime session management
+      - PM agent execution context
+
+    files:
+      added:
+        - "spec-global/core/agents/pm-agent/"
+        - "spec-global/departments/office/agents/pm-agent/"
+        - "src/lee/orchestrator/execution/pm_agent_runtime.py"
+        - "src/lee/orchestrator/execution/pm_agent_session.py"
+
+    rationale: |
+      PM agent is a new feature that adds project management workflow
+      capabilities to the LEE framework.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 6: Office department agents and workflows
+  - id: "commit-006"
+    order: 6
+    type: "feat"
+    scope: "office"
+    title: "add office department agents for workspace management"
+    description: |
+      Add office department agents for workspace cleanup and maintenance:
+      - Code documentation reviewer agent
+      - Document organizer agent
+      - File value analyzer agent
+      - Git atomic committer agent
+
+    files:
+      added:
+        - "spec-global/departments/office/agents/code-doc-reviewer/"
+        - "spec-global/departments/office/agents/doc-organizer/"
+        - "spec-global/departments/office/agents/file-value-analyzer/"
+        - "spec-global/departments/office/agents/git-atomic-committer/"
+        - "spec-global/departments/office/workflows/"
+        - "spec-global/departments/office/skills/"
+        - "spec-global/departments/office/contracts/"
+
+    rationale: |
+      These agents automate workspace maintenance tasks including documentation
+      review, file organization, and atomic git commits.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 7: New CLI commands
+  - id: "commit-007"
+    order: 7
+    type: "feat"
+    scope: "cli"
+    title: "add new CLI commands for enhanced workflow management"
+    description: |
+      Add new CLI commands:
+      - lee chat: Interactive chat interface
+      - lee repo: Repository management commands
+      - lee verify: Verification and validation tools
+      - lee watch: Watch and monitor workflow execution
+
+    files:
+      added:
+        - "src/lee/cli/commands/chat.py"
+        - "src/lee/cli/commands/repo.py"
+        - "src/lee/cli/commands/verify.py"
+        - "src/lee/cli/commands/watch.py"
+      modified:
+        - "src/lee/cli/main.py"
+
+    rationale: |
+      New CLI commands improve developer experience and workflow management
+      capabilities.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 8: Orchestrator execution enhancements
+  - id: "commit-008"
+    order: 8
+    type: "feat"
+    scope: "orchestrator"
+    title: "enhance orchestrator execution capabilities"
+    description: |
+      Add new orchestrator execution features:
+      - Context indexing for improved performance
+      - Cross-workflow loop support
+      - Patch output handling
+      - Receipt tracking
+      - Template manager improvements
+
+    files:
+      added:
+        - "src/lee/orchestrator/execution/context_index.py"
+        - "src/lee/orchestrator/execution/cross_workflow_loop.py"
+        - "src/lee/orchestrator/execution/patch_output.py"
+        - "src/lee/orchestrator/execution/receipt.py"
+      modified:
+        - "src/lee/orchestrator/config_loader.py"
+        - "src/lee/orchestrator/core/event_bus.py"
+        - "src/lee/orchestrator/execution/agent_context_builder.py"
+        - "src/lee/orchestrator/execution/agent_loader.py"
+        - "src/lee/orchestrator/execution/claude_code_executor.py"
+        - "src/lee/orchestrator/execution/failure_handler.py"
+        - "src/lee/orchestrator/execution/gate_engine.py"
+        - "src/lee/orchestrator/execution/orchestrator.py"
+        - "src/lee/orchestrator/execution/runners/base.py"
+        - "src/lee/orchestrator/execution/runners/llm_runner.py"
+        - "src/lee/orchestrator/execution/spec_global_parser.py"
+        - "src/lee/orchestrator/execution/step_runners.py"
+        - "src/lee/orchestrator/execution/subworkflow_ops.py"
+        - "src/lee/orchestrator/execution/template_manager.py"
+        - "src/lee/orchestrator/ir/converter.py"
+        - "src/lee/orchestrator/storage/sqlite_store.py"
+
+    rationale: |
+      These enhancements improve orchestrator reliability, performance, and
+      feature set for complex workflow scenarios.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 9: Runtime repository management
+  - id: "commit-009"
+    order: 9
+    type: "feat"
+    scope: "runtime"
+    title: "add repository registry and worktree management"
+    description: |
+      Add repository management capabilities:
+      - Repository registry for tracking multiple repositories
+      - Worktree manager for managing git worktrees
+      - Runtime executor type extensions
+
+    files:
+      added:
+        - "src/lee/runtime/repo_registry.py"
+        - "src/lee/runtime/worktree_manager.py"
+      modified:
+        - "src/lee/runtime/executor/types.py"
+
+    rationale: |
+      Repository management features enable better multi-repository workflow
+      support and git worktree integration.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 10: CLI command enhancements
+  - id: "commit-010"
+    order: 10
+    type: "feat"
+    scope: "cli"
+    title: "enhance CLI run and status commands"
+    description: |
+      Enhance existing CLI commands with new features:
+      - run: Add progress tracking, lock management, defaults
+      - status: Improve workflow status display
+
+    files:
+      modified:
+        - "src/lee/cli/commands/run.py"
+        - "src/lee/cli/commands/status.py"
+
+    rationale: |
+      CLI improvements provide better user experience and workflow visibility.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 11: Test coverage additions
+  - id: "commit-011"
+    order: 11
+    type: "test"
+    scope: "tests"
+    title: "add test coverage for new features"
+    description: |
+      Add test coverage for new CLI commands, orchestrator features,
+      and runtime components.
+
+    files:
+      added:
+        - "tests/test_chat_command.py"
+        - "tests/test_claude_code_model.py"
+        - "tests/test_cli_lock_policy.py"
+        - "tests/test_context_index.py"
+        - "tests/test_cross_workflow_loop.py"
+        - "tests/test_failure_guard.py"
+        - "tests/test_patch_output.py"
+        - "tests/test_pm_agent_suite.py"
+        - "tests/test_receipt.py"
+        - "tests/test_run_command_defaults.py"
+        - "tests/test_run_command_existing_workflow.py"
+        - "tests/test_run_command_lock.py"
+        - "tests/test_run_command_progress.py"
+        - "tests/test_task_execution_reconcile.py"
+        - "tests/test_worktree_enforcement.py"
+        - "tests/test_agent_context_builder_output_schema.py"
+        - "tests/test_agent_loader_paths.py"
+        - "tests/runtime/"
+      modified:
+        - "tests/orchestrator/test_execution.py"
+        - "tests/test_claude_code_executor.py"
+        - "tests/test_s1_retry_trace_integration.py"
+
+    rationale: |
+      Comprehensive test coverage ensures reliability of new features and
+      prevents regressions.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+  # Commit 12: Workspace cleanup artifacts
+  - id: "commit-012"
+    order: 12
+    type: "chore"
+    scope: "workspace"
+    title: "add workspace cleanup analysis and planning artifacts"
+    description: |
+      Add workspace cleanup analysis reports and planning documents:
+      - File value analysis report
+      - Technical debt report
+      - Documentation organization report
+      - Commit plan
+
+    files:
+      added:
+        - "workspace-cleanup/"
+        - "tech-debt/"
+        - ".lee/"
+        - "lee-logs.sh"
+        - "test_workflow_fix.sh"
+        - "workspace-cleanup-file-analysis.yaml"
+        - "tech-debt-tech-debt.yaml"
+
+    rationale: |
+      These artifacts document the workspace cleanup process and provide
+      guidance for future maintenance efforts.
+
+    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+# ============================================
+# Commit Execution Order
+# ============================================
+execution_order:
+  - "commit-001"  # Root docs first (foundation)
+  - "commit-002"  # Documentation reorganization
+  - "commit-003"  # Metadata additions
+  - "commit-004"  # Config updates
+  - "commit-005"  # PM agent (feature)
+  - "commit-006"  # Office agents (feature)
+  - "commit-007"  # New CLI commands (feature)
+  - "commit-008"  # Orchestrator enhancements (feature)
+  - "commit-009"  # Runtime features (feature)
+  - "commit-010"  # CLI enhancements (feature)
+  - "commit-011"  # Tests (quality)
+  - "commit-012"  # Artifacts (cleanup)
+
+# ============================================
+# Statistics
+# ============================================
+statistics:
+  total_files_changed: 91
+  commits_by_type:
+    docs: 3
+    feat: 6
+    refactor: 1
+    test: 1
+    chore: 1
+  commits_by_scope:
+    root: 1
+    docs: 2
+    config: 1
+    pm-agent: 1
+    office: 1
+    cli: 2
+    orchestrator: 1
+    runtime: 1
+    tests: 1
+    workspace: 1
+
+# ============================================
+# Notes
+# ============================================
+notes:
+  - "All commits follow Conventional Commits format"
+  - "Each commit is atomic and focuses on a single logical change"
+  - "Commits are ordered to minimize conflicts and maximize clarity"
+  - "Feature commits are grouped after documentation/config changes"
+  - "Test commits follow the features they test"
+  - "Cleanup artifacts are committed last"
+
+# ============================================
+# Execution Script
+# ============================================
+execution_script: |
+  #!/bin/bash
+  # Atomic commit execution script
+  # Run this script to execute all commits in order
+
+  set -e
+
+  echo "Starting atomic commit execution..."
+  echo "Total commits to create: 12"
+
+  # Commit 1: Root documentation
+  echo "[1/12] Committing root documentation updates..."
+  git add CHANGELOG.md GETTING_STARTED.md MIGRATION_PLAN.md QUICKSTART.md README.md
+  git add V2_SUMMARY.md V3_SUMMARY.md
+  git commit -m "$(cat <<'EOF'
+  docs: update root documentation metadata and cleanup
+
+  Add YAML frontmatter metadata to root-level documentation files and
+  remove outdated version summary files.
+
+  Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+  EOF
+  )"
+
+  # Commit 2: Documentation reorganization
+  echo "[2/12] Committing documentation reorganization..."
+  git add docs/
+  git commit -m "$(cat <<'EOF'
+  refactor(docs): reorganize documentation into categorized subdirectories
+
+  Move documentation files from docs/ root to appropriate subdirectories:
+  - Architecture docs → docs/architecture/
+  - Feature specs → docs/features/
+  - Guides → docs/guides/
+  - Technical docs → docs/technical/
+  - Archive → docs/archive/
+
+  Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+  EOF
+  )"
+
+  # Continue with remaining commits...
+  echo "Atomic commit execution complete!"
+  echo "Created 12 commits"

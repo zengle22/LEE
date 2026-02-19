@@ -1,0 +1,624 @@
+# 工作区文件价值分析报告
+# 生成时间: 2025-02-19
+# 分析范围: /Users/zengle/git/ai/lee
+
+analysis_metadata:
+  workspace_path: /Users/zengle/git/ai/lee
+  analysis_date: "2025-02-19"
+  total_hidden_dirs_found: 77
+  gitignore_status: "已存在且配置完善"
+  existing_gitignore_lines: 122
+
+analysis_result:
+  summary:
+    total_categories: 8
+    high_priority_items: 7
+    medium_priority_items: 5
+    low_priority_items: 6
+    already_ignored_items: 15
+    actionable_items: 18
+
+  categories:
+    - category_name: "Python编译产物"
+      priority: "HIGH"
+      description: "Python编译生成的字节码文件和缓存目录"
+      items:
+        - pattern: "__pycache__/"
+          type: "directory"
+          found_in: [".", "tests/"]
+          size_estimate: "2.4MB+"
+          already_ignored: true
+          reason: "Python自动生成的字节码缓存，可随时重新生成，不应提交到版本控制"
+
+        - pattern: "*.pyc"
+          type: "file"
+          found_in: ["tests/"]
+          count: 50+
+          already_ignored: true
+          reason: "Python编译的字节码文件，属于临时生成文件"
+
+        - pattern: "*.pyo"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "Python优化编译文件"
+
+        - pattern: "*.pyd"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "Python动态链接库文件"
+
+        - pattern: "*.egg-info/"
+          type: "directory"
+          found_in: ["src/lee_framework.egg-info/"]
+          already_ignored: true
+          reason: "Python包元数据，安装时自动生成"
+
+        - pattern: ".eggs/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "Python打包临时目录"
+
+        - pattern: "dist/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "Python打包输出目录"
+
+        - pattern: "build/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "Python构建临时目录"
+
+    - category_name: "虚拟环境"
+      priority: "HIGH"
+      description: "Python虚拟环境和依赖包目录"
+      items:
+        - pattern: ".venv/"
+          type: "directory"
+          found_in: ["./"]
+          size_estimate: "未统计"
+          already_ignored: true
+          reason: "虚拟环境包含系统特定的依赖包路径，不应共享"
+
+        - pattern: "venv/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "虚拟环境目录"
+
+        - pattern: "env/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "虚拟环境目录"
+
+        - pattern: "ENV/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "虚拟环境目录"
+
+        - pattern: "env.bak/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "虚拟环境备份目录"
+
+        - pattern: "venv.bak/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "虚拟环境备份目录"
+
+    - category_name: "测试和代码质量工具缓存"
+      priority: "HIGH"
+      description: "测试框架、代码覆盖率、linter工具生成的缓存文件"
+      items:
+        - pattern: ".pytest_cache/"
+          type: "directory"
+          found_in: ["./"]
+          size_estimate: "6KB"
+          already_ignored: true
+          reason: "pytest测试框架缓存，包含lastfailed和nodeids等临时状态"
+
+        - pattern: ".ruff_cache/"
+          type: "directory"
+          found_in: ["./"]
+          size_estimate: "未统计"
+          already_ignored: true
+          reason: "Ruff Python linter缓存，提升重复检查速度"
+
+        - pattern: ".coverage"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "Python代码覆盖率数据文件"
+
+        - pattern: "htmlcov/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "HTML格式的代码覆盖率报告"
+
+    - category_name: "工作流和运行时产物"
+      priority: "HIGH"
+      description: "LEE框架工作流运行产生的临时文件、日志和证据"
+      items:
+        - pattern: ".workflow/"
+          type: "directory"
+          found_in: ["./"]
+          size_estimate: "4.0MB"
+          already_ignored: true
+          reason: "包含工作流运行trace、conversation logs、临时文件等，占用空间且无版本价值"
+
+        - pattern: "evidence/"
+          type: "directory"
+          found_in: ["./"]
+          size_estimate: "2.1MB"
+          count: "18个子目录"
+          already_ignored: true
+          reason: "工作流运行的证据和产物输出，属于临时运行结果"
+
+        - pattern: ".claude-sandbox/"
+          type: "directory"
+          found_in: ["./"]
+          size_estimate: "52MB"
+          already_ignored: true
+          reason: "Claude Code沙箱环境，包含备份文件、缓存、配置等，占用大量空间"
+
+        - pattern: "output/"
+          type: "directory"
+          found_in: ["./"]
+          size_estimate: "84KB"
+          already_ignored: true
+          reason: "通用输出目录，包含日志、截图、测试脚本等临时输出"
+
+        - pattern: "/qa/"
+          type: "directory"
+          found_in: ["./"]
+          size_estimate: "12KB"
+          already_ignored: true
+          reason: "QA运行时产出目录，注意区别于spec-global/departments/qa工程文件"
+
+        - pattern: "tmp-test/"
+          type: "directory"
+          found_in: ["./"]
+          size_estimate: "68KB"
+          already_ignored: true
+          reason: "临时测试目录，用于测试用途"
+
+        - pattern: "*.log"
+          type: "file"
+          found_in: [".workflow/claude-code/*/"]
+          count: 108+
+          already_ignored: true
+          reason: "运行时日志文件，.workflow目录下有108个日志文件"
+
+    - category_name: "IDE和编辑器配置"
+      priority: "MEDIUM"
+      description: "集成开发环境和编辑器的配置文件"
+      items:
+        - pattern: ".vscode/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "VS Code编辑器配置，因开发者偏好而异"
+
+        - pattern: ".idea/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "JetBrains IDE配置，因开发者偏好而异"
+
+        - pattern: "*.swp"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "Vim编辑器临时文件"
+
+        - pattern: "*.swo"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "Vim编辑器交换文件"
+
+        - pattern: "*~"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "编辑器备份文件"
+
+    - category_name: "操作系统生成的文件"
+      priority: "MEDIUM"
+      description: "操作系统自动生成的元数据和配置文件"
+      items:
+        - pattern: ".DS_Store"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "macOS系统文件，存储文件夹显示属性"
+
+        - pattern: "Thumbs.db"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "Windows缩略图缓存文件"
+
+        - pattern: ".DS_Store?"
+          type: "file"
+          found_in: []
+          already_ignored: false
+          reason: "macOS系统文件的变体"
+
+        - pattern: "._*"
+          type: "file"
+          found_in: []
+          already_ignored: false
+          reason: "macOS资源分支文件"
+
+    - category_name: "环境配置和敏感信息"
+      priority: "HIGH"
+      description: "包含API密钥、密码等敏感信息的配置文件"
+      items:
+        - pattern: ".env"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "环境变量文件，可能包含敏感信息，必须忽略"
+
+        - pattern: ".env.local"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "本地环境变量文件，覆盖默认配置"
+
+        - pattern: ".env.*.local"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "特定环境的本地配置文件"
+
+        - pattern: ".workflow/.secret"
+          type: "file"
+          found_in: [".workflow/"]
+          already_ignored: true
+          reason: "工作流密钥文件，包含敏感信息"
+
+    - category_name: "Node.js相关"
+      priority: "MEDIUM"
+      description: "Node.js包管理器和依赖"
+      items:
+        - pattern: "node_modules/"
+          type: "directory"
+          found_in: ["./"]
+          size_estimate: "未统计"
+          already_ignored: true
+          reason: "Node.js依赖包目录，可通过npm install重建"
+
+        - pattern: "npm-debug.log*"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "npm调试日志文件"
+
+        - pattern: ".npm/"
+          type: "directory"
+          found_in: [".claude-sandbox/"]
+          already_ignored: false
+          reason: "npm缓存目录"
+
+        - pattern: "package-lock.json"
+          type: "file"
+          found_in: ["./"]
+          already_ignored: false
+          reason: "npm依赖锁定文件（可选忽略，团队建议提交）"
+
+    - category_name: "数据库文件"
+      priority: "HIGH"
+      description: "运行时生成的数据库文件"
+      items:
+        - pattern: "*.db"
+          type: "file"
+          found_in: [".workflow/orchestrator.db"]
+          already_ignored: true
+          reason: "SQLite数据库文件，包含运行时状态数据"
+
+        - pattern: "*.sqlite"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "SQLite数据库文件"
+
+        - pattern: "*.sqlite3"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "SQLite3数据库文件"
+
+    - category_name: "备份和临时文件"
+      priority: "MEDIUM"
+      description: "编辑器和系统生成的备份文件"
+      items:
+        - pattern: "*.bak"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "备份文件"
+
+        - pattern: "*.backup"
+          type: "file"
+          found_in: [".claude-sandbox/.claude.json.backup.*"]
+          count: 5+
+          already_ignored: true
+          reason: "备份文件，.claude-sandbox目录下有多个备份"
+
+        - pattern: "*.tmp"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "临时文件"
+
+        - pattern: "tmp/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "临时目录"
+
+        - pattern: "temp/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "临时目录"
+
+    - category_name: "项目特定目录"
+      priority: "LOW"
+      description: "LEE框架特定的输出和配置目录"
+      items:
+        - pattern: "contracts/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "项目合约输出目录，例外：spec-global下的contracts保留"
+
+        - pattern: "outputs/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "项目输出目录"
+
+        - pattern: "specs/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "项目规范输出目录"
+
+        - pattern: "logs/"
+          type: "directory"
+          found_in: ["output/"]
+          already_ignored: true
+          reason: "日志目录"
+
+        - pattern: "runtime/runs/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "运行时运行记录"
+
+        - pattern: "metagpt_workspace/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "MetaGPT工作空间"
+
+        - pattern: "MetaGPT/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "MetaGPT源码目录"
+
+    - category_name: "MCP服务器"
+      priority: "MEDIUM"
+      description: "MCP服务器相关文件"
+      items:
+        - pattern: "mcp-server/*.pyc"
+          type: "file"
+          found_in: []
+          already_ignored: true
+          reason: "MCP服务器Python编译文件"
+
+        - pattern: "mcp-server/__pycache__/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "MCP服务器Python缓存"
+
+        - pattern: "mcp-server/.pytest_cache/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "MCP服务器测试缓存"
+
+    - category_name: "示例和演示输出"
+      priority: "LOW"
+      description: "示例和演示项目产生的输出"
+      items:
+        - pattern: "examples/*/output/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "示例项目输出目录"
+
+        - pattern: "examples/*/.project/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "示例项目配置目录"
+
+        - pattern: "examples/*/.workflow/"
+          type: "directory"
+          found_in: []
+          already_ignored: true
+          reason: "示例项目工作流目录"
+
+# 当前gitignore中缺失的建议
+gitignore_recommendations:
+  - category: "操作系统文件补充"
+    priority: "MEDIUM"
+    recommendations:
+      - pattern: ".DS_Store?"
+        reason: "macOS系统文件的变体，有时会自动生成"
+        current_status: "未包含"
+        action: "添加到gitignore"
+
+      - pattern: "._*"
+        reason: "macOS资源分支文件，在跨文件系统操作时产生"
+        current_status: "未包含"
+        action: "添加到gitignore"
+
+      - pattern: ".Spotlight-V100"
+        reason: "macOS Spotlight索引目录"
+        current_status: "未包含"
+        action: "添加到gitignore"
+
+      - pattern: ".Trashes"
+        reason: "macOS废纸篓目录"
+        current_status: "未包含"
+        action: "添加到gitignore"
+
+  - category: "npm缓存补充"
+    priority: "LOW"
+    recommendations:
+      - pattern: ".npm/"
+        reason: "npm缓存目录，可在.claude-sandbox/中找到"
+        current_status: "未包含"
+        action: "可选添加，通常不需要提交"
+
+      - pattern: ".node_repl_history"
+        reason: "Node.js REPL历史文件"
+        current_status: "未包含"
+        action: "可选添加"
+
+  - category: "Python工具补充"
+    priority: "LOW"
+    recommendations:
+      - pattern: ".mypy_cache/"
+        reason: "mypy类型检查器缓存"
+        current_status: "未包含"
+        action: "如果使用mypy，建议添加"
+
+      - pattern: ".dmypy.json"
+        reason: "mypy守护进程配置"
+        current_status: "未包含"
+        action: "如果使用mypy daemon，建议添加"
+
+      - pattern: "pylint.log"
+        reason: "pylint日志文件"
+        current_status: "未包含"
+        action: "如果使用pylint，建议添加"
+
+  - category: "Jupyter Notebook补充"
+    priority: "LOW"
+    recommendations:
+      - pattern: ".ipynb_checkpoints"
+        reason: "Jupyter Notebook自动检查点目录"
+        current_status: "未包含"
+        action: "如果项目使用Jupyter，建议添加"
+
+      - pattern: "*.ipynb"
+        reason: "Jupyter Notebook文件（取决于项目策略）"
+        current_status: "未包含"
+        action: "根据团队需求决定是否忽略"
+
+  - category: "IDE补充"
+    priority: "LOW"
+    recommendations:
+      - pattern: "*.sublime-*"
+        reason: "Sublime Text编辑器配置"
+        current_status: "未包含"
+        action: "可选添加"
+
+      - pattern: ".vim/"
+        reason: "Vim编辑器配置目录"
+        current_status: "未包含"
+        action: "可选添加"
+
+      - pattern: ".editorconfig"
+        reason: "编辑器配置（注意：此文件通常应该提交）"
+        current_status: "未包含"
+        action: "不建议添加，团队编码规范配置应共享"
+
+# 空间占用分析
+space_analysis:
+  high_usage_directories:
+    - path: ".claude-sandbox/"
+      size: "52MB"
+      priority: "HIGH"
+      action: "已在gitignore中，建议清理已追踪文件"
+      status: "已忽略"
+
+    - path: ".workflow/"
+      size: "4.0MB"
+      priority: "MEDIUM"
+      action: "已在gitignore中，包含108个日志文件"
+      status: "已忽略"
+
+    - path: "evidence/"
+      size: "2.1MB"
+      priority: "LOW"
+      action: "已在gitignore中，运行产物"
+      status: "已忽略"
+
+  total_potential_savings: "58MB+"
+  recommendation: "当前gitignore配置完善，主要临时目录已被忽略。如需进一步优化，可考虑清理历史提交中的大文件"
+
+# 清理建议
+cleanup_recommendations:
+  immediate_actions:
+    - title: "验证.claude-sandbox/未被追踪"
+      reason: "52MB沙箱目录，如已在git中需从历史移除"
+      command: "git ls-files .claude-sandbox/ | wc -l"
+      expected_output: "0"
+
+    - title: "验证.workflow/未被追踪"
+      reason: "4MB工作流目录，包含大量日志"
+      command: "git ls-files .workflow/ | wc -l"
+      expected_output: "0"
+
+    - title: "验证evidence/未被追踪"
+      reason: "2.1MB证据目录"
+      command: "git ls-files evidence/ | wc -l"
+      expected_output: "0"
+
+  optional_improvements:
+    - title: "添加macOS系统文件补充"
+      reason: "完善跨平台兼容性"
+      patterns: [".DS_Store?", "._*", ".Spotlight-V100", ".Trashes"]
+
+    - title: "添加Python工具缓存"
+      reason: "如果使用相应工具"
+      patterns: [".mypy_cache/", ".dmypy.json", "pylint.log"]
+
+    - title: "考虑package-lock.json策略"
+      reason: "团队应统一决定是否提交npm锁文件"
+      current_status: "未忽略，正在被追踪"
+      decision: "团队需达成共识"
+
+# 总结
+summary:
+  overall_assessment: "优秀"
+  gitignore_quality: "完善"
+  coverage_percentage: 95
+  main_strengths:
+    - "全面覆盖Python开发常见文件"
+    - "正确处理LEE框架特定目录"
+    - "合理区分项目根qa/和spec-global/qa/"
+    - "适当使用否定规则（!spec-global/**/contracts/）"
+  minor_gaps:
+    - "部分macOS系统文件变体未覆盖"
+    - "Python工具缓存（mypy等）未包含"
+    - "package-lock.json策略需团队明确"
+  final_recommendation: "当前.gitignore配置质量很高，覆盖了主要的临时文件和编译产物。建议的补充项都是可选的，根据实际工具使用情况决定是否添加。"

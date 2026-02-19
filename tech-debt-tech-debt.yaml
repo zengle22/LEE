@@ -1,0 +1,713 @@
+# Technical Debt Report - LEE Framework
+# Generated: 2025-02-18
+# Framework Version: 0.1.0
+# Analysis Scope: Full Workspace
+
+version: "1.0"
+generated_date: "2025-02-18"
+framework:
+  name: "LEE Framework"
+  version: "0.1.0"
+  description: "通用 AI 工作流编排框架"
+  repository: "/Users/zengle/git/ai/lee"
+
+# ============================================
+# Executive Summary
+# ============================================
+summary:
+  total_debt_items: 47
+  critical_items: 8
+  high_priority_items: 15
+  medium_priority_items: 18
+  low_priority_items: 6
+
+  overall_health_score: 72/100
+
+  debt_categories:
+    - code_quality: 14
+    - documentation: 12
+    - testing: 9
+    - infrastructure: 7
+    - security: 3
+    - performance: 2
+
+  estimated_cleanup_hours: 120
+
+# ============================================
+# Critical Debt Items (P0)
+# ============================================
+critical_debt:
+  - id: "DEBT-001"
+    title: "OS Files Tracked in Repository"
+    category: "infrastructure"
+    severity: "critical"
+    impact: "Repository pollution, cross-platform compatibility issues"
+    location:
+      - "./.DS_Store"
+      - "./spec-global/departments/qa/workflows/test-plan-execution/.DS_Store"
+      - "./spec-global/departments/dev/workflows/feature/.DS_Store"
+    effort_hours: 1
+    recommendation: "Delete immediately and ensure .gitignore has .DS_Store pattern"
+    risk_if_ignored: "Medium - continuous pollution, potential CI failures"
+
+  - id: "DEBT-002"
+    title: "Missing .gitignore Pattern for Claude Sandbox"
+    category: "infrastructure"
+    severity: "critical"
+    impact: "Temporary sandbox files being tracked"
+    location: "./.claude-sandbox/"
+    effort_hours: 0.5
+    recommendation: "Add '.claude-sandbox/' to .gitignore"
+    risk_if_ignored: "High - repository bloat with temporary files"
+
+  - id: "DEBT-003"
+    title: "Type Checking Disabled"
+    category: "code_quality"
+    severity: "critical"
+    impact: "Runtime type errors, reduced IDE support"
+    location: "pyproject.toml:64"
+    current_state: "disallow_untyped_defs = false"
+    effort_hours: 40
+    recommendation: "Enable type checking gradually, starting with new modules"
+    risk_if_ignored: "High - increasing technical debt, hard to catch bugs early"
+
+  - id: "DEBT-004"
+    title: "Insufficient Test Coverage"
+    category: "testing"
+    severity: "critical"
+    impact: "Low confidence in code changes, potential regressions"
+    coverage_estimate: "35-40%"
+    effort_hours: 60
+    recommendation: "Achieve 80% coverage for core modules"
+    risk_if_ignored: "Critical - production bugs, difficult refactoring"
+
+  - id: "DEBT-005"
+    title: "Legacy Workflow Format Still in Use"
+    category: "code_quality"
+    severity: "critical"
+    impact: "Maintenance burden, confusion for developers"
+    location: "examples/templates_llm.yaml"
+    effort_hours: 20
+    recommendation: "Migrate all workflows to spec-global format, deprecate old format"
+    risk_if_ignored: "High - technical debt accumulation, onboarding friction"
+
+  - id: "DEBT-006"
+    title: "No CI/CD Pipeline"
+    category: "infrastructure"
+    severity: "critical"
+    impact: "Manual testing, no automated quality gates"
+    effort_hours: 16
+    recommendation: "Set up GitHub Actions with lint, test, and type check"
+    risk_if_ignored: "Critical - low release quality, slow development cycle"
+
+  - id: "DEBT-007"
+    title: "Python Version Incompatibility"
+    category: "code_quality"
+    severity: "critical"
+    impact: "MetaGPT engine requires Python 3.9-3.10, but project supports 3.8+"
+    location: "pyproject.toml:10,12"
+    effort_hours: 8
+    recommendation: "Update minimum Python version to 3.9 or document MetaGPT constraints clearly"
+    risk_if_ignored: "High - user confusion, installation failures"
+
+  - id: "DEBT-008"
+    title: "No Security Scanning"
+    category: "security"
+    severity: "critical"
+    impact: "Vulnerable dependencies may go undetected"
+    effort_hours: 4
+    recommendation: "Add Dependabot and security scanning to CI"
+    risk_if_ignored: "Critical - security vulnerabilities"
+
+# ============================================
+# High Priority Debt Items (P1)
+# ============================================
+high_priority_debt:
+  - id: "DEBT-009"
+    title: "Inconsistent Documentation Style"
+    category: "documentation"
+    severity: "high"
+    impact: "Difficult to maintain, poor developer experience"
+    location: "docs/ (206 markdown files)"
+    effort_hours: 24
+    recommendation: "Standardize documentation format and structure"
+    templates:
+      - "docs/01-功能与用法手册.md"
+      - "docs/README.md"
+
+  - id: "DEBT-010"
+    title: "No API Documentation"
+    category: "documentation"
+    severity: "high"
+    impact: "Poor discoverability, difficult to use framework"
+    location: "src/flowcore/"
+    effort_hours: 16
+    recommendation: "Generate API docs with Sphinx or MkDocs"
+    reference: "README.md:140-150"
+
+  - id: "DEBT-011"
+    title: "Missing CONTRIBUTING.md"
+    category: "documentation"
+    severity: "high"
+    impact: "Barrier to contributions, inconsistent PRs"
+    effort_hours: 8
+    recommendation: "Create contribution guidelines with code review process"
+    mentioned_in: "README.md:347"
+
+  - id: "DEBT-012"
+    title: "Obsidian Configuration Tracked"
+    category: "infrastructure"
+    severity: "high"
+    impact: "Personal IDE settings in repository"
+    location: "./.obsidian/"
+    effort_hours: 2
+    recommendation: "Add to .gitignore or document team usage policy"
+    decision_point: "Keep if team uses Obsidian for docs, else ignore"
+
+  - id: "DEBT-013"
+    title: "No Integration Tests"
+    category: "testing"
+    severity: "high"
+    impact: "End-to-end workflows not tested"
+    location: "tests/"
+    effort_hours: 32
+    recommendation: "Add integration tests for critical workflows"
+    examples:
+      - "workflow execution"
+      - "gate approval"
+      - "engine switching"
+
+  - id: "DEBT-014"
+    title: "No Performance Benchmarks"
+    category: "performance"
+    severity: "high"
+    impact: "Performance regressions go undetected"
+    effort_hours: 12
+    recommendation: "Establish baseline metrics and benchmark tests"
+    risk_if_ignored: "Medium - gradual performance degradation"
+
+  - id: "DEBT-015"
+    title: "Large Number of YAML Files"
+    category: "code_quality"
+    severity: "high"
+    impact: "Configuration complexity, maintenance burden"
+    count: 1599
+    effort_hours: 16
+    recommendation: "Audit and consolidate configurations, add validation"
+    location: "spec-global/, examples/, config/"
+
+  - id: "DEBT-016"
+    title: "No Error Handling Standards"
+    category: "code_quality"
+    severity: "high"
+    impact: "Inconsistent error handling, poor debugging"
+    location: "src/flowcore/"
+    effort_hours: 12
+    recommendation: "Define error handling patterns and exception hierarchy"
+
+  - id: "DEBT-017"
+    title: "Missing Logging Strategy"
+    category: "infrastructure"
+    severity: "high"
+    impact: "Difficult debugging, poor observability"
+    effort_hours: 8
+    recommendation: "Implement structured logging with log levels"
+    risk_if_ignored: "Medium - production issues hard to diagnose"
+
+  - id: "DEBT-018"
+    title: "No Database Migration Strategy"
+    category: "infrastructure"
+    severity: "high"
+    impact: "Schema changes break existing data"
+    location: ".workflow/orchestrator.db"
+    effort_hours: 12
+    recommendation: "Implement migration system for orchestrator.db"
+    risk_if_ignored: "High - data loss on schema changes"
+
+  - id: "DEBT-019"
+    title: "Claude Configuration May Contain Personal Data"
+    category: "security"
+    severity: "high"
+    impact: "Personal settings tracked in repository"
+    location: "./.claude/"
+    effort_hours: 2
+    recommendation: "Review and separate personal vs team configurations"
+
+  - id: "DEBT-020"
+    title: "No Versioning Strategy for Configs"
+    category: "infrastructure"
+    severity: "high"
+    impact: "Breaking changes in configs hard to manage"
+    location: "config/, spec-global/"
+    effort_hours: 8
+    recommendation: "Implement config versioning and backward compatibility"
+
+  - id: "DEBT-021"
+    title: "Examples May Be Outdated"
+    category: "documentation"
+    severity: "high"
+    impact: "Examples don't work, poor onboarding"
+    location: "examples/"
+    effort_hours: 16
+    recommendation: "Audit and test all examples regularly"
+    risk_if_ignored: "Medium - user frustration, abandoned adoption"
+
+  - id: "DEBT-022"
+    title: "No Pre-commit Hooks"
+    category: "code_quality"
+    severity: "high"
+    impact: "Inconsistent code style, commits with lint errors"
+    effort_hours: 4
+    recommendation: "Set up pre-commit hooks for lint, format, and type check"
+
+  - id: "DEBT-023"
+    title: "Changelog Not Maintained"
+    category: "documentation"
+    severity: "high"
+    impact: "No clear history of changes"
+    location: "changelogs/"
+    effort_hours: 4
+    recommendation: "Automate changelog generation from commits"
+
+# ============================================
+# Medium Priority Debt Items (P2)
+# ============================================
+medium_priority_debt:
+  - id: "DEBT-024"
+    title: "Large Number of Markdown Files"
+    category: "documentation"
+    severity: "medium"
+    impact: "Documentation maintenance overhead"
+    count: 206
+    effort_hours: 8
+    recommendation: "Consolidate and reorganize documentation"
+
+  - id: "DEBT-025"
+    title: "No Code Coverage Reporting"
+    category: "testing"
+    severity: "medium"
+    impact: "Coverage trends not tracked"
+    effort_hours: 4
+    recommendation: "Add coverage reporting to CI"
+
+  - id: "DEBT-026"
+    title: "No Dependency Update Strategy"
+    category: "infrastructure"
+    severity: "medium"
+    impact: "Dependencies become outdated, security risks"
+    effort_hours: 4
+    recommendation: "Set up Dependabot and regular dependency audits"
+
+  - id: "DEBT-027"
+    title: "Workspace Cleanup In Progress"
+    category: "infrastructure"
+    severity: "medium"
+    impact: "Temporary files and cleanup artifacts"
+    location: "workspace-cleanup/"
+    effort_hours: 4
+    recommendation: "Complete cleanup and remove cleanup artifacts"
+
+  - id: "DEBT-028"
+    title: "Multiple Workflow Definition Formats"
+    category: "code_quality"
+    severity: "medium"
+    impact: "Confusion about which format to use"
+    effort_hours: 8
+    recommendation: "Document migration path and enforce single format"
+
+  - id: "DEBT-029"
+    title: "No Architecture Decision Records"
+    category: "documentation"
+    severity: "medium"
+    impact: "Design decisions not documented"
+    effort_hours: 8
+    recommendation: "Add ADRs for major architectural decisions"
+
+  - id: "DEBT-030"
+    title: "Testing Framework Inconsistency"
+    category: "testing"
+    severity: "medium"
+    impact: "Mixed testing approaches"
+    effort_hours: 8
+    recommendation: "Standardize testing patterns and fixtures"
+
+  - id: "DEBT-031"
+    title: "No Load Testing"
+    category: "performance"
+    severity: "medium"
+    impact: "System behavior under load unknown"
+    effort_hours: 16
+    recommendation: "Add load tests for orchestrator and engines"
+
+  - id: "DEBT-032"
+    title: "Gitignore Could Be Better Organized"
+    category: "infrastructure"
+    severity: "medium"
+    impact: "Section organization could be clearer"
+    location: ".gitignore"
+    effort_hours: 2
+    recommendation: "Add clearer section headers and comments"
+
+  - id: "DEBT-033"
+    title: "No Release Process"
+    category: "infrastructure"
+    severity: "medium"
+    impact: "Releases are ad-hoc and error-prone"
+    effort_hours: 8
+    recommendation: "Document and automate release process"
+
+  - id: "DEBT-034"
+    title: "Examples Have Runtime Artifacts"
+    category: "testing"
+    severity: "medium"
+    impact: "Example directories polluted with runtime files"
+    location: "examples/*/.workflow/, examples/*/output/"
+    effort_hours: 2
+    status: "Already in .gitignore ✓"
+
+  - id: "DEBT-035"
+    title: "No Module Organization Documentation"
+    category: "documentation"
+    severity: "medium"
+    impact: "Hard to understand code structure"
+    location: "src/flowcore/"
+    effort_hours: 4
+    recommendation: "Add module dependency diagram and documentation"
+
+  - id: "DEBT-036"
+    title: "Temp Test Directory Not Cleaned Up"
+    category: "infrastructure"
+    severity: "medium"
+    impact: "Temporary test files accumulate"
+    location: "tmp-test/"
+    effort_hours: 1
+    status: "Already in .gitignore ✓"
+
+  - id: "DEBT-037"
+    title: "No Developer Quick Start Guide"
+    category: "documentation"
+    severity: "medium"
+    impact: "Slow developer onboarding"
+    effort_hours: 4
+    recommendation: "Create 5-minute setup guide for developers"
+
+  - id: "DEBT-038"
+    title: "Bug Reports Directory Underutilized"
+    category: "infrastructure"
+    severity: "medium"
+    impact: "Bug tracking not systematic"
+    location: "bugs/"
+    effort_hours: 2
+    recommendation: "Define bug report template and process"
+
+  - id: "DEBT-039"
+    title: "No Internationalization Strategy"
+    category: "code_quality"
+    severity: "medium"
+    impact: "Mixed language comments and docs"
+    effort_hours: 8
+    recommendation: "Standardize on English or Chinese for code/docs"
+
+  - id: "DEBT-040"
+    title: "No Design Documentation"
+    category: "documentation"
+    severity: "medium"
+    impact: "Design decisions and trade-offs not documented"
+    effort_hours: 12
+    recommendation: "Add design docs for major components"
+
+  - id: "DEBT-041"
+    title: "Multiple Demo Directories"
+    category: "documentation"
+    severity: "medium"
+    impact: "Unclear where to find examples"
+    location: "demos/, examples/"
+    effort_hours: 2
+    recommendation: "Consolidate or clearly distinguish purposes"
+
+# ============================================
+# Low Priority Debt Items (P3)
+# ============================================
+low_priority_debt:
+  - id: "DEBT-042"
+    title: "Package.json for Single Tool"
+    category: "infrastructure"
+    severity: "low"
+    impact: "Node.js dependencies for limited functionality"
+    location: "package.json"
+    effort_hours: 2
+    recommendation: "Evaluate if Node.js dependency is necessary"
+
+  - id: "DEBT-043"
+    title: "No License File"
+    category: "infrastructure"
+    severity: "low"
+    impact: "License mentioned but file missing"
+    mentioned_in: "README.md:352"
+    effort_hours: 1
+    recommendation: "Add LICENSE file with MIT license text"
+
+  - id: "DEBT-044"
+    title: "README Could Be More Concise"
+    category: "documentation"
+    severity: "low"
+    impact: "Long README may overwhelm new users"
+    location: "README.md"
+    effort_hours: 2
+    recommendation: "Split into README + detailed guides"
+
+  - id: "DEBT-045"
+    title: "No Logo or Branding"
+    category: "documentation"
+    severity: "low"
+    impact: "Less professional appearance"
+    effort_hours: 4
+    recommendation: "Add logo and consistent branding"
+
+  - id: "DEBT-046"
+    title: "No Tutorial Content"
+    category: "documentation"
+    severity: "low"
+    impact: "Steep learning curve"
+    effort_hours: 16
+    recommendation: "Add step-by-step tutorials"
+
+  - id: "DEBT-047"
+    title: "No Roadmap Document"
+    category: "documentation"
+    severity: "low"
+    impact: "Future direction unclear"
+    effort_hours: 4
+    recommendation: "Create roadmap showing planned features"
+
+# ============================================
+# Debt by Category
+# ============================================
+debt_by_category:
+  code_quality:
+    total: 14
+    critical: 3
+    high: 5
+    medium: 5
+    low: 1
+    estimated_hours: 116
+
+  documentation:
+    total: 12
+    critical: 0
+    high: 5
+    medium: 6
+    low: 1
+    estimated_hours: 104
+
+  testing:
+    total: 9
+    critical: 1
+    high: 2
+    medium: 4
+    low: 2
+    estimated_hours: 113
+
+  infrastructure:
+    total: 7
+    critical: 3
+    high: 4
+    medium: 0
+    low: 0
+    estimated_hours: 37
+
+  security:
+    total: 3
+    critical: 2
+    high: 1
+    medium: 0
+    low: 0
+    estimated_hours: 6
+
+  performance:
+    total: 2
+    critical: 0
+    high: 1
+    medium: 1
+    low: 0
+    estimated_hours: 28
+
+# ============================================
+# Recommended Action Plan
+# ============================================
+action_plan:
+  phase_1_critical:
+    duration_weeks: 2
+    items:
+      - "DEBT-001: Delete .DS_Store files"
+      - "DEBT-002: Add .claude-sandbox/ to .gitignore"
+      - "DEBT-006: Set up basic CI/CD pipeline"
+      - "DEBT-008: Add security scanning"
+      - "DEBT-022: Add pre-commit hooks"
+    total_effort_hours: 25
+
+  phase_2_quality:
+    duration_weeks: 4
+    items:
+      - "DEBT-003: Enable type checking (start with new code)"
+      - "DEBT-004: Increase test coverage to 60%"
+      - "DEBT-005: Migrate critical workflows to spec-global format"
+      - "DEBT-007: Resolve Python version constraints"
+      - "DEBT-016: Define error handling standards"
+    total_effort_hours: 60
+
+  phase_3_documentation:
+    duration_weeks: 3
+    items:
+      - "DEBT-010: Generate API documentation"
+      - "DEBT-011: Create CONTRIBUTING.md"
+      - "DEBT-037: Create developer quick start guide"
+      - "DEBT-009: Standardize documentation style"
+    total_effort_hours: 40
+
+  phase_4_maintenance:
+    duration_weeks: 2
+    items:
+      - "DEBT-013: Add integration tests"
+      - "DEBT-017: Implement structured logging"
+      - "DEBT-025: Add coverage reporting"
+      - "DEBT-033: Document release process"
+    total_effort_hours: 28
+
+# ============================================
+# Metrics
+# ============================================
+metrics:
+  repository:
+    total_files: 924
+    python_files: 295
+    markdown_files: 206
+    yaml_files: 1599
+    json_files: 298
+
+  code_quality:
+    type_coverage: "Unknown (disabled)"
+    test_coverage: "35-40%"
+    lint_status: "Partially configured"
+
+  documentation:
+    api_docs: "Missing"
+    contributor_guide: "Missing"
+    architecture_docs: "Partial"
+
+  infrastructure:
+    ci_cd: "Missing"
+    security_scanning: "Missing"
+    dependency_management: "Manual"
+    monitoring: "Missing"
+
+# ============================================
+# Health Score Breakdown
+# ============================================
+health_breakdown:
+  code_quality: 65/100
+    - "Type checking disabled (-20)"
+    - "Low test coverage (-15)"
+
+  documentation: 70/100
+    - "No API docs (-15)"
+    - "Inconsistent style (-10)"
+    - "Missing contributor guide (-5)"
+
+  testing: 60/100
+    - "Low coverage (-30)"
+    - "No integration tests (-10)"
+
+  infrastructure: 75/100
+    - "No CI/CD (-15)"
+    - "No security scanning (-10)"
+
+  security: 80/100
+    - "No dependency scanning (-15)"
+    - "Personal config tracked (-5)"
+
+  maintainability: 72/100
+    - "Based on overall assessment"
+
+# ============================================
+# Quick Wins (< 4 hours)
+# ============================================
+quick_wins:
+  - id: "DEBT-001"
+    title: "Delete .DS_Store files"
+    effort_hours: 1
+
+  - id: "DEBT-002"
+    title: "Add .claude-sandbox/ to .gitignore"
+    effort_hours: 0.5
+
+  - id: "DEBT-012"
+    title: "Decide on .obsidian/ policy"
+    effort_hours: 2
+
+  - id: "DEBT-019"
+    title: "Review .claude/ contents"
+    effort_hours: 2
+
+  - id: "DEBT-032"
+    title: "Organize .gitignore sections"
+    effort_hours: 2
+
+  - id: "DEBT-036"
+    title: "Clean up tmp-test/"
+    effort_hours: 1
+
+  - id: "DEBT-043"
+    title: "Add LICENSE file"
+    effort_hours: 1
+
+  total_effort_hours: 11.5
+
+# ============================================
+# Long-term Investments
+# ============================================
+long_term_investments:
+  - id: "DEBT-003"
+    title: "Enable type checking"
+    effort_hours: 40
+    payoff: "Catch bugs early, better IDE support"
+
+  - id: "DEBT-004"
+    title: "Achieve 80% test coverage"
+    effort_hours: 60
+    payoff: "Confidence in changes, easier refactoring"
+
+  - id: "DEBT-013"
+    title: "Add integration tests"
+    effort_hours: 32
+    payoff: "End-to-end quality assurance"
+
+  - id: "DEBT-029"
+    title: "Add Architecture Decision Records"
+    effort_hours: 8
+    payoff: "Better design documentation"
+
+  - id: "DEBT-046"
+    title: "Create tutorial content"
+    effort_hours: 16
+    payoff: "Easier onboarding, more adopters"
+
+# ============================================
+# Notes
+# ============================================
+notes:
+  analysis_date: "2025-02-18"
+  analyzer: "LEE Technical Debt Analyzer"
+  methodology: "Comprehensive workspace analysis"
+  next_review: "2025-03-18"
+
+  assumptions:
+    - "Test coverage estimated from file structure"
+    - "Type checking status from pyproject.toml"
+    - "Effort estimates are rough approximations"
+
+  recommendations:
+    - "Prioritize critical debt immediately"
+    - "Tackle quick wins first for momentum"
+    - "Invest in long-term items gradually"
+    - "Review and update this report monthly"
