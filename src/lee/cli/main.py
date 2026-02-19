@@ -40,6 +40,7 @@ from lee.cli.commands.repo import repo
 from lee.cli.commands.verify import verify
 from lee.cli.commands.chat import chat
 from lee.cli.commands.watch import watch
+from lee.cli.commands import gates_cmd as gates
 
 try:
     import fcntl
@@ -145,6 +146,19 @@ cli.add_command(status)
 cli.add_command(approve)
 cli.add_command(init)
 cli.add_command(demo)
+cli.add_command(qa)
+cli.add_command(test_runner, "test-runner")
+cli.add_command(check_env, "check-env")
+cli.add_command(behavior_compliance_checker, "behavior-check")
+cli.add_command(diagram_gen, "diagram-gen")
+cli.add_command(diagram_insert, "diagram-insert")
+cli.add_command(md_to_wechat, "md-to-wechat")
+cli.add_command(wf, "workflow")
+cli.add_command(repo)
+cli.add_command(verify)
+cli.add_command(chat)
+cli.add_command(watch)
+cli.add_command(gates.gates)
 cli.add_command(qa)
 cli.add_command(test_runner, "test-runner")
 cli.add_command(check_env, "check-env")

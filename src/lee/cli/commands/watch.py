@@ -89,28 +89,37 @@ def watch(workflow_id: str, project_dir: str, interval: int) -> None:
 
                 conn.close()
 
-                # 检查是否已完成/失败
+                # 检查是否已完成/失败/暂停
                 if status in ["completed", "failed", "paused"]:
                     click.echo(f"\n工作流已{status}")
 
                     # 显示失败步骤的错误信息
-                    if status == "failed" or status == "paused":
-                        cursor.execute(
-                            """SELECT step_name, error_message, status
-                               FROM task_executions
-                               WHERE workflow_id = ? AND status IN ('failed', 'running')
-                               ORDER BY started_at DESC""",
-                            (workflow_id,)
-                        )
-                        problem_steps = cursor.fetchall()
+                    if status in ["failed", "paused"]:
+                        try:
+                            cursor.execute(
+                                """SELECT step_name, error_message, status
+                                   FROM task_executions
+                                   WHERE workflow_id = ? AND status IN ('failed', 'running')
+                                   ORDER BY started_at DESC""",
+                                (workflow_id,)
+                            )
+                            problem_steps = cursor.fetchall()
 
-                        if problem_steps:
-                            click.echo("\n问题详情:")
-                            for step_name, error, step_status in problem_steps:
-                                if step_status == "failed":
-                                    click.echo(f"  ❌ {step_name}: {error}")
-                                elif step_status == "running":
-                                    click.echo(f"  ⚙️  {step_name}: 正在执行中...")
+                            if problem_steps:
+                                click.echo("\n问题详情:")
+                                for step_name, error, step_status in problem_steps:
+                                    if step_status == "failed":
+                                        click.echo(f"  ❌ {step_name}: {error}")
+                                    elif step_status == "running":
+                                        click.echo(f"  ⚙️  {step_name}: 正在执行中...")
+                        except Exception:
+                            pass
+
+                    # 关闭连接
+                    try:
+                        conn.close()
+                    except:
+                        pass
 
                     break
 

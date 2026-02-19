@@ -37,15 +37,24 @@ def _render_workflow_template(template_path: Path, params: Dict[str, Any], proje
     with open(template_path, encoding="utf-8") as f:
         content = f.read()
 
+    now = datetime.now()
     engine = TemplateEngine()
-    rendered = engine.render_string(content, {"params": params})
+    rendered = engine.render_string(
+        content,
+        {
+            "params": params,
+            "date": now.strftime("%Y-%m-%d"),
+            "timestamp": now.strftime("%Y%m%d%H%M%S"),
+            "now": now,
+        },
+    )
 
     # Validate YAML is parseable
     yaml.safe_load(rendered)
 
     out_dir = project_dir / ".workflow" / "rendered"
     out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    stamp = now.strftime("%Y%m%d%H%M%S")
     out_path = out_dir / f"{template_path.stem}-{stamp}.yaml"
     out_path.write_text(rendered, encoding="utf-8")
     return out_path
