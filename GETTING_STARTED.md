@@ -1,3 +1,11 @@
+---
+title: LEE 框架快速开始
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE 框架快速开始
 
 > 快速开始使用 LEE 框架 v2

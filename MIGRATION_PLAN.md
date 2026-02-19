@@ -1,3 +1,11 @@
+---
+title: LEE 框架重组迁移计划 v3
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE 框架重组迁移计划 v3
 
 > 生成时间：2026-01-22

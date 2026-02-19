@@ -1,3 +1,11 @@
+---
+title: 变更日志
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # 变更日志
 
 本文文件记录 LEE 框架所有重要变更。
