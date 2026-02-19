@@ -1,0 +1,77 @@
+# LEE Repo Registry — JSON Schema Definition
+# Version: 1.0
+#
+# 定义 repo registry 的合法结构。
+# 所有受管 repo 必须在 registry 中注册才能被 executor 使用。
+
+$schema: "http://json-schema.org/draft-07/schema#"
+title: "LEE Repo Registry"
+description: |
+  LEE 框架 Repo 注册表。
+  将 repo 提升为一等公民：executor 不接受任意路径，只接受 repo_id。
+  路径只由 runtime 根据 registry 解析。
+
+type: object
+required: [version, repos]
+
+properties:
+  version:
+    type: string
+    description: "Registry schema 版本"
+    enum: ["1.0"]
+
+  repos:
+    type: object
+    description: "repo_id → RepoEntry 映射"
+    additionalProperties:
+      $ref: "#/definitions/RepoEntry"
+
+definitions:
+  RepoEntry:
+    type: object
+    required: [path, type]
+    properties:
+      path:
+        type: string
+        description: |
+          仓库根目录路径。
+          可以是绝对路径，也可以是相对于 workspace 根的路径。
+
+      type:
+        type: string
+        enum: [git, hg, svn]
+        description: "版本控制系统类型"
+
+      url:
+        type: string
+        description: "可选。远程仓库地址（用于 clone/fetch）"
+
+      default_branch:
+        type: string
+        default: "main"
+        description: "默认分支名"
+
+      description:
+        type: string
+        description: "仓库用途说明"
+
+      path_policy:
+        type: array
+        items:
+          type: string
+        description: |
+          写路径白名单（glob 模式）。
+          executor 只允许在这些路径下写入文件。
+          例如: ["src/**", "tests/**", "config/**"]
+
+      owner:
+        type: string
+        description: "可选。负责人/团队标识"
+
+      tags:
+        type: array
+        items:
+          type: string
+        description: |
+          可选。标签列表，用于分类和过滤。
+          例如: ["backend", "production", "go"]

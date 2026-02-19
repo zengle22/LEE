@@ -1,0 +1,198 @@
+# GitIgnore Updater Skill Specification v1.0
+# GitIgnore 更新技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.office.gitignore_updater
+name: GitIgnore Updater
+name_zh: GitIgnore 更新器
+description: >
+  智能更新 .gitignore 文件，添加临时文件、编译中间产物等规则。
+  按照类别组织规则，保持 .gitignore 文件的可读性。
+owner: office-ai
+tags: [git, gitignore, cleanup, automation]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [workspace_path, patterns_to_add]
+    properties:
+      workspace_path:
+        type: string
+        description: 工作区路径
+
+      patterns_to_add:
+        type: array
+        items:
+          type: object
+          properties:
+            pattern:
+              type: string
+            category:
+              type: string
+              enum: [temporary_files, build_artifacts, ide_files, os_files, dependencies, logs, cache]
+            comment:
+              type: string
+        description: 要添加的 gitignore 规则列表
+
+      gitignore_path:
+        type: string
+        description: .gitignore 文件路径（默认为工作区根目录）
+        default: ".gitignore"
+
+  outputs:
+    type: object
+    required: [updated, patterns_added, gitignore_content]
+    properties:
+      updated:
+        type: boolean
+        description: 是否更新了 .gitignore
+
+      patterns_added:
+        type: array
+        items:
+          type: string
+        description: 新添加的规则列表
+
+      gitignore_content:
+        type: string
+        description: 更新后的 .gitignore 内容
+
+      backup_path:
+        type: string
+        description: 备份文件路径
+
+# ============================================
+# 规则模板
+# ============================================
+rule_templates:
+  temporary_files:
+    - pattern: "*.tmp"
+      comment: "临时文件"
+    - pattern: "*.temp"
+      comment: "临时文件"
+    - pattern: "*.swp"
+      comment: "Vim 交换文件"
+    - pattern: "*~"
+      comment: "备份文件"
+
+  build_artifacts:
+    - pattern: "*.pyc"
+      comment: "Python 编译文件"
+    - pattern: "__pycache__/"
+      comment: "Python 缓存目录"
+    - pattern: "*.class"
+      comment: "Java 编译文件"
+    - pattern: "*.o"
+      comment: "C/C++ 目标文件"
+    - pattern: "*.so"
+      comment: "共享库文件"
+    - pattern: "*.dylib"
+      comment: "macOS 动态库"
+    - pattern: "dist/"
+      comment: "构建输出目录"
+    - pattern: "build/"
+      comment: "构建目录"
+
+  ide_files:
+    - pattern: ".vscode/"
+      comment: "VS Code 配置"
+    - pattern: ".idea/"
+      comment: "IntelliJ IDEA 配置"
+    - pattern: "*.sublime-*"
+      comment: "Sublime Text 文件"
+
+  os_files:
+    - pattern: ".DS_Store"
+      comment: "macOS 文件夹属性"
+    - pattern: "Thumbs.db"
+      comment: "Windows 缩略图"
+    - pattern: "desktop.ini"
+      comment: "Windows 文件夹配置"
+
+  dependencies:
+    - pattern: "node_modules/"
+      comment: "Node.js 依赖"
+    - pattern: "vendor/"
+      comment: "依赖包目录"
+    - pattern: ".pnp.*"
+      comment: "Yarn PnP"
+
+  logs:
+    - pattern: "*.log"
+      comment: "日志文件"
+    - pattern: "logs/"
+      comment: "日志目录"
+
+  cache:
+    - pattern: ".cache/"
+      comment: "缓存目录"
+    - pattern: ".pytest_cache/"
+      comment: "pytest 缓存"
+    - pattern: ".mypy_cache/"
+      comment: "mypy 缓存"
+
+# ============================================
+# 执行逻辑
+# ============================================
+execution:
+  steps:
+    - name: "读取现有 .gitignore"
+      description: "如果文件存在，读取内容；否则创建新文件"
+
+    - name: "分析现有规则"
+      description: "解析现有规则，识别已存在的模式"
+
+    - name: "按类别组织新规则"
+      description: "将新规则按类别分组"
+
+    - name: "生成更新内容"
+      description: "生成格式化的 .gitignore 内容，包含注释和分组"
+
+    - name: "备份原文件"
+      description: "创建 .gitignore.backup"
+
+    - name: "写入更新"
+      description: "写入新的 .gitignore 内容"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: script
+  timeout_ms: 10000
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: modifies_files
+  backup_required: true
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: add_python_patterns
+      input:
+        workspace_path: "/tmp/test-workspace"
+        patterns_to_add:
+          - pattern: "*.pyc"
+            category: "build_artifacts"
+            comment: "Python 编译文件"
+      assert:
+        - path: "$.updated"
+          op: "=="
+          value: true
+        - path: "$.patterns_added"
+          op: "contains"
+          value: "*.pyc"

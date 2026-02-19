@@ -1,0 +1,223 @@
+# Workspace Cleanup Contract v1.0
+# 工作区整理契约规范
+
+kind: contract
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: contract.office.workspace_cleanup
+name: Workspace Cleanup Contract
+description: >
+  工作区整理契约，定义工作区整理的输入输出规范。
+  包括文件价值分析、文档整理、代码审查、提交记录等。
+owner: office-ai
+tags: [contract, workspace, cleanup, organization]
+
+# ============================================
+# 输入 Schema
+# ============================================
+input_schema:
+  type: object
+  required: [workspace_path]
+  properties:
+    workspace_path:
+      type: string
+      description: 工作区路径
+
+    exclude_patterns:
+      type: array
+      items:
+        type: string
+      description: 排除的文件模式（如 node_modules, .git）
+      default: ["node_modules", ".git", "venv", "__pycache__", "dist", "build"]
+
+    doc_directories:
+      type: array
+      items:
+        type: string
+      description: 文档目录列表
+      default: ["docs", "doc", "documentation"]
+
+    author_name:
+      type: string
+      description: 文档作者名称（用于补充元数据）
+
+# ============================================
+# 输出 Schema
+# ============================================
+output_schema:
+  type: object
+  required: [cleanup_summary, gitignore_update, doc_organization, tech_debt_report, commit_history]
+  properties:
+    cleanup_summary:
+      type: object
+      required: [start_time, end_time, total_files_processed, actions_taken]
+      properties:
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        total_files_processed:
+          type: integer
+        actions_taken:
+          type: object
+          properties:
+            gitignore_updates:
+              type: integer
+            docs_organized:
+              type: integer
+            docs_metadata_updated:
+              type: integer
+            commits_created:
+              type: integer
+
+    gitignore_update:
+      type: object
+      properties:
+        added_patterns:
+          type: array
+          items:
+            type: string
+          description: 新增的 gitignore 规则
+
+        categories:
+          type: object
+          description: 按类别分组的规则
+          properties:
+            temporary_files:
+              type: array
+              items:
+                type: string
+            build_artifacts:
+              type: array
+              items:
+                type: string
+            ide_files:
+              type: array
+              items:
+                type: string
+            os_files:
+              type: array
+              items:
+                type: string
+
+    doc_organization:
+      type: object
+      properties:
+        docs_moved:
+          type: array
+          items:
+            type: object
+            properties:
+              from:
+                type: string
+              to:
+                type: string
+              category:
+                type: string
+
+        docs_updated:
+          type: array
+          items:
+            type: object
+            properties:
+              file_path:
+                type: string
+              metadata_added:
+                type: object
+                properties:
+                  author:
+                    type: string
+                  date:
+                    type: string
+                  version:
+                    type: string
+
+        directories_created:
+          type: array
+          items:
+            type: string
+
+    tech_debt_report:
+      type: object
+      description: 技术债报告（引用 tech-debt-contract）
+      properties:
+        report_path:
+          type: string
+        summary:
+          type: object
+
+    commit_history:
+      type: array
+      items:
+        type: object
+        required: [commit_id, message, files_changed, timestamp]
+        properties:
+          commit_id:
+            type: string
+            description: 提交 ID（短 hash）
+
+          message:
+            type: string
+            description: 提交信息
+
+          files_changed:
+            type: integer
+            description: 变更文件数量
+
+          timestamp:
+            type: string
+            format: date-time
+
+# ============================================
+# 示例
+# ============================================
+examples:
+  - name: successful_cleanup
+    input:
+      workspace_path: "/Users/zengle/git/ai/lee"
+      author_name: "LEE Team"
+
+    output:
+      cleanup_summary:
+        start_time: "2026-02-18T10:00:00Z"
+        end_time: "2026-02-18T10:45:00Z"
+        total_files_processed: 156
+        actions_taken:
+          gitignore_updates: 8
+          docs_organized: 23
+          docs_metadata_updated: 15
+          commits_created: 5
+
+      gitignore_update:
+        added_patterns:
+          - "*.pyc"
+          - "__pycache__/"
+          - ".pytest_cache/"
+          - "*.log"
+        categories:
+          temporary_files: ["*.log", "*.tmp"]
+          build_artifacts: ["*.pyc", "__pycache__/"]
+          ide_files: [".vscode/", ".idea/"]
+
+      doc_organization:
+        docs_moved:
+          - from: "README_old.md"
+            to: "docs/archive/README_old.md"
+            category: "archive"
+        docs_updated:
+          - file_path: "docs/architecture.md"
+            metadata_added:
+              author: "LEE Team"
+              date: "2026-02-18"
+              version: "1.0.0"
+
+      commit_history:
+        - commit_id: "a1b2c3d"
+          message: "chore: update .gitignore for temp files"
+          files_changed: 1
+          timestamp: "2026-02-18T10:15:00Z"

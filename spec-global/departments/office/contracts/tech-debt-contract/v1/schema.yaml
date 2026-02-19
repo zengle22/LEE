@@ -1,0 +1,189 @@
+# Technical Debt Contract v1.0
+# 技术债契约规范
+
+kind: contract
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: contract.office.tech_debt
+name: Technical Debt Contract
+description: >
+  技术债文档契约，记录代码和文档审查发现的技术债务。
+  用于追踪需要改进但暂不修复的问题。
+owner: office-ai
+tags: [contract, tech-debt, review, documentation]
+
+# ============================================
+# Schema 定义
+# ============================================
+schema:
+  type: object
+  required: [metadata, summary, debt_items]
+  properties:
+    metadata:
+      type: object
+      required: [project_name, review_date, reviewer, version]
+      properties:
+        project_name:
+          type: string
+          description: 项目名称
+
+        review_date:
+          type: string
+          format: date
+          description: 审查日期
+
+        reviewer:
+          type: string
+          description: 审查人员
+
+        version:
+          type: string
+          description: 版本号
+
+    summary:
+      type: object
+      required: [total_files_reviewed, total_debt_items, severity_distribution]
+      properties:
+        total_files_reviewed:
+          type: integer
+          description: 审查文件总数
+
+        total_debt_items:
+          type: integer
+          description: 技术债项目总数
+
+        severity_distribution:
+          type: object
+          properties:
+            critical:
+              type: integer
+              description: 严重问题数量
+            major:
+              type: integer
+              description: 重要问题数量
+            minor:
+              type: integer
+              description: 次要问题数量
+            trivial:
+              type: integer
+              description: 轻微问题数量
+
+    debt_items:
+      type: array
+      description: 技术债项目列表
+      items:
+        type: object
+        required: [id, title, file_path, severity, category, description]
+        properties:
+          id:
+            type: string
+            description: 技术债项目唯一标识
+
+          title:
+            type: string
+            description: 简短标题
+
+          file_path:
+            type: string
+            description: 文件路径
+
+          line_range:
+            type: string
+            description: 行号范围（可选）
+
+          severity:
+            type: string
+            enum: [critical, major, minor, trivial]
+            description: 严重程度
+
+          category:
+            type: string
+            enum: [code_quality, documentation, architecture, security, performance, maintainability, testing, deprecated]
+            description: 问题分类
+
+          description:
+            type: string
+            description: 详细描述
+
+          impact:
+            type: string
+            description: 影响分析
+
+          recommendation:
+            type: string
+            description: 改进建议
+
+          effort_estimate:
+            type: string
+            enum: [low, medium, high]
+            description: 修复工作量估算
+
+          created_date:
+            type: string
+            format: date
+            description: 创建日期
+
+# ============================================
+# 示例
+# ============================================
+examples:
+  - name: basic_tech_debt
+    data:
+      metadata:
+        project_name: "LEE Framework"
+        review_date: "2026-02-18"
+        reviewer: "workspace-cleanup-agent"
+        version: "1.0.0"
+
+      summary:
+        total_files_reviewed: 45
+        total_debt_items: 12
+        severity_distribution:
+          critical: 1
+          major: 4
+          minor: 5
+          trivial: 2
+
+      debt_items:
+        - id: "TD-001"
+          title: "缺少错误处理"
+          file_path: "src/lee/orchestrator/execution/orchestrator.py"
+          line_range: "123-145"
+          severity: "major"
+          category: "code_quality"
+          description: "关键函数缺少异常处理，可能导致系统崩溃"
+          impact: "在异常情况下可能导致整个工作流失败"
+          recommendation: "添加 try-except 块，优雅处理异常"
+          effort_estimate: "medium"
+          created_date: "2026-02-18"
+
+        - id: "TD-002"
+          title: "文档缺少版本号"
+          file_path: "docs/architecture.md"
+          severity: "minor"
+          category: "documentation"
+          description: "文档缺少版本号和最后更新日期"
+          impact: "无法追踪文档版本，可能使用过时信息"
+          recommendation: "在文档头部添加元数据：版本、作者、日期"
+          effort_estimate: "low"
+          created_date: "2026-02-18"
+
+# ============================================
+# 输出要求
+# ============================================
+output_requirements:
+  path_pattern: "tech-debt/tech-debt-{date}.yaml"
+  format: yaml
+
+  markdown_format:
+    path_pattern: "tech-debt/tech-debt-{date}.md"
+    sections:
+      - metadata
+      - summary
+      - critical_items
+      - major_items
+      - minor_items
+      - trivial_items

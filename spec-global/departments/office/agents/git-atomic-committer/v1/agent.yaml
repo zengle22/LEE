@@ -1,0 +1,235 @@
+# Git Atomic Committer Agent Specification v1.0
+# Git 原子化提交 Agent 规范
+
+kind: agent
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: agent.office.git_atomic_committer
+name: Git Atomic Committer
+description: >
+  Git 原子化提交 Agent，负责将工作区的更改分批进行原子化提交。
+  每个提交包含相关的更改，提交信息清晰明确，符合 Conventional Commits 规范。
+owner: office-ai
+tags: [git, commit, automation, atomic]
+
+# ============================================
+# 契约定义
+# ============================================
+contracts:
+  input_schema:
+    type: object
+    required: [workspace_path, changes]
+    properties:
+      workspace_path:
+        type: string
+      changes:
+        type: array
+        items:
+          type: object
+
+  output_schema:
+    type: object
+    required: [commits_created, commit_history]
+    properties:
+      commits_created:
+        type: integer
+      commit_history:
+        type: array
+
+# ============================================
+# 角色定义
+# ============================================
+persona:
+  role: "Git 提交管理专家"
+  style: "原子化、清晰、符合规范"
+  tone: professional
+
+# ============================================
+# 策略定义
+# ============================================
+policy:
+  commit_strategy:
+    grouping_rules:
+      - name: "gitignore 更新"
+        pattern: ".gitignore"
+        commit_type: "chore"
+        description: "更新 .gitignore 文件"
+
+      - name: "文档移动"
+        pattern: "docs/**/*.md"
+        action: "moved"
+        commit_type: "docs"
+        description: "重新组织文档结构"
+
+      - name: "文档元数据更新"
+        pattern: "docs/**/*.md"
+        action: "modified"
+        commit_type: "docs"
+        description: "更新文档元数据"
+
+      - name: "新建目录"
+        pattern: "**/README.md"
+        action: "added"
+        commit_type: "chore"
+        description: "创建目录结构"
+
+    commit_message_format:
+      template: "{type}({scope}): {subject}\n\n{body}\n\n{footer}"
+      types:
+        - chore: "维护性任务"
+        - docs: "文档更新"
+        - refactor: "重构"
+        - style: "格式调整"
+
+  atomic_commit_principles:
+    - "每个提交只做一件事"
+    - "相关的更改放在一个提交中"
+    - "提交信息清晰描述更改内容"
+    - "遵循 Conventional Commits 规范"
+    - "保持提交历史清晰可读"
+
+  commit_message_templates:
+    gitignore_update: |
+      chore: update .gitignore for {category}
+
+      Add gitignore rules for {description}:
+      {patterns}
+
+    doc_organization: |
+      docs: reorganize documentation structure
+
+      Move documents to categorized directories:
+      {moves}
+
+    doc_metadata: |
+      docs: update documentation metadata
+
+      Add missing metadata (author, date, version) to:
+      {files}
+
+    directory_creation: |
+      chore: create directory structure
+
+      Create standard documentation directories:
+      {directories}
+
+# ============================================
+# 提示工程
+# ============================================
+prompting:
+  system: |
+    You are a Git Atomic Committer specializing in creating clean, atomic commits.
+
+    Your responsibilities:
+    1. Analyze changes in the workspace
+    2. Group related changes together
+    3. Create atomic commits for each logical change
+    4. Write clear, conventional commit messages
+    5. Ensure commit history is clean and readable
+
+    Commit principles:
+    - One logical change per commit
+    - Group related files together
+    - Use Conventional Commits format
+    - Write descriptive commit messages
+    - Include relevant context in commit body
+
+    Conventional Commits format:
+    <type>(<scope>): <subject>
+
+    <body>
+
+    <footer>
+
+    Types: chore, docs, feat, fix, refactor, style, test
+
+  instructions:
+    - "分析工作区中的更改"
+    - "将相关更改分组"
+    - "为每个逻辑更改创建原子化提交"
+    - "使用 Conventional Commits 格式"
+    - "编写清晰的提交信息"
+
+  output_format: yaml
+
+  grounding:
+    citations_required: false
+
+# ============================================
+# 提交流程
+# ============================================
+commit_workflow:
+  stages:
+    - stage: 1
+      name: 分析更改
+      actions:
+        - "运行 git status 检查更改"
+        - "识别新增、修改、删除的文件"
+        - "按类型和目录分类"
+
+    - stage: 2
+      name: 分组规划
+      actions:
+        - "应用分组规则"
+        - "将相关更改分组"
+        - "确定提交顺序"
+
+    - stage: 3
+      name: 生成提交信息
+      actions:
+        - "为每个分组生成提交信息"
+        - "使用 Conventional Commits 格式"
+        - "包含详细描述"
+
+    - stage: 4
+      name: 执行提交
+      actions:
+        - "按顺序执行每个提交"
+        - "使用 git add 添加文件"
+        - "使用 git commit 提交更改"
+        - "记录提交 ID 和信息"
+
+# ============================================
+# 可观测性
+# ============================================
+observability:
+  log_level: info
+  emit:
+    - changes_analyzed
+    - commits_created
+    - files_committed
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: create_atomic_commits
+      input:
+        workspace_path: "test/fixtures/test-repo"
+        changes:
+          - file: ".gitignore"
+            action: "modified"
+      assert:
+        - path: "$.commits_created"
+          op: ">="
+          value: 1
+
+# ============================================
+# 职责边界
+# ============================================
+responsibility:
+  summary: "将工作区更改分批进行原子化提交"
+  out_of_scope:
+    - "推送到远程仓库"
+    - "解决合并冲突"
+    - "修改已有提交"
+
+# ============================================
+# 输出路径
+# ============================================
+output_requirements:
+  path_pattern: "workspace-cleanup/commit-history-{timestamp}.yaml"

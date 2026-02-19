@@ -1,0 +1,81 @@
+# LEE Repo Registry — 示例配置
+# Version: 1.0
+#
+# 将此文件复制到项目工作区并修改为实际配置。
+# 位置示例:
+#   - {project}/.lee/repo-registry.yaml（项目级）
+#   - 或通过环境变量 LEE_REPO_REGISTRY 指定路径
+
+version: "1.0"
+
+repos:
+  # ──────────── 后端仓库 ────────────
+  app-backend:
+    path: "./repos/dev/backend"
+    type: git
+    url: "https://github.com/your-org/product-backend.git"
+    default_branch: main
+    description: "后端服务代码（Go）"
+    path_policy:
+      - "cmd/**"
+      - "internal/**"
+      - "pkg/**"
+      - "tests/**"
+      - "config/**"
+    owner: "backend-team"
+    tags: [backend, go, production]
+
+  # ──────────── 前端仓库 ────────────
+  app-frontend:
+    path: "./repos/dev/frontend"
+    type: git
+    url: "https://github.com/your-org/product-frontend.git"
+    default_branch: main
+    description: "前端应用代码（UniApp）"
+    path_policy:
+      - "src/**"
+      - "components/**"
+      - "pages/**"
+      - "tests/**"
+    owner: "frontend-team"
+    tags: [frontend, uniapp, production]
+
+  # ──────────── 协议仓库 ────────────
+  proto-contract:
+    path: "./repos/dev/proto"
+    type: git
+    default_branch: main
+    description: "API 协议定义（Contract）"
+    path_policy:
+      - "contracts/**"
+      - "schemas/**"
+    owner: "arch-team"
+    tags: [contract, api, shared]
+
+  # ──────────── 文档仓库（路线 A：单 repo + path_policy 约束）────────────
+  docs:
+    path: "./repos/docs"
+    type: git
+    default_branch: main
+    description: "统一文档仓库"
+    path_policy:
+      - "product/**"
+      - "ui/**"
+      - "qa/**"
+      - "ops/**"
+      - "changelog/**"
+    owner: "all"
+    tags: [docs]
+
+  # ──────────── 运维仓库 ────────────
+  ops:
+    path: "./repos/ops"
+    type: git
+    default_branch: main
+    description: "运维配置与脚本"
+    path_policy:
+      - "deploy/**"
+      - "monitoring/**"
+      - "scripts/**"
+    owner: "devops-team"
+    tags: [ops, devops, infra]
