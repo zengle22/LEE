@@ -10,6 +10,7 @@ LEE Orchestrator v3.0 - Agent Context Builder
 4. 渲染 prompt 模板
 """
 
+import json
 import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -44,7 +45,8 @@ class AgentContextBuilder:
         self,
         agent_loader,
         template_engine=None,
-        project_root: Optional[str] = None
+        project_root: Optional[str] = None,
+        context_index=None
     ):
         """
         初始化
@@ -57,6 +59,7 @@ class AgentContextBuilder:
         self.agent_loader = agent_loader
         self.template_engine = template_engine
         self.project_root = Path(project_root) if project_root else Path.cwd()
+        self.context_index = context_index
 
     async def build(
         self,
@@ -122,6 +125,7 @@ class AgentContextBuilder:
             agent_spec,
             context_files,
             workflow_context,
+            step=step,
             loop_context=loop_context,
         )
 
@@ -218,7 +222,15 @@ class AgentContextBuilder:
         if spec.contracts:
             output_schema = spec.contracts.get("output_schema", "")
             if output_schema:
-                outputs_desc.append(output_schema)
+                if isinstance(output_schema, str):
+                    outputs_desc.append(output_schema)
+                else:
+                    try:
+                        outputs_desc.append(
+                            json.dumps(output_schema, ensure_ascii=False, indent=2)
+                        )
+                    except (TypeError, ValueError):
+                        outputs_desc.append(str(output_schema))
 
         # 从 spec 获取输出列表（通过 raw_data）
         outputs_list = []
@@ -252,6 +264,7 @@ class AgentContextBuilder:
             "model": "gpt-4",
             "temperature": 0.7,
             "max_tokens": 4000,
+            "_raw_data": raw_data,  # v3.5: 保存原始数据用于构建更完整的上下文
         }
 
     def _get_default_agent_spec(self, agent_id: str) -> Dict[str, Any]:
@@ -416,6 +429,7 @@ Verification items:
         agent_spec: Dict[str, Any],
         context_files: Dict[str, str],
         workflow_context: Dict[str, Any],
+        step=None,
         loop_context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
@@ -448,15 +462,72 @@ Verification items:
                 user_prompt = user_prompt.replace(f"{{system_arch}}", content)
                 user_prompt = user_prompt.replace(f"{{non_functional_requirements}}", content)
         else:
-            # 构建默认 prompt
+            # 构建默认 prompt（v3.5：包含更完整的任务上下文）
             parts = ["# Task"]
-            parts.append(f"Please complete the task based on the following context:")
 
+            # 添加 agent 描述和职责（从 raw_data 提取）
+            raw_data = agent_spec.get("_raw_data", {})
+
+            # 1. 任务描述
+            description = raw_data.get("description", "")
+            if description:
+                parts.append(f"\n{description}")
+
+            # 2. 职责摘要
+            responsibility = raw_data.get("responsibility", {})
+            summary = responsibility.get("summary", "")
+            if summary:
+                parts.append(f"\n## Responsibility")
+                parts.append(summary)
+
+            # 3. 具体指令
+            prompting = raw_data.get("prompting", {})
+            instructions = prompting.get("instructions")
+            if instructions:
+                parts.append(f"\n## Instructions")
+                if isinstance(instructions, list):
+                    for instruction in instructions:
+                        parts.append(f"- {instruction}")
+                elif isinstance(instructions, str):
+                    parts.append(instructions)
+
+            # 添加步骤输入数据（从 step.input 获取）
+            step_inputs = {}
+            if step and hasattr(step, 'input'):
+                step_inputs = step.input
+
+            if step_inputs:
+                parts.append("\n## Input Data")
+                for key, value in step_inputs.items():
+                    if key not in ["run_id", "workflow_key", "context_files"]:  # 过滤掉元数据
+                        if isinstance(value, (str, int, float, bool)):
+                            parts.append(f"- {key}: {value}")
+                        elif isinstance(value, dict):
+                            import json
+                            parts.append(f"- {key}:")
+                            parts.append(f"```json\n{json.dumps(value, indent=2, ensure_ascii=False)}\n```")
+                        elif isinstance(value, list):
+                            import json
+                            parts.append(f"- {key}:")
+                            parts.append(f"```json\n{json.dumps(value, indent=2, ensure_ascii=False)}\n```")
+
+            # 添加上下文文件
             if context_files:
-                parts.append("\n# Context Files")
+                parts.append("\n## Context Files")
                 for path, content in context_files.items():
-                    parts.append(f"\n## {path}")
+                    parts.append(f"\n### {path}")
                     parts.append(content[:2000] + "..." if len(content) > 2000 else content)  # 限制长度
+
+            # 添加输出要求（从 step.outputs 获取）
+            if step and hasattr(step, 'outputs') and step.outputs:
+                parts.append("\n## Required Outputs")
+                for output in step.outputs:
+                    if hasattr(output, 'path'):
+                        parts.append(f"- {output.path} ({output.type}): {output.description}")
+
+            # 添加具体任务指令
+            parts.append("\n## Instructions")
+            parts.append("Please complete the above task following the role requirements and generate all required outputs.")
 
             user_prompt = "\n".join(parts)
 

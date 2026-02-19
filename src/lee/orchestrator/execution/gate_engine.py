@@ -496,10 +496,12 @@ class GateEngine:
             return False, None, "evidence_bundle", "Evidence bundle is missing"
 
         if isinstance(evidence, dict):
-            # 检查是否有 logs 或 screenshots
+            # 检查是否有 logs 或 screenshots 或 patch
             has_logs = bool(evidence.get("logs"))
             has_screenshots = bool(evidence.get("screenshots"))
-            if has_logs or has_screenshots:
+            has_patch = bool(evidence.get("patch"))
+            
+            if has_logs or has_screenshots or has_patch:
                 return True, evidence, "evidence_bundle", None
 
         return False, evidence, "evidence_bundle", "Evidence bundle is empty or invalid"

@@ -277,7 +277,11 @@ class AgentLoader:
         """
         尝试从 LEE 项目的目录结构加载 agent spec
 
-        LEE 项目结构: {spec_root}/departments/{department}/agents/{department}-{name}.agent.yaml
+        支持的 LEE 项目结构：
+        1) spec-global 新结构:
+           {spec_root}/departments/{department}/agents/{agent-name}/v1/agent.yaml
+        2) 历史结构:
+           {spec_root}/departments/{department}/agents/{department}-{name}.agent.yaml
 
         Args:
             agent_ref: agent 引用 (如 agent.devops.architect)
@@ -295,16 +299,31 @@ class AgentLoader:
         if not domain or not name:
             return None
 
-        # 尝试 LEE 项目路径: departments/{domain}/agents/{domain}-{name}.agent.yaml
-        lee_path = self.spec_root / "departments" / domain / "agents" / f"{domain}-{name}.agent.yaml"
+        name_kebab = name.replace("_", "-")
+        department_agents_dir = self.spec_root / "departments" / domain / "agents"
+
+        candidates = [
+            # spec-global: .../agents/file-value-analyzer/v1/agent.yaml
+            department_agents_dir / name_kebab / "v1" / "agent.yaml",
+            # 兼容无版本目录
+            department_agents_dir / name_kebab / "agent.yaml",
+            # 兼容少量历史命名
+            department_agents_dir / name / "v1" / "agent.yaml",
+            department_agents_dir / name / "agent.yaml",
+            # 历史扁平命名
+            department_agents_dir / f"{domain}-{name}.agent.yaml",
+            department_agents_dir / f"{domain}-{name_kebab}.agent.yaml",
+        ]
 
         if self._debug:
-            print(f"[DEBUG] Trying LEE project path: {lee_path}")
+            for candidate in candidates:
+                print(f"[DEBUG] Trying LEE project path: {candidate}")
 
-        if lee_path.exists():
-            if self._debug:
-                print(f"[DEBUG] Found agent spec at LEE path: {lee_path}")
-            return lee_path
+        for path in candidates:
+            if path.exists():
+                if self._debug:
+                    print(f"[DEBUG] Found agent spec at LEE path: {path}")
+                return path
 
         return None
 

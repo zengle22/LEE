@@ -59,6 +59,7 @@ class StepRunnerMixin:
             file_output_handler=self.file_output_handler,
             token_manager=self.token_manager,
             project_root=self.project_root,
+            worktree_manager=getattr(self, 'worktree_manager', None),
         )
 
     # ==================================================================

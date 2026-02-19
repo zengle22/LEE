@@ -43,6 +43,8 @@ class RunnerContext:
         file_output_handler,
         token_manager,
         project_root: Optional[str] = None,
+        repo_registry=None,
+        worktree_manager=None,
     ):
         self.store = store
         self.state_machine = state_machine
@@ -55,6 +57,31 @@ class RunnerContext:
         self.file_output_handler = file_output_handler
         self.token_manager = token_manager
         self.project_root = project_root
+        self.repo_registry = repo_registry
+        self.worktree_manager = worktree_manager
+
+    def resolve_workdir(self, step, run_id: str) -> str:
+        """
+        解析步骤的工作目录
+
+        优先级：
+        1. step.repo_scope + worktree_manager → 隔离 worktree
+        2. project_root → 回退到项目根目录
+
+        Args:
+            step: 步骤对象（可能有 repo_scope 属性）
+            run_id: 运行 ID（用于 worktree 分配）
+
+        Returns:
+            工作目录绝对路径
+        """
+        repo_scope = getattr(step, "repo_scope", None)
+        if repo_scope and self.worktree_manager:
+            try:
+                return self.worktree_manager.get_workdir(run_id, repo_scope)
+            except ValueError:
+                pass  # 未分配则 fallback
+        return str(Path(self.project_root or ".").resolve())
 
 
 class StepRunnerStrategy(ABC):

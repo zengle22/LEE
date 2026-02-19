@@ -34,6 +34,14 @@ class SubworkflowMixin:
         2. 驱动子工作流执行到阻塞点
         3. 子工作流完成后，结构化回填输出到父工作流 data
         """
+        # L3 跨工作流收敛循环检测
+        if (
+            hasattr(step, 'cross_workflow_loop')
+            and step.cross_workflow_loop
+            and step.cross_workflow_loop.enabled
+        ):
+            return await self._run_cross_workflow_loop(workflow_id, step)
+
         parent = await self.store.get_workflow(workflow_id)
         if not parent:
             return StepResult(
@@ -126,6 +134,313 @@ class SubworkflowMixin:
                 "child_status": child.status.value,
             },
         )
+
+    # ============ L3 跨工作流收敛循环 ============
+
+    async def _run_cross_workflow_loop(
+        self,
+        workflow_id: str,
+        step,
+    ) -> StepResult:
+        """
+        执行 L3 跨工作流收敛循环
+
+        QA-L3 → Dev-L3 → QA-L3 → … → bug 清零
+
+        Args:
+            workflow_id: 父工作流（L2）ID
+            step: 包含 cross_workflow_loop 配置的步骤
+
+        Returns:
+            最终的 StepResult
+        """
+        import logging
+        from lee.orchestrator.execution.cross_workflow_loop import (
+            CrossWorkflowLoopController,
+        )
+        from lee.orchestrator.storage.event_log import EventType
+
+        log = logging.getLogger(__name__)
+
+        controller = CrossWorkflowLoopController(
+            config=step.cross_workflow_loop,
+            evidence_collector=getattr(self, 'evidence_collector', None),
+            run_id=workflow_id,
+        )
+
+        all_phase_outputs = {}
+
+        while controller.should_continue():
+            phase = controller.get_current_phase()
+            if not phase:
+                break
+
+            phase_id = phase.get("id", "unknown")
+            phase_round = phase.get("round", 0)
+
+            # 条件检查：某些 phase 可能需要条件满足才执行
+            if phase.get("condition") and not self._evaluate_phase_condition(
+                phase["condition"], all_phase_outputs
+            ):
+                log.info(
+                    "Cross-workflow loop phase '%s' skipped (condition not met)",
+                    phase_id,
+                )
+                controller.advance_phase()
+                continue
+
+            # 记录事件
+            if hasattr(self, 'event_log'):
+                self.event_log.log(
+                    event_type=EventType.STEP_STARTED,
+                    data={
+                        "type": "cross_workflow_loop_phase_start",
+                        "step_id": step.id,
+                        "phase_id": phase_id,
+                        "round": phase_round,
+                        "workflow_ref": phase.get("workflow_ref"),
+                    },
+                )
+
+            # Spawn 并执行子工作流
+            phase_input = self._build_phase_input(step, phase, all_phase_outputs, controller)
+            child_result = await self._spawn_and_run_phase_workflow(
+                parent_workflow_id=workflow_id,
+                step=step,
+                phase=phase,
+                input_data=phase_input,
+            )
+
+            all_phase_outputs[phase_id] = child_result
+
+            # 子工作流阻塞 → 父步骤也阻塞
+            if child_result.get("status") == "blocked":
+                return StepResult(
+                    status="blocked",
+                    blocked_reason="cross_workflow_loop_blocked",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=f"Cross-workflow loop phase '{phase_id}' blocked",
+                    output=child_result,
+                )
+
+            # 记录 phase 结果并判定收敛
+            decision = controller.record_phase_result(child_result)
+            controller.write_round_evidence(phase_round, phase_id, child_result)
+
+            # 记录 phase 完成事件
+            if hasattr(self, 'event_log'):
+                self.event_log.log(
+                    event_type=EventType.STEP_COMPLETED,
+                    data={
+                        "type": "cross_workflow_loop_phase_end",
+                        "step_id": step.id,
+                        "phase_id": phase_id,
+                        "round": phase_round,
+                        "decision": decision,
+                        "loop_status": controller.state.status,
+                    },
+                )
+
+            if decision == "converged":
+                break
+            elif decision == "stop_max":
+                await self._trigger_exceeded_gate(step, controller)
+                break
+
+            controller.advance_phase()
+
+        # 循环结束 → 记录总结
+        summary = controller.get_summary()
+
+        if hasattr(self, 'event_log'):
+            self.event_log.log(
+                event_type=EventType.STEP_COMPLETED,
+                data={
+                    "type": "cross_workflow_loop_summary",
+                    "step_id": step.id,
+                    **summary,
+                },
+            )
+
+        # 判定最终结果
+        final_status = "success" if summary["final_status"] == "converged" else "failed"
+        message = (
+            f"Cross-workflow loop completed: {summary['final_status']} "
+            f"({summary['total_rounds']} rounds, bug_trend={summary['bug_trend']})"
+        )
+
+        if final_status == "success":
+            await self.state_machine.complete_step(workflow_id, step.id, summary)
+        else:
+            await self.state_machine.fail_step(workflow_id, step.id, message)
+
+        return StepResult(
+            status=final_status,
+            step_id=step.id,
+            workflow_id=workflow_id,
+            message=message,
+            output=summary,
+        )
+
+    async def _spawn_and_run_phase_workflow(
+        self,
+        parent_workflow_id: str,
+        step,
+        phase: dict,
+        input_data: dict,
+    ) -> dict:
+        """
+        为循环的一个 phase spawn 并执行子工作流
+
+        Returns:
+            子工作流执行结果字典
+        """
+        workflow_ref = phase.get("workflow_ref", "")
+        parent = await self.store.get_workflow(parent_workflow_id)
+        if not parent:
+            return {"status": "failed", "error": "Parent workflow not found"}
+
+        parent_level = parent.level
+        child_level = self._resolve_subworkflow_level("task", parent_level)
+
+        child = await self.spawn_workflow(
+            parent_id=parent_workflow_id,
+            level=child_level,
+            template_id=workflow_ref,
+            data=input_data,
+        )
+
+        # 驱动子流程执行
+        max_steps = 50  # 跨工作流循环中 L3 可能比较长
+        if step.config and isinstance(step.config.get("subworkflow_max_steps"), int):
+            max_steps = step.config.get("subworkflow_max_steps")
+
+        await self.run_until_blocked(child.id, max_steps=max_steps)
+        child = await self.store.get_workflow(child.id)
+
+        if not child:
+            return {"status": "failed", "error": "Child workflow disappeared"}
+
+        result = {
+            "status": child.status.value if child.status else "unknown",
+            "child_workflow_id": child.id,
+            "child_template_id": child.template_id,
+        }
+
+        # 提取子工作流输出数据
+        if child.data:
+            result["outputs"] = child.data.get("outputs", {})
+            result["exit_decision"] = child.data.get("exit_decision")
+            result["open_bug_count"] = child.data.get("open_bug_count")
+            result["bug_list"] = child.data.get("bug_list", [])
+
+        return result
+
+    def _build_phase_input(
+        self,
+        step,
+        phase: dict,
+        all_phase_outputs: dict,
+        controller,
+    ) -> dict:
+        """
+        构造 phase 子工作流的输入数据
+
+        合并来源：
+        1. 上一个 phase 的输出（用于 dev_fix 获取 bug 包）
+        2. 循环上下文（轮次信息）
+        3. step 本身的输入配置
+        """
+        input_data = {
+            "cross_workflow_loop_context": controller.get_loop_context(),
+            "parent_step_id": step.id,
+        }
+
+        # 注入上一个 phase 的相关输出
+        for key, value in all_phase_outputs.items():
+            input_data[f"phase_{key}_output"] = value
+
+        return input_data
+
+    async def _trigger_exceeded_gate(self, step, controller):
+        """
+        触发最大轮次超限时的处理
+
+        根据 on_exceeded 配置：
+        - human_gate: 创建一个 human gate 等待审批
+        - abort: 直接中止
+        """
+        import logging
+        log = logging.getLogger(__name__)
+
+        config = step.cross_workflow_loop
+        summary = controller.get_summary()
+
+        log.warning(
+            "Cross-workflow loop exceeded max rounds (%d). "
+            "on_exceeded=%s, bug_trend=%s",
+            config.max_rounds,
+            config.on_exceeded,
+            summary.get("bug_trend", []),
+        )
+
+        # TODO: 集成 human_gate 创建逻辑
+        # 当前输出到事件日志，等待人类门禁机制完善后对接
+        if hasattr(self, 'event_log'):
+            from lee.orchestrator.storage.event_log import EventType
+            self.event_log.log(
+                event_type=EventType.STEP_COMPLETED,
+                data={
+                    "type": "cross_workflow_loop_exceeded",
+                    "step_id": step.id,
+                    "on_exceeded": config.on_exceeded,
+                    "message": config.on_exceeded_message,
+                    "summary": summary,
+                },
+            )
+
+    @staticmethod
+    def _evaluate_phase_condition(
+        condition: str,
+        all_phase_outputs: dict,
+    ) -> bool:
+        """
+        评估 phase 条件表达式
+
+        支持简单条件："qa_test.exit_decision == 'fail'"
+
+        Args:
+            condition: 条件表达式
+            all_phase_outputs: 所有 phase 的输出
+
+        Returns:
+            条件是否成立
+        """
+        # 简单实现：解析 "phase_id.field == 'value'" 模式
+        try:
+            parts = condition.split(" ")
+            if len(parts) >= 3:
+                lhs = parts[0]        # "qa_test.exit_decision"
+                op = parts[1]         # "=="
+                rhs = parts[2].strip("'\"")
+
+                lhs_parts = lhs.split(".", 1)
+                if len(lhs_parts) == 2:
+                    phase_id, field = lhs_parts
+                    phase_output = all_phase_outputs.get(phase_id, {})
+                    actual_value = phase_output.get(field)
+
+                    if op == "==":
+                        return str(actual_value) == rhs
+                    elif op == "!=":
+                        return str(actual_value) != rhs
+
+        except Exception:
+            pass
+
+        # 默认：条件不可解析时视为满足
+        return True
 
     # ============ 辅助方法 ============
 

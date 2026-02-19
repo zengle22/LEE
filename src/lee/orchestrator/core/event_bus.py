@@ -24,6 +24,13 @@ class EventType(Enum):
     BUG_BLOCKED_ENV = "bug_blocked_env"
     ROUND_COMPLETED = "round_completed"
 
+    # Workflow Events
+    STEP_STARTED = "step_started"
+    STEP_COMPLETED = "step_completed"
+    STEP_FAILED = "step_failed"
+    GATE_PENDING = "gate_pending"
+    WORKFLOW_COMPLETED = "workflow_completed"
+
 
 @dataclass
 class Event:

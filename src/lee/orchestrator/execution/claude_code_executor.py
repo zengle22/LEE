@@ -19,13 +19,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import queue
+import signal
 import subprocess
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .executors import BaseExecutor
+
+logger = logging.getLogger(__name__)
 
 
 class ClaudeCodeExecutor(BaseExecutor):
@@ -46,8 +53,13 @@ class ClaudeCodeExecutor(BaseExecutor):
 
     # 默认配置
     DEFAULT_MAX_ITERATIONS = 5
-    DEFAULT_TIMEOUT_SECONDS = 600
+    DEFAULT_TIMEOUT_SECONDS = 300
+    DEFAULT_TIMEOUT_RETRIES = 1
+    DEFAULT_RETRY_BACKOFF_SECONDS = 5
+    DEFAULT_STRICT_MCP_CONFIG = True
     DEFAULT_ALLOWED_COMMANDS = ["cat", "ls", "find", "grep"]
+    DEFAULT_HEARTBEAT_SECONDS = 5
+    DEFAULT_MODEL = "claude-sonnet-4-6"
 
     def __init__(self, **kwargs):
         """
@@ -57,7 +69,11 @@ class ClaudeCodeExecutor(BaseExecutor):
             **kwargs: 额外参数（保留扩展性）
         """
         self._claude_binary = os.getenv("CLAUDE_CODE_BINARY", "claude")
-        self._model = os.getenv("CLAUDE_CODE_MODEL", "")  # e.g. "glm-5"
+        self._model = (
+            kwargs.get("model")
+            or os.getenv("CLAUDE_CODE_MODEL", "").strip()
+            or self.DEFAULT_MODEL
+        )
         self._extra_env = self._load_claude_env_settings()
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -87,20 +103,43 @@ class ClaudeCodeExecutor(BaseExecutor):
 
         goal = input_data["goal"]
         workspace = input_data["workspace"]
-        context_files = input_data.get("context_files", [])
-        allowed_commands = input_data.get(
-            "allowed_commands", self.DEFAULT_ALLOWED_COMMANDS
+        context_files = input_data.get("context_files") or []
+
+        configured_commands = input_data.get("allowed_commands")
+        if isinstance(configured_commands, list):
+            allowed_commands = [
+                str(cmd).strip() for cmd in configured_commands if str(cmd).strip()
+            ]
+        else:
+            allowed_commands = []
+        if not allowed_commands:
+            allowed_commands = list(self.DEFAULT_ALLOWED_COMMANDS)
+
+        write_scope = input_data.get("write_scope") or []
+        max_iterations = self._coerce_positive_int(
+            input_data.get("max_iterations"),
+            self.DEFAULT_MAX_ITERATIONS,
         )
-        write_scope = input_data.get("write_scope", [])
-        max_iterations = input_data.get(
-            "max_iterations", self.DEFAULT_MAX_ITERATIONS
+        timeout_seconds = self._coerce_positive_int(
+            input_data.get("timeout_seconds"),
+            self.DEFAULT_TIMEOUT_SECONDS,
         )
-        timeout_seconds = input_data.get(
-            "timeout_seconds", self.DEFAULT_TIMEOUT_SECONDS
+        timeout_retries = self._coerce_non_negative_int(
+            input_data.get("timeout_retries"),
+            self.DEFAULT_TIMEOUT_RETRIES,
         )
+        retry_backoff_seconds = self._coerce_non_negative_int(
+            input_data.get("retry_backoff_seconds"),
+            self.DEFAULT_RETRY_BACKOFF_SECONDS,
+        )
+        strict_mcp_config = input_data.get(
+            "strict_mcp_config", self.DEFAULT_STRICT_MCP_CONFIG
+        )
+        setting_sources = input_data.get("setting_sources", "")
         stop_conditions = input_data.get("stop_conditions", {})
         system_prompt_extra = input_data.get("system_prompt_extra", "")
         evidence_base = input_data.get("evidence_base", "")
+        model = str(input_data.get("model") or self._model or "").strip()
 
         # ========== 2. 构建 evidence bundle 目录 ==========
         evidence_dir = self._prepare_evidence_dir(evidence_base, workspace)
@@ -122,6 +161,37 @@ class ClaudeCodeExecutor(BaseExecutor):
             context_files=context_files,
         )
 
+        # 调试输出文件（即使失败也可用于排障）
+        conversation_live_log_path = str(evidence_dir / "conversation.live.log")
+        claude_debug_log_path = str(evidence_dir / "claude-debug.log")
+        prompt_system_path = str(evidence_dir / "prompt.system.txt")
+        prompt_user_path = str(evidence_dir / "prompt.user.txt")
+        self._write_prompt_artifacts(
+            prompt_system_path=prompt_system_path,
+            prompt_user_path=prompt_user_path,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+        self._append_live_log_meta(
+            conversation_live_log_path,
+            f"prompt_system_path={prompt_system_path}",
+        )
+        self._append_live_log_meta(
+            conversation_live_log_path,
+            f"prompt_user_path={prompt_user_path}",
+        )
+        mcp_config_path = input_data.get("mcp_config_path", "")
+        if strict_mcp_config and not mcp_config_path:
+            mcp_config_path = self._ensure_minimal_mcp_config(evidence_dir)
+        self._append_live_log_meta(
+            conversation_live_log_path,
+            f"mcp_config_path={mcp_config_path or '(none)'}",
+        )
+        self._append_live_log_meta(
+            conversation_live_log_path,
+            f"model={model or '(default)'}",
+        )
+
         # ========== 5. 调用 claude CLI ==========
         try:
             raw_output = await self._invoke_claude(
@@ -131,12 +201,27 @@ class ClaudeCodeExecutor(BaseExecutor):
                 allowed_commands=allowed_commands,
                 timeout_seconds=timeout_seconds,
                 max_iterations=max_iterations,
+                timeout_retries=timeout_retries,
+                retry_backoff_seconds=retry_backoff_seconds,
+                strict_mcp_config=strict_mcp_config,
+                setting_sources=setting_sources,
+                mcp_config_path=mcp_config_path,
+                model=model,
+                debug_file_path=claude_debug_log_path,
+                live_log_path=conversation_live_log_path,
             )
         except asyncio.TimeoutError:
             return self._build_result(
                 status="timeout",
-                error=f"Claude Code execution timed out after {timeout_seconds}s",
+                error=(
+                    f"Claude Code execution timed out after {timeout_seconds}s "
+                    f"(retries={timeout_retries})"
+                ),
                 evidence_dir=str(evidence_dir),
+                conversation_log_path=conversation_live_log_path,
+                debug_log_path=claude_debug_log_path,
+                prompt_system_path=prompt_system_path,
+                prompt_user_path=prompt_user_path,
             )
         except FileNotFoundError:
             return self._build_result(
@@ -144,12 +229,20 @@ class ClaudeCodeExecutor(BaseExecutor):
                 error=f"Claude CLI binary not found: {self._claude_binary}. "
                       "Install with: npm install -g @anthropic-ai/claude-code",
                 evidence_dir=str(evidence_dir),
+                conversation_log_path=conversation_live_log_path,
+                debug_log_path=claude_debug_log_path,
+                prompt_system_path=prompt_system_path,
+                prompt_user_path=prompt_user_path,
             )
         except Exception as e:
             return self._build_result(
                 status="failed",
                 error=f"Claude CLI invocation failed: {e}",
                 evidence_dir=str(evidence_dir),
+                conversation_log_path=conversation_live_log_path,
+                debug_log_path=claude_debug_log_path,
+                prompt_system_path=prompt_system_path,
+                prompt_user_path=prompt_user_path,
             )
 
         # ========== 6. 解析输出 ==========
@@ -179,6 +272,9 @@ class ClaudeCodeExecutor(BaseExecutor):
             "diff_summary": diff_summary,
             "evidence_bundle_path": str(evidence_dir),
             "conversation_log_path": conversation_log_path,
+            "debug_log_path": claude_debug_log_path,
+            "prompt_system_path": prompt_system_path,
+            "prompt_user_path": prompt_user_path,
             "generated_text": parsed.get("result_text", ""),
             "error": parsed.get("error"),
         }
@@ -291,6 +387,14 @@ class ClaudeCodeExecutor(BaseExecutor):
         allowed_commands: List[str],
         timeout_seconds: int,
         max_iterations: int,
+        timeout_retries: int = DEFAULT_TIMEOUT_RETRIES,
+        retry_backoff_seconds: int = DEFAULT_RETRY_BACKOFF_SECONDS,
+        strict_mcp_config: bool = DEFAULT_STRICT_MCP_CONFIG,
+        setting_sources: str = "",
+        mcp_config_path: str = "",
+        model: str = "",
+        debug_file_path: str = "",
+        live_log_path: str = "",
     ) -> str:
         """
         调用 claude CLI (v2.x)
@@ -305,9 +409,22 @@ class ClaudeCodeExecutor(BaseExecutor):
             "--output-format", "json",
         ]
 
-        # 指定模型（用于 GLM5 等非 Anthropic 后端）
-        if self._model:
-            cmd.extend(["--model", self._model])
+        # 记录 claude CLI 原生日志，便于定位网络/鉴权/连接问题
+        if debug_file_path:
+            cmd.extend(["--debug-file", debug_file_path])
+
+        if setting_sources:
+            cmd.extend(["--setting-sources", setting_sources])
+
+        # 仅使用显式 MCP 配置（默认无配置），避免本地全局 MCP 干扰执行稳定性
+        if strict_mcp_config:
+            cmd.append("--strict-mcp-config")
+            if mcp_config_path:
+                cmd.extend(["--mcp-config", mcp_config_path])
+
+        # 指定模型（显式传入优先，未传则使用初始化默认）
+        if model:
+            cmd.extend(["--model", model])
 
         # 注入系统 prompt
         if system_prompt:
@@ -323,19 +440,68 @@ class ClaudeCodeExecutor(BaseExecutor):
 
         # prompt 通过 stdin 传入（避免命令行参数过长或转义问题）
 
-        loop = asyncio.get_event_loop()
-        result = await asyncio.wait_for(
-            loop.run_in_executor(
-                None,
-                self._run_subprocess,
-                cmd,
-                workspace,
-                timeout_seconds,
-                prompt,
-            ),
-            timeout=timeout_seconds + 30,  # 额外 30s buffer
+        last_timeout_error: Optional[Exception] = None
+        total_attempts = max(timeout_retries, 0) + 1
+
+        for attempt_idx in range(total_attempts):
+            cancel_event = threading.Event()
+            try:
+                loop = asyncio.get_event_loop()
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        self._run_subprocess,
+                        cmd,
+                        workspace,
+                        timeout_seconds,
+                        prompt,
+                        live_log_path,
+                        debug_file_path,
+                        cancel_event,
+                    ),
+                    timeout=timeout_seconds + 30,  # 额外 30s buffer
+                )
+                return result
+            except asyncio.CancelledError:
+                cancel_event.set()
+                logger.warning(
+                    "Claude invoke cancelled (attempt %s/%s); sent cancellation signal to subprocess",
+                    attempt_idx + 1,
+                    total_attempts,
+                )
+                raise
+            except asyncio.TimeoutError as e:
+                cancel_event.set()
+                last_timeout_error = e
+                logger.warning(
+                    "Claude invoke timed out (attempt %s/%s, timeout=%ss)",
+                    attempt_idx + 1,
+                    total_attempts,
+                    timeout_seconds,
+                )
+                if attempt_idx >= total_attempts - 1:
+                    break
+                backoff_seconds = max(retry_backoff_seconds, 0) * (2 ** attempt_idx)
+                if backoff_seconds > 0:
+                    await asyncio.sleep(backoff_seconds)
+
+        raise asyncio.TimeoutError(
+            f"subprocess timed out after {timeout_seconds}s, attempts={total_attempts}"
+        ) from last_timeout_error
+
+    def _ensure_minimal_mcp_config(self, evidence_dir: Path) -> str:
+        """
+        生成最小 MCP 配置文件，确保 strict 模式下不加载额外 MCP 服务器。
+        """
+        config_path = evidence_dir / "mcp-config.minimal.json"
+        if config_path.exists():
+            return str(config_path)
+        payload = {"mcpServers": {}}
+        config_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
-        return result
+        return str(config_path)
 
     def _load_claude_env_settings(self) -> Dict[str, str]:
         """
@@ -423,9 +589,65 @@ class ClaudeCodeExecutor(BaseExecutor):
         return str(sandbox_home)
 
     def _run_subprocess(
-        self, cmd: List[str], cwd: str, timeout: int, stdin_text: str = ""
+        self,
+        cmd: List[str],
+        cwd: str,
+        timeout: int,
+        stdin_text: str = "",
+        live_log_path: str = "",
+        debug_file_path: str = "",
+        cancel_event: Optional[threading.Event] = None,
     ) -> str:
-        """同步执行 subprocess（在线程池中调用）"""
+        """同步执行 subprocess（在线程池中调用，实时监控输出）"""
+        process: Optional[subprocess.Popen] = None
+        stdout_lines: List[str] = []
+        stderr_lines: List[str] = []
+        log_queue: "queue.Queue[tuple[str, str]]" = queue.Queue()
+        reader_threads: List[threading.Thread] = []
+
+        def _reader(
+            stream: Optional[Any],
+            channel: str,
+            collector: List[str],
+        ) -> None:
+            if stream is None:
+                return
+            try:
+                for line in iter(stream.readline, ""):
+                    collector.append(line)
+                    log_queue.put((channel, line.rstrip("\n")))
+            finally:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+
+        def _append_meta(message: str) -> None:
+            if not live_log_path:
+                return
+            try:
+                with open(live_log_path, "a", encoding="utf-8") as f:
+                    f.write(f"[{datetime.now().isoformat()}][meta] {message}\n")
+            except OSError:
+                pass
+
+        def _drain_log_queue() -> int:
+            drained = 0
+            while True:
+                try:
+                    channel, line = log_queue.get_nowait()
+                except queue.Empty:
+                    return drained
+                drained += 1
+                compact_line = line if len(line) <= 500 else f"{line[:500]}..."
+                logger.info("[claude:%s] %s", channel, compact_line)
+                if live_log_path:
+                    try:
+                        with open(live_log_path, "a", encoding="utf-8") as f:
+                            f.write(f"[{datetime.now().isoformat()}][{channel}] {line}\n")
+                    except OSError:
+                        pass
+
         try:
             # 构建 env: 当前环境 + Claude settings.json env + entrypoint
             env = {
@@ -439,24 +661,140 @@ class ClaudeCodeExecutor(BaseExecutor):
             if sandbox_home:
                 env["HOME"] = sandbox_home
 
-            result = subprocess.run(
+            # Repo 管理 — 注入 repo 环境变量
+            # 当通过 RepoRegistry 调用时，input_data.repo_id 会被上层设置
+            # 这里通过 env 传递给 claude CLI 的 agent 感知
+            if os.getenv("LEE_REPO_ID"):
+                env["LEE_REPO_ID"] = os.getenv("LEE_REPO_ID")
+            if os.getenv("LEE_WORKDIR"):
+                env["LEE_WORKDIR"] = os.getenv("LEE_WORKDIR")
+            if os.getenv("LEE_REPO_ROOT_EXPECTED"):
+                env["LEE_REPO_ROOT_EXPECTED"] = os.getenv("LEE_REPO_ROOT_EXPECTED")
+
+            _append_meta(f"cmd={' '.join(cmd)}")
+            _append_meta(f"cwd={cwd}")
+            _append_meta(f"timeout={timeout}")
+            _append_meta(f"stdin_prompt_chars={len(stdin_text)}")
+
+            process = subprocess.Popen(
                 cmd,
-                capture_output=True,
-                text=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 cwd=cwd,
-                timeout=timeout,
-                input=stdin_text or None,
                 env=env,
+                text=True,
+                bufsize=1,
+                start_new_session=True,
             )
-            # 合并 stdout + stderr，确保不丢失任何输出
-            output = result.stdout or ""
-            if result.stderr:
-                output += f"\n--- stderr ---\n{result.stderr}"
+            _append_meta(f"pid={process.pid}")
+
+            stdout_thread = threading.Thread(
+                target=_reader,
+                args=(process.stdout, "stdout", stdout_lines),
+                daemon=True,
+            )
+            stderr_thread = threading.Thread(
+                target=_reader,
+                args=(process.stderr, "stderr", stderr_lines),
+                daemon=True,
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+            reader_threads.extend([stdout_thread, stderr_thread])
+
+            if process.stdin:
+                if stdin_text:
+                    process.stdin.write(stdin_text)
+                process.stdin.close()
+
+            start_ts = time.monotonic()
+            last_output_ts = start_ts
+            last_heartbeat_ts = start_ts
+            heartbeat_interval = float(self.DEFAULT_HEARTBEAT_SECONDS)
+            while True:
+                drained = _drain_log_queue()
+                now_ts = time.monotonic()
+                if drained > 0:
+                    last_output_ts = now_ts
+
+                if now_ts - last_heartbeat_ts >= heartbeat_interval:
+                    silent_for = int(now_ts - last_output_ts)
+                    elapsed = int(now_ts - start_ts)
+                    debug_size = 0
+                    if debug_file_path:
+                        try:
+                            debug_size = Path(debug_file_path).stat().st_size
+                        except OSError:
+                            debug_size = 0
+                    _append_meta(
+                        f"heartbeat elapsed={elapsed}s "
+                        f"silent_for={silent_for}s "
+                        f"stdout_lines={len(stdout_lines)} "
+                        f"stderr_lines={len(stderr_lines)} "
+                        f"debug_log_bytes={debug_size}"
+                    )
+                    last_heartbeat_ts = now_ts
+
+                if process.poll() is not None:
+                    break
+                if cancel_event is not None and cancel_event.is_set():
+                    _append_meta("cancellation requested; terminating subprocess")
+                    raise asyncio.TimeoutError("subprocess cancelled by caller")
+                if now_ts - start_ts > timeout:
+                    _append_meta(f"timeout reached ({timeout}s)")
+                    raise asyncio.TimeoutError(
+                        f"subprocess timed out after {timeout}s"
+                    )
+                time.sleep(0.2)
+
+            process.wait(timeout=5)
+            for t in reader_threads:
+                t.join(timeout=1)
+            _drain_log_queue()
+
+            output = "".join(stdout_lines)
+            stderr_output = "".join(stderr_lines)
+            if stderr_output:
+                output += f"\n--- stderr ---\n{stderr_output}"
             return output
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             raise asyncio.TimeoutError(
                 f"subprocess timed out after {timeout}s"
-            )
+            ) from e
+        finally:
+            if process and process.poll() is None:
+                try:
+                    if hasattr(os, "killpg"):
+                        os.killpg(process.pid, signal.SIGKILL)
+                    else:
+                        process.kill()
+                except Exception:
+                    pass
+            for t in reader_threads:
+                t.join(timeout=1)
+
+    @staticmethod
+    def _coerce_positive_int(value: Any, default: int) -> int:
+        """将输入安全转换为正整数；非法值回退默认值。"""
+        try:
+            if value is None:
+                return default
+            ivalue = int(value)
+            return ivalue if ivalue > 0 else default
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _coerce_non_negative_int(value: Any, default: int) -> int:
+        """将输入安全转换为非负整数；非法值回退默认值。"""
+        try:
+            if value is None:
+                return default
+            ivalue = int(value)
+            return ivalue if ivalue >= 0 else default
+        except (TypeError, ValueError):
+            return default
 
     def _parse_claude_output(self, raw_output: str) -> Dict[str, Any]:
         """
@@ -866,6 +1204,10 @@ class ClaudeCodeExecutor(BaseExecutor):
         status: str,
         error: str,
         evidence_dir: str = "",
+        conversation_log_path: str = "",
+        debug_log_path: str = "",
+        prompt_system_path: str = "",
+        prompt_user_path: str = "",
     ) -> Dict[str, Any]:
         """构建错误/异常结果"""
         return {
@@ -877,9 +1219,39 @@ class ClaudeCodeExecutor(BaseExecutor):
             "test_results": {},
             "diff_summary": {"files_changed": 0, "lines_added": 0, "lines_deleted": 0},
             "evidence_bundle_path": evidence_dir,
-            "conversation_log_path": "",
+            "conversation_log_path": conversation_log_path,
+            "debug_log_path": debug_log_path,
+            "prompt_system_path": prompt_system_path,
+            "prompt_user_path": prompt_user_path,
             "generated_text": "",
         }
+
+    def _append_live_log_meta(self, live_log_path: str, message: str) -> None:
+        """向 live log 追加一行 meta 信息。"""
+        if not live_log_path:
+            return
+        try:
+            with open(live_log_path, "a", encoding="utf-8") as f:
+                f.write(f"[{datetime.now().isoformat()}][meta] {message}\n")
+        except OSError:
+            pass
+
+    def _write_prompt_artifacts(
+        self,
+        prompt_system_path: str,
+        prompt_user_path: str,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> None:
+        """将 system/user prompt 落盘，便于超时调试。"""
+        try:
+            Path(prompt_system_path).write_text(system_prompt or "", encoding="utf-8")
+        except OSError:
+            pass
+        try:
+            Path(prompt_user_path).write_text(user_prompt or "", encoding="utf-8")
+        except OSError:
+            pass
 
 
 def register_claude_code_executor():

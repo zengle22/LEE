@@ -124,6 +124,22 @@ class EvidenceConfig:
 
 
 @dataclass
+class RepoRegistryConfig:
+    """Repo Registry 配置"""
+    registry_path: Optional[str] = None    # 显式指定 registry 文件路径
+    worktree_root: str = ".lee/runs"       # worktree 根目录
+    default_mode: str = "symlink"          # 默认工作区模式 (symlink/worktree/copy)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RepoRegistryConfig":
+        return cls(
+            registry_path=data.get("registry_path"),
+            worktree_root=data.get("worktree_root", ".lee/runs"),
+            default_mode=data.get("default_mode", "symlink"),
+        )
+
+
+@dataclass
 class LeeConfig:
     """
     LEE 项目配置
@@ -140,6 +156,7 @@ class LeeConfig:
     executor: ExecutorConfig = field(default_factory=ExecutorConfig)
     tracing: TracingConfig = field(default_factory=TracingConfig)
     evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
+    repos: RepoRegistryConfig = field(default_factory=RepoRegistryConfig)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LeeConfig":
@@ -152,6 +169,7 @@ class LeeConfig:
             executor=ExecutorConfig.from_dict(data.get("executor", {})),
             tracing=TracingConfig.from_dict(data.get("tracing", {})),
             evidence=EvidenceConfig.from_dict(data.get("evidence", {})),
+            repos=RepoRegistryConfig.from_dict(data.get("repos", {})),
         )
 
 
@@ -230,6 +248,11 @@ class ConfigLoader:
         spec_root_env = os.getenv("LEE_SPEC_ROOT")
         if spec_root_env:
             config.spec_root = spec_root_env
+
+        # LEE_REPO_REGISTRY
+        repo_registry_env = os.getenv("LEE_REPO_REGISTRY")
+        if repo_registry_env:
+            config.repos.registry_path = repo_registry_env
 
         return config
 

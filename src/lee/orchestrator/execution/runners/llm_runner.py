@@ -314,19 +314,33 @@ class ClaudeCodeRunner(StepRunnerBase):
 
         # 3. 构建 claude_code 输入
         claude_config = step.config.get("claude_code", {}) if step.config else {}
-        workspace = str(Path(ctx.project_root or ".").resolve())
+        workspace = ctx.resolve_workdir(step, instance.data.get("run_id", workflow_id))
 
         input_data = {
             "goal": agent_ctx.user_prompt or claude_config.get("goal", ""),
             "workspace": workspace,
             "context_files": claude_config.get("context_files", []),
-            "allowed_commands": claude_config.get("allowed_commands", []),
             "write_scope": claude_config.get("write_scope", []),
             "max_iterations": claude_config.get("max_iterations", 5),
-            "timeout_seconds": claude_config.get("timeout_seconds", 600),
+            "timeout_seconds": claude_config.get("timeout_seconds", 300),
+            "timeout_retries": claude_config.get("timeout_retries", 1),
+            "retry_backoff_seconds": claude_config.get("retry_backoff_seconds", 5),
             "stop_conditions": claude_config.get("stop_conditions", {}),
             "system_prompt_extra": agent_ctx.system_prompt or "",
         }
+
+        # 仅在显式配置时传 allowed_commands，避免把空列表传给执行器导致 Bash 被禁用。
+        configured_allowed_commands = claude_config.get("allowed_commands")
+        if isinstance(configured_allowed_commands, list) and configured_allowed_commands:
+            input_data["allowed_commands"] = configured_allowed_commands
+        if "setting_sources" in claude_config:
+            input_data["setting_sources"] = claude_config.get("setting_sources", "")
+        if "strict_mcp_config" in claude_config:
+            input_data["strict_mcp_config"] = bool(claude_config.get("strict_mcp_config"))
+        if claude_config.get("mcp_config_path"):
+            input_data["mcp_config_path"] = claude_config.get("mcp_config_path")
+        if claude_config.get("model"):
+            input_data["model"] = claude_config.get("model")
 
         if step_token:
             input_data["token_context"] = ctx.token_manager.encode_token_for_context(step_token)
@@ -378,7 +392,7 @@ class ClaudeCodeRunner(StepRunnerBase):
 
             # 6. 治理 Gate：diff 过大检查
             diff_summary = output.get("diff_summary", {})
-            max_diff_files = claude_config.get("max_diff_files", 50)
+            max_diff_files = claude_config.get("max_diff_files", 1000)
             if diff_summary.get("files_changed", 0) > max_diff_files:
                 status = "needs_human"
                 output["error"] = (
@@ -410,6 +424,9 @@ class ClaudeCodeRunner(StepRunnerBase):
             # 8. 失败处理
             if status in ("fail", "failed", "timeout"):
                 error_msg = output.get("error", f"Claude Code step {status}")
+                debug_hint = output.get("debug_log_path") or output.get("conversation_log_path")
+                if debug_hint:
+                    error_msg = f"{error_msg} (debug: {debug_hint})"
                 await ctx.state_machine.fail_step(workflow_id, step.id, error_msg)
                 await ctx.store.update_task_execution(
                     execution_id,

@@ -59,7 +59,11 @@ async def _get_orchestrator(project_dir: str) -> Orchestrator:
             if parent_lee.exists():
                 template_dir = parent_lee
 
-        template_manager = TemplateManager(str(template_dir))
+        # v3.5: 传递 project_root 到 TemplateManager 以加载配置
+        template_manager = TemplateManager(
+            template_dir=str(template_dir),
+            project_root=project_dir
+        )
 
         # 创建 Orchestrator
         orchestrator = Orchestrator(

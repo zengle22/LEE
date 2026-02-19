@@ -371,6 +371,38 @@ class SQLiteStore:
         row = await cursor.fetchone()
         return self._row_to_task_execution(row) if row else None
 
+    async def fail_running_task_executions(
+        self,
+        workflow_id: str,
+        error_message: str = "Workflow interrupted; running step marked as failed",
+        completed_at: Optional[datetime] = None,
+    ) -> int:
+        """
+        将工作流下所有 RUNNING 的 task_executions 收敛为 FAILED。
+
+        返回受影响的记录条数。
+        """
+        done_at = (completed_at or datetime.now()).isoformat()
+        cursor = await self._conn.execute(
+            """
+            UPDATE task_executions
+            SET status = ?,
+                error_message = COALESCE(error_message, ?),
+                completed_at = COALESCE(completed_at, ?)
+            WHERE workflow_id = ?
+              AND status = ?
+            """,
+            (
+                TaskExecutionStatus.FAILED.value,
+                error_message,
+                done_at,
+                workflow_id,
+                TaskExecutionStatus.RUNNING.value,
+            ),
+        )
+        await self._conn.commit()
+        return cursor.rowcount or 0
+
     # ========================================================================
     # Template 操作
     # ========================================================================

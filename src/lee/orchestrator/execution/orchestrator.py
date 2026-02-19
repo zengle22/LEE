@@ -26,6 +26,8 @@ v3.1 重构：
 """
 
 import uuid
+import json
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -54,7 +56,13 @@ from lee.orchestrator.execution.gate_engine import GateEngine
 from lee.orchestrator.storage.event_log import EventLog
 from lee.orchestrator.execution.trace import TraceLog, SpanType, Metrics
 from lee.orchestrator.execution.failure_handler import FailureHandler
-
+from lee.runtime.worktree_manager import WorktreeManager
+from lee.runtime.repo_registry import RepoRegistry
+from lee.orchestrator.execution.patch_output import PatchCollector
+from lee.orchestrator.execution.receipt import ReceiptStore, ExecutionReceipt
+from lee.orchestrator.execution.context_index import ContextIndex
+from lee.orchestrator.core.event_bus import get_event_bus, Event, EventType
+import uuid
 # Mixin 模块
 from lee.orchestrator.execution.step_runners import StepRunnerMixin
 from lee.orchestrator.execution.gate_operations import GateOperationsMixin
@@ -116,7 +124,11 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         self.store = store
         self.db = store  # 兼容 Runners 的 db 属性
         self.state_machine = WorkflowStateMachine(store)
-        self.template_manager = template_manager or TemplateManager()
+        # v3.5: 传递配置到 TemplateManager 以使用正确的 executor.default_type
+        self.template_manager = template_manager or TemplateManager(
+            project_root=project_root,
+            config=self.config
+        )
         self.executor_factory = ExecutorFactory
 
         # v1.5: 创建 AgentLoader 用于加载 agent spec
@@ -127,10 +139,38 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
             spec_root = str(Path(project_root) / "lee" / "spec-global") if project_root else None
         agent_loader = AgentLoader(project_root or ".", spec_root=spec_root)
 
+        # v3.1: P1 功能集成
+        self.contract_discovery = ContractDiscovery(project_root or ".")
+        repo_root = Path(project_root or ".")
+        registry_candidates = [
+            repo_root / ".lee" / "repos.yaml",
+            repo_root / ".lee" / "repo-registry.yaml",
+            repo_root / "config" / "repo-registry.yaml",
+        ]
+        registry_path = next((p for p in registry_candidates if p.exists()), registry_candidates[0])
+
+        self.repo_registry = RepoRegistry.from_yaml(
+            config_path=str(registry_path),
+            workspace_root=project_root
+        )
+        self.worktree_manager = WorktreeManager(
+            runs_root=str(Path(project_root or ".") / ".lee" / "runs"),
+            registry=self.repo_registry
+        )
+        self.patch_collector = PatchCollector(self.worktree_manager)
+        self.receipt_store = ReceiptStore(
+            runs_root=str(Path(project_root or ".") / ".lee" / "runs")
+        )
+        self.token_manager = TokenManager(project_root or ".")
+        self.tool_guard = ToolGuard(self.token_manager)
+        self.gate_engine = GateEngine()
+
         # v1.4 新增组件
+        self.context_index = ContextIndex(self.repo_registry)
         self.agent_context_builder = AgentContextBuilder(
             agent_loader=agent_loader,
-            project_root=project_root
+            project_root=project_root,
+            context_index=self.context_index
         )
         self.file_output_handler = FileOutputHandler(
             project_root=project_root
@@ -138,12 +178,6 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         self.evidence_collector = EvidenceCollector(project_root or ".")
         self.verifier_engine = VerifierEngine(project_root or ".")
         self.project_root = project_root
-
-        # v3.1: P1 功能集成
-        self.contract_discovery = ContractDiscovery(project_root or ".")
-        self.token_manager = TokenManager(project_root or ".")
-        self.tool_guard = ToolGuard(self.token_manager)
-        self.gate_engine = GateEngine()
 
         # v3.2: EventLog 事件日志
         self.event_log = EventLog(project_root or ".", run_id=None)
@@ -389,12 +423,24 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         # 开始步骤
         await self.state_machine.start_step(workflow_id, step_to_execute.id)
 
-        # v3.2: 记录步骤开始事件
-        self.event_log.run_id = instance.data.get("run_id", workflow_id)
+        # v3.2: 记录步骤开始事件 (Legacy EventLog)
         self.event_log.log_step_started(
             step_id=step_to_execute.id,
             agent_id=getattr(step_to_execute, 'agent_id', None) or step_to_execute.kind,
         )
+
+        # v3.5: Publish EventBus event (PM Agent)
+        get_event_bus().publish(Event(
+            type=EventType.STEP_STARTED,
+            payload={
+                "run_id": instance.data.get("run_id", workflow_id),
+                "step_id": step_to_execute.id,
+                "kind": step_to_execute.kind
+            },
+            source_workflow=workflow_id,
+            timestamp=datetime.utcnow().isoformat(),
+            event_id=uuid.uuid4().hex
+        ))
 
         # v3.4: 开始追踪 Span
         trace_span = self.trace_log.start_span(
@@ -437,8 +483,99 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
                 else:
                     executor = self.executor_factory.create(step_to_execute.executor_type or "llm")
                     input_data = step_to_execute.input or {}
+
+                    # v3.5: worktree 强制隔离
+                    if getattr(step_to_execute, "repo_scope", None):
+                        run_id = instance.data.get("run_id", workflow_id)
+                        repo_id = step_to_execute.repo_scope
+                        
+                        # 并行安全：检查是否有其他活跃 run 使用同一 repo
+                        active_runs = self.worktree_manager.list_active_runs_for_repo(repo_id)
+                        # 如果有其他 run，或者当前 run 已被标记为并行模式，则使用 worktree 模式
+                        mode = "worktree" if len(active_runs) > 0 and run_id not in active_runs else None
+                        
+                        wt_info = self.worktree_manager.allocate(run_id, repo_id, mode=mode)
+                        if not self.worktree_manager.validate_workdir(run_id, repo_id):
+                             raise RuntimeError(f"Worktree validation failed for {repo_id}")
+                        input_data["workspace"] = wt_info.workdir
+                        
+                        # P0-4: Capture state before
+                        commit_before = self.worktree_manager.get_current_commit(run_id, repo_id) or ""
+
                     output = await executor.execute(input_data)
+                    
+                    # v3.5: P0-3: Patch-first 强制产出
+                    patch_bundle = None
+                    if getattr(step_to_execute, "repo_scope", None):
+                        try:
+                            run_id = instance.data.get("run_id", workflow_id)
+                            repo_id = step_to_execute.repo_scope
+                            # 收集 patch 三件套
+                            patch_bundle = self.patch_collector.collect(
+                                run_id, step_to_execute.id, repo_id
+                            )
+                            # 注入 output.evidence
+                            if patch_bundle and not patch_bundle.is_empty:
+                                if isinstance(output, dict):
+                                    evidence = output.get("evidence", {})
+                                    evidence["patch"] = {
+                                        # 基本元数据
+                                        "files_changed": patch_bundle.files_changed,
+                                        "insertions": patch_bundle.insertions,
+                                        "deletions": patch_bundle.deletions,
+                                        "is_empty": patch_bundle.is_empty,
+                                        # 关键校验和
+                                        "hash": patch_bundle.patch_hash,
+                                        # 文件路径（用于后续查看/gate）
+                                        "path": patch_bundle.patch_path,
+                                        "stat_path": patch_bundle.stat_path,
+                                    }
+                                    output["evidence"] = evidence
+                            
+                            # v3.5 P0-4: 生成 Receipt (仅 repo_scope 步骤)
+                            commit_after = self.worktree_manager.get_current_commit(run_id, repo_id) or ""
+                            
+                            # Inputs hash
+                            try:
+                                inputs_json = json.dumps(input_data, sort_keys=True)
+                            except TypeError:
+                                inputs_json = str(input_data) # Fallback for non-serializable objects
+                            inputs_hash = hashlib.sha256(inputs_json.encode("utf-8")).hexdigest()
+                            
+                            receipt = ExecutionReceipt(
+                                run_id=run_id,
+                                step_id=step_to_execute.id,
+                                repo_id=repo_id,
+                                commit_before=commit_before,
+                                commit_after=commit_after,
+                                inputs_hash=inputs_hash,
+                                patch_hash=patch_bundle.patch_hash if patch_bundle else "",
+                                exit_code=0,
+                                timestamp=datetime.utcnow().isoformat(),
+                                executor_type=step_to_execute.executor_type or "llm",
+                            )
+                            self.receipt_store.save(receipt)
+
+                        except Exception as e:
+                            # 记录但不阻断主流程（Patch 收集失败可以算 warning）
+                            # logging.warning(f"Failed to collect patch: {e}")
+                            pass
+
                     r = await self.state_machine.complete_step(workflow_id, step_to_execute.id, output)
+                    
+                    # v3.5: Publish EventBus event
+                    get_event_bus().publish(Event(
+                        type=EventType.STEP_COMPLETED,
+                        payload={
+                            "run_id": run_id,
+                            "step_id": step_to_execute.id,
+                            "result": asdict(r) if hasattr(r, 'to_dict') else r.__dict__
+                        },
+                        source_workflow=workflow_id,
+                        timestamp=datetime.utcnow().isoformat(),
+                        event_id=uuid.uuid4().hex
+                    ))
+
                     await self._check_workflow_completion(workflow_id)
                     return r
 
@@ -503,6 +640,19 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
                 agent_id=getattr(step_to_execute, 'agent_id', None) or step_to_execute.kind,
                 error=str(e),
             )
+            
+            # v3.5: Publish EventBus event
+            get_event_bus().publish(Event(
+                type=EventType.STEP_FAILED,
+                payload={
+                    "run_id": instance.data.get("run_id", workflow_id),
+                    "step_id": step_to_execute.id,
+                    "error": str(e)
+                },
+                source_workflow=workflow_id,
+                timestamp=datetime.utcnow().isoformat(),
+                event_id=uuid.uuid4().hex
+            ))
             return StepResult(
                 status="failed",
                 step_id=step_to_execute.id,
@@ -713,6 +863,14 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
             workflow_id: 工作流 ID
         """
         await self.state_machine.pause_workflow(workflow_id)
+        # 收敛遗留的 running task 记录，避免出现 workflow=paused 但 task=running。
+        try:
+            await self.store.fail_running_task_executions(
+                workflow_id,
+                error_message="Workflow paused; running step interrupted",
+            )
+        except Exception:
+            pass
 
     async def resume(
         self,
@@ -760,6 +918,13 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         # 将错误信息存储在 data 中
         instance.data["error"] = error_message
         await self.store.update_workflow_data(workflow_id, instance.data)
+        try:
+            await self.store.fail_running_task_executions(
+                workflow_id,
+                error_message=error_message,
+            )
+        except Exception:
+            pass
         await self.store.update_workflow_status(workflow_id, WorkflowStatus.FAILED)
 
     # ============ 辅助方法 ============

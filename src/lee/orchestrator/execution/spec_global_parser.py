@@ -144,12 +144,24 @@ class SpecGlobalParser:
         # 支持两种格式:
         # 1. 简写格式: gate_id: path/to/gate.yaml
         # 2. 完整格式: gate_id: {ref: path/to/gate.yaml}
+        # 3. 内联定义: gate_id: {type: human, timeout: ...}
         if "gates" in doc:
-            for gate_id, gate_ref in doc["gates"].items():
-                # 如果是字典，提取 ref 字段
-                if isinstance(gate_ref, dict):
-                    gate_ref = gate_ref.get("ref", "")
-                gate_ir = self._parse_gate_file(gate_ref, file_path)
+            for gate_id, gate_def in doc["gates"].items():
+                gate_ir = None
+                # 如果是字典，检查是否有 ref 字段（文件引用）或其他字段（内联定义）
+                if isinstance(gate_def, dict):
+                    if "ref" in gate_def:
+                        # 文件引用格式
+                        gate_ref = gate_def["ref"]
+                        gate_ir = self._parse_gate_file(gate_ref, file_path)
+                    else:
+                        # 内联门禁定义，跳过解析（暂不支持）
+                        # 这些是配置性质的门禁，不是 spec-global 格式的门禁规范
+                        continue
+                elif isinstance(gate_def, str):
+                    # 简写格式：直接是文件路径
+                    gate_ir = self._parse_gate_file(gate_def, file_path)
+
                 # 只添加成功解析的门禁
                 if gate_ir is not None:
                     workflow_ir.gates[gate_id] = gate_ir

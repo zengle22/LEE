@@ -41,6 +41,19 @@ class IRConverter:
     3. 保留 IR 在 template.config 中供后续使用
     """
 
+    def __init__(self, config: Optional[Any] = None):
+        """
+        初始化 IR 转换器
+
+        Args:
+            config: LeeConfig 实例（可选，用于读取 executor.default_type）
+        """
+        self.config = config
+        if config is None:
+            # 使用默认配置
+            from lee.orchestrator.config_loader import LeeConfig
+            self.config = LeeConfig()
+
     def ir_to_template_dict(self, ir: WorkflowIR) -> Dict[str, Any]:
         """
         将 WorkflowIR 转换为字典（可用来构建 WorkflowTemplate）
@@ -87,11 +100,11 @@ class IRConverter:
         Returns:
             步骤字典
         """
-        # 推断 executor_type
+        # 推断 executor_type (v3.5: 使用配置中的 default_type)
         executor_type = step_ir.executor_type
         if not executor_type:
             if step_ir.kind == StepKind.AGENT:
-                executor_type = "llm"
+                executor_type = self.config.executor.default_type
             elif step_ir.kind == StepKind.SKILL:
                 executor_type = "shell"
             elif step_ir.kind in (
@@ -146,11 +159,11 @@ class IRConverter:
         Returns:
             Step 对象
         """
-        # 推断 executor_type
+        # 推断 executor_type (v3.5: 使用配置中的 default_type)
         executor_type = step_ir.executor_type
         if not executor_type:
             if step_ir.kind == StepKind.AGENT:
-                executor_type = "llm"
+                executor_type = self.config.executor.default_type
             elif step_ir.kind == StepKind.SKILL:
                 executor_type = "shell"
             elif step_ir.kind in (

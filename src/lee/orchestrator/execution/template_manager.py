@@ -71,15 +71,33 @@ class TemplateManager:
     - 支持 spec-global 格式（kind: workflow）
     """
 
-    def __init__(self, template_dir: str = "specs/workflows"):
+    def __init__(
+        self,
+        template_dir: str = "specs/workflows",
+        project_root: Optional[str] = None,
+        config: Optional[Any] = None,
+    ):
         """
         初始化模板管理器
 
         Args:
             template_dir: 模板文件目录
+            project_root: 项目根目录（用于加载配置）
+            config: LeeConfig 实例（可选，不提供则从 project_root 加载）
         """
         self.template_dir = Path(template_dir)
         self._cache: Dict[str, WorkflowTemplate] = {}
+
+        # v3.5: 加载配置以获取 executor.default_type
+        if config:
+            self.config = config
+        elif project_root:
+            from lee.orchestrator.config_loader import load_config
+            self.config = load_config(project_root)
+        else:
+            # 使用默认配置
+            from lee.orchestrator.config_loader import LeeConfig
+            self.config = LeeConfig()
 
         # 延迟导入 spec-global 解析器（避免循环依赖）
         self._spec_global_parser = None
@@ -230,7 +248,7 @@ class TemplateManager:
         try:
             docs = self.load_yaml_template(str(file_path))
             if docs:
-                template = self._parse_template_doc(docs[0], template_id)
+                template = self._parse_template_doc(docs[0], template_id, file_path)
                 self._cache[template_id] = template
                 # 也用文档中的 ID 作为缓存键
                 if template.id != template_id:
@@ -455,7 +473,8 @@ class TemplateManager:
     def _parse_template_doc(
         self,
         doc: Dict[str, Any],
-        template_id: str
+        template_id: str,
+        file_path: Optional[Path] = None
     ) -> WorkflowTemplate:
         """
         解析模板文档
@@ -468,6 +487,7 @@ class TemplateManager:
         Args:
             doc: YAML 文档字典
             template_id: 模板 ID
+            file_path: 模板文件路径（可选）
 
         Returns:
             WorkflowTemplate 对象
@@ -478,7 +498,7 @@ class TemplateManager:
         # spec-global 格式检测
         if kind == "workflow" and "stages" in doc:
             # 使用 spec-global 解析器
-            return self._parse_spec_global_format(doc, template_id)
+            return self._parse_spec_global_format(doc, template_id, file_path)
 
         # 其他格式处理（保持原有逻辑）
         if kind == "workflow":
@@ -521,7 +541,8 @@ class TemplateManager:
     def _parse_spec_global_format(
         self,
         doc: Dict[str, Any],
-        template_id: str
+        template_id: str,
+        file_path: Optional[Path] = None
     ) -> WorkflowTemplate:
         """
         解析 spec-global 格式的工作流文档
@@ -534,6 +555,7 @@ class TemplateManager:
         Args:
             doc: YAML 文档字典
             template_id: 模板 ID
+            file_path: 模板文件路径（可选）
 
         Returns:
             WorkflowTemplate 对象
@@ -544,10 +566,19 @@ class TemplateManager:
             from lee.orchestrator.ir.converter import IRConverter
 
             self._spec_global_parser = SpecGlobalParser(workflow_base_dir=str(self.template_dir))
-            self._ir_converter = IRConverter()
+            # v3.5: 传递配置到 IRConverter 以使用正确的 executor.default_type
+            self._ir_converter = IRConverter(config=self.config)
 
         # 使用 spec-global 解析器解析为 IR
-        workflow_ir = self._spec_global_parser.parse_workflow(doc, Path(self.template_dir) / f"{template_id}.yaml")
+        # 如果提供了 file_path，直接使用；否则根据 template_id 构建路径
+        if file_path:
+            workflow_file_path = file_path
+        elif template_id.endswith('.yaml') or template_id.endswith('.yml'):
+            workflow_file_path = Path(template_id)
+        else:
+            workflow_file_path = Path(self.template_dir) / f"{template_id}.yaml"
+
+        workflow_ir = self._spec_global_parser.parse_workflow(doc, workflow_file_path)
 
         # 将 IR 转换为模板字典
         template_dict = self._ir_converter.ir_to_template_dict(workflow_ir)
@@ -690,12 +721,13 @@ class TemplateManager:
             if step_data.get("level"):
                 subworkflow_level = step_data.get("level")
 
-        # 解析 executor_type（v1.4：不再从 workflow 直接读取，由 runtime 决定）
-        # 保留兼容性：如果指定了 executor 则使用，否则根据 kind 默认
+        # 解析 executor_type（v3.5：使用配置中的 default_type）
+        # 保留兼容性：如果指定了 executor 则使用，否则根据 kind 和配置决定
         executor_type = step_data.get("executor")
         if not executor_type:
             if kind == "agent":
-                executor_type = "llm"  # 默认使用 LLM
+                # v3.5: 从配置读取默认执行器类型
+                executor_type = self.config.executor.default_type
             elif kind == "claude_code":
                 executor_type = "claude_code"  # Claude Code 执行器
             elif kind == "patch_apply":
