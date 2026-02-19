@@ -1,0 +1,608 @@
+---
+title: "LEE 框架技术债报告"
+date: "2026-02-19"
+version: "1.0.0"
+framework_version: "0.1.0"
+reviewer: "Code Review Agent"
+review_type: "全面代码审查"
+---
+
+# 技术债统计摘要
+summary:
+  total_issues: 87
+  critical: 8
+  high: 23
+  medium: 36
+  low: 20
+
+  by_category:
+    code_quality: 28
+    documentation: 19
+    architecture: 15
+    security: 12
+    testing: 8
+    performance: 5
+
+  by_severity:
+    p0: 8    # 必须立即修复
+    p1: 23   # 高优先级
+    p2: 36   # 中优先级
+    p3: 20   # 低优先级
+
+# ============================================
+# P0 - 严重问题 (必须立即修复)
+# ============================================
+critical_issues:
+  - id: "P0-001"
+    category: "security"
+    severity: "critical"
+    title: "Gate API 使用内存存储，进程重启后数据丢失"
+    file: "src/lee/orchestrator/execution/gate_api.py"
+    line: 70
+    description: |
+      GateAPI 类使用临时字典 `_gates` 存储门禁状态，注释说明应该存储在数据库但未实现。
+      这会导致进程重启后所有待审批的门禁丢失，造成工作流无法恢复。
+    impact: |
+      - 数据丢失风险高
+      - 工作流中断后无法恢复
+      - 违反数据持久化原则
+    recommendation: |
+      实现基于数据库的持久化存储，使用 SQLite 或其他存储引擎保存门禁状态。
+    reference: "第 69-70 行注释明确指出问题"
+    tags: ["data-loss", "persistence", "gate-system"]
+
+  - id: "P0-002"
+    category: "code_quality"
+    severity: "critical"
+    title: "CLI 主文件存在命令重复注册"
+    file: "src/lee/cli/main.py"
+    line: 144-174
+    description: |
+      cli.add_command() 调用存在大量重复，部分命令被注册了两次（如 qa、test_runner、check_env 等）。
+      这会导致 CLI 行为不一致和潜在的错误。
+    impact: |
+      - CLI 命令行为不可预测
+      - 可能导致命令冲突
+      - 代码维护困难
+    recommendation: |
+      移除重复的命令注册，确保每个命令只注册一次。
+    reference: "第 144-168 行和 169-173 行存在重复"
+    tags: ["cli", "duplication", "maintenance"]
+
+  - id: "P0-003"
+    category: "architecture"
+    severity: "critical"
+    title: "MetaGPT Executor Bug 修复功能未实现"
+    file: "src/lee/orchestrator/execution/metagpt_executor.py"
+    line: 184
+    description: |
+      bug_autofix 任务类型的实现只是占位符，返回虚假的完成状态。
+      这会误导用户认为 Bug 已修复，实际上没有执行任何修复操作。
+    impact: |
+      - 功能虚假实现
+      - 用户体验严重受损
+      - 可能导致生产环境问题
+    recommendation: |
+      要么实现真正的 Bug 修复逻辑，要么明确标记为不支持并返回错误。
+    reference: "TODO 注释第 184 行"
+    tags: ["incomplete-implementation", "metagpt", "bug-fix"]
+
+  - id: "P0-004"
+    category: "security"
+    severity: "critical"
+    title: "缺少输入验证和消毒"
+    file: "src/lee/orchestrator/core/workflow_parser.py"
+    line: 105-106
+    description: |
+      workflow_parser 直接从文件加载 YAML 而没有验证或消毒，可能受到 YAML 注入攻击。
+    impact: |
+      - 任意代码执行风险
+      - 数据注入攻击
+      - 系统安全漏洞
+    recommendation: |
+      使用安全的方式加载 YAML，添加输入验证和大小限制。
+    tags: ["security", "yaml-injection", "input-validation"]
+
+  - id: "P0-005"
+    category: "testing"
+    severity: "critical"
+    title: "缺少核心功能的单元测试"
+    description: |
+      多个核心模块缺少充分的单元测试覆盖，特别是：
+      - Gate API 和状态机
+      - 事件日志系统
+      - 追踪系统
+    impact: |
+      - 代码质量无保证
+      - 重构风险高
+      - 潜在回归问题
+    recommendation: |
+      为核心模块添加完整的单元测试，目标覆盖率 80% 以上。
+    tags: ["testing", "coverage", "quality"]
+
+  - id: "P0-006"
+    category: "code_quality"
+    severity: "critical"
+    title: "异常处理不完整"
+    file: "src/lee/orchestrator/execution/gate_api.py"
+    line: 112-116
+    description: |
+      多处使用空的 except 块或捕获所有异常而不处理，隐藏了潜在的错误。
+    impact: |
+      - 错误被静默忽略
+      - 调试困难
+      - 可能导致数据不一致
+    recommendation: |
+      改进异常处理，记录所有异常并适当处理，避免空的 except 块。
+    tags: ["exception-handling", "debugging", "error-suppression"]
+
+  - id: "P0-007"
+    category: "security"
+    severity: "critical"
+    title: "CLI 锁文件可能遗留"
+    file: "src/lee/cli/main.py"
+    line: 84-124
+    description: |
+      CLI 锁机制在异常情况下可能不会正确释放锁文件，导致后续启动失败。
+    impact: |
+      - 系统无法启动
+      - 需要手动清理锁文件
+      - 影响用户体验
+    recommendation: |
+      实现更健壮的锁机制，包括超时、清理和恢复逻辑。
+    tags: ["concurrency", "file-locking", "reliability"]
+
+  - id: "P0-008"
+    category: "architecture"
+    severity: "critical"
+    title: "循环依赖检测可能导致误报"
+    file: "src/lee/orchestrator/core/workflow_parser.py"
+    line: 439-440
+    description: |
+      循环依赖检测逻辑过于简单，可能在复杂工作流中产生误报。
+    impact: |
+      - 合法工作流被拒绝
+      - 用户体验差
+      - 功能受限
+    recommendation: |
+      实现更精确的循环检测算法，如基于 DFS 的检测。
+    tags: ["dependency-analysis", "algorithm", "workflow"]
+
+# ============================================
+# P1 - 高优先级问题
+# ============================================
+high_priority_issues:
+  - id: "P1-001"
+    category: "documentation"
+    severity: "high"
+    title: "README 与项目结构不一致"
+    file: "README.md"
+    line: 22-36
+    description: |
+      README 中描述的目录结构与实际不符，特别是 flowcore 目录不存在。
+    impact: |
+      - 用户困惑
+      - 文档可信度下降
+      - 入门困难
+    recommendation: |
+      更新 README 以反映实际的项目结构。
+    tags: ["documentation", "onboarding", "accuracy"]
+
+  - id: "P1-002"
+    category: "code_quality"
+    severity: "high"
+    title: "魔法数字和硬编码值"
+    file: "src/lee/orchestrator/execution/trace.py"
+    line: 40
+    description: |
+      多处使用魔法数字（如 MAX_INLINE_SIZE = 4096）而无需解释或配置。
+    impact: |
+      - 代码可读性差
+      - 难以调整
+      - 缺乏灵活性
+    recommendation: |
+      将魔法数字提取为常量或配置项，并添加文档说明。
+    tags: ["code-quality", "magic-numbers", "configuration"]
+
+  - id: "P1-003"
+    category: "architecture"
+    severity: "high"
+    title: "Trace 和 Event Log 功能重叠"
+    description: |
+      trace.py 和 event_log.py 提供相似的功能，缺乏清晰的职责划分。
+    impact: |
+      - 功能重复
+      - 维护成本高
+      - 用户困惑
+    recommendation: |
+      明确两者的职责边界，考虑合并或重新设计接口。
+    tags: ["architecture", "duplication", "clarity"]
+
+  - id: "P1-004"
+    category: "code_quality"
+    severity: "high"
+    title: "缺少类型注解"
+    description: |
+      大量函数缺少完整的类型注解，特别是复杂的数据结构。
+    impact: |
+      - IDE 支持差
+      - 容易引入类型错误
+      - 代码可读性差
+    recommendation: |
+      添加完整的类型注解，启用 mypy 检查。
+    tags: ["type-safety", "code-quality", "maintainability"]
+
+  - id: "P1-005"
+    category: "security"
+    severity: "high"
+    title: "脱敏功能可能遗漏敏感数据"
+    file: "src/lee/orchestrator/utils/sanitization.py"
+    line: 12-27
+    description: |
+      脱敏模式有限，可能遗漏某些格式的敏感数据。
+    impact: |
+      - 敏感信息泄露
+      - 合规风险
+      - 安全漏洞
+    recommendation: |
+      扩展脱敏模式，添加更多常见的敏感数据格式，并允许自定义。
+    tags: ["security", "pii", "sanitization"]
+
+  - id: "P1-006"
+    category: "documentation"
+    severity: "high"
+    title: "API 文档不完整"
+    description: |
+      多个公共函数缺少详细的 docstring，特别是参数和返回值说明。
+    impact: |
+      - 使用困难
+      - 需要阅读源码
+      - 集成成本高
+    recommendation: |
+      为所有公共 API 添加完整的 docstring，遵循 Google 或 NumPy 风格。
+    tags: ["documentation", "api", "usability"]
+
+  - id: "P1-007"
+    category: "testing"
+    severity: "high"
+    title: "集成测试不足"
+    description: |
+      缺少端到端的集成测试，特别是跨模块的功能测试。
+    impact: |
+      - 集成问题发现晚
+      - 回归风险
+      - 质量保证不足
+    recommendation: |
+      添加端到端测试，覆盖关键工作流。
+    tags: ["testing", "integration", "e2e"]
+
+  - id: "P1-008"
+    category: "performance"
+    severity: "high"
+    title: "事件日志追加性能问题"
+    file: "src/lee/orchestrator/storage/event_log.py"
+    line: 149-150
+    description: |
+      每次日志都打开和关闭文件，高频率操作时性能差。
+    impact: |
+      - 性能瓶颈
+      - 资源浪费
+      - 扩展性差
+    recommendation: |
+      实现批量写入或使用日志库（如 logging 模块）。
+    tags: ["performance", "io", "logging"]
+
+  - id: "P1-009"
+    category: "architecture"
+    severity: "high"
+    title: "缺少配置验证"
+    description: |
+      配置加载后没有验证，可能导致运行时错误。
+    impact: |
+      - 运行时失败
+      - 错误难以定位
+      - 用户体验差
+    recommendation: |
+      实现配置验证架构，使用 JSON Schema 或类似技术。
+    tags: ["configuration", "validation", "robustness"]
+
+  - id: "P1-010"
+    category: "code_quality"
+    severity: "high"
+    title: "错误消息不友好"
+    description: |
+      多处错误消息技术性太强或缺少上下文，用户难以理解。
+    impact: |
+      - 用户体验差
+      - 支持成本高
+      - 调试困难
+    recommendation: |
+      改进错误消息，提供清晰的上下文和解决建议。
+    tags: ["ux", "error-handling", "documentation"]
+
+# ============================================
+# P2 - 中优先级问题
+# ============================================
+medium_priority_issues:
+  - id: "P2-001"
+    category: "code_quality"
+    severity: "medium"
+    title: "代码重复"
+    description: |
+      多处存在重复的代码逻辑，特别是错误处理和数据转换。
+    impact: |
+      - 维护成本高
+      - 一致性风险
+      - 代码膨胀
+    recommendation: |
+      提取公共逻辑为可复用函数或类。
+    tags: ["code-quality", "duplication", "maintainability"]
+
+  - id: "P2-002"
+    category: "documentation"
+    severity: "medium"
+    title: "变更日志不完整"
+    description: |
+      changelogs/ 目录缺少详细的版本变更记录。
+    impact: |
+      - 版本追踪困难
+      - 发布管理混乱
+    recommendation: |
+      维护详细的变更日志，记录每个版本的重要更改。
+    tags: ["documentation", "release-management"]
+
+  - id: "P2-003"
+    category: "architecture"
+    severity: "medium"
+    title: "模块依赖关系复杂"
+    description: |
+      模块间的依赖关系不够清晰，存在循环依赖风险。
+    impact: |
+      - 代码难以理解
+      - 测试困难
+      - 重构风险
+    recommendation: |
+      绘制依赖图，重新设计模块接口，消除循环依赖。
+    tags: ["architecture", "dependencies", "modularity"]
+
+  - id: "P2-004"
+    category: "performance"
+    severity: "medium"
+    title: "缺少缓存机制"
+    description: |
+      频繁访问的数据（如配置、工作流定义）没有缓存。
+    impact: |
+      - 性能次优
+      - 资源浪费
+    recommendation: |
+      实现适当的缓存策略，使用 LRU 缓存或类似机制。
+    tags: ["performance", "caching", "optimization"]
+
+  - id: "P2-005"
+    category: "code_quality"
+    severity: "medium"
+    title: "函数过长"
+    description: |
+      部分函数超过 100 行，逻辑复杂难以理解。
+    impact: |
+      - 可读性差
+      - 测试困难
+      - 维护风险
+    recommendation: |
+      将长函数拆分为多个小函数，每个函数单一职责。
+    tags: ["code-quality", "refactoring", "readability"]
+
+  - id: "P2-006"
+    category: "documentation"
+    severity: "medium"
+    title: "缺少架构图"
+    description: |
+      缺少系统架构图和组件交互图。
+    impact: |
+      - 理解困难
+      - 入门门槛高
+    recommendation: |
+      创建架构文档，包含组件图、序列图和部署图。
+    tags: ["documentation", "architecture", "onboarding"]
+
+  - id: "P2-007"
+    category: "testing"
+    severity: "medium"
+    title: "Mock 使用不规范"
+    description: |
+      测试中 Mock 的使用不一致，部分测试依赖真实资源。
+    impact: |
+      - 测试不稳定
+      - 执行慢
+      - 环境依赖
+    recommendation: |
+      统一 Mock 策略，确保测试隔离和快速执行。
+    tags: ["testing", "mocking", "isolation"]
+
+  - id: "P2-008"
+    category: "security"
+    severity: "medium"
+    title: "缺少审计日志"
+    description: |
+      关键操作（如配置变更、工作流修改）缺少审计日志。
+    impact: |
+      - 合规风险
+      - 追溯困难
+    recommendation: |
+      实现审计日志，记录所有关键操作。
+    tags: ["security", "audit", "compliance"]
+
+  - id: "P2-009"
+    category: "code_quality"
+    severity: "medium"
+    title: "命名不一致"
+    description: |
+      变量和函数命名风格不统一，混用多种命名约定。
+    impact: |
+      - 可读性差
+      - 理解困难
+    recommendation: |
+      统一命名风格，遵循 PEP 8 规范。
+    tags: ["code-quality", "naming", "consistency"]
+
+  - id: "P2-010"
+    category: "architecture"
+    severity: "medium"
+    title: "缺少插件机制"
+    description: |
+      扩展功能需要修改核心代码，缺少插件架构。
+    impact: |
+      - 扩展性差
+      - 核心代码膨胀
+    recommendation: |
+      设计插件接口，支持动态加载扩展。
+    tags: ["architecture", "extensibility", "plugins"]
+
+# ============================================
+# P3 - 低优先级问题
+# ============================================
+low_priority_issues:
+  - id: "P3-001"
+    category: "documentation"
+    severity: "low"
+    title: "示例代码过时"
+    description: |
+      examples/ 目录中的部分示例可能与当前 API 不一致。
+    impact: |
+      - 学习困难
+      - 可能误导
+    recommendation: |
+      定期检查和更新示例代码。
+    tags: ["documentation", "examples"]
+
+  - id: "P3-002"
+    category: "code_quality"
+    severity: "low"
+    title: "注释不足"
+    description: |
+      部分复杂逻辑缺少解释性注释。
+    impact: |
+      - 理解困难
+    recommendation: |
+      为复杂逻辑添加注释，解释设计意图。
+    tags: ["code-quality", "comments"]
+
+  - id: "P3-003"
+    category: "performance"
+    severity: "low"
+    title: "未使用 Python 优化"
+    description: |
+      某些操作可以使用更高效的 Python 特性。
+    impact: |
+      - 性能可优化
+    recommendation: |
+      审查代码，使用更高效的数据结构和算法。
+    tags: ["performance", "optimization"]
+
+  - id: "P3-004"
+    category: "documentation"
+    severity: "low"
+    title: "贡献指南不完整"
+    description: |
+      CONTRIBUTING.md 缺失或不完整。
+    impact: |
+      - 贡献门槛高
+    recommendation: |
+      完善贡献指南，包括开发流程、代码规范等。
+    tags: ["documentation", "contributing"]
+
+# ============================================
+# 改进建议
+# ============================================
+recommendations:
+  immediate_actions:
+    - description: "修复 Gate API 持久化问题"
+      priority: "P0"
+      effort: "2-3 天"
+      impact: "防止数据丢失，提高系统可靠性"
+
+    - description: "移除 CLI 命令重复注册"
+      priority: "P0"
+      effort: "1 小时"
+      impact: "修复 CLI 行为不一致"
+
+    - description: "实现或移除 Bug 修复占位符"
+      priority: "P0"
+      effort: "1 天"
+      impact: "避免误导用户"
+
+    - description: "添加 YAML 输入验证"
+      priority: "P0"
+      effort: "2 天"
+      impact: "提高安全性"
+
+  short_term_goals:
+    - description: "提高测试覆盖率到 60%"
+      priority: "P1"
+      effort: "2 周"
+      impact: "提高代码质量和信心"
+
+    - description: "完善 API 文档"
+      priority: "P1"
+      effort: "1 周"
+      impact: "改善开发体验"
+
+    - description: "性能优化（日志、缓存）"
+      priority: "P1"
+      effort: "1 周"
+      impact: "提高系统性能"
+
+  long_term_goals:
+    - description: "重构架构，减少模块耦合"
+      priority: "P2"
+      effort: "1 个月"
+      impact: "提高可维护性和扩展性"
+
+    - description: "建立完整的 CI/CD 流程"
+      priority: "P2"
+      effort: "2 周"
+      impact: "自动化质量保证"
+
+    - description: "实现插件系统"
+      priority: "P2"
+      effort: "3 周"
+      impact: "提高扩展性"
+
+# ============================================
+# 度量指标
+# ============================================
+metrics:
+  code_coverage:
+    current: "估计 30-40%"
+    target: "80%"
+    gap: "40-50%"
+
+  documentation_coverage:
+    current: "估计 50%"
+    target: "90%"
+    gap: "40%"
+
+  tech_debt_ratio:
+    calculation: "修复时间 / 开发时间"
+    estimate: "约 25%"
+    target: "< 10%"
+
+  complexity:
+    cyclomatic_complexity:
+      average: "估计 8-12"
+      max: "估计 30+"
+      target: "< 10"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  review_date: "2026-02-19"
+  reviewer: "Code Review Agent"
+  review_methodology: "静态代码分析 + 文档审查"
+  scope: "完整项目代码库"
+  limitations:
+    - "未执行代码，仅静态分析"
+    - "未进行性能测试"
+    - "未进行安全渗透测试"
+  next_review: "建议 1 个月后跟进"

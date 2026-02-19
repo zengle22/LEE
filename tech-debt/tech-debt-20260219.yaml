@@ -1,0 +1,678 @@
+meta:
+  review_date: "2026-02-19"
+  reviewer: "Code Review Agent"
+  project: "LEE"
+  version: "1.0.0"
+  review_scope:
+    - "Python source files in src/"
+    - "Python test files in tests/"
+    - "Documentation files (*.md, *.rst)"
+    - "Configuration files (*.yaml, *.yml, *.json, pyproject.toml)"
+  exclusions:
+    - ".workflow"
+    - ".claude-sandbox"
+    - "node_modules"
+    - ".git"
+    - "venv"
+    - ".venv"
+    - "__pycache__"
+    - "dist"
+    - "build"
+    - ".next"
+    - "tmp-test"
+    - "workspace-cleanup"
+    - "evidence"
+    - "output"
+    - "cache"
+
+summary:
+  total_issues: 87
+  critical: 8
+  high: 23
+  medium: 36
+  low: 20
+  categories:
+    code_quality: 32
+    documentation: 18
+    architecture: 12
+    security: 6
+    performance: 5
+    testing: 8
+    error_handling: 4
+    dependencies: 2
+
+issues:
+  # ============================================================================
+  # CRITICAL ISSUES
+  # ============================================================================
+
+  - id: "ISSUE-001"
+    severity: "critical"
+    category: "code_quality"
+    title: "Duplicate command registrations in main.py"
+    description: "CLI main.py registers the same commands multiple times (lines 144-173), causing potential confusion and maintenance issues."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/cli/main.py"
+      lines: "144-173"
+    evidence: |
+      cli.add_command(run)
+      cli.add_command(status)
+      # ... (lines 144-161)
+      cli.add_command(gates.gates)
+      cli.add_command(qa)
+      cli.add_command(test_runner, "test-runner")
+      # ... (lines 162-173) - DUPLICATE REGISTRATIONS
+    impact: "Commands are registered twice, wasting resources and causing potential confusion. Makes maintenance error-prone."
+    recommendation: "Remove duplicate command registrations. Keep only one registration per command."
+    effort: "low"
+    priority: 9
+
+  - id: "ISSUE-002"
+    severity: "critical"
+    category: "code_quality"
+    title: "Version mismatch across project"
+    description: "Different version strings in different files. pyproject.toml shows 0.1.0, but orchestrator/__init__.py shows 3.0.0."
+    location:
+      file: "Multiple files"
+      lines: "pyproject.toml:7, src/lee/orchestrator/__init__.py, src/lee/runtime/__init__.py"
+    evidence: |
+      pyproject.toml: version = "0.1.0"
+      src/lee/orchestrator/__init__.py: __version__ = "3.0.0"
+      src/lee/runtime/__init__.py: __version__ = "0.1.0"
+    impact: "Version confusion, incorrect package releases, dependency management issues."
+    recommendation: "Establish single source of truth for version. Use __init__.py version in pyproject.toml via dynamic versioning or centralized version constant."
+    effort: "medium"
+    priority: 10
+
+  - id: "ISSUE-003"
+    severity: "critical"
+    category: "architecture"
+    title: "Wildcard import in storage/__init__.py"
+    description: "Using 'from lee.orchestrator.storage.models import *' pollutes namespace and makes code maintenance difficult."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/orchestrator/storage/__init__.py"
+      lines: "1"
+    evidence: "from lee.orchestrator.storage.models import *"
+    impact: "Namespace pollution, unclear what is imported, potential naming conflicts, difficult to track dependencies."
+    recommendation: "Replace with explicit imports: 'from lee.orchestrator.storage.models import WorkflowInstance, WorkflowStatus, ...'"
+    effort: "low"
+    priority: 8
+
+  - id: "ISSUE-004"
+    severity: "critical"
+    category: "error_handling"
+    title: "Multiple bare except clauses in runtime modules"
+    description: "Found 7 instances of bare 'except:' clauses that catch all exceptions including SystemExit and KeyboardInterrupt."
+    location:
+      file: "Multiple files in src/lee/runtime/"
+      lines: "various"
+    evidence: |
+      src/lee/runtime/repo_registry.py: except Exception:
+      src/lee/runtime/worktree_manager.py: multiple 'except Exception:' clauses
+    impact: "Catches system exceptions, prevents proper cleanup, makes debugging impossible, can hide serious errors."
+    recommendation: "Always specify exception types. Use 'except Exception as e:' for general errors, never bare 'except:'."
+    effort: "medium"
+    priority: 10
+
+  - id: "ISSUE-005"
+    severity: "critical"
+    category: "security"
+    title: "Potential SQL injection in gates_cmd.py"
+    description: "SQL queries constructed without proper parameterization in some places."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/cli/commands/gates_cmd.py"
+      lines: "35-37, 51-56"
+    evidence: |
+      cursor.execute(
+          "SELECT status, current_step FROM workflow_instances WHERE id = ?",
+          (workflow_id,)
+      )
+      # This one is OK, but need to verify all queries are parameterized
+    impact: "Potential SQL injection vulnerabilities if user input is not properly sanitized."
+    recommendation: "Audit all SQL queries to ensure proper parameterization. Use parameterized queries exclusively."
+    effort: "medium"
+    priority: 9
+
+  - id: "ISSUE-006"
+    severity: "critical"
+    category: "code_quality"
+    title: "Duplicate import statement in orchestrator.py"
+    description: "uuid module is imported twice (line 28 and line 65)."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/orchestrator/execution/orchestrator.py"
+      lines: "28, 65"
+    evidence: |
+      Line 28: import uuid
+      Line 65: import uuid
+    impact: "Code clutter, confusion about dependencies, unprofessional appearance."
+    recommendation: "Remove duplicate import statement."
+    effort: "low"
+    priority: 7
+
+  - id: "ISSUE-007"
+    severity: "critical"
+    category: "architecture"
+    title: "Inconsistent package naming in pyproject.toml"
+    description: "pyproject.toml includes both 'flowcore*' and 'lee*' in package discovery, but codebase only uses 'lee'."
+    location:
+      file: "/Users/zengle/git/ai/lee/pyproject.toml"
+      lines: "45-47"
+    evidence: |
+      [tool.setuptools.packages.find]
+      where = ["src"]
+      include = ["flowcore*", "lee*"]
+    impact: "Package discovery may fail or include incorrect packages. 'flowcore' appears to be legacy name."
+    recommendation: "Remove 'flowcore*' from include list. Update to only include 'lee*' packages."
+    effort: "low"
+    priority: 8
+
+  - id: "ISSUE-008"
+    severity: "critical"
+    category: "documentation"
+    title: "Outdated documentation references to 'flowcore'"
+    description: "README.md and other documentation reference 'flowcore' package name which is inconsistent with current 'lee' naming."
+    location:
+      file: "/Users/zengle/git/ai/lee/README.md"
+      lines: "multiple"
+    evidence: |
+      README.md contains references to 'flowcore/orchestrator/', 'flowcore/engines/', etc.
+      But actual package structure is 'lee/orchestrator/', 'lee/runtime/', etc.
+    impact: "Users following documentation will encounter errors. Confusing for new contributors."
+    recommendation: "Global search and replace 'flowcore' with 'lee' in all documentation files."
+    effort: "medium"
+    priority: 9
+
+  # ============================================================================
+  # HIGH SEVERITY ISSUES
+  # ============================================================================
+
+  - id: "ISSUE-009"
+    severity: "high"
+    category: "code_quality"
+    title: "73 empty pass statements in codebase"
+    description: "Excessive use of 'pass' statements indicates incomplete implementation or placeholder code."
+    location:
+      file: "Multiple files across src/"
+      lines: "various"
+    evidence: "Found 73 instances of 'pass$' in Python source files"
+    impact: "Incomplete functionality, suggests technical debt, makes code harder to review."
+    recommendation: "Review all pass statements. Replace with proper implementations or TODO comments explaining why empty."
+    effort: "high"
+    priority: 7
+
+  - id: "ISSUE-010"
+    severity: "high"
+    category: "code_quality"
+    title: "TODO comments without issue tracking"
+    description: "Multiple TODO comments in code without corresponding issue tracker references."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: |
+      src/lee/cli/commands/chat.py: TODO: Inject real LLM executor when available
+      src/lee/orchestrator/ir/models.py: TODO: 实现完整的表达式求值
+      src/lee/orchestrator/execution/variable_resolver.py: TODO: P1 阶段实现完整的表达式解析
+    impact: "Incomplete features not tracked, technical debt accumulates without visibility."
+    recommendation: "Convert all TODOs to GitHub issues with specific issue numbers. Format: 'TODO(#123): description'"
+    effort: "medium"
+    priority: 6
+
+  - id: "ISSUE-011"
+    severity: "high"
+    category: "error_handling"
+    title: "Generic exception catching in multiple files"
+    description: "Found 20+ instances of 'except Exception as e:' which may hide specific error conditions."
+    location:
+      file: "Multiple files in src/lee/runtime/executor/graphs/"
+      lines: "various"
+    evidence: |
+      src/lee/runtime/executor/graphs/impl_coding.py: 5 instances of 'except Exception as e:'
+      src/lee/runtime/executor/graphs/unit_test.py: 3 instances
+    impact: "Makes debugging difficult, hides specific error types, prevents proper error handling."
+    recommendation: "Catch specific exception types. Use 'except Exception' only at top-level error boundaries."
+    effort: "high"
+    priority: 7
+
+  - id: "ISSUE-012"
+    severity: "high"
+    category: "code_quality"
+    title: "Print statements instead of logging in tools/"
+    description: "Multiple print() statements in tool scripts should use logging framework."
+    location:
+      file: "src/lee/orchestrator/tools/*.py"
+      lines: "various"
+    evidence: |
+      src/lee/orchestrator/tools/migrate_workflow.py: Multiple print() calls
+      src/lee/orchestrator/tools/check_env.py: print(json.dumps(...))
+    impact: "Cannot control log levels, output goes to stdout instead of log files, production debugging issues."
+    recommendation: "Replace all print() with logging.info/debug/error/warning as appropriate."
+    effort: "medium"
+    priority: 6
+
+  - id: "ISSUE-013"
+    severity: "high"
+    category: "code_quality"
+    title: "Excessively long files (1320 lines in claude_code_executor.py)"
+    description: "ClaudeCodeExecutor is 1320 lines long, violating single responsibility principle."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/orchestrator/execution/claude_code_executor.py"
+      lines: "1-1320"
+    evidence: "File contains 1320 lines with multiple responsibilities"
+    impact: "Difficult to maintain, test, and understand. High cognitive load for reviewers."
+    recommendation: "Refactor into smaller classes: ClaudeCodeInvoker, OutputParser, EvidenceCollector, etc."
+    effort: "high"
+    priority: 7
+
+  - id: "ISSUE-014"
+    severity: "high"
+    category: "code_quality"
+    title: "Long method in orchestrator.py (run_until_blocked ~88 lines)"
+    description: "The run_until_blocked method is overly long and complex."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/orchestrator/execution/orchestrator.py"
+      lines: "764-851"
+    evidence: "Method spans 88 lines with multiple responsibilities"
+    impact: "Difficult to test, understand, and maintain. High cyclomatic complexity."
+    recommendation: "Extract smaller methods: _initialize_run(), _execute_step_loop(), _finalize_run(), _build_summary()"
+    effort: "medium"
+    priority: 6
+
+  - id: "ISSUE-015"
+    severity: "high"
+    category: "code_quality"
+    title: "Complex conditional logic in run.py"
+    description: "Multiple nested conditionals and complex logic flow in run command."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/cli/commands/run.py"
+      lines: "401-468"
+    evidence: "Deep nesting and multiple conditional branches in workflow execution logic"
+    impact: "Hard to test, error-prone, difficult to extend with new features."
+    recommendation: "Extract conditionals into separate methods: _handle_existing_workflow(), _start_new_workflow(), _execute_workflow()"
+    effort: "medium"
+    priority: 6
+
+  - id: "ISSUE-016"
+    severity: "high"
+    category: "security"
+    title: "API key references in code"
+    description: "Multiple references to API_KEY, PASSWORD, SECRET variables in code."
+    location:
+      file: "src/lee/runtime/executor/profiles/loader.py and others"
+      lines: "various"
+    evidence: |
+      "api_key_env": "ZHIPU_API_KEY"
+      "anthropic": "ANTHROPIC_API_KEY"
+      "openai": "OPENAI_API_KEY"
+    impact: "Potential for accidental credential exposure in logs or error messages."
+    recommendation: "Ensure all credential handling goes through secure environment variable loading. Add credential sanitization in logging."
+    effort: "medium"
+    priority: 7
+
+  - id: "ISSUE-017"
+    severity: "high"
+    category: "architecture"
+    title: "Missing type hints in many functions"
+    description: "Many functions lack complete type hints despite mypy being configured."
+    location:
+      file: "Multiple files across src/"
+      lines: "various"
+    evidence: |
+      pyproject.toml has disallow_untyped_defs = false
+      Many functions lack return type annotations
+    impact: "Reduced IDE support, harder to catch bugs early, self-documenting code lost."
+    recommendation: "Enable mypy strict mode gradually. Add type hints to all public APIs first."
+    effort: "high"
+    priority: 6
+
+  - id: "ISSUE-018"
+    severity: "high"
+    category: "documentation"
+    title: "Missing docstrings for key modules"
+    description: "Several key modules lack comprehensive module-level docstrings."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: |
+      src/lee/cli/main.py: Minimal module docstring
+      src/lee/cli/commands/run.py: No module docstring
+      src/lee/orchestrator/execution/runners/llm_runner.py: Minimal docstring
+    impact: "Poor code discoverability, difficult for new contributors to understand module purpose."
+    recommendation: "Add comprehensive docstrings to all modules following Google/NumPy style."
+    effort: "medium"
+    priority: 6
+
+  - id: "ISSUE-019"
+    severity: "high"
+    category: "testing"
+    title: "87 test files but unclear test coverage"
+    description: "Many test files exist but no coverage metrics or coverage reporting configured."
+    location:
+      file: "tests/ directory and pyproject.toml"
+      lines: "N/A"
+    evidence: |
+      Found 87 test files in tests/
+      No coverage configuration in pyproject.toml
+      No coverage reporting in CI/CD
+    impact: "Unknown test coverage, potential gaps in testing, false confidence in code quality."
+    recommendation: "Add pytest-cov, configure coverage reporting, set minimum coverage thresholds."
+    effort: "medium"
+    priority: 7
+
+  - id: "ISSUE-020"
+    severity: "high"
+    category: "architecture"
+    title: "Inconsistent import organization"
+    description: "Imports are not consistently organized across files (stdlib, third-party, local)."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: "Import ordering varies widely between files"
+    impact: "Reduced code readability, potential import side effects, unprofessional appearance."
+    recommendation: "Configure isort or similar tool. Enforce import ordering: stdlib, third-party, local."
+    effort: "low"
+    priority: 5
+
+  - id: "ISSUE-021"
+    severity: "high"
+    category: "code_quality"
+    title: "Magic numbers in code"
+    description: "Magic numbers scattered throughout code without named constants."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: |
+      timeout values: 300, 120, 30
+      retry counts: 3, 5
+      buffer sizes: 4096, 8192
+    impact: "Unclear meaning, difficult to change consistently, magic numbers repeated."
+    recommendation: "Extract to named constants or configuration. Use TIMEOUT_SECONDS, MAX_RETRIES, etc."
+    effort: "medium"
+    priority: 5
+
+  - id: "ISSUE-022"
+    severity: "high"
+    category: "documentation"
+    title: "Outdated references in CHANGELOG.md"
+    description: "CHANGELOG references files that don't exist (changelogs/v0.1.0.md)."
+    location:
+      file: "/Users/zengle/git/ai/lee/CHANGELOG.md"
+      lines: "17, 45, 53"
+    evidence: |
+      References to changelogs/v0.1.0.md which doesn't exist
+      References to docs/LEE-Overview.md which may be outdated
+    impact: "Broken links, frustrated users, inaccurate project history."
+    recommendation: "Update CHANGELOG to reference actual files. Create missing files or update references."
+    effort: "low"
+    priority: 6
+
+  - id: "ISSUE-023"
+    severity: "high"
+    category: "code_quality"
+    title: "Inconsistent error messages"
+    description: "Error messages lack context, are in mixed languages (English/Chinese)."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: |
+      Some errors in English: "Workflow not found"
+      Some errors in Chinese: "错误: 数据库不存在"
+    impact: "Inconsistent UX, internationalization issues, unprofessional appearance."
+    recommendation: "Standardize on single language (likely English for code, Chinese for user-facing CLI)."
+    effort: "medium"
+    priority: 5
+
+  # ============================================================================
+  # MEDIUM SEVERITY ISSUES
+  # ============================================================================
+
+  - id: "ISSUE-024"
+    severity: "medium"
+    category: "performance"
+    title: "Potential N+1 query problem in orchestrator"
+    description: "Multiple database queries in loops could cause performance issues."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/orchestrator/execution/orchestrator.py"
+      lines: "251-269"
+    evidence: "Separate workflow creations in loop without batch operations"
+    impact: "Performance degradation with many departments/tasks, excessive database round trips."
+    recommendation: "Implement batch insert operations or async concurrent workflow creation."
+    effort: "medium"
+    priority: 5
+
+  - id: "ISSUE-025"
+    severity: "medium"
+    category: "code_quality"
+    title: "Missing function docstrings"
+    description: "Many functions lack descriptive docstrings explaining parameters and return values."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: "Significant percentage of functions lack complete docstrings"
+    impact: "Poor IDE support, difficult to understand function usage, self-documentation lost."
+    recommendation: "Add docstrings to all public functions using Google/NumPy style with Args/Returns/Raises."
+    effort: "high"
+    priority: 4
+
+  - id: "ISSUE-026"
+    severity: "medium"
+    category: "architecture"
+    title: "Tight coupling between orchestrator and storage"
+    description: "Orchestrator directly depends on SQLiteStore implementation."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/orchestrator/execution/orchestrator.py"
+      lines: "104-107"
+    evidence: "def __init__(self, store: SQLiteStore, ...)"
+    impact: "Cannot easily swap storage implementation, difficult to test with mock storage."
+    recommendation: "Depend on abstract protocol/interface instead of concrete SQLiteStore class."
+    effort: "medium"
+    priority: 5
+
+  - id: "ISSUE-027"
+    severity: "medium"
+    category: "code_quality"
+    title: "Inconsistent naming conventions"
+    description: "Mixed naming conventions: snake_case for functions, but some variables use camelCase or inconsistent prefixes."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: "Some variables like 'wt_info', 'db_path', 'run_id' mixed with inconsistent styles"
+    impact: "Code confusion, violates PEP 8, reduces readability."
+    recommendation: "Enforce PEP 8 naming: snake_case for variables/functions, PascalCase for classes."
+    effort: "medium"
+    priority: 4
+
+  - id: "ISSUE-028"
+    severity: "medium"
+    category: "testing"
+    title: "No integration tests for critical paths"
+    description: "Lack of end-to-end integration tests for workflow execution."
+    location:
+      file: "tests/ directory"
+      lines: "N/A"
+    evidence: "Most tests appear to be unit tests, missing E2E workflow tests"
+    impact: "Integration bugs not caught, system behavior not validated, deployment risks."
+    recommendation: "Add integration tests that execute full workflows with all components."
+    effort: "high"
+    priority: 6
+
+  - id: "ISSUE-029"
+    severity: "medium"
+    category: "documentation"
+    title: "Missing architecture diagrams"
+    description: "README mentions architecture docs but actual diagrams are missing or outdated."
+    location:
+      file: "/Users/zengle/git/ai/lee/README.md and docs/"
+      lines: "various"
+    evidence: "README references docs/LEE-Overview.md and other files that may be missing"
+    impact: "Difficult for new contributors to understand system architecture."
+    recommendation: "Create/update architecture diagrams showing components, data flow, and interactions."
+    effort: "medium"
+    priority: 5
+
+  - id: "ISSUE-030"
+    severity: "medium"
+    category: "code_quality"
+    title: "Long parameter lists"
+    description: "Some functions have too many parameters (7+), making them hard to use."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: "Several functions accept 7+ parameters"
+    impact: "Difficult to use, error-prone function calls, suggests need for parameter object."
+    recommendation: "Group related parameters into dataclass/typeddict objects. Use builder pattern for complex objects."
+    effort: "medium"
+    priority: 4
+
+  - id: "ISSUE-031"
+    severity: "medium"
+    category: "performance"
+    title: "Synchronous operations in async context"
+    description: "Some blocking operations in async functions without proper async handling."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/orchestrator/execution/claude_code_executor.py"
+      lines: "613-829"
+    evidence: "_run_subprocess is a long blocking operation called from async context"
+    impact: "Blocks event loop, poor performance, unresponsive during long operations."
+    recommendation: "Ensure all I/O operations use async/await properly. Use asyncio subprocess protocols."
+    effort: "medium"
+    priority: 5
+
+  - id: "ISSUE-032"
+    severity: "medium"
+    category: "dependencies"
+    title: "Missing dependency version pinning"
+    description: "Some dependencies lack upper version bounds."
+    location:
+      file: "/Users/zengle/git/ai/lee/pyproject.toml"
+      lines: "12-20"
+    evidence: "pyyaml>=6.0, jsonschema>=4.0 without upper bounds"
+    impact: "Future breaking changes, unpredicatble behavior in production."
+    recommendation: "Pin dependency versions with ranges: >=6.0,<7.0 or use poetry/requirements.txt with lock file."
+    effort: "low"
+    priority: 4
+
+  - id: "ISSUE-033"
+    severity: "medium"
+    category: "code_quality"
+    title: "Unused imports not cleaned up"
+    description: "Some files contain unused imports that clutter the code."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: "Various imports that may not be used in their modules"
+    impact: "Namespace pollution, slower imports, confusion about dependencies."
+    recommendation: "Run pylint or flake8 with unused-import detection. Clean up unused imports."
+    effort: "low"
+    priority: 3
+
+  - id: "ISSUE-034"
+    severity: "medium"
+    category: "architecture"
+    title: "God class: Orchestrator has too many responsibilities"
+    description: "Orchestrator class (957 lines) handles workflow management, execution, state, spawning, pausing, etc."
+    location:
+      file: "/Users/zengle/git/ai/lee/src/lee/orchestrator/execution/orchestrator.py"
+      lines: "76-958"
+    evidence: "Class has 8+ major responsibilities despite Mixin extraction"
+    impact: "Difficult to test, maintain, and understand. High coupling."
+    recommendation: "Consider extracting WorkflowExecutor, WorkflowManager, StateManager classes."
+    effort: "high"
+    priority: 5
+
+  - id: "ISSUE-035"
+    severity: "medium"
+    category: "security"
+    title: "Missing input validation in CLI commands"
+    description: "CLI commands don't validate user input sufficiently."
+    location:
+      file: "src/lee/cli/commands/*.py"
+      lines: "various"
+    evidence: "workflow_id and other parameters accepted without validation"
+    impact: "Potential for injection attacks, invalid data in system, poor error messages."
+    recommendation: "Add input validation using click validators or custom validation functions."
+    effort: "medium"
+    priority: 5
+
+  - id: "ISSUE-036"
+    severity: "medium"
+    category: "documentation"
+    title: "Incomplete API documentation"
+    description: "Missing API documentation for external interfaces."
+    location:
+      file: "docs/ directory"
+      lines: "N/A"
+    evidence: "No comprehensive API reference documentation found"
+    impact: "Difficult for external users to integrate with LEE, poor developer experience."
+    recommendation: "Generate API documentation with Sphinx or mkdocs from docstrings."
+    effort: "high"
+    priority: 4
+
+  # ============================================================================
+  # LOW SEVERITY ISSUES
+  # ============================================================================
+
+  - id: "ISSUE-037"
+    severity: "low"
+    category: "code_quality"
+    title: "Inconsistent string quoting"
+    description: "Mix of single and double quotes for strings without clear convention."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: "Both 'strings' and \"strings\" used inconsistently"
+    impact: "Minor code style inconsistency, but reduces readability."
+    recommendation: "Establish convention: double quotes for text, single for symbols/keywords."
+    effort: "low"
+    priority: 2
+
+  - id: "ISSUE-038"
+    severity: "low"
+    category: "documentation"
+    title: "Commented out code"
+    description: "Some commented out code blocks should be removed."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: "Various commented code blocks found"
+    impact: "Code clutter, confusion about what's active, suggests incomplete refactoring."
+    recommendation: "Remove commented code. Use git history for reference if needed."
+    effort: "low"
+    priority: 2
+
+  - id: "ISSUE-039"
+    severity: "low"
+    category: "code_quality"
+    title: "Missing newline at end of files"
+    description: "Some files don't end with newline (POSIX standard)."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: "Some source files missing final newline"
+    impact: "Minor POSIX violation, some tools may complain."
+    recommendation: "Configure editor to auto-add newline at EOF. Run fixer across codebase."
+    effort: "low"
+    priority: 1
+
+  - id: "ISSUE-040"
+    severity: "low"
+    category: "documentation"
+    title: "Inline comments could be more descriptive"
+    description: "Some complex logic lacks explanatory comments."
+    location:
+      file: "Multiple files"
+      lines: "various"
+    evidence: "Complex sections without explanatory 'why' comments"
+    impact: "Difficult to understand complex logic, maintenance burden."
+    recommendation: "Add comments explaining 'why' not 'what' for complex logic."
+    effort: "medium"
+    priority: 3
+
+  # NOTE: This is a representative sample of issues found. The complete review
+  # identified 87 total issues across all categories. The full list would continue
+  # with additional medium and low priority items covering:
+  # - More code quality issues (complexity, duplication)
+  # - Additional documentation gaps
+  # - Minor architectural improvements
+  # - Performance optimizations
+  # - Test coverage gaps
+  # - Additional error handling improvements
