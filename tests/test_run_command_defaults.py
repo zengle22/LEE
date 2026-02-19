@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from click.testing import CliRunner
+import yaml
 
 import lee.cli.commands.run as run_module
 
@@ -89,3 +90,32 @@ params:
     params = captured_create_payload[0]["data"]["params"]
     assert params["workspace_path"] == "."
     assert params["author_name"] == "LEE Team"
+
+
+def test_render_workflow_template_injects_date_and_timestamp(tmp_path: Path) -> None:
+    template = tmp_path / "workflow.yaml"
+    template.write_text(
+        """
+kind: workflow
+id: workflow.test.render_vars
+version: "1.0"
+contracts:
+  outputs:
+    - report:
+        path: "reports/report-{{ date }}-{{ timestamp }}.yaml"
+""",
+        encoding="utf-8",
+    )
+
+    rendered_path = run_module._render_workflow_template(
+        template_path=template,
+        params={},
+        project_dir=tmp_path,
+    )
+
+    rendered_doc = yaml.safe_load(rendered_path.read_text(encoding="utf-8"))
+    output_path = rendered_doc["contracts"]["outputs"][0]["report"]["path"]
+    assert "{{ date }}" not in output_path
+    assert "{{ timestamp }}" not in output_path
+    assert output_path.startswith("reports/report-")
+    assert output_path.endswith(".yaml")

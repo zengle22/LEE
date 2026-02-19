@@ -24,6 +24,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 import pytest
 
 from lee.orchestrator.execution.claude_code_executor import (
+    BashToolLimitExceeded,
     ClaudeCodeExecutor,
     register_claude_code_executor,
 )
@@ -173,6 +174,56 @@ class TestTimeoutHandling:
                     timeout_retries=1,
                     retry_backoff_seconds=0,
                 )
+
+    @pytest.mark.asyncio
+    async def test_invoke_claude_retry_uses_resume_session(self, executor, workspace):
+        """重试时应复用同一会话，并通过 --resume 续跑。"""
+        seen = []
+        attempts = {"count": 0}
+
+        def flaky_run(cmd, cwd, timeout, stdin_text="", *args):
+            attempts["count"] += 1
+            seen.append({"cmd": list(cmd), "stdin_text": stdin_text})
+            if attempts["count"] == 1:
+                raise asyncio.TimeoutError("first timeout")
+            return '{"status":"success"}'
+
+        with patch.object(executor, "_run_subprocess", side_effect=flaky_run):
+            output = await executor._invoke_claude(
+                prompt="test retry prompt",
+                system_prompt="",
+                workspace=str(workspace),
+                allowed_commands=[],
+                timeout_seconds=1,
+                max_iterations=1,
+                timeout_retries=1,
+                retry_backoff_seconds=0,
+            )
+
+        assert output == '{"status":"success"}'
+        assert attempts["count"] == 2
+        first_cmd = seen[0]["cmd"]
+        second_cmd = seen[1]["cmd"]
+        assert "--session-id" in first_cmd
+        assert "--resume" not in first_cmd
+        assert "--resume" in second_cmd
+        assert "--session-id" not in second_cmd
+        first_session = first_cmd[first_cmd.index("--session-id") + 1]
+        resumed_session = second_cmd[second_cmd.index("--resume") + 1]
+        assert first_session == resumed_session
+        assert "Continue the previous session" in seen[1]["stdin_text"]
+
+    @pytest.mark.asyncio
+    async def test_bash_tool_limit_returns_failed(self, executor, base_input):
+        """Bash 工具调用超过上限应 fail-fast 返回 failed。"""
+        with patch.object(
+            executor,
+            "_invoke_claude",
+            side_effect=BashToolLimitExceeded(limit=5, observed=6),
+        ):
+            result = await executor.execute(base_input)
+        assert result["status"] == "failed"
+        assert "limit exceeded" in (result.get("error") or "").lower()
 
 
 # ========================================================================
@@ -537,12 +588,14 @@ class TestSystemPrompt:
             allowed_commands=["pytest"],
             write_scope=["src/**"],
             max_iterations=5,
+            max_bash_calls=12,
             stop_conditions={},
             system_prompt_extra="",
         )
         assert "/my/project" in prompt
         assert "pytest" in prompt
         assert "src/**" in prompt
+        assert "12" in prompt
 
     def test_includes_extra(self, executor):
         """system prompt 包含额外约束"""
@@ -552,10 +605,26 @@ class TestSystemPrompt:
             allowed_commands=[],
             write_scope=[],
             max_iterations=5,
+            max_bash_calls=0,
             stop_conditions={},
             system_prompt_extra="不允许修改 go.mod",
         )
         assert "不允许修改 go.mod" in prompt
+
+    def test_scan_bash_calls_from_debug_log(self, tmp_path):
+        """debug 日志增量扫描应能统计 Bash 调用次数。"""
+        debug_file = tmp_path / "claude-debug.log"
+        debug_file.write_text(
+            "a\nexecutePreToolHooks called for tool: Bash\n"
+            "x\nexecutePreToolHooks called for tool: Bash\n",
+            encoding="utf-8",
+        )
+        offset, count = ClaudeCodeExecutor._scan_bash_calls_from_debug_log(
+            str(debug_file),
+            0,
+        )
+        assert count == 2
+        assert offset == len(debug_file.read_text(encoding="utf-8"))
 
 
 # ========================================================================

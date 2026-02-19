@@ -36,7 +36,7 @@ class TestLeeConfigDefaults:
         assert config.demo_mode is False
         assert config.retry.max_retries == 3
         assert config.on_failure.default_fallback == "abort"
-        assert config.executor.timeout_seconds == 300
+        assert config.executor.timeout_seconds == 600
         assert config.tracing.enabled is True
         assert config.evidence.output_dir == ".workflow/evidence"
 
