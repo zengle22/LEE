@@ -60,6 +60,99 @@ class SQLiteStore:
             self._conn = None
 
     # ========================================================================
+    # 事务支持 (v1.1)
+    # ========================================================================
+
+    def transaction(self, isolation_level: str = "REPEATABLE_READ"):
+        """
+        事务上下文管理器
+
+        Args:
+            isolation_level: 隔离级别
+                - "REPEATABLE_READ": 可重复读（默认，使用 BEGIN IMMEDIATE）
+                - "DEFERRED": 延迟事务（使用 BEGIN DEFERRED）
+                - "IMMEDIATE": 立即事务（使用 BEGIN IMMEDIATE）
+                - "EXCLUSIVE": 排他事务（使用 BEGIN EXCLUSIVE）
+
+        Yields:
+            aiosqlite.Cursor: 事务内的游标对象
+
+        Example:
+            async with store.transaction() as cursor:
+                await cursor.execute("INSERT INTO ...")
+                await cursor.execute("UPDATE ...")
+            # 自动提交或回滚
+        """
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _transaction_context():
+            if self._conn is None:
+                raise RuntimeError("Database not connected. Call connect() first.")
+
+            cursor = await self._conn.cursor()
+            try:
+                # 根据隔离级别选择 BEGIN 语句
+                if isolation_level == "REPEATABLE_READ":
+                    # SQLite 的 REPEATABLE READ 通过 BEGIN IMMEDIATE 实现
+                    await self.execute("BEGIN IMMEDIATE")
+                elif isolation_level == "DEFERRED":
+                    await self.execute("BEGIN DEFERRED")
+                elif isolation_level == "IMMEDIATE":
+                    await self.execute("BEGIN IMMEDIATE")
+                elif isolation_level == "EXCLUSIVE":
+                    await self.execute("BEGIN EXCLUSIVE")
+                else:
+                    raise ValueError(f"Unknown isolation level: {isolation_level}")
+
+                yield cursor
+
+                await self.execute("COMMIT")
+
+            except Exception as e:
+                # 发生异常时回滚
+                try:
+                    await self.execute("ROLLBACK")
+                except Exception as rollback_error:
+                    # 回滚失败，记录错误但不掩盖原始异常
+                    print(f"Warning: ROLLBACK failed: {rollback_error}")
+                raise e
+            finally:
+                await cursor.close()
+
+        return _transaction_context()
+
+    async def execute(self, sql: str, parameters: tuple = ()):
+        """
+        执行 SQL 语句（便捷方法）
+
+        Args:
+            sql: SQL 语句
+            parameters: 参数元组
+
+        Returns:
+            aiosqlite.Cursor
+        """
+        if self._conn is None:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        return await self._conn.execute(sql, parameters)
+
+    async def executemany(self, sql: str, parameters_list: list):
+        """
+        批量执行 SQL 语句（便捷方法）
+
+        Args:
+            sql: SQL 语句
+            parameters_list: 参数列表
+
+        Returns:
+            aiosqlite.Cursor
+        """
+        if self._conn is None:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        return await self._conn.executemany(sql, parameters_list)
+
+    # ========================================================================
     # 内部方法
     # ========================================================================
 
@@ -491,24 +584,64 @@ class SQLiteStore:
         self,
         gate: GateApproval
     ) -> GateApproval:
-        """创建门禁审批记录"""
-        await self._conn.execute("""
-            INSERT INTO gate_approvals
-            (workflow_id, gate_id, step_id, status, approver, comments,
-             created_at, decided_at, approval_criteria, reviewers)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            gate.workflow_id,
-            gate.gate_id,
-            gate.step_id,
-            gate.status.value,
-            gate.approver,
-            gate.comments,
-            gate.created_at.isoformat(),
-            gate.decided_at.isoformat() if gate.decided_at else None,
-            json.dumps(gate.approval_criteria),
-            json.dumps(gate.reviewers),
-        ))
+        """
+        创建门禁审批记录
+
+        v1.1: 支持新增字段（version, default_action, decision_action 等）
+        """
+        # 检查 gate_approvals 表是否有新列
+        # 如果没有（旧版本），则不插入新字段
+        try:
+            await self._conn.execute("""
+                INSERT INTO gate_approvals
+                (workflow_id, gate_id, step_id, status, approver, comments,
+                 created_at, decided_at, approval_criteria, reviewers,
+                 version, default_reject_action, default_reject_target,
+                 default_revise_action, default_revise_target,
+                 decision_action, target_step)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                gate.workflow_id,
+                gate.gate_id,
+                gate.step_id,
+                gate.status.value,
+                gate.approver,
+                gate.comments,
+                gate.created_at.isoformat(),
+                gate.decided_at.isoformat() if gate.decided_at else None,
+                json.dumps(gate.approval_criteria),
+                json.dumps(gate.reviewers),
+                gate.version,
+                gate.default_reject_action,
+                gate.default_reject_target,
+                gate.default_revise_action,
+                gate.default_revise_target,
+                gate.decision_action,
+                gate.target_step,
+            ))
+        except aiosqlite.OperationalError as e:
+            # 如果新列不存在，回退到旧版本插入
+            if "column" in str(e).lower():
+                await self._conn.execute("""
+                    INSERT INTO gate_approvals
+                    (workflow_id, gate_id, step_id, status, approver, comments,
+                     created_at, decided_at, approval_criteria, reviewers)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    gate.workflow_id,
+                    gate.gate_id,
+                    gate.step_id,
+                    gate.status.value,
+                    gate.approver,
+                    gate.comments,
+                    gate.created_at.isoformat(),
+                    gate.decided_at.isoformat() if gate.decided_at else None,
+                    json.dumps(gate.approval_criteria),
+                    json.dumps(gate.reviewers),
+                ))
+            else:
+                raise
+
         await self._conn.commit()
         return gate
 
@@ -567,18 +700,203 @@ class SQLiteStore:
         rows = await cursor.fetchall()
         return [self._row_to_gate_approval(row) for row in rows]
 
+    async def update_gate_approval_with_version(
+        self,
+        workflow_id: str,
+        gate_id: str,
+        status: GateStatus,
+        approver: Optional[str] = None,
+        comments: Optional[str] = None,
+        expected_version: Optional[int] = None,
+        decision_action: Optional[str] = None,
+        target_step: Optional[str] = None,
+        structured_feedback: Optional[Dict[str, Any]] = None,
+        issues: Optional[List[str]] = None,
+    ) -> Optional[GateApproval]:
+        """
+        更新门禁审批状态（带版本检查）
+
+        v1.1: 支持乐观锁，防止并发决策冲突
+
+        Args:
+            workflow_id: 工作流 ID
+            gate_id: 门禁 ID
+            status: 新状态
+            approver: 审批人
+            comments: 审批意见
+            expected_version: 期望的版本号（用于乐观锁）
+            decision_action: 决策动作
+            target_step: 目标步骤
+            structured_feedback: 结构化反馈
+            issues: 问题列表
+
+        Returns:
+            更新后的 GateApproval，如果版本不匹配返回 None（并发冲突）
+
+        Raises:
+            ValueError: 如果 gate 不存在
+        """
+        # 检查 gate 是否存在
+        current = await self.get_gate_approval(workflow_id, gate_id)
+        if current is None:
+            raise ValueError(f"Gate not found: {workflow_id}/{gate_id}")
+
+        # 如果没有指定期望版本，使用当前版本
+        if expected_version is None:
+            expected_version = current.version
+
+        decided_at = datetime.now()
+
+        # 尝试更新（带版本检查）
+        try:
+            # 检查表是否有 version 列
+            cursor = await self._conn.execute("""
+                UPDATE gate_approvals
+                SET status = ?,
+                    approver = ?,
+                    comments = ?,
+                    decided_at = ?,
+                    version = version + 1
+                WHERE workflow_id = ? AND gate_id = ? AND version = ?
+            """, (
+                status.value,
+                approver,
+                comments,
+                decided_at.isoformat(),
+                workflow_id,
+                gate_id,
+                expected_version,
+            ))
+
+            # 检查是否更新成功
+            if cursor.rowcount == 0:
+                # 版本不匹配，并发冲突
+                return None
+
+            # 如果有其他新字段，也尝试更新
+            try:
+                if decision_action is not None:
+                    await self._conn.execute("""
+                        UPDATE gate_approvals
+                        SET decision_action = ?
+                        WHERE workflow_id = ? AND gate_id = ?
+                    """, (decision_action, workflow_id, gate_id))
+
+                if target_step is not None:
+                    await self._conn.execute("""
+                        UPDATE gate_approvals
+                        SET target_step = ?
+                        WHERE workflow_id = ? AND gate_id = ?
+                    """, (target_step, workflow_id, gate_id))
+
+                if structured_feedback is not None:
+                    await self._conn.execute("""
+                        UPDATE gate_approvals
+                        SET structured_feedback = ?
+                        WHERE workflow_id = ? AND gate_id = ?
+                    """, (json.dumps(structured_feedback), workflow_id, gate_id))
+
+                if issues is not None:
+                    await self._conn.execute("""
+                        UPDATE gate_approvals
+                        SET issues = ?
+                        WHERE workflow_id = ? AND gate_id = ?
+                    """, (json.dumps(issues), workflow_id, gate_id))
+
+            except aiosqlite.OperationalError:
+                # 新列可能不存在，忽略
+                pass
+
+            await self._conn.commit()
+
+            # 返回更新后的记录
+            return await self.get_gate_approval(workflow_id, gate_id)
+
+        except aiosqlite.OperationalError as e:
+            # 如果 version 列不存在，使用旧版本更新逻辑
+            if "version" in str(e).lower():
+                return await self.update_gate_approval(
+                    workflow_id, gate_id, status, approver, comments
+                )
+            raise
+
     @staticmethod
     def _row_to_gate_approval(row) -> GateApproval:
-        """将数据库行转换为 GateApproval"""
+        """
+        将数据库行转换为 GateApproval
+
+        v1.1: 支持新字段的解析
+        """
+        # 基本字段（索引 0-9）
+        workflow_id = row[0]
+        gate_id = row[1]
+        step_id = row[2]
+        status = GateStatus(row[3])
+        approver = row[4]
+        comments = row[5]
+        created_at = datetime.fromisoformat(row[6])
+        decided_at = datetime.fromisoformat(row[7]) if row[7] else None
+        approval_criteria = json.loads(row[8]) if row[8] else []
+        reviewers = json.loads(row[9]) if row[9] else []
+
+        # v1.1 新字段（索引 10+）
+        # 注意：旧版本数据库可能没有这些列
+        version = 1
+        default_reject_action = None
+        default_reject_target = None
+        default_revise_action = None
+        default_revise_target = None
+        decision_action = None
+        target_step = None
+        structured_feedback = None
+        issues = None
+        invalidated_at = None
+
+        # 尝试解析新字段
+        try:
+            if len(row) > 10:
+                version = row[10] if row[10] is not None else 1
+            if len(row) > 11:
+                default_reject_action = row[11]
+            if len(row) > 12:
+                default_reject_target = row[12]
+            if len(row) > 13:
+                default_revise_action = row[13]
+            if len(row) > 14:
+                default_revise_target = row[14]
+            if len(row) > 15:
+                decision_action = row[15]
+            if len(row) > 16:
+                target_step = row[16]
+            if len(row) > 17 and row[17]:
+                structured_feedback = json.loads(row[17])
+            if len(row) > 18 and row[18]:
+                issues = json.loads(row[18])
+            if len(row) > 19 and row[19]:
+                invalidated_at = datetime.fromisoformat(row[19])
+        except (IndexError, json.JSONDecodeError, ValueError):
+            # 新字段不存在或解析失败，使用默认值
+            pass
+
         return GateApproval(
-            workflow_id=row[0],
-            gate_id=row[1],
-            step_id=row[2],
-            status=GateStatus(row[3]),
-            approver=row[4],
-            comments=row[5],
-            created_at=datetime.fromisoformat(row[6]),
-            decided_at=datetime.fromisoformat(row[7]) if row[7] else None,
-            approval_criteria=json.loads(row[8]) if row[8] else [],
-            reviewers=json.loads(row[9]) if row[9] else [],
+            workflow_id=workflow_id,
+            gate_id=gate_id,
+            step_id=step_id,
+            status=status,
+            approver=approver,
+            comments=comments,
+            created_at=created_at,
+            decided_at=decided_at,
+            approval_criteria=approval_criteria,
+            reviewers=reviewers,
+            version=version,
+            default_reject_action=default_reject_action,
+            default_reject_target=default_reject_target,
+            default_revise_action=default_revise_action,
+            default_revise_target=default_revise_target,
+            decision_action=decision_action,
+            target_step=target_step,
+            structured_feedback=structured_feedback,
+            issues=issues,
+            invalidated_at=invalidated_at,
         )

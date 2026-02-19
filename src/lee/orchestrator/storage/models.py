@@ -34,6 +34,7 @@ class WorkflowStatus(str, Enum):
     PAUSED = "paused"        # 已暂停
     COMPLETED = "completed"  # 已完成
     FAILED = "failed"        # 已失败
+    SUPERSEDED = "superseded"  # v1.1: 被新工作流替代
 
 
 class TaskExecutionStatus(str, Enum):
@@ -255,12 +256,27 @@ class GateStatus(str, Enum):
     PENDING = "pending"      # 待审批
     APPROVED = "approved"    # 已批准
     REJECTED = "rejected"    # 已拒绝
+    REVISED = "revised"      # v1.1: 要求修改
+    FLAGGED = "flagged"      # v1.1: 标记问题
+    INVALIDATED = "invalidated"  # v1.1: 已作废
+
+
+class ConcurrentDecisionError(Exception):
+    """并发决策冲突异常（v1.1）"""
+    pass
 
 
 @dataclass
 class GateApproval:
     """
     门禁审批记录
+
+    v1.1 更新：
+    - 添加 version 字段用于乐观锁
+    - 添加默认 action 字段
+    - 添加决策 action 字段
+    - 添加结构化反馈字段
+    - 添加作废标记
     """
     workflow_id: str
     gate_id: str
@@ -275,6 +291,28 @@ class GateApproval:
     approval_criteria: List[Dict[str, Any]] = field(default_factory=list)
     # 审批人列表（从 workflow.yaml 复制）
     reviewers: List[Dict[str, str]] = field(default_factory=list)
+
+    # === v1.1 新增字段 ===
+
+    # 乐观锁版本号
+    version: int = 1
+
+    # 默认 action（创建 gate 时从配置写入）
+    default_reject_action: Optional[str] = None
+    default_reject_target: Optional[str] = None
+    default_revise_action: Optional[str] = None
+    default_revise_target: Optional[str] = None
+
+    # 实际决策 action
+    decision_action: Optional[str] = None
+    target_step: Optional[str] = None
+
+    # 结构化反馈
+    structured_feedback: Optional[Dict[str, Any]] = None
+    issues: Optional[List[str]] = None
+
+    # 作废标记
+    invalidated_at: Optional[datetime] = None
 
 
 @dataclass
