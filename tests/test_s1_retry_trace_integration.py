@@ -34,7 +34,8 @@ class TestAsyncRetryExecutor:
         from lee.orchestrator.execution.retry import RetryResult
         assert "result" in RetryResult.__dataclass_fields__
 
-    def test_success_first_attempt(self):
+    @pytest.mark.asyncio
+    async def test_success_first_attempt(self):
         """验证首次成功不重试"""
         from lee.orchestrator.execution.retry import AsyncRetryExecutor, RetryPolicy
 
@@ -42,14 +43,15 @@ class TestAsyncRetryExecutor:
             return {"status": "ok", "data": 42}
 
         executor = AsyncRetryExecutor(policy=RetryPolicy(max_retries=3))
-        result = asyncio.get_event_loop().run_until_complete(executor.execute(success_func))
+        result = await executor.execute(success_func)
 
         assert result.success is True
         assert result.total_attempts == 1
         assert result.result == {"status": "ok", "data": 42}
         assert result.failed_attempts == 0
 
-    def test_success_after_retries(self):
+    @pytest.mark.asyncio
+    async def test_success_after_retries(self):
         """验证在第N次重试后成功"""
         from lee.orchestrator.execution.retry import AsyncRetryExecutor, RetryPolicy
 
@@ -65,7 +67,7 @@ class TestAsyncRetryExecutor:
         executor = AsyncRetryExecutor(
             policy=RetryPolicy(max_retries=3, base_delay=0.01, jitter=False)
         )
-        result = asyncio.get_event_loop().run_until_complete(executor.execute(fail_twice_then_succeed))
+        result = await executor.execute(fail_twice_then_succeed)
 
         assert result.success is True
         assert result.total_attempts == 3
@@ -73,7 +75,8 @@ class TestAsyncRetryExecutor:
         assert result.was_successful_on_retry is True
         assert call_count == 3
 
-    def test_all_attempts_exhausted(self):
+    @pytest.mark.asyncio
+    async def test_all_attempts_exhausted(self):
         """验证重试次数耗尽"""
         from lee.orchestrator.execution.retry import AsyncRetryExecutor, RetryPolicy
 
@@ -83,7 +86,7 @@ class TestAsyncRetryExecutor:
         executor = AsyncRetryExecutor(
             policy=RetryPolicy(max_retries=2, base_delay=0.01, jitter=False)
         )
-        result = asyncio.get_event_loop().run_until_complete(executor.execute(always_fail))
+        result = await executor.execute(always_fail)
 
         assert result.success is False
         assert result.total_attempts == 3  # 1 initial + 2 retries
@@ -91,7 +94,8 @@ class TestAsyncRetryExecutor:
         assert "Permanent failure" in result.final_error
         assert result.failed_attempts == 3
 
-    def test_with_args_and_kwargs(self):
+    @pytest.mark.asyncio
+    async def test_with_args_and_kwargs(self):
         """验证传递参数给目标函数"""
         from lee.orchestrator.execution.retry import AsyncRetryExecutor, RetryPolicy
 
@@ -99,14 +103,13 @@ class TestAsyncRetryExecutor:
             return a + b + extra
 
         executor = AsyncRetryExecutor(policy=RetryPolicy(max_retries=1))
-        result = asyncio.get_event_loop().run_until_complete(
-            executor.execute(add, 2, 3, extra=10)
-        )
+        result = await executor.execute(add, 2, 3, extra=10)
 
         assert result.success is True
         assert result.result == 15
 
-    def test_error_classification(self):
+    @pytest.mark.asyncio
+    async def test_error_classification(self):
         """验证错误类型分类"""
         from lee.orchestrator.execution.retry import (
             AsyncRetryExecutor, RetryPolicy, RetryErrorType
@@ -118,9 +121,7 @@ class TestAsyncRetryExecutor:
         executor = AsyncRetryExecutor(
             policy=RetryPolicy(max_retries=0)  # 不重试
         )
-        result = asyncio.get_event_loop().run_until_complete(
-            executor.execute(raise_validation)
-        )
+        result = await executor.execute(raise_validation)
 
         assert result.success is False
         assert result.attempts[0].error_type == RetryErrorType.VALIDATION_FAILED
@@ -138,7 +139,8 @@ class TestAsyncRetryExecutor:
 
         assert FAST_FAIL_POLICY.max_retries == 0
 
-    def test_retry_timing_uses_asyncio_sleep(self):
+    @pytest.mark.asyncio
+    async def test_retry_timing_uses_asyncio_sleep(self):
         """验证使用 asyncio.sleep 而非 time.sleep (不阻塞事件循环)"""
         from lee.orchestrator.execution.retry import AsyncRetryExecutor, RetryPolicy
         import asyncio
@@ -157,7 +159,7 @@ class TestAsyncRetryExecutor:
         )
 
         start = time.time()
-        result = asyncio.get_event_loop().run_until_complete(executor.execute(fail_once))
+        result = await executor.execute(fail_once)
         elapsed = time.time() - start
 
         assert result.success is True

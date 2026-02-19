@@ -132,6 +132,48 @@ class TestTimeoutHandling:
             assert result["status"] == "failed"
             assert "not found" in result["error"].lower()
 
+    @pytest.mark.asyncio
+    async def test_invoke_claude_retries_on_timeout(self, executor, workspace):
+        """_invoke_claude 超时后应按配置重试并最终成功"""
+        attempts = {"count": 0}
+
+        def flaky_run(*args, **kwargs):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise asyncio.TimeoutError("first timeout")
+            return '{"status":"success"}'
+
+        with patch.object(executor, "_run_subprocess", side_effect=flaky_run):
+            output = await executor._invoke_claude(
+                prompt="test",
+                system_prompt="",
+                workspace=str(workspace),
+                allowed_commands=[],
+                timeout_seconds=1,
+                max_iterations=1,
+                timeout_retries=1,
+                retry_backoff_seconds=0,
+            )
+
+        assert output == '{"status":"success"}'
+        assert attempts["count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_invoke_claude_timeout_exhausted(self, executor, workspace):
+        """_invoke_claude 超时达到上限后应抛出 TimeoutError"""
+        with patch.object(executor, "_run_subprocess", side_effect=asyncio.TimeoutError()):
+            with pytest.raises(asyncio.TimeoutError):
+                await executor._invoke_claude(
+                    prompt="test",
+                    system_prompt="",
+                    workspace=str(workspace),
+                    allowed_commands=[],
+                    timeout_seconds=1,
+                    max_iterations=1,
+                    timeout_retries=1,
+                    retry_backoff_seconds=0,
+                )
+
 
 # ========================================================================
 # 3. 输出解析测试
@@ -226,7 +268,7 @@ class TestIterationLimits:
 
         captured_cmd = []
 
-        def mock_subprocess(cmd, cwd, timeout, stdin_text=""):
+        def mock_subprocess(cmd, cwd, timeout, stdin_text="", *args):
             captured_cmd.extend(cmd)
             return json.dumps({
                 "status": "success",
@@ -249,7 +291,7 @@ class TestIterationLimits:
         """--allowedTools 应使用逗号分隔格式"""
         captured_cmd = []
 
-        def mock_subprocess(cmd, cwd, timeout, stdin_text=""):
+        def mock_subprocess(cmd, cwd, timeout, stdin_text="", *args):
             captured_cmd.extend(cmd)
             return '{"status": "success"}'
 
@@ -261,6 +303,67 @@ class TestIterationLimits:
             assert "Read" in tools_str
             assert "Write" in tools_str
             assert "Bash" in tools_str  # base_input has allowed_commands
+
+    @pytest.mark.asyncio
+    async def test_empty_allowed_commands_fallback_to_default(self, executor, base_input):
+        """allowed_commands 为空时应回退到默认命令集（仍允许 Bash）。"""
+        captured_cmd = []
+        base_input["allowed_commands"] = []
+
+        def mock_subprocess(cmd, cwd, timeout, stdin_text="", *args):
+            captured_cmd.extend(cmd)
+            return '{"status": "success"}'
+
+        with patch.object(executor, '_run_subprocess', side_effect=mock_subprocess):
+            await executor.execute(base_input)
+
+        assert "--allowedTools" in captured_cmd
+        idx = captured_cmd.index("--allowedTools")
+        tools_str = captured_cmd[idx + 1]
+        assert "Bash" in tools_str
+
+        sp_idx = captured_cmd.index("--system-prompt")
+        system_prompt = captured_cmd[sp_idx + 1]
+        assert "cat" in system_prompt
+        assert "find" in system_prompt
+
+    @pytest.mark.asyncio
+    async def test_strict_mcp_uses_minimal_config(self, executor, base_input):
+        """strict MCP 模式应自动使用最小 mcp config"""
+        captured_cmd = []
+
+        def mock_subprocess(cmd, cwd, timeout, stdin_text="", *args):
+            captured_cmd.extend(cmd)
+            return '{"status": "success"}'
+
+        with patch.object(executor, "_run_subprocess", side_effect=mock_subprocess):
+            await executor.execute(base_input)
+
+        assert "--strict-mcp-config" in captured_cmd
+        assert "--setting-sources" not in captured_cmd
+        assert "--mcp-config" in captured_cmd
+        mcp_idx = captured_cmd.index("--mcp-config")
+        mcp_path = captured_cmd[mcp_idx + 1]
+        assert mcp_path.endswith("mcp-config.minimal.json")
+        payload = json.loads(Path(mcp_path).read_text())
+        assert payload == {"mcpServers": {}}
+
+    @pytest.mark.asyncio
+    async def test_setting_sources_is_optional_override(self, executor, base_input):
+        """可通过 setting_sources 显式覆盖 claude settings 来源"""
+        captured_cmd = []
+        base_input["setting_sources"] = "project,local"
+
+        def mock_subprocess(cmd, cwd, timeout, stdin_text="", *args):
+            captured_cmd.extend(cmd)
+            return '{"status": "success"}'
+
+        with patch.object(executor, "_run_subprocess", side_effect=mock_subprocess):
+            await executor.execute(base_input)
+
+        assert "--setting-sources" in captured_cmd
+        idx = captured_cmd.index("--setting-sources")
+        assert captured_cmd[idx + 1] == "project,local"
 
 
 # ========================================================================

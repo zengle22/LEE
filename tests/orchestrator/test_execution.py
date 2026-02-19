@@ -11,7 +11,13 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 
-from lee.orchestrator.storage.models import WorkflowLevel, WorkflowStatus, WorkflowInstance
+from lee.orchestrator.storage.models import (
+    WorkflowLevel,
+    WorkflowStatus,
+    WorkflowInstance,
+    TaskExecution,
+    TaskExecutionStatus,
+)
 from lee.orchestrator.storage.sqlite_store import SQLiteStore
 from lee.orchestrator.execution.state_machine import WorkflowStateMachine
 from lee.orchestrator.core.event_bus import EventBus
@@ -161,11 +167,25 @@ async def test_orchestrator_pause_resume():
 
     # 先将工作流设置为 RUNNING 状态（只能暂停 RUNNING 状态）
     await db.update_workflow_status(project.id, WorkflowStatus.RUNNING)
+    await db.create_task_execution(
+        TaskExecution(
+            id="exec_pause_001",
+            workflow_id=project.id,
+            step_name="s1_test",
+            executor_type="claude_code",
+            input_data={},
+            status=TaskExecutionStatus.RUNNING,
+            started_at=datetime.now(),
+        )
+    )
 
     # 暂停
     await orchestrator.pause(project.id)
     state = await orchestrator.get_state(project.id)
     assert state.status == WorkflowStatus.PAUSED
+    executions = await db.get_task_executions(project.id)
+    assert executions[0].status == TaskExecutionStatus.FAILED
+    assert "paused" in (executions[0].error_message or "").lower()
 
     # 恢复
     await orchestrator.resume(project.id)
