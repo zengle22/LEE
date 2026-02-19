@@ -25,7 +25,7 @@ on_failure:
 executor:
   default_type: llm
   llm_model: gpt-4
-  timeout_seconds: 300
+  timeout_seconds: 600
 
 tracing:
   enabled: true
@@ -84,7 +84,7 @@ class ExecutorConfig:
     coding_executor: str = "claude_code"       # 编码步骤首选执行器
     coding_fallback: str = "llm_patch"         # 编码步骤降级执行器
     llm_model: Optional[str] = None
-    timeout_seconds: int = 300
+    timeout_seconds: int = 600
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ExecutorConfig":
@@ -93,7 +93,7 @@ class ExecutorConfig:
             coding_executor=data.get("coding_executor", "claude_code"),
             coding_fallback=data.get("coding_fallback", "llm_patch"),
             llm_model=data.get("llm_model"),
-            timeout_seconds=data.get("timeout_seconds", 300),
+            timeout_seconds=data.get("timeout_seconds", 600),
         )
 
 
