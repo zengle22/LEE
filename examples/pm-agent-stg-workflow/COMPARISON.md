@@ -1,3 +1,11 @@
+---
+title: PM Agent 使用方式对比
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # PM Agent 使用方式对比
 
 本文档对比 PM Agent 的不同使用方式，帮助你选择最适合的方式。

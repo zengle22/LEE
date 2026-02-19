@@ -1,3 +1,11 @@
+---
+title: L3 Test Orchestration Demo
+author: LEE Team
+date: 2026-02-06
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # L3 Test Orchestration Demo
 
 Complete demonstration of the L3 test orchestration workflow for result aggregation, bug generation, and gate evaluation.

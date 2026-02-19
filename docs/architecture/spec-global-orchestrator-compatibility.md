@@ -1,3 +1,11 @@
+---
+title: spec-global Orchestrator 能力矩阵
+author: LEE Team
+date: 2026-02-06
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # spec-global Orchestrator 能力矩阵
 
 > **版本**: 1.0

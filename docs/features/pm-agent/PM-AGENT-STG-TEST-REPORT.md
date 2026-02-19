@@ -1,3 +1,11 @@
+---
+title: PM Agent 运行 STG Workflow 测试报告
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # PM Agent 运行 STG Workflow 测试报告
 
 **测试日期**: 2025-01-23

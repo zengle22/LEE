@@ -1,3 +1,11 @@
+---
+title: LEE Framework - Technical Debt Report
+author: LEE Team
+date: 2026-02-18
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE Framework - Technical Debt Report
 
 **Generated:** 2025-02-18

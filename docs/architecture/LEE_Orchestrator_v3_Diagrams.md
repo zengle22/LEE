@@ -1,3 +1,11 @@
+---
+title: LEE Orchestrator v3.1 架构图
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE Orchestrator v3.1 架构图
 
 > **版本**: v3.1

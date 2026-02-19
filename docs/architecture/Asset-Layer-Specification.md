@@ -1,3 +1,11 @@
+---
+title: 资产层规范（Asset Layer Specification）
+author: LEE Team
+date: 2026-02-08
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # 资产层规范（Asset Layer Specification）
 
 版本：v1.0

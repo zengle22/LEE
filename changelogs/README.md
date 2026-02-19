@@ -1,3 +1,11 @@
+---
+title: LEE 框架变更日志
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE 框架变更日志
 
 本目录包含 LEE 框架所有版本的变更记录。

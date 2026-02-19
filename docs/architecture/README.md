@@ -1,3 +1,13 @@
+---
+title: LEE Orchestrator v3.1 架构方案总结
+author: LEE Team
+date: 2026-01-27
+version: 3.1
+last_updated: 2026-02-19
+status: 实现完成
+goal: 统一 flowcore 和 src/lee/orchestrator 为单一架构
+---
+
 # LEE Orchestrator v3.1 架构方案总结
 
 > **状态**: ✅ v3.1 实现完成

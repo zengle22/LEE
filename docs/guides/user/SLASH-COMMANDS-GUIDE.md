@@ -1,3 +1,11 @@
+---
+title: LEE Slash Commands 使用指南
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE Slash Commands 使用指南
 
 ## 概述

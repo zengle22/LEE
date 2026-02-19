@@ -1,3 +1,11 @@
+---
+title: STG Workflow 审核指南
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # STG Workflow 审核指南
 
 ## 📁 输出文档位置

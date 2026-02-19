@@ -1,3 +1,11 @@
+---
+title: Orchestrator 产品需求文档 (PRD)
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Orchestrator 产品需求文档 (PRD)
 
 > **⚠️ ARCHITECTURE UPDATE NOTICE**

@@ -1,3 +1,11 @@
+---
+title: Human Gate 测试验证报告
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Human Gate 测试验证报告
 
 **测试日期**: 2025-01-23

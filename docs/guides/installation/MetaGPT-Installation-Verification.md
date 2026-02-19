@@ -1,3 +1,11 @@
+---
+title: MetaGPT 安装验证指南
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # MetaGPT 安装验证指南
 
 ## 快速验证

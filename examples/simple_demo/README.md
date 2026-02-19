@@ -1,3 +1,11 @@
+---
+title: 简单 Demo 说明
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # 简单 Demo 说明
 
 本目录包含用于验证 LEE + MetaGPT 环境的简单示例。

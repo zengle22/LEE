@@ -1,3 +1,11 @@
+---
+title: LEE PM Agent + Gate Assistant Integration Demo
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE PM Agent + Gate Assistant Integration Demo
 
 This demo showcases the complete integration between PM Agent and Gate Assistant in the LEE system.

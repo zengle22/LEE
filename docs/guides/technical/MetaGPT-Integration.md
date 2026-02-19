@@ -1,3 +1,11 @@
+---
+title: MetaGPT LEE 适配层实现总结
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # MetaGPT LEE 适配层实现总结
 
 ## 项目概述

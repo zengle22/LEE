@@ -1,3 +1,11 @@
+---
+title: LEE Orchestrator - P3 优化方案
+author: LEE Team
+date: 2026-02-06
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE Orchestrator - P3 优化方案
 
 > **版本**: 1.0

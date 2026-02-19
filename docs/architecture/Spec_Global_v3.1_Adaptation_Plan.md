@@ -1,3 +1,11 @@
+---
+title: Spec-Global v3.1 适配方案
+author: LEE Team
+date: 2026-01-29
+version: 3.1
+last_updated: 2026-02-19
+---
+
 # Spec-Global v3.1 适配方案
 
 > **版本**: 1.0

@@ -1,3 +1,11 @@
+---
+title: LEE Orchestrator v3.1 实施计划
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE Orchestrator v3.1 实施计划
 
 > **目标**: 从当前混乱状态（老版本 + 新版本分叉）收敛到统一的 v3.1 架构

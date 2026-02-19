@@ -1,3 +1,11 @@
+---
+title: LEE MCP Server
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE MCP Server
 
 简单的 MCP (Model Context Protocol) 服务器实现，用于 LEE 系统的测试和开发。

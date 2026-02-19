@@ -1,3 +1,11 @@
+---
+title: PM Agent 运行 STG 工作流示例
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # PM Agent 运行 STG 工作流示例
 
 本示例展示如何使用 PM Agent API 管理和执行 STG 部门的商业机会发现工作流。

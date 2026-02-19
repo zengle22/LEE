@@ -1,3 +1,11 @@
+---
+title: Orchestrator v2.0 Enhancement Design
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Orchestrator v2.0 Enhancement Design
 # 支持Testing Workflow v2.0的技术设计
 

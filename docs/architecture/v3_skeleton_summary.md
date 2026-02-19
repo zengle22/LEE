@@ -1,3 +1,11 @@
+---
+title: LEE Orchestrator v3.0 - Skeleton Progress
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE Orchestrator v3.0 - Skeleton Progress
 
 > **Date**: 2026-01-27

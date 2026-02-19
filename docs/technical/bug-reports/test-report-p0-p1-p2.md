@@ -1,3 +1,11 @@
+---
+title: LEE Orchestrator - spec-global 兼容性测试报告
+author: LEE Team
+date: 2026-02-06
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE Orchestrator - spec-global 兼容性测试报告
 
 **测试日期**: 2026-02-05

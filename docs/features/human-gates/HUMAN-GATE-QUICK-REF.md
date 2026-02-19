@@ -1,3 +1,11 @@
+---
+title: Human Gate 快速参考
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Human Gate 快速参考
 
 > 快速查阅 Human Gate 的使用方法、API 和最佳实践

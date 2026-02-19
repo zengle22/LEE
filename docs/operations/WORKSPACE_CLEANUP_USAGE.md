@@ -1,3 +1,11 @@
+---
+title: LEE 工作流日志和监控指南
+author: LEE Team
+date: 2026-02-18
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE 工作流日志和监控指南
 
 ## 📋 问题解决方案

@@ -1,3 +1,11 @@
+---
+title: STG Opportunity Discovery Demo
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # STG Opportunity Discovery Demo
 
 商业机会发现工作流演示项目

@@ -1,3 +1,11 @@
+---
+title: Conda 环境验证报告
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Conda 环境验证报告
 
 > 验证时间：2026-01-22

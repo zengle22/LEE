@@ -1,3 +1,11 @@
+---
+title: Unreleased
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Unreleased
 
 本文档记录当前开发中的变更，尚未正式发布。

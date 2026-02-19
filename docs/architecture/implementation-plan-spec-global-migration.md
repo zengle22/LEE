@@ -1,3 +1,11 @@
+---
+title: LEE 框架 spec-global 迁移实施方案
+author: LEE Team
+date: 2026-02-06
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE 框架 spec-global 迁移实施方案
 
 > **版本**: 1.0

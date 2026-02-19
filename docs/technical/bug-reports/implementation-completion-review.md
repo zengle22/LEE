@@ -1,3 +1,11 @@
+---
+title: spec-global 兼容性实施 - 对照审查与任务完成总结
+author: LEE Team
+date: 2026-02-06
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # spec-global 兼容性实施 - 对照审查与任务完成总结
 
 > **审查日期**: 2026-02-05

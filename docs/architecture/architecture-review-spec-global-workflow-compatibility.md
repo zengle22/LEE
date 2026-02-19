@@ -1,3 +1,11 @@
+---
+title: LEE 框架架构评审文档
+author: LEE Team
+date: 2026-02-06
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE 框架架构评审文档
 
 ## Orchestrator 与 spec-global 工作流格式兼容性方案评审

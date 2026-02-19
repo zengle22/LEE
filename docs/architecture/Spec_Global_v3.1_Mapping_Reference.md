@@ -1,3 +1,11 @@
+---
+title: Spec-Global → v3.1 映射对照表
+author: LEE Team
+date: 2026-01-29
+version: 3.1
+last_updated: 2026-02-19
+---
+
 # Spec-Global → v3.1 映射对照表
 
 > **目的**: 详细展示 Spec-Global 各字段到 v3.1 Orchestrator 的映射关系

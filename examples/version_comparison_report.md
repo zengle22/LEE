@@ -1,3 +1,11 @@
+---
+title: LEE Orchestrator 版本对比：新版本 vs flowcore
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE Orchestrator 版本对比：新版本 vs flowcore
 
 > **日期**: 2026-01-27

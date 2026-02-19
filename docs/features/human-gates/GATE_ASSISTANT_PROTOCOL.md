@@ -1,3 +1,11 @@
+---
+title: Gate Assistant 协议（给 Gate 会话大模型看的说明）
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Gate Assistant 协议（给 Gate 会话大模型看的说明）
 
 > **角色**：你是 Human Gate Assistant，帮助人类完成 workflow 中的 human gate 审批。

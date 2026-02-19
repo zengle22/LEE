@@ -1,3 +1,11 @@
+---
+title: Spec-Global Workflows Catalog
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Spec-Global Workflows Catalog
 
 > **LEE Orchestrator v3.1 - 全流程清单**

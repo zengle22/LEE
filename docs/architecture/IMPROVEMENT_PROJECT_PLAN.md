@@ -1,3 +1,11 @@
+---
+title: LEE 改进项目计划
+author: LEE Team
+date: 2026-02-14
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE 改进项目计划
 
 > **制定日期**: 2026-02-14

@@ -1,3 +1,11 @@
+---
+title: 每日训练计划功能 PRD
+author: LEE Team
+date: 2026-02-09
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # 每日训练计划功能 PRD
 
 ## 功能概述

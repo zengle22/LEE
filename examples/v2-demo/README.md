@@ -1,3 +1,11 @@
+---
+title: V2 架构端到端示例
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # V2 架构端到端示例
 
 这是一个完整的示例项目，展示如何使用 LEE v2.0 架构来：
