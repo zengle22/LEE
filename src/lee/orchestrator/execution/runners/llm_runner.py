@@ -322,7 +322,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             "context_files": claude_config.get("context_files", []),
             "write_scope": claude_config.get("write_scope", []),
             "max_iterations": claude_config.get("max_iterations", 5),
-            "timeout_seconds": claude_config.get("timeout_seconds", 300),
+            "timeout_seconds": claude_config.get("timeout_seconds", 600),
             "timeout_retries": claude_config.get("timeout_retries", 1),
             "retry_backoff_seconds": claude_config.get("retry_backoff_seconds", 5),
             "stop_conditions": claude_config.get("stop_conditions", {}),
@@ -341,6 +341,18 @@ class ClaudeCodeRunner(StepRunnerBase):
             input_data["mcp_config_path"] = claude_config.get("mcp_config_path")
         if claude_config.get("model"):
             input_data["model"] = claude_config.get("model")
+        if "silence_timeout_seconds" in claude_config:
+            input_data["silence_timeout_seconds"] = claude_config.get(
+                "silence_timeout_seconds"
+            )
+        if "silence_grace_seconds" in claude_config:
+            input_data["silence_grace_seconds"] = claude_config.get(
+                "silence_grace_seconds"
+            )
+        if "max_bash_calls" in claude_config:
+            input_data["max_bash_calls"] = claude_config.get("max_bash_calls")
+        if "resume_on_retry" in claude_config:
+            input_data["resume_on_retry"] = bool(claude_config.get("resume_on_retry"))
 
         if step_token:
             input_data["token_context"] = ctx.token_manager.encode_token_for_context(step_token)

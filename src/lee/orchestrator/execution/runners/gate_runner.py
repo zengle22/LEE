@@ -49,7 +49,25 @@ class HumanGateRunner(StepRunnerBase):
                 "approval_criteria": step.config.get("approval_criteria", []),
             }
 
-        # 创建门禁审批记录
+        # v1.1: 提取默认动作配置 (P0-4)
+        on_reject = gate_config.get("on_reject", {})
+        on_revise = gate_config.get("on_revise", {})
+
+        # 解析 reject 默认动作
+        default_reject_action = None
+        default_reject_target = None
+        if on_reject:
+            default_reject_action = on_reject.get("action")
+            if default_reject_action == "rollback":
+                default_reject_target = on_reject.get("target_step")
+
+        # 解析 revise 默认动作
+        default_revise_target = None
+        if on_revise:
+            # revise 总是执行 retry
+            default_revise_target = on_revise.get("target_step")
+
+        # 创建门禁审批记录（包含默认动作）
         gate_approval = GateApproval(
             workflow_id=workflow_id,
             gate_id=step.gate_id or f"gate_{step.id}",
@@ -57,6 +75,10 @@ class HumanGateRunner(StepRunnerBase):
             status=GateStatus.PENDING,
             approval_criteria=gate_config.get("approval_criteria", []),
             reviewers=gate_config.get("reviewers", []),
+            version=1,  # v1.1: 初始版本号
+            default_reject_action=default_reject_action,
+            default_reject_target=default_reject_target,
+            default_revise_target=default_revise_target,
         )
         await ctx.store.create_gate_approval(gate_approval)
 
