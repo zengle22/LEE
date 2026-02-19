@@ -1,3 +1,11 @@
+---
+title: RFC-001: Repository Registry - 仓库注册表
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # RFC-001: Repository Registry - 仓库注册表
 
 ## 问题背景

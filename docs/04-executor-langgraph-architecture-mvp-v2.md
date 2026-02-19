@@ -1,3 +1,11 @@
+---
+title: LEE Executor (基于 LangGraph) 架构设计 - MVP 版本 v2
+author: LEE Team
+date: 2026-01-29
+version: v3.1-MVP-v2
+last_updated: 2026-02-19
+---
+
 # LEE Executor (基于 LangGraph) 架构设计 - MVP 版本 v2
 
 > **版本:** v3.1-MVP-v2

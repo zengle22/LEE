@@ -1,3 +1,11 @@
+---
+title: LEE CLI Guide
+author: LEE Team
+date: 2026-02-08
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE CLI Guide
 
 This document describes the available `lee` CLI commands, common options, and usage examples.

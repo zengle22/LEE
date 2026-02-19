@@ -1,3 +1,11 @@
+---
+title: LEE 工作流使用指南
+author: LEE Team
+date: 2026-02-15
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE 工作流使用指南
 
 > **版本**: v1.0 | **更新日期**: 2026-02-15 | **适用 LEE 版本**: v2.x

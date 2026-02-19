@@ -1,3 +1,11 @@
+---
+title: 架构迁移指南 - 从 v1.6 到 v2.0
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # 架构迁移指南 - 从 v1.6 到 v2.0
 
 ## 概述

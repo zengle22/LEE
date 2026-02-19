@@ -1,3 +1,11 @@
+---
+title: LLM Platform Integration Guide
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LLM Platform Integration Guide
 
 本指南说明如何将 Workflow Orchestrator 集成到不同的 LLM 平台。

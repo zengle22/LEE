@@ -1,3 +1,11 @@
+---
+title: Conda 环境搭建快速指南
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Conda 环境搭建快速指南
 
 ## 概述

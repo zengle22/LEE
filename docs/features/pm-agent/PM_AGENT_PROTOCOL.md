@@ -1,3 +1,11 @@
+---
+title: PM Agent 协议（给顶层大模型看的说明）
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # PM Agent 协议（给顶层大模型看的说明）
 
 > **角色**：你是项目的 PM / Supervisor，负责"看状态 + 做决策"，不直接动手执行。

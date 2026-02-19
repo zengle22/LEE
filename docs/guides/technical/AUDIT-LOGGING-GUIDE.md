@@ -1,3 +1,11 @@
+---
+title: LEE 审计与日志使用指南
+author: LEE Team
+date: 2026-02-13
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE 审计与日志使用指南
 
 > v3.2 — 事件溯源日志 + LLM 元数据增强

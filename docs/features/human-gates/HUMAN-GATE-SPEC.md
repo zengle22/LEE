@@ -1,3 +1,11 @@
+---
+title: Human Gate 决策文件模板
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Human Gate 决策文件模板
 
 此模板定义了 human gate 的决策文件结构。

@@ -1,3 +1,11 @@
+---
+title: LEE Orchestrator 执行架构（v3.x / spec-global）
+author: LEE Team
+date: 2026-02-13
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # LEE Orchestrator 执行架构（v3.x / spec-global）
 
 > **文档版本**: v3.x（与代码同步演进）

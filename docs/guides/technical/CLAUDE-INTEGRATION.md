@@ -1,3 +1,11 @@
+---
+title: Claude Code + LEE 集成指南
+author: LEE Team
+date: 2026-01-29
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # Claude Code + LEE 集成指南
 
 本文档说明如何将 LEE 的 PM Agent 和 Gate Assistant 集成到 Claude Code 中，实现两个独立的会话。

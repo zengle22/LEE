@@ -1,3 +1,11 @@
+---
+title: ADR-002: Execution Path Governance — orchestrator/ vs runtime/
+author: LEE Team
+date: 2026-02-14
+version: 1.0
+last_updated: 2026-02-19
+---
+
 # ADR-002: Execution Path Governance — orchestrator/ vs runtime/
 
 **Status**: Accepted  
