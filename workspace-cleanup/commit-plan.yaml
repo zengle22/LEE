@@ -1,515 +1,348 @@
 # Git Atomic Commit Plan
-# Generated: 2026-02-19
+# Generated: 2026-02-20
 # Workspace: /Users/zengle/git/ai/lee
-# Task: Atomic commits for workspace cleanup
+# Mode: plan
 
-version: "1.0"
-generated_date: "2026-02-19"
+version: "2.0"
+generated_date: "2026-02-20"
 workspace_path: "/Users/zengle/git/ai/lee"
-total_commits: 12
+total_commits: 15
 
 # ============================================
 # Commit Plan Summary
 # ============================================
 summary:
-  total_changes: 91 files
-  files_modified: 28
-  files_deleted: 40
-  files_added: 23
-  estimated_commits: 12
+  total_changes: 19 files
+  files_modified: 13
+  files_deleted: 1
+  files_added: 5
+  estimated_commits: 15
   commit_strategy: "atomic_by_category"
+  lines_added: 1280
+  lines_removed: 1023
+  net_change: +257
 
 # ============================================
 # Atomic Commits
 # ============================================
 commits:
-  # Commit 1: Root documentation updates with metadata
+  # Commit 1: 新增技术债报告
   - id: "commit-001"
     order: 1
     type: "docs"
-    scope: "root"
-    title: "update root documentation metadata and cleanup"
+    scope: "tech-debt"
+    title: "docs: add technical debt report for 2026-02-20"
     description: |
-      Add YAML frontmatter metadata to root-level documentation files and
-      remove outdated version summary files.
-
+      Add comprehensive technical debt analysis report including:
+      - Code quality issues (type annotations, code duplication, error handling)
+      - Documentation gaps
+      - Architecture concerns (coupling, boundaries)
+      - Testing coverage gaps
+      - Configuration and security issues
+      - Performance and dependency concerns
+      - Prioritized recommendations and roadmap
     files:
-      modified:
-        - "CHANGELOG.md"
-        - "GETTING_STARTED.md"
-        - "MIGRATION_PLAN.md"
-        - "QUICKSTART.md"
-        - "README.md"
-      deleted:
-        - "V2_SUMMARY.md"
-        - "V3_SUMMARY.md"
+      added:
+        - "tech-debt/tech-debt-2026-02-20.md"
+        - "tech-debt/tech-debt-2026-02-20.yaml"
 
-    rationale: |
-      Root documentation files received metadata updates during the workspace
-      cleanup process. V2 and V3 summary files are outdated and have been
-      moved to docs/archive/ directory.
-
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
-
-  # Commit 2: Documentation reorganization - move files to subdirectories
+  # Commit 2: gates 命令增强 - 添加列表和详情功能
   - id: "commit-002"
     order: 2
-    type: "refactor"
-    scope: "docs"
-    title: "reorganize documentation into categorized subdirectories"
+    type: "feat"
+    scope: "gates"
+    title: "feat(gates): add list and details commands for gate management"
     description: |
-      Move documentation files from docs/ root to appropriate subdirectories:
-      - Architecture docs → docs/architecture/
-      - Feature specs → docs/features/
-      - Guides → docs/guides/
-      - Technical docs → docs/technical/
-      - Archive → docs/archive/
-
-    files:
-      deleted:
-        - "docs/ADR-002-EXECUTION-PATH-GOVERNANCE.md"
-        - "docs/ARCHITECTURE-MIGRATION-GUIDE.md"
-        - "docs/Asset-Layer-Specification.md"
-        - "docs/IMPROVEMENT_PROJECT_PLAN.md"
-        - "docs/LEE-L3-Implementation-Plan.md"
-        - "docs/RFC-001-repository-registry.md"
-        - "docs/architecture-review-spec-global-workflow-compatibility.md"
-        - "docs/implementation-plan-spec-global-migration.md"
-        - "docs/spec-global-orchestrator-compatibility.md"
-        - "docs/v2-enhancement-design.md"
-        - "docs/AI-CONSTITUTION.md"
-        - "docs/Orchestrator-PRD.md"
-        - "docs/GATE_ASSISTANT_PROTOCOL.md"
-        - "docs/GATE-REVIEW-SKILL-GUIDE.md"
-        - "docs/GATE-REVIEW-TROUBLESHOOT.md"
-        - "docs/HUMAN-GATE-IMPLEMENTATION.md"
-        - "docs/HUMAN-GATE-QUICK-REF.md"
-        - "docs/HUMAN-GATE-SPEC.md"
-        - "docs/HUMAN-GATE-SUMMARY.md"
-        - "docs/HUMAN-GATE-TEST-REPORT.md"
-        - "docs/PM_AGENT_PROTOCOL.md"
-        - "docs/PM-AGENT-STG-TEST-REPORT.md"
-        - "docs/PM-AGENT-USER-GUIDE.md"
-        - "docs/PM-GATE-INTEGRATION-COMPLETE.md"
-        - "docs/QA-WORKFLOW-SUMMARY.md"
-        - "docs/Installation-Guide.md"
-        - "docs/Integration-Guide.md"
-        - "docs/Conda-Setup-Guide.md"
-        - "docs/Conda-Environment-Verification.md"
-        - "docs/MetaGPT-Integration.md"
-        - "docs/MetaGPT-Installation-Verification.md"
-        - "docs/CLAUDE-INTEGRATION.md"
-        - "docs/Dependency-Management.md"
-        - "docs/AUDIT-LOGGING-GUIDE.md"
-        - "docs/Orchestrator-Engine-Integration-Guide.md"
-        - "docs/CLI.md"
-        - "docs/SLASH-COMMANDS-GUIDE.md"
-        - "docs/STG-WORKFLOW-REVIEW-GUIDE.md"
-        - "docs/WORKFLOW-USAGE-GUIDE.md"
-        - "docs/LOCAL-ENVIRONMENT-SETUP-COMPLETE.md"
-        - "docs/detailed-execution-log-proposal.md"
-        - "docs/implementation-completion-review.md"
-        - "docs/p3-optimization-plan.md"
-        - "docs/technical-debt.md"
-        - "docs/test-report-p0-p1-p2.md"
-        - "docs/项目深度分析报告.md"
-
-    rationale: |
-      Documentation reorganization improves discoverability and maintainability.
-      Files are now grouped by type (architecture, features, guides, technical)
-      rather than cluttering the docs/ root directory.
-
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
-
-  # Commit 3: Add metadata to Chinese documentation
-  - id: "commit-003"
-    order: 3
-    type: "docs"
-    scope: "docs"
-    title: "add YAML frontmatter metadata to Chinese documentation"
-    description: |
-      Add standard YAML frontmatter metadata to Chinese documentation files
-      for consistency and better documentation tooling support.
-
+      Enhance the gates command group with new functionality:
+      - Add `gates list` command to show pending gates for a workflow
+      - Add `gates show` command to display detailed gate information
+      - Add `gates decide` alias command for backward compatibility
+      - Add helper functions for loading gates from database
+      - Add safe JSON parsing for gate metadata
+      - Improve gate details formatting
     files:
       modified:
-        - "docs/01-功能与用法手册.md"
-        - "docs/02-软件架构文档.md"
-        - "docs/04-executor-langgraph-architecture-mvp-v2.md"
-        - "docs/04-executor-langgraph-architecture-mvp.md"
-        - "docs/04-executor-langgraph-architecture.md"
-        - "docs/Orchestrator-Architecture.md"
-        - "docs/Orchestrator-Complete-Guide.md"
-        - "docs/Orchestrator-Guide.md"
-        - "docs/README.md"
+        - "src/lee/cli/commands/gates_cmd.py"
 
-    rationale: |
-      Consistent metadata across all documentation files enables better
-      documentation generation, navigation, and maintenance.
+  # Commit 3: gates 命令测试
+  - id: "commit-003"
+    order: 3
+    type: "test"
+    scope: "gates"
+    title: "test(gates): add tests for gates decide command"
+    description: |
+      Add comprehensive tests for the gates decide command:
+      - Test basic command execution
+      - Test database state preparation
+      - Test gate loading and display
+      - Test approval criteria parsing
+      - Test reviewer information handling
+    files:
+      added:
+        - "tests/test_gates_decide_command.py"
 
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
-
-  # Commit 4: Workflow registry update
+  # Commit 4: run 命令门禁循环支持
   - id: "commit-004"
     order: 4
     type: "feat"
-    scope: "config"
-    title: "register new office department workflows and skills"
+    scope: "run"
+    title: "feat(run): add gate wait loop for interactive decision support"
     description: |
-      Add new workflow definitions to the workflow registry:
-      - Code documentation review workflow
-      - Document organization workflow
-      - File value analysis workflow
-      - Git atomic commit workflow
-      - PM agent workflow
-
-    files:
-      modified:
-        - "config/workflow-registry.yaml"
-
-    rationale: |
-      New workflow definitions were created during the workspace cleanup
-      process and need to be registered in the central workflow registry.
-
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
-
-  # Commit 5: New PM agent workflow and skills
-  - id: "commit-005"
-    order: 5
-    type: "feat"
-    scope: "pm-agent"
-    title: "add PM agent workflow, skills, and runtime support"
-    description: |
-      Add PM (Project Management) agent capabilities including:
-      - PM agent workflow definition
-      - PM agent runtime session management
-      - PM agent execution context
-
-    files:
-      added:
-        - "spec-global/core/agents/pm-agent/"
-        - "spec-global/departments/office/agents/pm-agent/"
-        - "src/lee/orchestrator/execution/pm_agent_runtime.py"
-        - "src/lee/orchestrator/execution/pm_agent_session.py"
-
-    rationale: |
-      PM agent is a new feature that adds project management workflow
-      capabilities to the LEE framework.
-
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
-
-  # Commit 6: Office department agents and workflows
-  - id: "commit-006"
-    order: 6
-    type: "feat"
-    scope: "office"
-    title: "add office department agents for workspace management"
-    description: |
-      Add office department agents for workspace cleanup and maintenance:
-      - Code documentation reviewer agent
-      - Document organizer agent
-      - File value analyzer agent
-      - Git atomic committer agent
-
-    files:
-      added:
-        - "spec-global/departments/office/agents/code-doc-reviewer/"
-        - "spec-global/departments/office/agents/doc-organizer/"
-        - "spec-global/departments/office/agents/file-value-analyzer/"
-        - "spec-global/departments/office/agents/git-atomic-committer/"
-        - "spec-global/departments/office/workflows/"
-        - "spec-global/departments/office/skills/"
-        - "spec-global/departments/office/contracts/"
-
-    rationale: |
-      These agents automate workspace maintenance tasks including documentation
-      review, file organization, and atomic git commits.
-
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
-
-  # Commit 7: New CLI commands
-  - id: "commit-007"
-    order: 7
-    type: "feat"
-    scope: "cli"
-    title: "add new CLI commands for enhanced workflow management"
-    description: |
-      Add new CLI commands:
-      - lee chat: Interactive chat interface
-      - lee repo: Repository management commands
-      - lee verify: Verification and validation tools
-      - lee watch: Watch and monitor workflow execution
-
-    files:
-      added:
-        - "src/lee/cli/commands/chat.py"
-        - "src/lee/cli/commands/repo.py"
-        - "src/lee/cli/commands/verify.py"
-        - "src/lee/cli/commands/watch.py"
-      modified:
-        - "src/lee/cli/main.py"
-
-    rationale: |
-      New CLI commands improve developer experience and workflow management
-      capabilities.
-
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
-
-  # Commit 8: Orchestrator execution enhancements
-  - id: "commit-008"
-    order: 8
-    type: "feat"
-    scope: "orchestrator"
-    title: "enhance orchestrator execution capabilities"
-    description: |
-      Add new orchestrator execution features:
-      - Context indexing for improved performance
-      - Cross-workflow loop support
-      - Patch output handling
-      - Receipt tracking
-      - Template manager improvements
-
-    files:
-      added:
-        - "src/lee/orchestrator/execution/context_index.py"
-        - "src/lee/orchestrator/execution/cross_workflow_loop.py"
-        - "src/lee/orchestrator/execution/patch_output.py"
-        - "src/lee/orchestrator/execution/receipt.py"
-      modified:
-        - "src/lee/orchestrator/config_loader.py"
-        - "src/lee/orchestrator/core/event_bus.py"
-        - "src/lee/orchestrator/execution/agent_context_builder.py"
-        - "src/lee/orchestrator/execution/agent_loader.py"
-        - "src/lee/orchestrator/execution/claude_code_executor.py"
-        - "src/lee/orchestrator/execution/failure_handler.py"
-        - "src/lee/orchestrator/execution/gate_engine.py"
-        - "src/lee/orchestrator/execution/orchestrator.py"
-        - "src/lee/orchestrator/execution/runners/base.py"
-        - "src/lee/orchestrator/execution/runners/llm_runner.py"
-        - "src/lee/orchestrator/execution/spec_global_parser.py"
-        - "src/lee/orchestrator/execution/step_runners.py"
-        - "src/lee/orchestrator/execution/subworkflow_ops.py"
-        - "src/lee/orchestrator/execution/template_manager.py"
-        - "src/lee/orchestrator/ir/converter.py"
-        - "src/lee/orchestrator/storage/sqlite_store.py"
-
-    rationale: |
-      These enhancements improve orchestrator reliability, performance, and
-      feature set for complex workflow scenarios.
-
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
-
-  # Commit 9: Runtime repository management
-  - id: "commit-009"
-    order: 9
-    type: "feat"
-    scope: "runtime"
-    title: "add repository registry and worktree management"
-    description: |
-      Add repository management capabilities:
-      - Repository registry for tracking multiple repositories
-      - Worktree manager for managing git worktrees
-      - Runtime executor type extensions
-
-    files:
-      added:
-        - "src/lee/runtime/repo_registry.py"
-        - "src/lee/runtime/worktree_manager.py"
-      modified:
-        - "src/lee/runtime/executor/types.py"
-
-    rationale: |
-      Repository management features enable better multi-repository workflow
-      support and git worktree integration.
-
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
-
-  # Commit 10: CLI command enhancements
-  - id: "commit-010"
-    order: 10
-    type: "feat"
-    scope: "cli"
-    title: "enhance CLI run and status commands"
-    description: |
-      Enhance existing CLI commands with new features:
-      - run: Add progress tracking, lock management, defaults
-      - status: Improve workflow status display
-
+      Enhance run command to support gate wait loops:
+      - Add `_get_gate_wait_snapshot()` to read current gate state
+      - Add `_wait_for_gate_resolution()` to wait for human decisions
+      - Add `_run_until_settled_with_gates()` for full execution with gates
+      - Support concurrent terminal usage (run in one, gates in another)
+      - Add TERMINAL_WORKFLOW_STATUSES constant
+      - Improve status monitoring and heartbeat display
     files:
       modified:
         - "src/lee/cli/commands/run.py"
-        - "src/lee/cli/commands/status.py"
 
-    rationale: |
-      CLI improvements provide better user experience and workflow visibility.
+  # Commit 5: run 命令门禁循环测试
+  - id: "commit-005"
+    order: 5
+    type: "test"
+    scope: "run"
+    title: "test(run): add tests for gate loop functionality"
+    description: |
+      Add tests for the new gate loop functionality:
+      - Test `_run_until_settled_with_gates()` waiting behavior
+      - Test gate snapshot retrieval
+      - Test status transition from blocked to completed
+      - Test pending gates detection
+      - Mock gate resolution for testing
+    files:
+      added:
+        - "tests/test_run_command_gate_loop.py"
 
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+  # Commit 6: CLI 锁策略更新支持 gates 命令
+  - id: "commit-006"
+    order: 6
+    type: "feat"
+    scope: "cli"
+    title: "feat(cli): allow gates commands to run concurrently with lee run"
+    description: |
+      Update CLI lock policy to support gate management during workflow execution:
+      - Rename READ_ONLY_COMMANDS to NON_BLOCKING_COMMANDS
+      - Add "gates" and "approve" to non-blocking commands
+      - Update documentation to explain the concurrency model
+      - Allow `lee gates/approve` in one terminal while `lee run` blocks
+    files:
+      modified:
+        - "src/lee/cli/main.py"
 
-  # Commit 11: Test coverage additions
+  # Commit 7: CLI 锁策略测试更新
+  - id: "commit-007"
+    order: 7
+    type: "test"
+    scope: "cli"
+    title: "test(cli): add tests for gates command lock policy"
+    description: |
+      Add tests to verify gates commands don't require CLI lock:
+      - Test `gates list` doesn't require lock
+      - Test `approve` alias doesn't require lock
+      - Ensure concurrent execution model works correctly
+    files:
+      modified:
+        - "tests/test_cli_lock_policy.py"
+
+  # Commit 8: Agent 规范文件修复
+  - id: "commit-008"
+    order: 8
+    type: "fix"
+    scope: "specs"
+    title: "fix(specs): fix agent YAML skills syntax and add missing fields"
+    description: |
+      Fix agent specification YAML files:
+      - Add missing `skills:` root key to icon-generator agent
+      - Add missing `skills:` root key to prototype-designer agent
+      - Add missing `skills:` root key to phase-acceptance gate
+      - Add `only_changed` input parameter to doc-organizer agent
+      - Update doc-organizer to support incremental mode
+      - Update business-opportunity-builder agent skills reference
+    files:
+      modified:
+        - "spec-global/departments/ui/agents/icon-generator/v1/agent.yaml"
+        - "spec-global/departments/ui/agents/prototype-designer/v1/agent.yaml"
+        - "spec-global/departments/office/gates/phase-acceptance/v1/agent.yaml"
+        - "spec-global/departments/office/agents/doc-organizer/v1/agent.yaml"
+        - "spec-global/departments/stg/agents/business-opportunity-builder/v1/agent.yaml"
+
+  # Commit 9: Agent loader YAML 解析错误增强
+  - id: "commit-009"
+    order: 9
+    type: "feat"
+    scope: "loader"
+    title: "feat(loader): enhance YAML parsing error detection for Jinja tags"
+    description: |
+      Improve agent loader error reporting:
+      - Detect unrendered Jinja control tags ({% ... %})
+      - Provide helpful error messages when Jinja syntax is found
+      - Read raw text first for better error context
+      - Maintain backward compatibility with existing error handling
+    files:
+      modified:
+        - "src/lee/orchestrator/execution/agent_loader.py"
+
+  # Commit 10: Agent 规范验证测试
+  - id: "commit-010"
+    order: 10
+    type: "test"
+    scope: "specs"
+    title: "test(specs): add agent spec YAML validation tests"
+    description: |
+      Add comprehensive tests for agent specification validation:
+      - Test all agent specs are valid YAML
+      - Test office agent specs have no Jinja control tags
+      - Ensure specs are parseable and well-formed
+    files:
+      added:
+        - "tests/test_agent_specs_yaml_parseable.py"
+        - "tests/test_office_agent_specs_sanity.py"
+
+  # Commit 11: workspace-cleanup 工作流更新
   - id: "commit-011"
     order: 11
-    type: "test"
-    scope: "tests"
-    title: "add test coverage for new features"
+    type: "feat"
+    scope: "workflow"
+    title: "feat(workflow): optimize workspace-cleanup for incremental execution"
     description: |
-      Add test coverage for new CLI commands, orchestrator features,
-      and runtime components.
-
+      Update workspace-cleanup workflow for better efficiency:
+      - Remove redundant push confirmation gate (auto-push after approval)
+      - Update state machine triggers for simplified flow
+      - Add only_changed parameter to doc-organizer step
+      - Update commit-plan with version 2.0 format
+      - Update file-analysis and doc-organization outputs
+      - Clean up intermediate gates
     files:
-      added:
-        - "tests/test_chat_command.py"
-        - "tests/test_claude_code_model.py"
-        - "tests/test_cli_lock_policy.py"
-        - "tests/test_context_index.py"
-        - "tests/test_cross_workflow_loop.py"
-        - "tests/test_failure_guard.py"
-        - "tests/test_patch_output.py"
-        - "tests/test_pm_agent_suite.py"
-        - "tests/test_receipt.py"
-        - "tests/test_run_command_defaults.py"
-        - "tests/test_run_command_existing_workflow.py"
-        - "tests/test_run_command_lock.py"
-        - "tests/test_run_command_progress.py"
-        - "tests/test_task_execution_reconcile.py"
-        - "tests/test_worktree_enforcement.py"
-        - "tests/test_agent_context_builder_output_schema.py"
-        - "tests/test_agent_loader_paths.py"
-        - "tests/runtime/"
       modified:
-        - "tests/orchestrator/test_execution.py"
-        - "tests/test_claude_code_executor.py"
-        - "tests/test_s1_retry_trace_integration.py"
+        - "spec-global/departments/office/workflows/workspace-cleanup/v1/workflow.yaml"
+        - "workspace-cleanup/commit-plan.yaml"
+        - "workspace-cleanup/file-analysis.yaml"
+        - "workspace-cleanup/doc-organization.yaml"
 
-    rationale: |
-      Comprehensive test coverage ensures reliability of new features and
-      prevents regressions.
-
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
-
-  # Commit 12: Workspace cleanup artifacts
+  # Commit 12: 文档更新 - GATE_MANAGEMENT_GUIDE
   - id: "commit-012"
     order: 12
-    type: "chore"
-    scope: "workspace"
-    title: "add workspace cleanup analysis and planning artifacts"
+    type: "docs"
+    scope: "gates"
+    title: "docs(gates): update GATE_MANAGEMENT_GUIDE with workspace-cleanup info"
     description: |
-      Add workspace cleanup analysis reports and planning documents:
-      - File value analysis report
-      - Technical debt report
-      - Documentation organization report
-      - Commit plan
-
+      Update gate management documentation:
+      - Add workspace-cleanup workflow gate documentation
+      - Document s5_2_review_commits gate behavior
+      - Clarify auto-push behavior after approval
+      - Document --skip-push option
     files:
-      added:
-        - "workspace-cleanup/"
-        - "tech-debt/"
-        - ".lee/"
-        - "lee-logs.sh"
-        - "test_workflow_fix.sh"
-        - "workspace-cleanup-file-analysis.yaml"
-        - "tech-debt-tech-debt.yaml"
+      modified:
+        - "docs/guides/user/GATE_MANAGEMENT_GUIDE.md"
 
-    rationale: |
-      These artifacts document the workspace cleanup process and provide
-      guidance for future maintenance efforts.
+  # Commit 13: 清理遗留文档
+  - id: "commit-013"
+    order: 13
+    type: "chore"
+    scope: "docs"
+    title: "chore(docs): remove obsolete Chinese documentation"
+    description: |
+      Remove outdated Chinese documentation:
+      - Delete docs/03-编辑与改进方案.md (obsolete planning document)
+      - Content is superseded by newer documentation
+    files:
+      deleted:
+        - "docs/03-编辑与改进方案.md"
 
-    co_authored_by: "Claude Sonnet 4.6 <noreply@anthropic.com>"
+  # Commit 14: 测试更新适配新函数名
+  - id: "commit-014"
+    order: 14
+    type: "test"
+    scope: "run"
+    title: "test(run): update tests to use new function names"
+    description: |
+      Update existing tests to match refactored code:
+      - Update mock calls to use `_run_until_settled_with_gates`
+      - Replace deprecated `_run_until_blocked_with_interrupt_guard`
+      - Ensure tests pass with new gate loop functionality
+    files:
+      modified:
+        - "tests/test_run_command_defaults.py"
+        - "tests/test_run_command_existing_workflow.py"
+
+  # Commit 15: CLI 锁文件状态更新
+  - id: "commit-015"
+    order: 15
+    type: "chore"
+    scope: "cli"
+    title: "chore(cli): update CLI lock file timestamp"
+    description: |
+      Update CLI lock file with current session information:
+      - Update PID and timestamp
+      - Update command reference
+      - Normal workspace state update
+    files:
+      modified:
+        - ".lee/cli.lock"
 
 # ============================================
-# Commit Execution Order
+# Execution Notes
 # ============================================
-execution_order:
-  - "commit-001"  # Root docs first (foundation)
-  - "commit-002"  # Documentation reorganization
-  - "commit-003"  # Metadata additions
-  - "commit-004"  # Config updates
-  - "commit-005"  # PM agent (feature)
-  - "commit-006"  # Office agents (feature)
-  - "commit-007"  # New CLI commands (feature)
-  - "commit-008"  # Orchestrator enhancements (feature)
-  - "commit-009"  # Runtime features (feature)
-  - "commit-010"  # CLI enhancements (feature)
-  - "commit-011"  # Tests (quality)
-  - "commit-012"  # Artifacts (cleanup)
+execution_notes:
+  strategy: "atomic_by_category"
+  grouping_logic: |
+    Commits are grouped by functional area and dependency order:
+    1. Documentation and reports (independent)
+    2. Core feature implementation (gates, run loop)
+    3. Tests for new features
+    4. Configuration updates (CLI lock policy)
+    5. Spec fixes and validation
+    6. Workflow optimization
+    7. Test updates for compatibility
+
+  testing_required:
+    - "Run all test files to ensure no regressions"
+    - "Test gates commands with actual workflows"
+    - "Verify concurrent terminal usage (run + gates)"
+    - "Validate agent specs load correctly"
+
+  rollback_plan: |
+    Each commit is atomic and can be independently reverted if needed.
+    Dependencies between commits are minimal and well-documented.
 
 # ============================================
-# Statistics
+# Validation Checklist
+# ============================================
+validation:
+  pre_commit:
+    - "All tests pass"
+    - "No YAML syntax errors in agent specs"
+    - "Documentation is accurate and complete"
+
+  post_commit:
+    - "Commits follow Conventional Commits format"
+    - "Commit messages are clear and descriptive"
+    - "Related files are grouped in same commit"
+    - "No unrelated changes in any commit"
+
+# ============================================
+# Commit Statistics
 # ============================================
 statistics:
-  total_files_changed: 91
-  commits_by_type:
-    docs: 3
-    feat: 6
-    refactor: 1
-    test: 1
-    chore: 1
-  commits_by_scope:
-    root: 1
+  by_type:
+    feat: 5
+    fix: 1
+    test: 5
     docs: 2
-    config: 1
-    pm-agent: 1
-    office: 1
+    chore: 2
+  by_scope:
+    gates: 3
+    run: 3
     cli: 2
-    orchestrator: 1
-    runtime: 1
-    tests: 1
-    workspace: 1
-
-# ============================================
-# Notes
-# ============================================
-notes:
-  - "All commits follow Conventional Commits format"
-  - "Each commit is atomic and focuses on a single logical change"
-  - "Commits are ordered to minimize conflicts and maximize clarity"
-  - "Feature commits are grouped after documentation/config changes"
-  - "Test commits follow the features they test"
-  - "Cleanup artifacts are committed last"
-
-# ============================================
-# Execution Script
-# ============================================
-execution_script: |
-  #!/bin/bash
-  # Atomic commit execution script
-  # Run this script to execute all commits in order
-
-  set -e
-
-  echo "Starting atomic commit execution..."
-  echo "Total commits to create: 12"
-
-  # Commit 1: Root documentation
-  echo "[1/12] Committing root documentation updates..."
-  git add CHANGELOG.md GETTING_STARTED.md MIGRATION_PLAN.md QUICKSTART.md README.md
-  git add V2_SUMMARY.md V3_SUMMARY.md
-  git commit -m "$(cat <<'EOF'
-  docs: update root documentation metadata and cleanup
-
-  Add YAML frontmatter metadata to root-level documentation files and
-  remove outdated version summary files.
-
-  Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-  EOF
-  )"
-
-  # Commit 2: Documentation reorganization
-  echo "[2/12] Committing documentation reorganization..."
-  git add docs/
-  git commit -m "$(cat <<'EOF'
-  refactor(docs): reorganize documentation into categorized subdirectories
-
-  Move documentation files from docs/ root to appropriate subdirectories:
-  - Architecture docs → docs/architecture/
-  - Feature specs → docs/features/
-  - Guides → docs/guides/
-  - Technical docs → docs/technical/
-  - Archive → docs/archive/
-
-  Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-  EOF
-  )"
-
-  # Continue with remaining commits...
-  echo "Atomic commit execution complete!"
-  echo "Created 12 commits"
+    specs: 3
+    loader: 1
+    workflow: 1
+    tech-debt: 1
+    docs: 1
+  estimated_time:
+    execution: "5-10 minutes"
+    testing: "10-15 minutes"
+    verification: "5 minutes"

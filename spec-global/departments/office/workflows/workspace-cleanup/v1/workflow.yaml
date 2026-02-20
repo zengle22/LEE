@@ -33,9 +33,7 @@ roles:
     - skill.office.gitignore_updater        # 程序：更新 .gitignore
     - skill.office.git_push                 # 程序：推送到远程
   gates:
-    - gate.office.cleanup_review            # 人类：审核整理结果
     - gate.office.commit_approval           # 人类：批准提交
-    - gate.office.push_confirmation         # 人类：确认推送
 
 # ============================================
 # 参数定义
@@ -156,9 +154,7 @@ state_machine:
 
     PUSH_REMOTE:
       - to: COMPLETED
-        trigger: "push_confirmed"
-      - to: COMPLETED
-        trigger: "push_skipped"
+        trigger: "push_completed"
       - to: FAILED
         trigger: "push_failed"
 
@@ -215,6 +211,7 @@ stages:
         inputs:
           - workspace_path: "{{ params.workspace_path }}"
           - author_name: "{{ params.author_name }}"
+          - only_changed: true
         outputs:
           - path: "workspace-cleanup/doc-organization.yaml"
             description: "文档整理结果"
@@ -290,22 +287,9 @@ stages:
     condition: "params.skip_push == false"
 
     steps:
-      - id: s6_1_confirm_push
-        name: "确认推送"
-        gate:
-          type: human_confirmation
-          prompt: "即将推送提交到远程，是否继续？"
-          artifacts:
-            - "workspace-cleanup/commit-history.yaml"
-          on_confirm:
-            trigger: push_confirmed
-          on_cancel:
-            trigger: push_skipped
-
-      - id: s6_2_push_commits
+      - id: s6_1_push_commits
         name: "推送提交"
         run: skill.office.git_push
-        condition: "gate.s6_1_confirm_push.confirmed"
         inputs:
           - workspace_path: "{{ params.workspace_path }}"
           - remote: "{{ params.remote }}"
@@ -321,12 +305,6 @@ gates:
   commit_review:
     type: human
     timeout: 24h
-    required_approvers:
-      - role: developer
-
-  push_confirmation:
-    type: human
-    timeout: 1h
     required_approvers:
       - role: developer
 
