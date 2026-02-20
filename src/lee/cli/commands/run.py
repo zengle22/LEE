@@ -24,6 +24,7 @@ except ImportError:  # pragma: no cover
 
 
 REGISTRY_PATH = Path("config/workflow-registry.yaml")
+TERMINAL_WORKFLOW_STATUSES = {"completed", "failed", "superseded"}
 
 
 def _load_registry() -> Dict[str, Any]:
@@ -320,6 +321,161 @@ def _start_progress_monitor(
     return stop_event, thread
 
 
+def _get_gate_wait_snapshot(project_root: Path, workflow_id: str) -> Optional[Dict[str, Any]]:
+    """
+    读取当前 workflow 的 gate 等待快照。
+
+    返回:
+      {
+        "status": "...",
+        "current_step": "...",
+        "pending_gates": [{"gate_id": "...", "step_id": "..."}]
+      }
+    """
+    db_path = project_root / ".workflow" / "orchestrator.db"
+    if not db_path.exists():
+        return None
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT status, current_step FROM workflow_instances WHERE id = ?",
+            (workflow_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+
+        status, current_step = row
+        cursor.execute(
+            """
+            SELECT gate_id, step_id
+            FROM gate_approvals
+            WHERE workflow_id = ? AND status = 'pending'
+            ORDER BY created_at
+            """,
+            (workflow_id,),
+        )
+        pending_gates = [
+            {"gate_id": gate_id, "step_id": step_id}
+            for gate_id, step_id in cursor.fetchall()
+        ]
+        return {
+            "status": status,
+            "current_step": current_step,
+            "pending_gates": pending_gates,
+        }
+    finally:
+        conn.close()
+
+
+def _wait_for_gate_resolution(
+    project_root: Path,
+    workflow_id: str,
+    interval_seconds: float = 2.0,
+    heartbeat_seconds: float = 15.0,
+) -> Dict[str, Any]:
+    """
+    在 workflow 被 gate 阻塞时等待人工决策（approve/reject/revise）。
+
+    该函数不做审批动作，只等待状态变化，适配“另一个终端执行 gates approve/reject”场景。
+    """
+    last_signature: Optional[tuple[Any, ...]] = None
+    last_emit_at = 0.0
+
+    while True:
+        snapshot = _get_gate_wait_snapshot(project_root, workflow_id) or {
+            "status": "unknown",
+            "current_step": None,
+            "pending_gates": [],
+        }
+
+        status = str(snapshot.get("status") or "unknown").lower()
+        pending = snapshot.get("pending_gates") or []
+        gate_ids = tuple(g.get("gate_id") for g in pending)
+        signature = (status, gate_ids)
+        now = time.monotonic()
+
+        should_emit = signature != last_signature
+        is_heartbeat = False
+        if not should_emit and pending:
+            should_emit = (now - last_emit_at) >= heartbeat_seconds
+            is_heartbeat = should_emit
+        if should_emit:
+            last_signature = signature
+            last_emit_at = now
+            suffix = " (heartbeat)" if is_heartbeat else ""
+            click.echo(
+                f"等待门禁决策: status={status} pending={len(pending)} "
+                f"gates={', '.join(gate_ids) if gate_ids else '-'}{suffix}"
+            )
+
+        if status in TERMINAL_WORKFLOW_STATUSES:
+            return snapshot
+        if not pending:
+            return snapshot
+
+        time.sleep(max(interval_seconds, 0.2))
+
+
+def _run_until_settled_with_gates(
+    project_root: Path,
+    workflow_id: str,
+    max_steps: int,
+) -> Dict[str, Any]:
+    """
+    主执行循环：
+    - 正常执行 run_until_blocked
+    - 如果因 human gate 阻塞，则等待外部审批/拒绝
+    - 决策完成后继续执行，直到 completed/failed/superseded 或其他可返回状态
+    """
+    while True:
+        summary = _run_until_blocked_with_interrupt_guard(project_root, workflow_id, max_steps)
+        if str(summary.get("status")) != "blocked":
+            return summary
+
+        wait_snapshot = _get_gate_wait_snapshot(project_root, workflow_id)
+        pending = (wait_snapshot or {}).get("pending_gates") or []
+        if not pending:
+            return summary
+
+        click.echo("\n⏸️ 检测到人工门禁，等待审批/拒绝后自动继续...")
+        for gate in pending:
+            click.echo(f"  - {gate.get('gate_id')} (step={gate.get('step_id')})")
+        click.echo(
+            "可在另一个终端执行: "
+            f"lee gates decide {workflow_id} --project-dir {project_root}"
+        )
+
+        resolved = _wait_for_gate_resolution(project_root, workflow_id)
+        resolved_status = str(resolved.get("status") or "").lower()
+        resolved_pending = resolved.get("pending_gates") or []
+
+        if resolved_status in TERMINAL_WORKFLOW_STATUSES:
+            return {
+                "status": resolved_status,
+                "blocked_at": None,
+                "completed_steps": summary.get("completed_steps", 0),
+            }
+        if resolved_pending:
+            return summary
+
+        if resolved_status == "paused":
+            resume_result = pm_workflow(
+                "resume",
+                project_dir=str(project_root),
+                workflow_id=workflow_id,
+            )
+            if "error" in resume_result:
+                click.echo(
+                    f"门禁已处理，但恢复 workflow 失败: {resume_result.get('error')}"
+                )
+                return summary
+
+        click.echo("✅ 门禁已决策，继续执行后续步骤...")
+
+
 def _acquire_project_run_lock(project_root: Path):
     """
     单项目并发锁：同一 project_dir 只允许一个 `lee run` 进程。
@@ -426,7 +582,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
                 click.echo(f"执行中... (使用 'lee status {selected['id']}' 查看详细状态)")
                 stop_event, monitor = _start_progress_monitor(project_root, selected["id"])
                 try:
-                    summary = _run_until_blocked_with_interrupt_guard(project_root, selected["id"], max_steps)
+                    summary = _run_until_settled_with_gates(project_root, selected["id"], max_steps)
                 finally:
                     stop_event.set()
                     monitor.join(timeout=1)
@@ -468,7 +624,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         # 执行工作流
         stop_event, monitor = _start_progress_monitor(project_root, workflow_id)
         try:
-            summary = _run_until_blocked_with_interrupt_guard(project_root, workflow_id, max_steps)
+            summary = _run_until_settled_with_gates(project_root, workflow_id, max_steps)
         finally:
             stop_event.set()
             monitor.join(timeout=1)
