@@ -1,9 +1,13 @@
 """lee gates command - 统一的门禁管理入口"""
 
+from __future__ import annotations
+
 import click
 import json
+import os
 import sqlite3
 from pathlib import Path
+from typing import Any, Dict, List
 
 from lee.orchestrator.api import pm_workflow
 
@@ -14,12 +18,128 @@ def gates():
     pass
 
 
+def _safe_json_loads(raw: str | None, default):
+    if not raw:
+        return default
+    try:
+        return json.loads(raw)
+    except Exception:
+        return default
+
+
+def _load_gates_from_db(
+    project_root: Path,
+    workflow_id: str | None = None,
+    status_filter: str | None = None,
+) -> List[Dict[str, Any]]:
+    db_path = project_root / ".workflow" / "orchestrator.db"
+    if not db_path.exists():
+        return []
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cursor = conn.cursor()
+        base_sql = """
+            SELECT gate_id, step_id, status, approver, comments,
+                   created_at, decided_at, approval_criteria, reviewers,
+                   default_reject_action, default_reject_target
+            FROM gate_approvals
+        """
+        params: list[Any] = []
+        where_clauses = []
+
+        if workflow_id:
+            where_clauses.append("workflow_id = ?")
+            params.append(workflow_id)
+
+        if status_filter:
+            where_clauses.append("status = ?")
+            params.append(status_filter)
+
+        if where_clauses:
+            base_sql += " WHERE " + " AND ".join(where_clauses)
+
+        base_sql += " ORDER BY created_at"
+        cursor.execute(base_sql, params)
+
+        rows = []
+        for (
+            gate_id,
+            step_id,
+            status,
+            approver,
+            comments,
+            created_at,
+            decided_at,
+            approval_criteria,
+            reviewers,
+            default_reject_action,
+            default_reject_target,
+        ) in cursor.fetchall():
+            rows.append(
+                {
+                    "gate_id": gate_id,
+                    "step_id": step_id,
+                    "status": status,
+                    "approver": approver,
+                    "comments": comments,
+                    "created_at": created_at,
+                    "decided_at": decided_at,
+                    "approval_criteria": _safe_json_loads(approval_criteria, []),
+                    "reviewers": _safe_json_loads(reviewers, []),
+                    "default_reject_action": default_reject_action,
+                    "default_reject_target": default_reject_target,
+                }
+            )
+        return rows
+    finally:
+        conn.close()
+
+
+def _print_gate_details(gate: Dict[str, Any]) -> None:
+    click.echo(f"\nGate: {gate.get('gate_id')}")
+    click.echo(f"Step: {gate.get('step_id')}")
+    click.echo(f"状态: {gate.get('status')}")
+    if gate.get("created_at"):
+        click.echo(f"创建时间: {gate.get('created_at')}")
+    if gate.get("reviewers"):
+        click.echo("评审人:")
+        for reviewer in gate["reviewers"]:
+            if isinstance(reviewer, dict):
+                rid = reviewer.get("id") or reviewer.get("name") or str(reviewer)
+                click.echo(f"  - {rid}")
+            else:
+                click.echo(f"  - {reviewer}")
+    if gate.get("approval_criteria"):
+        click.echo("待决策条件:")
+        for idx, criterion in enumerate(gate["approval_criteria"], 1):
+            if isinstance(criterion, dict):
+                title = criterion.get("name") or criterion.get("title") or f"条件{idx}"
+                desc = criterion.get("description") or criterion.get("rule") or ""
+                click.echo(f"  {idx}. {title}{f' - {desc}' if desc else ''}")
+            else:
+                click.echo(f"  {idx}. {criterion}")
+    if gate.get("default_reject_action"):
+        target = gate.get("default_reject_target")
+        target_suffix = f" (target={target})" if target else ""
+        click.echo(
+            "默认拒绝动作: "
+            f"{gate.get('default_reject_action')}"
+            f"{target_suffix}"
+        )
+
+
 @gates.command()
-@click.argument("workflow_id")
+@click.argument("workflow_id", required=False, default=None)
+@click.option("--all", "-a", is_flag=True, help="显示所有门禁（包括已处理的）")
+@click.option("--pending", "-p", is_flag=True, help="只显示待处理门禁（默认）")
 @click.option("--project-dir", default=".", help="项目目录")
-def list(workflow_id: str, project_dir: str) -> None:
-    """列出待处理的门禁"""
-    # 查询数据库获取门禁信息
+def list(workflow_id: str | None, all: bool, pending: bool, project_dir: str) -> None:
+    """列出门禁
+
+    不指定 WORKFLOW_ID 时，列出所有工作流的门禁。
+    使用 --all 显示已处理的历史门禁。
+    """
     project_root = Path(project_dir).resolve()
     db_path = project_root / ".workflow" / "orchestrator.db"
 
@@ -31,51 +151,212 @@ def list(workflow_id: str, project_dir: str) -> None:
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
 
-        # 获取工作流状态
-        cursor.execute(
-            "SELECT status, current_step FROM workflow_instances WHERE id = ?",
-            (workflow_id,)
-        )
-        result = cursor.fetchone()
+        if workflow_id:
+            # 查询指定工作流
+            cursor.execute(
+                "SELECT status, current_step FROM workflow_instances WHERE id = ?",
+                (workflow_id,)
+            )
+            result = cursor.fetchone()
 
-        if not result:
-            click.echo(f"工作流不存在: {workflow_id}")
+            if not result:
+                click.echo(f"工作流不存在: {workflow_id}")
+                conn.close()
+                return
+
+            status, current_step = result
+            click.echo(f"工作流: {workflow_id}")
+            click.echo(f"状态: {status}")
+            click.echo(f"当前步骤: {current_step or '无'}")
+
+            # 获取门禁
+            status_filter = None if all else "pending"
+            gates = _load_gates_from_db(project_root, workflow_id, status_filter)
+        else:
+            # 查询所有工作流的门禁
+            status_filter = None if all else "pending"
+            cursor.execute("""
+                SELECT id, status, current_step
+                FROM workflow_instances
+                ORDER BY updated_at DESC
+            """)
+            workflows = cursor.fetchall()
+
+            if not workflows:
+                click.echo("没有找到任何工作流")
+                conn.close()
+                return
+
+            # 收集所有门禁
+            all_gates = []
+            for wf_id, wf_status, wf_step in workflows:
+                gates = _load_gates_from_db(project_root, wf_id, status_filter)
+                for gate in gates:
+                    gate["workflow_id"] = wf_id
+                    gate["workflow_status"] = wf_status
+                    gate["workflow_current_step"] = wf_step
+                    all_gates.append(gate)
+
+            gates = all_gates
+
+        if not gates:
+            if workflow_id:
+                click.echo("\n没有门禁记录")
+            else:
+                click.echo("没有找到门禁记录")
+            conn.close()
             return
 
-        status, current_step = result
-        click.echo(f"工作流: {workflow_id}")
-        click.echo(f"状态: {status}")
-        click.echo(f"当前步骤: {current_step or '无'}")
-
-        # 获取待审核的门禁
-        cursor.execute(
-            """SELECT gate_id, status, approver, comments
-               FROM gate_approvals
-               WHERE workflow_id = ?""",
-            (workflow_id,)
-        )
-        gates = cursor.fetchall()
-
-        if gates:
+        # 显示门禁列表
+        if workflow_id:
             click.echo("\n门禁列表:")
-            for gate_id, gate_status, approver, comments in gates:
-                status_icon = "⏳" if gate_status == "pending" else "✅" if gate_status == "approved" else "❌"
-                click.echo(f"  {status_icon} {gate_id}")
-                click.echo(f"     状态: {gate_status}")
-                if approver:
-                    click.echo(f"     审批人: {approver}")
-                if comments:
-                    click.echo(f"     评论: {comments}")
         else:
-            click.echo("\n没有门禁记录")
-            # 从当前步骤推断门禁
-            if current_step and "review" in current_step or "confirm" in current_step:
-                click.echo(f"\n推断门禁: {current_step}")
+            click.echo(f"\n门禁列表 ({'所有' if all else '待处理'}):")
+
+        for gate in gates:
+            gate_id = gate.get("gate_id")
+            step_id = gate.get("step_id")
+            status = gate.get("status")
+            approver = gate.get("approver")
+            comments = gate.get("comments")
+            created_at = gate.get("created_at")
+
+            # 状态图标
+            if status == "pending":
+                status_icon = "⏳"
+            elif status == "approved":
+                status_icon = "✅"
+            elif status == "rejected":
+                status_icon = "❌"
+            elif status == "flagged":
+                status_icon = "🚩"
+            else:
+                status_icon = "📝"
+
+            # 工作流信息（多工作流模式）
+            if not workflow_id:
+                wf_id = gate.get("workflow_id")
+                wf_status = gate.get("workflow_status")
+                click.echo(f"\n[{status_icon}] {gate_id} (工作流: {wf_id}, 状态: {wf_status})")
+            else:
+                click.echo(f"\n{status_icon} {gate_id}")
+
+            click.echo(f"  步骤: {step_id}")
+            click.echo(f"  状态: {status}")
+
+            if approver:
+                click.echo(f"  审批人: {approver}")
+            if comments:
+                click.echo(f"  评论: {comments}")
+            if created_at and not workflow_id:
+                click.echo(f"  创建时间: {created_at}")
+
+            # 显示默认拒绝动作
+            if gate.get("default_reject_action"):
+                target = gate.get("default_reject_target")
+                target_suffix = f" (target={target})" if target else ""
+                click.echo(f"  默认拒绝动作: {gate.get('default_reject_action')}{target_suffix}")
 
         conn.close()
 
     except Exception as e:
         click.echo(f"查询失败: {e}")
+
+
+@gates.command()
+@click.argument("workflow_id")
+@click.option("--approver", default=lambda: os.getenv("USER", "reviewer"), show_default="当前用户")
+@click.option("--project-dir", default=".", help="项目目录")
+def decide(workflow_id: str, approver: str, project_dir: str) -> None:
+    """交互式门禁决策：选择 gate 后一键 approve/reject。"""
+    project_root = Path(project_dir).resolve()
+    pending_gates = _load_gates_from_db(project_root, workflow_id, status_filter="pending")
+
+    if not pending_gates:
+        click.echo(f"工作流 {workflow_id} 当前没有待决策门禁。")
+        all_gates = _load_gates_from_db(project_root, workflow_id, status_filter=None)
+        if all_gates:
+            click.echo("已有门禁记录:")
+            for gate in all_gates:
+                click.echo(
+                    f"  - {gate.get('gate_id')} [{gate.get('status')}]"
+                    f" step={gate.get('step_id')}"
+                )
+        return
+
+    click.echo(f"工作流: {workflow_id}")
+    click.echo("待决策门禁:")
+    for idx, gate in enumerate(pending_gates, 1):
+        criteria_count = len(gate.get("approval_criteria") or [])
+        click.echo(
+            f"  {idx}. {gate.get('gate_id')} (step={gate.get('step_id')}, 条件数={criteria_count})"
+        )
+
+    selected_idx = 1
+    if len(pending_gates) > 1:
+        selected_idx = click.prompt(
+            "选择 gate 编号",
+            type=click.IntRange(1, len(pending_gates)),
+            default=1,
+        )
+    selected_gate = pending_gates[selected_idx - 1]
+    _print_gate_details(selected_gate)
+
+    decision = click.prompt(
+        "请选择决策",
+        type=click.Choice(["approve", "reject"], case_sensitive=False),
+        default="approve",
+    ).lower()
+
+    if decision == "approve":
+        comments = click.prompt("审批意见（可留空）", default="", show_default=False)
+        result = pm_workflow(
+            "approve_gate",
+            project_dir=project_dir,
+            workflow_id=workflow_id,
+            gate_id=selected_gate["gate_id"],
+            approver=approver,
+            comments=comments,
+        )
+    else:
+        reason = click.prompt("拒绝原因", default="Rejected by reviewer")
+        result = pm_workflow(
+            "reject_gate",
+            project_dir=project_dir,
+            workflow_id=workflow_id,
+            gate_id=selected_gate["gate_id"],
+            rejecter=approver,
+            reason=reason,
+        )
+        # 没有默认动作时再补充一次最小交互
+        if "error" in result and "must specify action" in str(result.get("error", "")).lower():
+            click.echo("该门禁需要指定拒绝动作。")
+            action = click.prompt(
+                "选择动作",
+                type=click.Choice(["rollback", "spawn"], case_sensitive=False),
+                default="rollback",
+            ).lower()
+            target_step = None
+            if action == "rollback":
+                target_step = click.prompt("目标步骤（可留空）", default="", show_default=False).strip() or None
+            result = pm_workflow(
+                "reject_gate",
+                project_dir=project_dir,
+                workflow_id=workflow_id,
+                gate_id=selected_gate["gate_id"],
+                rejecter=approver,
+                reason=reason,
+                action=action,
+                target_step=target_step,
+            )
+
+    if "error" in result:
+        raise click.ClickException(str(result.get("error")))
+
+    status_label = "批准" if decision == "approve" else "拒绝"
+    click.echo(f"\n✅ 已{status_label}: {selected_gate['gate_id']}")
+    if result.get("message"):
+        click.echo(result["message"])
 
 
 @gates.command()
