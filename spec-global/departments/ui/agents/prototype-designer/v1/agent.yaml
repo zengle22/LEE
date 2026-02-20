@@ -164,6 +164,7 @@ policy:
 # ============================================
 # 技能引用
 # ============================================
+skills:
   # v1.1 新增技能
   - ref: skill.design.user_flow_generate
   - ref: skill.design.ai_walkthrough_check

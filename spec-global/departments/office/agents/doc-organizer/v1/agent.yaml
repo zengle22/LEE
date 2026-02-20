@@ -32,6 +32,10 @@ contracts:
           type: string
       author_name:
         type: string
+      only_changed:
+        type: boolean
+        description: "仅处理有改动或新增的文件（使用 git status 检测）"
+        default: true
 
   output_schema:
     type: object
@@ -132,8 +136,20 @@ prompting:
   system: |
     You are a Document Organizer specializing in organizing and managing documentation.
 
-    Your responsibilities:
-    1. Scan workspace for markdown and documentation files
+    Determine mode from input.only_changed.
+
+    INCREMENTAL MODE (`only_changed=true`) - Only process changed or new files:
+    1. Use `git status --short` to identify changed/new files
+    2. Filter for markdown and documentation files from the changed files
+    3. Classify only the changed/new documents
+    4. Move changed/new documents to appropriate directories
+    5. Check and add missing metadata (author, date, version) only for changed/new files
+    6. Generate organization report for processed files
+
+    IMPORTANT: Do NOT process files that haven't been modified in incremental mode.
+
+    FULL SCAN MODE (`only_changed=false`) - Process all documentation files:
+    1. Scan workspace for all markdown and documentation files
     2. Classify documents by type and purpose
     3. Move documents to appropriate directories
     4. Check and add missing metadata (author, date, version)
@@ -147,12 +163,12 @@ prompting:
     - Maintain document traceability
 
   instructions:
-    - "扫描工作区中的文档文件"
-    - "根据文档类型和内容进行分类"
-    - "将文档移动到合适的目录"
-    - "检查文档元数据，补充缺失的作者、日期、版本号"
-    - "创建必要的子目录"
-    - "生成文档整理报告"
+    - "先读取 input.only_changed，严格按对应模式执行。"
+    - "only_changed=true: 使用 git status --short，仅处理改动/新增文档。"
+    - "only_changed=true: 忽略未修改文档，只对变更文档补齐元数据并整理。"
+    - "only_changed=false: 扫描工作区所有文档文件并执行完整整理。"
+    - "根据文档类型和内容分类，移动到合适目录。"
+    - "补充缺失的作者、日期、版本号，并生成文档整理报告。"
 
   output_format: yaml
 
@@ -163,46 +179,89 @@ prompting:
 # 整理流程
 # ============================================
 organization_workflow:
-  stages:
-    - stage: 1
-      name: 文档扫描
-      actions:
-        - "扫描工作区中的 .md 文件"
-        - "排除 node_modules、.git 等目录"
-        - "收集文档路径和基本信息"
+  incremental_mode:
+    stages:
+      - stage: 1
+        name: 检测改动文件
+        actions:
+          - "运行 git status --short 获取改动文件列表"
+          - "过滤出 .md 文档文件"
+          - "排除 node_modules、.git、venv 等目录"
 
-    - stage: 2
-      name: 文档分类
-      actions:
-        - "分析文档文件名和内容"
-        - "确定文档类型"
-        - "规划目标目录"
+      - stage: 2
+        name: 文档分类
+        actions:
+          - "分析改动文档的文件名和内容"
+          - "确定文档类型"
+          - "规划目标目录"
 
-    - stage: 3
-      name: 目录准备
-      actions:
-        - "检查目标目录是否存在"
-        - "创建缺失的子目录"
+      - stage: 3
+        name: 目录准备
+        actions:
+          - "检查目标目录是否存在"
+          - "创建缺失的子目录"
 
-    - stage: 4
-      name: 元数据检查
-      actions:
-        - "解析文档内容"
-        - "检查是否有元数据部分"
-        - "识别缺失的元数据字段"
+      - stage: 4
+        name: 元数据检查
+        actions:
+          - "解析改动文档的内容"
+          - "检查是否有元数据部分"
+          - "识别缺失的元数据字段"
 
-    - stage: 5
-      name: 文档更新
-      actions:
-        - "补充缺失的元数据"
-        - "使用标准模板格式"
-        - "保持文档原有内容"
+      - stage: 5
+        name: 文档更新
+        actions:
+          - "补充缺失的元数据"
+          - "使用标准模板格式"
+          - "保持文档原有内容"
 
-    - stage: 6
-      name: 文档移动
-      actions:
-        - "将文档移动到目标目录"
-        - "记录移动操作"
+      - stage: 6
+        name: 文档移动
+        actions:
+          - "将文档移动到目标目录"
+          - "记录移动操作"
+
+  full_scan_mode:
+    stages:
+      - stage: 1
+        name: 文档扫描
+        actions:
+          - "扫描工作区中的所有 .md 文件"
+          - "排除 node_modules、.git 等目录"
+          - "收集文档路径和基本信息"
+
+      - stage: 2
+        name: 文档分类
+        actions:
+          - "分析文档文件名和内容"
+          - "确定文档类型"
+          - "规划目标目录"
+
+      - stage: 3
+        name: 目录准备
+        actions:
+          - "检查目标目录是否存在"
+          - "创建缺失的子目录"
+
+      - stage: 4
+        name: 元数据检查
+        actions:
+          - "解析文档内容"
+          - "检查是否有元数据部分"
+          - "识别缺失的元数据字段"
+
+      - stage: 5
+        name: 文档更新
+        actions:
+          - "补充缺失的元数据"
+          - "使用标准模板格式"
+          - "保持文档原有内容"
+
+      - stage: 6
+        name: 文档移动
+        actions:
+          - "将文档移动到目标目录"
+          - "记录移动操作"
 
 # ============================================
 # 可观测性
