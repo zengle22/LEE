@@ -12,6 +12,20 @@ last_updated: 2026-02-19
 
 LEE 提供了新的 `lee gates` 命令组，作为统一的所有门禁管理入口。
 
+## 📝 Workspace Cleanup 工作流门禁
+
+workspace-cleanup 工作流只有一个门禁点：
+
+- **s5_2_review_commits**: 审核提交规划（人类门禁）
+  - 在 s5_1 规划提交后触发
+  - 查看生成的 commit-plan.yaml
+  - 批准后执行提交，然后**自动推送到远程**
+  - 拒绝后返回 s5_1 重新规划
+
+**注意**：
+- ✅ s5 提交批准后会**自动推送到远程**（s6 无需人工确认）
+- ✅ 通过 `--skip-push` 参数可以跳过推送
+
 ## 📋 可用命令
 
 ### 1. lee gates list - 列出门禁
