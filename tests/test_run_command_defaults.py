@@ -67,7 +67,7 @@ params:
     monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
     monkeypatch.setattr(
         run_module,
-        "_run_until_blocked_with_interrupt_guard",
+        "_run_until_settled_with_gates",
         lambda *_a, **_k: {"status": "completed", "completed_steps": 0, "blocked_at": None},
     )
     monkeypatch.setattr(run_module, "_print_summary", lambda *_a, **_k: None)

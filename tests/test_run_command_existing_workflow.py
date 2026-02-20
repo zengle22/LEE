@@ -43,7 +43,7 @@ def test_run_continue_existing_workflow(monkeypatch, tmp_path: Path) -> None:
     )
     monkeypatch.setattr(
         run_module,
-        "_run_until_blocked_with_interrupt_guard",
+        "_run_until_settled_with_gates",
         lambda *_args, **_kwargs: {
             "status": "blocked",
             "blocked_at": "s1_1_analyze_files",
@@ -106,7 +106,7 @@ def test_run_restart_existing_workflow(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_args, **_kwargs: rendered)
     monkeypatch.setattr(
         run_module,
-        "_run_until_blocked_with_interrupt_guard",
+        "_run_until_settled_with_gates",
         lambda *_args, **_kwargs: {
             "status": "completed",
             "completed_steps": 1,
