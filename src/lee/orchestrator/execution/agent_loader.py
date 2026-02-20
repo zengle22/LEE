@@ -342,11 +342,19 @@ class AgentLoader:
         if self._debug:
             print(f"[DEBUG] Loading agent spec from: {spec_path}")
 
+        raw_text: str = ""
         try:
             with open(spec_path, 'r', encoding='utf-8') as f:
-                data = yaml.safe_load(f)
+                raw_text = f.read()
+                data = yaml.safe_load(raw_text)
         except yaml.YAMLError as e:
-            raise AgentSpecInvalid(str(spec_path), [f"YAML parse error: {e}"])
+            errors = [f"YAML parse error: {e}"]
+            if "{%" in raw_text or "%}" in raw_text:
+                errors.append(
+                    "Detected possible unrendered Jinja control tags ('{% ... %}'). "
+                    "Agent specs must be plain YAML."
+                )
+            raise AgentSpecInvalid(str(spec_path), errors)
         except IOError as e:
             raise AgentSpecInvalid(str(spec_path), [f"IO error: {e}"])
 
