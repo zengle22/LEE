@@ -48,7 +48,10 @@ except ImportError:  # pragma: no cover - non-posix fallback
     fcntl = None
 
 LOCK_ENV_DISABLE = "LEE_DISABLE_CLI_LOCK"
-READ_ONLY_COMMANDS = {"status", "watch"}
+# 这些命令允许与 `lee run` 并发执行：
+# - status/watch: 只读查询
+# - gates/approve: 人工门禁决策，需要在 run 挂起等待时可用
+NON_BLOCKING_COMMANDS = {"status", "watch", "gates", "approve"}
 
 
 def _should_lock(argv: list[str]) -> bool:
@@ -57,6 +60,7 @@ def _should_lock(argv: list[str]) -> bool:
 
     约定：
     - `lee status/watch ...` 是只读查询，允许并发执行
+    - `lee gates ...` / `lee approve ...` 用于门禁决策，允许与 `lee run` 并发
     - 其他命令默认需要加锁，避免并发写 workflow/db
     """
     if not argv:
@@ -64,7 +68,7 @@ def _should_lock(argv: list[str]) -> bool:
     first = argv[0]
     if first in ("-h", "--help", "-v", "--version"):
         return False
-    if first in READ_ONLY_COMMANDS:
+    if first in NON_BLOCKING_COMMANDS:
         return False
     return True
 
