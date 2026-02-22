@@ -218,6 +218,11 @@ class OrchestratorAPIWrapper:
     ) -> APIResponse:
         """Handle next_step action"""
         workflow_id = decision.params.workflow_ref or (context.workflow_id if context else None)
+        execution_mode = str(decision.params.params.get("execution_mode", "") or "").lower()
+        try:
+            max_steps = int(decision.params.params.get("max_steps", 20))
+        except (TypeError, ValueError):
+            max_steps = 20
 
         if not workflow_id:
             return APIResponse(
@@ -225,6 +230,33 @@ class OrchestratorAPIWrapper:
                 data={},
                 error="No workflow specified and no current workflow in context",
                 action="next_step"
+            )
+
+        if execution_mode == "until_blocked":
+            run_result = await api_run_until_blocked(
+                self.project_dir,
+                workflow_id,
+                max_steps=max_steps,
+            )
+            run_status = str(run_result.get("status", "")).lower()
+            ok = run_status in {"running", "blocked", "completed"}
+            message_map = {
+                "completed": "Workflow execution completed",
+                "blocked": "Workflow execution blocked",
+                "running": "Workflow execution still running",
+                "failed": "Workflow execution failed",
+            }
+            message = message_map.get(run_status, f"Workflow execution status: {run_status or 'unknown'}")
+            return APIResponse(
+                status="success" if ok else "failed",
+                data={
+                    "step_id": run_result.get("blocked_at"),
+                    "workflow_id": workflow_id,
+                    "message": message,
+                    "run_result": run_result,
+                },
+                error=None if ok else message,
+                action="next_step",
             )
 
         result = await api_next_step(self.project_dir, workflow_id)
