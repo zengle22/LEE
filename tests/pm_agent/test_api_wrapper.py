@@ -284,6 +284,40 @@ async def test_next_step_treats_success_status_as_success(wrapper, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_next_step_supports_run_until_blocked_mode(wrapper, monkeypatch):
+    mock_next = AsyncMock()
+    mock_run_until = AsyncMock(
+        return_value={
+            "workflow_id": "wf_task_1",
+            "total_steps": 5,
+            "completed_steps": 2,
+            "blocked_at": "gate_review_step",
+            "status": "blocked",
+            "duration_seconds": 1.2,
+        }
+    )
+    monkeypatch.setattr(api_wrapper_module, "api_next_step", mock_next)
+    monkeypatch.setattr(api_wrapper_module, "api_run_until_blocked", mock_run_until)
+
+    decision = _decision(
+        "next_step",
+        WorkflowParams(
+            workflow_ref="wf_task_1",
+            params={"execution_mode": "until_blocked", "max_steps": 5},
+        ),
+    )
+    resp = await wrapper.execute(decision)
+
+    assert resp.status == "success"
+    assert resp.action == "next_step"
+    assert resp.data["step_id"] == "gate_review_step"
+    assert resp.data["run_result"]["status"] == "blocked"
+    assert "blocked" in (resp.data["message"] or "").lower()
+    mock_run_until.assert_awaited_once_with(str(wrapper.project_dir), "wf_task_1", max_steps=5)
+    mock_next.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_next_step_uses_message_as_error_when_no_blocked_reason(wrapper, monkeypatch):
     mock_next = AsyncMock(
         return_value={

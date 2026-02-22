@@ -280,6 +280,22 @@ class TestParameterMapping:
         assert params.gate_id == "gate_review"
 
     @pytest.mark.asyncio
+    async def test_map_params_for_continue_workflow_sets_until_blocked_mode(self, param_mapper, sample_context):
+        """Continue command should default to run-until-blocked mode."""
+        intent = Intent(type=IntentType.EXECUTE_STEP, confidence=0.9, reasoning="Continue workflow")
+
+        params = await param_mapper.map_params(
+            "继续工作流 wf_task_123",
+            intent,
+            sample_context
+        )
+
+        assert params.workflow_ref == "wf_task_123"
+        assert params.step_id is None
+        assert params.params.get("execution_mode") == "until_blocked"
+        assert params.params.get("max_steps") == 20
+
+    @pytest.mark.asyncio
     async def test_map_params_for_flag_gate_rule(self, param_mapper, sample_context):
         """Test rule-based mapping for FLAG_GATE intent"""
         intent = Intent(type=IntentType.FLAG_GATE, confidence=0.9, reasoning="Flag")
