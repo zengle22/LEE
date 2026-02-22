@@ -1,0 +1,28 @@
+{
+  "session_id": "chat_20260222_155819",
+  "run_id": "wf_task_db4200cb",
+  "last_active_timestamp": 1771747204.220512,
+  "history_summary": "1 turns",
+  "metadata": {
+    "user_permissions": [],
+    "department": null,
+    "interaction_history": [
+      {
+        "timestamp": 1771747204.2205079,
+        "user_input": "全新运行工作流workspace_cleanup",
+        "action": "run_workflow",
+        "status": "success",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_db4200cb",
+        "template_resolution": {
+          "input": "workspace_cleanup",
+          "resolved": "workflow.office.workspace_cleanup"
+        }
+      }
+    ],
+    "last_template_resolution": {
+      "input": "workspace_cleanup",
+      "resolved": "workflow.office.workspace_cleanup"
+    }
+  }
+}
