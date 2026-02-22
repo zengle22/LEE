@@ -15,6 +15,7 @@ LEE CLI
 """
 
 import json
+import logging
 import os
 import sys
 from datetime import datetime
@@ -48,10 +49,16 @@ except ImportError:  # pragma: no cover - non-posix fallback
     fcntl = None
 
 LOCK_ENV_DISABLE = "LEE_DISABLE_CLI_LOCK"
+
+logger = logging.getLogger(__name__)
+
 # 这些命令允许与 `lee run` 并发执行：
-# - status/watch: 只读查询
-# - gates/approve: 人工门禁决策，需要在 run 挂起等待时可用
-NON_BLOCKING_COMMANDS = {"status", "watch", "gates", "approve"}
+# - 只读查询：status, watch, gates list, gates show
+# - 门禁决策：gates approve/reject/decide/revise/flag, approve（独立命令）
+# 这些命令可以在 lee run 等待门禁时安全执行
+READONLY_COMMANDS = {"status", "watch"}
+GATES_READONLY_SUBCOMMANDS = {"list", "show"}
+GATES_DECISION_SUBCOMMANDS = {"approve", "reject", "decide", "revise", "flag"}
 
 
 def _should_lock(argv: list[str]) -> bool:
@@ -60,16 +67,36 @@ def _should_lock(argv: list[str]) -> bool:
 
     约定：
     - `lee status/watch ...` 是只读查询，允许并发执行
-    - `lee gates ...` / `lee approve ...` 用于门禁决策，允许与 `lee run` 并发
+    - `lee gates list/show ...` 是只读查询，允许并发执行
+    - `lee gates approve/reject/decide/revise/flag ...` 用于门禁决策，允许与 `lee run` 并发
+    - `lee approve ...` (独立命令) 用于门禁决策，允许与 `lee run` 并发
     - 其他命令默认需要加锁，避免并发写 workflow/db
     """
     if not argv:
         return False
+
     first = argv[0]
+
+    # Help/version 不需要锁
     if first in ("-h", "--help", "-v", "--version"):
         return False
-    if first in NON_BLOCKING_COMMANDS:
+
+    # 只读命令
+    if first in READONLY_COMMANDS:
         return False
+
+    # 独立的 approve 命令（与 gates approve 功能重复）
+    if first == "approve":
+        return False
+
+    # gates 子命令需要特殊处理
+    if first == "gates" and len(argv) >= 2:
+        subcommand = argv[1]
+        # 只读子命令或决策子命令都不需要锁
+        if subcommand in GATES_READONLY_SUBCOMMANDS or subcommand in GATES_DECISION_SUBCOMMANDS:
+            return False
+
+    # 其他命令需要锁
     return True
 
 
@@ -104,7 +131,8 @@ def _acquire_cli_lock(argv: list[str]) -> Optional[int]:
         owner = {}
         try:
             owner = json.loads(lock_path.read_text(encoding="utf-8") or "{}")
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to read lock file: {e}")
             owner = {}
         os.close(fd)
 
@@ -163,18 +191,6 @@ cli.add_command(verify)
 cli.add_command(chat)
 cli.add_command(watch)
 cli.add_command(gates.gates)
-cli.add_command(qa)
-cli.add_command(test_runner, "test-runner")
-cli.add_command(check_env, "check-env")
-cli.add_command(behavior_compliance_checker, "behavior-check")
-cli.add_command(diagram_gen, "diagram-gen")
-cli.add_command(diagram_insert, "diagram-insert")
-cli.add_command(md_to_wechat, "md-to-wechat")
-cli.add_command(wf, "workflow")
-cli.add_command(repo)
-cli.add_command(verify)
-cli.add_command(chat)
-cli.add_command(watch)
 
 
 def main():
