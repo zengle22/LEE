@@ -58,6 +58,20 @@ class SkillRunner(StepRunnerBase):
     @staticmethod
     def _resolve_param_value(value: Any, workflow_params: Dict[str, Any]) -> Any:
         """解析 params 模板引用，兼容 `${{ params.xxx }}` / `{{ params.xxx }}`。"""
+        # VariableIR / 变量对象统一降级为可序列化字符串引用，避免 task_execution 序列化失败。
+        reference = getattr(value, "reference", None)
+        if isinstance(reference, str) and reference:
+            return reference
+
+        if isinstance(value, dict):
+            return {
+                key: SkillRunner._resolve_param_value(val, workflow_params)
+                for key, val in value.items()
+            }
+
+        if isinstance(value, list):
+            return [SkillRunner._resolve_param_value(item, workflow_params) for item in value]
+
         if not isinstance(value, str):
             return value
 

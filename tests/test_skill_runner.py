@@ -12,7 +12,7 @@ from lee.orchestrator.execution.runners.shell_runner import SkillRunner
 from lee.orchestrator.execution.spec_global_parser import SpecGlobalParser
 from lee.orchestrator.execution.template_manager import TemplateManager
 from lee.orchestrator.execution.failure_handler import FailureHandler
-from lee.orchestrator.ir.models import StepKind
+from lee.orchestrator.ir.models import StepKind, VariableIR
 from lee.orchestrator.storage.models import StepResult, TaskExecutionStatus
 
 
@@ -95,7 +95,7 @@ def test_workspace_cleanup_execute_step_preserves_constants_and_retry_policy():
 
     execute_step = next(step for step in template.steps if step.id == "s5_3_execute_commits")
     assert execute_step.input["mode"] == "execute"
-    assert execute_step.input["commit_plan"] == "workspace-cleanup/commit-plan.yaml"
+    assert execute_step.input["commit_plan"] == ".workflow/workspace-cleanup/commit-plan.yaml"
     assert execute_step.on_failure is not None
     assert execute_step.on_failure["retry"] == 2
     assert FailureHandler.has_policy(execute_step) is True
@@ -194,3 +194,40 @@ async def test_skill_runner_uses_skill_defaults_when_workflow_params_missing():
     assert result.status == "success"
     commands = [call.args[0]["command"] for call in shell_executor.execute.await_args_list]
     assert any("git push origin $(git branch --show-current)" in cmd for cmd in commands)
+
+
+def test_skill_runner_resolve_param_value_handles_variable_ir():
+    value = VariableIR(
+        reference="$outputs.s1_1_analyze_files.gitignore_recommendations",
+        source_type="context",
+        path=["outputs", "s1_1_analyze_files", "gitignore_recommendations"],
+    )
+
+    resolved = SkillRunner._resolve_param_value(value, workflow_params={})
+    assert resolved == "$outputs.s1_1_analyze_files.gitignore_recommendations"
+
+
+@pytest.mark.asyncio
+async def test_workspace_cleanup_gitignore_skill_does_not_fail_on_variable_ir_input(tmp_path: Path):
+    manager = TemplateManager(template_dir="spec-global")
+    template = manager.get_template("workflow.office.workspace_cleanup")
+    assert template is not None
+    gitignore_step = next(step for step in template.steps if step.id == "s2_1_update_gitignore")
+
+    shell_executor = MagicMock()
+    shell_executor.execute = AsyncMock(
+        return_value={"status": "completed", "return_code": 0, "stdout": "", "stderr": ""}
+    )
+
+    ctx = _make_ctx(
+        shell_executor=shell_executor,
+        params={"workspace_path": str(tmp_path)},
+        project_root=Path.cwd(),
+    )
+
+    runner = SkillRunner()
+    result = await runner.execute("wf-test", gitignore_step, ctx)
+
+    assert result.status == "success"
+    created_execution = ctx.store.create_task_execution.await_args.args[0]
+    assert created_execution.input_data["patterns_to_add"] == "$outputs.s1_1_analyze_files.gitignore_recommendations"
