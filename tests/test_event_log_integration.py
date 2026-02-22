@@ -266,3 +266,38 @@ class TestEventLogBasics:
         h2 = el._compute_hash(data)
         assert h1 == h2
         assert len(h1) == 16
+
+    def test_gate_event_helpers_cover_revise_and_flag(self):
+        """验证 gate helper 方法完整可用（包含 revise/flag/reject action）"""
+        from lee.orchestrator.storage.event_log import EventLog
+
+        el = EventLog(self.temp_dir, run_id="RUN-001")
+        el.log_gate_triggered("gate_s1", "s1", "human", True)
+        el.log_gate_rejected("gate_s1", "s1", "reviewer", "need changes", action="rollback")
+        el.log_gate_revised("gate_s1", "s1", "reviewer", "fix formatting")
+        el.log_gate_flagged("gate_s1", "s1", "reviewer", ["minor style issue"])
+
+        events = [e.to_dict() for e in el.get_events()]
+        assert [e["event_type"] for e in events] == [
+            "gate_triggered",
+            "gate_rejected",
+            "gate_revised",
+            "gate_flagged",
+        ]
+        assert events[1]["data"]["action"] == "rollback"
+        assert events[2]["data"]["reviewer"] == "reviewer"
+        assert events[3]["data"]["issues"] == ["minor style issue"]
+
+    def test_gate_wait_time_includes_revised_and_flagged(self):
+        """验证统计中的 gate_wait_times 支持 revised/flagged 终态"""
+        from lee.orchestrator.storage.event_log import EventLog, EventType
+
+        el = EventLog(self.temp_dir, run_id="RUN-001")
+        el.log_gate_triggered("gate_revised", "s1", "human", True)
+        el.log(EventType.GATE_REVISED, step_id="s1", data={"gate_id": "gate_revised"})
+        el.log_gate_triggered("gate_flagged", "s2", "human", True)
+        el.log(EventType.GATE_FLAGGED, step_id="s2", data={"gate_id": "gate_flagged"})
+
+        stats = el.get_statistics()
+        assert "gate_revised" in stats["gate_wait_times"]
+        assert "gate_flagged" in stats["gate_wait_times"]

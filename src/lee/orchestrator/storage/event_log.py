@@ -45,6 +45,8 @@ class EventType(Enum):
     GATE_TRIGGERED = "gate_triggered"
     GATE_APPROVED = "gate_approved"
     GATE_REJECTED = "gate_rejected"
+    GATE_REVISED = "gate_revised"
+    GATE_FLAGGED = "gate_flagged"
     GATE_TIMEOUT = "gate_timeout"
 
     # 产物事件
@@ -218,13 +220,49 @@ class EventLog:
             data={"gate_id": gate_id, "approver": approver, "approval_id": approval_id}
         )
 
-    def log_gate_rejected(self, gate_id: str, step_id: str, approver: str, reason: str) -> Event:
+    def log_gate_rejected(
+        self,
+        gate_id: str,
+        step_id: str,
+        approver: str,
+        reason: str,
+        action: Optional[str] = None,
+    ) -> Event:
         return self.log(
             EventType.GATE_REJECTED,
             step_id=step_id,
             actor="human",
             error=reason,
-            data={"gate_id": gate_id, "approver": approver}
+            data={"gate_id": gate_id, "approver": approver, "action": action}
+        )
+
+    def log_gate_revised(
+        self,
+        gate_id: str,
+        step_id: str,
+        reviewer: str,
+        reason: str,
+    ) -> Event:
+        return self.log(
+            EventType.GATE_REVISED,
+            step_id=step_id,
+            actor="human",
+            error=reason,
+            data={"gate_id": gate_id, "reviewer": reviewer}
+        )
+
+    def log_gate_flagged(
+        self,
+        gate_id: str,
+        step_id: str,
+        reporter: str,
+        issues: List[str],
+    ) -> Event:
+        return self.log(
+            EventType.GATE_FLAGGED,
+            step_id=step_id,
+            actor="human",
+            data={"gate_id": gate_id, "reporter": reporter, "issues": issues}
         )
 
     def log_token_issued(self, step_id: str, token_id: str, expires_at: str) -> Event:
@@ -317,7 +355,12 @@ class EventLog:
             if event.event_type == EventType.GATE_TRIGGERED:
                 gate_id = event.data.get("gate_id")
                 gate_triggers[gate_id] = event.timestamp
-            elif event.event_type in [EventType.GATE_APPROVED, EventType.GATE_REJECTED]:
+            elif event.event_type in [
+                EventType.GATE_APPROVED,
+                EventType.GATE_REJECTED,
+                EventType.GATE_REVISED,
+                EventType.GATE_FLAGGED,
+            ]:
                 gate_id = event.data.get("gate_id")
                 if gate_id in gate_triggers:
                     start = datetime.fromisoformat(gate_triggers[gate_id])
