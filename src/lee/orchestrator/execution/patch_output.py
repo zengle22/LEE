@@ -13,10 +13,13 @@ LEE Orchestrator — Patch Output Collector
 """
 
 import hashlib
+import logging
 import os
 import re
 from dataclasses import dataclass
 from typing import Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 from lee.runtime.worktree_manager import WorktreeManager
 
@@ -134,7 +137,10 @@ class PatchCollector:
                 content = f.read()
             calculated_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
             return calculated_hash == bundle.patch_hash
-        except Exception:
+        except Exception as e:
+            logger.debug(
+                f"Failed to verify patch hash for {bundle.patch_path}: {e}"
+            )
             return False
 
     def _parse_diff_stat(self, stat_content: str) -> Tuple[int, int, int]:

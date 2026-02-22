@@ -218,7 +218,11 @@ class ExecutorFactory:
 
             try:
                 return executor_class(**kwargs)
-            except Exception:
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug(
+                    f"Failed to create executor {executor_type}, trying mock fallback: {e}"
+                )
                 # Optional fallback to mock in demo mode
                 if use_mock:
                     return MockLLMExecutor(agent_id=kwargs.get("agent_id", ""))

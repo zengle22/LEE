@@ -496,8 +496,15 @@ class WorkflowStateMachine(IStateMachine):
         step_ids: list,
     ) -> None:
         """作废任务执行记录"""
-        # TODO: 实现批量更新 task_executions.status = 'invalidated'
-        pass
+        from datetime import datetime
+        # 批量更新 task_executions.status = 'invalidated'
+        for step_id in step_ids:
+            await self.store.execute_query("""
+                UPDATE task_executions
+                SET status = 'invalidated',
+                    invalidated_at = ?
+                WHERE workflow_id = ? AND step_name = ?
+            """, (datetime.utcnow(), workflow_id, step_id))
 
     async def _invalidate_gate_approvals(
         self,
@@ -505,8 +512,15 @@ class WorkflowStateMachine(IStateMachine):
         step_ids: list,
     ) -> None:
         """作废门禁审批记录"""
-        # TODO: 实现批量更新 gate_approvals.status = 'invalidated'
-        pass
+        from datetime import datetime
+        # 批量更新 gate_approvals.status = 'invalidated'
+        for step_id in step_ids:
+            await self.store.execute_query("""
+                UPDATE gate_approvals
+                SET status = 'invalidated',
+                    invalidated_at = ?
+                WHERE workflow_id = ? AND step_id = ?
+            """, (datetime.utcnow(), workflow_id, step_id))
 
     async def _clear_step_attempts(
         self,

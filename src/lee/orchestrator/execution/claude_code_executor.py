@@ -1061,6 +1061,28 @@ class ClaudeCodeExecutor(BaseExecutor):
             except json.JSONDecodeError:
                 pass
 
+        # 3. 如果仍然没有检测到错误，检查 result_text 中的错误模式
+        if not parsed["error"] and raw_output:
+            error_patterns = [
+                r"^Error:",  # 以 "Error:" 开头
+                r"^fatal:",  # 以 "fatal:" 开头
+                r"cannot be launched",  # 嵌套会话错误
+                r"Nested sessions",  # 嵌套会话错误
+                r"command not found",  # 命令未找到
+            ]
+
+            import re
+            for pattern in error_patterns:
+                if re.search(pattern, raw_output, re.MULTILINE | re.IGNORECASE):
+                    # 提取第一行作为错误摘要
+                    lines = raw_output.split('\n')
+                    for line in lines:
+                        line = line.strip()
+                        if line:
+                            parsed["error"] = line
+                            break
+                    break
+
         return parsed
 
     def _parse_result_object(
@@ -1101,6 +1123,26 @@ class ClaudeCodeExecutor(BaseExecutor):
         # 提取 result 文本
         result_text = data.get("result", "")
         parsed["result_text"] = result_text
+
+        # 检测 result_text 中的错误信息
+        # 有些情况下 Claude CLI 不会设置 is_error=True，但 result 中包含错误
+        if result_text and not parsed["error"]:
+            # 检查常见的错误模式
+            error_patterns = [
+                r"^Error:",  # 以 "Error:" 开头
+                r"^fatal:",  # 以 "fatal:" 开头
+                r"cannot be launched",  # 嵌套会话错误
+                r"Nested sessions",  # 嵌套会话错误
+                r"command not found",  # 命令未找到
+            ]
+
+            import re
+            for pattern in error_patterns:
+                if re.search(pattern, result_text, re.MULTILINE | re.IGNORECASE):
+                    # 提取第一行作为错误摘要
+                    first_line = result_text.split('\n')[0].strip()
+                    parsed["error"] = first_line
+                    break
 
         # 从 result 文本中提取嵌入的 JSON 代码块
         if result_text:

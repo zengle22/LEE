@@ -81,7 +81,11 @@ class ReceiptVerifier:
         try:
             receipt = ExecutionReceipt(**data)
             return self.verify(receipt)
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(
+                f"Failed to verify receipt from dict: {e}"
+            )
             return False
 
 

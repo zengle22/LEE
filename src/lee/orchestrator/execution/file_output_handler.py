@@ -626,7 +626,11 @@ class FileOutputHandler:
                 # 如果多文档解析失败，尝试单文档（向后兼容）
                 try:
                     yaml.safe_load(content)
-                except Exception:
+                except Exception as e2:
+                    import logging
+                    logging.getLogger(__name__).debug(
+                        f"Failed to parse YAML in multi-document or single-document mode: {e}, {e2}"
+                    )
                     raise ValueError(f"Invalid YAML format: {e}")
 
         elif format_type == "json":

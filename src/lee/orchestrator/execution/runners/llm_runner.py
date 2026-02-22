@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from lee.orchestrator.storage.models import (
     TaskExecution,
@@ -59,7 +60,11 @@ class LLMRunner(StepRunnerBase):
             )
             if contract_inputs:
                 workflow_context["contract_inputs"] = contract_inputs
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(
+                f"Contract discovery failed for template {instance.template_id}: {e}"
+            )
             pass  # 契约发现失败不阻塞执行
 
         # 1. 构建 Agent 执行上下文（包含 prompt）
@@ -275,6 +280,79 @@ class LLMRunner(StepRunnerBase):
 class ClaudeCodeRunner(StepRunnerBase):
     """Claude Code 步骤运行器"""
 
+    @staticmethod
+    def _get_success_criteria(step) -> Dict[str, Any]:
+        config = step.config or {}
+        criteria = config.get("success_criteria")
+        return criteria if isinstance(criteria, dict) else {}
+
+    @staticmethod
+    def _extract_commands_run(output: Dict[str, Any]) -> List[str]:
+        commands = output.get("commands_run", [])
+        if not isinstance(commands, list):
+            return []
+        result: List[str] = []
+        for item in commands:
+            if isinstance(item, dict):
+                cmd = item.get("cmd") or item.get("command")
+                if cmd:
+                    result.append(str(cmd))
+            elif isinstance(item, str):
+                result.append(item)
+        return result
+
+    @staticmethod
+    def _git_head(workspace: str) -> Optional[str]:
+        try:
+            proc = subprocess.run(
+                ["git", "-C", workspace, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if proc.returncode != 0:
+                return None
+            value = (proc.stdout or "").strip()
+            return value or None
+        except Exception:
+            return None
+
+    @classmethod
+    def _validate_success_criteria(
+        cls,
+        output: Dict[str, Any],
+        criteria: Dict[str, Any],
+        workspace: str,
+        head_before: Optional[str],
+    ) -> Optional[str]:
+        required_commands = criteria.get("require_commands") or criteria.get("required_commands") or []
+        if isinstance(required_commands, str):
+            required_commands = [required_commands]
+        if not isinstance(required_commands, list):
+            required_commands = []
+
+        commands_run = cls._extract_commands_run(output)
+        lowered = [cmd.lower() for cmd in commands_run]
+
+        missing: List[str] = []
+        for expected in required_commands:
+            expected_text = str(expected).strip().lower()
+            if not expected_text:
+                continue
+            if not any(expected_text in cmd for cmd in lowered):
+                missing.append(str(expected))
+        if missing:
+            return f"Missing required command(s): {', '.join(missing)}"
+
+        if bool(criteria.get("require_new_commit", False)):
+            head_after = cls._git_head(workspace)
+            if not head_before or not head_after:
+                return "Unable to verify git commit creation (HEAD unavailable)"
+            if head_before == head_after:
+                return f"No new commit detected (HEAD unchanged: {head_after[:8]})"
+
+        return None
+
     def can_handle(self, step_kind: str) -> bool:
         return step_kind == "claude_code"
 
@@ -315,6 +393,10 @@ class ClaudeCodeRunner(StepRunnerBase):
         # 3. 构建 claude_code 输入
         claude_config = step.config.get("claude_code", {}) if step.config else {}
         workspace = ctx.resolve_workdir(step, instance.data.get("run_id", workflow_id))
+        success_criteria = self._get_success_criteria(step)
+        head_before = None
+        if success_criteria.get("require_new_commit"):
+            head_before = self._git_head(workspace)
 
         input_data = {
             "goal": agent_ctx.user_prompt or claude_config.get("goal", ""),
@@ -457,6 +539,34 @@ class ClaudeCodeRunner(StepRunnerBase):
                     step_id=step.id,
                     workflow_id=workflow_id,
                     message=f"Claude Code execution failed: {error_msg}",
+                    output=output,
+                )
+
+            criteria_error = self._validate_success_criteria(
+                output=output,
+                criteria=success_criteria,
+                workspace=workspace,
+                head_before=head_before,
+            )
+            if criteria_error:
+                await ctx.state_machine.fail_step(workflow_id, step.id, criteria_error)
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    output_data=output,
+                    error_message=criteria_error,
+                    completed_at=datetime.now(),
+                )
+                ctx.event_log.log_step_failed(
+                    step_id=step.id,
+                    agent_id=step.agent_id or "claude_code",
+                    error=criteria_error,
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=f"Claude Code success criteria not met: {criteria_error}",
                     output=output,
                 )
 

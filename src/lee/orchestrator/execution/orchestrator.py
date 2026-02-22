@@ -35,6 +35,7 @@ from typing import Optional, List, Dict, Any
 from lee.orchestrator.storage.models import (
     WorkflowLevel,
     WorkflowStatus,
+    TaskExecutionStatus,
     WorkflowInstance,
     Step,
     WorkflowState,
@@ -386,19 +387,56 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
 
         # 自动启动工作流：如果状态是 PENDING，先转换为 RUNNING
         # 这样 get_ready_steps() 才能正确返回就绪步骤
+        reopened_from_failed = False
         if instance.status == WorkflowStatus.PENDING:
             await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
+            instance = await self.store.get_workflow(workflow_id)  # 刷新实例状态
+        elif instance.status == WorkflowStatus.FAILED:
+            # 允许通过 "继续工作流" 从失败状态重试未完成步骤。
+            # 先收敛遗留 running 记录，避免状态与执行记录不一致。
+            try:
+                await self.store.fail_running_task_executions(
+                    workflow_id,
+                    error_message="Workflow retry requested after failure",
+                )
+            except Exception:
+                pass
+            await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
+            reopened_from_failed = True
             instance = await self.store.get_workflow(workflow_id)  # 刷新实例状态
 
         # 获取可执行步骤
         ready_steps = await self.get_ready_steps(workflow_id)
 
         if not ready_steps:
+            # 提供更可诊断的无就绪步骤信息（尤其是失败场景）。
+            latest_failed_step = None
+            latest_failed_reason = None
+            if instance.status == WorkflowStatus.FAILED:
+                executions = await self.store.get_task_executions(workflow_id)
+                failed_exec = next(
+                    (
+                        exe for exe in reversed(executions)
+                        if exe.status == TaskExecutionStatus.FAILED
+                    ),
+                    None,
+                )
+                if failed_exec is not None:
+                    latest_failed_step = failed_exec.step_name
+                    latest_failed_reason = failed_exec.error_message
+
+            status_suffix = f"workflow_status={instance.status.value}"
+            if reopened_from_failed:
+                status_suffix += ", reopened_from_failed=true"
+            if latest_failed_step:
+                status_suffix += f", last_failed_step={latest_failed_step}"
+            if latest_failed_reason:
+                status_suffix += f", reason={latest_failed_reason}"
             return StepResult(
                 status="no_ready_step",
-                step_id=None,
+                step_id=latest_failed_step,
                 workflow_id=workflow_id,
-                message="No ready steps available",
+                message=f"No ready steps available ({status_suffix})",
             )
 
         # 选择要执行的步骤
@@ -869,8 +907,11 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
                 workflow_id,
                 error_message="Workflow paused; running step interrupted",
             )
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Failed to fail running tasks for workflow {workflow_id}: {e}"
+            )
 
     async def resume(
         self,

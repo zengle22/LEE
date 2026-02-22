@@ -12,6 +12,8 @@ LEE Orchestrator v3.0 - 模板管理器
 
 import os
 import yaml
+import logging
+import re
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
@@ -21,6 +23,8 @@ from lee.orchestrator.storage.models import (
     Step,
     Template,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ========================================================================
@@ -129,17 +133,28 @@ class WorkflowTemplate:
             ValueError: 如果 step_id 不在模板中
         """
         step_order = self.get_step_order()
-
-        try:
-            index = step_order.index(step_id)
-        except ValueError:
+        step_ids = {s.id for s in self.steps}
+        if step_id not in step_ids:
             raise ValueError(
                 f"Step '{step_id}' not found in workflow '{self.id}'. "
                 f"Available steps: {step_order}"
             )
 
-        # 返回 index 之后的所有步骤
-        return step_order[index + 1:]
+        # 仅返回“依赖于 step_id 的后继步骤”（传递闭包），而非拓扑顺序中所有后续步骤
+        descendants = set()
+        changed = True
+        while changed:
+            changed = False
+            for step in self.steps:
+                if step.id == step_id:
+                    continue
+                if step.id in descendants:
+                    continue
+                if step_id in step.depends_on or any(dep in descendants for dep in step.depends_on):
+                    descendants.add(step.id)
+                    changed = True
+
+        return [sid for sid in step_order if sid in descendants]
 
     def get_step_info(self, step_id: str) -> Optional[Step]:
         """
@@ -269,7 +284,7 @@ class TemplateManager:
                     templates[template_id] = template
                     self._cache[template_id] = template
             except Exception as e:
-                print(f"Warning: Failed to load {yaml_file}: {e}")
+                logger.warning("Failed to load %s: %s", yaml_file, e)
 
         # 2. 递归搜索子目录中的 workflow.yaml 文件
         for yaml_file in self.template_dir.rglob("workflow.yaml"):
@@ -286,11 +301,52 @@ class TemplateManager:
                             templates[template_id] = template
                             self._cache[template_id] = template
             except Exception as e:
-                print(f"Warning: Failed to load {yaml_file}: {e}")
+                logger.warning("Failed to load %s: %s", yaml_file, e)
 
         return templates
 
     # ============ 模板查询 ============
+
+    def list_workflows(self) -> List[str]:
+        """
+        List available workflow IDs.
+
+        Uses lightweight text scanning to avoid eagerly parsing every YAML file.
+        """
+        if not self.template_dir.exists():
+            return []
+
+        seen = set()
+        workflow_ids: List[str] = []
+
+        candidate_files = list(self.template_dir.glob("*.yaml")) + list(self.template_dir.rglob("workflow.yaml"))
+        for yaml_file in candidate_files:
+            try:
+                content = yaml_file.read_text(encoding="utf-8")
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug(
+                    f"Failed to read template file {yaml_file}: {e}"
+                )
+                continue
+
+            match = re.search(
+                r'(?m)^\s*id\s*:\s*["\']?([a-zA-Z0-9_.-]+)["\']?\s*$',
+                content,
+            )
+            if not match:
+                # Only fallback to stem for top-level files.
+                if yaml_file.name == "workflow.yaml":
+                    continue
+                candidate_id = yaml_file.stem
+            else:
+                candidate_id = match.group(1).strip()
+
+            if candidate_id and candidate_id not in seen:
+                seen.add(candidate_id)
+                workflow_ids.append(candidate_id)
+
+        return workflow_ids
 
     def get_template(self, template_id: str) -> Optional[WorkflowTemplate]:
         """
@@ -336,7 +392,11 @@ class TemplateManager:
                 for doc in docs:
                     if doc and doc.get("id") == template_id:
                         return self._load_template_from_file(yaml_file, template_id)
-            except Exception:
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug(
+                    f"Failed to parse workflow.yaml {yaml_file}: {e}"
+                )
                 continue
 
         return None
@@ -357,7 +417,7 @@ class TemplateManager:
                     self._cache[template.id] = template
                 return template
         except Exception as e:
-            print(f"Warning: Failed to load template {file_path}: {e}")
+            logger.warning("Failed to load template %s: %s", file_path, e)
         return None
 
     def _find_template_file(self, template_id: str) -> Optional[Path]:
@@ -396,7 +456,11 @@ class TemplateManager:
                     # 简单检查 ID 是否在文件中
                     if f"id: {template_id}" in content:
                         return workflow_file
-            except Exception:
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug(
+                    f"Failed to read workflow file {workflow_file}: {e}"
+                )
                 pass
 
         return None
@@ -598,7 +662,9 @@ class TemplateManager:
         kind = doc.get("kind", "")
 
         # spec-global 格式检测
-        if kind == "workflow" and "stages" in doc:
+        # 检查 stages 是否在顶层或在 overview 下
+        has_stages = "stages" in doc or "stages" in doc.get("overview", {})
+        if kind == "workflow" and has_stages:
             # 使用 spec-global 解析器
             return self._parse_spec_global_format(doc, template_id, file_path)
 
@@ -742,6 +808,7 @@ class TemplateManager:
             input=step_dict.get("input", {}),
             outputs=outputs,
             config=step_dict.get("config", {}),
+            on_failure=step_dict.get("on_failure", (step_dict.get("config", {}) or {}).get("on_failure")),
         )
 
     def _parse_step(self, step_data: Dict[str, Any]) -> Step:
@@ -899,6 +966,7 @@ class TemplateManager:
                 subworkflow_ref=subworkflow_ref,
                 subworkflow_level=subworkflow_level,
             ),
+            on_failure=step_data.get("on_failure"),
         )
 
     def _build_step_config(
@@ -971,6 +1039,10 @@ class TemplateManager:
         # 添加成功后执行的步骤
         if "on_success" in step_data:
             config["on_success"] = step_data["on_success"]
+        if "on_failure" in step_data:
+            config["on_failure"] = step_data["on_failure"]
+        if "success_criteria" in step_data:
+            config["success_criteria"] = step_data["success_criteria"]
 
         return config
 

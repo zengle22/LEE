@@ -35,6 +35,7 @@ from lee.orchestrator.ir.models import (
     StepOutputIR,
     VariableIR,
 )
+from lee.orchestrator.execution.variable_resolver import VariableResolver
 
 
 class SpecGlobalParser:
@@ -57,10 +58,43 @@ class SpecGlobalParser:
         """
         self.workflow_base_dir = Path(workflow_base_dir) if workflow_base_dir else None
         self.version = "1.0"
+        self._variable_resolver = VariableResolver()
 
     # ========================================================================
     # 主解析方法
     # ========================================================================
+
+    def _parse_value(self, value: Any) -> Any:
+        """
+        解析值，判断是变量引用还是常量
+
+        Args:
+            value: 原始值（字符串、字典、列表等）
+
+        Returns:
+            解析后的值（VariableIR 或常量）
+        """
+        # 如果是字符串，检查是否是变量引用
+        if isinstance(value, str):
+            # 检查是否是 $inputs.xxx, $sX_yyy, $context.xxx 格式
+            if value.startswith("$"):
+                try:
+                    return self._variable_resolver.parse_reference(value)
+                except ValueError:
+                    # 如果解析失败，作为常量返回
+                    return value
+            # 检查是否是 "external" 特殊值（spec-global 格式的外部输入）
+            elif value == "external":
+                # external 表示从工作流的 data 字段获取输入
+                # 返回一个特殊的 VariableIR
+                return VariableIR(
+                    reference="$inputs.external",
+                    source_type="inputs",
+                    path=["external"],
+                )
+            return value
+        # 如果是字典或列表，保持不变
+        return value
 
     def parse_workflow_file(self, file_path: str) -> WorkflowIR:
         """
@@ -392,14 +426,26 @@ class SpecGlobalParser:
             StepIR 对象
         """
         # 推断步骤类型（兼容 type/kind 两种写法）
+        # 优先级：
+        # 1) 显式 kind/type
+        # 2) 显式结构字段（subworkflow/skill/gate）
+        # 3) run 前缀（run: skill.* / agent.* / workflow.*）
         step_type = step_data.get("kind") or step_data.get("type")
         if not step_type:
+            run_ref_for_infer = step_data.get("run")
             if "subworkflow" in step_data or "workflow" in step_data:
                 step_type = "subworkflow"
             elif "skill" in step_data:
                 step_type = "skill"
             elif "gate" in step_data:
                 step_type = "human_gate"
+            elif isinstance(run_ref_for_infer, str):
+                if run_ref_for_infer.startswith("skill."):
+                    step_type = "skill"
+                elif run_ref_for_infer.startswith("workflow."):
+                    step_type = "subworkflow"
+                else:
+                    step_type = "agent"
             else:
                 step_type = "agent"
 
@@ -524,6 +570,10 @@ class SpecGlobalParser:
             step_config["verifiers"] = step_data.get("verifiers")
         if "verify" in step_data:
             step_config["verifiers"] = step_data.get("verify")
+        if "success_criteria" in step_data:
+            step_config["success_criteria"] = step_data.get("success_criteria")
+        if "on_failure" in step_data:
+            step_config["on_failure"] = step_data.get("on_failure")
 
         return StepIR(
             id=step_data["id"],
@@ -550,25 +600,55 @@ class SpecGlobalParser:
         解析步骤输入
 
         支持多种格式:
-        1. 字典格式: - key: value
-        2. 纯字符串格式: - value (自动生成名称)
+        1. spec-global 格式: - source: step_id, type: [...], required: true
+        2. 简化变量格式: - step_id (source 引用)
+        3. 纯字符串格式: - value (自动生成名称)
         """
         inputs = []
         for input_item in inputs_data:
             if isinstance(input_item, dict):
-                # 字典格式: - key: value
-                for key, value in input_item.items():
+                # 检查是否是 spec-global 格式的输入定义
+                # 包含 source 字段的是 spec-global 格式
+                if "source" in input_item:
+                    # spec-global 格式: source 是主要字段
+                    source = input_item["source"]
+                    if (
+                        isinstance(source, str)
+                        and source
+                        and not source.startswith("$")
+                        and "{{" not in source
+                    ):
+                        source = f"${source}"
+                    # 创建一个名为 source 的输入，值为 VariableIR
                     inputs.append(StepInputIR(
-                        name=key,
-                        value=value,
-                        required=True,
+                        name="source",
+                        value=self._parse_value(source),  # 解析为变量引用
+                        required=input_item.get("required", True),
                     ))
+                    # 同时保存 type 和其他元数据到 config
+                    # 注意：这里不再为 type 和 required 创建单独的输入
+                elif "name" in input_item and "value" in input_item:
+                    # 明确的 name/value 格式
+                    inputs.append(StepInputIR(
+                        name=input_item["name"],
+                        value=self._parse_value(input_item["value"]),
+                        required=input_item.get("required", True),
+                    ))
+                else:
+                    # 兼容旧格式：字典格式 - key: value
+                    # 遍历字典的所有键值对
+                    for key, value in input_item.items():
+                        inputs.append(StepInputIR(
+                            name=key,
+                            value=self._parse_value(value),
+                            required=True,
+                        ))
             elif isinstance(input_item, str):
-                # 纯字符串格式: - value
+                # 纯字符串格式: - value (可能是变量引用)
                 # 使用值本身作为名称
                 inputs.append(StepInputIR(
                     name=input_item,  # 或使用生成的名称
-                    value=input_item,
+                    value=self._parse_value(input_item),
                     required=True,
                 ))
             else:
