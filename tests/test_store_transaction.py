@@ -131,22 +131,23 @@ class TestTransactionRollback:
 
     async def test_transaction_rollback_partial(self, db_store):
         """测试部分操作失败时的回滚"""
-        async with db_store.transaction() as cursor:
-            # 插入第一条记录
-            await cursor.execute("""
-                INSERT INTO workflow_instances
-                (id, level, template_id, status, current_step, data, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, ("test_wf_1", "task", "test_template", "running", None, "{}",
-                "2026-02-19T10:00:00", "2026-02-19T10:00:00"))
+        with pytest.raises(Exception):
+            async with db_store.transaction() as cursor:
+                # 插入第一条记录
+                await cursor.execute("""
+                    INSERT INTO workflow_instances
+                    (id, level, template_id, status, current_step, data, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, ("test_wf_1", "task", "test_template", "running", None, "{}",
+                    "2026-02-19T10:00:00", "2026-02-19T10:00:00"))
 
-            # 尝试插入重复 ID（会失败）
-            await cursor.execute("""
-                INSERT INTO workflow_instances
-                (id, level, template_id, status, current_step, data, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, ("test_wf_1", "task", "test_template", "running", None, "{}",
-                "2026-02-19T10:00:00", "2026-02-19T10:00:00"))
+                # 尝试插入重复 ID（会失败）
+                await cursor.execute("""
+                    INSERT INTO workflow_instances
+                    (id, level, template_id, status, current_step, data, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, ("test_wf_1", "task", "test_template", "running", None, "{}",
+                    "2026-02-19T10:00:00", "2026-02-19T10:00:00"))
 
         # 两条记录都应该失败
         wf = await db_store.get_workflow("test_wf_1")

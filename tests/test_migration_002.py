@@ -8,7 +8,7 @@ import pytest
 import sqlite3
 import tempfile
 from pathlib import Path
-from lee.orchestrator.storage.migrations import migration_002_gate_actions_v1_1 as migration
+from lee.orchestrator.storage.migrations import migration_002_gate_actions as migration
 
 
 @pytest.fixture
@@ -127,7 +127,7 @@ class TestMigrationUpgrade:
         cursor.execute("SELECT version FROM gate_approvals WHERE workflow_id=?", ("wf_1",))
         version = cursor.fetchone()
 
-        assert version == 1, f"Version should default to 1, got {version}"
+        assert version and version[0] == 1, f"Version should default to 1, got {version}"
 
         conn.close()
 

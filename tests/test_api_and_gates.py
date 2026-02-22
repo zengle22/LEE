@@ -238,6 +238,57 @@ async def test_gate_workflow_lifecycle():
 
 
 @pytest.mark.asyncio
+async def test_run_step_can_continue_after_failed_state():
+    """FAILED 状态下，继续执行应自动恢复为 RUNNING 并重试后续步骤。"""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
+        db_path = tmp.name
+
+        try:
+            store = SQLiteStore(db_path)
+            await store.connect()
+
+            tm = TemplateManager()
+            tm._cache["retry_from_failed_workflow"] = tm._parse_template_doc(
+                {
+                    "id": "retry_from_failed_workflow",
+                    "level": "task",
+                    "name": "Retry From Failed",
+                    "steps": [
+                        {
+                            "id": "step_1",
+                            "kind": "skill",
+                            "executor": "shell",
+                        },
+                    ],
+                },
+                "retry_from_failed_workflow",
+            )
+
+            orchestrator = Orchestrator(store, tm)
+            workflow = await orchestrator.create_workflow(
+                level=WorkflowLevel.TASK,
+                template_id="retry_from_failed_workflow",
+            )
+
+            await store.update_workflow_status(workflow.id, WorkflowStatus.FAILED)
+            result = await orchestrator.run_step(workflow.id)
+
+            assert result.status == "success"
+            assert result.step_id == "step_1"
+
+            state = await orchestrator.get_state(workflow.id)
+            assert state.status == WorkflowStatus.COMPLETED
+
+            await store.close()
+        finally:
+            try:
+                if os.path.exists(db_path):
+                    os.unlink(db_path)
+            except PermissionError:
+                pass
+
+
+@pytest.mark.asyncio
 async def test_gate_rejection():
     """测试 Gate 拒绝流程"""
     print_section("测试 3: Gate 拒绝流程")

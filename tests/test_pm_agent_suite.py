@@ -34,8 +34,9 @@ def test_list_active(tmp_path):
 # --- Runtime Tests ---
 
 from unittest.mock import MagicMock, AsyncMock
-from lee.orchestrator.execution.pm_agent_runtime import PMAgentRuntime, ProgressReport
+from lee.orchestrator.execution.pm_agent_runtime import PMAgentRuntime, ProgressReport, CompiledParams
 from lee.orchestrator.execution.orchestrator import Orchestrator
+from lee.orchestrator.execution.pm_agent.models import APIResponse
 
 @pytest.fixture
 def runtime_env():
@@ -92,3 +93,94 @@ async def test_amend_workflow(runtime_env):
     assert success
     store.update_workflow_data.assert_awaited_once()
     assert wf.data["params"] == {"a": 1, "b": 2}
+
+
+@pytest.mark.asyncio
+async def test_process_input_persists_template_resolution_history(tmp_path):
+    store = MagicMock()
+    orchestrator = MagicMock(spec=Orchestrator)
+    orchestrator.store = store
+    runtime = PMAgentRuntime(
+        orchestrator=orchestrator,
+        llm_executor=None,
+        store=store,
+        project_dir=str(tmp_path),
+        enable_decision_engine=False,
+    )
+
+    runtime.compile_prompt = AsyncMock(return_value=CompiledParams(
+        workflow_ref="workflow.office.workspace_cleanup",
+        params={
+            "action": "run_workflow",
+            "template_id": "workflow.office.workspace_cleanup",
+            "template_input": "workspace_cleanup",
+            "template_resolved": "workflow.office.workspace_cleanup",
+        },
+        confidence=0.95,
+        reasoning="test",
+        action="run_workflow",
+        allowed=True,
+        denial_reason=None,
+    ))
+    runtime.execute_decision = AsyncMock(return_value=APIResponse(
+        status="success",
+        data={
+            "workflow_id": "wf_task_123",
+            "template_id": "workflow.office.workspace_cleanup",
+            "template_input": "workspace_cleanup",
+            "template_resolved": "workflow.office.workspace_cleanup",
+        },
+        error=None,
+        action="run_workflow",
+    ))
+
+    await runtime.process_input("全新运行工作流workspace_cleanup", session_id="sess_template")
+    state = runtime.session_manager.restore("sess_template")
+
+    assert state is not None
+    assert state.run_id == "wf_task_123"
+    assert state.history_summary == "1 turns"
+    assert state.metadata.get("last_template_resolution") == {
+        "input": "workspace_cleanup",
+        "resolved": "workflow.office.workspace_cleanup",
+    }
+    history = state.metadata.get("interaction_history", [])
+    assert len(history) == 1
+    assert history[0]["action"] == "run_workflow"
+    assert history[0]["template_resolution"]["resolved"] == "workflow.office.workspace_cleanup"
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_context_loads_interaction_history(tmp_path):
+    store = MagicMock()
+    orchestrator = MagicMock(spec=Orchestrator)
+    orchestrator.store = store
+    runtime = PMAgentRuntime(
+        orchestrator=orchestrator,
+        llm_executor=None,
+        store=store,
+        project_dir=str(tmp_path),
+        enable_decision_engine=False,
+    )
+
+    state = SessionState(
+        session_id="sess_restore",
+        run_id="wf_task_9",
+        last_active_timestamp=time.time(),
+        history_summary="2 turns",
+        metadata={
+            "department": "office",
+            "user_permissions": ["lee.workflow.run"],
+            "interaction_history": [
+                {"user_input": "a", "action": "get_state", "status": "success"},
+                {"user_input": "b", "action": "run_workflow", "status": "success"},
+            ],
+        },
+    )
+    runtime.session_manager.save("sess_restore", state)
+
+    context = await runtime._get_or_create_context("sess_restore")
+    assert context.current_workflow_id == "wf_task_9"
+    assert context.department == "office"
+    assert len(context.history) == 2
+    assert context.history[-1]["action"] == "run_workflow"
