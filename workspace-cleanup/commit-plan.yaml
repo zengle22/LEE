@@ -1,320 +1,445 @@
-# Git Atomic Commit Plan
-# Generated: 2026-02-20
-# Workspace: /Users/zengle/git/ai/lee
-# Mode: plan
+# Git 原子化提交计划
+# 生成时间: 2026-02-22
+# 模式: plan
 
 version: "2.0"
-generated_date: "2026-02-20"
+generated_date: "2026-02-22"
 workspace_path: "/Users/zengle/git/ai/lee"
-total_commits: 15
+total_commits: 13
 
 # ============================================
-# Commit Plan Summary
+# 提交计划摘要
 # ============================================
 summary:
-  total_changes: 19 files
-  files_modified: 13
+  total_changes: 95
+  files_modified: 35
   files_deleted: 1
-  files_added: 5
-  estimated_commits: 15
+  files_added: 59
+  estimated_commits: 13
   commit_strategy: "atomic_by_category"
-  lines_added: 1280
-  lines_removed: 1023
-  net_change: +257
+  lines_added: 3654
+  lines_removed: 2630
+  net_change: +1024
 
 # ============================================
-# Atomic Commits
+# 原子化提交
 # ============================================
 commits:
-  # Commit 1: 新增技术债报告
+  # 提交 1: PM Agent Decision Engine 架构重构
   - id: "commit-001"
     order: 1
-    type: "docs"
-    scope: "tech-debt"
-    title: "docs: add technical debt report for 2026-02-20"
+    type: "feat"
+    scope: "pm-agent"
+    title: "feat(pm-agent): implement Decision Engine architecture"
     description: |
-      Add comprehensive technical debt analysis report including:
-      - Code quality issues (type annotations, code duplication, error handling)
-      - Documentation gaps
-      - Architecture concerns (coupling, boundaries)
-      - Testing coverage gaps
-      - Configuration and security issues
-      - Performance and dependency concerns
-      - Prioritized recommendations and roadmap
-    files:
-      added:
-        - "tech-debt/tech-debt-2026-02-20.md"
-        - "tech-debt/tech-debt-2026-02-20.yaml"
+      Refactor PM Agent to use new Decision Engine architecture with proper separation of concerns:
 
-  # Commit 2: gates 命令增强 - 添加列表和详情功能
+      Core Components:
+      - Intent Classifier - Natural language intent classification
+      - Permission Checker - Permission validation
+      - Param Mapper - Parameter mapping and compilation
+      - Decision Engine - Decision orchestration
+      - API Wrapper - Unified API interface
+      - Security Manager - Security management
+      - Models - Data model definitions
+
+      Architecture Improvements:
+      - Clear separation of concerns
+      - Better testability
+      - Plugin-style extensibility
+      - Backward compatibility with existing code
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    files:
+      modified:
+        - "src/lee/orchestrator/execution/pm_agent_runtime.py"
+      added:
+        - "src/lee/orchestrator/execution/pm_agent/__init__.py"
+        - "src/lee/orchestrator/execution/pm_agent/api_wrapper.py"
+        - "src/lee/orchestrator/execution/pm_agent/cache.py"
+        - "src/lee/orchestrator/execution/pm_agent/config.py"
+        - "src/lee/orchestrator/execution/pm_agent/decision_engine.py"
+        - "src/lee/orchestrator/execution/pm_agent/exceptions.py"
+        - "src/lee/orchestrator/execution/pm_agent/intent_classifier.py"
+        - "src/lee/orchestrator/execution/pm_agent/models.py"
+        - "src/lee/orchestrator/execution/pm_agent/param_mapper.py"
+        - "src/lee/orchestrator/execution/pm_agent/permission_checker.py"
+        - "src/lee/orchestrator/execution/pm_agent/security.py"
+
+  # 提交 2: Chat CLI 命令增强
   - id: "commit-002"
     order: 2
     type: "feat"
-    scope: "gates"
-    title: "feat(gates): add list and details commands for gate management"
+    scope: "chat"
+    title: "feat(chat): enhance Chat CLI with Decision Engine integration"
     description: |
-      Enhance the gates command group with new functionality:
-      - Add `gates list` command to show pending gates for a workflow
-      - Add `gates show` command to display detailed gate information
-      - Add `gates decide` alias command for backward compatibility
-      - Add helper functions for loading gates from database
-      - Add safe JSON parsing for gate metadata
-      - Improve gate details formatting
+      Improve lee chat command user experience and functionality:
+
+      Features:
+      - Integrate new Decision Engine architecture
+      - Add timestamp output for all messages
+      - Add command history support with FileHistory
+      - Add auto-suggestion from history
+      - Improve template discovery mechanism
+      - Add session management
+      - Improve error handling and user feedback
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
     files:
       modified:
-        - "src/lee/cli/commands/gates_cmd.py"
+        - "src/lee/cli/commands/chat.py"
 
-  # Commit 3: gates 命令测试
+  # 提交 3: Orchestrator API 改进
   - id: "commit-003"
     order: 3
-    type: "test"
-    scope: "gates"
-    title: "test(gates): add tests for gates decide command"
+    type: "feat"
+    scope: "orchestrator"
+    title: "feat(orchestrator): enhance Orchestrator API interface"
     description: |
-      Add comprehensive tests for the gates decide command:
-      - Test basic command execution
-      - Test database state preparation
-      - Test gate loading and display
-      - Test approval criteria parsing
-      - Test reviewer information handling
-    files:
-      added:
-        - "tests/test_gates_decide_command.py"
+      Enhance Orchestrator public API:
 
-  # Commit 4: run 命令门禁循环支持
+      Improvements:
+      - Add API Contract definitions
+      - Improve error handling
+      - Add richer status returns
+      - Improve workflow query interface
+      - Add batch operation support
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    files:
+      modified:
+        - "src/lee/orchestrator/api/__init__.py"
+      added:
+        - "src/lee/orchestrator/api/contract.py"
+
+  # 提交 4: Gate 和 Watch 命令增强
   - id: "commit-004"
     order: 4
     type: "feat"
-    scope: "run"
-    title: "feat(run): add gate wait loop for interactive decision support"
+    scope: "commands"
+    title: "feat(commands): enhance Gates and Watch command functionality"
     description: |
-      Enhance run command to support gate wait loops:
-      - Add `_get_gate_wait_snapshot()` to read current gate state
-      - Add `_wait_for_gate_resolution()` to wait for human decisions
-      - Add `_run_until_settled_with_gates()` for full execution with gates
-      - Support concurrent terminal usage (run in one, gates in another)
-      - Add TERMINAL_WORKFLOW_STATUSES constant
-      - Improve status monitoring and heartbeat display
+      Improve command-line tool user experience:
+
+      gates_cmd:
+      - Improve output formatting
+      - Add more detailed status information
+      - Optimize error prompts
+
+      watch:
+      - Improve file monitoring logic
+      - Optimize output display
+      - Add progress feedback
+
+      approve:
+      - Improve approval workflow
+      - Add confirmation prompts
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
     files:
       modified:
-        - "src/lee/cli/commands/run.py"
+        - "src/lee/cli/commands/gates_cmd.py"
+        - "src/lee/cli/commands/watch.py"
+        - "src/lee/cli/commands/approve.py"
 
-  # Commit 5: run 命令门禁循环测试
+  # 提交 5: 执行器层改进
   - id: "commit-005"
     order: 5
-    type: "test"
-    scope: "run"
-    title: "test(run): add tests for gate loop functionality"
+    type: "feat"
+    scope: "execution"
+    title: "feat(execution): enhance executor layer functionality"
     description: |
-      Add tests for the new gate loop functionality:
-      - Test `_run_until_settled_with_gates()` waiting behavior
-      - Test gate snapshot retrieval
-      - Test status transition from blocked to completed
-      - Test pending gates detection
-      - Mock gate resolution for testing
-    files:
-      added:
-        - "tests/test_run_command_gate_loop.py"
+      Enhance various executors:
 
-  # Commit 6: CLI 锁策略更新支持 gates 命令
+      Improvements:
+      - Claude Code Executor - Add Claude Code integration
+      - LLM Runner - Improve LLM calls and error handling
+      - Shell Runner - Enhance command execution and output processing
+      - Spec Global Parser - Improve spec parsing
+      - State Machine - Optimize state transitions
+      - Template Manager - Improve template management
+      - Patch Output - Improve patch output handling
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    files:
+      modified:
+        - "src/lee/orchestrator/execution/claude_code_executor.py"
+        - "src/lee/orchestrator/execution/executors.py"
+        - "src/lee/orchestrator/execution/file_output_handler.py"
+        - "src/lee/orchestrator/execution/llm_executor.py"
+        - "src/lee/orchestrator/execution/orchestrator.py"
+        - "src/lee/orchestrator/execution/patch_output.py"
+        - "src/lee/orchestrator/execution/receipt.py"
+        - "src/lee/orchestrator/execution/runners/llm_runner.py"
+        - "src/lee/orchestrator/execution/runners/shell_runner.py"
+        - "src/lee/orchestrator/execution/spec_global_parser.py"
+        - "src/lee/orchestrator/execution/state_machine.py"
+        - "src/lee/orchestrator/execution/template_manager.py"
+
+  # 提交 6: 存储层改进
   - id: "commit-006"
     order: 6
     type: "feat"
-    scope: "cli"
-    title: "feat(cli): allow gates commands to run concurrently with lee run"
+    scope: "storage"
+    title: "feat(storage): enhance storage layer with Gate Actions"
     description: |
-      Update CLI lock policy to support gate management during workflow execution:
-      - Rename READ_ONLY_COMMANDS to NON_BLOCKING_COMMANDS
-      - Add "gates" and "approve" to non-blocking commands
-      - Update documentation to explain the concurrency model
-      - Allow `lee gates/approve` in one terminal while `lee run` blocks
+      Improve data persistence:
+
+      Changes:
+      - Add Gate Actions support
+      - Update data models
+      - Improve SQLite storage
+      - Add transaction support
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    files:
+      modified:
+        - "src/lee/orchestrator/storage/models.py"
+        - "src/lee/orchestrator/storage/sqlite_store.py"
+        - "src/lee/orchestrator/storage/migrations/migration_002_gate_actions.py"
+
+  # 提交 7: CLI 主入口和工具函数改进
+  - id: "commit-007"
+    order: 7
+    type: "feat"
+    scope: "cli"
+    title: "feat(cli): improve CLI main entry and utilities"
+    description: |
+      Optimize command-line interface:
+
+      Changes:
+      - Improve main entry logic
+      - Optimize command registration
+      - Improve error handling
+      - IR converter enhancements
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
     files:
       modified:
         - "src/lee/cli/main.py"
+        - "src/lee/orchestrator/ir/converter.py"
 
-  # Commit 7: CLI 锁策略测试更新
-  - id: "commit-007"
-    order: 7
-    type: "test"
-    scope: "cli"
-    title: "test(cli): add tests for gates command lock policy"
-    description: |
-      Add tests to verify gates commands don't require CLI lock:
-      - Test `gates list` doesn't require lock
-      - Test `approve` alias doesn't require lock
-      - Ensure concurrent execution model works correctly
-    files:
-      modified:
-        - "tests/test_cli_lock_policy.py"
-
-  # Commit 8: Agent 规范文件修复
+  # 提交 8: PM Agent 完整文档
   - id: "commit-008"
     order: 8
-    type: "fix"
-    scope: "specs"
-    title: "fix(specs): fix agent YAML skills syntax and add missing fields"
+    type: "docs"
+    scope: "pm-agent"
+    title: "docs(pm-agent): add comprehensive PM Agent documentation"
     description: |
-      Fix agent specification YAML files:
-      - Add missing `skills:` root key to icon-generator agent
-      - Add missing `skills:` root key to prototype-designer agent
-      - Add missing `skills:` root key to phase-acceptance gate
-      - Add `only_changed` input parameter to doc-organizer agent
-      - Update doc-organizer to support incremental mode
-      - Update business-opportunity-builder agent skills reference
-    files:
-      modified:
-        - "spec-global/departments/ui/agents/icon-generator/v1/agent.yaml"
-        - "spec-global/departments/ui/agents/prototype-designer/v1/agent.yaml"
-        - "spec-global/departments/office/gates/phase-acceptance/v1/agent.yaml"
-        - "spec-global/departments/office/agents/doc-organizer/v1/agent.yaml"
-        - "spec-global/departments/stg/agents/business-opportunity-builder/v1/agent.yaml"
+      Add comprehensive documentation for PM Agent:
 
-  # Commit 9: Agent loader YAML 解析错误增强
-  - id: "commit-009"
-    order: 9
-    type: "feat"
-    scope: "loader"
-    title: "feat(loader): enhance YAML parsing error detection for Jinja tags"
-    description: |
-      Improve agent loader error reporting:
-      - Detect unrendered Jinja control tags ({% ... %})
-      - Provide helpful error messages when Jinja syntax is found
-      - Read raw text first for better error context
-      - Maintain backward compatibility with existing error handling
-    files:
-      modified:
-        - "src/lee/orchestrator/execution/agent_loader.py"
+      User Guides:
+      - API Reference Manual
+      - Quick Start Guide
+      - Usage Examples
+      - LLM Setup Guide
+      - Performance Optimization Guide
+      - Security Guide
+      - Implementation Summary
+      - Project Completion Summary
 
-  # Commit 10: Agent 规范验证测试
-  - id: "commit-010"
-    order: 10
-    type: "test"
-    scope: "specs"
-    title: "test(specs): add agent spec YAML validation tests"
-    description: |
-      Add comprehensive tests for agent specification validation:
-      - Test all agent specs are valid YAML
-      - Test office agent specs have no Jinja control tags
-      - Ensure specs are parseable and well-formed
+      Architecture Docs:
+      - LEE API Architecture
+      - LEE Modification Plan
+
+      Technical Docs:
+      - Improvement Plan
+      - Refactoring Execution Plan
+      - Technical Debt Tracking
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
     files:
       added:
-        - "tests/test_agent_specs_yaml_parseable.py"
-        - "tests/test_office_agent_specs_sanity.py"
+        - "docs/features/pm-agent/API-REFERENCE.md"
+        - "docs/features/pm-agent/EXAMPLES.md"
+        - "docs/features/pm-agent/LLM-SETUP-GUIDE.md"
+        - "docs/features/pm-agent/PERFORMANCE-GUIDE.md"
+        - "docs/features/pm-agent/PM-AGENT-IMPLEMENTATION-SUMMARY.md"
+        - "docs/features/pm-agent/PROJECT-COMPLETION-SUMMARY.md"
+        - "docs/features/pm-agent/QUICKSTART.md"
+        - "docs/features/pm-agent/SECURITY-GUIDE.md"
+        - "docs/features/pm-agent/guides/"
+        - "docs/features/pm-agent/reports/"
+        - "docs/features/lee-chat/"
+        - "docs/architecture/LEE-API-ARCHITECTURE.md"
+        - "docs/architecture/LEE-MODIFICATION-PLAN.md"
+        - "docs/development/"
+        - "docs/technical/analysis/IMPROVEMENT_PLAN.md"
+        - "docs/technical/projects/REFACTORING_EXECUTION_PLAN.md"
+        - "docs/technical/reports/"
+        - "docs/technical/test-reports/"
+      deleted:
+        - "docs/03-编辑与运行方案.md"
 
-  # Commit 11: workspace-cleanup 工作流更新
+  # 提交 9: 测试套件新增和更新
+  - id: "commit-009"
+    order: 9
+    type: "test"
+    scope: "tests"
+    title: "test: add and update comprehensive test suite"
+    description: |
+      Add comprehensive test coverage:
+
+      New Tests:
+      - PM Agent test suite
+      - Claude Code Runner validation tests
+      - Gates reference resolution tests
+      - Orchestrator API contract tests
+      - PM Workflow lifecycle tests
+      - Skill Runner tests
+
+      Updated Tests:
+      - Chat command tests
+      - PM Agent suite tests
+      - Migration tests
+      - Store transaction tests
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    files:
+      modified:
+        - "tests/test_chat_command.py"
+        - "tests/test_migration_002.py"
+        - "tests/test_pm_agent_suite.py"
+        - "tests/test_store_transaction.py"
+      added:
+        - "tests/pm_agent/"
+        - "tests/test_claude_code_runner_validation.py"
+        - "tests/test_gates_ref_resolution.py"
+        - "tests/test_orchestrator_api_contract.py"
+        - "tests/test_pm_workflow_handler_lifecycle.py"
+        - "tests/test_skill_runner.py"
+
+  # 提交 10: 示例和调试工具
+  - id: "commit-010"
+    order: 10
+    type: "chore"
+    scope: "tools"
+    title: "chore: add example and debug tools"
+    description: |
+      Add development helper tools:
+
+      Tools:
+      - PM Agent demo script
+      - PM Agent quick test
+      - Debug scripts
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    files:
+      added:
+        - "examples/pm_agent_demo.py"
+        - "test_pm_agent_quick.py"
+        - "debug_decision.py"
+        - "debug_pm_agent.py"
+
+  # 提交 11: 工作流和配置文件更新
   - id: "commit-011"
     order: 11
-    type: "feat"
-    scope: "workflow"
-    title: "feat(workflow): optimize workspace-cleanup for incremental execution"
+    type: "chore"
+    scope: "config"
+    title: "chore: update workflow and configuration files"
     description: |
-      Update workspace-cleanup workflow for better efficiency:
-      - Remove redundant push confirmation gate (auto-push after approval)
-      - Update state machine triggers for simplified flow
-      - Add only_changed parameter to doc-organizer step
-      - Update commit-plan with version 2.0 format
-      - Update file-analysis and doc-organization outputs
-      - Clean up intermediate gates
+      Update workflow definitions and configuration:
+
+      Changes:
+      - Workspace cleanup workflow
+      - LLM configuration adjustments
+      - Intent classifier configuration
+      - Document organization configuration
+      - File analysis reports
+      - Project configuration updates
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
     files:
       modified:
         - "spec-global/departments/office/workflows/workspace-cleanup/v1/workflow.yaml"
-        - "workspace-cleanup/commit-plan.yaml"
-        - "workspace-cleanup/file-analysis.yaml"
+        - "config/llm_config.yaml"
         - "workspace-cleanup/doc-organization.yaml"
+        - "workspace-cleanup/file-analysis.yaml"
+        - "pyproject.toml"
+        - ".claude/settings.local.json"
+        - ".lee/cli.lock"
+      added:
+        - "config/intent_classifier.yaml"
+        - "workspace-cleanup/doc-organization-report-2026-02-22.md"
+        - "workspace-cleanup/commit-history.yaml"
 
-  # Commit 12: 文档更新 - GATE_MANAGEMENT_GUIDE
+  # 提交 12: 技术债务追踪
   - id: "commit-012"
     order: 12
-    type: "docs"
-    scope: "gates"
-    title: "docs(gates): update GATE_MANAGEMENT_GUIDE with workspace-cleanup info"
+    type: "chore"
+    scope: "tech-debt"
+    title: "chore: add technical debt tracking"
     description: |
-      Update gate management documentation:
-      - Add workspace-cleanup workflow gate documentation
-      - Document s5_2_review_commits gate behavior
-      - Clarify auto-push behavior after approval
-      - Document --skip-push option
-    files:
-      modified:
-        - "docs/guides/user/GATE_MANAGEMENT_GUIDE.md"
+      Record and track technical debt:
 
-  # Commit 13: 清理遗留文档
+      Debt Records:
+      - 2026-02-21 technical debt records
+      - 2026-02-22 technical debt records
+      - Backup technical debt files
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    files:
+      added:
+        - "tech-debt/tech-debt-2026-02-21.md"
+        - "tech-debt/tech-debt-2026-02-21.yaml"
+        - "tech-debt/tech-debt-2026-02-22.md"
+        - "tech-debt/tech-debt-2026-02-22.yaml"
+        - "tech-debt/tech-debt-20260221.md"
+        - "tech-debt/tech-debt-20260221.yaml"
+
+  # 提交 13: 运行时状态文件
   - id: "commit-013"
     order: 13
     type: "chore"
-    scope: "docs"
-    title: "chore(docs): remove obsolete Chinese documentation"
+    scope: "runtime"
+    title: "chore: add runtime state files"
     description: |
-      Remove outdated Chinese documentation:
-      - Delete docs/03-编辑与改进方案.md (obsolete planning document)
-      - Content is superseded by newer documentation
-    files:
-      deleted:
-        - "docs/03-编辑与改进方案.md"
+      Add LEE runtime generated state files:
 
-  # Commit 14: 测试更新适配新函数名
-  - id: "commit-014"
-    order: 14
-    type: "test"
-    scope: "run"
-    title: "test(run): update tests to use new function names"
-    description: |
-      Update existing tests to match refactored code:
-      - Update mock calls to use `_run_until_settled_with_gates`
-      - Replace deprecated `_run_until_blocked_with_interrupt_guard`
-      - Ensure tests pass with new gate loop functionality
-    files:
-      modified:
-        - "tests/test_run_command_defaults.py"
-        - "tests/test_run_command_existing_workflow.py"
+      Files:
+      - Chat history records
+      - PM Agent session data
 
-  # Commit 15: CLI 锁文件状态更新
-  - id: "commit-015"
-    order: 15
-    type: "chore"
-    scope: "cli"
-    title: "chore(cli): update CLI lock file timestamp"
-    description: |
-      Update CLI lock file with current session information:
-      - Update PID and timestamp
-      - Update command reference
-      - Normal workspace state update
+      Note: These files should typically be ignored by .gitignore
+
+      Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
     files:
-      modified:
-        - ".lee/cli.lock"
+      added:
+        - ".lee/chat_history.txt"
+        - ".lee/pm_agent_sessions/"
 
 # ============================================
-# Execution Notes
+# 执行说明
 # ============================================
 execution_notes:
   strategy: "atomic_by_category"
   grouping_logic: |
     Commits are grouped by functional area and dependency order:
-    1. Documentation and reports (independent)
-    2. Core feature implementation (gates, run loop)
-    3. Tests for new features
-    4. Configuration updates (CLI lock policy)
-    5. Spec fixes and validation
-    6. Workflow optimization
-    7. Test updates for compatibility
+    1. Core architecture (PM Agent Decision Engine)
+    2. CLI enhancements (Chat, Gates, Watch)
+    3. API and execution layer improvements
+    4. Storage and data layer
+    5. Documentation
+    6. Tests
+    7. Configuration and tools
 
   testing_required:
     - "Run all test files to ensure no regressions"
-    - "Test gates commands with actual workflows"
-    - "Verify concurrent terminal usage (run + gates)"
-    - "Validate agent specs load correctly"
+    - "Test PM Agent decision engine"
+    - "Verify chat command with new features"
+    - "Validate Orchestrator API changes"
 
   rollback_plan: |
     Each commit is atomic and can be independently reverted if needed.
     Dependencies between commits are minimal and well-documented.
 
 # ============================================
-# Validation Checklist
+# 验证清单
 # ============================================
 validation:
   pre_commit:
     - "All tests pass"
-    - "No YAML syntax errors in agent specs"
+    - "No YAML syntax errors in configs"
     - "Documentation is accurate and complete"
 
   post_commit:
@@ -324,25 +449,28 @@ validation:
     - "No unrelated changes in any commit"
 
 # ============================================
-# Commit Statistics
+# 提交统计
 # ============================================
 statistics:
   by_type:
-    feat: 5
-    fix: 1
-    test: 5
-    docs: 2
-    chore: 2
-  by_scope:
-    gates: 3
-    run: 3
-    cli: 2
-    specs: 3
-    loader: 1
-    workflow: 1
-    tech-debt: 1
+    feat: 7
     docs: 1
+    test: 1
+    chore: 4
+  by_scope:
+    pm-agent: 2
+    chat: 1
+    orchestrator: 1
+    commands: 1
+    execution: 1
+    storage: 1
+    cli: 1
+    tests: 1
+    tools: 1
+    config: 1
+    tech-debt: 1
+    runtime: 1
   estimated_time:
-    execution: "5-10 minutes"
-    testing: "10-15 minutes"
+    execution: "10-15 minutes"
+    testing: "15-20 minutes"
     verification: "5 minutes"
