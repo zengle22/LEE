@@ -55,7 +55,7 @@ params:
     type: array
     required: false
     description: "排除的文件模式"
-    default: ["node_modules", ".git", "venv", "__pycache__", "dist", "build"]
+    default: ["node_modules", ".git", ".workflow", "evidence", "venv", "__pycache__", "dist", "build"]
 
   remote:
     type: string
@@ -85,17 +85,17 @@ contracts:
 
   outputs:
     - cleanup_summary:
-        path: "workspace-cleanup/cleanup-summary-{{ timestamp }}.yaml"
+        path: ".workflow/workspace-cleanup/cleanup-summary-{{ timestamp }}.yaml"
         schema: ../../contracts/workspace-cleanup-contract/v1/schema.yaml
         description: "整理汇总报告"
 
     - tech_debt_report:
-        path: "tech-debt/tech-debt-{{ date }}.yaml"
+        path: ".workflow/workspace-cleanup/tech-debt/tech-debt-{{ date }}.yaml"
         schema: ../../contracts/tech-debt-contract/v1/schema.yaml
         description: "技术债文档"
 
     - tech_debt_markdown:
-        path: "tech-debt/tech-debt-{{ date }}.md"
+        path: ".workflow/workspace-cleanup/tech-debt/tech-debt-{{ date }}.md"
         description: "技术债 Markdown 报告"
 
 # ============================================
@@ -176,7 +176,7 @@ stages:
           - workspace_path: "{{ params.workspace_path }}"
           - exclude_patterns: "{{ params.exclude_patterns }}"
         outputs:
-          - path: "workspace-cleanup/file-analysis.yaml"
+          - path: ".workflow/workspace-cleanup/file-analysis.yaml"
             description: "文件价值分析结果"
 
   # ========== Stage 2: 更新 .gitignore ==========
@@ -195,7 +195,7 @@ stages:
         outputs:
           - path: ".gitignore"
             description: "更新后的 .gitignore"
-          - path: "workspace-cleanup/gitignore-update.yaml"
+          - path: ".workflow/workspace-cleanup/gitignore-update.yaml"
             description: "更新记录"
 
   # ========== Stage 3: 文档整理 ==========
@@ -213,7 +213,7 @@ stages:
           - author_name: "{{ params.author_name }}"
           - only_changed: true
         outputs:
-          - path: "workspace-cleanup/doc-organization.yaml"
+          - path: ".workflow/workspace-cleanup/doc-organization.yaml"
             description: "文档整理结果"
 
   # ========== Stage 4: 代码文档审查 ==========
@@ -230,10 +230,10 @@ stages:
           - workspace_path: "{{ params.workspace_path }}"
           - exclude_patterns: "{{ params.exclude_patterns }}"
         outputs:
-          - path: "tech-debt/tech-debt-{{ date }}.yaml"
+          - path: ".workflow/workspace-cleanup/tech-debt/tech-debt-{{ date }}.yaml"
             schema: ../../contracts/tech-debt-contract/v1/schema.yaml
             description: "技术债 YAML 文档"
-          - path: "tech-debt/tech-debt-{{ date }}.md"
+          - path: ".workflow/workspace-cleanup/tech-debt/tech-debt-{{ date }}.md"
             description: "技术债 Markdown 报告"
 
   # ========== Stage 5: 原子化提交 ==========
@@ -250,7 +250,7 @@ stages:
           - workspace_path: "{{ params.workspace_path }}"
           - mode: "plan"
         outputs:
-          - path: "workspace-cleanup/commit-plan.yaml"
+          - path: ".workflow/workspace-cleanup/commit-plan.yaml"
             description: "提交规划"
 
       - id: s5_2_review_commits
@@ -259,7 +259,7 @@ stages:
           type: human_review
           prompt: "请审核提交规划，确认提交分组和提交信息"
           artifacts:
-            - "workspace-cleanup/commit-plan.yaml"
+            - ".workflow/workspace-cleanup/commit-plan.yaml"
           on_approve:
             trigger: commits_approved
           on_reject:
@@ -282,9 +282,9 @@ stages:
         inputs:
           - workspace_path: "{{ params.workspace_path }}"
           - mode: "execute"
-          - commit_plan: "workspace-cleanup/commit-plan.yaml"
+          - commit_plan: ".workflow/workspace-cleanup/commit-plan.yaml"
         outputs:
-          - path: "workspace-cleanup/commit-history.yaml"
+          - path: ".workflow/workspace-cleanup/commit-history.yaml"
             description: "提交历史记录"
 
   # ========== Stage 6: 推送远程 ==========
@@ -303,7 +303,7 @@ stages:
           - remote: "{{ params.remote }}"
           - branch: "{{ params.branch }}"
         outputs:
-          - path: "workspace-cleanup/push-result.yaml"
+          - path: ".workflow/workspace-cleanup/push-result.yaml"
             description: "推送结果"
 
 # ============================================
@@ -320,7 +320,7 @@ gates:
 # 产出目录结构
 # ============================================
 output_structure: |
-  workspace-cleanup/
+  .workflow/workspace-cleanup/
   ├── cleanup-summary-{timestamp}.yaml      # 整理汇总报告
   ├── file-analysis.yaml                    # 文件价值分析
   ├── gitignore-update.yaml                 # gitignore 更新记录
@@ -329,7 +329,7 @@ output_structure: |
   ├── commit-history.yaml                   # 提交历史
   └── push-result.yaml                      # 推送结果
 
-  tech-debt/
+  .workflow/workspace-cleanup/tech-debt/
   ├── tech-debt-{date}.yaml                 # 技术债 YAML
   └── tech-debt-{date}.md                   # 技术债 Markdown 报告
 
@@ -355,6 +355,7 @@ examples:
 notes: |
   1. 运行前请确保工作区没有未保存的重要更改
   2. 建议先在测试分支上运行
-  3. 技术债文档仅记录问题，不会修复代码
-  4. 所有更改都会通过 Git 提交，可以随时回滚
-  5. 推送前会要求人工确认
+  3. 运行记录和报告输出到 .workflow/workspace-cleanup/（运行时证据目录）
+  4. 技术债文档仅记录问题，不会修复代码
+  5. 所有更改都会通过 Git 提交，可以随时回滚
+  6. 推送前会要求人工确认

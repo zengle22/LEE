@@ -240,5 +240,5 @@ responsibility:
 # 输出路径
 # ============================================
 output_requirements:
-  path_pattern: "tech-debt/tech-debt-{date}.yaml"
-  markdown_path_pattern: "tech-debt/tech-debt-{date}.md"
+  path_pattern: ".workflow/workspace-cleanup/tech-debt/tech-debt-{date}.yaml"
+  markdown_path_pattern: ".workflow/workspace-cleanup/tech-debt/tech-debt-{date}.md"

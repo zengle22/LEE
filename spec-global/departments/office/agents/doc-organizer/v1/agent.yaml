@@ -301,4 +301,4 @@ responsibility:
 # 输出路径
 # ============================================
 output_requirements:
-  path_pattern: "workspace-cleanup/doc-organization-{timestamp}.yaml"
+  path_pattern: ".workflow/workspace-cleanup/doc-organization-{timestamp}.yaml"

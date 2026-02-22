@@ -31,7 +31,7 @@ input_schema:
       items:
         type: string
       description: 排除的文件模式（如 node_modules, .git）
-      default: ["node_modules", ".git", "venv", "__pycache__", "dist", "build"]
+      default: ["node_modules", ".git", ".workflow", "evidence", "venv", "__pycache__", "dist", "build"]
 
     doc_directories:
       type: array

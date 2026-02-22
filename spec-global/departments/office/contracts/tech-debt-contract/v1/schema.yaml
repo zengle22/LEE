@@ -175,11 +175,11 @@ examples:
 # 输出要求
 # ============================================
 output_requirements:
-  path_pattern: "tech-debt/tech-debt-{date}.yaml"
+  path_pattern: ".workflow/workspace-cleanup/tech-debt/tech-debt-{date}.yaml"
   format: yaml
 
   markdown_format:
-    path_pattern: "tech-debt/tech-debt-{date}.md"
+    path_pattern: ".workflow/workspace-cleanup/tech-debt/tech-debt-{date}.md"
     sections:
       - metadata
       - summary

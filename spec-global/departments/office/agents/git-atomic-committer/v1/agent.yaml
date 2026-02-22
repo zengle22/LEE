@@ -277,4 +277,4 @@ responsibility:
 # 输出路径
 # ============================================
 output_requirements:
-  path_pattern: "workspace-cleanup/commit-history-{timestamp}.yaml"
+  path_pattern: ".workflow/workspace-cleanup/commit-history-{timestamp}.yaml"

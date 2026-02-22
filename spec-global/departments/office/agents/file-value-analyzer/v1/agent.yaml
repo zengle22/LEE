@@ -195,4 +195,4 @@ responsibility:
 # 输出路径
 # ============================================
 output_requirements:
-  path_pattern: "workspace-cleanup/file-analysis-{timestamp}.yaml"
+  path_pattern: ".workflow/workspace-cleanup/file-analysis-{timestamp}.yaml"
