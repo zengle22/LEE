@@ -1,16 +1,18 @@
 """lee watch command"""
 
+import asyncio
 import click
 import sqlite3
 import time
 from pathlib import Path
+from typing import Optional
 
 
 @click.command()
-@click.argument("workflow_id")
+@click.argument("workflow_id", required=False)
 @click.option("--project-dir", default=".", help="项目目录")
 @click.option("--interval", default=2, help="刷新间隔（秒）")
-def watch(workflow_id: str, project_dir: str, interval: int) -> None:
+def watch(workflow_id: Optional[str], project_dir: str, interval: int) -> None:
     """实时监控工作流执行进度"""
     project_root = Path(project_dir).resolve()
     db_path = project_root / ".workflow" / "orchestrator.db"
@@ -19,6 +21,87 @@ def watch(workflow_id: str, project_dir: str, interval: int) -> None:
         click.echo(f"错误: 数据库不存在 {db_path}")
         return
 
+    # 如果没有提供 workflow_id，显示列表并让用户选择
+    if not workflow_id:
+        workflow_id = _select_workflow_to_watch(db_path)
+        if not workflow_id:
+            click.echo("已取消监控")
+            return
+
+    _watch_workflow(db_path, workflow_id, interval)
+
+
+def _list_workflows(db_path: Path) -> list:
+    """列出所有活跃的工作流"""
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """SELECT id, status, template_id
+           FROM workflow_instances
+           WHERE status NOT IN ('completed', 'failed')
+           ORDER BY created_at DESC"""
+    )
+
+    workflows = []
+    for row in cursor.fetchall():
+        workflows.append({
+            "id": row[0],
+            "status": row[1],
+            "template_id": row[2] if len(row) > 2 else "N/A"
+        })
+
+    conn.close()
+    return workflows
+
+
+def _select_workflow_to_watch(db_path: Path) -> Optional[str]:
+    """显示工作流列表并让用户选择"""
+    workflows = _list_workflows(db_path)
+
+    if not workflows:
+        click.echo("没有活跃的工作流")
+        return None
+
+    click.echo("=" * 70)
+    click.echo("可监控的工作流:")
+    click.echo("=" * 70)
+
+    for i, wf in enumerate(workflows, 1):
+        status_icon = {
+            "running": "🔄",
+            "paused": "⏸️",
+            "pending": "⏳",
+            "blocked": "🚫"
+        }.get(wf["status"], "❓")
+
+        click.echo(f"{i}. {status_icon} {wf['id']}")
+        click.echo(f"   模板: {wf['template_id']}")
+        click.echo(f"   状态: {wf['status']}")
+        click.echo()
+
+    click.echo("0. 取消")
+    click.echo()
+
+    try:
+        choice = click.prompt("请选择要监控的工作流", type=int, default=1)
+
+        if choice == 0:
+            return None
+
+        if 1 <= choice <= len(workflows):
+            return workflows[choice - 1]["id"]
+        else:
+            click.echo("无效的选择")
+            return None
+
+    except (KeyboardInterrupt, EOFError):
+        click.echo("\n已取消")
+        return None
+
+
+def _watch_workflow(db_path: Path, workflow_id: str, interval: int) -> None:
+    """监控指定的工作流"""
     click.echo(f"监控工作流: {workflow_id}")
     click.echo(f"数据库: {db_path}")
     click.echo("=" * 60)

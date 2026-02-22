@@ -129,6 +129,48 @@ def _print_gate_details(gate: Dict[str, Any]) -> None:
         )
 
 
+def _resolve_gate_ref(
+    project_root: Path,
+    workflow_id: str,
+    gate_ref: str,
+    *,
+    pending_only: bool = True,
+) -> str:
+    """
+    允许用户传 gate_id 或 step_id。
+    - 若传 gate_id，直接返回
+    - 若传 step_id，自动映射到对应 gate_id（优先 pending）
+    """
+    status_filter = "pending" if pending_only else None
+    gates = _load_gates_from_db(project_root, workflow_id, status_filter=status_filter)
+    if not gates:
+        raise click.ClickException(
+            f"Workflow {workflow_id} has no {'pending ' if pending_only else ''}gates."
+        )
+
+    exact_gate = [g for g in gates if g.get("gate_id") == gate_ref]
+    if exact_gate:
+        return gate_ref
+
+    step_matches = [g for g in gates if g.get("step_id") == gate_ref]
+    if len(step_matches) == 1:
+        mapped = step_matches[0]["gate_id"]
+        click.echo(f"检测到步骤 ID，自动映射: {gate_ref} -> {mapped}")
+        return mapped
+    if len(step_matches) > 1:
+        candidates = ", ".join(g["gate_id"] for g in step_matches)
+        raise click.ClickException(
+            f"Step '{gate_ref}' matches multiple gates: {candidates}. "
+            "Please use explicit gate_id."
+        )
+
+    pending_list = ", ".join(g.get("gate_id") for g in gates[:8])
+    hint = f" Available gates: {pending_list}" if pending_list else ""
+    raise click.ClickException(
+        f"Gate/step '{gate_ref}' not found in workflow {workflow_id}.{hint}"
+    )
+
+
 @gates.command()
 @click.argument("workflow_id", required=False, default=None)
 @click.option("--all", "-a", is_flag=True, help="显示所有门禁（包括已处理的）")
@@ -449,12 +491,15 @@ def show(workflow_id: str, project_dir: str) -> None:
 
 @gates.command()
 @click.argument("workflow_id")
-@click.argument("gate_id")
+@click.argument("gate_ref")
 @click.option("--approver", required=True, help="审批人")
 @click.option("--comments", default="", help="审批意见")
 @click.option("--project-dir", default=".", help="项目目录")
-def approve(workflow_id: str, gate_id: str, approver: str, comments: str, project_dir: str) -> None:
-    """批准门禁"""
+def approve(workflow_id: str, gate_ref: str, approver: str, comments: str, project_dir: str) -> None:
+    """批准门禁（支持 gate_id 或 step_id）"""
+    project_root = Path(project_dir).resolve()
+    gate_id = _resolve_gate_ref(project_root, workflow_id, gate_ref, pending_only=True)
+
     # 先显示门禁详情
     click.echo(f"批准门禁: {gate_id}")
     click.echo(f"工作流: {workflow_id}")
@@ -464,7 +509,6 @@ def approve(workflow_id: str, gate_id: str, approver: str, comments: str, projec
 
     # 查看产物文件
     click.echo("\n📂 查看产物文件...")
-    project_root = Path(project_dir).resolve()
 
     # 尝试显示提交计划
     commit_plan = project_root / "workspace-cleanup" / "commit-plan.yaml"
@@ -486,35 +530,36 @@ def approve(workflow_id: str, gate_id: str, approver: str, comments: str, projec
         return
 
     # 调用批准 API
-    try:
-        result = pm_workflow(
-            "approve_gate",
-            project_dir=project_dir,
-            workflow_id=workflow_id,
-            gate_id=gate_id,
-            approver=approver,
-            decision="approve",
-            comments=comments
-        )
+    result = pm_workflow(
+        "approve_gate",
+        project_dir=project_dir,
+        workflow_id=workflow_id,
+        gate_id=gate_id,
+        approver=approver,
+        decision="approve",
+        comments=comments
+    )
+    if "error" in result:
+        raise click.ClickException(str(result.get("error")))
 
-        click.echo(f"\n✅ 门禁已批准")
-        if result.get("next_step"):
-            click.echo(f"下一步: {result.get('next_step')}")
-
-    except Exception as e:
-        click.echo(f"批准失败: {e}")
+    click.echo(f"\n✅ 门禁已批准")
+    if result.get("next_step"):
+        click.echo(f"下一步: {result.get('next_step')}")
 
 
 @gates.command()
 @click.argument("workflow_id")
-@click.argument("gate_id")
+@click.argument("gate_ref")
 @click.option("--approver", required=True, help="审批人")
 @click.option("--comments", default="", help="拒绝原因")
 @click.option("--action", type=click.Choice(["rollback", "spawn"]), help="执行动作（rollback/spawn）")
 @click.option("--target-step", help="目标步骤（用于 rollback）")
 @click.option("--project-dir", default=".", help="项目目录")
-def reject(workflow_id: str, gate_id: str, approver: str, comments: str, action: str, target_step: str, project_dir: str) -> None:
-    """拒绝门禁（v1.1: 支持动作选择）"""
+def reject(workflow_id: str, gate_ref: str, approver: str, comments: str, action: str, target_step: str, project_dir: str) -> None:
+    """拒绝门禁（v1.1: 支持动作选择；支持 gate_id 或 step_id）"""
+    project_root = Path(project_dir).resolve()
+    gate_id = _resolve_gate_ref(project_root, workflow_id, gate_ref, pending_only=True)
+
     click.echo(f"拒绝门禁: {gate_id}")
     click.echo(f"工作流: {workflow_id}")
     click.echo(f"审批人: {approver}")
@@ -531,40 +576,41 @@ def reject(workflow_id: str, gate_id: str, approver: str, comments: str, action:
         return
 
     # 调用拒绝 API（v1.1: 支持 action 参数）
-    try:
-        result = pm_workflow(
-            "reject_gate",
-            project_dir=project_dir,
-            workflow_id=workflow_id,
-            gate_id=gate_id,
-            rejecter=approver,
-            reason=comments,
-            action=action,
-            target_step=target_step,
-        )
+    result = pm_workflow(
+        "reject_gate",
+        project_dir=project_dir,
+        workflow_id=workflow_id,
+        gate_id=gate_id,
+        rejecter=approver,
+        reason=comments,
+        action=action,
+        target_step=target_step,
+    )
+    if "error" in result:
+        raise click.ClickException(str(result.get("error")))
 
-        click.echo(f"\n❌ 门禁已拒绝")
-        if result.get("action"):
-            click.echo(f"执行动作: {result.get('action')}")
-        if result.get("target_step"):
-            click.echo(f"目标步骤: {result.get('target_step')}")
-        if result.get("new_workflow_id"):
-            click.echo(f"新工作流: {result.get('new_workflow_id')}")
-
-    except Exception as e:
-        click.echo(f"拒绝失败: {e}")
+    click.echo(f"\n❌ 门禁已拒绝")
+    if result.get("action"):
+        click.echo(f"执行动作: {result.get('action')}")
+    if result.get("target_step"):
+        click.echo(f"目标步骤: {result.get('target_step')}")
+    if result.get("new_workflow_id"):
+        click.echo(f"新工作流: {result.get('new_workflow_id')}")
 
 
 @gates.command()
 @click.argument("workflow_id")
-@click.argument("gate_id")
+@click.argument("gate_ref")
 @click.option("--reviewer", required=True, help="评审人")
 @click.option("--reason", required=True, help="修改意见")
 @click.option("--target-step", help="重试目标步骤")
 @click.option("--structured-feedback", help="结构化反馈（JSON）")
 @click.option("--project-dir", default=".", help="项目目录")
-def revise(workflow_id: str, gate_id: str, reviewer: str, reason: str, target_step: str, structured_feedback: str, project_dir: str) -> None:
-    """修订门禁，重试步骤（v1.1 新增）"""
+def revise(workflow_id: str, gate_ref: str, reviewer: str, reason: str, target_step: str, structured_feedback: str, project_dir: str) -> None:
+    """修订门禁，重试步骤（v1.1 新增；支持 gate_id 或 step_id）"""
+    project_root = Path(project_dir).resolve()
+    gate_id = _resolve_gate_ref(project_root, workflow_id, gate_ref, pending_only=True)
+
     click.echo(f"修订门禁: {gate_id}")
     click.echo(f"工作流: {workflow_id}")
     click.echo(f"评审人: {reviewer}")
@@ -585,35 +631,36 @@ def revise(workflow_id: str, gate_id: str, reviewer: str, reason: str, target_st
         return
 
     # 调用修订 API
-    try:
-        result = pm_workflow(
-            "revise_gate",
-            project_dir=project_dir,
-            workflow_id=workflow_id,
-            gate_id=gate_id,
-            reviewer=reviewer,
-            reason=reason,
-            target_step=target_step,
-            structured_feedback=feedback_data,
-        )
+    result = pm_workflow(
+        "revise_gate",
+        project_dir=project_dir,
+        workflow_id=workflow_id,
+        gate_id=gate_id,
+        reviewer=reviewer,
+        reason=reason,
+        target_step=target_step,
+        structured_feedback=feedback_data,
+    )
+    if "error" in result:
+        raise click.ClickException(str(result.get("error")))
 
-        click.echo(f"\n🔄 门禁已修订，工作流将重试")
-        if result.get("target_step"):
-            click.echo(f"重试目标: {result.get('target_step')}")
-
-    except Exception as e:
-        click.echo(f"修订失败: {e}")
+    click.echo(f"\n🔄 门禁已修订，工作流将重试")
+    if result.get("target_step"):
+        click.echo(f"重试目标: {result.get('target_step')}")
 
 
 @gates.command()
 @click.argument("workflow_id")
-@click.argument("gate_id")
+@click.argument("gate_ref")
 @click.option("--reporter", required=True, help="报告人")
 @click.option("--issues", required=True, help="问题列表（逗号分隔）")
 @click.option("--continue-workflow/--pause-workflow", default=True, help="是否继续工作流（默认继续）")
 @click.option("--project-dir", default=".", help="项目目录")
-def flag(workflow_id: str, gate_id: str, reporter: str, issues: str, continue_workflow: bool, project_dir: str) -> None:
-    """标记门禁问题（v1.1 新增）"""
+def flag(workflow_id: str, gate_ref: str, reporter: str, issues: str, continue_workflow: bool, project_dir: str) -> None:
+    """标记门禁问题（v1.1 新增；支持 gate_id 或 step_id）"""
+    project_root = Path(project_dir).resolve()
+    gate_id = _resolve_gate_ref(project_root, workflow_id, gate_ref, pending_only=True)
+
     click.echo(f"标记门禁: {gate_id}")
     click.echo(f"工作流: {workflow_id}")
     click.echo(f"报告人: {reporter}")
@@ -629,19 +676,17 @@ def flag(workflow_id: str, gate_id: str, reporter: str, issues: str, continue_wo
         return
 
     # 调用标记 API
-    try:
-        result = pm_workflow(
-            "flag_gate",
-            project_dir=project_dir,
-            workflow_id=workflow_id,
-            gate_id=gate_id,
-            reporter=reporter,
-            issues=issue_list,
-            continue_workflow=continue_workflow,
-        )
+    result = pm_workflow(
+        "flag_gate",
+        project_dir=project_dir,
+        workflow_id=workflow_id,
+        gate_id=gate_id,
+        reporter=reporter,
+        issues=issue_list,
+        continue_workflow=continue_workflow,
+    )
+    if "error" in result:
+        raise click.ClickException(str(result.get("error")))
 
-        status_str = "继续执行" if continue_workflow else "暂停等待审核"
-        click.echo(f"\n🚩 门禁已标记，工作流{status_str}")
-
-    except Exception as e:
-        click.echo(f"标记失败: {e}")
+    status_str = "继续执行" if continue_workflow else "暂停等待审核"
+    click.echo(f"\n🚩 门禁已标记，工作流{status_str}")
