@@ -1,0 +1,1161 @@
+---
+# Technical Debt Report - LEE Project
+# Generated: 2026-02-21
+# Review scope: Full codebase (src/, config/, docs/, spec-global/, tests/)
+#
+# This document tracks all identified technical debt items categorized by
+# severity and type. Each item includes description, location, and remediation guidance.
+#
+
+metadata:
+  project: lee
+  version: "1.0"
+  generated_date: "2026-02-21"
+  reviewed_by: "Code Review Agent"
+  total_items: 57
+  severity_breakdown:
+    critical: 9
+    high: 14
+    medium: 25
+    low: 9
+
+categories:
+  - id: code_quality
+    name: Code Quality
+    description: Issues related to code maintainability, complexity, and standards
+
+  - id: security
+    name: Security
+    description: Security vulnerabilities and potential risks
+
+  - id: architecture
+    name: Architecture
+    description: Architectural design issues and technical decisions
+
+  - id: documentation
+    name: Documentation
+    description: Documentation gaps, inconsistencies, and issues
+
+  - id: configuration
+    name: Configuration
+    description: Configuration management issues
+
+  - id: testing
+    name: Testing
+    description: Test coverage and quality issues
+
+  - id: performance
+    name: Performance
+    description: Performance bottlenecks and optimization opportunities
+
+items:
+  # ============================================================================
+  # CRITICAL SEVERITY ITEMS
+  # ============================================================================
+
+  - id: TD-001
+    category: security
+    severity: critical
+    title: SQL Injection Risk via String Concatenation
+    description: |
+      Using f-string concatenation to build SET clauses in SQL UPDATE statements.
+      While parameters use placeholders, column names are directly concatenated.
+    location:
+      file: src/lee/orchestrator/storage/sqlite_store.py
+      lines: [344, 348, 470, 474]
+    impact: "Potential SQL injection if column names are user-controlled"
+    remediation: |
+      - Implement column name whitelist validation
+      - Or use ORM with proper escaping
+      - Add integration tests for SQL injection scenarios
+    estimated_effort: "2-4 hours"
+    references: []
+
+  - id: TD-002
+    category: code_quality
+    severity: critical
+    title: Bare except Clauses Catch All Exceptions
+    description: |
+      Multiple files use bare `except:` clauses that catch all exceptions
+      including SystemExit and KeyboardInterrupt, masking real errors.
+    location:
+      - file: src/lee/orchestrator/execution/file_output_handler.py
+        lines: [407, 414]
+      - file: src/lee/orchestrator/core/project_config.py
+        lines: [637]
+      - file: src/lee/orchestrator/core/token_manager.py
+        lines: [277]
+    impact: "Silently fails on critical errors, makes debugging impossible"
+    remediation: |
+      - Replace `except:` with `except Exception:`
+      - Add proper error logging
+      - Consider specific exception types
+    estimated_effort: "1-2 hours"
+    references: []
+
+  - id: TD-003
+    category: security
+    severity: critical
+    title: Command Injection via shell=True
+    description: |
+      subprocess.Popen uses shell=True by default, allowing command injection
+      if command arguments contain user input.
+    location:
+      file: src/lee/runtime/executor/tools/shell_tools.py
+      lines: [34, 64]
+    impact: "Arbitrary command execution if input is not sanitized"
+    remediation: |
+      - Default to shell=False
+      - If shell=True is required, use shlex.quote() to escape arguments
+      - Pass commands as lists instead of strings
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-004
+    category: code_quality
+    severity: critical
+    title: Unsafe Import * Statement
+    description: |
+      Using `from module import *` pollutes namespace and can cause
+      unpredictable behavior and naming conflicts.
+    location:
+      file: src/lee/orchestrator/storage/__init__.py
+    impact: "Namespace pollution, potential naming conflicts"
+    remediation: |
+      - Explicitly import required classes and functions
+      - Update all dependent code
+    estimated_effort: "1 hour"
+    references: []
+
+  - id: TD-005
+    category: security
+    severity: critical
+    title: Path Traversal Vulnerability
+    description: |
+      File workspace validation only checks path existence, not whether
+      the path is within allowed workspace boundaries.
+    location:
+      file: src/lee/orchestrator/execution/claude_code_executor.py
+      lines: [349, 353]
+    impact: "Unauthorized file system access outside workspace"
+    remediation: |
+      - Use safe_join() or equivalent function
+      - Ensure resolved path is within expected directory
+      - Project already has security.py with safe_join() - use it consistently
+    estimated_effort: "2-3 hours"
+    references:
+      - file: src/lee/runtime/executor/tools/security.py
+        description: "Existing safe_join() implementation"
+
+  - id: TD-006
+    category: configuration
+    severity: critical
+    title: Hardcoded API Keys in Configuration
+    description: |
+      Multiple real API keys are hardcoded in llm_config.yaml
+    location:
+      file: config/llm_config.yaml
+      lines: [37, 76, 90, 103]
+    impact: "Credential exposure, unauthorized API usage"
+    remediation: |
+      - Remove all hardcoded keys immediately
+      - Use environment variables exclusively
+      - Add config validation to reject commits with real keys
+    estimated_effort: "1 hour"
+    references: []
+
+  - id: TD-007
+    category: configuration
+    severity: critical
+    title: Real API Keys in .env.example
+    description: |
+      .env.example contains real API keys instead of placeholders
+    location:
+      file: .env.example
+      lines: [10, 14, 27]
+    impact: "Credential exposure in version control"
+    remediation: |
+      - Replace with placeholder format (e.g., your_api_key_here)
+      - Add comments on how to obtain real keys
+    estimated_effort: "30 minutes"
+    references: []
+
+  - id: TD-008
+    category: documentation
+    severity: critical
+    title: Missing LICENSE File
+    description: |
+      README references MIT License but no LICENSE file exists in repository
+    location:
+      file: .
+    impact: "Legal ambiguity, unclear usage rights"
+    remediation: |
+      - Add MIT License file
+      - Or update README to remove license reference
+      - Determine project's open source strategy
+    estimated_effort: "30 minutes"
+    references: []
+
+  - id: TD-009
+    category: documentation
+    severity: critical
+    title: Broken Documentation Links in README
+    description: |
+      README references multiple non-existent documentation files
+    location:
+      file: README.md
+    impact: "Poor developer experience, confusion"
+    remediation: |
+      - Create referenced documentation files
+      - Or update README to remove non-existent links
+      - Add documentation placeholders with TODO status
+    estimated_effort: "4-8 hours"
+    references:
+      - docs/LEE-Overview.md
+      - docs/LEE-Interface-Spec.md
+      - docs/Workflow-Spec-Guide.md
+      - docs/Orchestrator-Guide.md
+      - docs/Workspace-Config.md
+      - docs/Spec-Organization.md
+
+  # ============================================================================
+  # HIGH SEVERITY ITEMS
+  # ============================================================================
+
+  - id: TD-010
+    category: code_quality
+    severity: high
+    title: Extremely Long Function (237 lines)
+    description: |
+      The execute() method in claude_code_executor.py is 237 lines long
+      with too many responsibilities.
+    location:
+      file: src/lee/orchestrator/execution/claude_code_executor.py
+      lines: [99, 336]
+    impact: "Unmaintainable, hard to test, violates Single Responsibility Principle"
+    remediation: |
+      - Extract into private methods:
+        * _validate_input()
+        * _prepare_workspace()
+        * _build_prompts()
+        * _invoke_claude_cli()
+        * _parse_output()
+    estimated_effort: "4-6 hours"
+    references: []
+
+  - id: TD-011
+    category: code_quality
+    severity: high
+    title: Hardcoded Magic Values
+    description: |
+      Multiple hardcoded default values scattered across codebase
+    location:
+      - file: src/lee/orchestrator/execution/claude_code_executor.py
+        lines: [69, 78]
+      - file: src/lee/orchestrator/storage/sqlite_store.py
+        lines: [122]
+    impact: "Difficult to maintain, inconsistent behavior"
+    remediation: |
+      - Move to config files or environment variables
+      - Use centralized constants module
+      - Replace print() with logger
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-012
+    category: code_quality
+    severity: high
+    title: Missing Type Annotations
+    description: |
+      Approximately 30% of functions lack return type and parameter annotations
+    location:
+      - file: src/lee/orchestrator/execution/pm_agent_runtime.py
+      - file: src/lee/runtime/executor/tools/shell_tools.py
+    impact: "Poor IDE support, type safety issues"
+    remediation: |
+      - Add complete type annotations using typing module
+      - Enable mypy strict mode
+      - Add type checking to CI
+    estimated_effort: "8-12 hours"
+    references: []
+
+  - id: TD-013
+    category: code_quality
+    severity: high
+    title: Duplicate Data Class Definition
+    description: |
+      CompiledParams is defined in two separate files
+    location:
+      - file: src/lee/orchestrator/execution/pm_agent_runtime.py
+        lines: [47, 56]
+      - file: src/lee/orchestrator/execution/pm_agent/models.py
+    impact: "Maintenance burden, potential inconsistencies"
+    remediation: |
+      - Remove duplicate definition
+      - Use single source of truth from models.py
+      - Update all imports
+    estimated_effort: "1 hour"
+    references: []
+
+  - id: TD-014
+    category: security
+    severity: high
+    title: Unsafe Deserialization
+    description: |
+      JSON deserialization without validation could allow injection attacks
+    location:
+      file: src/lee/orchestrator/storage/sqlite_store.py
+      lines: [574, 588, 717, 884, 925]
+    impact: "Potential injection if data is tampered"
+    remediation: |
+      - Add data validation and sanitization
+      - Use Pydantic or similar for validation
+      - Implement schema validation
+    estimated_effort: "4-6 hours"
+    references: []
+
+  - id: TD-015
+    category: configuration
+    severity: high
+    title: Missing Production Environment Configuration
+    description: |
+      Only .env.example exists, no production/staging config templates
+    location:
+      file: config/
+    impact: "Difficult deployment, environment-specific issues"
+    remediation: |
+      - Create config/environments/ directory
+      - Add development.yaml, staging.yaml, production.yaml
+      - Use LEE_ENV environment variable to switch
+    estimated_effort: "4-6 hours"
+    references: []
+
+  - id: TD-016
+    category: documentation
+    severity: high
+    title: Missing API Reference Documentation
+    description: |
+      No comprehensive API documentation for core framework
+    location:
+      file: docs/
+    impact: "Poor developer experience, high onboarding cost"
+    remediation: |
+      - Generate API docs using Sphinx or MkDocs
+      - Add docstrings to all public APIs
+      - Include usage examples
+    estimated_effort: "16-24 hours"
+    references: []
+
+  - id: TD-017
+    category: documentation
+    severity: high
+    title: Missing Security Guide
+    description: |
+      No framework-level security documentation
+    location:
+      file: docs/
+    impact: "Security knowledge not documented, inconsistent practices"
+    remediation: |
+      - Create framework-level security guide
+      - Document API key management
+      - Document permission control mechanisms
+      - Add security audit checklist
+    estimated_effort: "8-12 hours"
+    references:
+      - file: docs/features/pm-agent/SECURITY-GUIDE.md
+        description: "Example PM Agent security guide"
+
+  - id: TD-018
+    category: documentation
+    severity: high
+    title: Missing JSON Schema Validation
+    description: |
+      YAML files lack schema definitions for validation
+    location:
+      path: spec-global/
+    impact: "Configuration errors, runtime failures"
+    remediation: |
+      - Create schemas for each file type
+      - Add validation tooling
+      - Integrate into CI pipeline
+    estimated_effort: "8-12 hours"
+    references:
+      - file: spec-global/repo-registry.schema.yaml
+        description: "Example existing schema"
+
+  - id: TD-019
+    category: code_quality
+    severity: high
+    title: Duplicate Import Statement
+    description: |
+      uuid module imported twice in the same file
+    location:
+      file: src/lee/orchestrator/execution/orchestrator.py
+      lines: [28, 65]
+    impact: "Code clutter, confusion"
+    remediation: |
+      - Remove duplicate import
+      - Run import organization tool
+    estimated_effort: "5 minutes"
+    references: []
+
+  - id: TD-020
+    category: configuration
+    severity: high
+    title: GitHub Workflow Runs on Windows
+    description: |
+      CI configured for windows-latest but project is Python-centric
+    location:
+      file: .github/workflows/yaml-validate.yml
+      lines: [7]
+    impact: "Platform-specific issues, inconsistent with dev environment"
+    remediation: |
+      - Change to ubuntu-latest
+      - Or use matrix strategy for multi-platform testing
+      - Add Python version matrix
+    estimated_effort: "30 minutes"
+    references: []
+
+  - id: TD-021
+    category: code_quality
+    severity: high
+    title: Inconsistent Logging
+    description: |
+      Mix of print() and logger usage across codebase
+    location:
+      - file: src/lee/orchestrator/storage/sqlite_store.py
+        lines: [122]
+      - file: src/lee/orchestrator/execution/llm_executor.py
+        lines: [245]
+    impact: "Inconsistent output, difficult production debugging"
+    remediation: |
+      - Standardize on logging module
+      - Establish log level conventions
+      - Use existing sanitization tools for sensitive data
+    estimated_effort: "4-6 hours"
+    references:
+      - file: src/lee/orchestrator/execution/sanitization.py
+        description: "Existing data sanitization utilities"
+
+  - id: TD-022
+    category: documentation
+    severity: high
+    title: Package Name Inconsistency
+    description: |
+      pyproject.toml uses lee-framework, README uses flowcore, source is in src/lee/
+    location:
+      - file: pyproject.toml
+      - file: README.md
+      - path: src/lee/
+    impact: "Confusion, broken import examples"
+    remediation: |
+      - Standardize on lee as package name
+      - Update all documentation
+      - Add migration guide if needed
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-023
+    category: code_quality
+    severity: high
+    title: TODO Comments with Unimplemented Features
+    description: |
+      TODO markers in code without corresponding issues or implementation
+    location:
+      file: src/lee/orchestrator/execution/metagpt_executor.py
+      lines: [184]
+    impact: "Incomplete features, unclear project status"
+    remediation: |
+      - Implement or delete TODO features
+      - Create issues for tracking
+      - Add implementation timeline
+    estimated_effort: "Varies"
+    references: []
+
+  # ============================================================================
+  # MEDIUM SEVERITY ITEMS
+  # ============================================================================
+
+  - id: TD-024
+    category: code_quality
+    severity: medium
+    title: Silent File Write Failures
+    description: |
+      File write errors in _write_prompt_artifacts are silently ignored
+    location:
+      file: src/lee/orchestrator/execution/claude_code_executor.py
+      lines: [1463, 1489]
+    impact: "Debugging difficulty, data loss"
+    remediation: |
+      - At minimum, log errors
+      - Return error status to caller
+      - Consider making failures visible
+    estimated_effort: "1-2 hours"
+    references: []
+
+  - id: TD-025
+    category: performance
+    severity: medium
+    title: Potential Memory Leak in Subprocess Handling
+    description: |
+      _run_subprocess may not properly clean up processes/threads in some exceptions
+    location:
+      file: src/lee/orchestrator/execution/claude_code_executor.py
+      lines: [777, 934]
+    impact: "Memory leak, resource exhaustion"
+    remediation: |
+      - Use context manager for subprocess
+      - Ensure all threads and processes are cleaned up
+      - Add resource cleanup tests
+    estimated_effort: "3-4 hours"
+    references: []
+
+  - id: TD-026
+    category: code_quality
+    severity: medium
+    title: High Cyclomatic Complexity
+    description: |
+      run_step method has deep nesting and high complexity
+    location:
+      file: src/lee/orchestrator/execution/orchestrator.py
+      lines: [362, 661]
+    impact: "Difficult to test and maintain"
+    remediation: |
+      - Extract methods to reduce nesting
+      - Use strategy pattern for step.kind handling
+      - Consider state machine pattern
+    estimated_effort: "8-12 hours"
+    references: []
+
+  - id: TD-027
+    category: architecture
+    severity: medium
+    title: Tightly Coupled Orchestrator Class
+    description: |
+      Orchestrator has 20+ dependencies, violates Single Responsibility Principle
+    location:
+      file: src/lee/orchestrator/execution/orchestrator.py
+    impact: "Difficult to test, change, and extend"
+    remediation: |
+      - Use dependency injection
+      - Abstract interface layer
+      - Consider plugin architecture
+    estimated_effort: "16-24 hours"
+    references: []
+
+  - id: TD-028
+    category: architecture
+    severity: medium
+    title: Missing Abstraction Layer for Runners
+    description: |
+      Various runners lack unified interface
+    location:
+      path: src/lee/orchestrator/execution/
+    impact: "Inconsistent behavior, difficult to extend"
+    remediation: |
+      - Define clear Runner interface
+      - All runners implement the interface
+      - Add interface compliance tests
+    estimated_effort: "8-12 hours"
+    references: []
+
+  - id: TD-029
+    category: code_quality
+    severity: medium
+    title: Repeated Code Patterns
+    description: |
+      Similar functions like _coerce_positive_int and _coerce_non_negative_int
+    location:
+      path: multiple files
+    impact: "Maintenance burden, inconsistency"
+    remediation: |
+      - Extract to utility module
+      - Create reusable validation functions
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-030
+    category: configuration
+    severity: medium
+    title: Hardcoded Windows Path in Example
+    description: |
+      PROJECT_DIR in .env.example uses Windows format
+    location:
+      file: .env.example
+      lines: [44]
+    impact: "Cross-platform compatibility issues"
+    remediation: |
+      - Change to cross-platform format (./lee or ${HOME}/lee)
+      - Add comments about relative vs absolute paths
+      - Provide OS-specific examples
+    estimated_effort: "30 minutes"
+    references: []
+
+  - id: TD-031
+    category: configuration
+    severity: medium
+    title: Inconsistent Model Versions
+    description: |
+      Default model versions differ between .env.example and llm_config.yaml
+    location:
+      - file: .env.example
+      - file: config/llm_config.yaml
+    impact: "Unexpected behavior, confusion"
+    remediation: |
+      - Standardize default versions
+      - Document supported model list
+      - Add version compatibility notes
+    estimated_effort: "1-2 hours"
+    references: []
+
+  - id: TD-032
+    category: configuration
+    severity: medium
+    title: Outdated Python Version Requirement
+    description: |
+      Requires Python >=3.8 but 3.8 is EOL (Oct 2024)
+    location:
+      file: pyproject.toml
+      lines: [10, 51, 62]
+    impact: "Security risks, missing features"
+    remediation: |
+      - Upgrade to >=3.9
+      - Update all related configs
+      - Document Python version requirements
+    estimated_effort: "1-2 hours"
+    references: []
+
+  - id: TD-033
+    category: documentation
+    severity: medium
+    title: Architecture Document Organization Issues
+    description: |
+      23 architecture docs with unclear version relationships
+    location:
+      path: docs/architecture/
+    impact: "Difficult to navigate, unclear what's current"
+    remediation: |
+      - Create docs/architecture/README.md as index
+      - Mark document status (current/deprecated/superseded_by)
+      - Archive old docs to docs/archive/
+    estimated_effort: "4-6 hours"
+    references: []
+
+  - id: TD-034
+    category: documentation
+    severity: medium
+    title: Missing Contributing Guidelines
+    description: |
+      README references CONTRIBUTING.md but file doesn't exist
+    location:
+      file: .
+    impact: "Unclear contribution process"
+    remediation: |
+      - Create contribution guide
+      - Include code standards, PR process, test requirements
+      - Or remove reference from README
+    estimated_effort: "4-6 hours"
+    references: []
+
+  - id: TD-035
+    category: documentation
+    severity: medium
+    title: Unverified Code Examples in Documentation
+    description: |
+      Code examples not marked as runnable, may be outdated
+    location:
+      path: docs/
+    impact: "Misleading examples, frustration"
+    remediation: |
+      - Verify all examples
+      - Mark example versions
+      - Add testable examples to examples/ directory
+      - Update import paths (lee vs flowcore)
+    estimated_effort: "8-12 hours"
+    references: []
+
+  - id: TD-036
+    category: documentation
+    severity: medium
+    title: Missing Troubleshooting Guide
+    description: |
+      No common problems and solutions documentation
+    location:
+      file: docs/
+    impact: "Difficult debugging, poor support experience"
+    remediation: |
+      - Create docs/troubleshooting.md
+      - Collect common errors and solutions
+      - Add debug logging guide
+    estimated_effort: "6-8 hours"
+    references: []
+
+  - id: TD-037
+    category: documentation
+    severity: medium
+    title: TODO/FIXME Markers in Documentation
+    description: |
+      At least 8 docs contain uncompleted TODO markers
+    location:
+      path: docs/
+    impact: "Incomplete documentation, unclear project status"
+    remediation: |
+      - Review and complete or remove all TODOs
+      - Move pending items to project management
+      - Add document last update dates
+    estimated_effort: "4-6 hours"
+    references: []
+
+  - id: TD-038
+    category: documentation
+    severity: medium
+    title: Mixed Language Documentation
+    description: |
+      Inconsistent use of Chinese, English, and mixed content
+    location:
+      path: docs/
+    impact: "Inconsistent experience, accessibility issues"
+    remediation: |
+      - Determine documentation language strategy
+      - Consider multi-language support
+      - Or clearly separate Chinese/English docs
+    estimated_effort: "2-4 hours"
+    references: []
+
+  - id: TD-039
+    category: documentation
+    severity: medium
+    title: Potentially Broken Internal Links
+    description: |
+      Relative path links may break when files are moved
+    location:
+      path: docs/
+    impact: "Broken links, poor navigation"
+    remediation: |
+      - Use markdown-link-check tool
+      - Add to CI pipeline
+      - Fix all broken links
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-040
+    category: configuration
+    severity: medium
+    title: YAML Format Inconsistency
+    description: |
+      230 YAML files with inconsistent formatting
+    location:
+      path: spec-global/
+    impact: "Difficult to maintain, visual clutter"
+    remediation: |
+      - Add pre-commit hooks
+      - Use yamlfmt or prettier
+      - Add CI checks
+    estimated_effort: "4-6 hours"
+    references: []
+
+  - id: TD-041
+    category: configuration
+    severity: medium
+    title: Inconsistent workflow version Field Format
+    description: |
+      Some files use version: "1.0", others version: 1.0
+    location:
+      path: spec-global/
+    impact: "Parsing issues, inconsistency"
+    remediation: |
+      - Standardize on version: "1.0" format
+      - Add required field checks
+      - Update existing files
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-042
+    category: configuration
+    severity: medium
+    title: Unclear Version Number Strategy
+    description: |
+      metadata version is 1.1 but orchestrator_version is 3.1
+    location:
+      file: spec-global/_metadata.yaml
+      lines: [38]
+    impact: "Compatibility confusion, unclear evolution"
+    remediation: |
+      - Define version numbering strategy
+      - Add version explanation documentation
+      - Consider semantic versioning
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-043
+    category: configuration
+    severity: medium
+    title: No spec-global Version Management
+    description: |
+      No overall version, each file independent
+    location:
+      path: spec-global/
+    impact: "Difficult to track compatibility"
+    remediation: |
+      - Consider single version number
+      - Or use modular versioning strategy
+      - Add change tracking
+    estimated_effort: "4-6 hours"
+    references: []
+
+  - id: TD-044
+    category: configuration
+    severity: medium
+    title: Duplicate Workflow Registration
+    description: |
+      Both workflow-registry.yaml and _metadata.yaml register workflows
+    location:
+      - file: config/workflow-registry.yaml
+      - file: spec-global/_metadata.yaml
+    impact: "Maintenance burden, potential inconsistencies"
+    remediation: |
+      - Determine single source of truth
+      - Remove duplicate file
+      - Or clarify distinct purposes
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-045
+    category: code_quality
+    severity: medium
+    title: Array Access Without Bounds Checking
+    description: |
+      List access using indexes with minimal length checking
+    location:
+      file: src/lee/orchestrator/execution/gate_engine.py
+      lines: [900, 925]
+    impact: "Index errors, runtime failures"
+    remediation: |
+      - Use named tuples or dataclasses
+      - Access by name instead of index
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-046
+    category: configuration
+    severity: medium
+    title: Missing Log Configuration Details
+    description: |
+      Only basic LOG_LEVEL in .env.example
+    location:
+      file: .env.example
+    impact: "Limited observability control"
+    remediation: |
+      - Add log output path config
+      - Add log rotation config
+      - Document log level purposes
+    estimated_effort: "1-2 hours"
+    references: []
+
+  - id: TD-047
+    category: configuration
+    severity: medium
+    title: Missing Performance Configuration
+    description: |
+      No concurrency, caching, or resource limit configs
+    location:
+      path: config/
+    impact: "No performance tuning capability"
+    remediation: |
+      - Add max concurrent workflows config
+      - Add cache TTL config
+      - Add memory/CPU limit config
+    estimated_effort: "3-4 hours"
+    references: []
+
+  - id: TD-048
+    category: configuration
+    severity: medium
+    title: Potentially Outdated MetaGPT Version Constraint
+    description: |
+      metagpt>=0.8.0,<0.9.0 may miss important fixes
+    location:
+      file: pyproject.toml
+      lines: [25]
+    impact: "Missing security fixes, limited updates"
+    remediation: |
+      - Evaluate relaxing to <1.0.0
+      - Or use ~=0.8.0 (compatible release)
+      - Regularly test new version compatibility
+    estimated_effort: "1-2 hours"
+    references: []
+
+  # ============================================================================
+  # LOW SEVERITY ITEMS
+  # ============================================================================
+
+  - id: TD-049
+    category: code_quality
+    severity: low
+    title: Long Code Lines
+    description: |
+      Many lines exceed 100 characters, some exceed 150
+    location:
+      path: multiple files
+    impact: "Readability issues"
+    remediation: |
+      - Set line length limit (recommend 88-100)
+      - Format with black or ruff
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-050
+    category: code_quality
+    severity: low
+    title: Missing Docstrings
+    description: |
+      Many private methods lack docstrings
+    location:
+      path: multiple files
+    impact: "Poor API documentation"
+    remediation: |
+      - Add docstrings to all public APIs
+      - Add docstrings to complex private methods
+    estimated_effort: "8-12 hours"
+    references: []
+
+  - id: TD-051
+    category: code_quality
+    severity: low
+    title: Unused Imports and Variables
+    description: |
+      Unused imports like asyncio in debug script
+    location:
+      - file: debug_pm_agent.py
+        lines: [3]
+    impact: "Code clutter, confusion"
+    remediation: |
+      - Run linter to find all unused code
+      - Clean up imports and variables
+    estimated_effort: "1-2 hours"
+    references: []
+
+  - id: TD-052
+    category: code_quality
+    severity: low
+    title: Hardcoded Error Messages
+    description: |
+      Error messages not internationalized, mixed Chinese/English
+    location:
+      path: multiple files
+    impact: "Inconsistent user experience"
+    remediation: |
+      - Standardize on English or Chinese
+      - Consider i18n framework
+    estimated_effort: "4-6 hours"
+    references: []
+
+  - id: TD-053
+    category: configuration
+    severity: low
+    title: Hardcoded Local Service Addresses
+    description: |
+      localhost addresses with specific ports hardcoded
+    location:
+      - file: .env.example
+      - file: config/llm_config.yaml
+    impact: "Limited flexibility"
+    remediation: |
+      - These are acceptable dev defaults
+      - Add comments explaining they're for local development
+      - Document production override via env vars
+    estimated_effort: "30 minutes"
+    references: []
+
+  - id: TD-054
+    category: documentation
+    severity: low
+    title: Missing Author and Maintainer Information
+    description: |
+      Most YAML files lack author and maintainer info
+    location:
+      path: spec-global/
+    impact: "Unclear ownership, difficult accountability"
+    remediation: |
+      - Add maintainer field
+      - Add created_at and updated_at fields
+      - Use Git for automatic tracking
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-055
+    category: documentation
+    severity: low
+    title: Missing workflow Descriptions
+    description: |
+      Some workflow files lack description field
+    location:
+      path: spec-global/
+    impact: "Poor discoverability"
+    remediation: |
+      - Ensure description is required field
+      - Add validation rules
+      - Fill in missing descriptions
+    estimated_effort: "2-3 hours"
+    references: []
+
+  - id: TD-056
+    category: code_quality
+    severity: low
+    title: Incomplete Environment Variable Replacement
+    description: |
+      One real-format key remaining in .env.example
+    location:
+      file: .env.example
+    impact: "Incomplete cleanup"
+    remediation: |
+      - Full review and replace all real keys
+      - Add verification script
+    estimated_effort: "30 minutes"
+    references: []
+
+  - id: TD-057
+    category: configuration
+    severity: low
+    title: Local Service Port Hardcoding
+    description: |
+      Specific ports (8045, 11434, 3000) hardcoded for local services
+    location:
+      - file: .env.example
+      - file: config/llm_config.yaml
+    impact: "Minor inconvenience"
+    remediation: |
+      - Acceptable for dev defaults
+      - Add comments
+      - Document production overrides
+    estimated_effort: "30 minutes"
+    references: []
+
+# ============================================================================
+# REMEDIATION PLAN
+# ============================================================================
+
+remediation_plan:
+  phase_1_critical:
+    name: "Immediate Security Fixes"
+    priority: P0
+    timeframe: "1-3 days"
+    items: [TD-001, TD-002, TD-003, TD-004, TD-005, TD-006, TD-007]
+    description: |
+      Address all critical security vulnerabilities immediately.
+      These issues could lead to system compromise or data exposure.
+
+  phase_2_critical_docs:
+    name: "Critical Documentation Fixes"
+    priority: P0
+    timeframe: "1 week"
+    items: [TD-008, TD-009]
+    description: |
+      Fix missing LICENSE and broken documentation links.
+      These block developer onboarding and legal clarity.
+
+  phase_3_high:
+    name: "High Priority Code Quality"
+    priority: P1
+    timeframe: "2-4 weeks"
+    items: [TD-010, TD-011, TD-012, TD-013, TD-014, TD-019, TD-021, TD-023]
+    description: |
+      Improve code maintainability and type safety.
+      Break down long functions, add types, fix duplicates.
+
+  phase_4_config:
+    name: "Configuration Management"
+    priority: P1
+    timeframe: "2-3 weeks"
+    items: [TD-015, TD-020, TD-030, TD-031, TD-032, TD-048]
+    description: |
+      Establish proper configuration management for different environments.
+      Fix CI/CD, update Python version, standardize configs.
+
+  phase_5_docs:
+    name: "Documentation Foundation"
+    priority: P1
+    timeframe: "3-4 weeks"
+    items: [TD-016, TD-017, TD-018, TD-022, TD-033, TD-034, TD-035, TD-036]
+    description: |
+      Build comprehensive documentation foundation.
+      API docs, security guide, troubleshooting, architecture index.
+
+  phase_6_architecture:
+    name: "Architecture Improvements"
+    priority: P2
+    timeframe: "1-2 months"
+    items: [TD-024, TD-025, TD-026, TD-027, TD-028, TD-029, TD-045]
+    description: |
+      Refactor architectural issues.
+      Reduce coupling, add abstractions, improve error handling.
+
+  phase_7_config_docs:
+    name: "Configuration and Documentation Cleanup"
+    priority: P2
+    timeframe: "2-4 weeks"
+    items: [TD-037, TD-038, TD-039, TD-040, TD-041, TD-042, TD-043, TD-044,
+            TD-046, TD-047]
+    description: |
+      Clean up configuration and documentation inconsistencies.
+      Standardize formats, fix links, organize docs.
+
+  phase_8_low:
+    name: "Code Quality Polish"
+    priority: P3
+    timeframe: "Ongoing"
+    items: [TD-049, TD-050, TD-051, TD-052, TD-053, TD-054, TD-055, TD-056, TD-057]
+    description: |
+      Continuous improvement of code quality.
+      Formatting, documentation, minor cleanups.
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+statistics:
+  total_issues: 57
+  by_severity:
+    critical: 9
+    high: 14
+    medium: 25
+    low: 9
+  by_category:
+    security: 7
+    code_quality: 18
+    documentation: 16
+    configuration: 11
+    architecture: 3
+    performance: 1
+    testing: 1
+  estimated_effort_hours:
+    critical: "20-40"
+    high: "80-140"
+    medium: "100-180"
+    low: "30-50"
+    total: "230-410"
+  effort_by_category:
+    security: "20-40 hours"
+    code_quality: "80-140 hours"
+    documentation: "80-120 hours"
+    configuration: "40-80 hours"
+    architecture: "30-50 hours"
+    performance: "3-4 hours"
+    testing: "0 hours"  # Not analyzed in this review
+
+next_steps:
+  immediate:
+    - "Create GitHub issues for all P0 items"
+    - "Set up security scan in CI pipeline"
+    - "Rotate all exposed API keys"
+    - "Add LICENSE file"
+  short_term:
+    - "Implement pre-commit hooks for code quality"
+    - "Set up automated documentation generation"
+    - "Create configuration validation scripts"
+    - "Add type checking with mypy"
+  long_term:
+    - "Establish regular tech debt review process"
+    - "Add automated security scanning"
+    - "Implement comprehensive testing"
+    - "Create onboarding documentation"

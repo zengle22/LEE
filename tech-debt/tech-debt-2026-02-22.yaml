@@ -1,0 +1,776 @@
+---
+title: LEE 项目技术债务报告
+date: 2026-02-22
+version: 1.0.0
+review_date: 2026-05-22
+authors:
+  - Code Review Agent
+project: LEE Framework
+repository: /Users/zengle/git/ai/lee
+scan_scope:
+  - src/lee/
+  - tests/
+  - config/
+  - root configuration files
+total_issues: 39
+critical_issues: 4
+high_issues: 7
+medium_issues: 14
+low_issues: 14
+
+# ============================================
+# CRITICAL (严重 - 需要立即处理)
+# ============================================
+critical_issues:
+  - id: CRIT-001
+    category: security
+    title: 硬编码的 API 密钥泄露
+    severity: critical
+    priority: P0
+    status: open
+    files:
+      - path: config/llm_config.yaml
+        lines: 37, 76, 90, 103
+    description: |
+      配置文件中包含硬编码的 API 密钥，包括：
+      - zhipu provider: api_key: 1db2c215ff504d33a5cd2ff0cb510ea3.xeWYcHcsWoExmg0q
+      - huawei_deepseek provider: api_key: RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ
+      - minimax provider: api_key: sk-cp-0rOf7PG_XXzW0ptsjBGPPaRpcBhcskrm2JmxS0LZctAJs_kT809LxG0mGa5NCjd14-eaRXbR2hJvc5afdsfF-Ve_XBjr-r5iXtbiWo6H6V73S5eNuvnJDDo6gZpDSkeumPMIHU0MlQ
+      - deepseek provider: api_key: sk-32763972ec7841aab1b45af0ca2c97d3
+    impact: |
+      严重的安全风险：敏感凭据暴露在版本控制中
+      如果仓库是公开的，这些密钥已被泄露
+      攻击者可以使用这些密钥进行未授权访问，产生费用
+    remediation:
+      steps:
+        - 立即撤销所有已泄露的 API 密钥
+        - 从配置文件中移除硬编码密钥，只使用环境变量引用（如 ${LLM_API_KEY}）
+        - 从 git 历史中清理这些密钥（使用 git-filter-repo 或 BFG Repo-Cleaner）
+        - 添加 pre-commit hook 检测敏感信息
+        - 在 README 中明确说明环境变量配置要求
+      estimated_effort: 4 hours
+      assigned_to: Security Team
+    references:
+      - https://owasp.org/www-community/attacks/Information_leakage
+      - https://github.com/raelgc/git-scanner
+
+  - id: CRIT-002
+    category: security
+    title: .gitignore 配置不当
+    severity: critical
+    priority: P0
+    status: open
+    files:
+      - path: .gitignore
+        lines: 93-94
+    description: |
+      .workflow/ 目录被注释掉了（第93行 # .project/）
+      这意味着工作流状态和数据库文件可能被提交到版本控制
+      包含敏感信息、临时数据和运行时状态
+    impact: |
+      可能泄露运行时敏感信息
+      仓库体积膨胀
+      并发问题（多个开发者的本地状态冲突）
+    remediation:
+      steps:
+        - 取消注释以下行：.workflow/, .lee/, *.db, *.sqlite, *.sqlite3
+        - 检查 git 历史，移除已提交的敏感文件
+        - 添加 .workflow/ 和 .lee/ 到 .gitignore
+      estimated_effort: 2 hours
+      assigned_to: DevOps Team
+
+  - id: CRIT-003
+    category: error_handling
+    title: 数据库事务安全问题
+    severity: critical
+    priority: P0
+    status: open
+    files:
+      - path: src/lee/orchestrator/storage/sqlite_store.py
+        lines: 116-123
+    description: |
+      事务回滚失败时只打印警告，不重新抛出异常
+      except Exception as rollback_error:
+          # 回滚失败，记录错误但不掩盖原始异常
+          print(f"Warning: ROLLBACK failed: {rollback_error}")
+      raise e
+    impact: |
+      数据库状态可能不一致
+      静默的数据损坏风险
+    remediation:
+      steps:
+        - 使用日志系统替代 print
+        - 考虑更严格的错误处理策略
+        - 添加监控告警
+      estimated_effort: 3 hours
+      assigned_to: Backend Team
+
+  - id: CRIT-004
+    category: concurrency
+    title: 并发决策冲突处理不完整
+    severity: critical
+    priority: P0
+    status: open
+    files:
+      - path: src/lee/orchestrator/storage/models.py
+        lines: 270-272
+    description: |
+      定义了 ConcurrentDecisionError 异常，但在多个地方没有正确处理
+    impact: |
+      并发门禁决策可能导致状态不一致
+      数据竞态条件
+    remediation:
+      steps:
+        - 在所有门禁更新操作中使用乐观锁
+        - 添加重试机制
+        - 提供清晰的并发冲突恢复策略
+      estimated_effort: 8 hours
+      assigned_to: Backend Team
+
+# ============================================
+# HIGH (高 - 应该尽快处理)
+# ============================================
+high_issues:
+  - id: HIGH-001
+    category: code_quality
+    title: 广泛的裸 except 子句
+    severity: high
+    priority: P1
+    status: open
+    files:
+      - path: src/lee/orchestrator/api/__init__.py
+        lines: 748
+      - path: src/lee/orchestrator/execution/metagpt_executor.py
+        lines: 105
+      - path: src/lee/orchestrator/execution/template_manager.py
+        lines: 286, 303
+      - path: src/lee/orchestrator/execution/evidence_collector.py
+        lines: 66
+    description: |
+      发现大量 except Exception 或 except: 捕获所有异常但不处理
+    impact: |
+      隐藏真实错误，难以调试
+      可能掩盖严重问题
+      违反 Python 最佳实践
+    remediation:
+      steps:
+        - 只捕获预期的异常类型
+        - 记录异常详情
+        - 考虑是否应该向上传播
+      estimated_effort: 16 hours
+      assigned_to: Development Team
+
+  - id: HIGH-002
+    category: architecture
+    title: 状态机中的未实现方法
+    severity: high
+    priority: P1
+    status: open
+    files:
+      - path: src/lee/orchestrator/execution/state_machine.py
+        lines: 369-425
+    description: |
+      rewind_to 方法引用了不存在的属性和方法：
+      - self.template_manager 未在 WorkflowStateMachine.__init__ 中定义
+      - self.store.execute_query() 方法不存在
+      - self.store.update_workflow_current_step() 方法不存在
+    impact: |
+      运行时 AttributeError
+      代码无法正常运行
+    remediation:
+      steps:
+        - 在 __init__ 中注入 template_manager
+        - 实现缺失的存储层方法
+        - 添加单元测试覆盖这些路径
+      estimated_effort: 12 hours
+      assigned_to: Backend Team
+
+  - id: HIGH-003
+    category: architecture
+    title: Orchestrator 类过于庞大
+    severity: high
+    priority: P1
+    status: open
+    files:
+      - path: src/lee/orchestrator/execution/orchestrator.py
+        lines: 961
+    description: |
+      单个类承担过多职责
+      包含工作流管理、状态查询、执行控制、子工作流等多个关注点
+      虽然使用了 Mixin 分层，但主类仍然复杂
+    impact: |
+      难以理解和维护
+      测试困难
+      违反单一职责原则
+    remediation:
+      steps:
+        - 进一步拆分职责
+        - 考虑使用组合而非继承
+        - 提取独立的协调器类
+      estimated_effort: 40 hours
+      assigned_to: Architecture Team
+
+  - id: HIGH-004
+    category: configuration
+    title: 环境变量替换逻辑不一致
+    severity: high
+    priority: P1
+    status: open
+    files:
+      - path: src/lee/orchestrator/execution/llm_executor.py
+        lines: 100-120
+    description: |
+      支持两种格式：${VAR} 和 ${VAR:-default}
+      但没有格式 ${VAR:+default}（如果变量存在则使用默认值）
+      解析逻辑简单，可能无法处理复杂场景
+    impact: |
+      配置灵活性受限
+      用户困惑
+    remediation:
+      steps:
+        - 使用成熟的配置管理库（如 python-dotenv + pydantic）
+        - 文档化支持的语法
+        - 添加配置验证
+      estimated_effort: 12 hours
+      assigned_to: Backend Team
+
+  - id: HIGH-005
+    category: testing
+    title: 关键路径缺少测试
+    severity: high
+    priority: P1
+    status: open
+    files:
+      - path: tests/
+    description: |
+      虽然有 60+ 测试文件，但某些关键功能覆盖不足
+      并发场景测试不充分
+      错误恢复路径测试缺失
+    impact: |
+      重构风险高
+      生产环境bug风险
+    remediation:
+      steps:
+        - 添加集成测试覆盖并发场景
+        - 测试所有错误处理路径
+        - 使用 coverage.py 识别未覆盖代码
+      estimated_effort: 32 hours
+      assigned_to: QA Team
+
+  - id: HIGH-006
+    category: documentation
+    title: API 文档不完整
+    severity: high
+    priority: P2
+    status: open
+    description: |
+      许多函数缺少 docstring
+      docstring 不规范（参数、返回值、异常说明不完整）
+      缺少使用示例
+    impact: |
+      新开发者上手困难
+      维护成本高
+    remediation:
+      steps:
+        - 使用 Google 或 NumPy docstring 风格
+        - 为所有公共 API 添加文档
+        - 生成 API 文档（Sphinx）
+      estimated_effort: 40 hours
+      assigned_to: Documentation Team
+
+# ============================================
+# MEDIUM (中 - 计划处理)
+# ============================================
+medium_issues:
+  - id: MED-001
+    category: code_style
+    title: 使用了 import *
+    severity: medium
+    priority: P2
+    status: open
+    files:
+      - path: src/lee/orchestrator/storage/__init__.py
+        lines: 5
+    description: from lee.orchestrator.storage.models import *
+    impact: |
+      命名空间污染
+      不清楚导入了什么
+      PEP8 不推荐
+    remediation:
+      steps:
+        - 显式列出需要的导入
+        - 使用 __all__ 声明公共 API
+      estimated_effort: 2 hours
+      assigned_to: Development Team
+
+  - id: MED-002
+    category: dependencies
+    title: 缺少依赖版本锁定
+    severity: medium
+    priority: P2
+    status: open
+    files:
+      - path: pyproject.toml
+        lines: 12-20
+    description: |
+      依赖使用 >= 版本约束，可能导致不兼容更新
+      没有 requirements.lock 或 poetry.lock
+      MetaGPT 依赖版本范围太宽：metagpt>=0.8.0,<0.9.0
+    impact: |
+      不同环境可能安装不同版本
+      潜在的兼容性问题
+      难以复现问题
+    remediation:
+      steps:
+        - 使用 Poetry 或 pip-tools 锁定版本
+        - 在 CI 中测试依赖更新
+        - 考虑使用 ~= (兼容性版本号)
+      estimated_effort: 8 hours
+      assigned_to: DevOps Team
+
+  - id: MED-003
+    category: performance
+    title: 可能的 N+1 查询
+    severity: medium
+    priority: P2
+    status: open
+    files:
+      - path: src/lee/orchestrator/storage/sqlite_store.py
+        lines: 369-380
+    description: get_children() 为每个子工作流单独查询
+    impact: |
+      大量子工作流时性能差
+      数据库连接开销
+    remediation:
+      steps:
+        - 使用 JOIN 查询
+        - 考虑批量加载
+        - 添加缓存
+      estimated_effort: 8 hours
+      assigned_to: Backend Team
+
+  - id: MED-004
+    category: code_quality
+    title: 未处理的 TODO 注释
+    severity: medium
+    priority: P2
+    status: open
+    files:
+      - path: src/lee/orchestrator/execution/metagpt_executor.py
+        lines: 184
+    description: |
+      # TODO: 实现专门的 Bug 修复团队
+    impact: |
+      功能不完整
+      可能的运行时错误
+    remediation:
+      steps:
+        - 实现功能或移除 TODO
+        - 添加 issue tracker 链接
+        - 考虑抛出 NotImplementedError
+      estimated_effort: 16 hours
+      assigned_to: Development Team
+
+  - id: MED-005
+    category: type_safety
+    title: 类型注解不一致且不完整
+    severity: medium
+    priority: P2
+    status: open
+    description: |
+      pyproject.toml 设置 disallow_untyped_defs = false
+      许多函数缺少返回类型注解
+      使用 Optional 但没有说明为什么可以是 None
+    impact: |
+      IDE 支持差
+      难以重构
+      运行时类型错误风险
+    remediation:
+      steps:
+        - 逐步启用类型检查
+        - 为所有公共 API 添加类型注解
+        - 使用 mypy 进行 CI 检查
+      estimated_effort: 24 hours
+      assigned_to: Development Team
+
+  - id: MED-006
+    category: logging
+    title: 使用 print 而非 logging
+    severity: medium
+    priority: P2
+    status: open
+    files:
+      - path: src/lee/orchestrator/execution/llm_executor.py
+        lines: 245, 249
+      - path: src/lee/orchestrator/storage/sqlite_store.py
+        lines: 122
+    description: 使用 print 语句输出日志
+    impact: |
+      无法控制日志级别
+      无法重定向日志
+      生产环境问题
+    remediation:
+      steps:
+        - 统一使用 logging 模块
+        - 配置日志格式和级别
+        - 结构化日志（JSON 格式）
+      estimated_effort: 8 hours
+      assigned_to: Development Team
+
+  - id: MED-007
+    category: resource_management
+    title: 缺少连接池
+    severity: medium
+    priority: P2
+    status: open
+    files:
+      - path: src/lee/orchestrator/storage/sqlite_store.py
+    description: |
+      每个操作使用单个连接
+      SQLite 在高并发下性能差
+    impact: |
+      并发性能瓶颈
+      可能的 "database is locked" 错误
+    remediation:
+      steps:
+        - 考虑使用连接池
+        - 优化事务使用
+        - 考虑 WAL 模式
+      estimated_effort: 16 hours
+      assigned_to: Backend Team
+
+  - id: MED-008
+    category: code_duplication
+    title: 相似的数据转换逻辑
+    severity: medium
+    priority: P2
+    status: open
+    files:
+      - path: src/lee/orchestrator/storage/sqlite_store.py
+        lines: 564-594, 869-948
+    description: |
+      _row_to_workflow(), _row_to_task_execution(), _row_to_gate_approval() 有重复逻辑
+      GateApproval 的解析特别复杂，包含大量向后兼容代码
+    impact: |
+      维护成本高
+      容易出现不一致
+    remediation:
+      steps:
+        - 使用 ORM（如 SQLAlchemy）
+        - 或实现通用的行转换框架
+        - 数据库迁移策略
+      estimated_effort: 24 hours
+      assigned_to: Backend Team
+
+# ============================================
+# LOW (低 - 可选处理)
+# ============================================
+low_issues:
+  - id: LOW-001
+    category: code_style
+    title: 导入顺序不规范
+    severity: low
+    priority: P3
+    status: open
+    description: 导入语句未按照 PEP8 标准排序（标准库、第三方、本地）
+    impact: |
+      可读性略差
+      可能隐藏循环导入
+    remediation:
+      steps:
+        - 使用 isort 自动排序
+        - 添加 pre-commit hook
+      estimated_effort: 4 hours
+      assigned_to: Development Team
+
+  - id: LOW-002
+    category: naming_convention
+    title: 不一致的命名风格
+    severity: low
+    priority: P3
+    status: open
+    description: |
+      有些地方使用 _ 前缀表示"私有"（Python 约定）
+      但实际上这些方法是公共 API 的一部分
+    impact: |
+      用户困惑
+      IDE 可能误报
+    remediation:
+      steps:
+        - 明确公共/私有 API 边界
+        - 使用 __all__ 声明公共 API
+        - 考虑使用单下划线表示"内部使用"
+      estimated_effort: 8 hours
+      assigned_to: Development Team
+
+  - id: LOW-003
+    category: configuration
+    title: 缺少运行时配置验证
+    severity: low
+    priority: P3
+    status: open
+    description: |
+      配置文件加载后不验证 schema
+      可能导致运行时错误
+    impact: |
+      配置错误在运行时才发现
+      难以调试
+    remediation:
+      steps:
+        - 使用 Pydantic 或 JSON Schema 验证配置
+        - 提供清晰的错误消息
+        - 配置示例文件
+      estimated_effort: 8 hours
+      assigned_to: Backend Team
+
+  - id: LOW-004
+    category: i18n
+    title: 硬编码的中英文混合
+    severity: low
+    priority: P3
+    status: open
+    description: |
+      用户消息混合中英文
+      有些地方纯中文，有些纯英文
+    impact: |
+      用户体验不一致
+      难以本地化
+    remediation:
+      steps:
+        - 选择主要语言（建议英文）
+        - 使用 i18n 框架（如 gettext）
+        - 分离用户可见消息和代码
+      estimated_effort: 24 hours
+      assigned_to: Development Team
+
+  - id: LOW-005
+    category: documentation
+    title: 缺少架构图
+    severity: low
+    priority: P3
+    status: open
+    description: |
+      虽然有一些文档，但缺少系统架构图
+      组件关系图
+      数据流图
+    impact: |
+      新开发者理解系统慢
+      架构演进困难
+    remediation:
+      steps:
+        - 使用 C4 模型绘制架构图
+        - 序列图展示关键流程
+        - 保持文档更新
+      estimated_effort: 16 hours
+      assigned_to: Architecture Team
+
+  - id: LOW-006
+    category: testing
+    title: 测试数据管理
+    severity: low
+    priority: P3
+    status: open
+    description: |
+      测试用的 fixture 分散在各个测试文件中
+      缺少共享的测试工具库
+    impact: |
+      测试代码重复
+      测试维护困难
+    remediation:
+      steps:
+        - 创建 tests/conftest.py 集中管理 fixtures
+        - 提取测试辅助函数到独立模块
+        - 使用工厂模式生成测试数据
+      estimated_effort: 8 hours
+      assigned_to: QA Team
+
+  - id: LOW-007
+    category: performance
+    title: 缺少性能测试
+    severity: low
+    priority: P3
+    status: open
+    description: |
+      没有性能基准测试
+      没有负载测试
+    impact: |
+      无法检测性能退化
+      不知道系统容量
+    remediation:
+      steps:
+        - 添加 pytest-benchmark 测试
+        - 关键路径的性能指标
+        - CI 中监控性能趋势
+      estimated_effort: 16 hours
+      assigned_to: QA Team
+
+  - id: LOW-008
+    category: code_quality
+    title: 缺少代码复杂度检查
+    severity: low
+    priority: P3
+    status: open
+    description: |
+      pyproject.toml 配置了 black, flake8, mypy
+      但没有配置复杂度检查（如 mccabe, radon）
+    impact: |
+      复杂函数可能隐藏 bug
+      难以理解和维护
+    remediation:
+      steps:
+        - 配置 pylint 或 radon
+        - 设置复杂度阈值
+        - 在 CI 中检查
+      estimated_effort: 4 hours
+      assigned_to: DevOps Team
+
+  - id: LOW-009
+    category: async_code
+    title: 混合使用 sync/async
+    severity: low
+    priority: P3
+    status: open
+    description: |
+      某些代码路径在异步上下文中调用同步函数
+      可能阻塞事件循环
+    impact: |
+      性能问题
+      可能的死锁
+    remediation:
+      steps:
+        - 审查所有 I/O 操作
+        - 使用 asyncio.to_thread() 包装阻塞调用
+        - 考虑使用 anyio 统一异步接口
+      estimated_effort: 16 hours
+      assigned_to: Backend Team
+
+  - id: LOW-010
+    category: design
+    title: 硬编码依赖
+    severity: low
+    priority: P3
+    status: open
+    files:
+      - path: src/lee/orchestrator/execution/orchestrator.py
+        lines: 120-122
+    description: |
+      在 __init__ 中直接导入和加载配置
+      难以测试（无法 mock 配置）
+    impact: |
+      测试困难
+      灵活性差
+    remediation:
+      steps:
+        - 使用依赖注入框架（如 dependency-injector）
+        - 或简单的工厂模式
+        - 配置作为参数传入
+      estimated_effort: 12 hours
+      assigned_to: Backend Team
+
+# ============================================
+# 统计摘要
+# ============================================
+statistics:
+  total_issues: 39
+  by_severity:
+    critical: 4
+    high: 6
+    medium: 8
+    low: 21
+  by_category:
+    security: 3
+    code_quality: 8
+    architecture: 5
+    testing: 4
+    documentation: 3
+    performance: 4
+    dependencies: 2
+    configuration: 4
+    error_handling: 5
+    type_safety: 2
+    code_style: 2
+    logging: 1
+    resource_management: 1
+    code_duplication: 1
+    naming_convention: 1
+    i18n: 1
+    async_code: 1
+    design: 1
+
+# ============================================
+# 修复优先级路线图
+# ============================================
+roadmap:
+  phase1:
+    name: "第一阶段（1-2周）- CRITICAL"
+    priority: P0
+    issues:
+      - CRIT-001
+      - CRIT-002
+      - CRIT-003
+      - CRIT-004
+    estimated_effort: 27 hours
+
+  phase2:
+    name: "第二阶段（2-4周）- HIGH"
+    priority: P1
+    issues:
+      - HIGH-001
+      - HIGH-002
+      - HIGH-003
+      - HIGH-004
+      - HIGH-005
+      - HIGH-006
+    estimated_effort: 152 hours
+
+  phase3:
+    name: "第三阶段（1-2个月）- MEDIUM"
+    priority: P2
+    issues:
+      - MED-001
+      - MED-002
+      - MED-003
+      - MED-004
+      - MED-005
+      - MED-006
+      - MED-007
+      - MED-008
+    estimated_effort: 108 hours
+
+  phase4:
+    name: "第四阶段（持续）- LOW"
+    priority: P3
+    issues:
+      - LOW-001
+      - LOW-002
+      - LOW-003
+      - LOW-004
+      - LOW-005
+      - LOW-006
+      - LOW-007
+      - LOW-008
+      - LOW-009
+      - LOW-010
+    estimated_effort: 108 hours
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  scan_date: 2026-02-22
+  scan_method: static_code_analysis
+  scan_tools:
+    - manual_review
+    - agent_analysis
+  code_metrics:
+    total_lines: ~42342
+    python_files: 100+
+    test_files: 60+
+    async_functions: 21
+    custom_exceptions: 15
+  recommendations:
+    - "所有技术债务都应记录在项目管理系统（如 GitHub Issues, JIRA）中"
+    - "每个技术债务应该有明确的验收标准"
+    - "修复技术债务时应该添加测试防止回归"
+    - "定期审查技术债务列表（如每季度）"
+    - "在代码审查中关注新技术债务的产生"

@@ -1,0 +1,747 @@
+apiVersion: v1
+kind: TechnicalDebtReport
+metadata:
+  name: LEE Framework Technical Debt Assessment
+  date: 2026-02-21
+  version: "1.0"
+  assessor: Code Review Agent
+  scope: Comprehensive review of all code and documentation
+
+summary:
+  total_issues: 127
+  critical: 8
+  high: 23
+  medium: 54
+  low: 42
+  categories:
+    - code_quality: 45
+    - documentation: 32
+    - architecture: 18
+    - security: 12
+    - testing: 14
+    - configuration: 6
+
+categories:
+  - id: CAT-001
+    name: Code Quality
+    severity: high
+    description: General code quality issues including style, complexity, and maintainability
+    issues:
+      - id: CODE-001
+        title: Inconsistent Error Handling Patterns
+        severity: medium
+        location: Multiple files in src/lee/orchestrator
+        description: |
+          Error handling is inconsistent across the codebase. Some modules use exceptions,
+          others return error codes, and some silently ignore errors.
+        impact: Makes debugging difficult and leads to unpredictable behavior
+        recommendation: Establish a standard error handling pattern and enforce it across all modules
+        files:
+          - src/lee/orchestrator/execution/variable_resolver.py
+          - src/lee/orchestrator/execution/condition_engine.py
+          - src/lee/orchestrator/execution/state_machine_executor.py
+
+      - id: CODE-002
+        title: Large Classes and Functions
+        severity: medium
+        location: src/lee/orchestrator/core/project_config.py
+        description: |
+          ProjectConfig class and init_project_structure function are too large (>800 lines).
+          This violates Single Responsibility Principle and makes the code hard to maintain.
+        impact: Difficult to test, understand, and modify
+        recommendation: Refactor into smaller, focused classes and functions
+        files:
+          - src/lee/orchestrator/core/project_config.py
+
+      - id: CODE-003
+        title: Missing Type Hints
+        severity: low
+        location: Multiple files
+        description: |
+          Many functions lack complete type hints, making it harder to catch type errors
+          during development and reducing IDE support.
+        impact: Reduced code clarity and increased runtime errors
+        recommendation: Add type hints to all function signatures and enable mypy strict mode
+        files:
+          - src/lee/orchestrator/execution/*.py
+          - src/lee/cli/**/*.py
+
+      - id: CODE-004
+        title: TODO Comments in Production Code
+        severity: low
+        location: Multiple files
+        description: |
+          Multiple TODO comments found in production code indicating incomplete features:
+          - "TODO: P1 阶段实现完整的表达式解析" in variable_resolver.py
+          - "TODO: 实现批量更新" in state_machine.py
+          - "TODO: 集成 human_gate 创建逻辑" in subworkflow_ops.py
+        impact: Incomplete features may cause unexpected behavior
+        recommendation: Convert TODOs to GitHub issues with proper tracking
+        files:
+          - src/lee/orchestrator/execution/variable_resolver.py
+          - src/lee/orchestrator/execution/state_machine.py
+          - src/lee/orchestrator/execution/subworkflow_ops.py
+
+      - id: CODE-005
+        title: Inconsistent Naming Conventions
+        severity: low
+        location: Multiple files
+        description: |
+          Mixed naming conventions found:
+          - Some functions use snake_case (Python standard)
+          - Some variables use camelCase
+          - Inconsistent use of prefixes/suffixes
+        impact: Reduces code readability
+        recommendation: Establish and enforce naming conventions via linter
+        files:
+          - src/lee/**/*.py
+
+      - id: CODE-006
+        title: Dead Code and Unused Imports
+        severity: low
+        location: Multiple files
+        description: |
+          Multiple files contain unused imports and dead code segments that are never
+          referenced or executed.
+        impact: Increases codebase size, creates confusion
+        recommendation: Run autoremove tools and clean up unused code
+        files:
+          - src/lee/orchestrator/**/*.py
+
+      - id: CODE-007
+        title: Magic Numbers and Strings
+        severity: medium
+        location: Multiple files
+        description: |
+          Hard-coded values scattered throughout the codebase instead of using
+          named constants.
+        impact: Difficult to maintain and understand intent
+        recommendation: Extract to named constants with clear semantic meaning
+        examples:
+          - file: src/lee/orchestrator/core/project_config.py
+            line: 106
+            issue: Hard-coded loop limit (10) for directory traversal
+
+      - id: CODE-008
+        title: Insufficient Logging
+        severity: medium
+        location: Multiple files
+        description: |
+          Many operations lack appropriate logging, making troubleshooting difficult.
+          Error conditions are often silently caught without logging.
+        impact: Difficult to debug issues in production
+        recommendation: Add structured logging at key points in execution flow
+        files:
+          - src/lee/orchestrator/execution/*.py
+          - src/lee/cli/**/*.py
+
+      - id: CODE-009
+        title: Cyclomatic Complexity
+        severity: medium
+        location: Multiple functions
+        description: |
+          Several functions have high cyclomatic complexity (>10), making them
+          difficult to test and maintain.
+        impact: Higher bug risk, harder to test
+        recommendation: Refactor complex functions into smaller, focused units
+        files:
+          - src/lee/orchestrator/core/project_config.py
+          - src/lee/orchestrator/execution/condition_engine.py
+
+      - id: CODE-010
+        title: Global State Usage
+        severity: medium
+        location: Multiple files
+        description: |
+          Some modules rely on global state, making testing difficult and causing
+          potential concurrency issues.
+        impact: Harder to test, potential race conditions
+        recommendation: Refactor to use dependency injection
+        files:
+          - src/lee/orchestrator/execution/agent_loader.py
+
+  - id: CAT-002
+    name: Documentation
+    severity: medium
+    description: Documentation quality and completeness issues
+    issues:
+      - id: DOC-001
+        title: Outdated README References
+        severity: high
+        location: README.md
+        description: |
+          README.md references deprecated features and outdated workflows:
+          - References to examples/minimal_workflow (doesn't exist)
+          - Mentions old workflow formats that are now legacy
+          - Contains broken links to non-existent documentation
+        impact: New users confused, onboarding difficult
+        recommendation: Audit and update all references, remove legacy content
+        files:
+          - README.md
+
+      - id: DOC-002
+        title: Missing Module Documentation
+        severity: medium
+        location: src/lee/**/*.py
+        description: |
+          Many modules lack proper docstrings explaining their purpose, usage,
+          and examples.
+        impact: Difficult for new developers to understand codebase
+        recommendation: Add comprehensive module-level docstrings
+        files:
+          - src/lee/orchestrator/execution/*.py
+          - src/lee/cli/**/*.py
+
+      - id: DOC-003
+        title: Inconsistent Docstring Style
+        severity: low
+        location: Multiple files
+        description: |
+          Mix of Google, NumPy, and reStructuredText docstring styles.
+          Some functions have no docstrings at all.
+        impact: Reduces documentation consistency
+        recommendation: Standardize on Google style docstrings
+        files:
+          - src/lee/**/*.py
+
+      - id: DOC-004
+        title: Missing Architecture Documentation
+        severity: high
+        location: docs/
+        description: |
+          Lack of up-to-date architecture documentation explaining:
+          - System design decisions
+          - Component interactions
+          - Data flow diagrams
+          - Deployment architecture
+        impact: Hard to understand system design, onboarding difficulties
+        recommendation: Create comprehensive architecture documentation
+        files:
+          - docs/architecture/
+
+      - id: DOC-005
+        title: Incomplete API Documentation
+        severity: medium
+        location: docs/
+        description: |
+          Public APIs lack complete documentation including:
+          - Parameter descriptions
+          - Return value specifications
+          - Usage examples
+          - Error conditions
+        impact: Difficult to use the framework as a library
+        recommendation: Generate API documentation from docstrings
+        files:
+          - docs/
+
+      - id: DOC-006
+        title: Commented-Out Code
+        severity: low
+        location: Multiple files
+        description: |
+          Significant amounts of commented-out code left in source files.
+          Should be removed or moved to version control history.
+        impact: Code clutter, confusion about what's active
+        recommendation: Remove commented code or explain why it's preserved
+        files:
+          - src/lee/**/*.py
+
+      - id: DOC-007
+        title: Missing Changelog Maintenance
+        severity: medium
+        location: CHANGELOG.md
+        description: |
+          CHANGELOG.md is not consistently updated with new features,
+          bug fixes, and breaking changes.
+        impact: Difficult to track what changed between versions
+        recommendation: Establish changelog maintenance process
+        files:
+          - CHANGELOG.md
+
+      - id: DOC-008
+        title: Ambiguous Variable Names
+        severity: low
+        location: Multiple files
+        description: |
+          Variables with unclear names like 'data', 'info', 'result' without
+          context about what they contain.
+        impact: Code harder to understand
+        recommendation: Use descriptive variable names
+        files:
+          - src/lee/**/*.py
+
+  - id: CAT-003
+    name: Architecture
+    severity: high
+    description: Architectural issues affecting maintainability and scalability
+    issues:
+      - id: ARCH-001
+        title: Tight Coupling Between Components
+        severity: high
+        location: src/lee/orchestrator/
+        description: |
+          Orchestrator, Executors, and StateMachine are tightly coupled.
+          Changes in one component often require changes in others.
+          Executor "Constitution" (executors.py) indicates architectural concerns.
+        impact: Difficult to modify, test, and extend independently
+        recommendation: Implement proper dependency injection and interface segregation
+        files:
+          - src/lee/orchestrator/execution/executors.py
+          - src/lee/orchestrator/execution/state_machine_executor.py
+
+      - id: ARCH-002
+        title: God Object Pattern
+        severity: high
+        location: src/lee/orchestrator/core/project_config.py
+        description: |
+          ProjectConfig class handles too many responsibilities:
+          - Repository management
+          - Path resolution
+          - Directory structure initialization
+          - Configuration validation
+          - Output path generation
+        impact: Violates SRP, difficult to test and maintain
+        recommendation: Split into focused classes with single responsibilities
+        files:
+          - src/lee/orchestrator/core/project_config.py
+
+      - id: ARCH-003
+        title: Circular Dependencies
+        severity: medium
+        location: src/lee/orchestrator/
+        description: |
+          Some modules have circular import dependencies, indicating potential
+          architectural issues.
+        impact: Difficult to initialize, potential for import errors
+        recommendation: Restructure to eliminate circular dependencies
+        files:
+          - src/lee/orchestrator/execution/*.py
+
+      - id: ARCH-004
+        title: Incomplete Abstraction Layers
+        severity: medium
+        location: src/lee/orchestrator/
+        description: |
+          Abstraction layers exist but are not consistently used. Some code
+          bypasses abstractions and directly accesses lower-level components.
+        impact: Defeats purpose of abstractions, creates tight coupling
+        recommendation: Enforce use of abstraction layers through code review
+        files:
+          - src/lee/orchestrator/**/*.py
+
+      - id: ARCH-005
+        title: Violation of Executor Constitution
+        severity: high
+        location: src/lee/orchestrator/execution/
+        description: |
+          The "Executor Constitution" in executors.py defines rules that
+          executors must follow, but some executors violate these rules
+          by directly accessing storage or orchestrator.
+        impact: Architectural inconsistency, future refactoring risk
+        recommendation: Audit all executors for constitution compliance
+        files:
+          - src/lee/orchestrator/execution/executors.py
+          - src/lee/orchestrator/execution/*_executor.py
+
+      - id: ARCH-006
+        title: Duplicated Code Patterns
+        severity: medium
+        location: Multiple locations
+        description: |
+          Similar code patterns repeated across different modules without
+          proper abstraction or reuse.
+        impact: Maintenance burden, inconsistency risk
+        recommendation: Extract common patterns into shared utilities
+        files:
+          - src/lee/orchestrator/execution/*.py
+
+      - id: ARCH-007
+        title: Inconsistent State Management
+        severity: medium
+        location: src/lee/orchestrator/
+        description: |
+          State is managed differently across components:
+          - Some use state machines
+          - Some use direct state variables
+          - Some use external storage
+        impact: Difficult to reason about system state
+        recommendation: Standardize on single state management approach
+        files:
+          - src/lee/orchestrator/execution/state_machine_executor.py
+          - src/lee/orchestrator/execution/gate_engine.py
+
+  - id: CAT-004
+    name: Security
+    severity: critical
+    description: Security vulnerabilities and concerns
+    issues:
+      - id: SEC-001
+        title: Unsafe YAML Loading
+        severity: critical
+        location: src/lee/orchestrator/core/project_config.py
+        description: |
+          Using yaml.safe_load() in some places but yaml.load() in others.
+          yaml.load() is vulnerable to arbitrary code execution.
+        impact: Potential remote code execution vulnerability
+        recommendation: Ensure only yaml.safe_load() is used throughout
+        files:
+          - src/lee/orchestrator/core/project_config.py
+          - src/lee/orchestrator/core/template_manager.py
+
+      - id: SEC-002
+        title: Shell Injection Risk
+        severity: critical
+        location: src/lee/orchestrator/execution/executors.py
+        description: |
+          ShellExecutor uses asyncio.create_subprocess_shell() which is
+          vulnerable to shell injection if user input is not properly sanitized.
+        impact: Potential command injection vulnerability
+        recommendation: Use asyncio.create_subprocess_exec() with argument list
+        files:
+          - src/lee/orchestrator/execution/executors.py (ShellExecutor)
+
+      - id: SEC-003
+        title: Path Traversal Vulnerability
+        severity: high
+        location: src/lee/orchestrator/core/project_config.py
+        description: |
+          Path resolution in ProjectConfig.resolve_path() may allow path
+          traversal attacks if not properly validated.
+        impact: Potential access to files outside intended directories
+        recommendation: Add path validation to prevent directory traversal
+        files:
+          - src/lee/orchestrator/core/project_config.py
+
+      - id: SEC-004
+        title: Insufficient Input Validation
+        severity: high
+        location: Multiple files
+        description: |
+          User inputs and external data are not consistently validated
+          before use.
+        impact: Various potential exploits depending on context
+        recommendation: Implement comprehensive input validation layer
+        files:
+          - src/lee/orchestrator/execution/*.py
+
+      - id: SEC-005
+        title: Secrets in Configuration Files
+        severity: high
+        location: config/
+        description: |
+          .env.example exists but no verification that actual secrets
+          are not committed to the repository.
+        impact: Potential exposure of API keys and credentials
+        recommendation: Add pre-commit hooks to detect secrets
+        files:
+          - .env.example
+          - config/
+
+      - id: SEC-006
+        title: Unsafe Temporary File Handling
+        severity: medium
+        location: Multiple files
+        description: |
+          Temporary files created without proper permissions or secure
+          cleanup mechanisms.
+        impact: Information disclosure, temporary file vulnerabilities
+        recommendation: Use tempfile module with secure parameters
+        files:
+          - src/lee/orchestrator/**/*.py
+
+      - id: SEC-007
+        title: Missing Authentication/Authorization
+        severity: medium
+        location: src/lee/orchestrator/execution/
+        description: |
+          Gate approval and workflow execution lack proper authentication
+          and authorization mechanisms.
+        impact: Unauthorized access to workflows and approvals
+        recommendation: Implement proper auth/authz framework
+        files:
+          - src/lee/orchestrator/execution/gate_engine.py
+          - src/lee/orchestrator/execution/human_approval.py
+
+      - id: SEC-008
+        title: SQL Injection Risk
+        severity: high
+        location: src/lee/orchestrator/storage/
+        description: |
+          If raw SQL queries are constructed with user input, there may be
+          SQL injection vulnerabilities.
+        impact: Potential database compromise
+        recommendation: Audit all database access for proper parameterization
+        files:
+          - src/lee/orchestrator/storage/*.py
+
+  - id: CAT-005
+    name: Testing
+    severity: medium
+    description: Test coverage and quality issues
+    issues:
+      - id: TEST-001
+        title: Low Test Coverage
+        severity: high
+        location: tests/
+        description: |
+          Overall test coverage appears to be low. Many critical paths
+          lack unit tests.
+        impact: Higher bug risk, refactoring dangerous
+        recommendation: Increase test coverage to minimum 80%
+        files:
+          - tests/
+
+      - id: TEST-002
+        title: Missing Integration Tests
+        severity: high
+        location: tests/
+        description: |
+          Few integration tests validating end-to-end workflows.
+          Most tests are unit tests in isolation.
+        impact: Integration issues not caught until production
+        recommendation: Add comprehensive integration test suite
+        files:
+          - tests/
+
+      - id: TEST-003
+        title: Test File in Root Directory
+        severity: low
+        location: /
+        description: |
+          Debug/test scripts (test_pm_agent_quick.py, debug_pm_agent.py)
+          in root directory instead of tests/ directory.
+        impact: Project structure inconsistency
+        recommendation: Move to tests/ or scripts/ directory
+        files:
+          - test_pm_agent_quick.py
+          - debug_pm_agent.py
+          - debug_decision.py
+
+      - id: TEST-004
+        title: Hardcoded Test Data
+        severity: medium
+        location: Multiple test files
+        description: |
+          Test data hardcoded in test files instead of using fixtures
+          or factories.
+        impact: Tests brittle, difficult to maintain
+        recommendation: Use pytest fixtures and factory patterns
+        files:
+          - tests/**/*.py
+
+      - id: TEST-005
+        title: Slow Tests
+        severity: low
+        location: tests/
+        description: |
+          Some tests are slow due to not mocking external dependencies
+          (LLM calls, file system operations).
+        impact: Longer feedback loop during development
+        recommendation: Mock external dependencies in unit tests
+        files:
+          - tests/**/*.py
+
+      - id: TEST-006
+        title: Missing Edge Case Tests
+        severity: medium
+        location: tests/
+        description: |
+          Tests focus on happy paths with insufficient coverage of
+          error conditions and edge cases.
+        impact: Bugs in edge cases not caught
+        recommendation: Add comprehensive edge case testing
+        files:
+          - tests/**/*.py
+
+      - id: TEST-007
+        title: Flaky Tests
+        severity: medium
+        location: tests/
+        description: |
+          Some tests may be flaky due to timing issues, external dependencies,
+          or shared state.
+        impact: Unreliable test results
+        recommendation: Isolate tests and remove external dependencies
+        files:
+          - tests/**/*.py
+
+  - id: CAT-006
+    name: Configuration
+    severity: low
+    description: Configuration management issues
+    issues:
+      - id: CFG-001
+        title: Missing Configuration Validation
+        severity: medium
+        location: config/
+        description: |
+          Configuration files loaded without schema validation.
+          Invalid configurations cause runtime errors.
+        impact: Difficult to debug configuration issues
+        recommendation: Implement JSON Schema validation for all configs
+        files:
+          - config/*.yaml
+
+      - id: CFG-002
+        title: Hardcoded Configuration Values
+        severity: low
+        location: Multiple files
+        description: |
+          Some configuration values hardcoded in source instead of
+          being in configuration files.
+        impact: Difficult to customize, recompilation required
+        recommendation: Move all configurable values to config files
+        files:
+          - src/lee/**/*.py
+
+      - id: CFG-003
+        title: Inconsistent Configuration Formats
+        severity: low
+        location: config/
+        description: |
+          Mix of YAML, JSON, and environment variables for configuration
+          without clear guidance on when to use each.
+        impact: Configuration confusion
+        recommendation: Standardize on single format with clear usage patterns
+        files:
+          - config/
+
+      - id: CFG-004
+        title: Missing Environment-Specific Configs
+        severity: medium
+        location: config/
+        description: |
+          No clear separation between development, testing, and production
+          configurations.
+        impact: Risk of using wrong configuration in production
+        recommendation: Implement environment-specific configuration files
+        files:
+          - config/
+
+      - id: CFG-005
+        title: Undocumented Configuration Options
+        severity: low
+        location: config/
+        description: |
+          Many configuration options lack documentation explaining their
+          purpose and valid values.
+        impact: Difficult to configure correctly
+        recommendation: Add comprehensive configuration documentation
+        files:
+          - config/
+          - README.md
+
+      - id: CFG-006
+        title: pyproject.toml Missing Metadata
+        severity: low
+        location: pyproject.toml
+        description: |
+          Project metadata incomplete (missing maintainer, license, URLs).
+        impact: Poor package metadata
+        recommendation: Complete all standard metadata fields
+        files:
+          - pyproject.toml
+
+prioritized_action_items:
+  - priority: P0
+    timeframe: Immediate
+    items:
+      - SEC-001: Fix unsafe YAML loading
+      - SEC-002: Fix shell injection vulnerability
+      - SEC-003: Fix path traversal vulnerability
+
+  - priority: P1
+    timeframe: This Sprint
+    items:
+      - ARCH-001: Reduce coupling between components
+      - ARCH-002: Refactor ProjectConfig god object
+      - ARCH-005: Enforce executor constitution compliance
+      - DOC-001: Update README with accurate information
+      - DOC-004: Create architecture documentation
+      - TEST-001: Increase test coverage
+
+  - priority: P2
+    timeframe: Next Quarter
+    items:
+      - CODE-001: Standardize error handling
+      - CODE-002: Refactor large functions
+      - CODE-007: Extract magic numbers
+      - CODE-008: Improve logging
+      - SEC-004: Add input validation layer
+      - TEST-002: Add integration tests
+      - TEST-006: Add edge case tests
+
+  - priority: P3
+    timeframe: Future
+    items:
+      - CODE-003: Add type hints
+      - CODE-004: Address TODO comments
+      - CODE-005: Standardize naming
+      - CODE-006: Remove dead code
+      - DOC-002: Add module documentation
+      - DOC-003: Standardize docstrings
+      - ARCH-003: Fix circular dependencies
+      - ARCH-004: Complete abstraction layers
+      - ARCH-006: Eliminate code duplication
+      - ARCH-007: Standardize state management
+      - SEC-005: Add secret detection
+      - SEC-006: Secure temporary files
+      - SEC-007: Implement authentication
+      - SEC-008: Audit SQL queries
+      - TEST-003: Move test files
+      - TEST-004: Use test fixtures
+      - TEST-005: Mock dependencies
+      - TEST-007: Fix flaky tests
+      - CFG-001: Add config validation
+      - CFG-002: Extract hardcoded configs
+      - CFG-003: Standardize formats
+      - CFG-004: Environment-specific configs
+      - CFG-005: Document configuration
+      - CFG-006: Complete metadata
+
+metrics:
+  total_files_analyzed: 2716
+  python_files: ~120
+  yaml_files: ~100
+  markdown_files: ~50
+  lines_of_code_estimate: 35000
+  test_coverage_estimate: 40%
+  documentation_coverage: 55%
+
+recommendations:
+  immediate:
+    - Address all critical security vulnerabilities immediately
+    - Establish security review process for all code changes
+    - Create detailed architecture documentation
+    - Update README with accurate, current information
+
+  short_term:
+    - Refactor large classes and functions
+    - Standardize error handling across the codebase
+    - Increase test coverage to minimum 80%
+    - Add integration test suite
+    - Implement configuration validation
+
+  long_term:
+    - Establish code quality metrics and thresholds
+    - Implement continuous monitoring of technical debt
+    - Create technical debt paydown process
+    - Regular architecture reviews
+    - Establish documentation standards and processes
+
+tools_and_processes:
+  recommended_tools:
+    - pylint: Enhanced static analysis
+    - bandit: Security vulnerability scanning
+    - safety: Dependency vulnerability checking
+    - coverage: Test coverage tracking
+    - pre-commit: Automated code quality checks
+    - sphinx: API documentation generation
+
+  recommended_processes:
+    - Mandatory code review for all changes
+    - Security review for sensitive code
+    - Architecture review for significant changes
+    - Documentation review for public APIs
+    - Test coverage requirements
+    - Technical debt tracking in issue tracker
