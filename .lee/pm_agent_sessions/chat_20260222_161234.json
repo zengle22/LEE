@@ -1,8 +1,8 @@
 {
   "session_id": "chat_20260222_161234",
-  "run_id": "wf_task_db4200cb",
-  "last_active_timestamp": 1771748919.059168,
-  "history_summary": "1 turns",
+  "run_id": "wf_task_f97b2731",
+  "last_active_timestamp": 1771762365.078172,
+  "history_summary": "3 turns",
   "metadata": {
     "user_permissions": [],
     "department": null,
@@ -14,7 +14,31 @@
         "status": "success",
         "confidence": 0.9,
         "workflow_id": "wf_task_db4200cb"
+      },
+      {
+        "timestamp": 1771749113.343402,
+        "user_input": "批准 gate_s5_2_review_commits",
+        "action": "approve_gate",
+        "status": "success",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_db4200cb"
+      },
+      {
+        "timestamp": 1771757299.907259,
+        "user_input": "全新运行工作流workspace_cleanup",
+        "action": "run_workflow",
+        "status": "success",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_f97b2731",
+        "template_resolution": {
+          "input": "workspace_cleanup",
+          "resolved": "workflow.office.workspace_cleanup"
+        }
       }
-    ]
+    ],
+    "last_template_resolution": {
+      "input": "workspace_cleanup",
+      "resolved": "workflow.office.workspace_cleanup"
+    }
   }
 }
