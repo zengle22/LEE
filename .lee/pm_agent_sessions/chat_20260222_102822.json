@@ -1,0 +1,92 @@
+{
+  "session_id": "chat_20260222_102822",
+  "run_id": "wf_task_8cec6367",
+  "last_active_timestamp": 1771741407.815958,
+  "history_summary": "9 turns",
+  "metadata": {
+    "user_permissions": [],
+    "department": null,
+    "interaction_history": [
+      {
+        "timestamp": 1771727312.974188,
+        "user_input": "批准门禁gate_s5_2_review_commits",
+        "action": "approve_gate",
+        "status": "failed",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_03563a47"
+      },
+      {
+        "timestamp": 1771729898.110935,
+        "user_input": "继续Lee> 批准门禁gate_s5_2_review_commits\n[10:28:23] HTML('<pm>🤔 Processing...</pm>')\n[10:28:32] \n[10:28:32] 🧠 思考过程:\n[10:28:32]    Matched pattern: Approve commands\n[10:28:32] \n[10:28:32] ⚡ 执行动作: approve_gate\n[10:28:32] 🔄 工作流ID: wf_task_03563a47\n[10:28:32] ✅ 网关ID: gate_s5_2_review_commits\n[10:28:32] \n[10:28:32] \n🚦 Gate decision: gate_s5_2_review_commits -> approved\n[10:28:32]   Workflow: wf_task_03563a47\n[10:28:32] 执行未完成\n[10:28:32] \n[10:28:",
+        "action": "next_step",
+        "status": "failed",
+        "confidence": 0.9,
+        "workflow_id": "lee"
+      },
+      {
+        "timestamp": 1771729934.860137,
+        "user_input": "继续工作流wf_task_03563a47",
+        "action": "next_step",
+        "status": "failed",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_03563a47"
+      },
+      {
+        "timestamp": 1771731027.387456,
+        "user_input": "继续工作流",
+        "action": "next_step",
+        "status": "failed",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_03563a47"
+      },
+      {
+        "timestamp": 1771739497.7294238,
+        "user_input": "查看所有gate",
+        "action": "list_gates",
+        "status": "success",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_03563a47"
+      },
+      {
+        "timestamp": 1771740608.100126,
+        "user_input": "全新运行工作流workspace_cleanup",
+        "action": "run_workflow",
+        "status": "success",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_8cec6367",
+        "template_resolution": {
+          "input": "workspace_cleanup",
+          "resolved": "workflow.office.workspace_cleanup"
+        }
+      },
+      {
+        "timestamp": 1771740677.164274,
+        "user_input": "察看gate",
+        "action": "list_gates",
+        "status": "success",
+        "confidence": 0.95,
+        "workflow_id": "wf_task_8cec6367"
+      },
+      {
+        "timestamp": 1771740759.6967838,
+        "user_input": "批准门禁gate_s5_2_review_commits",
+        "action": "approve_gate",
+        "status": "failed",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_8cec6367"
+      },
+      {
+        "timestamp": 1771741407.815954,
+        "user_input": "继续工作流",
+        "action": "next_step",
+        "status": "failed",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_8cec6367"
+      }
+    ],
+    "last_template_resolution": {
+      "input": "workspace_cleanup",
+      "resolved": "workflow.office.workspace_cleanup"
+    }
+  }
+}
