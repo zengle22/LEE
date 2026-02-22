@@ -331,6 +331,8 @@ For EXECUTE_STEP intent:
 - If user mentions a specific step name/ID, extract it as step_id
 - If user mentions a workflow name/ID, extract it as workflow_ref
 - If no specific step mentioned, step_id should be null (will auto-select next step)
+- If user clearly asks to continue workflow (e.g. "继续工作流", "continue workflow"),
+  set params.execution_mode = "until_blocked" (and optionally params.max_steps)
 - params should include any additional parameters mentioned
 """,
             IntentType.APPROVE_GATE: """
@@ -543,6 +545,7 @@ For CREATE_WORKFLOW intent:
         import re
 
         user_input_lower = user_input.lower().strip()
+        is_continue_command = bool(re.match(r'^\s*(继续|continue)', user_input_lower, re.IGNORECASE))
 
         # Pattern 1: Extract workflow ID from "继续工作流 XXX" or "继续 wf_XXX"
         # Matches: "继续工作流wf_task_123", "继续 wf_abc", "continue workflow wf_123"
@@ -561,7 +564,11 @@ For CREATE_WORKFLOW intent:
                     workflow_ref=workflow_id,
                     step_id=None,
                     gate_id=None,
-                    params={},
+                    params=(
+                        {"execution_mode": "until_blocked", "max_steps": 20}
+                        if intent_type == IntentType.EXECUTE_STEP and is_continue_command
+                        else {}
+                    ),
                     confidence=0.95
                 )
 
