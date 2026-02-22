@@ -47,6 +47,7 @@ class SQLiteStore:
         """
         self.db_path = db_path
         self._conn: Optional[aiosqlite.Connection] = None
+        self._transaction_depth: int = 0
 
     async def connect(self):
         """建立数据库连接并创建表结构"""
@@ -89,8 +90,11 @@ class SQLiteStore:
         async def _transaction_context():
             if self._conn is None:
                 raise RuntimeError("Database not connected. Call connect() first.")
+            if self._transaction_depth > 0:
+                raise RuntimeError("Nested transactions are not supported.")
 
             cursor = await self._conn.cursor()
+            self._transaction_depth += 1
             try:
                 # 根据隔离级别选择 BEGIN 语句
                 if isolation_level == "REPEATABLE_READ":
@@ -118,6 +122,8 @@ class SQLiteStore:
                     print(f"Warning: ROLLBACK failed: {rollback_error}")
                 raise e
             finally:
+                if self._transaction_depth > 0:
+                    self._transaction_depth -= 1
                 await cursor.close()
 
         return _transaction_context()
@@ -204,6 +210,7 @@ class SQLiteStore:
                 error_message TEXT,
                 started_at TEXT,
                 completed_at TEXT,
+                invalidated_at TEXT,
 
                 FOREIGN KEY (workflow_id) REFERENCES workflow_instances(id)
             )
@@ -244,6 +251,16 @@ class SQLiteStore:
                 decided_at TEXT,
                 approval_criteria TEXT,
                 reviewers TEXT,
+                version INTEGER DEFAULT 1,
+                default_reject_action TEXT,
+                default_reject_target TEXT,
+                default_revise_action TEXT,
+                default_revise_target TEXT,
+                decision_action TEXT,
+                target_step TEXT,
+                structured_feedback TEXT,
+                issues TEXT,
+                invalidated_at TEXT,
 
                 PRIMARY KEY (workflow_id, gate_id),
                 FOREIGN KEY (workflow_id) REFERENCES workflow_instances(id)
@@ -697,6 +714,35 @@ class SQLiteStore:
             WHERE workflow_id = ? AND status = 'pending'
             ORDER BY created_at ASC
         """, (workflow_id,))
+        rows = await cursor.fetchall()
+        return [self._row_to_gate_approval(row) for row in rows]
+
+    async def get_gate_approvals(
+        self,
+        workflow_id: Optional[str] = None,
+        status: Optional[str] = None
+    ) -> List[GateApproval]:
+        """
+        获取门禁审批记录（可按 workflow_id/status 过滤）
+        """
+        sql = "SELECT * FROM gate_approvals"
+        where_clauses: List[str] = []
+        params: List[Any] = []
+
+        if workflow_id:
+            where_clauses.append("workflow_id = ?")
+            params.append(workflow_id)
+
+        if status:
+            where_clauses.append("status = ?")
+            params.append(status)
+
+        if where_clauses:
+            sql += " WHERE " + " AND ".join(where_clauses)
+
+        sql += " ORDER BY created_at ASC"
+
+        cursor = await self._conn.execute(sql, tuple(params))
         rows = await cursor.fetchall()
         return [self._row_to_gate_approval(row) for row in rows]
 

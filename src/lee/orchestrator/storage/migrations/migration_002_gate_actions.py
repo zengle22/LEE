@@ -60,8 +60,16 @@ NEW_INDEXES = [
 # Migration Functions
 # ============================================================================
 
+def _ensure_db_exists(db_path: Path) -> Path:
+    """Ensure target database file exists."""
+    path = Path(db_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Database file not found: {path}")
+    return path
+
 def check_table_exists(db_path: Path, table_name: str) -> bool:
     """检查表是否存在"""
+    db_path = _ensure_db_exists(db_path)
     conn = sqlite3.connect(str(db_path))
     try:
         cursor = conn.cursor()
@@ -76,6 +84,7 @@ def check_table_exists(db_path: Path, table_name: str) -> bool:
 
 def check_column_exists(db_path: Path, table_name: str, column_name: str) -> bool:
     """检查列是否存在"""
+    db_path = _ensure_db_exists(db_path)
     if not check_table_exists(db_path, table_name):
         return False
 
@@ -95,6 +104,7 @@ def upgrade(db_path: Path) -> None:
 
     添加 gate actions 相关的列和索引
     """
+    db_path = _ensure_db_exists(db_path)
     print(f"🔄 Starting migration 002 (Gate Actions v1.1) on {db_path}")
 
     conn = sqlite3.connect(str(db_path))
@@ -206,6 +216,7 @@ def downgrade(db_path: Path) -> None:
     注意：SQLite 不直接支持 DROP COLUMN（需要重建表）
     因此这里采用标记删除的方式
     """
+    db_path = _ensure_db_exists(db_path)
     print(f"🔄 Rolling back migration 002 (Gate Actions v1.1) on {db_path}")
 
     conn = sqlite3.connect(str(db_path))
@@ -252,6 +263,7 @@ def validate(db_path: Path) -> bool:
 
     检查所有必需的列和索引是否已创建
     """
+    db_path = _ensure_db_exists(db_path)
     print(f"🔍 Validating migration 002 on {db_path}")
 
     conn = sqlite3.connect(str(db_path))

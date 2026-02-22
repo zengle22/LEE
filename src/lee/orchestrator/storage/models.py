@@ -200,6 +200,12 @@ class Step:
     # 配置
     config: Dict[str, Any] = field(default_factory=dict)
 
+    # 失败策略（由 Orchestrator FailureHandler 消费）
+    on_failure: Optional[Dict[str, Any]] = None
+
+    # 兼容字段（历史测试/模板会传入 name）
+    name: str = ""
+
 
 # ========================================================================
 # 状态相关数据类
