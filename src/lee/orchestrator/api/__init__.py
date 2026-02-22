@@ -6,13 +6,15 @@ LEE Orchestrator API 层
 主要功能：
 1. get_state - 获取工作流状态
 2. list_ready_steps - 列出就绪步骤
-3. run_step - 执行指定步骤
-4. next_step - 自动执行下一步
-5. create_workflow - 创建工作流
-6. approve_gate / reject_gate - 门禁审批
+3. list_gates - 列出门禁
+4. run_step - 执行指定步骤
+5. next_step - 自动执行下一步
+6. create_workflow - 创建工作流
+7. approve_gate / reject_gate / revise_gate / flag_gate - 门禁操作
 """
 
 import asyncio
+import contextlib
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -21,13 +23,35 @@ from lee.orchestrator.storage.sqlite_store import SQLiteStore
 from lee.orchestrator.storage.models import WorkflowLevel, WorkflowStatus
 from lee.orchestrator.execution.orchestrator import Orchestrator
 from lee.orchestrator.execution.template_manager import TemplateManager
+from lee.orchestrator.api.contract import (
+    OrchestratorAction,
+    OrchestratorAPIRequest,
+    OrchestratorAPIResponse,
+    ResponseStatus,
+)
 
 
 # ========================================================================
 # 全局状态
 # ========================================================================
 
-_orchestrators: Dict[str, Orchestrator] = {}
+_orchestrators: Dict[tuple[str, int], Orchestrator] = {}
+
+
+def _normalize_project_dir(project_dir: str) -> str:
+    """Return canonical absolute project path."""
+    return str(Path(project_dir).resolve())
+
+
+def _orchestrator_cache_key(project_dir: str) -> tuple[str, int]:
+    """
+    Build cache key scoped by asyncio event loop.
+
+    pm_workflow() uses asyncio.run() per invocation, which creates a new loop.
+    Reusing loop-bound aiosqlite objects across loops can cause stalls/hangs.
+    """
+    loop = asyncio.get_running_loop()
+    return (_normalize_project_dir(project_dir), id(loop))
 
 
 async def _get_orchestrator(project_dir: str) -> Orchestrator:
@@ -40,11 +64,12 @@ async def _get_orchestrator(project_dir: str) -> Orchestrator:
     Returns:
         Orchestrator 实例
     """
-    project_dir = str(Path(project_dir).resolve())
+    normalized_project_dir = _normalize_project_dir(project_dir)
+    key = _orchestrator_cache_key(project_dir)
 
-    if project_dir not in _orchestrators:
+    if key not in _orchestrators:
         # 数据库路径
-        db_path = Path(project_dir) / ".workflow" / "orchestrator.db"
+        db_path = Path(normalized_project_dir) / ".workflow" / "orchestrator.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
         # 创建存储层
@@ -52,29 +77,79 @@ async def _get_orchestrator(project_dir: str) -> Orchestrator:
         await store.connect()
 
         # 模板目录
-        template_dir = Path(project_dir) / "lee" / "spec-global"
+        template_dir = Path(normalized_project_dir) / "lee" / "spec-global"
         if not template_dir.exists():
             # 尝试父目录
-            parent_lee = Path(project_dir).parent / "lee" / "spec-global"
+            parent_lee = Path(normalized_project_dir).parent / "lee" / "spec-global"
             if parent_lee.exists():
                 template_dir = parent_lee
 
         # v3.5: 传递 project_root 到 TemplateManager 以加载配置
         template_manager = TemplateManager(
             template_dir=str(template_dir),
-            project_root=project_dir
+            project_root=normalized_project_dir
         )
 
         # 创建 Orchestrator
         orchestrator = Orchestrator(
             store=store,
             template_manager=template_manager,
-            project_root=project_dir
+            project_root=normalized_project_dir
         )
 
-        _orchestrators[project_dir] = orchestrator
+        _orchestrators[key] = orchestrator
 
-    return _orchestrators[project_dir]
+    return _orchestrators[key]
+
+
+async def _release_orchestrator(project_dir: str) -> None:
+    """
+    Close and drop orchestrator bound to current event loop.
+
+    This is critical for pm_workflow() which creates transient event loops.
+    """
+    key = _orchestrator_cache_key(project_dir)
+    orchestrator = _orchestrators.pop(key, None)
+    if orchestrator is None:
+        return
+
+    with contextlib.suppress(Exception):
+        await orchestrator.store.close()
+
+
+def _serialize_gate(gate: Any) -> Dict[str, Any]:
+    """将 GateApproval/GateInfo 统一序列化为 dict。"""
+    return {
+        "workflow_id": getattr(gate, "workflow_id", None),
+        "gate_id": getattr(gate, "gate_id", None),
+        "step_id": getattr(gate, "step_id", None),
+        "status": getattr(getattr(gate, "status", None), "value", getattr(gate, "status", None)),
+        "approver": getattr(gate, "approver", None),
+        "comments": getattr(gate, "comments", None),
+        "reviewers": getattr(gate, "reviewers", []),
+        "approval_criteria": getattr(gate, "approval_criteria", []),
+        "version": getattr(gate, "version", None),
+        "default_reject_action": getattr(gate, "default_reject_action", None),
+        "default_reject_target": getattr(gate, "default_reject_target", None),
+        "default_revise_action": getattr(gate, "default_revise_action", None),
+        "default_revise_target": getattr(gate, "default_revise_target", None),
+        "decision_action": getattr(gate, "decision_action", None),
+        "target_step": getattr(gate, "target_step", None),
+        "structured_feedback": getattr(gate, "structured_feedback", None),
+        "issues": getattr(gate, "issues", None),
+        "created_at": (
+            gate.created_at.isoformat()
+            if getattr(gate, "created_at", None) else None
+        ),
+        "decided_at": (
+            gate.decided_at.isoformat()
+            if getattr(gate, "decided_at", None) else None
+        ),
+        "invalidated_at": (
+            gate.invalidated_at.isoformat()
+            if getattr(gate, "invalidated_at", None) else None
+        ),
+    }
 
 
 # ========================================================================
@@ -176,6 +251,37 @@ async def api_list_ready_steps(project_dir: str, workflow_id: str) -> List[Dict[
         }
         for s in ready_steps
     ]
+
+
+async def api_list_gates(
+    project_dir: str,
+    workflow_id: Optional[str] = None,
+    status: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    列出门禁（可按 workflow/status 过滤）
+
+    Args:
+        project_dir: 项目目录
+        workflow_id: 工作流 ID（可选）
+        status: 门禁状态过滤（可选）
+
+    Returns:
+        门禁列表
+    """
+    orchestrator = await _get_orchestrator(project_dir)
+    gates = await orchestrator.store.get_gate_approvals(
+        workflow_id=workflow_id,
+        status=status,
+    )
+
+    return {
+        "workflow_id": workflow_id,
+        "status_filter": status,
+        "total": len(gates),
+        "gates": [_serialize_gate(g) for g in gates],
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 async def api_run_step(
@@ -335,7 +441,9 @@ async def api_reject_gate(
     workflow_id: str,
     gate_id: str,
     rejecter: str,
-    reason: str
+    reason: str,
+    action: Optional[str] = None,
+    target_step: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     拒绝门禁
@@ -346,6 +454,8 @@ async def api_reject_gate(
         gate_id: 门禁 ID
         rejecter: 拒绝人
         reason: 拒绝原因
+        action: 拒绝动作（可选）
+        target_step: 回退目标步骤（可选）
 
     Returns:
         拒绝结果
@@ -355,14 +465,85 @@ async def api_reject_gate(
         workflow_id,
         gate_id,
         rejecter,
-        reason
+        reason,
+        action=action,
+        target_step=target_step,
     )
 
-    return {
+    response = {
         "status": result.status,
         "step_id": result.step_id,
         "workflow_id": result.workflow_id,
         "message": result.message,
+        "action": action,
+        "target_step": target_step,
+        "timestamp": datetime.now().isoformat(),
+    }
+    if isinstance(getattr(result, "output", None), dict):
+        if result.output.get("new_workflow_id"):
+            response["new_workflow_id"] = result.output.get("new_workflow_id")
+    return response
+
+
+async def api_revise_gate(
+    project_dir: str,
+    workflow_id: str,
+    gate_id: str,
+    reviewer: str,
+    reason: str,
+    target_step: Optional[str] = None,
+    structured_feedback: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    修订门禁（要求重试）
+    """
+    orchestrator = await _get_orchestrator(project_dir)
+    result = await orchestrator.revise_gate(
+        workflow_id=workflow_id,
+        gate_id=gate_id,
+        reviewer=reviewer,
+        reason=reason,
+        target_step=target_step,
+        structured_feedback=structured_feedback,
+    )
+    return {
+        "status": result.status,
+        "step_id": result.step_id,
+        "workflow_id": result.workflow_id,
+        "target_step": target_step,
+        "message": result.message,
+        "output": result.output if hasattr(result, "output") else None,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+async def api_flag_gate(
+    project_dir: str,
+    workflow_id: str,
+    gate_id: str,
+    reporter: str,
+    issues: List[str],
+    continue_workflow: bool = True,
+) -> Dict[str, Any]:
+    """
+    标记门禁问题
+    """
+    orchestrator = await _get_orchestrator(project_dir)
+    result = await orchestrator.flag_gate(
+        workflow_id=workflow_id,
+        gate_id=gate_id,
+        reporter=reporter,
+        issues=issues,
+        continue_workflow=continue_workflow,
+    )
+    return {
+        "status": result.status,
+        "step_id": result.step_id,
+        "workflow_id": result.workflow_id,
+        "continue_workflow": continue_workflow,
+        "issues": issues,
+        "message": result.message,
+        "output": result.output if hasattr(result, "output") else None,
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -414,6 +595,169 @@ async def api_resume_workflow(
 
 
 # ========================================================================
+# Contract v1 统一分发器
+# ========================================================================
+
+async def orchestrator_api_dispatch(
+    request: OrchestratorAPIRequest
+) -> OrchestratorAPIResponse:
+    """
+    Contract v1 统一分发入口
+    """
+    normalized_project_dir = _normalize_project_dir(request.project_dir)
+    action = request.normalized_action()
+    payload = request.payload or {}
+
+    try:
+        if action == OrchestratorAction.GET_STATE.value:
+            data = await api_get_state(normalized_project_dir, request.workflow_id)
+
+        elif action == OrchestratorAction.LIST_READY_STEPS.value:
+            if not request.workflow_id:
+                raise ValueError("workflow_id is required for list_ready_steps")
+            data = await api_list_ready_steps(normalized_project_dir, request.workflow_id)
+
+        elif action == OrchestratorAction.LIST_GATES.value:
+            data = await api_list_gates(
+                normalized_project_dir,
+                request.workflow_id,
+                payload.get("status"),
+            )
+
+        elif action == OrchestratorAction.RUN_STEP.value:
+            if not request.workflow_id:
+                raise ValueError("workflow_id is required for run_step")
+            data = await api_run_step(normalized_project_dir, request.workflow_id, request.step_id)
+
+        elif action == OrchestratorAction.NEXT_STEP.value:
+            if not request.workflow_id:
+                raise ValueError("workflow_id is required for next_step")
+            data = await api_next_step(normalized_project_dir, request.workflow_id)
+
+        elif action == OrchestratorAction.CREATE_WORKFLOW.value:
+            level = payload.get("level")
+            template_id = payload.get("template_id")
+            if not level or not template_id:
+                raise ValueError("level and template_id are required for create_workflow")
+            data = await api_create_workflow(
+                normalized_project_dir,
+                level,
+                template_id,
+                payload.get("parent_id"),
+                payload.get("data"),
+            )
+
+        elif action == OrchestratorAction.RUN_UNTIL_BLOCKED.value:
+            if not request.workflow_id:
+                raise ValueError("workflow_id is required for run_until_blocked")
+            data = await api_run_until_blocked(
+                normalized_project_dir,
+                request.workflow_id,
+                payload.get("max_steps", 10),
+            )
+
+        elif action == OrchestratorAction.APPROVE_GATE.value:
+            if not request.workflow_id:
+                raise ValueError("workflow_id is required for approve_gate")
+            gate_id = payload.get("gate_id")
+            approver = payload.get("approver")
+            if not gate_id or not approver:
+                raise ValueError("gate_id and approver are required for approve_gate")
+            data = await api_approve_gate(
+                normalized_project_dir,
+                request.workflow_id,
+                gate_id,
+                approver,
+                payload.get("comments", ""),
+            )
+
+        elif action == OrchestratorAction.REJECT_GATE.value:
+            if not request.workflow_id:
+                raise ValueError("workflow_id is required for reject_gate")
+            gate_id = payload.get("gate_id")
+            rejecter = payload.get("rejecter")
+            reason = payload.get("reason")
+            if not gate_id or not rejecter or not reason:
+                raise ValueError("gate_id, rejecter and reason are required for reject_gate")
+            data = await api_reject_gate(
+                normalized_project_dir,
+                request.workflow_id,
+                gate_id,
+                rejecter,
+                reason,
+                payload.get("action"),
+                payload.get("target_step"),
+            )
+
+        elif action == OrchestratorAction.REVISE_GATE.value:
+            if not request.workflow_id:
+                raise ValueError("workflow_id is required for revise_gate")
+            gate_id = payload.get("gate_id")
+            reviewer = payload.get("reviewer")
+            reason = payload.get("reason")
+            if not gate_id or not reviewer or not reason:
+                raise ValueError("gate_id, reviewer and reason are required for revise_gate")
+            data = await api_revise_gate(
+                normalized_project_dir,
+                request.workflow_id,
+                gate_id,
+                reviewer,
+                reason,
+                payload.get("target_step"),
+                payload.get("structured_feedback"),
+            )
+
+        elif action == OrchestratorAction.FLAG_GATE.value:
+            if not request.workflow_id:
+                raise ValueError("workflow_id is required for flag_gate")
+            gate_id = payload.get("gate_id")
+            reporter = payload.get("reporter")
+            issues = payload.get("issues")
+            if not gate_id or not reporter or not isinstance(issues, list):
+                raise ValueError("gate_id, reporter and issues(list) are required for flag_gate")
+            data = await api_flag_gate(
+                normalized_project_dir,
+                request.workflow_id,
+                gate_id,
+                reporter,
+                issues,
+                payload.get("continue_workflow", True),
+            )
+
+        elif action == OrchestratorAction.PAUSE_WORKFLOW.value:
+            if not request.workflow_id:
+                raise ValueError("workflow_id is required for pause_workflow")
+            data = await api_pause_workflow(normalized_project_dir, request.workflow_id)
+
+        elif action == OrchestratorAction.RESUME_WORKFLOW.value:
+            if not request.workflow_id:
+                raise ValueError("workflow_id is required for resume_workflow")
+            data = await api_resume_workflow(normalized_project_dir, request.workflow_id)
+
+        else:
+            raise ValueError(f"Unknown action: {request.action}")
+
+        return OrchestratorAPIResponse(
+            status=ResponseStatus.SUCCESS.value,
+            action=action,
+            data=data,
+            error=None,
+            meta={"timestamp": datetime.now().isoformat()},
+        )
+
+    except Exception as e:
+        return OrchestratorAPIResponse(
+            status=ResponseStatus.ERROR.value,
+            action=action,
+            data=None,
+            error=str(e),
+            meta={"timestamp": datetime.now().isoformat()},
+        )
+    finally:
+        await _release_orchestrator(normalized_project_dir)
+
+
+# ========================================================================
 # pm_workflow_handler - 统一入口（供 MCP 工具调用）
 # ========================================================================
 
@@ -440,94 +784,31 @@ async def pm_workflow_handler(
     Returns:
         操作结果
     """
-    try:
-        if action == "get_state":
-            return await api_get_state(project_dir, workflow_id)
+    response = await orchestrator_api_dispatch(
+        OrchestratorAPIRequest(
+            action=action,
+            project_dir=project_dir,
+            workflow_id=workflow_id,
+            step_id=step_id,
+            payload=kwargs,
+        )
+    )
 
-        elif action == "list_ready_steps":
-            if not workflow_id:
-                return {"error": "workflow_id is required for list_ready_steps"}
-            return {"ready_steps": await api_list_ready_steps(project_dir, workflow_id)}
-
-        elif action == "run_step":
-            if not workflow_id:
-                return {"error": "workflow_id is required for run_step"}
-            return await api_run_step(project_dir, workflow_id, step_id)
-
-        elif action == "next_step":
-            if not workflow_id:
-                return {"error": "workflow_id is required for next_step"}
-            return await api_next_step(project_dir, workflow_id)
-
-        elif action == "create":
-            level = kwargs.get("level")
-            template_id = kwargs.get("template_id")
-            if not level or not template_id:
-                return {"error": "level and template_id are required for create"}
-            return await api_create_workflow(
-                project_dir,
-                level,
-                template_id,
-                kwargs.get("parent_id"),
-                kwargs.get("data"),
-            )
-
-        elif action == "run_until_blocked":
-            if not workflow_id:
-                return {"error": "workflow_id is required for run_until_blocked"}
-            max_steps = kwargs.get("max_steps", 10)
-            return await api_run_until_blocked(project_dir, workflow_id, max_steps)
-
-        elif action == "approve_gate":
-            if not workflow_id:
-                return {"error": "workflow_id is required for approve_gate"}
-            gate_id = kwargs.get("gate_id")
-            approver = kwargs.get("approver")
-            if not gate_id or not approver:
-                return {"error": "gate_id and approver are required for approve_gate"}
-            return await api_approve_gate(
-                project_dir,
-                workflow_id,
-                gate_id,
-                approver,
-                kwargs.get("comments", ""),
-            )
-
-        elif action == "reject_gate":
-            if not workflow_id:
-                return {"error": "workflow_id is required for reject_gate"}
-            gate_id = kwargs.get("gate_id")
-            rejecter = kwargs.get("rejecter")
-            reason = kwargs.get("reason")
-            if not gate_id or not rejecter or not reason:
-                return {"error": "gate_id, rejecter and reason are required for reject_gate"}
-            return await api_reject_gate(
-                project_dir,
-                workflow_id,
-                gate_id,
-                rejecter,
-                reason,
-            )
-
-        elif action == "pause":
-            if not workflow_id:
-                return {"error": "workflow_id is required for pause"}
-            return await api_pause_workflow(project_dir, workflow_id)
-
-        elif action == "resume":
-            if not workflow_id:
-                return {"error": "workflow_id is required for resume"}
-            return await api_resume_workflow(project_dir, workflow_id)
-
-        else:
-            return {"error": f"Unknown action: {action}"}
-
-    except Exception as e:
+    if response.status == ResponseStatus.ERROR.value:
         return {
-            "error": str(e),
+            "error": response.error,
             "action": action,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": response.meta.get("timestamp", datetime.now().isoformat()),
         }
+
+    # Legacy compatibility: keep historical return shapes.
+    if action == "list_ready_steps":
+        return {"ready_steps": response.data or []}
+
+    if isinstance(response.data, dict):
+        return response.data
+
+    return {"result": response.data}
 
 
 # ========================================================================
@@ -557,16 +838,24 @@ def pm_workflow(
 
 # 导出
 __all__ = [
+    "OrchestratorAction",
+    "OrchestratorAPIRequest",
+    "OrchestratorAPIResponse",
+    "ResponseStatus",
     "api_get_state",
     "api_list_ready_steps",
+    "api_list_gates",
     "api_run_step",
     "api_next_step",
     "api_create_workflow",
     "api_run_until_blocked",
     "api_approve_gate",
     "api_reject_gate",
+    "api_revise_gate",
+    "api_flag_gate",
     "api_pause_workflow",
     "api_resume_workflow",
+    "orchestrator_api_dispatch",
     "pm_workflow_handler",
     "pm_workflow",
 ]
