@@ -63,7 +63,7 @@ huawei_deepseek:
   base_url: https://api.modelarts-maas.com/v2/chat/completions
   api_key: RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ
   model: DeepSeek-R1
-  temperature: 0.1
+  temperature: 0.5
   max_tokens: 16000
   timeout: 300
   description: "华为 ModelArts 部署的 DeepSeek-R1 模型（高优先级）"
@@ -90,8 +90,8 @@ deepseek:
   base_url: https://api.deepseek.com
   api_key: sk-32763972ec7841aab1b45af0ca2c97d3
   model: deepseek-chat
-  temperature: 0.1
-  max_tokens: 8192
+  temperature: 0.6
+  max_tokens: 16000
   timeout: 300
   description: "DeepSeek 官方 Coder 模型（高优先级）"
 

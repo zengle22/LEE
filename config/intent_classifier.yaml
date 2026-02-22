@@ -1,0 +1,288 @@
+# PM Agent Intent Classifier Configuration
+# Defines patterns for intent recognition and permission rules
+
+# Intent definitions
+intents:
+  query_status:
+    description: Query workflow status and progress
+    llm_fallback: true
+    allowed_tools:
+      - lee.workflow.status
+    requires_params: false
+    patterns:
+      - regex: '^(当前)?状态|status|state'
+        priority: 1
+        case_sensitive: false
+        description: Status query keywords
+
+      - regex: '^查看|显示|列出|list|show'
+        priority: 2
+        case_sensitive: false
+        description: List/show commands
+
+      - regex: '^怎么.*了|如何.*了|完成.*了'
+        priority: 3
+        case_sensitive: false
+        description: Progress queries
+
+      - regex: '^进度|progress'
+        priority: 4
+        case_sensitive: false
+        description: Progress keywords
+
+  execute_step:
+    description: Execute a workflow step
+    llm_fallback: true
+    allowed_tools:
+      - lee.workflow.run
+    requires_params: true
+    patterns:
+      - regex: '^(运行|执行|跑|run|execute)'
+        priority: 1
+        case_sensitive: false
+        description: Execute commands
+
+      - regex: '^(开始|启动|start)'
+        priority: 2
+        case_sensitive: false
+        description: Start commands
+
+      - regex: '^(继续|continue)'
+        priority: 3
+        case_sensitive: false
+        description: Continue commands
+
+  approve_gate:
+    description: Approve a human gate
+    llm_fallback: true
+    allowed_tools:
+      - lee.gate.approve
+    requires_params: true
+    patterns:
+      - regex: '^(批准|通过|同意|approve|accept)'
+        priority: 1
+        case_sensitive: false
+        description: Approve commands
+
+  reject_gate:
+    description: Reject a human gate
+    llm_fallback: true
+    allowed_tools:
+      - lee.gate.reject
+    requires_params: true
+    patterns:
+      - regex: '^(拒绝|reject|deny)'
+        priority: 1
+        case_sensitive: false
+        description: Reject commands
+
+  revise_gate:
+    description: Revise a gate and trigger retry
+    llm_fallback: true
+    allowed_tools:
+      - lee.gate.reject
+    requires_params: true
+    patterns:
+      - regex: '^(修订|修正|revise|retry gate)'
+        priority: 1
+        case_sensitive: false
+        description: Revise gate commands
+
+  flag_gate:
+    description: Flag issues on a gate
+    llm_fallback: true
+    allowed_tools:
+      - lee.gate.reject
+    requires_params: true
+    patterns:
+      - regex: '^(标记|flag)'
+        priority: 1
+        case_sensitive: false
+        description: Flag gate commands
+
+  list_workflows:
+    description: List available workflows
+    llm_fallback: true
+    allowed_tools:
+      - lee.workflow.status
+    requires_params: false
+    patterns:
+      - regex: '^有哪些工作流|工作流列表|list.*workflow'
+        priority: 1
+        case_sensitive: false
+        description: List workflows commands
+
+  list_gates:
+    description: List workflow gates
+    llm_fallback: true
+    allowed_tools:
+      - lee.workflow.status
+    requires_params: false
+    patterns:
+      - regex: '^(有哪些门禁|门禁列表|查看.*(门禁|gate|gates)|显示.*(门禁|gate|gates)|列出.*(门禁|gate|gates)|当前.*(门禁|gate|gates)|查.*(门禁|gate|gates)|list.*gate|gate.*有哪些)'
+        priority: 1
+        case_sensitive: false
+        description: List gates commands
+
+  pause_workflow:
+    description: Pause workflow execution
+    llm_fallback: true
+    allowed_tools:
+      - lee.workflow.run
+    requires_params: true
+    patterns:
+      - regex: '^(暂停|pause)'
+        priority: 1
+        case_sensitive: false
+        description: Pause workflow commands
+
+  resume_workflow:
+    description: Resume workflow execution
+    llm_fallback: true
+    allowed_tools:
+      - lee.workflow.run
+    requires_params: true
+    patterns:
+      - regex: '^(恢复|继续执行|resume)'
+        priority: 1
+        case_sensitive: false
+        description: Resume workflow commands
+
+  show_help:
+    description: Show help information
+    llm_fallback: false
+    allowed_tools: []
+    requires_params: false
+    patterns:
+      - regex: '^(帮助|help|怎么用|使用指南)'
+        priority: 1
+        case_sensitive: false
+        description: Help commands
+
+  run_workflow:
+    description: Run a workflow template
+    llm_fallback: true
+    allowed_tools:
+      - lee.workflow.run
+    requires_params: true
+    patterns:
+      - regex: '^(全新|重新|新建)?\s*(运行|run|执行|execute|启动|start).*(工作流|workflow)\s*[a-z][a-z0-9_.-]+'
+        priority: 0
+        case_sensitive: false
+        description: Run workflow with explicit workflow keyword
+
+      - regex: '^(运行|run|执行|execute|启动|start).*\s+(office\.|workflow\.|wf_|[a-z]+\.[a-z]+\.)'
+        priority: 1
+        case_sensitive: false
+        description: Run workflow with template ID
+
+      - regex: '^(在当前目录|在.*目录)?(运行|run).*\s+([a-z][a-z0-9_]+\.)?[a-z][a-z0-9_]+\.[a-z][a-z0-9_]+'
+        priority: 2
+        case_sensitive: false
+        description: Run workflow in current directory
+
+# Global permissions
+permissions:
+  allowed_tools:
+    - lee.workflow.run
+    - lee.workflow.status
+    - lee.gate.approve
+    - lee.gate.reject
+    - lee.step.retry
+    - lee.run.verify
+    - lee.context.query
+
+  denied_tools:
+    - shell
+    - git
+    - file_write
+
+  constitution_rules:
+    - "All code changes must go through workflow -> executor -> patch/receipt"
+    - "On failure, only allow: retry | human_gate_required | switch_executor"
+
+# Department-specific configurations
+departments:
+  stg:
+    description: Strategy department specific intents
+    intents:
+      analyze_market:
+        description: Analyze market signals
+        llm_fallback: true
+        allowed_tools:
+          - lee.workflow.run
+        requires_params: true
+        patterns:
+          - regex: '分析市场|market.*analysis'
+            priority: 1
+            case_sensitive: false
+            description: Market analysis commands
+
+    permissions:
+      allowed_tools:
+        - lee.workflow.run
+        - lee.workflow.status
+        - lee.gate.approve
+        - lee.gate.reject
+      denied_tools:
+        - shell
+        - git
+        - file_write
+      constitution_rules:
+        - "Market analysis must follow opportunity discovery workflow"
+
+  dev:
+    description: Development department specific intents
+    intents:
+      fix_bug:
+        description: Fix a bug
+        llm_fallback: true
+        allowed_tools:
+          - lee.workflow.run
+        requires_params: true
+        patterns:
+          - regex: '修复.*bug|fix.*bug'
+            priority: 1
+            case_sensitive: false
+            description: Bug fix commands
+
+    permissions:
+      allowed_tools:
+        - lee.workflow.run
+        - lee.workflow.status
+        - lee.gate.approve
+        - lee.gate.reject
+        - lee.context.query
+      denied_tools:
+        - shell
+        - git
+      constitution_rules:
+        - "All bug fixes must follow the bug-fix workflow"
+
+  qa:
+    description: QA department specific intents
+    intents:
+      run_tests:
+        description: Run test suite
+        llm_fallback: true
+        allowed_tools:
+          - lee.workflow.run
+        requires_params: true
+        patterns:
+          - regex: '运行测试|run.*test'
+            priority: 1
+            case_sensitive: false
+            description: Test execution commands
+
+    permissions:
+      allowed_tools:
+        - lee.workflow.run
+        - lee.workflow.status
+        - lee.gate.approve
+        - lee.gate.reject
+      denied_tools:
+        - shell
+        - git
+        - file_write
+      constitution_rules:
+        - "Test execution must follow the test-plan-execution workflow"

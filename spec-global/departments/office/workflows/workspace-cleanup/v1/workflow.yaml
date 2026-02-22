@@ -271,6 +271,14 @@ stages:
         name: "执行提交"
         run: agent.office.git_atomic_committer
         condition: "gate.s5_2_review_commits.approved"
+        on_failure:
+          retry: 2
+          retry_delay_seconds: 2
+          fallback: human_review
+        success_criteria:
+          require_commands:
+            - "git commit"
+          require_new_commit: true
         inputs:
           - workspace_path: "{{ params.workspace_path }}"
           - mode: "execute"

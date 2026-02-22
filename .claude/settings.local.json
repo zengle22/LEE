@@ -6,7 +6,9 @@
       "Bash(python -m pytest:*)",
       "Bash(pip install:*)",
       "Bash(python3:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(python:*)",
+      "Bash(lee gates list:*)"
     ]
   },
   "commands": {
