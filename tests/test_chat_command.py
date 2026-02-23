@@ -47,6 +47,20 @@ async def test_chat_decision_engine_uses_direct_api(monkeypatch, tmp_path: Path)
                 "reasoning": "",
                 "confidence": 0.9,
             }
+        ),
+        process_input_with_timeout=AsyncMock(
+            return_value={
+                "status": "success",
+                "action": "run_workflow",
+                "data": {
+                    "template_id": "workflow.office.workspace_cleanup",
+                    "template_input": "workspace_cleanup",
+                    "template_resolved": "workflow.office.workspace_cleanup",
+                    "workflow_id": "wf_task_1",
+                },
+                "reasoning": "",
+                "confidence": 0.9,
+            }
         )
     )
     repl._display_result_data = lambda *_a, **_k: None
@@ -223,6 +237,19 @@ async def test_chat_shows_gate_block_hint(monkeypatch, tmp_path: Path):
     repl.session_id = "test-session"
     repl.runtime = SimpleNamespace(
         process_input=AsyncMock(
+            return_value={
+                "status": "success",
+                "action": "run_workflow",
+                "data": {
+                    "template_id": "workflow.office.workspace_cleanup",
+                    "workflow_id": "wf_task_1",
+                    "run_result": {"status": "blocked", "blocked_at": "step_review"},
+                },
+                "reasoning": "",
+                "confidence": 0.9,
+            }
+        ),
+        process_input_with_timeout=AsyncMock(
             return_value={
                 "status": "success",
                 "action": "run_workflow",
