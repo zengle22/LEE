@@ -398,6 +398,47 @@ class SQLiteStore:
         rows = await cursor.fetchall()
         return [self._row_to_workflow(row) for row in rows]
 
+    async def list_workflows(
+        self,
+        limit: int = 100,
+        status: Optional[WorkflowStatus] = None,
+        level: Optional[WorkflowLevel] = None,
+        parent_id: Optional[str] = None
+    ) -> List[WorkflowInstance]:
+        """
+        List workflows with optional filters.
+
+        Args:
+            limit: Maximum number of workflows to return
+            status: Optional status filter
+            level: Optional level filter
+            parent_id: Optional parent_id filter
+
+        Returns:
+            List of workflows, ordered by created_at DESC
+        """
+        sql = "SELECT * FROM workflow_instances WHERE 1=1"
+        params = []
+
+        if status:
+            sql += " AND status = ?"
+            params.append(status.value)
+
+        if level:
+            sql += " AND level = ?"
+            params.append(level.value)
+
+        if parent_id:
+            sql += " AND parent_id = ?"
+            params.append(parent_id)
+
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        cursor = await self._conn.execute(sql, params)
+        rows = await cursor.fetchall()
+        return [self._row_to_workflow(row) for row in rows]
+
     # ========================================================================
     # TaskExecution 操作
     # ========================================================================
@@ -512,6 +553,40 @@ class SQLiteStore:
         )
         await self._conn.commit()
         return cursor.rowcount or 0
+
+    async def list_task_executions(
+        self,
+        workflow_id: str,
+        limit: int = 100,
+        status: Optional[TaskExecutionStatus] = None
+    ) -> List[TaskExecution]:
+        """
+        List task executions for a workflow.
+
+        Args:
+            workflow_id: Workflow ID
+            limit: Maximum number of executions to return
+            status: Optional status filter
+
+        Returns:
+            List of task executions, ordered by started_at DESC
+        """
+        sql = """
+            SELECT * FROM task_executions
+            WHERE workflow_id = ?
+        """
+        params = [workflow_id]
+
+        if status:
+            sql += " AND status = ?"
+            params.append(status.value)
+
+        sql += " ORDER BY started_at DESC LIMIT ?"
+        params.append(limit)
+
+        cursor = await self._conn.execute(sql, params)
+        rows = await cursor.fetchall()
+        return [self._row_to_task_execution(row) for row in rows]
 
     # ========================================================================
     # Template 操作
