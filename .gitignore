@@ -119,3 +119,4 @@ examples/*/.project/
 examples/*/.workflow/
 .claude-sandbox/
 tmp-test/
+.lee/chat_history.txt
