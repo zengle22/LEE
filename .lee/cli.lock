@@ -1,1 +1,0 @@
-{"pid": 41890, "started_at": "2026-02-23T10:40:51.025281", "cmd": "/Users/zengle/git/ai/lee/src/lee/cli/main.py pm-workflow get-state --workflow-id wf_task_f97b2731 --project-dir ."}
