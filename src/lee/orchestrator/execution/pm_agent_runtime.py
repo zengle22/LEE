@@ -11,6 +11,7 @@ Refactored to use Decision Engine architecture with proper separation of concern
 - Decision Orchestration (Decision Engine)
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -18,6 +19,7 @@ import uuid
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from pathlib import Path
+from datetime import datetime
 
 from lee.orchestrator.execution.orchestrator import Orchestrator
 from lee.orchestrator.core.event_bus import get_event_bus, EventType
@@ -41,8 +43,37 @@ from lee.orchestrator.execution.pm_agent.models import (
     ExecutionContext,
     APIResponse,
 )
+from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+
+class JobStatus(str, Enum):
+    """后台任务状态"""
+    PENDING = "pending"      # 已创建，等待执行
+    RUNNING = "running"      # 执行中
+    COMPLETED = "completed"  # 已完成
+    FAILED = "failed"        # 失败
+    CANCELLED = "cancelled"  # 已取消
+
+
+@dataclass
+class Job:
+    """后台任务"""
+    id: str
+    text: str
+    session_id: str
+    status: JobStatus = JobStatus.PENDING
+    created_at: datetime = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    workflow_id: Optional[str] = None
+
+    def __post_init__(self):
+        if self.created_at is None:
+            self.created_at = datetime.now()
 
 @dataclass
 class CompiledParams:
@@ -82,7 +113,18 @@ class PMAgentRuntime:
     - Orchestrates decision-making pipeline
     - Executes decisions via API wrapper
     - Maintains backward compatibility with existing code
+
+    Phase 1 Enhancements:
+    - Timeout protection for all operations
+    - Enhanced error handling and persistence
+    - Workflow status query methods
     """
+
+    # Default timeout for operations (in seconds)
+    DEFAULT_TIMEOUT = 600
+
+    # Maximum concurrent background jobs
+    MAX_CONCURRENT_JOBS = 3
 
     def __init__(
         self,
@@ -108,6 +150,10 @@ class PMAgentRuntime:
         self.project_dir = project_dir or str(Path.cwd())
         self.event_bus = get_event_bus()
         self.failure_guard = FailureGuard()
+
+        # Background job management
+        self.running_jobs: Dict[str, asyncio.Task] = {}
+        self.jobs: Dict[str, Job] = {}  # In-memory job cache
 
         # Initialize session manager
         self.session_manager = PMAgentSession(self.project_dir)
@@ -343,6 +389,246 @@ class PMAgentRuntime:
         # Return formatted response
         return result
 
+    async def process_input_with_timeout(
+        self,
+        user_input: str,
+        session_id: Optional[str] = None,
+        timeout: int = None
+    ) -> Dict[str, Any]:
+        """
+        Process user input with timeout protection.
+
+        Args:
+            user_input: User's natural language input
+            session_id: Optional session ID
+            timeout: Timeout in seconds (default: DEFAULT_TIMEOUT)
+
+        Returns:
+            Formatted response dictionary with status, data, error, etc.
+            On timeout, returns status="timeout" with guidance.
+        """
+        if timeout is None:
+            timeout = self.DEFAULT_TIMEOUT
+
+        try:
+            result = await asyncio.wait_for(
+                self.process_input(user_input, session_id),
+                timeout=timeout
+            )
+            return result
+        except asyncio.TimeoutError:
+            # Log timeout event
+            logger.warning(
+                f"Process input timed out after {timeout}s for session {session_id}"
+            )
+
+            # Try to extract workflow_id from context for better error message
+            workflow_id = None
+            if session_id:
+                try:
+                    context = await self._get_or_create_context(session_id)
+                    workflow_id = context.current_workflow_id
+                except Exception:
+                    pass
+
+            error_msg = (
+                f"执行超时（{timeout}秒）"
+            )
+            if workflow_id:
+                error_msg += f"\n工作流 ID: {workflow_id}"
+                error_msg += f"\n使用 '/status {workflow_id}' 查看状态"
+            else:
+                error_msg += "\n使用 '/list' 查看最近的任务"
+
+            return {
+                "status": "timeout",
+                "error": error_msg,
+                "action": "timeout",
+                "timeout_seconds": timeout,
+            }
+        except Exception as e:
+            logger.error(f"Process input failed: {e}", exc_info=True)
+            return {
+                "status": "failed",
+                "error": str(e),
+                "action": "error",
+            }
+
+    async def get_workflow_status(
+        self, workflow_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed status of a workflow.
+
+        Args:
+            workflow_id: Workflow instance ID
+
+        Returns:
+            Dict with workflow status info, or None if not found
+        """
+        wf = await self.store.get_workflow(workflow_id)
+        if not wf:
+            return None
+
+        # Get pending gates
+        pending_gates = []
+        try:
+            gates = await self.store.get_pending_gates(workflow_id)
+            pending_gates = [
+                {
+                    "gate_id": g.gate_id,
+                    "step_id": g.step_id,
+                    "created_at": g.created_at.isoformat() if g.created_at else None,
+                }
+                for g in gates
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to fetch gates for {workflow_id}: {e}")
+
+        # Get recent task executions
+        recent_executions = []
+        try:
+            executions = await self.store.list_task_executions(
+                workflow_id=workflow_id,
+                limit=5
+            )
+            recent_executions = [
+                {
+                    "step_name": e.step_name,
+                    "executor_type": e.executor_type,
+                    "status": e.status.value,
+                    "started_at": e.started_at.isoformat() if e.started_at else None,
+                    "completed_at": e.completed_at.isoformat() if e.completed_at else None,
+                    "error_message": e.error_message,
+                }
+                for e in executions
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to fetch executions for {workflow_id}: {e}")
+
+        return {
+            "workflow_id": wf.id,
+            "template_id": wf.template_id,
+            "status": wf.status.value,
+            "current_step": wf.current_step,
+            "level": wf.level.value if wf.level else None,
+            "parent_id": wf.parent_id,
+            "created_at": wf.created_at.isoformat() if wf.created_at else None,
+            "updated_at": wf.updated_at.isoformat() if wf.updated_at else None,
+            "completed_at": wf.completed_at.isoformat() if wf.completed_at else None,
+            "completed_steps": wf.data.get("completed_steps", []),
+            "params": wf.data.get("params", {}),
+            "pending_gates": pending_gates,
+            "recent_executions": recent_executions,
+        }
+
+    async def list_recent_workflows(
+        self, limit: int = 10, status: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        List recent workflows.
+
+        Args:
+            limit: Maximum number of workflows to return
+            status: Optional status filter
+
+        Returns:
+            List of workflow summary dicts
+        """
+        try:
+            workflows = await self.store.list_workflows(
+                limit=limit,
+                status=status
+            )
+        except Exception as e:
+            logger.error(f"Failed to list workflows: {e}")
+            return []
+
+        return [
+            {
+                "workflow_id": wf.id,
+                "template_id": wf.template_id,
+                "status": wf.status.value,
+                "current_step": wf.current_step,
+                "level": wf.level.value if wf.level else None,
+                "created_at": wf.created_at.isoformat() if wf.created_at else None,
+                "updated_at": wf.updated_at.isoformat() if wf.updated_at else None,
+            }
+            for wf in workflows
+        ]
+
+    async def get_workflow_logs(
+        self, workflow_id: str, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        Get recent logs for a workflow.
+
+        Args:
+            workflow_id: Workflow instance ID
+            limit: Maximum number of log entries
+
+        Returns:
+            List of log entry dicts
+        """
+        logs = []
+
+        # Get task execution logs
+        try:
+            executions = await self.store.list_task_executions(
+                workflow_id=workflow_id,
+                limit=limit
+            )
+
+            for exec in executions:
+                logs.append({
+                    "type": "task_execution",
+                    "step_name": exec.step_name,
+                    "executor_type": exec.executor_type,
+                    "status": exec.status.value,
+                    "started_at": exec.started_at.isoformat() if exec.started_at else None,
+                    "error_message": exec.error_message,
+                })
+        except Exception as e:
+            logger.warning(f"Failed to fetch executions for {workflow_id}: {e}")
+
+        # Get event logs if available
+        try:
+            if hasattr(self.store, 'event_log'):
+                events = self.store.event_log.get_events_for_run(workflow_id)
+                for event in events[-limit:]:
+                    logs.append({
+                        "type": "event",
+                        "event_type": event.event_type.value,
+                        "timestamp": event.timestamp,
+                        "step_id": event.step_id,
+                        "actor": event.actor,
+                        "error": event.error,
+                        "data": event.data,
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to fetch event logs for {workflow_id}: {e}")
+
+        # Sort by timestamp
+        logs.sort(key=lambda x: x.get("timestamp") or x.get("started_at") or "", reverse=True)
+
+        return logs[:limit]
+
+    async def get_current_workflow_id(self, session_id: str) -> Optional[str]:
+        """
+        Get the current workflow ID for a session.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            Current workflow ID or None
+        """
+        try:
+            context = await self._get_or_create_context(session_id)
+            return context.current_workflow_id
+        except Exception:
+            return None
+
     async def _get_or_create_context(self, session_id: Optional[str]) -> ConversationContext:
         """Get existing context or create new one"""
         if session_id:
@@ -539,3 +825,301 @@ class PMAgentRuntime:
             
         await self.store.update_workflow_data(run_id, current_data)
         return True
+
+    # ========================================================================
+    # Background Job Management (Phase 2)
+    # ========================================================================
+
+    async def create_job(
+        self,
+        text: str,
+        session_id: Optional[str] = None,
+        timeout: int = None
+    ) -> str:
+        """
+        Create a background job and return immediately.
+
+        Args:
+            text: User input text
+            session_id: Optional session ID
+            timeout: Optional timeout in seconds
+
+        Returns:
+            Job ID
+        """
+        # Check concurrent job limit
+        running_count = sum(
+            1 for job in self.jobs.values()
+            if job.status == JobStatus.RUNNING
+        )
+        if running_count >= self.MAX_CONCURRENT_JOBS:
+            # Wait for a slot or queue the job
+            pass  # For now, just queue it
+
+        # Create job
+        job_id = uuid.uuid4().hex[:12]
+        job = Job(
+            id=job_id,
+            text=text,
+            session_id=session_id or "",
+            status=JobStatus.PENDING,
+            created_at=datetime.now()
+        )
+        self.jobs[job_id] = job
+
+        # Create background task
+        task = asyncio.create_task(
+            self._execute_job(job_id, text, session_id, timeout)
+        )
+        self.running_jobs[job_id] = task
+
+        # Add callback to clean up when done
+        task.add_done_callback(
+            lambda t: self._on_job_done(job_id, t)
+        )
+
+        logger.info(f"Created background job {job_id} for input: {text[:50]}...")
+        return job_id
+
+    async def _execute_job(
+        self,
+        job_id: str,
+        text: str,
+        session_id: Optional[str],
+        timeout: Optional[int]
+    ):
+        """
+        Execute a background job.
+
+        This runs in an asyncio task.
+        """
+        job = self.jobs.get(job_id)
+        if not job:
+            logger.error(f"Job {job_id} not found")
+            return
+
+        try:
+            # Update status to running
+            job.status = JobStatus.RUNNING
+            job.started_at = datetime.now()
+
+            # Publish job started event
+            self.event_bus.publish(Event(
+                type=EventType.JOB_STARTED,
+                payload={
+                    "job_id": job_id,
+                    "text": text,
+                    "session_id": session_id,
+                },
+                source_workflow=job_id,
+                timestamp=datetime.now().isoformat(),
+                event_id=uuid.uuid4().hex,
+            ))
+
+            # Execute with timeout
+            if timeout is None:
+                timeout = self.DEFAULT_TIMEOUT
+
+            result = await asyncio.wait_for(
+                self.process_input(text, session_id),
+                timeout=timeout
+            )
+
+            # Job completed successfully
+            job.status = JobStatus.COMPLETED
+            job.completed_at = datetime.now()
+            job.result = result
+
+            # Extract workflow_id from result if available
+            if result and isinstance(result, dict):
+                data = result.get('data', {})
+                if isinstance(data, dict):
+                    job.workflow_id = data.get('workflow_id') or data.get('state', {}).get('workflow_id')
+
+            # Publish job completed event
+            self.event_bus.publish(Event(
+                type=EventType.JOB_COMPLETED,
+                payload={
+                    "job_id": job_id,
+                    "result": result,
+                    "workflow_id": job.workflow_id,
+                },
+                source_workflow=job_id,
+                timestamp=datetime.now().isoformat(),
+                event_id=uuid.uuid4().hex,
+            ))
+
+            logger.info(f"Job {job_id} completed successfully")
+
+        except asyncio.TimeoutError:
+            # Job timed out
+            job.status = JobStatus.FAILED
+            job.completed_at = datetime.now()
+            job.error = f"Timeout after {timeout}s"
+
+            # Publish job failed event
+            self.event_bus.publish(Event(
+                type=EventType.JOB_FAILED,
+                payload={
+                    "job_id": job_id,
+                    "error": job.error,
+                },
+                source_workflow=job_id,
+                timestamp=datetime.now().isoformat(),
+                event_id=uuid.uuid4().hex,
+            ))
+
+            logger.warning(f"Job {job_id} timed out")
+
+        except Exception as e:
+            # Job failed with error
+            job.status = JobStatus.FAILED
+            job.completed_at = datetime.now()
+            job.error = str(e)
+
+            # Publish job failed event
+            self.event_bus.publish(Event(
+                type=EventType.JOB_FAILED,
+                payload={
+                    "job_id": job_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+                source_workflow=job_id,
+                timestamp=datetime.now().isoformat(),
+                event_id=uuid.uuid4().hex,
+            ))
+
+            logger.error(f"Job {job_id} failed: {e}", exc_info=True)
+
+    def _on_job_done(self, job_id: str, task: asyncio.Task):
+        """Callback when job task completes."""
+        # Clean up running_jobs
+        self.running_jobs.pop(job_id, None)
+
+        # Check for exceptions
+        try:
+            exception = task.exception()
+            if exception:
+                logger.error(f"Job {job_id} task raised exception: {exception}")
+        except asyncio.CancelledError:
+            logger.info(f"Job {job_id} was cancelled")
+            if job_id in self.jobs:
+                self.jobs[job_id].status = JobStatus.CANCELLED
+        except Exception as e:
+            # No exception or already handled
+            pass
+
+    async def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get status of a background job.
+
+        Args:
+            job_id: Job ID
+
+        Returns:
+            Job status dict or None if not found
+        """
+        job = self.jobs.get(job_id)
+        if not job:
+            return None
+
+        return {
+            "job_id": job.id,
+            "text": job.text,
+            "session_id": job.session_id,
+            "status": job.status.value,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "workflow_id": job.workflow_id,
+            "error": job.error,
+            "has_result": job.result is not None,
+        }
+
+    async def list_jobs(
+        self,
+        limit: int = 20,
+        status: Optional[JobStatus] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        List background jobs.
+
+        Args:
+            limit: Maximum number of jobs to return
+            status: Optional status filter
+
+        Returns:
+            List of job dicts, ordered by created_at DESC
+        """
+        jobs = list(self.jobs.values())
+
+        # Filter by status
+        if status:
+            jobs = [j for j in jobs if j.status == status]
+
+        # Sort by created_at DESC
+        jobs.sort(key=lambda j: j.created_at or datetime.min, reverse=True)
+
+        # Convert to dicts
+        return [
+            {
+                "job_id": j.id,
+                "text": j.text[:60] + "..." if len(j.text) > 60 else j.text,
+                "session_id": j.session_id,
+                "status": j.status.value,
+                "created_at": j.created_at.isoformat() if j.created_at else None,
+                "started_at": j.started_at.isoformat() if j.started_at else None,
+                "completed_at": j.completed_at.isoformat() if j.completed_at else None,
+                "workflow_id": j.workflow_id,
+                "error": j.error,
+            }
+            for j in jobs[:limit]
+        ]
+
+    async def cancel_job(self, job_id: str) -> bool:
+        """
+        Cancel a running job.
+
+        Args:
+            job_id: Job ID
+
+        Returns:
+            True if cancelled, False otherwise
+        """
+        job = self.jobs.get(job_id)
+        if not job:
+            return False
+
+        if job.status != JobStatus.RUNNING and job.status != JobStatus.PENDING:
+            return False
+
+        task = self.running_jobs.get(job_id)
+        if task and not task.done():
+            task.cancel()
+            job.status = JobStatus.CANCELLED
+            job.completed_at = datetime.now()
+
+            # Publish job cancelled event
+            self.event_bus.publish(Event(
+                type=EventType.JOB_CANCELLED,
+                payload={"job_id": job_id},
+                source_workflow=job_id,
+                timestamp=datetime.now().isoformat(),
+                event_id=uuid.uuid4().hex,
+            ))
+
+            return True
+
+        return False
+
+    def get_active_job_count(self) -> int:
+        """Get number of active (running/pending) jobs."""
+        return sum(
+            1 for job in self.jobs.values()
+            if job.status in (JobStatus.PENDING, JobStatus.RUNNING)
+        )
+
+    def get_total_job_count(self) -> int:
+        """Get total number of jobs."""
+        return len(self.jobs)
