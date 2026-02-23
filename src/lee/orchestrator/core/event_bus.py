@@ -31,6 +31,12 @@ class EventType(Enum):
     GATE_PENDING = "gate_pending"
     WORKFLOW_COMPLETED = "workflow_completed"
 
+    # Background Job Events (Phase 2)
+    JOB_STARTED = "job_started"
+    JOB_COMPLETED = "job_completed"
+    JOB_FAILED = "job_failed"
+    JOB_CANCELLED = "job_cancelled"
+
 
 @dataclass
 class Event:
