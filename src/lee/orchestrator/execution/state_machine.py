@@ -251,7 +251,8 @@ class WorkflowStateMachine(IStateMachine):
         self,
         workflow_id: str,
         step_id: str,
-        output: Dict[str, Any]
+        output: Dict[str, Any],
+        step_outputs: Optional[List[Any]] = None
     ) -> StepResult:
         """
         完成步骤
@@ -259,8 +260,9 @@ class WorkflowStateMachine(IStateMachine):
         操作：
         1. 更新 TaskExecution 状态
         2. 将 step_id 添加到 completed_steps
-        3. 计算下一个就绪步骤
-        4. 检查工作流是否完成
+        3. 存储 step_outputs 用于后续 $outputs 引用解析
+        4. 计算下一个就绪步骤
+        5. 检查工作流是否完成
         """
         instance = await self.store.get_workflow(workflow_id)
         if not instance:
@@ -271,9 +273,30 @@ class WorkflowStateMachine(IStateMachine):
         if step_id not in completed_steps:
             completed_steps.append(step_id)
 
+        # 更新 step_outputs 映射
+        step_outputs_map = dict(instance.data.get("step_outputs", {}))
+        if step_outputs:
+            # 提取输出路径（支持 OutputSpec dataclass, dict, str）
+            output_paths = []
+            for out in step_outputs:
+                if hasattr(out, 'path'):
+                    # OutputSpec dataclass
+                    output_paths.append(out.path)
+                elif isinstance(out, dict) and out.get("path"):
+                    output_paths.append(out["path"])
+                elif isinstance(out, str):
+                    output_paths.append(out)
+
+            if output_paths:
+                # Merge with existing paths (handle retry scenario)
+                existing = step_outputs_map.get(step_id, {}).get("paths", [])
+                merged_paths = list(dict.fromkeys(existing + output_paths))  # Preserve order, remove dupes
+                step_outputs_map[step_id] = {"paths": merged_paths}
+
         await self.store.update_workflow_data(workflow_id, {
             **instance.data,
             "completed_steps": completed_steps,
+            "step_outputs": step_outputs_map,
         })
 
         # 清除 current_step
