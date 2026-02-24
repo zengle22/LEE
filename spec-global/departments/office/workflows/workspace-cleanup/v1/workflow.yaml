@@ -31,6 +31,7 @@ roles:
     - agent.office.git_atomic_committer     # LLM：原子化提交
   skills:
     - skill.office.gitignore_updater        # 程序：更新 .gitignore
+    - skill.office.runtime_state_cleanup    # 程序：清理运行时状态文件
     - skill.office.git_push                 # 程序：推送到远程
   gates:
     - gate.office.commit_approval           # 人类：批准提交
@@ -287,6 +288,16 @@ stages:
           - path: ".workflow/workspace-cleanup/commit-history.yaml"
             description: "提交历史记录"
 
+      - id: s5_4_cleanup_runtime_state
+        name: "清理运行时状态文件"
+        run: skill.office.runtime_state_cleanup
+        depends_on: ["s5_3_execute_commits"]
+        inputs:
+          - workspace_path: "{{ params.workspace_path }}"
+        outputs:
+          - path: ".workflow/workspace-cleanup/runtime-cleanup.yaml"
+            description: "运行时状态清理记录"
+
   # ========== Stage 6: 推送远程 ==========
   - id: s6_push_remote
     name: "推送远程"
@@ -298,6 +309,7 @@ stages:
       - id: s6_1_push_commits
         name: "推送提交"
         run: skill.office.git_push
+        depends_on: ["s5_4_cleanup_runtime_state"]
         inputs:
           - workspace_path: "{{ params.workspace_path }}"
           - remote: "{{ params.remote }}"
@@ -327,6 +339,7 @@ output_structure: |
   ├── doc-organization.yaml                 # 文档整理结果
   ├── commit-plan.yaml                      # 提交规划
   ├── commit-history.yaml                   # 提交历史
+  ├── runtime-cleanup.yaml                  # 运行时状态清理记录
   └── push-result.yaml                      # 推送结果
 
   .workflow/workspace-cleanup/tech-debt/
@@ -359,3 +372,4 @@ notes: |
   4. 技术债文档仅记录问题，不会修复代码
   5. 所有更改都会通过 Git 提交，可以随时回滚
   6. 推送前会要求人工确认
+  7. 会自动清理 .lee 目录下的运行时状态文件（会话/锁文件等）

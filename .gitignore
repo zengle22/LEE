@@ -90,6 +90,9 @@ nul
 metagpt/
 metagpt_workspace/
 MetaGPT/
+.lee/pm_agent_sessions/
+.lee/cli.lock
+input.mode
 
 # LEE 配置和状态文件 (可选，根据需要保留)
 # .project/
@@ -133,3 +136,6 @@ tmp-test/
 *.pyo
 # Python virtual env
 .Python
+
+# LEE 运行时状态
+.lee/chat_history.txt

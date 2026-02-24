@@ -346,8 +346,8 @@ def test_llm_executor():
     assert result["status"] in ["completed", "failed"]
     if result["status"] == "completed":
         assert "generated_text" in result
-        # GLM 模型名称
-        assert result["model"] in ["glm-4-flash", "glm-4", "unknown"]
+        # GLM 模型名称 (包括 glm-5)
+        assert result["model"] in ["glm-4-flash", "glm-4", "glm-5", "unknown"]
     else:
         # 如果失败，检查是否有错误信息
         assert "error" in result

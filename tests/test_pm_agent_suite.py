@@ -2,6 +2,7 @@
 import pytest
 import os
 import time
+import json
 from lee.orchestrator.execution.pm_agent_session import PMAgentSession, SessionState
 
 def test_session_persistence(tmp_path):
@@ -30,6 +31,37 @@ def test_list_active(tmp_path):
     active = session.list_active(max_age_seconds=5000)
     assert len(active) == 1
     assert active[0].session_id == "sess1"
+
+
+def test_session_saved_under_workflow_runtime_dir(tmp_path):
+    session = PMAgentSession(str(tmp_path))
+    state = SessionState("sess_runtime", "run_runtime", time.time(), "history", {})
+    session.save("sess_runtime", state)
+
+    saved_path = tmp_path / ".workflow" / "runtime" / "pm_agent_sessions" / "sess_runtime.json"
+    assert saved_path.exists()
+
+
+def test_restore_falls_back_to_legacy_pm_agent_sessions_dir(tmp_path):
+    legacy_dir = tmp_path / ".lee" / "pm_agent_sessions"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+    legacy_path = legacy_dir / "legacy_sess.json"
+
+    payload = {
+        "session_id": "legacy_sess",
+        "run_id": "wf_legacy",
+        "last_active_timestamp": time.time(),
+        "history_summary": "legacy",
+        "metadata": {"source": "legacy"},
+    }
+    legacy_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    session = PMAgentSession(str(tmp_path))
+    restored = session.restore("legacy_sess")
+
+    assert restored is not None
+    assert restored.session_id == "legacy_sess"
+    assert restored.run_id == "wf_legacy"
 
 # --- Runtime Tests ---
 

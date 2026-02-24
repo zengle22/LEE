@@ -3,12 +3,15 @@ Lee Chat Command
 PM Agent interactive interface (REPL).
 
 Refactored to use new Decision Engine architecture.
+
+Phase 2: Async job mode - tasks run in background, chat never blocks.
 """
 import asyncio
 import sys
 import click
 from pathlib import Path
 from contextlib import contextmanager
+from typing import Optional
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import HTML
@@ -196,6 +199,11 @@ class LeeChatREPL:
                     self._show_metrics()
                     continue
 
+                # Check for internal commands starting with /
+                if user_input.startswith('/'):
+                    await self._handle_internal_command(user_input)
+                    continue
+
                 await self.handle_input(user_input)
                 self.turn_count += 1
 
@@ -237,8 +245,8 @@ class LeeChatREPL:
             text = self.security.sanitize_and_validate_input(text, self.session_id)
 
             if self.runtime.enable_decision_engine and self.llm_executor:
-                # Use new Decision Engine
-                await self._handle_with_decision_engine(text)
+                # Use async job mode (Phase 2)
+                await self._handle_with_job_mode(text)
             else:
                 # Legacy mode
                 await self._handle_legacy(text)
@@ -250,12 +258,52 @@ class LeeChatREPL:
         except Exception as e:
             self._print_error(f"Unexpected error: {e}")
 
+    async def _handle_with_job_mode(self, text: str):
+        """
+        Handle input using async job mode.
+
+        Creates a background job and returns immediately with job_id.
+        """
+        from lee.orchestrator.execution.pm_agent_runtime import JobStatus
+
+        # Create background job
+        job_id = await self.runtime.create_job(text, self.session_id)
+
+        # Show job created message
+        click.echo()
+        click.echo(click.style(f"✅ 任务已创建", fg='green', bold=True))
+        click.echo(f"  任务 ID: {click.style(job_id, fg='cyan', bold=True)}")
+        click.echo(f"  输入: {text[:60]}{'...' if len(text) > 60 else ''}")
+        click.echo()
+        click.echo(click.style("💡 提示:", fg='blue'))
+        click.echo(f"  使用 '/jobs' 查看所有任务")
+        click.echo(f"  使用 '/status' 查看工作流状态")
+
+        # Briefly check if job completed quickly (for instant operations)
+        await asyncio.sleep(0.5)
+        job_status = await self.runtime.get_job_status(job_id)
+        if job_status and job_status['status'] == 'completed':
+            click.echo()
+            click.echo(click.style("⚡ 任务已完成!", fg='green'))
+            result = job_status.get('result')
+            if result:
+                self._display_result_data(result.get('data', {}))
+
+        elif job_status and job_status['status'] == 'failed':
+            click.echo()
+            click.echo(click.style("❌ 任务失败", fg='red'))
+            if job_status.get('error'):
+                click.echo(f"  错误: {job_status['error']}")
+        else:
+            click.echo()
+            click.echo(click.style("⏳ 任务正在后台执行...", fg='yellow'))
+
     async def _handle_with_decision_engine(self, text: str):
         """Handle input using Decision Engine via direct API responses."""
         click.echo(HTML("<pm>🤔 Processing...</pm>"))
 
-        # Process input end-to-end (this calls Orchestrator API internally)
-        result = await self.runtime.process_input(text, self.session_id)
+        # Process input with timeout protection
+        result = await self.runtime.process_input_with_timeout(text, self.session_id)
 
         # Show reasoning/LLM thought process
         if 'reasoning' in result and result['reasoning']:
@@ -411,6 +459,362 @@ class LeeChatREPL:
         click.echo()
         click.echo(click.style("💡 提示: 使用 'lee list' 查看所有可用的命令", fg='blue'))
 
+    async def _handle_internal_command(self, text: str):
+        """Handle internal commands starting with /"""
+        parts = text.strip().split()
+        if not parts:
+            return
+
+        cmd = parts[0].lower()
+
+        if cmd == '/status':
+            # /status [workflow_id]
+            workflow_id = parts[1] if len(parts) > 1 else None
+            await self._cmd_status(workflow_id)
+
+        elif cmd == '/log':
+            # /log <workflow_id> [lines]
+            if len(parts) < 2:
+                self._print_error("用法: /log <workflow_id> [行数]")
+                return
+            workflow_id = parts[1]
+            lines = int(parts[2]) if len(parts) > 2 else 50
+            await self._cmd_log(workflow_id, lines)
+
+        elif cmd == '/list':
+            # /list [limit]
+            limit = int(parts[1]) if len(parts) > 1 else 10
+            await self._cmd_list(limit)
+
+        elif cmd == '/errors':
+            # /errors <workflow_id>
+            if len(parts) < 2:
+                self._print_error("用法: /errors <workflow_id>")
+                return
+            workflow_id = parts[1]
+            await self._cmd_errors(workflow_id)
+
+        elif cmd == '/jobs':
+            # /jobs [status]
+            status_filter = parts[1] if len(parts) > 1 else None
+            await self._cmd_jobs(status_filter)
+
+        elif cmd == '/watch':
+            # /watch <workflow_id>
+            if len(parts) < 2:
+                self._print_error("用法: /watch <workflow_id>")
+                return
+            workflow_id = parts[1]
+            await self._cmd_watch(workflow_id)
+
+        else:
+            self._print_error(f"未知命令: {cmd}")
+            self._print_info("可用命令: /status, /log, /list, /errors, /jobs, /watch")
+
+    async def _cmd_status(self, workflow_id: Optional[str]):
+        """Show workflow status"""
+        # If no workflow_id provided, try to get current from session
+        if not workflow_id:
+            try:
+                workflow_id = await self.runtime.get_current_workflow_id(self.session_id)
+            except Exception:
+                pass
+
+            if not workflow_id:
+                self._print_error("没有指定工作流 ID，且会话中没有活跃的工作流")
+                self._print_info("使用 '/list' 查看最近的工作流")
+                return
+
+        status = await self.runtime.get_workflow_status(workflow_id)
+
+        if not status:
+            self._print_error(f"工作流不存在: {workflow_id}")
+            return
+
+        click.echo()
+        click.echo(click.style("📊 工作流状态", fg='cyan', bold=True))
+        click.echo(f"  ID: {status['workflow_id']}")
+        click.echo(f"  模板: {status['template_id']}")
+        click.echo(f"  状态: {self._format_status(status['status'])}")
+        if status['current_step']:
+            click.echo(f"  当前步骤: {status['current_step']}")
+        if status['level']:
+            click.echo(f"  层级: {status['level']}")
+        if status['parent_id']:
+            click.echo(f"  父工作流: {status['parent_id']}")
+
+        # Time info
+        from datetime import datetime
+
+        if status['created_at']:
+            created = datetime.fromisoformat(status['created_at'])
+            click.echo(f"  创建时间: {created.strftime('%Y-%m-%d %H:%M:%S')}")
+
+            # Calculate duration
+            if status['completed_at']:
+                completed = datetime.fromisoformat(status['completed_at'])
+                duration = completed - created
+                duration_str = self._format_duration(duration)
+                click.echo(f"  完成时间: {completed.strftime('%Y-%m-%d %H:%M:%S')}")
+                click.echo(f"  执行耗时: {duration_str}")
+            else:
+                # Still running
+                now = datetime.now()
+                duration = now - created
+                duration_str = self._format_duration(duration)
+                click.echo(f"  已运行: {duration_str}")
+        elif status['updated_at']:
+            updated = datetime.fromisoformat(status['updated_at'])
+            click.echo(f"  更新时间: {updated.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        # Completed steps
+        completed_steps = status.get('completed_steps', [])
+        if completed_steps:
+            click.echo(f"  已完成步骤 ({len(completed_steps)}):")
+            for step in completed_steps[-5:]:  # Show last 5
+                click.echo(f"    - {step}")
+            if len(completed_steps) > 5:
+                click.echo(f"    ... 还有 {len(completed_steps) - 5} 个")
+
+        # Pending gates
+        pending_gates = status.get('pending_gates', [])
+        if pending_gates:
+            click.echo()
+            click.echo(click.style("🚧 待处理门禁:", fg='yellow', bold=True))
+            for gate in pending_gates:
+                click.echo(f"  - {gate['gate_id']} @ {gate['step_id']}")
+
+        # Recent executions
+        recent_executions = status.get('recent_executions', [])
+        if recent_executions:
+            click.echo()
+            click.echo(click.style("⚡ 最近执行:", fg='blue'))
+            for exec in recent_executions[:3]:
+                status_icon = "✅" if exec['status'] == 'completed' else "❌" if exec['status'] == 'failed' else "⏳"
+                click.echo(f"  {status_icon} {exec['step_name']} ({exec['executor_type']})")
+                if exec.get('error_message'):
+                    click.echo(f"     错误: {exec['error_message'][:80]}...")
+
+    async def _cmd_log(self, workflow_id: str, lines: int):
+        """Show workflow logs"""
+        logs = await self.runtime.get_workflow_logs(workflow_id, lines)
+
+        if not logs:
+            self._print_info(f"工作流 {workflow_id} 没有日志")
+            return
+
+        click.echo()
+        click.echo(click.style(f"📝 工作流日志 ({workflow_id})", fg='cyan', bold=True))
+        click.echo(f"  显示最近 {len(logs)} 条记录")
+        click.echo()
+
+        for log in logs:
+            if log['type'] == 'task_execution':
+                status_icon = "✅" if log['status'] == 'completed' else "❌" if log['status'] == 'failed' else "⏳"
+                timestamp = log.get('started_at', '')[:19] if log.get('started_at') else ''
+                click.echo(f"{status_icon} [{timestamp}] {log['step_name']} ({log['executor_type']})")
+                if log.get('error_message'):
+                    click.echo(f"   错误: {log['error_message'][:100]}")
+
+            elif log['type'] == 'event':
+                timestamp = log.get('timestamp', '')[:19] if log.get('timestamp') else ''
+                click.echo(f"📌 [{timestamp}] {log['event_type']} @ {log.get('step_id', 'N/A')}")
+                if log.get('error'):
+                    click.echo(f"   错误: {log['error'][:100]}")
+
+    async def _cmd_list(self, limit: int):
+        """List recent workflows"""
+        workflows = await self.runtime.list_recent_workflows(limit)
+
+        if not workflows:
+            self._print_info("没有工作流")
+            return
+
+        click.echo()
+        click.echo(click.style(f"📋 最近的工作流 (最近 {len(workflows)} 个)", fg='cyan', bold=True))
+        click.echo()
+
+        for wf in workflows:
+            status_str = self._format_status(wf['status'])
+            created = wf['created_at'][:16] if wf.get('created_at') else 'N/A'
+            click.echo(f"{status_str} {wf['workflow_id']}")
+            click.echo(f"   模板: {wf['template_id']}")
+            click.echo(f"   创建: {created}")
+            if wf.get('current_step'):
+                click.echo(f"   当前: {wf['current_step']}")
+            click.echo()
+
+    async def _cmd_errors(self, workflow_id: str):
+        """Show errors for a workflow"""
+        logs = await self.runtime.get_workflow_logs(workflow_id, limit=100)
+
+        # Filter logs with errors
+        error_logs = [
+            log for log in logs
+            if log.get('error_message') or (log.get('type') == 'event' and log.get('error'))
+        ]
+
+        if not error_logs:
+            self._print_info(f"工作流 {workflow_id} 没有错误记录")
+            return
+
+        click.echo()
+        click.echo(click.style(f"❌ 错误记录 ({workflow_id})", fg='red', bold=True))
+        click.echo()
+
+        for log in error_logs[:20]:  # Max 20 errors
+            if log['type'] == 'task_execution':
+                timestamp = log.get('started_at', '')[:19] if log.get('started_at') else ''
+                click.echo(f"❌ [{timestamp}] {log['step_name']}")
+                click.echo(f"   错误: {log['error_message']}")
+            elif log['type'] == 'event':
+                timestamp = log.get('timestamp', '')[:19] if log.get('timestamp') else ''
+                click.echo(f"❌ [{timestamp}] {log['event_type']}")
+                if log.get('error'):
+                    click.echo(f"   错误: {log['error']}")
+            click.echo()
+
+    async def _cmd_jobs(self, status_filter: Optional[str] = None):
+        """List background jobs"""
+        from lee.orchestrator.execution.pm_agent_runtime import JobStatus
+
+        # Convert status string to enum
+        status_enum = None
+        if status_filter:
+            try:
+                status_enum = JobStatus(status_filter.lower())
+            except ValueError:
+                self._print_error(f"无效的状态: {status_filter}")
+                self._print_info("有效状态: pending, running, completed, failed, cancelled")
+                return
+
+        jobs = await self.runtime.list_jobs(status=status_enum)
+
+        if not jobs:
+            self._print_info("没有后台任务")
+            return
+
+        # Count by status
+        status_counts = {}
+        for job in self.runtime.jobs.values():
+            status_counts[job.status.value] = status_counts.get(job.status.value, 0) + 1
+
+        click.echo()
+        click.echo(click.style(f"📋 后台任务", fg='cyan', bold=True))
+        click.echo(f"  总计: {len(self.runtime.jobs)} 个任务")
+        click.echo(f"  活跃: {self.runtime.get_active_job_count()} 个")
+        if status_counts:
+            click.echo(f"  状态分布: {', '.join(f'{k}: {v}' for k, v in sorted(status_counts.items()))}")
+        click.echo()
+
+        for job in jobs:
+            status_str = self._format_status(job['status'])
+            created = job['created_at'][:16] if job.get('created_at') else 'N/A'
+            click.echo(f"{status_str} {click.style(job['job_id'], fg='cyan', bold=True)}")
+            click.echo(f"   输入: {job['text']}")
+            click.echo(f"   创建: {created}")
+
+            if job.get('workflow_id'):
+                click.echo(f"   工作流: {job['workflow_id']}")
+
+            if job.get('error'):
+                click.echo(f"   错误: {job['error'][:80]}{'...' if len(job['error']) > 80 else ''}")
+
+            click.echo()
+
+    async def _cmd_watch(self, workflow_id: str, interval: int = 2, max_iterations: int = 30):
+        """
+        Watch workflow logs in real-time.
+
+        Args:
+            workflow_id: Workflow ID to watch
+            interval: Polling interval in seconds
+            max_iterations: Maximum number of polling iterations
+        """
+        from lee.orchestrator.storage.models import WorkflowStatus
+
+        click.echo()
+        click.echo(click.style(f"👀️ 实时监控: {workflow_id}", fg='cyan', bold=True))
+        click.echo(click.style("  (Ctrl+C 退出)", fg='blue'))
+        click.echo()
+
+        last_log_count = 0
+        iteration = 0
+
+        try:
+            while iteration < max_iterations:
+                iteration += 1
+
+                # Check workflow status
+                status = await self.runtime.get_workflow_status(workflow_id)
+
+                if not status:
+                    self._print_error(f"工作流不存在: {workflow_id}")
+                    return
+
+                # Get logs
+                logs = await self.runtime.get_workflow_logs(workflow_id, limit=20)
+
+                # Show new logs
+                new_logs = logs[last_log_count:]
+                if new_logs:
+                    for log in new_logs:
+                        if log['type'] == 'task_execution':
+                            status_icon = "✅" if log['status'] == 'completed' else "❌" if log['status'] == 'failed' else "⏳"
+                            timestamp = log.get('started_at', '')[:19] if log.get('started_at') else ''
+                            click.echo(f"{status_icon} [{timestamp}] {log['step_name']} ({log['executor_type']})")
+                            if log.get('error_message'):
+                                click.echo(f"   错误: {log['error_message'][:100]}")
+                        elif log['type'] == 'event':
+                            timestamp = log.get('timestamp', '')[:19] if log.get('timestamp') else ''
+                            click.echo(f"📌 [{timestamp}] {log['event_type']} @ {log.get('step_id', 'N/A')}")
+
+                    last_log_count = len(logs)
+
+                # Check if workflow is complete
+                if status['status'] in ('completed', 'failed', 'superseded'):
+                    click.echo()
+                    click.echo(click.style(f"工作流已结束: {status['status']}", fg='green'))
+                    break
+
+                # Wait before next poll
+                await asyncio.sleep(interval)
+
+        except KeyboardInterrupt:
+            click.echo()
+            click.echo(click.style("监控已停止", fg='yellow'))
+        except Exception as e:
+            self._print_error(f"监控出错: {e}")
+
+    def _format_status(self, status: str) -> str:
+        """Format status with emoji"""
+        status_map = {
+            'pending': '⏳',
+            'running': '🚀',
+            'paused': '⏸️',
+            'completed': '✅',
+            'failed': '❌',
+            'timeout': '⌛',
+            'superseded': '🔄',
+            'cancelled': '🚫',
+        }
+        icon = status_map.get(status, '❓')
+        return f"{icon} {status}"
+
+    def _format_duration(self, duration) -> str:
+        """Format timedelta to human readable string"""
+        total_seconds = int(duration.total_seconds())
+        if total_seconds < 60:
+            return f"{total_seconds}秒"
+        elif total_seconds < 3600:
+            minutes = total_seconds // 60
+            seconds = total_seconds % 60
+            return f"{minutes}分{seconds}秒"
+        else:
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            return f"{hours}小时{minutes}分"
+
     async def _handle_legacy(self, text: str):
         """Handle input in legacy mode (no Decision Engine)"""
         click.echo(HTML(f"<pm>PM Agent (Basic Mode): {text}</pm>"))
@@ -470,10 +874,33 @@ class LeeChatREPL:
             click.echo(f"\n📊 工作流状态:")
             if 'workflow_id' in state:
                 click.echo(f"  ID: {state['workflow_id']}")
+            if 'template_id' in state:
+                click.echo(f"  模板: {state['template_id']}")
+            if 'level' in state:
+                click.echo(f"  层级: {state['level']}")
             if 'status' in state:
                 click.echo(f"  状态: {state['status']}")
+            if 'current_step' in state:
+                click.echo(f"  当前步骤: {state['current_step'] or '(无)'}")
+            if 'parent_id' in state and state['parent_id']:
+                click.echo(f"  父工作流: {state['parent_id']}")
+            if 'children' in state and state['children']:
+                click.echo(f"  子工作流: {', '.join(state['children'])}")
             if 'ready_steps' in state and state['ready_steps']:
-                click.echo(f"  就绪步骤: {', '.join([s['id'] for s in state['ready_steps']])}")
+                click.echo(f"  就绪步骤 ({len(state['ready_steps'])}):")
+                for s in state['ready_steps']:
+                    click.echo(f"    - {s['id']} ({s.get('kind', 'unknown')})")
+            if 'pending_gates' in state and state['pending_gates']:
+                click.echo(f"  待审批门禁 ({len(state['pending_gates'])}):")
+                for g in state['pending_gates']:
+                    click.echo(f"    - {g['gate_id']} @ {g['step_id']} [{g['status']}]")
+            # Display data section if present
+            if 'data' in state and isinstance(state['data'], dict):
+                state_data = state['data']
+                if state_data.get('completed_steps'):
+                    click.echo(f"  已完成步骤: {len(state_data['completed_steps'])} 个")
+                if state_data.get('params'):
+                    click.echo(f"  参数: {state_data['params']}")
 
         # Display workflows list
         if 'workflows' in data:
@@ -581,26 +1008,42 @@ Type 'help' for available commands, 'exit' to quit.
         """Show help information"""
         help_text = """
 Available Commands:
-  status, 当前状态          - Query workflow status
-  gates, 门禁列表           - List gates (all/pending)
-  run, 运行                - Execute next step
-  run <step_id>            - Execute specific step
-  approve <gate_id>        - Approve a gate
-  reject <gate_id>         - Reject a gate
-  revise <gate_id>         - Revise a gate and retry
-  flag <gate_id>           - Flag a gate with issues
-  pause <workflow_id>      - Pause a workflow
-  resume <workflow_id>     - Resume a workflow
-  list, 列表                - List all workflows
-  help, ?                  - Show this help
-  metrics                  - Show performance metrics
-  exit, quit               - Exit chat
+
+  自然语言命令:
+    - 直接输入问题或指令，例如："当前状态"、"运行下一步"
+
+  内部命令（以 / 开头）:
+    /status [workflow_id]  - 查看工作流状态（默认当前会话）
+    /log <workflow_id> [N]  - 查看工作流日志（默认最近 50 行）
+    /list [N]               - 列出最近的工作流（默认 10 个）
+    /errors <workflow_id>   - 查看工作流的错误记录
+    /jobs [status]          - 列出后台任务（可选状态过滤）
+    /watch <workflow_id>    - 实时监控工作流日志（Ctrl+C 退出）
+
+  传统命令（仍然支持）:
+    status, 当前状态          - Query workflow status
+    gates, 门禁列表           - List gates (all/pending)
+    run, 运行                - Execute next step
+    run <step_id>            - Execute specific step
+    approve <gate_id>        - Approve a gate
+    reject <gate_id>         - Reject a gate
+    revise <gate_id>         - Revise a gate and retry
+    flag <gate_id>           - Flag a gate with issues
+    pause <workflow_id>      - Pause a workflow
+    resume <workflow_id>     - Resume a workflow
+
+  其他:
+    help, ?                  - Show this help
+    metrics                  - Show performance metrics
+    exit, quit               - Exit chat
 
 Examples:
   - 当前状态如何？
   - 运行下一步
   - 执行 generate_code
   - 批准 gate_review
+  - /status wf_abc123
+  - /log wf_abc123 20
 """
         click.echo(help_text)
 

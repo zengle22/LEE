@@ -102,6 +102,17 @@ def test_workspace_cleanup_execute_step_preserves_constants_and_retry_policy():
     assert execute_step.config["success_criteria"]["require_new_commit"] is True
 
 
+def test_workspace_cleanup_template_parses_runtime_cleanup_step_as_skill():
+    manager = TemplateManager(template_dir="spec-global")
+    template = manager.get_template("workflow.office.workspace_cleanup")
+    assert template is not None
+
+    cleanup_step = next(step for step in template.steps if step.id == "s5_4_cleanup_runtime_state")
+    assert cleanup_step.kind == "skill"
+    assert cleanup_step.skill_id == "skill.office.runtime_state_cleanup"
+    assert cleanup_step.depends_on == ["s5_3_execute_commits"]
+
+
 @pytest.mark.asyncio
 async def test_skill_runner_loads_skill_commands_and_executes_push(tmp_path: Path):
     shell_executor = MagicMock()
@@ -231,3 +242,31 @@ async def test_workspace_cleanup_gitignore_skill_does_not_fail_on_variable_ir_in
     assert result.status == "success"
     created_execution = ctx.store.create_task_execution.await_args.args[0]
     assert created_execution.input_data["patterns_to_add"] == "$outputs.s1_1_analyze_files.gitignore_recommendations"
+
+
+@pytest.mark.asyncio
+async def test_skill_runner_loads_runtime_cleanup_skill_commands(tmp_path: Path):
+    shell_executor = MagicMock()
+    shell_executor.execute = AsyncMock(
+        return_value={"status": "completed", "return_code": 0, "stdout": "", "stderr": ""}
+    )
+
+    ctx = _make_ctx(
+        shell_executor=shell_executor,
+        params={"workspace_path": str(tmp_path)},
+        project_root=Path.cwd(),
+    )
+    step = MockStep(
+        id="s5_4_cleanup_runtime_state",
+        skill_id="skill.office.runtime_state_cleanup",
+        input={"workspace_path": "${{ params.workspace_path }}"},
+    )
+
+    runner = SkillRunner()
+    result = await runner.execute("wf-test", step, ctx)
+
+    assert result.status == "success"
+    commands = [call.args[0]["command"] for call in shell_executor.execute.await_args_list]
+    assert any("rm -f .lee/chat_history.txt .lee/cli.lock input.mode" in cmd for cmd in commands)
+    assert any("find .lee/pm_agent_sessions -type f -name '*.json' -delete" in cmd for cmd in commands)
+    assert all(cmd.startswith(f"cd {tmp_path}") for cmd in commands)
