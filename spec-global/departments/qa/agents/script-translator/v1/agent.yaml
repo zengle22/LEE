@@ -59,11 +59,12 @@ responsibility:
     - "执行脚本"
     - "分析执行结果"
 
-# 技能引用
-capabilities:
-  - skill.qa.api_script_generation
-  - skill.qa.playwright_code_generator
-  - skill.io.file_write
+# 工具和规范引用
+tools:
+  - skill.file.write
+
+specs:
+  - ../../contracts/e2e-script-contract/v1/schema.yaml
 
 # 输入输出
 inputs:

@@ -79,6 +79,14 @@ policy:
     - by_priority_breakdown
     - feature_coverage_percentage
 
+# 工具和规范引用
+tools:
+  - skill.file.write
+
+specs:
+  - ../../contracts/test-report/v1/schema.yaml
+  - ../../contracts/test-result/v1/schema.yaml
+
 prompting:
   system: |
     You are a Test Report Generator. Your job is to:

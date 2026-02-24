@@ -1,0 +1,324 @@
+# Test Result Contract v1.0
+# 测试结果契约
+# L3 Step 5: 结果判定 Agent 的输出格式
+
+kind: contract
+version: "1.0"
+id: contract.qa.test_result
+name: Test Result Contract
+description: |
+  测试结果契约，定义 L3 Step 5（结果判定）的输出格式。
+  由 agent.qa.result_judge 根据证据判定后生成。
+
+owner: qa-governance
+tags: [contract, qa, test-result, l3]
+
+# ============================================
+# Schema 定义
+# ============================================
+schema:
+  type: object
+  required:
+    - test_set_id
+    - test_run_id
+    - generated_at
+    - judgment_agent
+    - summary
+    - cases
+
+  properties:
+    test_set_id:
+      type: string
+      description: "Test Set ID"
+
+    test_run_id:
+      type: string
+      description: "Test Run ID"
+
+    generated_at:
+      type: string
+      format: datetime
+      description: "生成时间"
+
+    judgment_agent:
+      type: string
+      description: "判定 Agent ID"
+      default: "agent.qa.result_judge"
+
+    # ============================================
+    # 执行摘要
+    # ============================================
+    summary:
+      type: object
+      required:
+        - total_cases
+        - executed_cases
+        - passed_cases
+        - failed_cases
+        - skipped_cases
+        - invalid_cases
+        - pass_rate
+        - status
+      properties:
+        total_cases:
+          type: integer
+          description: "总用例数"
+        executed_cases:
+          type: integer
+          description: "已执行用例数"
+        passed_cases:
+          type: integer
+          description: "通过用例数"
+        failed_cases:
+          type: integer
+          description: "失败用例数"
+        skipped_cases:
+          type: integer
+          description: "跳过用例数（依赖失败等）"
+        invalid_cases:
+          type: integer
+          description: "无效执行用例数（AI 违规、证据缺失等）"
+        pass_rate:
+          type: number
+          description: "通过率（百分比）"
+        duration_ms:
+          type: integer
+          description: "执行耗时（毫秒）"
+        status:
+          type: string
+          enum: [pass, fail, partial, invalid_run]
+          description: "整体状态"
+
+    # ============================================
+    # 用例结果详情
+    # ============================================
+    cases:
+      type: array
+      description: "每个用例的判定结果"
+      items:
+        type: object
+        required:
+          - case_id
+          - title
+          - status
+        properties:
+          case_id:
+            type: string
+            description: "用例 ID"
+          title:
+            type: string
+            description: "用例标题"
+          priority:
+            type: string
+            enum: [P0, P1, P2, P3]
+            description: "优先级"
+          status:
+            type: string
+            enum: [pass, fail, skipped, invalid_run]
+            description: "判定状态"
+
+          # Pass 相关
+          evidence_bundle:
+            type: object
+            description: "证据包（pass/fail 都需要）"
+            properties:
+              commands:
+                type: array
+                description: "执行的命令"
+              logs:
+                type: string
+                description: "日志文件路径"
+              screenshots:
+                type: array
+                description: "截图路径列表"
+              exit_code:
+                type: integer
+                description: "退出码"
+              runner_result_ref:
+                type: string
+                description: "runner-output.json 引用"
+
+          # Fail 相关
+          failure_reason:
+            type: string
+            description: "失败原因"
+          failure_type:
+            type: string
+            enum: [assertion_failed, timeout, error, exception]
+            description: "失败类型"
+          error_message:
+            type: string
+            description: "错误信息"
+
+          # Invalid Run 相关
+          invalid_reason:
+            type: string
+            description: "无效执行原因"
+            enum: [no_evidence, evidence_missing, ai_violation, tool_missing]
+
+          # Skipped 相关
+          skip_reason:
+            type: string
+            description: "跳过原因"
+            enum: [dependency_failed, environment_issue, not_applicable]
+
+    # ============================================
+    # 失败汇总
+    # ============================================
+    failures:
+      type: array
+      description: "失败用例汇总"
+      items:
+        type: object
+        properties:
+          case_id:
+            type: string
+          title:
+            type: string
+          priority:
+            type: string
+          failure_reason:
+            type: string
+          evidence_ref:
+            type: string
+            description: "证据文件引用"
+
+    # ============================================
+    # 违规记录
+    # ============================================
+    violations:
+      type: array
+      description: "AI 行为违规记录"
+      items:
+        type: object
+        properties:
+          rule_id:
+            type: string
+          description:
+            type: string
+          severity:
+            type: string
+            enum: [critical, high, medium, low]
+
+# ============================================
+# 示例数据
+# ============================================
+example:
+  test_set_id: "ts_auth"
+  test_run_id: "TR-2026-0224-abc123"
+  generated_at: "2026-02-24T12:00:00Z"
+  judgment_agent: "agent.qa.result_judge"
+
+  summary:
+    total_cases: 15
+    executed_cases: 15
+    passed_cases: 13
+    failed_cases: 2
+    skipped_cases: 0
+    invalid_cases: 0
+    pass_rate: 86.7
+    duration_ms: 120000
+    status: "fail"
+
+  cases:
+    - case_id: "TC_AUTH_001"
+      title: "正常登录"
+      priority: "P0"
+      status: "pass"
+      evidence_bundle:
+        commands: ["test_runner run --case TC_AUTH_001 --env test"]
+        logs: "evidence/TC_AUTH_001.log"
+        screenshots: ["evidence/TC_AUTH_001_step1.png", "evidence/TC_AUTH_001_step2.png"]
+        exit_code: 0
+        runner_result_ref: "runner-output.json#TC_AUTH_001"
+
+    - case_id: "TC_AUTH_002"
+      title: "密码错误登录"
+      priority: "P1"
+      status: "fail"
+      failure_reason: "Assertion failed: expected error message not shown"
+      failure_type: "assertion_failed"
+      error_message: "Expected selector [data-testid='login-error'] not found"
+      evidence_bundle:
+        commands: ["test_runner run --case TC_AUTH_002 --env test"]
+        logs: "evidence/TC_AUTH_002.log"
+        screenshots: ["evidence/TC_AUTH_002_failed.png"]
+        exit_code: 1
+        runner_result_ref: "runner-output.json#TC_AUTH_002"
+
+    - case_id: "TC_AUTH_005"
+      title: "Token 过期处理"
+      priority: "P1"
+      status: "fail"
+      failure_reason: "Timeout: API response exceeded 30s"
+      failure_type: "timeout"
+      evidence_bundle:
+        commands: ["test_runner run --case TC_AUTH_005 --env test"]
+        logs: "evidence/TC_AUTH_005.log"
+        exit_code: 124
+        runner_result_ref: "runner-output.json#TC_AUTH_005"
+
+  failures:
+    - case_id: "TC_AUTH_002"
+      title: "密码错误登录"
+      priority: "P1"
+      failure_reason: "Assertion failed: expected error message not shown"
+      evidence_ref: "evidence/TC_AUTH_002.log"
+
+    - case_id: "TC_AUTH_005"
+      title: "Token 过期处理"
+      priority: "P1"
+      failure_reason: "Timeout: API response exceeded 30s"
+      evidence_ref: "evidence/TC_AUTH_005.log"
+
+  violations: []
+
+# ============================================
+# 验证规则
+# ============================================
+validation_rules:
+  - rule: "cases_count_matches_summary"
+    check: "summary.passed_cases + summary.failed_cases + summary.skipped_cases + summary.invalid_cases == summary.executed_cases"
+    error: "用例统计数字不匹配"
+
+  - rule: "pass_case_has_evidence"
+    check: "ALL(cases WHERE status == 'pass') HAVE evidence_bundle != null"
+    error: "通过用例必须有证据包"
+
+  - rule: "fail_case_has_evidence"
+    check: "ALL(cases WHERE status == 'fail') HAVE evidence_bundle != null"
+    error: "失败用例必须有证据包"
+
+  - rule: "fail_case_has_reason"
+    check: "ALL(cases WHERE status == 'fail') HAVE failure_reason != null"
+    error: "失败用例必须说明失败原因"
+
+  - rule: "invalid_case_has_reason"
+    check: "ALL(cases WHERE status == 'invalid_run') HAVE invalid_reason != null"
+    error: "无效执行用例必须说明原因"
+
+# ============================================
+# 判定标准（参考）
+# ============================================
+judgment_criteria:
+  pass:
+    - "exit_code == 0"
+    - "所有断言通过"
+    - "实际行为符合预期"
+    - "有完整证据包"
+
+  fail:
+    - "exit_code != 0"
+    - "存在断言失败"
+    - "实际行为与预期不符"
+    - "运行时错误"
+
+  invalid_run:
+    - "没有 evidence_bundle（P0/P1 用例）"
+    - "AI 行为违规"
+    - "工具缺失（经 Orchestrator 确认）"
+
+  skipped:
+    - "依赖的 Test Set 失败"
+    - "环境不可用（经 Orchestrator 确认）"
+    - "用例不适用"

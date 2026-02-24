@@ -72,6 +72,15 @@ policy:
     merge_severity: "max"  # 合并时取最高严重程度
     merge_priority: "max"  # 合并时取最高优先级
 
+# 工具和规范引用
+tools:
+  - skill.file.collect
+  - skill.file.write
+
+specs:
+  - ../../contracts/bug-summary/v1/schema.yaml
+  - ../../contracts/bug-v2/v1/schema.yaml
+
 prompting:
   system: |
     You are a Bug Summarizer. Your job is to:

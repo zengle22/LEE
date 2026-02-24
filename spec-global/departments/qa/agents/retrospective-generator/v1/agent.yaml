@@ -84,6 +84,13 @@ policy:
       - due_date
       - status
 
+# 工具和规范引用
+tools:
+  - skill.file.write
+
+specs:
+  - ../../contracts/retrospective/v1/schema.yaml
+
 prompting:
   system: |
     You are a Retrospective Generator. Your job is to:
