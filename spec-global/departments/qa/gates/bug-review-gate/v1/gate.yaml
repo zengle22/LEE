@@ -1,0 +1,133 @@
+# Bug Review Gate v1.0
+# Bug 审核门禁 - 人类审核 Bug 草稿
+
+kind: gate_rules
+version: 1.0
+
+gate_id: gate.qa.bug_review_gate
+name: Bug Review Gate
+description: >
+  L2 Phase 5 Bug 汇总后的审核门禁。
+  人类审核汇总后的 Bug 列表，确认后将正式创建 Bug 记录。
+
+owner: qa-governance
+tags: [gate, qa, bug-review, l2]
+
+# ============================================
+# 审核标准
+# ============================================
+review_criteria:
+  mandatory:
+    - criterion_id: BR_M001
+      name: "Bug 描述完整性"
+      description: "每个 Bug 必须有清晰的标题、描述、复现步骤"
+      check: "ALL(bugs) HAVE complete_description"
+      severity: blocker
+
+    - criterion_id: BR_M002
+      name: "严重程度标注"
+      description: "每个 Bug 必须标注严重程度（critical/high/medium/low）"
+      check: "ALL(bugs) HAVE severity IN [critical, high, medium, low]"
+      severity: blocker
+
+    - criterion_id: BR_M003
+      name: "优先级标注"
+      description: "每个 Bug 必须标注优先级（P0/P1/P2/P3）"
+      check: "ALL(bugs) HAVE priority IN [P0, P1, P2, P3]"
+      severity: blocker
+
+    - criterion_id: BR_M004
+      name: "证据引用"
+      description: "每个 Bug 必须引用测试证据（日志、截图等）"
+      check: "ALL(bugs) HAVE evidence_references NOT EMPTY"
+      severity: blocker
+
+  quality:
+    - criterion_id: BR_Q001
+      name: "Bug 去重验证"
+      description: "检查是否有重复的 Bug"
+      check: "NO_DUPLICATE_BUGS"
+      severity: major
+
+    - criterion_id: BR_Q002
+      name: "受影响功能标注"
+      description: "每个 Bug 应标注受影响的功能模块"
+      check: "ALL(bugs) HAVE affected_feature"
+      severity: minor
+
+# ============================================
+# 审核选项
+# ============================================
+review_options:
+  - option: approve
+    label: "批准"
+    description: "Bug 列表准确完整，可以正式创建"
+    trigger: bugs_confirmed
+    action:
+      - create_bug_records
+      - link_to_test_run
+
+  - option: reject
+    label: "拒绝"
+    description: "Bug 列表存在问题，需要重新汇总"
+    trigger: bugs_rejected
+    action:
+      - provide_feedback
+      - retry_phase: bug_summary
+
+  - option: modify
+    label: "修改后批准"
+    description: "有少量问题，修改后通过"
+    trigger: bugs_modified
+    action:
+      - apply_modifications
+      - create_bug_records
+
+# ============================================
+# 审核交付物
+# ============================================
+required_artifacts:
+  - artifact: bug-summary.yaml
+    description: Bug 汇总文件
+    schema: ../../contracts/bug-summary/v1/schema.yaml
+
+  - artifact: bug-list.md
+    description: Bug 列表 Markdown 报告（人类可读）
+
+# ============================================
+# 签字要求
+# ============================================
+signoff_requirements:
+  required_approvers:
+    - role: qa
+      responsibility: "Bug 准确性和完整性"
+
+  optional_approvers:
+    - role: tech_lead
+      responsibility: "技术可行性确认"
+      condition: "涉及技术疑难 Bug"
+
+# ============================================
+# 审核检查清单
+# ============================================
+review_checklist:
+  - item: "Bug 去重是否正确"
+  - item: "严重程度是否合理"
+  - item: "优先级是否合理"
+  - item: "证据引用是否完整"
+  - item: "受影响功能是否正确"
+  - item: "复现步骤是否清晰"
+
+# ============================================
+# 门禁判定逻辑
+# ============================================
+gate_verdict:
+  PASS:
+    condition: "ALL(mandatory_criteria) == MET AND reviewer_approved == true"
+    action: approve_bugs
+    next_state: BUGS_APPROVED
+
+  FAIL:
+    condition: "ANY(mandatory_criteria) == NOT_MET OR reviewer_rejected == true"
+    action: reject_with_feedback
+    next_state: NEEDS_REVISION

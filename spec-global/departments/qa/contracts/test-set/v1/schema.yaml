@@ -131,10 +131,26 @@ schema:
             - "网络超时"
             - "服务不可用"
 
-    # ========== 执行配置 ==========
+    # ========== L3 执行配置 ==========
     execution:
       type: object
       properties:
+        # L3 执行依赖关系
+        depends_on:
+          type: array
+          items:
+            type: string
+          description: |
+            依赖的其他 Test Set ID 列表。
+            用于 L2 调度 L3 时确定执行顺序：
+            - 如果依赖的 Test Set 失败，当前 Test Set 会被跳过
+            - 支持串行执行（当前实现）
+            - 未来可扩展为并行执行无依赖的 Test Sets
+          examples:
+            - []  # 无依赖，可首先执行
+            - ["TS-AUTH"]  # 依赖认证 Test Set
+            - ["TS-PAYMENT", "TS-ORDER"]  # 依赖多个 Test Set
+
         estimated_duration:
           type: string
           description: "预估执行时长"
