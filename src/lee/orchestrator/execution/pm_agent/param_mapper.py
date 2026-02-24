@@ -574,6 +574,71 @@ For CREATE_WORKFLOW intent:
 
         # Pattern 1.5: Extract template/workflow alias for RUN_WORKFLOW intent
         if intent_type in [IntentType.RUN_WORKFLOW, IntentType.CREATE_WORKFLOW]:
+            # Extract directory + template using string operations (more reliable than regex for paths)
+            workspace_path = None
+
+            # Pattern: "在目录<PATH>运行工作流<TEMPLATE>" or similar
+            if "在目录" in user_input:
+                try:
+                    start = user_input.index("在目录") + len("在目录")
+                    # Find the end of the path - look for common separators or Chinese keywords
+                    remaining = user_input[start:]
+
+                    # Try to find path end markers: Chinese comma, space, or keywords
+                    path_end_markers = ["，", ",", "运行", "工作流", "全新", "重新", " "]
+                    end_pos = len(remaining)  # default to end of string
+
+                    for marker in path_end_markers:
+                        if marker in remaining:
+                            pos = remaining.index(marker)
+                            if pos < end_pos:
+                                end_pos = pos
+
+                    potential_path = remaining[:end_pos].strip()
+                    # Validate it looks like a path (has : or /)
+                    if ":" in potential_path or potential_path.startswith("/"):
+                        workspace_path = potential_path
+                        logger.debug(f"Extracted workspace_path: {workspace_path}")
+                except (ValueError, IndexError):
+                    pass
+
+            # Also try pattern: "在<PATH>目录运行"
+            if not workspace_path and "目录" in user_input:
+                try:
+                    start = user_input.index("在") + len("在")
+                    end = user_input.index("目录")
+                    potential_path = user_input[start:end].strip()
+                    if ":" in potential_path or potential_path.startswith("/"):
+                        workspace_path = potential_path
+                        logger.debug(f"Extracted workspace_path (alt pattern): {workspace_path}")
+                except (ValueError, IndexError):
+                    pass
+
+            # Extract template ID
+            template_id = None
+            # Pattern: after "工作流" keyword
+            template_patterns = [
+                r'(?:工作流|workflow)\s*([a-z][a-z0-9_.-]+)',
+                r'(?:运行|run|execute)\s*([a-z][a-z0-9_.-]+\.[a-z][a-z0-9_.-]+)',
+            ]
+            for pattern in template_patterns:
+                match = re.search(pattern, user_input_lower, re.IGNORECASE)
+                if match:
+                    template_id = match.group(1)
+                    break
+
+            # If we found both path and template
+            if workspace_path and template_id:
+                logger.info(f"Rule-based extraction (run workflow with dir): template_id={template_id}, workspace_path={workspace_path}")
+                return WorkflowParams(
+                    workflow_ref=template_id,
+                    step_id=None,
+                    gate_id=None,
+                    params={"template_id": template_id, "workspace_path": workspace_path},
+                    confidence=0.95
+                )
+
+            # Fallback: template only patterns
             template_patterns_relaxed = [
                 r'(?:全新|重新|新建)?\s*(?:运行|run|执行|execute|启动|start)\s*(?:工作流|workflow)\s*([a-z][a-z0-9_.-]+)',
                 r'(?:在.*目录)?(?:运行|run|执行|execute|启动|start)\s*([a-z][a-z0-9_.-]+)',
@@ -582,14 +647,25 @@ For CREATE_WORKFLOW intent:
                 match = re.search(pattern, user_input_lower, re.IGNORECASE)
                 if match:
                     template_id = match.group(1)
-                    logger.info(f"Rule-based extraction (run workflow): template_id={template_id}")
-                    return WorkflowParams(
-                        workflow_ref=template_id,
-                        step_id=None,
-                        gate_id=None,
-                        params={"template_id": template_id},
-                        confidence=0.92
-                    )
+                    # If we found a path but no template, use the extracted path
+                    if workspace_path:
+                        logger.info(f"Rule-based extraction (run workflow with dir, template inferred): template_id={template_id}, workspace_path={workspace_path}")
+                        return WorkflowParams(
+                            workflow_ref=template_id,
+                            step_id=None,
+                            gate_id=None,
+                            params={"template_id": template_id, "workspace_path": workspace_path},
+                            confidence=0.92
+                        )
+                    else:
+                        logger.info(f"Rule-based extraction (run workflow): template_id={template_id}")
+                        return WorkflowParams(
+                            workflow_ref=template_id,
+                            step_id=None,
+                            gate_id=None,
+                            params={"template_id": template_id},
+                            confidence=0.92
+                        )
 
         # Pattern 2: Extract step ID from "运行 step_XXX" or "执行 XXX_step"
         step_patterns = [

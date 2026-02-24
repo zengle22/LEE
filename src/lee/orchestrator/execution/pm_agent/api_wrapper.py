@@ -622,6 +622,19 @@ class OrchestratorAPIWrapper:
                 action="run_workflow"
             )
 
+        # Build workflow data with workspace_path
+        workflow_data = {}
+
+        # Extract workspace_path from various sources
+        workspace_path = params.get("workspace_path") or params.get("directory") or params.get("target_dir")
+        if workspace_path:
+            workflow_data["workspace_path"] = workspace_path
+            # Also store in params for template resolution
+            workflow_data["params"] = {"workspace_path": workspace_path}
+        else:
+            # Use project_dir as default workspace_path
+            workflow_data["params"] = {"workspace_path": self.project_dir}
+
         try:
             # Import Orchestrator API
             from lee.orchestrator.api import api_create_workflow, api_run_until_blocked
@@ -632,7 +645,7 @@ class OrchestratorAPIWrapper:
                 level="task",
                 template_id=template_id,
                 parent_id=None,
-                data={}
+                data=workflow_data
             )
 
             if "workflow_id" not in create_result:
@@ -652,8 +665,19 @@ class OrchestratorAPIWrapper:
                 max_steps=10
             )
 
+            # Determine API status based on actual run_result status
+            run_status = str(run_result.get("status", "")).lower()
+            ok = run_status in {"running", "blocked", "completed"}
+            message_map = {
+                "completed": "Workflow execution completed",
+                "blocked": "Workflow execution blocked",
+                "running": "Workflow execution still running",
+                "failed": "Workflow execution failed",
+            }
+            message = message_map.get(run_status, f"Workflow execution status: {run_status or 'unknown'}")
+
             return APIResponse(
-                status="success",
+                status="success" if ok else "failed",
                 data={
                     "workflow_id": workflow_id,
                     "template_id": template_id,
@@ -661,8 +685,9 @@ class OrchestratorAPIWrapper:
                     "template_resolved": params.get("template_resolved", template_id),
                     "create_result": create_result,
                     "run_result": run_result,
-                    "message": f"Created and started workflow {workflow_id} from template {template_id}"
+                    "message": f"Created and started workflow {workflow_id} from template {template_id}: {message}"
                 },
+                error=None if ok else message,
                 action="run_workflow"
             )
 
