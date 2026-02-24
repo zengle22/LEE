@@ -599,7 +599,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
                             # logging.warning(f"Failed to collect patch: {e}")
                             pass
 
-                    r = await self.state_machine.complete_step(workflow_id, step_to_execute.id, output)
+                    r = await self.state_machine.complete_step(
+                        workflow_id,
+                        step_to_execute.id,
+                        output,
+                        step_outputs=step_to_execute.outputs if hasattr(step_to_execute, 'outputs') else None
+                    )
                     
                     # v3.5: Publish EventBus event
                     get_event_bus().publish(Event(

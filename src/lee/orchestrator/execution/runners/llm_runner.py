@@ -231,7 +231,8 @@ class LLMRunner(StepRunnerBase):
             }
 
             result = await ctx.state_machine.complete_step(
-                workflow_id, step.id, output_data
+                workflow_id, step.id, output_data,
+                step_outputs=step.outputs if hasattr(step, 'outputs') else None
             )
 
             await ctx.store.update_task_execution(
@@ -614,6 +615,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             # 11. 完成步骤
             result = await ctx.state_machine.complete_step(
                 workflow_id, step.id, output,
+                step_outputs=step.outputs if hasattr(step, 'outputs') else None
             )
 
             await ctx.store.update_task_execution(
