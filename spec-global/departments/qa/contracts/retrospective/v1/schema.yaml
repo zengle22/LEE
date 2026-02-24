@@ -1,0 +1,436 @@
+# Retrospective Contract
+# 复盘总结契约
+# 用于 L2 生成复盘总结
+
+kind: contract
+version: "1.0"
+id: contract.qa.retrospective
+name: Retrospective Contract
+description: |
+  复盘总结数据结构，用于 L2 阶段生成复盘总结。
+
+  包含内容：
+  - 执行过程中的问题
+  - 成功经验
+  - 改进建议
+  - 经验教训
+
+owner: qa-governance
+tags: [contract, qa, retrospective, l2]
+
+# ============================================
+# Schema 定义
+# ============================================
+schema:
+  type: object
+  required:
+    - test_run_id
+    - generated_at
+    - participants
+    - summary
+    - issues
+    - successes
+    - action_items
+    - lessons_learned
+
+  properties:
+    test_run_id:
+      type: string
+      description: "Test Run ID"
+
+    generated_at:
+      type: string
+      format: datetime
+      description: "生成时间"
+
+    participants:
+      type: array
+      description: "参与人员"
+      items:
+        type: object
+        properties:
+          role:
+            type: string
+            enum: [qa_engineer, qa_lead, developer, pm, devops]
+          name:
+            type: string
+
+    # ============================================
+    # 总结
+    # ============================================
+    summary:
+      type: object
+      required:
+        - overall_assessment
+        - exit_decision
+        - duration
+      properties:
+        overall_assessment:
+          type: string
+          description: "整体评估"
+          enum: [excellent, good, fair, poor]
+
+        exit_decision:
+          type: string
+          description: "出测决策"
+          enum: [pass, conditional_pass, fail]
+
+        duration:
+          type: string
+          description: "执行时长"
+
+        highlights:
+          type: array
+          description: "亮点"
+          items:
+            type: string
+
+        lowlights:
+          type: array
+          description: "不足"
+          items:
+            type: string
+
+    # ============================================
+    # 执行中的问题
+    # ============================================
+    issues:
+      type: array
+      description: "执行过程中遇到的问题"
+      items:
+        type: object
+        required:
+          - category
+          - severity
+          - description
+          - impact
+          - root_cause
+          - resolution
+        properties:
+          category:
+            type: string
+            enum: [environment, tooling, test_case, execution, coordination, other]
+            description: "问题类别"
+
+          severity:
+            type: string
+            enum: [critical, high, medium, low]
+            description: "严重程度"
+
+          title:
+            type: string
+            description: "问题标题"
+
+          description:
+            type: string
+            description: "问题描述"
+
+          impact:
+            type: string
+            description: "影响范围"
+
+          affected_test_sets:
+            type: array
+            description: "受影响的 Test Set"
+            items:
+              type: string
+
+          root_cause:
+            type: string
+            description: "根因分析"
+
+          resolution:
+            type: string
+            description: "解决方案"
+
+          prevention:
+            type: string
+            description: "预防措施"
+
+          status:
+            type: string
+            enum: [resolved, ongoing, mitigated, open]
+            description: "状态"
+
+    # ============================================
+    # 成功经验
+    # ============================================
+    successes:
+      type: array
+      description: "成功的经验"
+      items:
+        type: object
+        properties:
+          category:
+            type: string
+            description: "类别"
+
+          description:
+            type: string
+            description: "描述"
+
+          impact:
+            type: string
+            description: "影响"
+
+          reusable:
+            type: boolean
+            description: "是否可复用"
+
+          applicable_scenarios:
+            type: array
+            description: "适用场景"
+            items:
+              type: string
+
+    # ============================================
+    # 改进建议
+    # ============================================
+    action_items:
+      type: array
+      description: "改进建议（Action Items）"
+      items:
+        type: object
+        required:
+          - id
+          - title
+          - priority
+          - category
+          - owner
+          - status
+        properties:
+          id:
+            type: string
+            description: "Action Item ID"
+
+          title:
+            type: string
+            description: "标题"
+
+          description:
+            type: string
+            description: "详细描述"
+
+          priority:
+            type: string
+            enum: [P0, P1, P2, P3]
+            description: "优先级"
+
+          category:
+            type: string
+            enum: [process, tooling, environment, skill, documentation, communication]
+            description: "类别"
+
+          owner:
+            type: string
+            description: "负责人"
+
+          due_date:
+            type: string
+            format: date
+            description: "截止日期"
+
+          status:
+            type: string
+            enum: [open, in_progress, completed, cancelled]
+            description: "状态"
+
+          related_issue:
+            type: string
+            description: "关联问题"
+
+    # ============================================
+    # 经验教训
+    # ============================================
+    lessons_learned:
+      type: array
+      description: "经验教训"
+      items:
+        type: object
+        properties:
+          category:
+            type: string
+            description: "类别"
+
+          lesson:
+            type: string
+            description: "经验/教训"
+
+          context:
+            type: string
+            description: "背景"
+
+          application:
+            type: string
+            description: "如何应用"
+
+    # ============================================
+    # 数据统计
+    # ============================================
+    metrics:
+      type: object
+      description: "执行指标"
+      properties:
+        total_execution_time:
+          type: string
+          description: "总执行时间"
+
+        environment_setup_time:
+          type: string
+          description: "环境准备时间"
+
+        actual_testing_time:
+          type: string
+          description: "实际测试时间"
+
+        bug_fixing_time:
+          type: string
+          description: "Bug 修复时间"
+
+        retest_time:
+          type: string
+          description: "回归测试时间"
+
+        efficiency_metrics:
+          type: object
+          description: "效率指标"
+          properties:
+            cases_per_hour:
+              type: number
+            automation_rate:
+              type: number
+            bug_detection_rate:
+              type: number
+
+        quality_metrics:
+          type: object
+          description: "质量指标"
+          properties:
+            pass_rate:
+              type: number
+            bug_escape_rate_estimate:
+              type: number
+            test_coverage:
+              type: number
+
+# ============================================
+# 示例数据
+# ============================================
+example:
+  test_run_id: "TR-2026-0224-abc123"
+  generated_at: "2026-02-24T16:00:00Z"
+
+  participants:
+    - role: qa_lead
+      name: "张三"
+    - role: qa_engineer
+      name: "李四"
+
+  summary:
+    overall_assessment: "good"
+    exit_decision: "conditional_pass"
+    duration: "6 小时"
+    highlights:
+      - "环境准备流程顺畅，30 分钟完成"
+      - "自动化脚本执行稳定"
+    lowlights:
+      - "支付模块发现 P0 Bug"
+      - "1 个 Test Set 因依赖失败被跳过"
+
+  issues:
+    - category: environment
+      severity: medium
+      title: "测试环境偶发网络抖动"
+      description: "测试环境在下午 2 点左右出现网络抖动，导致部分用例失败"
+      impact: "3 个用例需要重试"
+      affected_test_sets:
+        - "ts_payment"
+      root_cause: "网络配置问题"
+      resolution: "重试后通过"
+      prevention: "增加网络健康检查"
+      status: resolved
+
+    - category: tooling
+      severity: low
+      title: "测试报告生成时间较长"
+      description: "Bug 汇总耗时约 5 分钟"
+      impact: "影响效率"
+      root_cause: "Bug 数量较多"
+      resolution: "优化去重算法"
+      prevention: "优化脚本"
+      status: ongoing
+
+  successes:
+    - category: automation
+      description: "L3 自动化执行流程稳定，无需人工干预"
+      impact: "节省人工执行时间约 2 小时"
+      reusable: true
+      applicable_scenarios:
+        - "回归测试"
+        - "冒烟测试"
+
+    - category: environment
+      description: "环境准备脚本一键部署，成功率 100%"
+      impact: "减少环境准备时间"
+      reusable: true
+      applicable_scenarios:
+        - "所有测试批次"
+
+  action_items:
+    - id: "AI-2026-001"
+      title: "优化测试环境网络配置"
+      priority: P1
+      category: environment
+      owner: "devops"
+      due_date: "2026-03-01"
+      status: open
+
+    - id: "AI-2026-002"
+      title: "补充积分系统测试用例"
+      priority: P2
+      category: documentation
+      owner: "qa"
+      due_date: "2026-03-15"
+      status: open
+
+  lessons_learned:
+    - category: execution
+      lesson: "L3 串行执行确保了依赖关系的正确性"
+      context: "支付 Test Set 依赖认证 Test Set"
+      application: "保持串行执行，直到依赖关系更明确"
+
+    - category: process
+      lesson: "Bug 去重避免了重复工作"
+      context: "多个 Test Set 发现相同 Bug"
+      application: "持续优化去重算法"
+
+  metrics:
+    total_execution_time: "6 小时"
+    environment_setup_time: "30 分钟"
+    actual_testing_time: "4 小时"
+    bug_fixing_time: "1 小时"
+    retest_time: "30 分钟"
+    efficiency_metrics:
+      cases_per_hour: 20
+      automation_rate: 95
+      bug_detection_rate: 5
+    quality_metrics:
+      pass_rate: 87.5
+      bug_escape_rate_estimate: 5
+      test_coverage: 80
+
+# ============================================
+# 验证规则
+# ============================================
+validation_rules:
+  - rule: "at_least_one_participant"
+    check: "participants.length > 0"
+    error: "至少需要一名参与人员"
+
+  - rule: "action_items_have_owner"
+    check: "all(action_items.*.owner != null)"
+    error: "每个 Action Item 必须有负责人"
+
+  - rule: "issues_have_category"
+    check: "all(issues.*.category != null)"
+    error: "每个问题必须指定类别"

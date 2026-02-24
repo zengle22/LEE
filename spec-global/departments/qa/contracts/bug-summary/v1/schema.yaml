@@ -1,0 +1,235 @@
+# Bug Summary Contract
+# Bug 汇总契约
+# 用于 L2 汇总所有 L3 产生的 Bug 草稿
+
+kind: contract
+version: "1.0"
+id: contract.qa.bug_summary
+name: Bug Summary Contract
+description: |
+  Bug 汇总数据结构，用于 L2 阶段汇总所有 L3 产生的 Bug 草稿。
+
+  功能：
+  - 收集所有 L3 的 Bug 草稿
+  - 去重（相同症状、相同位置）
+  - 优先级排序
+  - 关联 Test Set 和用例
+  - 准备人工审核
+
+owner: qa-governance
+tags: [contract, qa, bug, summary, l2]
+
+# ============================================
+# Schema 定义
+# ============================================
+schema:
+  type: object
+  required:
+    - test_run_id
+    - generated_at
+    - total_bug_drafts
+    - unique_bugs
+    - bug_groups
+
+  properties:
+    test_run_id:
+      type: string
+      description: "Test Run ID"
+
+    generated_at:
+      type: string
+      format: datetime
+      description: "生成时间"
+
+    total_bug_drafts:
+      type: integer
+      description: "L3 产生的 Bug 草稿总数（去重前）"
+
+    unique_bugs:
+      type: integer
+      description: "去重后的 Bug 数量"
+
+    bug_groups:
+      type: array
+      description: "Bug 分组（去重后的 Bug 组）"
+      items:
+        type: object
+        required:
+          - group_id
+          - severity
+          - priority
+          - title
+          - description
+          - affected_test_sets
+          - affected_cases
+          - source_bugs
+        properties:
+          group_id:
+            type: string
+            description: "Bug 组 ID（如 BG-2026-001）"
+
+          severity:
+            type: string
+            enum: [critical, high, medium, low]
+            description: "严重程度"
+
+          priority:
+            type: string
+            enum: [P0, P1, P2, P3]
+            description: "优先级"
+
+          title:
+            type: string
+            description: "Bug 标题"
+
+          description:
+            type: string
+            description: "Bug 详细描述"
+
+          reproduction_steps:
+            type: array
+            description: "复现步骤"
+            items:
+              type: string
+
+          expected_behavior:
+            type: string
+            description: "预期行为"
+
+          actual_behavior:
+            type: string
+            description: "实际行为"
+
+          affected_test_sets:
+            type: array
+            description: "受影响的 Test Set ID 列表"
+            items:
+              type: string
+
+          affected_cases:
+            type: array
+            description: "受影响的测试用例 ID 列表"
+            items:
+              type: string
+
+          source_bugs:
+            type: array
+            description: "来源 Bug 草稿 ID 列表（被合并的原始 Bug）"
+            items:
+              type: object
+              properties:
+                bug_id:
+                  type: string
+                test_set_id:
+                  type: string
+                case_id:
+                  type: string
+
+          environment:
+            type: object
+            description: "环境信息"
+            properties:
+              build_version:
+                type: string
+              test_environment:
+                type: string
+
+          evidence_references:
+            type: array
+            description: "证据引用（日志、截图等）"
+            items:
+              type: string
+
+          suspected_root_cause:
+            type: string
+            description: "疑似根因分析"
+
+          suggested_fix:
+            type: string
+            description: "建议修复方案"
+
+    deduplication_rules:
+      type: object
+      description: "去重规则说明"
+      properties:
+        title_similarity_threshold:
+          type: number
+          description: "标题相似度阈值"
+          default: 0.8
+
+        location_match_required:
+          type: boolean
+          description: "是否要求位置匹配"
+          default: true
+
+        symptom_match_required:
+          type: boolean
+          description: "是否要求症状匹配"
+          default: true
+
+# ============================================
+# 示例数据
+# ============================================
+example:
+  test_run_id: "TR-2026-0224-abc123"
+  generated_at: "2026-02-24T10:30:00Z"
+  total_bug_drafts: 15
+  unique_bugs: 8
+
+  bug_groups:
+    - group_id: "BG-2026-001"
+      severity: "high"
+      priority: "P1"
+      title: "用户登录时偶发超时"
+      description: |
+        在高并发场景下，用户登录请求偶尔超时，
+        超时时间约 30 秒。
+      reproduction_steps:
+        - "1. 打开登录页面"
+        - "2. 输入用户名和密码"
+        - "3. 点击登录按钮"
+        - "4. 等待响应"
+      expected_behavior: "3 秒内完成登录"
+      actual_behavior: "偶发 30 秒超时"
+      affected_test_sets:
+        - "ts_auth"
+        - "ts_user_profile"
+      affected_cases:
+        - "TC_AUTH_001"
+        - "TC_AUTH_002"
+        - "TC_PROFILE_005"
+      source_bugs:
+        - bug_id: "bug_draft_ts_auth_001"
+          test_set_id: "ts_auth"
+          case_id: "TC_AUTH_001"
+        - bug_id: "bug_draft_ts_profile_005"
+          test_set_id: "ts_user_profile"
+          case_id: "TC_PROFILE_005"
+      environment:
+        build_version: "v1.2.3"
+        test_environment: "test"
+      evidence_references:
+        - "qa/test-runs/TR-2026-0224-abc123/tse-ts-auth/evidence/TC_AUTH_001.log"
+        - "qa/test-runs/TR-2026-0224-abc123/tse-ts-auth/evidence/TC_AUTH_001_network.json"
+      suspected_root_cause: "后端认证服务数据库连接池耗尽"
+      suggested_fix: "增加数据库连接池大小，添加连接池监控"
+
+# ============================================
+# 验证规则
+# ============================================
+validation_rules:
+  - rule: "bug_groups_not_empty_when_total_bug_drafts_gt_0"
+    check: "total_bug_drafts == 0 or bug_groups.length > 0"
+    error: "有 Bug 草稿但 Bug 组为空"
+
+  - rule: "unique_bugs_lte_total"
+    check: "unique_bugs <= total_bug_drafts"
+    error: "唯一 Bug 数不能大于草稿总数"
+
+  - rule: "source_bugs_not_empty"
+    check: "all(bug_groups.*.source_bugs.length > 0)"
+    error: "每个 Bug 组必须至少有一个来源 Bug"
+
+  - rule: "affected_cases_not_empty"
+    check: "all(bug_groups.*.affected_cases.length > 0)"
+    error: "每个 Bug 组必须至少关联一个测试用例"
