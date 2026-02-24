@@ -1,0 +1,28 @@
+{
+  "session_id": "chat_20260222_230545",
+  "run_id": "wf_task_7af9425a",
+  "last_active_timestamp": 1771773004.7159393,
+  "history_summary": "1 turns",
+  "metadata": {
+    "user_permissions": [],
+    "department": null,
+    "interaction_history": [
+      {
+        "timestamp": 1771773004.715935,
+        "user_input": "在目录E:\\projects\\ai-marathon-coach运行工作流workspace-cleanup",
+        "action": "run_workflow",
+        "status": "success",
+        "confidence": 0.95,
+        "workflow_id": "wf_task_7af9425a",
+        "template_resolution": {
+          "input": "workspace-cleanup",
+          "resolved": "workflow.office.workspace_cleanup"
+        }
+      }
+    ],
+    "last_template_resolution": {
+      "input": "workspace-cleanup",
+      "resolved": "workflow.office.workspace_cleanup"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "session_id": "chat_20260223_130751",
+  "run_id": "wf_task_6075419c",
+  "last_active_timestamp": 1771823654.894104,
+  "history_summary": "2 turns",
+  "metadata": {
+    "user_permissions": [],
+    "department": null,
+    "interaction_history": [
+      {
+        "timestamp": 1771823417.2174394,
+        "user_input": "在目录E:\\projects\\ai-marathon-coach运行工作流workspace-cleanup",
+        "action": "run_workflow",
+        "status": "failed",
+        "confidence": 0.95,
+        "workflow_id": "wf_task_a2dde054",
+        "template_resolution": {
+          "input": "workspace-cleanup",
+          "resolved": "workflow.office.workspace_cleanup"
+        }
+      },
+      {
+        "timestamp": 1771823654.894101,
+        "user_input": "在目录E:\\projects\\ai-marathon-coach，全新运行工作流workspace-cleanup",
+        "action": "run_workflow",
+        "status": "failed",
+        "confidence": 0.95,
+        "workflow_id": "wf_task_6075419c",
+        "template_resolution": {
+          "input": "workspace-cleanup",
+          "resolved": "workflow.office.workspace_cleanup"
+        }
+      }
+    ],
+    "last_template_resolution": {
+      "input": "workspace-cleanup",
+      "resolved": "workflow.office.workspace_cleanup"
+    }
+  }
+}
