@@ -1,3 +1,6 @@
+# .gitignore
+# Updated by LEE gitignore-updater at 2026-02-24T11:31:06.735521
+
 # Python
 __pycache__/
 *.py[cod]
@@ -119,3 +122,14 @@ examples/*/.project/
 examples/*/.workflow/
 .claude-sandbox/
 tmp-test/
+
+# === Patterns added by LEE ===
+
+# Build artifacts
+
+# Python bytecode
+*.pyc
+# Python optimized bytecode
+*.pyo
+# Python virtual env
+.Python
