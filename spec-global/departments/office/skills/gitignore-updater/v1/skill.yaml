@@ -143,31 +143,22 @@ rule_templates:
 # 执行逻辑
 # ============================================
 execution:
+  # Main command - calls Python script (cross-platform)
+  command: 'python "{skill_dir}/gitignore_updater.py" --workspace "{workspace_path}" --patterns ''{patterns_json}'' --gitignore "{gitignore_path}" --output-json'
+
+  # Detailed steps for documentation (these are executed by the Python script)
   steps:
-    - name: "读取现有 .gitignore"
-      description: "如果文件存在，读取内容；否则创建新文件"
-
-    - name: "分析现有规则"
-      description: "解析现有规则，识别已存在的模式"
-
-    - name: "按类别组织新规则"
-      description: "将新规则按类别分组"
-
-    - name: "生成更新内容"
-      description: "生成格式化的 .gitignore 内容，包含注释和分组"
-
-    - name: "备份原文件"
-      description: "创建 .gitignore.backup"
-
-    - name: "写入更新"
-      description: "写入新的 .gitignore 内容"
+    - name: "更新 .gitignore"
+      description: "执行跨平台 Python 脚本更新 .gitignore"
+      command: 'python "{skill_dir}/gitignore_updater.py" --workspace "{workspace_path}" --patterns ''{patterns_json}'' --gitignore "{gitignore_path}" --output-json'
 
 # ============================================
 # 运行时配置
 # ============================================
 runtime:
   type: script
-  timeout_ms: 10000
+  timeout_ms: 30000
+  interpreter: python
 
 # ============================================
 # 约束声明
