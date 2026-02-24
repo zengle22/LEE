@@ -143,11 +143,12 @@ responsibility:
     - "修改证据"
     - "伪造证据"
 
-# 技能引用
-capabilities:
+# 工具和规范引用
+tools:
   - skill.file.read
-  - skill.qa.evidence_analysis
-  - skill.io.file_write
+
+specs:
+  - ../../contracts/test-result/v1/schema.yaml
 
 # 输入
 inputs:
