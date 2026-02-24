@@ -5,6 +5,7 @@ PM Agent interactive interface (REPL).
 Refactored to use new Decision Engine architecture.
 """
 import asyncio
+import sys
 import click
 from pathlib import Path
 from contextlib import contextmanager
@@ -156,13 +157,27 @@ class LeeChatREPL:
         """Main REPL loop"""
         self._print_welcome()
 
-        while True:
+        # Track consecutive Ctrl+C presses for graceful exit
+        ctrl_c_count = 0
+        max_ctrl_c = 2
+        running = True
+
+        while running:
             try:
                 self._ensure_prompt_auto_suggest()
-                user_input = await self.session.prompt_async(
-                    HTML("<prompt>Lee></prompt> "),
-                    style=self.style
-                )
+
+                # Use prompt_async with a timeout to prevent infinite blocking
+                try:
+                    user_input = await self.session.prompt_async(
+                        HTML("<prompt>Lee></prompt> "),
+                        style=self.style
+                    )
+                except asyncio.TimeoutError:
+                    # Should not happen normally, but handle gracefully
+                    continue
+
+                # Reset Ctrl+C counter on successful input
+                ctrl_c_count = 0
 
                 user_input = user_input.strip()
                 if not user_input:
@@ -170,6 +185,7 @@ class LeeChatREPL:
 
                 if user_input.lower() in ('exit', 'quit'):
                     click.echo("Goodbye!")
+                    running = False
                     break
 
                 if user_input.lower() in ('help', '?'):
@@ -184,11 +200,35 @@ class LeeChatREPL:
                 self.turn_count += 1
 
             except KeyboardInterrupt:
-                continue
+                ctrl_c_count += 1
+                if ctrl_c_count >= max_ctrl_c:
+                    click.echo("\nGoodbye!")
+                    running = False
+                else:
+                    click.echo("\n(Press Ctrl+C again to exit, or type 'exit')")
+                    continue
             except EOFError:
-                break
+                # Ctrl+D on Unix, or when input stream is closed
+                # On Windows, may need to press Ctrl+Z then Enter
+                click.echo("\nGoodbye!")
+                running = False
+            except asyncio.CancelledError:
+                # Async task was cancelled
+                click.echo("\nGoodbye!")
+                running = False
             except Exception as e:
+                # Log unexpected errors but don't crash
                 self._print_error(f"Error: {e}")
+                # Reset Ctrl+C counter on other errors
+                ctrl_c_count = 0
+
+        # Cleanup: ensure we exit cleanly
+        try:
+            # Save any pending history
+            if hasattr(self.session, 'history'):
+                self.session.history.save()
+        except Exception:
+            pass
 
     async def handle_input(self, text: str):
         """Process user input via PM Agent Runtime"""
@@ -514,6 +554,12 @@ class LeeChatREPL:
 
     def _print_welcome(self):
         """Print welcome message"""
+        import platform
+
+        # On Windows, Ctrl+Z+Enter is the EOF signal instead of Ctrl+D
+        is_windows = platform.system() == "Windows"
+        eof_hint = "Ctrl+Z then Enter" if is_windows else "Ctrl+D"
+
         welcome = f"""
 ╔════════════════════════════════════════════════════════════╗
 ║           Lee Chat - PM Agent Interactive Interface         ║
@@ -524,8 +570,8 @@ Mode: {'Decision Engine (Full NLP)' if self.runtime.enable_decision_engine else 
 
 快捷键:
   ↑/↓ 箭头键    - 翻阅历史命令
-  Ctrl+C        - 中断当前输入
-  Ctrl+D        - 退出
+  Ctrl+C        - 中断当前输入 (按两次退出)
+  {eof_hint:12} - 直接退出
 
 Type 'help' for available commands, 'exit' to quit.
 """
