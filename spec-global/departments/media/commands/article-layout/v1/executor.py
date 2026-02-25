@@ -297,14 +297,31 @@ class ArticleLayoutCommand:
 6. **独立的重点标题**（后面不跟列表）：
    - `<p style="color:#cf1322;font-weight:bold;font-size:16px;margin:16px 0;">标题</p>`
 
-7. **代码块处理（非常重要）**：
-   - **只有真正的代码才转换为 `<pre><code>` 格式**
-   - 真正的代码特征：有明确的编程语言标识（```python, ```javascript, ```yaml 等）或包含明显代码语法（函数定义、变量赋值、循环等）
-   - **纯文本/流程示意图不要用代码块！** 例如：
-     - 流程箭头图：`人 → 打开AI → 提问 → 得到回答`
-     - 纯文本说明、配置示例、流程步骤
-     - 这些应该用 `<blockquote>` 或普通 `<p>` 段落显示
-   - 真正的代码格式：
+7. **代码块处理（非常重要，仔细判断！）**：
+
+   **🚫 以下情况【绝对不要】用 `<pre><code>` 代码块格式：**
+
+   a) **`text` 语言的代码块**：原文中 ```text 包裹的内容通常是：
+      - 文件路径/目录结构：如 `backend/service/user.py`、`src/components/`
+      - 纯文本说明、流程描述
+      - 配置示例（非完整 YAML/JSON）
+      - **处理方式**：用 `<blockquote>` 显示，路径可用 `<code>` 行内代码样式
+
+   b) **单行或简单内容**：
+      - 单行路径：`backend/service/user.py`
+      - 简单命令：`npm install`、`git status`
+      - **处理方式**：用 `<blockquote>` 或普通 `<p>` + 行内 `<code>` 显示
+
+   c) **流程图/结构示意图**：
+      - 箭头流程：`用户 → API → 数据库`
+      - 层级结构：`前端 / 后端 / 数据库`
+      - **处理方式**：用 `<blockquote>` 显示
+
+   **✅ 只有以下情况才用 `<pre><code>` 格式：**
+
+   - 有明确的编程语言标识（\`\`\`python, \`\`\`javascript, \`\`\`yaml, \`\`\`json, \`\`\`bash 等）
+   - 包含多行真正的代码（函数定义、类定义、完整配置文件等）
+   - 代码格式示例：
      ```
      <pre><code class="language-python">
      def hello():
@@ -312,6 +329,20 @@ class ArticleLayoutCommand:
      </code></pre>
      ```
    - 代码内容需要转义 HTML 特殊字符（< 变成 &lt;, > 变成 &gt;, & 变成 &amp;）
+
+   **📝 路径/目录结构的推荐显示方式：**
+   ```
+   <blockquote>
+   <code>backend/service/user.py</code>
+   </blockquote>
+   ```
+   或多行路径：
+   ```
+   <blockquote>
+   <code>backend/service/user.py</code><br>
+   <code>backend/service/order.py</code>
+   </blockquote>
+   ```
 
 8. **行内强调**：
    - 使用 `<span class="emphasis">关键词</span>` 来强调重点词汇
@@ -356,10 +387,21 @@ class ArticleLayoutCommand:
    - 只有 `>` 开头的内容才放入 `<blockquote>`
    - 普通陈述句使用 `<p>` 标签
 
-4. **代码块（重要）**：
-   - **只有真正的编程代码才用 `<pre><code>` 格式**
-   - **纯文本流程图（如 `人 → AI → 提问`）不要用代码块！用 `<blockquote>` 或 `<p>` 显示**
-   - 真正的代码必须转义 HTML 特殊字符（< 变成 &lt;, > 变成 &gt;）
+4. **代码块（非常重要，仔细判断！）**：
+
+   🚫 **以下情况不用 `<pre><code>` 代码块**：
+   - `text` 语言的代码块（通常是路径、目录结构、纯文本说明）
+   - 单行路径如 `backend/service/user.py`
+   - 流程图如 `用户 → API → 数据库`
+   - **这些用 `<blockquote>` 显示，路径可用行内 `<code>` 样式**
+
+   ✅ **只有真正的编程代码才用 `<pre><code>` 格式**：
+   - 有明确语言标识（python, javascript, yaml, json, bash 等）
+   - 多行真正的代码（函数、类、完整配置）
+   - 代码必须转义 HTML（< 变 &lt;, > 变 &gt;）
+
+   **路径显示示例**：
+   `<blockquote><code>backend/service/user.py</code></blockquote>`
 
 5. **分隔线**：在每个 H1 标题后添加 `<hr>`
 
@@ -367,12 +409,13 @@ class ArticleLayoutCommand:
 """
 
         # 使用更高的 max_tokens 处理长文章（覆盖配置文件的值）
+        # 注意：DeepSeek API max_tokens 限制为 8192
         # 对于长文章排版，需要足够的输出空间
         result = await self.llm_executor.execute({
             "prompt": user_prompt,
             "system_message": system_prompt,
             "temperature": 0.1,
-            "max_tokens": 32000  # 增大到 32000 以处理长文章
+            "max_tokens": 8192  # DeepSeek API 限制最大 8192
         })
 
         if result.get("status") == "completed":

@@ -34,6 +34,7 @@ roles:
     - skill.office.runtime_state_cleanup    # 程序：清理运行时状态文件
     - skill.office.git_push                 # 程序：推送到远程
     - skill.office.submodule_detector       # 程序：子模块检测 (新增)
+    - skill.office.submodule_committer      # 程序：子模块提交 (新增)
   gates:
     - gate.office.commit_approval           # 人类：批准提交
 
@@ -304,6 +305,18 @@ stages:
         outputs:
           - path: ".workflow/workspace-cleanup/commit-history.yaml"
             description: "提交历史记录"
+
+      # 新增：处理 submodule 提交（在主仓库模式下执行）
+      - id: s5_3b_commit_submodules
+        name: "提交子模块"
+        run: skill.office.submodule_committer
+        condition: "outputs.s0_1_detect_environment.execution_mode == 'main'"
+        depends_on: ["s5_3_execute_commits"]
+        inputs:
+          - workspace_path: "{{ params.workspace_path }}"
+        outputs:
+          - path: ".workflow/workspace-cleanup/submodule-commit-result.yaml"
+            description: "子模块提交结果"
 
       - id: s5_4_cleanup_runtime_state
         name: "清理运行时状态文件"
