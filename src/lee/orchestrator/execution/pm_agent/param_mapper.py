@@ -707,8 +707,26 @@ For CREATE_WORKFLOW intent:
                     confidence=0.95
                 )
 
-        # Pattern 4: Extract gate ID for approve/reject intents
+        # Pattern 4: Extract gate ID or workflow_id for approve/reject intents
         if intent_type in [IntentType.APPROVE_GATE, IntentType.REJECT_GATE, IntentType.REVISE_GATE, IntentType.FLAG_GATE]:
+            # First, try to extract workflow ID (e.g., "批准工作流 wf_task_xxx 的门禁")
+            workflow_patterns = [
+                r'(?:批准|通过|同意|approve|accept|拒绝|reject|deny|修订|修正|revise|标记|flag)\s*(?:工作流|workflow)?\s*(wf_[a-z0-9_]+)',
+            ]
+            for pattern in workflow_patterns:
+                match = re.search(pattern, user_input_lower, re.IGNORECASE)
+                if match:
+                    workflow_id = match.group(1)
+                    logger.info(f"Rule-based extraction: workflow_id={workflow_id} (will resolve gate)")
+                    return WorkflowParams(
+                        workflow_ref=workflow_id,
+                        step_id=None,
+                        gate_id=None,
+                        params={},
+                        confidence=0.95
+                    )
+
+            # Then, try to extract gate ID
             gate_patterns = [
                 r'(?:批准|通过|同意|approve|accept|拒绝|reject|deny|修订|修正|revise|retry\s+gate|标记|flag)\s*(gate_[a-z0-9_]+)',
                 r'(?:批准|通过|同意|approve|accept|拒绝|reject|deny|修订|修正|revise|retry\s+gate|标记|flag)\s*([a-z0-9_]+)(?=\s|$)',

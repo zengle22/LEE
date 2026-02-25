@@ -158,6 +158,9 @@ class LeeChatREPL:
 
     async def run_loop(self):
         """Main REPL loop"""
+        # Ensure database connection is established
+        await self.store.connect()
+
         self._print_welcome()
 
         # Track consecutive Ctrl+C presses for graceful exit
@@ -235,6 +238,12 @@ class LeeChatREPL:
             # Save any pending history
             if hasattr(self.session, 'history'):
                 self.session.history.save()
+        except Exception:
+            pass
+
+        # Close database connection
+        try:
+            await self.store.close()
         except Exception:
             pass
 

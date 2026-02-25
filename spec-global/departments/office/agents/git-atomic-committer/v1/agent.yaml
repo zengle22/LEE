@@ -38,6 +38,23 @@ contracts:
         items:
           type: object
         description: "规划模式下的变更信息（mode=plan时可选，自动检测）"
+      target_repos:
+        type: array
+        items:
+          type: object
+          properties:
+            path:
+              type: string
+            type:
+              type: string
+              enum: [main, submodule]
+        description: "目标仓库列表，用于多仓库提交（新增）"
+        default: [{"path": ".", "type": "main"}]
+      execution_mode:
+        type: string
+        enum: [main, submodule]
+        description: "执行模式：main=主仓库，submodule=子模块"
+        default: "main"
 
   output_schema:
     type: object
@@ -136,22 +153,43 @@ prompting:
 
     PLANNING MODE (`mode=plan`) responsibilities:
     1. Analyze changes in the workspace using git status and git diff
-    2. Group related changes together logically
-    3. Plan atomic commits for each logical change
-    4. Write clear, conventional commit messages for each planned commit
-    5. Generate a commit plan YAML file
-    6. DO NOT execute any git commits
+    2. If input.target_repos contains submodules, analyze each submodule separately
+    3. Group related changes together logically
+    4. Plan atomic commits for each logical change
+    5. Write clear, conventional commit messages for each planned commit
+    6. Generate a commit plan YAML file
+    7. DO NOT execute any git commits
+
+    IMPORTANT - Multi-repo/submodule support:
+    - Check input.target_repos for list of repositories to process
+    - Each entry has: path (relative path) and type ("main" or "submodule")
+    - For main repo: use path "."
+    - For submodules: use the submodule path like "dev/src/ai-marathon-coach-front"
+    - Plan commits for EACH repository separately
 
     Planning output should include:
     - commits: list of planned commits with id, order, type, scope, title, description, files
-    - execution_order: the sequence in which commits should be made
+    - execution_order: the sequence in which commits should be made (submodules first, then main)
     - statistics: summary of changes
 
     EXECUTION MODE (`mode=execute`) responsibilities:
     1. Read the commit plan file from the input
-    2. Execute each commit in the specified order
-    3. Use git add and git commit for each planned commit
-    4. Record the actual commit IDs and execution results
+    2. Check input.target_repos for list of repositories to process
+    3. Execute commits in the specified order:
+       - FIRST: Process each submodule (in target_repos where type="submodule")
+         - cd into the submodule directory
+         - Run git status/diff to see changes
+         - Execute planned commits within the submodule
+         - cd back to main repo
+       - THEN: Update main repo submodule references if needed
+       - Finally: Process main repo commits
+    4. Use git add and git commit for each planned commit
+    5. Record the actual commit IDs and execution results
+
+    IMPORTANT - Multi-repo execution:
+    - Submodule commits MUST happen BEFORE main repo commits
+    - After committing in a submodule, you MUST return to main repo before processing next repo
+    - Main repo should update submodule references after submodules are committed
 
     Commit principles:
     - One logical change per commit
@@ -171,10 +209,13 @@ prompting:
 
   instructions:
     - "先读取 input.mode（plan 或 execute），严格按对应模式执行。"
+    - "检查 input.target_repos 获取需要处理的仓库列表（支持多仓库/submodule）。"
     - "mode=plan: 仅分析和规划提交，禁止执行 git commit。"
-    - "mode=plan: 使用 git status 和 git diff，并输出提交计划 YAML。"
-    - "mode=execute: 读取 commit_plan，按顺序执行 git add/git commit。"
-    - "mode=execute: 记录实际提交 ID 与执行结果。"
+    - "mode=plan: 使用 git status 和 git diff，并为每个 submodule 分别规划提交。"
+    - "mode=plan: 输出提交计划 YAML，包含所有仓库的提交规划。"
+    - "mode=execute: 先处理所有 submodule（按 target_repos 中的顺序），再处理主仓库。"
+    - "mode=execute: 在每个 submodule 中执行提交后，必须回到主仓库。"
+    - "mode=execute: 主仓库最后更新 submodule 引用。"
 
   output_format: yaml
 

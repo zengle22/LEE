@@ -1,8 +1,8 @@
 {
   "session_id": "chat_20260224_112642",
   "run_id": "wf_task_b651cba1",
-  "last_active_timestamp": 1771904720.2970126,
-  "history_summary": "1 turns",
+  "last_active_timestamp": 1771905178.8731143,
+  "history_summary": "2 turns",
   "metadata": {
     "user_permissions": [],
     "department": null,
@@ -18,6 +18,14 @@
           "input": "workspace-cleanup",
           "resolved": "workflow.office.workspace_cleanup"
         }
+      },
+      {
+        "timestamp": 1771905178.8731117,
+        "user_input": "批准 gate_s5_2_review_commits",
+        "action": "approve_gate",
+        "status": "success",
+        "confidence": 0.9,
+        "workflow_id": "wf_task_b651cba1"
       }
     ],
     "last_template_resolution": {

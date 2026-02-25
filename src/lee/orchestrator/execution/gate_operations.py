@@ -68,6 +68,12 @@ class GateOperationsMixin:
         except Exception as e:
             logger.warning(f"Gate evaluation error (non-blocking): {e}")
 
+        # 检查 gate 是否存在
+        gate_approval = await self.store.get_gate_approval(workflow_id, gate_id)
+        if gate_approval is None:
+            logger.error(f"Gate not found: workflow_id={workflow_id}, gate_id={gate_id}")
+            raise ValueError(f"Gate not found: {workflow_id}/{gate_id}")
+
         # 更新门禁审批状态
         gate_approval = await self.store.update_gate_approval(
             workflow_id,
@@ -76,6 +82,11 @@ class GateOperationsMixin:
             approver,
             comments
         )
+
+        # 检查更新是否成功
+        if gate_approval is None:
+            logger.error(f"Failed to update gate: workflow_id={workflow_id}, gate_id={gate_id}")
+            raise RuntimeError(f"Failed to update gate approval: {workflow_id}/{gate_id}")
 
         # 恢复工作流状态
         await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)

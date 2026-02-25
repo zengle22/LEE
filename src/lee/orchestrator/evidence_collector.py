@@ -40,6 +40,20 @@ class EvidenceCollector:
                 continue
 
             rel_path = self._relative_to_project(src)
+
+            # Skip if artifact is already inside the current evidence directory
+            # to prevent infinite nesting (e.g., evidence/RUN-x/evidence/RUN-x/...)
+            try:
+                src_resolved = src.resolve()
+                evidence_dir_resolved = evidence_dir.resolve()
+                # Check if src is already under evidence_dir
+                if str(src_resolved).startswith(str(evidence_dir_resolved)):
+                    # Already in the correct evidence directory, skip copying
+                    copied.append(str(src_resolved))
+                    continue
+            except Exception:
+                pass  # Fall through to normal copy logic
+
             dest = evidence_dir / rel_path
             dest.parent.mkdir(parents=True, exist_ok=True)
 
