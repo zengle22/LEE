@@ -8,7 +8,9 @@
       "Bash(python3:*)",
       "Bash(sqlite3:*)",
       "Bash(python:*)",
-      "Bash(lee gates list:*)"
+      "Bash(lee gates list:*)",
+      "Bash(claude config list:*)",
+      "Bash(unset:*)"
     ]
   },
   "commands": {
