@@ -1,0 +1,254 @@
+# L2 v3 Workflow Instance Demo
+# 跑步记录页新增备注输入框
+#
+# 这是一个 L2 v3 工作流实例，用于演示：
+# 1. L2 v3 实例格式（kind: l2_workflow_instance）
+# 2. complexity=M 时 spawn L3 子工作流
+# 3. L3 v3 6步 TDD 流程
+
+kind: l2_workflow_instance
+version: "3.0"
+
+id: l2-running-notes-feature-v3
+name: 跑步记录页新增备注输入框 (L2 v3 Demo)
+description: >
+  在跑步记录页面新增备注输入框功能：
+  - 用户可以在跑步记录中添加文字备注
+  - 备注内容保存到数据库
+  - 支持备注的编辑和删除
+
+template_id: template.dev.feature_l2_v3
+level: department
+status: pending
+
+created_at: "2026-02-24T00:00:00Z"
+created_by: "demo-user"
+
+# ============================================
+# 上下文配置
+# ============================================
+context:
+  project: "HealthTracker"
+  module: "running-logs"
+  module_version: "1.0.0"
+  prd_path: "specs/running-notes-feature-prd.md"
+  repos:
+    - id: "healthtracker-frontend"
+      type: "frontend"
+      language: "vue"
+      url: "https://github.com/example/healthtracker-frontend"
+    - id: "healthtracker-backend"
+      type: "backend"
+      language: "python"
+      url: "https://github.com/example/healthtracker-backend"
+
+# ============================================
+# L2 阶段定义
+# ============================================
+phases:
+  # ---------- Phase 1: 契约设计 ----------
+  - id: p1_contract_design
+    name: "契约设计阶段"
+    description: "设计备注输入框的 API 契约"
+    default_complexity: M
+    complexity: S  # 简单，直接执行
+    status: pending
+    depends_on: []
+    spawns_l3: false
+    l3_instance_ids: []
+    steps:
+      - id: p1_1_api_design
+        name: "设计备注 API"
+        type: agent
+        outputs:
+          - path: "output/api-contract.yaml"
+
+  # ---------- Phase 2: 并行开发 ----------
+  - id: p2_parallel_development
+    name: "并行开发阶段"
+    description: "前后端并行开发"
+    default_complexity: M
+    status: pending
+    depends_on: ["p1_contract_design"]
+    parallel_phases:
+      # ----- Frontend Development (demo 重点) -----
+      - id: p2_1_fe_development
+        name: "前端开发"
+        description: "实现备注输入框 UI"
+        default_complexity: M
+        complexity: M  # M = spawn 单个 L3 (6步流程)
+        status: pending
+        depends_on: ["p1_contract_design"]
+        spawns_l3: true
+        l3_template: "template.dev.task_l3_v3"
+        l3_instance_ids: []  # 将在运行时填充
+        steps:
+          - id: p2_1_fe_spawn_l3
+            name: "Spawn Frontend L3"
+            description: "派发前端 L3 子工作流（6 步流程）"
+            type: spawn_l3
+            l3_template_ref: "template.dev.task_l3_v3"
+
+      # ----- Backend Development -----
+      - id: p2_2_be_development
+        name: "后端开发"
+        description: "实现备注 API"
+        default_complexity: M
+        complexity: S  # 简单，直接执行
+        status: pending
+        depends_on: ["p1_contract_design"]
+        spawns_l3: false
+        l3_instance_ids: []
+        steps:
+          - id: p2_2_be_impl
+            name: "后端实现"
+            type: agent
+
+  # ---------- Phase 3: 集成测试 ----------
+  - id: p3_integration
+    name: "集成测试阶段"
+    description: "前后端联调测试"
+    default_complexity: S
+    complexity: S
+    status: pending
+    depends_on: ["p2_1_fe_development", "p2_2_be_development"]
+    spawns_l3: false
+    l3_instance_ids: []
+
+  # ---------- Phase 4: 冒烟测试 ----------
+  - id: p4_smoke
+    name: "冒烟测试阶段"
+    description: "端到端冒烟测试"
+    default_complexity: S
+    complexity: S
+    status: pending
+    depends_on: ["p3_integration"]
+    spawns_l3: false
+    l3_instance_ids: []
+
+# ============================================
+# 执行策略配置
+# ============================================
+execution_strategies:
+  S:
+    description: "Simple: 直接执行阶段步骤"
+    spawns_l3: false
+  M:
+    description: "Medium: spawn 单个 L3 子工作流"
+    spawns_l3: true
+    default_l3_count: 1
+  L:
+    description: "Large: PMA 拆分后 spawn 多个 L3"
+    spawns_l3: true
+    uses_pma: true
+    default_l3_count: "2-5"
+
+# ============================================
+# L3 配置（前端开发）
+# ============================================
+l3_config:
+  frontend:
+    template_id: "template.dev.task_l3_v3"
+    name: "Frontend Task L3 v3"
+    description: "前端任务 L3 v3（6 步 TDD 流程）"
+    point_id: "p2_1_fe_development"
+    point_title: "跑步记录页备注输入框"
+    point_desc: >
+      在跑步记录页面新增备注输入框：
+      - 页面位置：跑步记录详情页，时间信息下方
+      - UI 组件：多行文本输入框，支持 200 字限制
+      - 交互：支持实时保存，显示保存状态
+      - 验证：非空时显示字数统计，超限时提示
+    point_layer: "ui"
+    point_complexity: "M"
+    steps:
+      - id: align_requirement
+        name: "对齐需求"
+        kind: agent
+        description: "分析功能点需求，明确验收标准"
+        mandatory: true
+        depends_on: []
+        status: pending
+      - id: design_tests
+        name: "设计测试"
+        kind: agent
+        description: "设计测试用例（测试先行）"
+        mandatory: true
+        depends_on: ["align_requirement"]
+        status: pending
+      - id: implement
+        name: "实现"
+        kind: agent
+        description: "编写实现代码使测试通过"
+        mandatory: true
+        depends_on: ["design_tests"]
+        status: pending
+      - id: run_tests
+        name: "测试"
+        kind: skill
+        description: "运行单元测试，确认所有测试通过"
+        mandatory: true
+        depends_on: ["implement"]
+        status: pending
+      - id: code_review
+        name: "Review"
+        kind: agent
+        description: "代码自检与评审"
+        mandatory: true
+        depends_on: ["run_tests"]
+        status: pending
+      - id: retrospective
+        name: "复盘"
+        kind: agent
+        description: "任务复盘与总结"
+        mandatory: false
+        depends_on: ["code_review"]
+        status: pending
+
+# ============================================
+# 预期执行流程
+# ============================================
+expected_execution_flow:
+  - phase: "p1_contract_design"
+    action: "直接执行"
+    complexity: "S"
+    description: "设计备注 API 契约"
+  - phase: "p2_1_fe_development"
+    action: "spawn L3"
+    complexity: "M"
+    description: "派发前端 L3（6步流程）"
+    l3_steps:
+      - "1. align_requirement: 对齐需求"
+      - "2. design_tests: 设计测试"
+      - "3. implement: 实现"
+      - "4. run_tests: 测试"
+      - "5. code_review: Review"
+      - "6. retrospective: 复盘"
+  - phase: "p2_2_be_development"
+    action: "直接执行"
+    complexity: "S"
+    description: "实现备注 API"
+  - phase: "p3_integration"
+    action: "集成测试"
+    complexity: "S"
+    description: "前后端联调"
+  - phase: "p4_smoke"
+    action: "冒烟测试"
+    complexity: "S"
+    description: "端到端测试"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  demo: true
+  demo_name: "L2 v3 跑步记录页备注功能"
+  demo_description: >
+    演示 L2 v3 工作流的以下特性：
+    1. kind: l2_workflow_instance 标识
+    2. complexity=M 时 spawn L3 子工作流
+    3. L3 v3 6步 TDD 流程
+    4. 阶段依赖与并行执行
+  version: "3.0"
+  created_at: "2026-02-24"
+  last_updated: "2026-02-24"

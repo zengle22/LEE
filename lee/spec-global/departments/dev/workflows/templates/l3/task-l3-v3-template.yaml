@@ -1,0 +1,358 @@
+# Task L3 Workflow Template v3
+# 任务级 L3 工作流模板 v3 — 6 步 TDD 流程
+#
+# 用于 L2 的 complexity=M 阶段 spawn 单个 L3 子工作流
+# 流程：对齐需求 → 设计测试 → 实现 → 测试 → review → 复盘
+
+kind: l3_workflow_template
+version: "3.0"
+
+id: template.dev.task_l3_v3
+name: Task L3 Template v3 — 6-Step TDD Flow
+description: >
+  L3 任务级工作流模板 v3，包含 6 个标准步骤：
+  1. align_requirement: 对齐需求（分析 Feature Spec，明确功能点）
+  2. design_tests: 设计测试（根据功能点设计测试用例，测试先行）
+  3. implement: 实现（编写实现代码使测试通过）
+  4. run_tests: 测试（运行单元测试，确认所有测试通过）
+  5. code_review: Review（代码自检与评审）
+  6. retrospective: 复盘（任务复盘与总结，可选）
+
+owner: development
+tags: [workflow, template, dev, l3, v3, tdd]
+
+# ============================================
+# 模板参数
+# ============================================
+parameters:
+  - name: point_id
+    type: string
+    required: true
+    description: "功能点 ID（如 p2_1_fe_development）"
+
+  - name: point_title
+    type: string
+    required: true
+    description: "功能点标题"
+
+  - name: point_description
+    type: string
+    required: false
+    description: "功能点详细描述"
+
+  - name: feature_spec_path
+    type: string
+    required: true
+    description: "Feature Spec 文件路径"
+
+  - name: branch
+    type: string
+    required: false
+    default: "develop"
+    description: "Git 分支名"
+
+  - name: files_hint
+    type: list
+    required: false
+    description: "涉及文件提示"
+
+# ============================================
+# 契约验证配置
+# ============================================
+contracts:
+  inputs:
+    - frozen_dev_package:
+        path: ../../contracts/frozen-dev-package-contract/v1/schema.json
+        description: |
+          研发冻结包 (Frozen Dev Package) - L3 的标准输入
+          L3 从 L2 接收研发冻结包，获取完整的前置契约信息
+        validation:
+          enabled: true
+          on_failure: block  # 输入验证失败时阻塞步骤执行
+          schema_validation:
+            - field: contract_type
+              required: true
+              allowed_values: ["frozen-dev-package"]
+            - field: package_content.prd_ref
+              required: true
+              check: file_exists
+            - field: package_content.tech_ref
+              required: true
+              check: file_exists
+            - field: package_content.ui_ref
+              required: true
+              check: file_exists
+    - phase_context:
+        path: ../../contracts/l3-phase-context/v1/schema.json
+        description: |
+          L3 阶段上下文 - 包含父 L2 工作流传递的上下文信息
+        validation:
+          enabled: true
+          on_failure: block
+          required_fields:
+            - parent_l2_id
+            - parent_phase_id
+            - point_id
+
+  outputs:
+    - l3_outputs:
+        path: ../../contracts/l3-outputs/v1/schema.json
+        description: L3 各步骤输出汇总
+        validation:
+          enabled: true
+          on_failure: retry  # 输出验证失败时重试
+          max_retries: 3     # 最多重试 3 次
+          retry_delay_seconds: 5  # 重试间隔
+          required_artifacts:
+            - output/{{params.point_id}}-requirement-analysis.yaml
+            - output/{{params.point_id}}-test-code-diff.patch
+            - output/{{params.point_id}}-code-diff.patch
+            - output/{{params.point_id}}-test-report.json
+            - output/{{params.point_id}}-coverage.json
+            - output/{{params.point_id}}-review.json
+
+# ============================================
+# 步骤输出契约验证配置
+# ============================================
+step_output_validation:
+  # 步骤 1: 对齐需求输出验证
+  align_requirement:
+    contract_ref: ../../contracts/requirement-analysis/v1/schema.json
+    on_failure: retry
+    max_retries: 3
+    required_fields:
+      - feature_points
+      - acceptance_criteria
+      - edge_cases
+
+  # 步骤 2: 设计测试输出验证
+  design_tests:
+    contract_ref: ../../contracts/test-code-diff/v1/schema.json
+    on_failure: retry
+    max_retries: 3
+    required_fields:
+      - test_cases
+      - coverage_plan
+    validation_rules:
+      - name: "test_cases_not_empty"
+        expression: "output.test_cases.length > 0"
+        error_message: "至少需要设计一个测试用例"
+
+  # 步骤 3: 实现输出验证
+  implement:
+    contract_ref: ../../contracts/code-diff/v1/schema.json
+    on_failure: retry
+    max_retries: 3
+    required_fields:
+      - files_changed
+      - diff_summary
+
+  # 步骤 4: 测试输出验证
+  run_tests:
+    contract_ref: ../../contracts/test-report/v1/schema.json
+    on_failure: retry
+    max_retries: 3
+    required_fields:
+      - test_results
+      - coverage
+    validation_rules:
+      - name: "all_tests_passed"
+        expression: "output.test_results.failed == 0"
+        error_message: "所有测试必须通过才能继续"
+        is_blocking: true
+      - name: "min_coverage"
+        expression: "output.coverage.percentage >= 80"
+        error_message: "测试覆盖率必须达到 80%"
+        is_blocking: false  # 不阻塞，仅警告
+
+  # 步骤 5: Review 输出验证
+  code_review:
+    contract_ref: ../../contracts/code-review/v1/schema.json
+    on_failure: retry
+    max_retries: 3
+    required_fields:
+      - review_result
+      - issues_found
+      - approval_status
+
+  # 步骤 6: 复盘输出验证（可选步骤）
+  retrospective:
+    contract_ref: ../../contracts/retrospective/v1/schema.json
+    on_failure: warn  # 可选步骤，失败仅警告
+    required_fields:
+      - summary
+      - lessons_learned
+
+# ============================================
+# 步骤定义
+# ============================================
+steps:
+  # ---------- Step 1: 对齐需求 ----------
+  - id: align_requirement
+    name: "对齐需求"
+    kind: agent
+    description: >
+      分析 Feature Spec，产出需求分析文档：
+      - 识别功能点的具体需求
+      - 明确输入/输出/边界条件
+      - 列出验收标准
+    mandatory: true
+    depends_on: []
+    agent: agent.dev.uniapp_frontend_engineer
+    inputs:
+      - feature_spec: "{{params.feature_spec_path}}"
+      - task: "align_requirement"
+      - point_id: "{{params.point_id}}"
+    outputs:
+      - path: "output/{{params.point_id}}-requirement-analysis.yaml"
+        description: "需求分析文档"
+
+  # ---------- Step 2: 设计测试 ----------
+  - id: design_tests
+    name: "设计测试"
+    kind: agent
+    description: >
+      根据需求分析设计测试用例（测试先行）：
+      - 每个功能点至少一个测试用例
+      - 覆盖正常路径、异常路径、边界条件
+      - 测试基于接口定义，不依赖内部实现
+      - 此阶段只写测试代码，不写业务实现
+    mandatory: true
+    depends_on: ["align_requirement"]
+    agent: agent.dev.uniapp_frontend_engineer
+    inputs:
+      - feature_spec: "{{params.feature_spec_path}}"
+      - requirement_analysis: "output/{{params.point_id}}-requirement-analysis.yaml"
+      - task: "design_tests"
+      - point_id: "{{params.point_id}}"
+    outputs:
+      - path: "output/{{params.point_id}}-test-code-diff.patch"
+        description: "测试代码差异"
+
+  # ---------- Step 3: 实现 ----------
+  - id: implement
+    name: "实现"
+    kind: agent
+    description: >
+      根据测试用例编写实现代码，使所有测试通过：
+      - 参照测试用例理解接口契约
+      - 编写最小化实现代码
+      - 实现完成后所有测试应为绿色
+    mandatory: true
+    depends_on: ["design_tests"]
+    agent: agent.dev.uniapp_frontend_engineer
+    inputs:
+      - feature_spec: "{{params.feature_spec_path}}"
+      - requirement_analysis: "output/{{params.point_id}}-requirement-analysis.yaml"
+      - test_code_diff: "output/{{params.point_id}}-test-code-diff.patch"
+      - task: "implement"
+      - point_id: "{{params.point_id}}"
+    outputs:
+      - path: "output/{{params.point_id}}-code-diff.patch"
+        description: "实现代码差异"
+
+  # ---------- Step 4: 测试 ----------
+  - id: run_tests
+    name: "测试"
+    kind: skill
+    description: >
+      运行所有单元测试，确认实现使全部测试通过：
+      - 执行单元测试
+      - 生成测试覆盖率报告
+      - 确保所有测试通过
+    mandatory: true
+    depends_on: ["implement"]
+    skill: skill.test.vitest
+    inputs:
+      - command: "npx vitest run"
+    outputs:
+      - path: "output/{{params.point_id}}-test-report.json"
+        description: "测试报告"
+      - path: "output/{{params.point_id}}-coverage.json"
+        description: "覆盖率报告"
+
+  # ---------- Step 5: Review ----------
+  - id: code_review
+    name: "Review"
+    kind: agent
+    description: >
+      代码自检与评审：
+      - 检查代码质量与规范
+      - 检查测试覆盖率
+      - 验证功能完整性
+    mandatory: true
+    depends_on: ["run_tests"]
+    agent: agent.dev.code_self_reviewer
+    inputs:
+      - feature_spec: "{{params.feature_spec_path}}"
+      - test_report: "output/{{params.point_id}}-test-report.json"
+      - coverage_report: "output/{{params.point_id}}-coverage.json"
+      - task: "review"
+    outputs:
+      - path: "output/{{params.point_id}}-review.json"
+        description: "评审报告"
+
+  # ---------- Step 6: 复盘 ----------
+  - id: retrospective
+    name: "复盘"
+    kind: agent
+    description: >
+      任务复盘与总结：
+      - 总结实现要点
+      - 记录遇到的问题与解决方案
+      - 提出改进建议
+    mandatory: false  # 可选步骤
+    depends_on: ["code_review"]
+    agent: agent.dev.uniapp_frontend_engineer
+    inputs:
+      - task: "retrospective"
+      - point_id: "{{params.point_id}}"
+    outputs:
+      - path: "output/{{params.point_id}}-retrospective.md"
+        description: "复盘文档"
+
+# ============================================
+# 实例 Schema (用于验证)
+# ============================================
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+    - point_id
+    - steps
+  step_fields:
+    - id
+    - name
+    - kind
+    - status
+    - mandatory
+    - depends_on
+  step_optional_fields:
+    - agent
+    - skill
+    - inputs
+    - outputs
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "dev-workflow-architect"
+  created_at: "2026-02-24"
+  version: "3.0"
+  last_updated: "2026-02-24"
+
+  changelog:
+    - version: "3.0"
+      date: "2026-02-24"
+      changes:
+        - "新增 kind: l3_workflow_template 标识"
+        - "定义 6 步 TDD 流程"
+        - "支持参数化实例生成"
+        - "支持步骤依赖 depends_on"
+    - version: "1.0"
+      date: "2026-02-11"
+      changes:
+        - "初始版本：Feature FE L3 v1（TDD 流程）"
