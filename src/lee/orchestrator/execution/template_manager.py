@@ -645,10 +645,11 @@ class TemplateManager:
         """
         解析模板文档
 
-        支持三种格式：
+        支持四种格式：
         1. spec-global 格式：kind: workflow，完整的工作流定义
-        2. 旧格式：level 字段指定层级
-        3. 新格式：kind: workflow，从 overview.stages 推断层级
+        2. L2 模板格式：kind: l2_workflow_template
+        3. L3 模板格式：kind: l3_workflow_template
+        4. 旧格式：level 字段指定层级
 
         Args:
             doc: YAML 文档字典
@@ -660,6 +661,12 @@ class TemplateManager:
         """
         # 检测文档格式
         kind = doc.get("kind", "")
+
+        # v3.6: L2/L3 模板支持
+        if kind == "l2_workflow_template":
+            return self._parse_l2_template(doc, template_id, file_path)
+        elif kind == "l3_workflow_template":
+            return self._parse_l3_template(doc, template_id, file_path)
 
         # spec-global 格式检测
         # 检查 stages 是否在顶层或在 overview 下
@@ -704,6 +711,147 @@ class TemplateManager:
             tasks=doc.get("tasks", []),
             completion_criteria=completion_criteria,
             config=doc.get("config", {}),
+        )
+
+    def _parse_l2_template(
+        self,
+        doc: Dict[str, Any],
+        template_id: str,
+        file_path: Optional[Path] = None
+    ) -> WorkflowTemplate:
+        """
+        解析 L2 工作流模板
+
+        L2 模板特点：
+        - kind: l2_workflow_template
+        - phases 定义（而非 steps）
+        - 每个阶段有 default_complexity
+
+        Args:
+            doc: YAML 文档字典
+            template_id: 模板 ID
+            file_path: 模板文件路径（可选）
+
+        Returns:
+            WorkflowTemplate 对象
+        """
+        from lee.orchestrator.storage.models import Complexity
+
+        phases = doc.get("phases", [])
+        steps = []
+
+        # 将 phases 转换为 steps（保持与现有 WorkflowTemplate 兼容）
+        for phase in phases:
+            phase_id = phase.get("id", "")
+            default_complexity = phase.get("default_complexity", "M")
+
+            # 验证 complexity 值
+            try:
+                Complexity(default_complexity)
+            except ValueError:
+                default_complexity = "M"
+
+            steps.append(Step(
+                id=phase_id,
+                kind="phase",  # L2 特有 kind
+                executor_type=None,
+                depends_on=[],
+                input={
+                    "phase_id": phase_id,
+                    "name": phase.get("name", ""),
+                    "description": phase.get("description", ""),
+                    "default_complexity": default_complexity,
+                },
+                config={
+                    "name": phase.get("name", ""),
+                    "description": phase.get("description", ""),
+                    "default_complexity": default_complexity,
+                    "phase": phase_id,
+                },
+            ))
+
+        return WorkflowTemplate(
+            id=doc.get("id", template_id),
+            level=WorkflowLevel.DEPARTMENT,
+            name=doc.get("name", template_id),
+            description=doc.get("description", ""),
+            steps=steps,
+            departments=[],
+            tasks=[],
+            completion_criteria={
+                "all_phases_complete": True,
+            },
+            config={
+                "kind": "l2_workflow_template",
+                "execution_strategies": doc.get("execution_strategies", {}),
+            },
+        )
+
+    def _parse_l3_template(
+        self,
+        doc: Dict[str, Any],
+        template_id: str,
+        file_path: Optional[Path] = None
+    ) -> WorkflowTemplate:
+        """
+        解析 L3 工作流模板
+
+        L3 模板特点：
+        - kind: l3_workflow_template
+        - 6 个标准步骤
+        - 单点任务执行
+
+        Args:
+            doc: YAML 文档字典
+            template_id: 模板 ID
+            file_path: 模板文件路径（可选）
+
+        Returns:
+            WorkflowTemplate 对象
+        """
+        steps_data = doc.get("steps", [])
+        steps = []
+
+        # 解析 L3 特有的 steps 格式
+        for step_data in steps_data:
+            step_id = step_data.get("id", "")
+            kind = step_data.get("kind", "agent")
+
+            # 解析 depends_on
+            depends_on = step_data.get("depends_on", [])
+
+            steps.append(Step(
+                id=step_id,
+                kind=kind,
+                executor_type="llm" if kind == "agent" else "shell",
+                depends_on=depends_on,
+                input={
+                    "step_id": step_id,
+                    "name": step_data.get("name", ""),
+                    "description": step_data.get("description", ""),
+                },
+                config={
+                    "name": step_data.get("name", ""),
+                    "description": step_data.get("description", ""),
+                    "mandatory": step_data.get("mandatory", True),
+                },
+            ))
+
+        return WorkflowTemplate(
+            id=doc.get("id", template_id),
+            level=WorkflowLevel.TASK,
+            name=doc.get("name", template_id),
+            description=doc.get("description", ""),
+            steps=steps,
+            departments=[],
+            tasks=[],
+            completion_criteria={
+                "all_steps_complete": True,
+            },
+            config={
+                "kind": "l3_workflow_template",
+                "execution_order": doc.get("execution_order", [s.id for s in steps]),
+            },
         )
 
     def _parse_spec_global_format(

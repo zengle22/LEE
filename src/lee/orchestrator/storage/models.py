@@ -336,3 +336,45 @@ class GateInfo:
     comments: Optional[str] = None
     created_at: Optional[datetime] = None
     decided_at: Optional[datetime] = None
+
+
+# ========================================================================
+# L2/L3 Workflow Template System Models (P0)
+# ========================================================================
+
+class Complexity(str, Enum):
+    """Task complexity for L2 phase routing.
+
+    Used to determine execution strategy:
+    - S (Simple): Direct execution via helper functions
+    - M (Medium): Spawn single L3 instance
+    - L (Large): PMA split, spawn multiple L3 instances
+    """
+    S = "S"  # Simple: direct execution
+    M = "M"  # Medium: spawn single L3
+    L = "L"  # Large: PMA split, spawn multiple L3s
+
+
+@dataclass
+class Point:
+    """PMA-generated feature point.
+
+    Represents a single implementable unit derived from splitting
+    a complex L2 phase. Each point becomes an L3 instance.
+
+    Attributes:
+        id: Unique point identifier (e.g., "frontend_dev-p1")
+        title: Human-readable point title
+        desc: Detailed description of what to implement
+        layer: Architecture layer (ui, state, api, service)
+        estimated_complexity: Expected implementation complexity
+        files_hint: Suggested file paths to modify
+        depends_on: List of point IDs this point depends on
+    """
+    id: str
+    title: str
+    desc: str
+    layer: str  # ui, state, api, service
+    estimated_complexity: Complexity
+    files_hint: List[str] = field(default_factory=list)
+    depends_on: List[str] = field(default_factory=list)

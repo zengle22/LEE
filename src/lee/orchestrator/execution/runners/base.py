@@ -248,6 +248,112 @@ class StepRunnerBase(StepRunnerStrategy):
                 print(f"[OutputValidation] Warning: Step {step.id} output schema validation failed (soft mode)")
         return None
 
+    async def _validate_step_output_with_retry(
+        self,
+        ctx: RunnerContext,
+        step,
+        output_data: Any,
+        workflow_id: str
+    ) -> tuple[bool, Optional[ValidationResult], int]:
+        """
+        v3.5: 验证步骤输出，支持重试机制
+
+        Args:
+            ctx: Runner 上下文
+            step: 步骤对象
+            output_data: 输出数据
+            workflow_id: 工作流 ID
+
+        Returns:
+            (passed, validation_result, attempt_count) 元组
+        """
+        config = step.config or {}
+        execution_config = config.get("execution", {}) if isinstance(config.get("execution"), dict) else {}
+
+        # 获取重试配置
+        on_failure = execution_config.get("on_failure", "warn")  # block | warn | retry
+        max_retries = execution_config.get("max_retries", 3)
+        retry_delay = execution_config.get("retry_delay_seconds", 5)
+
+        # 如果不是 retry 模式，使用原有逻辑
+        if on_failure != "retry":
+            result = self._validate_step_output(step, output_data)
+            if result is None:
+                return True, None, 1  # 无验证配置时认为通过
+
+            if result.passed:
+                return True, result, 1
+
+            # 处理验证失败
+            if on_failure == "block":
+                return False, result, 1
+            else:  # warn
+                print(f"[OutputValidation] Warning: Step {step.id} output validation failed (warn mode)")
+                return True, result, 1  # warn 模式下仍返回 True
+
+        # 重试模式
+        from lee.orchestrator.execution.retry import RetryPolicy
+
+        policy = RetryPolicy(
+            max_retries=max_retries,
+            base_delay=retry_delay,
+            max_delay=60.0,
+            jitter=True,
+        )
+
+        retry_executor = AsyncRetryExecutor(policy)
+        attempt_count = 0
+
+        async def validate_once():
+            """单次验证函数"""
+            nonlocal attempt_count
+            attempt_count += 1
+            result = self._validate_step_output(step, output_data)
+
+            if result is None:
+                return  # 无验证配置，认为通过
+
+            if not result.passed:
+                # 构造验证错误
+                error_msg = result.errors[0].message if result.errors else "Validation failed"
+                raise ValueError(f"Output validation failed: {error_msg}")
+
+            return result
+
+        try:
+            await retry_executor.execute(validate_once)
+            # 重试成功或无需验证
+            result = self._validate_step_output(step, output_data)
+            return True, result, attempt_count
+        except Exception as e:
+            # 重试耗尽
+            print(f"[OutputValidation] Step {step.id} output validation failed after {attempt_count} attempts: {e}")
+            result = self._validate_step_output(step, output_data)
+            return False, result, attempt_count
+
+    @staticmethod
+    def _get_step_output_validation_config(step_id: str, template_config: dict = None) -> dict:
+        """
+        获取步骤的输出验证配置
+
+        Args:
+            step_id: 步骤 ID
+            template_config: 模板配置（来自 workflow template）
+
+        Returns:
+            验证配置字典，包含:
+            - contract_ref: 契约 schema 路径
+            - on_failure: 失败处理策略 (block/warn/retry)
+            - max_retries: 最大重试次数
+            - required_fields: 必填字段列表
+            - validation_rules: 验证规则列表
+        """
+        if not template_config:
+            return {}
+
+        step_validation = template_config.get("step_output_validation", {})
+        return step_validation.get(step_id, {})
+
     # ------------------------------------------------------------------
     # Verifiers
     # ------------------------------------------------------------------
