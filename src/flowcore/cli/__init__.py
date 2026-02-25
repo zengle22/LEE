@@ -1,0 +1,2 @@
+"""Legacy CLI compatibility module."""
+
