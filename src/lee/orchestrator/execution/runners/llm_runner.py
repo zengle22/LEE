@@ -405,7 +405,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             "context_files": claude_config.get("context_files", []),
             "write_scope": claude_config.get("write_scope", []),
             "max_iterations": claude_config.get("max_iterations", 5),
-            "timeout_seconds": claude_config.get("timeout_seconds", 600),
+            "timeout_seconds": claude_config.get("timeout_seconds", 3600),
             "timeout_retries": claude_config.get("timeout_retries", 1),
             "retry_backoff_seconds": claude_config.get("retry_backoff_seconds", 5),
             "stop_conditions": claude_config.get("stop_conditions", {}),

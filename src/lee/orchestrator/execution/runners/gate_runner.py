@@ -68,9 +68,11 @@ class HumanGateRunner(StepRunnerBase):
             default_revise_target = on_revise.get("target_step")
 
         # 创建门禁审批记录（包含默认动作）
+        # Include workflow_id in gate_id to make it unique across multiple workflows
+        gate_id_value = step.gate_id or f"gate_{workflow_id}_{step.id}"
         gate_approval = GateApproval(
             workflow_id=workflow_id,
-            gate_id=step.gate_id or f"gate_{step.id}",
+            gate_id=gate_id_value,
             step_id=step.id,
             status=GateStatus.PENDING,
             approval_criteria=gate_config.get("approval_criteria", []),
@@ -84,7 +86,7 @@ class HumanGateRunner(StepRunnerBase):
 
         # v3.2: 记录门禁触发事件
         ctx.event_log.log_gate_triggered(
-            gate_id=step.gate_id or f"gate_{step.id}",
+            gate_id=gate_id_value,
             step_id=step.id,
             gate_type="human",
             blocking=True,
@@ -95,7 +97,7 @@ class HumanGateRunner(StepRunnerBase):
             blocked_reason="human_gate",
             step_id=step.id,
             workflow_id=workflow_id,
-            message=f"Waiting for human approval at gate: {step.gate_id or step.id}",
+            message=f"Waiting for human approval at gate: {gate_id_value}",
             next_steps=[],
         )
 

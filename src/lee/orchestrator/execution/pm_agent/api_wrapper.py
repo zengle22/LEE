@@ -286,6 +286,40 @@ class OrchestratorAPIWrapper:
         auto_continue = bool(decision.params.params.get("auto_continue", True))
         max_steps = int(decision.params.params.get("max_steps", 10))
 
+        # 如果没有 gate_id 但有 workflow_id，需要从 workflow 找到对应的 gate
+        if not gate_id and workflow_id:
+            try:
+                gates_result = await api_list_gates(self.project_dir, workflow_id, None)
+                gates = gates_result.get("gates", []) if isinstance(gates_result, dict) else []
+                if gates:
+                    # 取第一个 pending 的 gate
+                    for g in gates:
+                        if str(g.get("status", "")).lower() == "pending":
+                            gate_id = g.get("gate_id")
+                            logger.info(f"Resolved gate_id from workflow: {gate_id}")
+                            break
+                if not gate_id:
+                    return APIResponse(
+                        status="error",
+                        data={},
+                        error=f"No pending gate found for workflow {workflow_id}",
+                        action="approve_gate"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to resolve gate_id: {e}")
+
+        # 如果有 gate_id 但没有 workflow_id，需要从 gate 找到对应的 workflow_id
+        if not workflow_id and gate_id:
+            workflow_id, resolve_error = await self._resolve_workflow_id_from_gate(gate_id)
+            if not workflow_id:
+                return APIResponse(
+                    status="error",
+                    data={},
+                    error=resolve_error or "workflow_id is required for gate approval",
+                    action="approve_gate"
+                )
+
+        # 两者都没有，报错
         if not gate_id:
             return APIResponse(
                 status="error",

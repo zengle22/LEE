@@ -22,7 +22,7 @@ from pathlib import Path
 from datetime import datetime
 
 from lee.orchestrator.execution.orchestrator import Orchestrator
-from lee.orchestrator.core.event_bus import get_event_bus, EventType
+from lee.orchestrator.core.event_bus import get_event_bus, EventType, Event
 from lee.orchestrator.execution.failure_handler import FailureGuard
 from lee.orchestrator.execution.pm_agent_session import PMAgentSession, SessionState
 
@@ -121,7 +121,10 @@ class PMAgentRuntime:
     """
 
     # Default timeout for operations (in seconds)
-    DEFAULT_TIMEOUT = 600
+    # 2 hours - long enough for multi-step workflows with Claude Code steps
+    # Note: Claude Code executor has its own silence_timeout mechanism
+    # This timeout is a safety net, not a hard limit
+    DEFAULT_TIMEOUT = 7200
 
     # Maximum concurrent background jobs
     MAX_CONCURRENT_JOBS = 3

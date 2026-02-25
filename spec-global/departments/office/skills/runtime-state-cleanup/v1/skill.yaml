@@ -44,13 +44,13 @@ interface:
 execution:
   steps:
     - name: "创建报告目录"
-      command: "mkdir -p .workflow/workspace-cleanup"
+      command: "python -c \"import os; os.makedirs('.workflow/workspace-cleanup', exist_ok=True)\""
     - name: "清理运行时文件"
-      command: "rm -f .lee/chat_history.txt .lee/cli.lock input.mode"
+      command: "python -c \"import os, glob; [os.remove(f) for f in glob.glob('.lee/chat_history.txt') + glob.glob('.lee/cli.lock') + glob.glob('input.mode') if os.path.exists(f)]\""
     - name: "清理 PM Agent 会话文件"
-      command: "if [ -d .lee/pm_agent_sessions ]; then find .lee/pm_agent_sessions -type f -name '*.json' -delete; fi"
+      command: "python -c \"import os, glob; [os.remove(f) for f in glob.glob('.lee/pm_agent_sessions/*.json') if os.path.isfile(f)]\""
     - name: "写入清理报告"
-      command: "ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ'); printf \"success: true\\ncleaned_at: %s\\nreport_path: .workflow/workspace-cleanup/runtime-cleanup.yaml\\nremoved_paths:\\n  - .lee/chat_history.txt\\n  - .lee/cli.lock\\n  - input.mode\\n  - .lee/pm_agent_sessions/*.json\\n\" \"$ts\" > .workflow/workspace-cleanup/runtime-cleanup.yaml"
+      command: "python -c \"from datetime import datetime; content = f'success: true\\\\ncleaned_at: {datetime.utcnow().isoformat()}Z\\\\nreport_path: .workflow/workspace-cleanup/runtime-cleanup.yaml\\\\nremoved_paths:\\\\n  - .lee/chat_history.txt\\\\n  - .lee/cli.lock\\\\n  - input.mode\\\\n  - .lee/pm_agent_sessions/*.json\\\\n'; open('.workflow/workspace-cleanup/runtime-cleanup.yaml', 'w').write(content)\""
 
 # ============================================
 # 运行时配置
