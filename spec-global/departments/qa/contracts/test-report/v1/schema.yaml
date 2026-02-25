@@ -1,0 +1,537 @@
+# Test Report Contract
+# 测试报告契约
+# 用于 L2 生成测试报告
+
+kind: contract
+version: "1.0"
+id: contract.qa.test_report
+name: Test Report Contract
+description: |
+  测试报告数据结构，用于 L2 阶段生成测试报告。
+
+  包含内容：
+  - 执行汇总（通过率、失败率）
+  - 执行用例数
+  - 覆盖功能点
+  - Bug 列表
+  - 风险评估
+
+owner: qa-governance
+tags: [contract, qa, test-report, l2]
+
+# ============================================
+# Schema 定义
+# ============================================
+schema:
+  type: object
+  required:
+    - test_run_id
+    - test_plan_id
+    - generated_at
+    - execution_summary
+    - test_case_statistics
+    - feature_coverage
+    - bug_summary
+    - risk_assessment
+
+  properties:
+    test_run_id:
+      type: string
+      description: "Test Run ID"
+
+    test_plan_id:
+      type: string
+      description: "Test Plan ID"
+
+    generated_at:
+      type: string
+      format: datetime
+      description: "生成时间"
+
+    build_version:
+      type: string
+      description: "构建版本"
+
+    test_environment:
+      type: string
+      description: "测试环境"
+
+    # ============================================
+    # 执行汇总
+    # ============================================
+    execution_summary:
+      type: object
+      required:
+        - total_test_sets
+        - completed_test_sets
+        - skipped_test_sets
+        - failed_test_sets
+        - start_time
+        - end_time
+        - duration_seconds
+      properties:
+        total_test_sets:
+          type: integer
+          description: "总 Test Set 数量"
+
+        completed_test_sets:
+          type: integer
+          description: "已完成 Test Set 数量"
+
+        skipped_test_sets:
+          type: integer
+          description: "跳过的 Test Set 数量（依赖失败）"
+
+        failed_test_sets:
+          type: integer
+          description: "失败的 Test Set 数量"
+
+        start_time:
+          type: string
+          format: datetime
+          description: "开始时间"
+
+        end_time:
+          type: string
+          format: datetime
+          description: "结束时间"
+
+        duration_seconds:
+          type: integer
+          description: "执行时长（秒）"
+
+        execution_status:
+          type: string
+          enum: [completed, failed, partially_completed]
+          description: "执行状态"
+
+    # ============================================
+    # 用例统计
+    # ============================================
+    test_case_statistics:
+      type: object
+      required:
+        - total_cases
+        - executed_cases
+        - passed_cases
+        - failed_cases
+        - skipped_cases
+        - blocked_cases
+        - pass_rate
+        - fail_rate
+        - coverage_rate
+      properties:
+        total_cases:
+          type: integer
+          description: "总用例数"
+
+        executed_cases:
+          type: integer
+          description: "已执行用例数"
+
+        passed_cases:
+          type: integer
+          description: "通过用例数"
+
+        failed_cases:
+          type: integer
+          description: "失败用例数"
+
+        skipped_cases:
+          type: integer
+          description: "跳过用例数（依赖失败）"
+
+        blocked_cases:
+          type: integer
+          description: "阻塞用例数（环境问题等）"
+
+        pass_rate:
+          type: number
+          description: "通过率（百分比）"
+
+        fail_rate:
+          type: number
+          description: "失败率（百分比）"
+
+        coverage_rate:
+          type: number
+          description: "覆盖率（已执行/总数）"
+
+        by_priority:
+          type: object
+          description: "按优先级统计"
+          properties:
+            P0:
+              type: object
+              properties:
+                total: {type: integer}
+                passed: {type: integer}
+                failed: {type: integer}
+                pass_rate: {type: number}
+            P1:
+              type: object
+              properties:
+                total: {type: integer}
+                passed: {type: integer}
+                failed: {type: integer}
+                pass_rate: {type: number}
+            P2:
+              type: object
+              properties:
+                total: {type: integer}
+                passed: {type: integer}
+                failed: {type: integer}
+                pass_rate: {type: number}
+            P3:
+              type: object
+              properties:
+                total: {type: integer}
+                passed: {type: integer}
+                failed: {type: integer}
+                pass_rate: {type: number}
+
+    # ============================================
+    # 功能覆盖
+    # ============================================
+    feature_coverage:
+      type: object
+      required:
+        - total_features
+        - covered_features
+        - coverage_details
+      properties:
+        total_features:
+          type: integer
+          description: "总功能点数"
+
+        covered_features:
+          type: integer
+          description: "已覆盖功能点数"
+
+        coverage_percentage:
+          type: number
+          description: "功能覆盖率（百分比）"
+
+        coverage_details:
+          type: array
+          description: "覆盖详情"
+          items:
+            type: object
+            properties:
+              feature_id:
+                type: string
+              feature_name:
+                type: string
+              test_set_id:
+                type: string
+              coverage_status:
+                type: string
+                enum: [fully_covered, partially_covered, not_covered, skipped]
+              case_count:
+                type: integer
+              passed_count:
+                type: integer
+
+        not_covered_features:
+          type: array
+          description: "未覆盖的功能点"
+          items:
+            type: object
+            properties:
+              feature_id:
+                type: string
+              feature_name:
+                type: string
+              reason:
+                type: string
+
+    # ============================================
+    # Bug 汇总
+    # ============================================
+    bug_summary:
+      type: object
+      required:
+        - total_bugs
+        - by_severity
+        - by_priority
+        - blocking_bugs
+      properties:
+        total_bugs:
+          type: integer
+          description: "总 Bug 数"
+
+        new_bugs:
+          type: integer
+          description: "新发现 Bug 数"
+
+        recurring_bugs:
+          type: integer
+          description: "复发 Bug 数"
+
+        by_severity:
+          type: object
+          properties:
+            critical: {type: integer}
+            high: {type: integer}
+            medium: {type: integer}
+            low: {type: integer}
+
+        by_priority:
+          type: object
+          properties:
+            P0: {type: integer}
+            P1: {type: integer}
+            P2: {type: integer}
+            P3: {type: integer}
+
+        blocking_bugs:
+          type: array
+          description: "阻塞发布的 Bug 列表"
+          items:
+            type: object
+            properties:
+              bug_id:
+                type: string
+              title:
+                type: string
+              severity:
+                type: string
+              affected_feature:
+                type: string
+
+        bug_list:
+          type: array
+          description: "Bug 详细列表"
+          items:
+            type: object
+            properties:
+              bug_id:
+                type: string
+              title:
+                type: string
+              severity:
+                type: string
+              priority:
+                type: string
+              status:
+                type: string
+              test_set_id:
+                type: string
+              case_id:
+                type: string
+
+    # ============================================
+    # 风险评估
+    # ============================================
+    risk_assessment:
+      type: object
+      required:
+        - overall_risk_level
+        - risk_factors
+      properties:
+        overall_risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+          description: "整体风险等级"
+
+        risk_factors:
+          type: array
+          description: "风险因素列表"
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+                enum: [quality, coverage, stability, performance, security]
+              level:
+                type: string
+                enum: [low, medium, high, critical]
+              description:
+                type: string
+              affected_areas:
+                type: array
+                items:
+                  type: string
+              mitigation:
+                type: string
+
+        recommendations:
+          type: array
+          description: "建议"
+          items:
+            type: string
+
+    # ============================================
+    # 出测建议
+    # ============================================
+    exit_recommendation:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [pass, conditional_pass, fail]
+          description: "出测决策"
+
+        summary:
+          type: string
+          description: "决策摘要"
+
+        conditions:
+          type: array
+          description: "有条件通过时的条件"
+          items:
+            type: string
+
+        blocking_reasons:
+          type: array
+          description: "不通过时的阻塞原因"
+          items:
+            type: string
+
+# ============================================
+# 示例数据
+# ============================================
+example:
+  test_run_id: "TR-2026-0224-abc123"
+  test_plan_id: "TP-2026-Q1-release"
+  generated_at: "2026-02-24T15:00:00Z"
+  build_version: "v1.2.3"
+  test_environment: "test"
+
+  execution_summary:
+    total_test_sets: 5
+    completed_test_sets: 4
+    skipped_test_sets: 1
+    failed_test_sets: 1
+    start_time: "2026-02-24T10:00:00Z"
+    end_time: "2026-02-24T15:00:00Z"
+    duration_seconds: 18000
+    execution_status: "partially_completed"
+
+  test_case_statistics:
+    total_cases: 150
+    executed_cases: 120
+    passed_cases: 105
+    failed_cases: 15
+    skipped_cases: 30
+    blocked_cases: 0
+    pass_rate: 87.5
+    fail_rate: 12.5
+    coverage_rate: 80.0
+    by_priority:
+      P0:
+        total: 30
+        passed: 28
+        failed: 2
+        pass_rate: 93.3
+      P1:
+        total: 50
+        passed: 45
+        failed: 5
+        pass_rate: 90.0
+      P2:
+        total: 40
+        passed: 32
+        failed: 8
+        pass_rate: 80.0
+      P3:
+        total: 30
+        passed: 0
+        failed: 0
+        pass_rate: 0.0
+
+  feature_coverage:
+    total_features: 20
+    covered_features: 16
+    coverage_percentage: 80.0
+    coverage_details:
+      - feature_id: "F001"
+        feature_name: "用户认证"
+        test_set_id: "ts_auth"
+        coverage_status: "fully_covered"
+        case_count: 20
+        passed_count: 18
+      - feature_id: "F002"
+        feature_name: "支付流程"
+        test_set_id: "ts_payment"
+        coverage_status: "partially_covered"
+        case_count: 15
+        passed_count: 12
+    not_covered_features:
+      - feature_id: "F015"
+        feature_name: "积分系统"
+        reason: "依赖的支付模块测试未完全通过"
+
+  bug_summary:
+    total_bugs: 8
+    new_bugs: 6
+    recurring_bugs: 2
+    by_severity:
+      critical: 1
+      high: 2
+      medium: 4
+      low: 1
+    by_priority:
+      P0: 1
+      P1: 3
+      P2: 3
+      P3: 1
+    blocking_bugs:
+      - bug_id: "BG-2026-001"
+        title: "支付回调丢失"
+        severity: "critical"
+        affected_feature: "支付流程"
+    bug_list:
+      - bug_id: "BG-2026-001"
+        title: "支付回调丢失"
+        severity: "critical"
+        priority: "P0"
+        status: "confirmed"
+        test_set_id: "ts_payment"
+        case_id: "TC_PAY_005"
+
+  risk_assessment:
+    overall_risk_level: "high"
+    risk_factors:
+      - category: "quality"
+        level: "high"
+        description: "P0/P1 用例有 5 个失败"
+        affected_areas: ["支付", "认证"]
+        mitigation: "修复阻塞 Bug 后回归测试"
+      - category: "coverage"
+        level: "medium"
+        description: "20% 功能未覆盖"
+        affected_areas: ["积分", "优惠券"]
+        mitigation: "补充测试用例"
+    recommendations:
+      - "修复 P0 Bug BG-2026-001 后重新执行 ts_payment"
+      - "补充积分系统测试用例"
+      - "增加性能测试"
+
+  exit_recommendation:
+    decision: "conditional_pass"
+    summary: "核心功能测试通过，支付模块存在 P0 Bug，需修复后回归"
+    conditions:
+      - "修复 BG-2026-001（支付回调丢失）"
+      - "回归测试 ts_payment 全部用例"
+    blocking_reasons: []
+
+# ============================================
+# 验证规则
+# ============================================
+validation_rules:
+  - rule: "executed_lte_total"
+    check: "test_case_statistics.executed_cases <= test_case_statistics.total_cases"
+    error: "已执行用例数不能大于总用例数"
+
+  - rule: "pass_rate_valid"
+    check: "test_case_statistics.pass_rate >= 0 and test_case_statistics.pass_rate <= 100"
+    error: "通过率必须在 0-100 之间"
+
+  - rule: "passed_plus_failed_eq_executed"
+    check: "test_case_statistics.passed_cases + test_case_statistics.failed_cases <= test_case_statistics.executed_cases"
+    error: "通过+失败用例数不能大于已执行数"
+
+  - rule: "covered_lte_total_features"
+    check: "feature_coverage.covered_features <= feature_coverage.total_features"
+    error: "已覆盖功能数不能大于总功能数"

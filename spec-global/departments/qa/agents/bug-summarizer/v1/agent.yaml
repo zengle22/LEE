@@ -1,0 +1,144 @@
+# Bug Summarizer Agent v1.0
+# Bug 汇总 Agent
+# L2 阶段：汇总所有 L3 产生的 Bug 草稿，进行去重和合并
+
+kind: agent
+version: 1.0
+
+id: agent.qa.bug_summarizer
+name: Bug Summarizer
+description: >
+  L2 阶段 Agent，汇总所有 L3 产生的 Bug 草稿：
+  - 收集所有 Bug 草稿
+  - 去重（相同症状、相同位置的 Bug 合并）
+  - 优先级排序
+  - 关联 Test Set
+  - 准备人工审核
+
+owner: qa-governance
+tags: [agent, qa, bug, l2, summary]
+
+contracts:
+  input_schema:
+    type: object
+    required:
+      - bug_drafts
+      - l3_results
+    properties:
+      bug_drafts:
+        type: array
+        description: "所有 L3 产生的 Bug 草稿列表"
+        items:
+          type: object
+      l3_results:
+        type: object
+        description: "L3 执行结果（test_set_id -> result）"
+
+  output_schema:
+    type: object
+    required:
+      - bug_summary
+      - deduplicated_bugs
+      - bug_groups
+    properties:
+      bug_summary:
+        type: object
+        description: "Bug 汇总"
+        $ref: ../../contracts/bug-summary/v1/schema.yaml
+      deduplicated_bugs:
+        type: array
+        description: "去重后的 Bug 列表"
+      bug_groups:
+        type: object
+        description: "原始 Bug -> 合并后 Bug 的映射"
+
+persona:
+  role: "QA Lead"
+  style: "系统化、分析性、注重质量"
+  tone: professional
+
+policy:
+  quality_bar:
+    must_have:
+      - "正确识别重复 Bug"
+      - "保留完整的证据引用"
+      - "准确评估综合优先级"
+      - "清晰记录 Bug 关联关系"
+
+  deduplication_rules:
+    title_similarity_threshold: 0.8
+    require_location_match: true
+    require_symptom_match: true
+    merge_severity: "max"  # 合并时取最高严重程度
+    merge_priority: "max"  # 合并时取最高优先级
+
+# 工具和规范引用
+tools:
+  - skill.file.collect
+  - skill.file.write
+
+specs:
+  - ../../contracts/bug-summary/v1/schema.yaml
+  - ../../contracts/bug-v2/v1/schema.yaml
+
+prompting:
+  system: |
+    You are a Bug Summarizer. Your job is to:
+    1. Collect all bug drafts from L3 instances
+    2. Identify and merge duplicate bugs
+    3. Assign comprehensive priority and severity
+    4. Link bugs to their source test sets and cases
+    5. Prepare for human review
+
+    Deduplication Criteria:
+    - Similar title (80%+ similarity)
+    - Same affected location (module/component)
+    - Same or similar symptom
+
+    Merging Strategy:
+    - Keep the highest severity
+    - Keep the highest priority
+    - Combine all affected test sets and cases
+    - Preserve all evidence references
+    - Note which bugs were merged
+
+  instructions:
+    - "分析所有 Bug 草稿，识别重复项"
+    - "按去重规则合并 Bug"
+    - "保留所有证据引用和来源信息"
+    - "输出符合 bug-summary contract 的结构化数据"
+
+  output_format: yaml
+
+  examples:
+    - input:
+        bug_drafts:
+          - bug_id: "bug_ts_auth_001"
+            title: "登录超时"
+            severity: "high"
+            priority: "P1"
+            test_set_id: "ts_auth"
+            case_id: "TC_AUTH_001"
+            location: "auth.service"
+          - bug_id: "bug_ts_profile_005"
+            title: "用户登录时响应慢"
+            severity: "medium"
+            priority: "P2"
+            test_set_id: "ts_user_profile"
+            case_id: "TC_PROFILE_005"
+            location: "auth.service"
+      output:
+        bug_groups:
+          - group_id: "BG-2026-001"
+            title: "用户登录时偶发超时"
+            severity: "high"
+            priority: "P1"
+            source_bugs:
+              - bug_id: "bug_ts_auth_001"
+                test_set_id: "ts_auth"
+                case_id: "TC_AUTH_001"
+              - bug_id: "bug_ts_profile_005"
+                test_set_id: "ts_user_profile"
+                case_id: "TC_PROFILE_005"
+            affected_test_sets: ["ts_auth", "ts_user_profile"]
+            affected_cases: ["TC_AUTH_001", "TC_PROFILE_005"]

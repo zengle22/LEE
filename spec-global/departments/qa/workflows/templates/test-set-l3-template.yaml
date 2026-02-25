@@ -1,0 +1,233 @@
+kind: l3_workflow_template
+version: "1.0"
+id: template.qa.test_set_l3
+name: Test Set Execution L3 Template
+description: |
+  L3 template for single Test Set execution.
+
+  This template defines the standard 7-step workflow for executing
+  one Test Set, from case generation to bug drafting.
+
+  Key Design:
+  - Step 1-2: Agent-driven (case generation, script translation)
+  - Step 3: Skill-driven execution (executor role only)
+  - Step 4: Compliance gate (anti-mock)
+  - Step 5: Agent-driven judgment (judge role only)
+  - Step 6-7: Agent-driven assembly and bug drafting
+
+# Standard 7-step L3 process
+steps:
+  - id: case_generation
+    name: "Case Generation"
+    kind: agent
+    description: "Dynamically generate test cases from Test Set strategy"
+    agent_id: agent.qa.case_generator
+    mandatory: true
+    depends_on: []
+    outputs:
+      - cases_path  # Path to generated cases.yaml
+      - cases_count
+
+  - id: script_translation
+    name: "Script Translation"
+    kind: agent
+    description: "Translate cases to executable scripts"
+    agent_id: agent.qa.script_translator
+    mandatory: true
+    depends_on: [case_generation]
+    outputs:
+      - scripts_dir  # Path to scripts directory
+      - scripts_count
+
+  - id: script_execution
+    name: "Script Execution"
+    kind: skill
+    description: |
+      Execute test scripts via test_runner CLI.
+      Role: EXECUTOR - can only call runner and collect evidence, cannot judge results.
+    skill_id: skill.runner.test_e2e
+    mandatory: true
+    depends_on: [script_translation]
+    role_constraints:
+      role: executor
+      allowed_actions:
+        - call_test_runner
+        - collect_evidence
+        - report_runner_output
+      forbidden_actions:
+        - judge_pass_fail
+        - fabricate_errors
+        - mock_execution
+    outputs:
+      - runner_output_path  # Path to runner-output.json
+      - evidence_dir  # Path to evidence directory
+      - runtime_errors  # Only from runner_cli/orchestrator/human
+
+  - id: behavior_compliance
+    name: "Behavior Compliance Check"
+    kind: skill
+    description: |
+      Anti-mock compliance gate.
+      Check for mock/fabrication violations.
+    skill_id: skill.qa.behavior_compliance_checker
+    mandatory: true
+    depends_on: [script_execution]
+    gate:
+      type: auto_check
+      on_pass: proceed
+      on_fail: mark_invalid_run
+    outputs:
+      - compliance_result_path
+
+  - id: result_judgment
+    name: "Result Judgment"
+    kind: agent
+    description: |
+      Judge pass/fail based on evidence.
+      Role: JUDGE - can only read evidence and judge, cannot modify or re-execute.
+    agent_id: agent.qa.result_judge
+    mandatory: true
+    depends_on: [behavior_compliance]
+    role_constraints:
+      role: judge
+      allowed_actions:
+        - read_evidence
+        - judge_pass_fail
+        - write_results
+      forbidden_actions:
+        - call_test_runner
+        - modify_evidence
+        - fabricate_evidence
+    outputs:
+      - results_path  # Path to results.yaml
+      - pass_count
+      - fail_count
+      - failures  # List of failure details
+
+  - id: tse_assembly
+    name: "TSE Assembly"
+    kind: agent
+    description: "Assemble Test Set Execution file"
+    agent_id: agent.qa.tse_assembler
+    mandatory: true
+    depends_on: [result_judgment]
+    outputs:
+      - tse_path  # Path to tse.yaml
+
+  - id: bug_drafting
+    name: "Bug Drafting"
+    kind: agent
+    description: |
+      Draft bugs for failed cases.
+      Multiple bugs may be drafted from one Test Set.
+    agent_id: agent.qa.bug_drafter
+    mandatory: true
+    depends_on: [tse_assembly]
+    condition: "fail_count > 0"
+    outputs:
+      - bug_drafts  # List of bug draft file paths
+
+# Default execution order
+execution_order:
+  - case_generation
+  - script_translation
+  - script_execution
+  - behavior_compliance
+  - result_judgment
+  - tse_assembly
+  - bug_drafting
+
+# evidence_bundle structure definition
+evidence_bundle_schema:
+  description: |
+    Each case execution must produce an evidence bundle.
+    No evidence_bundle = invalid_run.
+
+  properties:
+    commands:
+      type: array
+      description: "Executed command list"
+      example:
+        - "test_runner run --case TC_LOGIN_001 --env test"
+
+    logs:
+      type: string
+      description: "Log file path"
+      required: true
+
+    screenshots:
+      type: array
+      description: "Screenshot paths"
+
+    video:
+      type: string
+      description: "Screen recording path (optional)"
+
+    network_trace:
+      type: string
+      description: "Network trace path (optional)"
+
+    runner_result_ref:
+      type: string
+      description: "Reference in runner-output.json"
+      required: true
+
+    exit_code:
+      type: integer
+      description: "test_runner exit code"
+
+    stderr:
+      type: string
+      description: "Standard error output (if any)"
+
+# Anti-Mock constraints for L3
+anti_mock_constraints:
+  description: "Constraints to prevent AI from fabricating execution"
+
+  no_mock_execution:
+    rule: "AI cannot use mock/simulate unless case.meta.allow_mock == true"
+    violation_action: invalid_run
+
+  evidence_required:
+    rule: "All P0/P1 cases must have evidence_bundle"
+    violation_action: invalid_run
+
+  no_fabricated_errors:
+    rule: "runtime_errors can only come from runner_cli/orchestrator/human"
+    violation_action: invalid_run
+
+  no_judge_in_executor:
+    rule: "script_execution step cannot judge pass/fail"
+    violation_action: invalid_run
+
+  no_re_execute_in_judge:
+    rule: "result_judgment step cannot call test_runner"
+    violation_action: invalid_run
+
+# Instance schema
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+    - test_set_id
+    - parent_l2_id
+    - parent_phase_id
+  context_fields:
+    - test_run_id
+    - test_set_id
+    - test_set_definition
+    - build_version
+    - build_commit
+    - environment
+    - env_check_result
+    - dependency_results  # Results from dependent Test Sets
+  output_fields:
+    - test_set_id
+    - status  # completed, failed, skipped, invalid_run
+    - tse_path
+    - results_summary
+    - bug_drafts
+    - skip_reason
+    - failure_reason

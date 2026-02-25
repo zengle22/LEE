@@ -61,11 +61,13 @@ responsibility:
     - "执行测试"
     - "起草 Bug"
 
-# 技能引用
-capabilities:
-  - skill.io.file_write
-  - skill.qa.statistics_calculation
-  - skill.qa.schema_validation
+# 工具和规范引用
+tools:
+  - skill.file.write
+
+specs:
+  - ../../contracts/test-set-execution/v1/schema.yaml
+  - ../../contracts/test-result/v1/schema.yaml
 
 # 输入输出
 inputs:

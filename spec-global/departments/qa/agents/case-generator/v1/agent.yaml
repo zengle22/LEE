@@ -59,11 +59,12 @@ responsibility:
     - "翻译脚本"
     - "执行用例"
 
-# 技能引用
-capabilities:
-  - skill.qa.case_generation
-  - skill.qa.test_data_generation
-  - skill.io.file_write
+# 工具和规范引用
+tools:
+  - skill.file.write
+
+specs:
+  - ../../contracts/test-case/v1/schema.yaml
 
 # 输入输出
 inputs:
