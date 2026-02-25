@@ -1,0 +1,70 @@
+kind: l2_workflow_instance
+version: '1.0'
+id: instance.demo.user_profile_v1
+template_id: template.dev.feature_l2
+name: User Profile Feature
+description: 'L2 template for feature development with 5 phases and complexity-aware
+  execution.
+
+
+  This template defines the structure for department-level feature workflows.
+
+  Each phase can have its complexity set to S/M/L to determine execution strategy:
+
+  - S (Simple): Direct execution of phase steps
+
+  - M (Medium): Spawn single L3 task instance
+
+  - L (Large): PMA split into multiple L3 task instances
+
+
+  P1: Phases support depends_on for parallel execution when possible.
+
+  '
+status: pending
+context:
+  project: Demo App
+  module: user_profile
+  module_version: v1
+  prd_path: specs/user-profile.md
+  repos:
+  - id: fe-repo
+    type: frontend
+    url: github.com/app/fe
+    branch: main
+  - id: be-repo
+    type: backend
+    url: github.com/app/be
+    branch: main
+phases:
+- id: plan
+  name: Planning Phase
+  description: Requirements analysis and technical planning
+  complexity: S
+  status: pending
+  l3_instance_ids: []
+- id: api_align
+  name: API Alignment Phase
+  description: Contract design and API specification
+  complexity: M
+  status: pending
+  l3_instance_ids: []
+- id: frontend_dev
+  name: Frontend Development Phase
+  description: UI implementation and user interaction
+  complexity: L
+  status: pending
+  l3_instance_ids: []
+- id: backend_dev
+  name: Backend Development Phase
+  description: Service implementation and business logic
+  complexity: L
+  status: pending
+  l3_instance_ids: []
+- id: integration
+  name: Integration Phase
+  description: Frontend-backend integration testing
+  complexity: S
+  status: pending
+  l3_instance_ids: []
+pma_splits: []

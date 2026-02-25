@@ -1,0 +1,78 @@
+kind: l2_workflow_instance
+version: "1.0"
+id: instance.dev.feature_timing_v1
+template_id: template.dev.feature_l2
+name: Timing Module Feature Instance
+description: |
+  L2 workflow instance for the AI Running Coach timing module feature.
+  This demonstrates complexity-based routing with frontend_dev set to L (large)
+  to trigger PMA task splitting.
+
+status: pending
+
+# Instance context
+context:
+  project: "AI跑步教练"
+  module: "timing"
+  module_version: "v1"
+  prd_path: "specs/prd/timing-module.md"
+  repos:
+    - id: fe-repo
+      url: "https://github.com/example/uniapp-app.git"
+      branch: "feature/timing"
+      type: "frontend"
+      language: "vue"
+    - id: be-repo
+      url: "https://github.com/example/go-api.git"
+      branch: "feature/timing"
+      type: "backend"
+      language: "go"
+
+# Phase configuration with complexity levels
+# - S: Direct execution (simple)
+# - M: Spawn single L3 (medium)
+# - L: PMA split into multiple L3s (large)
+phases:
+  - id: plan
+    name: "Planning Phase"
+    description: "Requirements analysis and technical planning"
+    complexity: S
+    status: pending
+    l3_instance_ids: []
+
+  - id: api_align
+    name: "API Alignment Phase"
+    description: "Contract design and API specification"
+    complexity: M
+    status: pending
+    l3_instance_ids: []
+
+  - id: frontend_dev
+    name: "Frontend Development Phase"
+    description: "UI implementation and user interaction"
+    complexity: L  # Will trigger PMA split
+    status: pending
+    l3_instance_ids: []
+
+  - id: backend_dev
+    name: "Backend Development Phase"
+    description: "Service implementation and business logic"
+    complexity: L  # Will trigger PMA split
+    status: pending
+    l3_instance_ids: []
+
+  - id: integration
+    name: "Integration Phase"
+    description: "Frontend-backend integration testing"
+    complexity: S
+    status: pending
+    l3_instance_ids: []
+
+# PMA split results (populated during execution)
+pma_splits: []
+
+# Metadata
+metadata:
+  created_at: "2026-02-24"
+  created_by: "lee-orchestrator"
+  version: "1.0.0"

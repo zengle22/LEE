@@ -1,0 +1,220 @@
+# L3 v3 Workflow Instance Demo
+# 前端开发：跑步记录页备注输入框
+#
+# 这是一个 L3 v3 工作流实例，由 L2 v3 的 p2_1_fe_development 阶段派发
+# 演示 6 步 TDD 流程
+
+kind: l3_workflow_instance
+version: "3.0"
+
+id: l3-p2_1_fe_running_notes
+name: 跑步记录页备注输入框 (L3 v3 Demo)
+description: >
+  L3 前端开发任务：在跑步记录页面新增备注输入框
+  使用 6 步 TDD 流程：对齐需求 → 设计测试 → 实现 → 测试 → review → 复盘
+
+template_id: template.dev.task_l3_v3
+level: task
+status: pending
+
+parent_l2_id: l2-running-notes-feature-v3
+parent_phase_id: p2_1_fe_development
+
+created_at: "2026-02-24T00:00:00Z"
+created_by: "l2-running-notes-feature-v3"
+
+# ============================================
+# 功能点配置
+# ============================================
+point:
+  id: "p2_1_fe_development"
+  title: "跑步记录页备注输入框"
+  description: >
+    在跑步记录页面新增备注输入框功能：
+    - 页面位置：跑步记录详情页，时间信息下方
+    - UI 组件：多行文本输入框，支持 200 字限制
+    - 交互：支持实时保存，显示保存状态
+    - 验证：非空时显示字数统计，超限时提示
+  layer: "ui"
+  estimated_complexity: "M"
+  files_hint:
+    - "src/pages/RunningLogDetail.vue"
+    - "src/components/NoteInput.vue"
+    - "src/api/notes.ts"
+  depends_on: []
+
+# ============================================
+# 步骤定义 (6 步 TDD 流程)
+# ============================================
+steps:
+  # ---------- Step 1: 对齐需求 ----------
+  - id: align_requirement
+    name: "对齐需求"
+    kind: agent
+    agent: "agent.dev.uniapp_frontend_engineer"
+    description: >
+      分析 Feature Spec，产出需求分析文档：
+      - 识别功能点的具体需求
+      - 明确输入/输出/边界条件
+      - 列出验收标准
+    mandatory: true
+    depends_on: []
+    status: pending
+    inputs:
+      feature_spec: "specs/running-notes-feature-prd.md"
+      task: "align_requirement"
+      point_id: "p2_1_fe_development"
+    outputs:
+      - path: "output/p2_1_fe_development-requirement-analysis.yaml"
+        description: "需求分析文档"
+
+  # ---------- Step 2: 设计测试 ----------
+  - id: design_tests
+    name: "设计测试"
+    kind: agent
+    agent: "agent.dev.uniapp_frontend_engineer"
+    description: >
+      根据需求分析设计测试用例（测试先行）：
+      - 每个功能点至少一个测试用例
+      - 覆盖正常路径、异常路径、边界条件
+      - 测试基于接口定义，不依赖内部实现
+      - 此阶段只写测试代码，不写业务实现
+    mandatory: true
+    depends_on: ["align_requirement"]
+    status: pending
+    inputs:
+      feature_spec: "specs/running-notes-feature-prd.md"
+      requirement_analysis: "output/p2_1_fe_development-requirement-analysis.yaml"
+      task: "design_tests"
+      point_id: "p2_1_fe_development"
+    outputs:
+      - path: "output/p2_1_fe_development-test-code-diff.patch"
+        description: "测试代码差异"
+
+  # ---------- Step 3: 实现 ----------
+  - id: implement
+    name: "实现"
+    kind: agent
+    agent: "agent.dev.uniapp_frontend_engineer"
+    description: >
+      根据测试用例编写实现代码，使所有测试通过：
+      - 参照测试用例理解接口契约
+      - 编写最小化实现代码
+      - 实现完成后所有测试应为绿色
+    mandatory: true
+    depends_on: ["design_tests"]
+    status: pending
+    inputs:
+      feature_spec: "specs/running-notes-feature-prd.md"
+      requirement_analysis: "output/p2_1_fe_development-requirement-analysis.yaml"
+      test_code_diff: "output/p2_1_fe_development-test-code-diff.patch"
+      task: "implement"
+      point_id: "p2_1_fe_development"
+    outputs:
+      - path: "output/p2_1_fe_development-code-diff.patch"
+        description: "实现代码差异"
+
+  # ---------- Step 4: 测试 ----------
+  - id: run_tests
+    name: "测试"
+    kind: skill
+    skill: "skill.test.vitest"
+    description: >
+      运行所有单元测试，确认实现使全部测试通过：
+      - 执行单元测试
+      - 生成测试覆盖率报告
+      - 确保所有测试通过
+    mandatory: true
+    depends_on: ["implement"]
+    status: pending
+    inputs:
+      command: "npx vitest run"
+    outputs:
+      - path: "output/p2_1_fe_development-test-report.json"
+        description: "测试报告"
+      - path: "output/p2_1_fe_development-coverage.json"
+        description: "覆盖率报告"
+
+  # ---------- Step 5: Review ----------
+  - id: code_review
+    name: "Review"
+    kind: agent
+    agent: "agent.dev.code_self_reviewer"
+    description: >
+      代码自检与评审：
+      - 检查代码质量与规范
+      - 检查测试覆盖率
+      - 验证功能完整性
+    mandatory: true
+    depends_on: ["run_tests"]
+    status: pending
+    inputs:
+      feature_spec: "specs/running-notes-feature-prd.md"
+      test_report: "output/p2_1_fe_development-test-report.json"
+      coverage_report: "output/p2_1_fe_development-coverage.json"
+      task: "review"
+    outputs:
+      - path: "output/p2_1_fe_development-review.json"
+        description: "评审报告"
+
+  # ---------- Step 6: 复盘 ----------
+  - id: retrospective
+    name: "复盘"
+    kind: agent
+    agent: "agent.dev.uniapp_frontend_engineer"
+    description: >
+      任务复盘与总结：
+      - 总结实现要点
+      - 记录遇到的问题与解决方案
+      - 提出改进建议
+    mandatory: false
+    depends_on: ["code_review"]
+    status: pending
+    inputs:
+      task: "retrospective"
+      point_id: "p2_1_fe_development"
+    outputs:
+      - path: "output/p2_1_fe_development-retrospective.md"
+        description: "复盘文档"
+
+# ============================================
+# 执行状态
+# ============================================
+execution:
+  current_step_index: 0  # 当前执行到第几步（0-based）
+  completed_steps: []     # 已完成的步骤 ID 列表
+  failed_steps: []        # 失败的步骤 ID 列表
+  started_at: null
+  completed_at: null
+
+# ============================================
+# 预期输出
+# ============================================
+expected_outputs:
+  code_changes:
+    - path: "src/components/NoteInput.vue"
+      description: "备注输入框组件"
+    - path: "src/pages/RunningLogDetail.vue"
+      description: "集成备注输入框"
+    - path: "src/api/notes.ts"
+      description: "备注 API 接口"
+    - path: "src/components/__tests__/NoteInput.spec.ts"
+      description: "组件单元测试"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  demo: true
+  demo_name: "L3 v3 前端开发 6 步流程"
+  demo_description: >
+    演示 L3 v3 工作流的 6 步 TDD 流程：
+    1. align_requirement: 对齐需求
+    2. design_tests: 设计测试（测试先行）
+    3. implement: 实现
+    4. run_tests: 测试
+    5. code_review: Review
+    6. retrospective: 复盘
+  version: "3.0"
+  created_at: "2026-02-24"
+  last_updated: "2026-02-24"
