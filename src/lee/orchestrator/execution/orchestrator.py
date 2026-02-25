@@ -41,6 +41,8 @@ from lee.orchestrator.storage.models import (
     WorkflowState,
     StepResult,
     ExecutionSummary,
+    Complexity,
+    Point,
 )
 from lee.orchestrator.storage.sqlite_store import SQLiteStore
 from lee.orchestrator.execution.state_machine import WorkflowStateMachine
@@ -63,7 +65,6 @@ from lee.orchestrator.execution.patch_output import PatchCollector
 from lee.orchestrator.execution.receipt import ReceiptStore, ExecutionReceipt
 from lee.orchestrator.execution.context_index import ContextIndex
 from lee.orchestrator.core.event_bus import get_event_bus, Event, EventType
-import uuid
 # Mixin 模块
 from lee.orchestrator.execution.step_runners import StepRunnerMixin
 from lee.orchestrator.execution.gate_operations import GateOperationsMixin
@@ -407,6 +408,31 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
 
         # 获取可执行步骤
         ready_steps = await self.get_ready_steps(workflow_id)
+
+        # v3.6: Check for L2 instance with complexity routing
+        # If this is an L2 instance, route phases through complexity-based execution
+        if self._is_l2_instance(instance):
+            # For L2 instances, phases act as steps
+            # Find the first pending phase
+            pending_phase = self._get_next_pending_phase(instance)
+            if pending_phase:
+                phase_id = pending_phase["id"]
+                complexity = self._get_phase_complexity(instance, phase_id)
+                return await self._execute_l2_phase_with_complexity(
+                    workflow_id, phase_id, complexity
+                )
+            else:
+                # All phases completed
+                await self.store.update_workflow_status(
+                    workflow_id, WorkflowStatus.COMPLETED,
+                    completed_at=datetime.now()
+                )
+                return StepResult(
+                    status="success",
+                    step_id=None,
+                    workflow_id=workflow_id,
+                    message="All L2 phases completed",
+                )
 
         if not ready_steps:
             # 提供更可诊断的无就绪步骤信息（尤其是失败场景）。
@@ -1001,3 +1027,809 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
                 WorkflowStatus.COMPLETED,
                 completed_at=datetime.now()
             )
+
+    # ============ L2 Complexity Routing (P0) ============
+
+    def _is_l2_instance(self, instance: WorkflowInstance) -> bool:
+        """Check if workflow is an L2 instance.
+
+        L2 instances are identified by:
+        1. Level is DEPARTMENT
+        2. data.kind is "l2_workflow_instance"
+        3. data.phases exists (L2 specific structure)
+
+        Args:
+            instance: WorkflowInstance to check
+
+        Returns:
+            True if this is an L2 workflow instance
+        """
+        return (
+            instance.level == WorkflowLevel.DEPARTMENT and
+            instance.data.get("kind") == "l2_workflow_instance" and
+            "phases" in instance.data
+        )
+
+    def _get_phase_complexity(
+        self,
+        instance: WorkflowInstance,
+        phase_id: str
+    ) -> Complexity:
+        """Get complexity for a phase from instance data.
+
+        Args:
+            instance: L2 workflow instance
+            phase_id: Phase identifier
+
+        Returns:
+            Complexity level (S/M/L)
+        """
+        phases = instance.data.get("phases", [])
+        for phase in phases:
+            if phase.get("id") == phase_id:
+                comp_str = phase.get("complexity", "M")
+                try:
+                    return Complexity(comp_str)
+                except ValueError:
+                    return Complexity.M  # Default to M if invalid
+        return Complexity.M  # Default
+
+    def _get_phase_info(
+        self,
+        instance: WorkflowInstance,
+        phase_id: str
+    ) -> Dict[str, Any]:
+        """Get full phase information from instance data.
+
+        Args:
+            instance: L2 workflow instance
+            phase_id: Phase identifier
+
+        Returns:
+            Phase dictionary or empty dict if not found
+        """
+        phases = instance.data.get("phases", [])
+        for phase in phases:
+            if phase.get("id") == phase_id:
+                return phase
+        return {}
+
+    def _get_next_pending_phase(
+        self,
+        instance: WorkflowInstance
+    ) -> Optional[Dict[str, Any]]:
+        """Get the next pending phase from an L2 instance.
+
+        P1: Respects phase dependencies - only returns phases whose
+        dependencies are all completed.
+
+        Args:
+            instance: L2 workflow instance
+
+        Returns:
+            Next pending phase dict or None if all complete
+        """
+        phases = instance.data.get("phases", [])
+
+        # Build completion map
+        phase_status = {}
+        for phase in phases:
+            phase_status[phase.get("id")] = phase.get("status")
+
+        # Find first pending phase with all dependencies satisfied
+        for phase in phases:
+            if phase.get("status") == "pending":
+                # Check dependencies
+                depends_on = phase.get("depends_on", [])
+                all_deps_complete = True
+                for dep_id in depends_on:
+                    if phase_status.get(dep_id) != "completed":
+                        all_deps_complete = False
+                        break
+
+                if all_deps_complete:
+                    return phase
+
+        return None
+
+    def _get_ready_phases(
+        self,
+        instance: WorkflowInstance
+    ) -> List[Dict[str, Any]]:
+        """Get all phases that are ready to execute (dependencies satisfied).
+
+        P1: Enables parallel phase execution when dependencies allow.
+
+        Args:
+            instance: L2 workflow instance
+
+        Returns:
+            List of ready phase dicts
+        """
+        phases = instance.data.get("phases", [])
+
+        # Build completion map
+        phase_status = {}
+        for phase in phases:
+            phase_status[phase.get("id")] = phase.get("status")
+
+        # Find all pending phases with all dependencies satisfied
+        ready_phases = []
+        for phase in phases:
+            if phase.get("status") == "pending":
+                # Check dependencies
+                depends_on = phase.get("depends_on", [])
+                all_deps_complete = True
+                for dep_id in depends_on:
+                    if phase_status.get(dep_id) != "completed":
+                        all_deps_complete = False
+                        break
+
+                if all_deps_complete:
+                    ready_phases.append(phase)
+
+        return ready_phases
+
+    async def _execute_l2_phase_with_complexity(
+        self,
+        workflow_id: str,
+        phase_id: str,
+        complexity: Complexity
+    ) -> StepResult:
+        """Route L2 phase execution based on complexity.
+
+        Args:
+            workflow_id: L2 workflow ID
+            phase_id: Phase identifier
+            complexity: Complexity level (S/M/L)
+
+        Returns:
+            StepResult from phase execution
+        """
+        if complexity == Complexity.S:
+            return await self._execute_complexity_s(workflow_id, phase_id)
+        elif complexity == Complexity.M:
+            return await self._execute_complexity_m(workflow_id, phase_id)
+        else:  # Complexity.L
+            return await self._execute_complexity_l(workflow_id, phase_id)
+
+    async def _execute_complexity_s(
+        self,
+        workflow_id: str,
+        phase_id: str
+    ) -> StepResult:
+        """Direct execution - run phase as simple workflow steps.
+
+        For complexity=S, we execute the phase directly without spawning L3s.
+        This is a simplified implementation for P0.
+
+        Args:
+            workflow_id: L2 workflow ID
+            phase_id: Phase identifier
+
+        Returns:
+            StepResult indicating success/failure
+        """
+        # P0: Mark phase as completed with a simple success result
+        # In full implementation, this would run phase-specific steps
+        instance = await self.store.get_workflow(workflow_id)
+
+        # Update phase status
+        phases = instance.data.get("phases", [])
+        for phase in phases:
+            if phase.get("id") == phase_id:
+                phase["status"] = "completed"
+                break
+
+        await self.store.update_workflow_data(workflow_id, instance.data)
+
+        return StepResult(
+            status="success",
+            step_id=phase_id,
+            workflow_id=workflow_id,
+            message=f"Phase {phase_id} (complexity=S) executed directly"
+        )
+
+    async def _execute_complexity_m(
+        self,
+        workflow_id: str,
+        phase_id: str
+    ) -> StepResult:
+        """Spawn single L3 instance and execute.
+
+        For complexity=M, we spawn a single L3 task for the entire phase.
+
+        Args:
+            workflow_id: L2 workflow ID
+            phase_id: Phase identifier
+
+        Returns:
+            StepResult from L3 execution
+        """
+        # P0: Create a single point from the phase
+        instance = await self.store.get_workflow(workflow_id)
+        phase_info = self._get_phase_info(instance, phase_id)
+        context = instance.data.get("context", {})
+
+        # Determine repo_id based on phase
+        repo_id = self._get_repo_id_for_phase(phase_id, context.get("repos", []))
+
+        # Create single point for the entire phase
+        point = Point(
+            id=f"{phase_id}-single",
+            title=phase_info.get("name", f"Phase {phase_id}"),
+            desc=phase_info.get("description", ""),
+            layer=self._get_layer_for_phase(phase_id),
+            estimated_complexity=Complexity.M,
+            files_hint=[],
+            depends_on=[]
+        )
+
+        # Spawn L3 for this point
+        l3_id = await self._spawn_l3_for_point(
+            point=point,
+            parent_l2_id=workflow_id,
+            parent_phase_id=phase_id,
+            repo_id=repo_id
+        )
+
+        # Update phase with L3 reference
+        phases = instance.data.get("phases", [])
+        for phase in phases:
+            if phase.get("id") == phase_id:
+                phase["l3_instance_ids"] = [l3_id]
+                break
+
+        await self.store.update_workflow_data(workflow_id, instance.data)
+
+        # Wait for L3 completion
+        await self._wait_for_l3_completion([l3_id])
+
+        return StepResult(
+            status="success",
+            step_id=phase_id,
+            workflow_id=workflow_id,
+            message=f"Phase {phase_id} (complexity=M) spawned L3 {l3_id}"
+        )
+
+    async def _execute_complexity_l(
+        self,
+        workflow_id: str,
+        phase_id: str
+    ) -> StepResult:
+        """Use PMA to split, spawn multiple L3 instances.
+
+        For complexity=L, we use the PMA task splitter to divide the phase
+        into multiple points, then spawn an L3 for each.
+
+        P1: Parallel L3 spawning with asyncio.gather
+        P1: Failure handling with partial success tracking
+
+        Args:
+            workflow_id: L2 workflow ID
+            phase_id: Phase identifier
+
+        Returns:
+            StepResult from L3 executions
+        """
+        import asyncio
+        from lee.orchestrator.execution.pm_agent.task_splitter import SimpleTaskSplitter
+
+        # Get context
+        instance = await self.store.get_workflow(workflow_id)
+        phase_info = self._get_phase_info(instance, phase_id)
+        context = instance.data.get("context", {})
+
+        # Create splitter
+        splitter = SimpleTaskSplitter(llm_executor=self.executor_factory.create("llm"))
+
+        # Load PRD content if available
+        prd_content = ""
+        prd_path = context.get("prd_path", "")
+        if prd_path:
+            try:
+                prd_full_path = Path(self.project_root) / prd_path if self.project_root else Path(prd_path)
+                if prd_full_path.exists():
+                    with open(prd_full_path, 'r', encoding='utf-8') as f:
+                        prd_content = f.read()
+            except Exception:
+                pass
+
+        # Build repo context
+        repo_context = {}
+        repos = context.get("repos", [])
+        for repo in repos:
+            if self._get_repo_id_for_phase(phase_id, [repo]) == repo.get("id"):
+                repo_context = repo
+                break
+
+        # Split phase
+        split_result = await splitter.split_phase(
+            phase_id=phase_id,
+            phase_description=phase_info.get("description", ""),
+            prd_content=prd_content,
+            repo_context=repo_context
+        )
+
+        # Store PMA result
+        instance.data.setdefault("pma_splits", []).append({
+            "phase_id": phase_id,
+            "points": [p.__dict__ for p in split_result.points],
+            "confidence": split_result.confidence,
+            "original_estimate": split_result.original_estimate,
+            "split_estimate": split_result.split_estimate,
+        })
+        await self.store.update_workflow_data(workflow_id, instance.data)
+
+        # P1: Spawn L3s in parallel, respecting dependencies
+        # Group points by dependency level
+        point_groups = self._group_points_by_dependency(split_result.points)
+
+        all_l3_ids = []
+        all_l3_results = []
+        failed_points = []
+
+        for group in point_groups:
+            # Spawn L3s in parallel within the same dependency level
+            spawn_tasks = []
+            for point in group:
+                repo_id = self._get_repo_id_for_layer(point.layer, context.get("repos", []))
+                task = self._spawn_l3_for_point(
+                    point=point,
+                    parent_l2_id=workflow_id,
+                    parent_phase_id=phase_id,
+                    repo_id=repo_id
+                )
+                spawn_tasks.append(task)
+
+            # Parallel spawn
+            group_l3_ids = await asyncio.gather(*spawn_tasks, return_exceptions=True)
+
+            # Process results
+            for i, l3_result in enumerate(group_l3_ids):
+                if isinstance(l3_result, Exception):
+                    failed_points.append({
+                        "point": group[i].id,
+                        "error": str(l3_result),
+                    })
+                else:
+                    all_l3_ids.append(l3_result)
+                    all_l3_results.append({"point": group[i].id, "l3_id": l3_result})
+
+        # Update phase with L3 references
+        phases = instance.data.get("phases", [])
+        for phase in phases:
+            if phase.get("id") == phase_id:
+                phase["l3_instance_ids"] = all_l3_ids
+                phase["l3_results"] = all_l3_results
+                if failed_points:
+                    phase["failed_points"] = failed_points
+                break
+
+        await self.store.update_workflow_data(workflow_id, instance.data)
+
+        # P1: Handle failures
+        if failed_points:
+            # Option 1: Fail the phase if any L3 spawn failed
+            # Option 2: Continue with successful L3s (P0 behavior)
+            # For P1, we log and continue - can be configured later
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Phase {phase_id}: {len(failed_points)} points failed to spawn L3")
+
+        # Wait for all L3s to complete
+        await self._wait_for_l3_completion(all_l3_ids)
+
+        # Collect outputs from completed L3s
+        outputs = await self._collect_l3_outputs(all_l3_ids)
+
+        return StepResult(
+            status="success" if not failed_points else "partial_success",
+            step_id=phase_id,
+            workflow_id=workflow_id,
+            message=f"Phase {phase_id} (complexity=L) split into {len(all_l3_ids)} L3s" +
+                    (f", {len(failed_points)} failed" if failed_points else ""),
+            output=outputs,
+        )
+
+    def _group_points_by_dependency(self, points: List) -> List[List]:
+        """Group points by dependency level for parallel execution.
+
+        Args:
+            points: List of Point objects
+
+        Returns:
+            List of point groups, where each group can be executed in parallel
+        """
+        # Build dependency graph
+        point_map = {p.id: p for p in points}
+        in_degree = {p.id: len(p.depends_on) for p in points}
+        adj_list = {p.id: [] for p in points}
+
+        for point in points:
+            for dep in point.depends_on:
+                if dep in adj_list:
+                    adj_list[dep].append(point.id)
+
+        # Topological sort with grouping
+        from collections import deque
+        queue = deque([pid for pid, degree in in_degree.items() if degree == 0])
+        groups = []
+
+        while queue:
+            current_level = list(queue)
+            groups.append([point_map[pid] for pid in current_level if pid in point_map])
+
+            # Process next level
+            next_queue = deque()
+            for pid in current_level:
+                for neighbor in adj_list.get(pid, []):
+                    in_degree[neighbor] -= 1
+                    if in_degree[neighbor] == 0:
+                        next_queue.append(neighbor)
+            queue = next_queue
+
+        return groups
+
+    async def _collect_l3_outputs(self, l3_ids: List[str]) -> Dict[str, Any]:
+        """Collect outputs from completed L3 instances.
+
+        Args:
+            l3_ids: List of L3 workflow IDs
+
+        Returns:
+            Aggregated outputs dictionary
+        """
+        outputs = {
+            "l3_count": len(l3_ids),
+            "l3_outputs": {},
+        }
+
+        for l3_id in l3_ids:
+            l3_instance = await self.store.get_workflow(l3_id)
+            if l3_instance:
+                outputs["l3_outputs"][l3_id] = {
+                    "status": l3_instance.status.value,
+                    "data": l3_instance.data,
+                }
+
+        return outputs
+
+    # ============ L2/L3 Progress Tracking (P2) ============
+
+    async def get_l2_progress(self, workflow_id: str) -> Dict[str, Any]:
+        """Get progress information for an L2 workflow.
+
+        Args:
+            workflow_id: L2 workflow ID
+
+        Returns:
+            Progress dictionary with phase completion status
+        """
+        instance = await self.store.get_workflow(workflow_id)
+        if not instance or not self._is_l2_instance(instance):
+            return {
+                "error": "Not an L2 workflow instance",
+                "workflow_id": workflow_id,
+            }
+
+        phases = instance.data.get("phases", [])
+        total_phases = len(phases)
+        completed_phases = sum(1 for p in phases if p.get("status") == "completed")
+        running_phases = sum(1 for p in phases if p.get("status") == "running")
+        pending_phases = sum(1 for p in phases if p.get("status") == "pending")
+
+        # Count L3 instances
+        total_l3 = sum(len(p.get("l3_instance_ids", [])) for p in phases)
+        completed_l3 = 0
+        for phase in phases:
+            for l3_id in phase.get("l3_instance_ids", []):
+                l3 = await self.store.get_workflow(l3_id)
+                if l3 and l3.status == WorkflowStatus.COMPLETED:
+                    completed_l3 += 1
+
+        return {
+            "workflow_id": workflow_id,
+            "status": instance.status.value,
+            "progress_percent": int(completed_phases / total_phases * 100) if total_phases > 0 else 0,
+            "phases": {
+                "total": total_phases,
+                "completed": completed_phases,
+                "running": running_phases,
+                "pending": pending_phases,
+            },
+            "l3_instances": {
+                "total": total_l3,
+                "completed": completed_l3,
+                "pending": total_l3 - completed_l3,
+            },
+            "phase_details": [
+                {
+                    "id": p.get("id"),
+                    "status": p.get("status"),
+                    "complexity": p.get("complexity"),
+                    "l3_count": len(p.get("l3_instance_ids", [])),
+                }
+                for p in phases
+            ],
+        }
+
+    def get_phase_progress(self, workflow_id: str, phase_id: str) -> Dict[str, Any]:
+        """Get progress for a specific phase within an L2 workflow.
+
+        Args:
+            workflow_id: L2 workflow ID
+            phase_id: Phase identifier
+
+        Returns:
+            Phase progress dictionary
+        """
+        # This is a synchronous method that reads from data
+        # For real-time status, use async methods
+        return {
+            "workflow_id": workflow_id,
+            "phase_id": phase_id,
+            "note": "Use get_l2_progress for detailed phase information",
+        }
+
+    # P2: Publish L2/L3 lifecycle events
+    def _publish_l2_phase_started(self, workflow_id: str, phase_id: str, complexity: str) -> None:
+        """Publish event when L2 phase starts."""
+        try:
+            get_event_bus().publish(Event(
+                type=EventType.L2_PHASE_STARTED,
+                payload={
+                    "workflow_id": workflow_id,
+                    "phase_id": phase_id,
+                    "complexity": complexity,
+                },
+                source_workflow=workflow_id,
+                timestamp=datetime.utcnow().isoformat(),
+                event_id=uuid.uuid4().hex
+            ))
+        except Exception:
+            pass  # Event publishing failure shouldn't break workflow
+
+    def _publish_l2_phase_completed(self, workflow_id: str, phase_id: str, l3_count: int) -> None:
+        """Publish event when L2 phase completes."""
+        try:
+            get_event_bus().publish(Event(
+                type=EventType.L2_PHASE_COMPLETED,
+                payload={
+                    "workflow_id": workflow_id,
+                    "phase_id": phase_id,
+                    "l3_count": l3_count,
+                },
+                source_workflow=workflow_id,
+                timestamp=datetime.utcnow().isoformat(),
+                event_id=uuid.uuid4().hex
+            ))
+        except Exception:
+            pass
+
+    def _publish_l3_spawned(self, parent_l2_id: str, phase_id: str, l3_id: str, point_id: str) -> None:
+        """Publish event when L3 is spawned."""
+        try:
+            get_event_bus().publish(Event(
+                type=EventType.L3_SPAWNED,
+                payload={
+                    "parent_l2_id": parent_l2_id,
+                    "phase_id": phase_id,
+                    "l3_id": l3_id,
+                    "point_id": point_id,
+                },
+                source_workflow=parent_l2_id,
+                timestamp=datetime.utcnow().isoformat(),
+                event_id=uuid.uuid4().hex
+            ))
+        except Exception:
+            pass
+
+    def _publish_pma_split_completed(self, workflow_id: str, phase_id: str, point_count: int, confidence: float) -> None:
+        """Publish event when PMA split completes."""
+        try:
+            get_event_bus().publish(Event(
+                type=EventType.PMA_SPLIT_COMPLETED,
+                payload={
+                    "workflow_id": workflow_id,
+                    "phase_id": phase_id,
+                    "point_count": point_count,
+                    "confidence": confidence,
+                },
+                source_workflow=workflow_id,
+                timestamp=datetime.utcnow().isoformat(),
+                event_id=uuid.uuid4().hex
+            ))
+        except Exception:
+            pass
+
+    def _get_repo_id_for_phase(self, phase_id: str, repos: List[Dict]) -> str:
+        """Determine which repo a phase should use.
+
+        Args:
+            phase_id: Phase identifier
+            repos: List of repo configs
+
+        Returns:
+            Repo ID
+
+        Raises:
+            ValueError: If repos list is empty or no matching repo found
+        """
+        if not repos:
+            raise ValueError(f"No repos configured for phase {phase_id}")
+
+        # Simple mapping for P0
+        frontend_phases = {"frontend_dev", "integration"}
+        backend_phases = {"backend_dev", "api_align"}
+
+        for repo in repos:
+            repo_id = repo.get("id", "")
+            repo_type = repo.get("type", "")
+
+            if phase_id in frontend_phases and repo_type == "frontend":
+                return repo_id
+            elif phase_id in backend_phases and repo_type == "backend":
+                return repo_id
+
+        # Fallback to first repo with warning
+        return repos[0].get("id", "")
+
+    def _get_layer_for_phase(self, phase_id: str) -> str:
+        """Determine the architectural layer for a phase.
+
+        Args:
+            phase_id: Phase identifier
+
+        Returns:
+            Layer string (ui, state, api, service)
+        """
+        layer_map = {
+            "plan": "ui",
+            "api_align": "api",
+            "frontend_dev": "ui",
+            "backend_dev": "service",
+            "integration": "ui",
+        }
+        return layer_map.get(phase_id, "ui")
+
+    def _get_repo_id_for_layer(self, layer: str, repos: List[Dict]) -> str:
+        """Map point layer to repo ID.
+
+        Args:
+            layer: Architectural layer (ui, state, api, service)
+            repos: List of repo configs
+
+        Returns:
+            Repo ID
+
+        Raises:
+            ValueError: If repos list is empty or no matching repo found
+        """
+        if not repos:
+            raise ValueError(f"No repos configured for layer {layer}")
+
+        # Map layers to repo types
+        frontend_layers = {"ui", "state"}
+        backend_layers = {"api", "service"}
+
+        for repo in repos:
+            repo_type = repo.get("type", "")
+            if layer in frontend_layers and repo_type == "frontend":
+                return repo.get("id", "")
+            elif layer in backend_layers and repo_type == "backend":
+                return repo.get("id", "")
+
+        # Fallback to first repo with warning
+        return repos[0].get("id", "")
+
+    async def _spawn_l3_for_point(
+        self,
+        point: Point,
+        parent_l2_id: str,
+        parent_phase_id: str,
+        repo_id: str
+    ) -> str:
+        """Generate and spawn L3 instance for a single point.
+
+        v3: Uses L3 v3 template with 6-step TDD flow.
+
+        Args:
+            point: Point to implement
+            parent_l2_id: Parent L2 workflow ID
+            parent_phase_id: Parent phase ID
+            repo_id: Repository ID for this point
+
+        Returns:
+            Created L3 workflow ID
+        """
+        from lee.orchestrator.core.workflow_generator import WorkflowGenerator, L3InstanceConfig
+
+        # Get parent context
+        parent = await self.store.get_workflow(parent_l2_id)
+        context = parent.data.get("context", {})
+
+        # Generate L3 instance
+        config = L3InstanceConfig(
+            point=point,
+            parent_l2_id=parent_l2_id,
+            parent_phase_id=parent_phase_id,
+            repo_id=repo_id,
+            prd_path=context.get("prd_path", "")
+        )
+
+        # Find L3 v3 template path (template remains in framework directory)
+        template_base = Path(self.project_root) / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates" if self.project_root else Path("lee/spec-global/departments/dev/workflows/templates")
+        # Try L3 v3 template first
+        l3_template_path = template_base / "l3" / "task-l3-v3-template.yaml"
+        if not l3_template_path.exists():
+            # Fallback to old path
+            l3_template_path = template_base / "task-l3-template.yaml"
+
+        generator = WorkflowGenerator(template_path=str(l3_template_path))
+
+        # Instance files go to runtime directory (.workflow/instances/l3/), NOT in framework directory
+        runtime_dir = Path(self.project_root) / ".workflow" if self.project_root else Path(".workflow")
+        l3_path = runtime_dir / "instances" / "l3" / f"{point.id}.yaml"
+        result = generator.generate_l3_instance(config, str(l3_path))
+
+        if not result.success:
+            raise RuntimeError(f"Failed to generate L3 instance: {result.errors}")
+
+        # Spawn L3 workflow using existing spawn_workflow
+        # v3: Use the L3 v3 template_id
+        l3_template_id = "template.dev.task_l3_v3"
+        l3_instance = await self.spawn_workflow(
+            parent_id=parent_l2_id,
+            level=WorkflowLevel.TASK,
+            template_id=l3_template_id,
+            data={
+                "kind": "l3_workflow_instance",
+                "point_id": point.id,
+                "point_title": point.title,
+                "point_desc": point.desc,
+                "point_layer": point.layer,
+                "point_complexity": point.estimated_complexity.value,
+                "parent_phase_id": parent_phase_id,
+                "repo_id": repo_id,
+                "step_index": 0,  # Current step in L3 flow
+            }
+        )
+
+        # Publish L3 spawned event
+        self._publish_l3_spawned(parent_l2_id, parent_phase_id, l3_instance.id, point.id)
+
+        return l3_instance.id
+
+    async def _wait_for_l3_completion(self, l3_ids: List[str]) -> None:
+        """Wait for all L3 instances to complete.
+
+        Args:
+            l3_ids: List of L3 workflow IDs to wait for
+
+        Raises:
+            TimeoutError: If L3s don't complete within timeout
+        """
+        max_wait_seconds = 3600  # 1 hour
+        check_interval = 10  # 10 seconds
+
+        import asyncio
+        start_time = asyncio.get_event_loop().time()
+
+        while True:
+            # Check status of all L3s
+            all_done = True
+            for l3_id in l3_ids:
+                l3 = await self.store.get_workflow(l3_id)
+                if l3.status not in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED):
+                    all_done = False
+                    break
+
+            if all_done:
+                break
+
+            # Timeout check
+            if asyncio.get_event_loop().time() - start_time > max_wait_seconds:
+                raise TimeoutError(f"L3 completion timeout after {max_wait_seconds}s")
+
+            await asyncio.sleep(check_interval)

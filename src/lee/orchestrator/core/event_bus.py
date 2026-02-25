@@ -37,6 +37,14 @@ class EventType(Enum):
     JOB_FAILED = "job_failed"
     JOB_CANCELLED = "job_cancelled"
 
+    # P2: L2/L3 Workflow Events
+    L2_PHASE_STARTED = "l2_phase_started"
+    L2_PHASE_COMPLETED = "l2_phase_completed"
+    L3_SPAWNED = "l3_spawned"
+    PMA_SPLIT_COMPLETED = "pma_split_completed"
+    L3_COMPLETED = "l3_completed"
+    L3_FAILED = "l3_failed"
+
 
 @dataclass
 class Event:

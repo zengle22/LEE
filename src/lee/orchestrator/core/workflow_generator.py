@@ -71,6 +71,58 @@ class GenerationResult:
     step_count: int = 0
 
 
+@dataclass
+class L2InstanceConfig:
+    """Configuration for L2 instance generation.
+
+    Used to generate L2 workflow instances from L2 templates.
+    """
+    # Required identification
+    id: str                              # Instance ID (e.g., "instance.dev.feature_timing_v1")
+    name: str                            # Instance name
+    template_id: str = "template.dev.feature_l2"  # L2 template to use
+
+    # Context information
+    project: str = ""
+    module: str = ""
+    module_version: str = ""
+    prd_path: str = ""
+    repos: List[Dict[str, str]] = field(default_factory=list)
+
+    # Phase complexity overrides (optional, uses template defaults if not specified)
+    phase_complexities: Optional[Dict[str, str]] = None  # {"plan": "S", "frontend_dev": "L"}
+
+    # Additional metadata
+    description: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class L3InstanceConfig:
+    """Configuration for L3 instance generation.
+
+    Used to generate L3 workflow instances from Points.
+    """
+    # Point information
+    point: 'Point'  # Forward reference, will be resolved at runtime
+
+    # Parent references
+    parent_l2_id: str
+    parent_phase_id: str
+
+    # Repository context
+    repo_id: str
+
+    # PRD reference
+    prd_path: str = ""
+
+    # Template
+    template_id: str = "template.dev.task_l3"
+
+    # Additional metadata
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
 class WorkflowGenerator:
     """Generates valid workflow.yaml from a template.
 
@@ -493,6 +545,199 @@ class WorkflowGenerator:
             deliverables=data.get("deliverables", []),
             standards=data.get("standards", []),
             metadata=data.get("metadata", {})
+        )
+
+    # ============ L2/L3 Instance Generation (P0) ============
+
+    def generate_l2_instance(
+        self,
+        config: L2InstanceConfig,
+        output_path: Optional[str] = None
+    ) -> GenerationResult:
+        """Generate L2 instance from template with complexity fields.
+
+        Args:
+            config: L2InstanceConfig with project context and phase complexities
+            output_path: Optional output path for generated instance
+
+        Returns:
+            GenerationResult with success status and generated instance
+        """
+        errors = []
+        warnings = []
+
+        # Load L2 template
+        template_path = Path("lee/spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
+        if not template_path.exists():
+            # Try relative to project root
+            template_path = Path(self.template_path).parent.parent.parent.parent / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates" / "feature-l2-template.yaml"
+
+        if not template_path.exists():
+            return GenerationResult(
+                success=False,
+                errors=["L2 template not found: feature-l2-template.yaml"]
+            )
+
+        try:
+            with open(template_path, encoding='utf-8') as f:
+                template = yaml.safe_load(f)
+        except Exception as e:
+            return GenerationResult(
+                success=False,
+                errors=[f"Failed to load L2 template: {e}"]
+            )
+
+        # Build instance from template
+        instance = {
+            "kind": "l2_workflow_instance",
+            "version": template.get("version", "1.0"),
+            "id": config.id,
+            "template_id": config.template_id,
+            "name": config.name,
+            "description": config.description or template.get("description", ""),
+            "status": "pending",
+            "context": {
+                "project": config.project,
+                "module": config.module,
+                "module_version": config.module_version,
+                "prd_path": config.prd_path,
+                "repos": config.repos,
+            },
+            "phases": [],
+            "pma_splits": [],  # Will be populated during execution
+        }
+
+        # Add phases with complexity settings
+        for phase_template in template.get("phases", []):
+            phase_id = phase_template["id"]
+            # Use override if provided, otherwise use template default
+            complexity = config.phase_complexities.get(phase_id) if config.phase_complexities else None
+            if complexity is None:
+                complexity = phase_template.get("default_complexity", "M")
+
+            instance["phases"].append({
+                "id": phase_id,
+                "name": phase_template.get("name", ""),
+                "description": phase_template.get("description", ""),
+                "complexity": complexity,
+                "status": "pending",
+                "l3_instance_ids": [],
+            })
+
+        # Add metadata
+        if config.metadata:
+            instance["metadata"] = config.metadata
+
+        # Write output if path provided
+        if output_path:
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(output_path, 'w', encoding='utf-8') as f:
+                yaml.dump(instance, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+        return GenerationResult(
+            success=True,
+            workflow_path=str(output_path) if output_path else None,
+            warnings=warnings,
+            generated_workflow=instance,
+            step_count=len(instance["phases"])
+        )
+
+    def generate_l3_instance(
+        self,
+        config: L3InstanceConfig,
+        output_path: Optional[str] = None
+    ) -> GenerationResult:
+        """Generate L3 instance from Point.
+
+        Args:
+            config: L3InstanceConfig with point information
+            output_path: Optional output path for generated instance
+
+        Returns:
+            GenerationResult with success status and generated instance
+        """
+        errors = []
+        warnings = []
+
+        # Use the template path provided during WorkflowGenerator initialization
+        # This allows using L3 v3 template by passing it to the constructor
+        template_path = Path(self.template_path)
+
+        if not template_path.exists():
+            # Fallback to default L3 template location
+            template_path = Path("lee/spec-global/departments/dev/workflows/templates/task-l3-template.yaml")
+            if not template_path.exists():
+                # Try relative to project root
+                template_path = Path(self.template_path).parent.parent.parent.parent / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates" / "task-l3-template.yaml"
+
+        if not template_path.exists():
+            return GenerationResult(
+                success=False,
+                errors=[f"L3 template not found: {self.template_path}"]
+            )
+
+        try:
+            with open(template_path, encoding='utf-8') as f:
+                template = yaml.safe_load(f)
+        except Exception as e:
+            return GenerationResult(
+                success=False,
+                errors=[f"Failed to load L3 template: {e}"]
+            )
+
+        # Build instance from template
+        point = config.point
+        instance = {
+            "kind": "l3_workflow_instance",
+            "version": template.get("version", "1.0"),
+            "id": f"instance.l3.{point.id}",
+            "template_id": config.template_id,
+            "name": f"L3: {point.title}",
+            "description": point.desc,
+            "status": "pending",
+            # Point reference
+            "point_id": point.id,
+            # Parent references
+            "parent_l2_id": config.parent_l2_id,
+            "parent_phase_id": config.parent_phase_id,
+            # Repository context
+            "repo_id": config.repo_id,
+            # PRD reference
+            "prd_path": config.prd_path,
+            # Point data
+            "point": {
+                "id": point.id,
+                "title": point.title,
+                "desc": point.desc,
+                "layer": point.layer,
+                "estimated_complexity": point.estimated_complexity.value,
+                "files_hint": point.files_hint,
+                "depends_on": point.depends_on,
+            },
+            # Steps from template
+            "steps": template.get("steps", []),
+        }
+
+        # Add metadata
+        if config.metadata:
+            instance["metadata"] = config.metadata
+
+        # Write output if path provided
+        if output_path:
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(output_path, 'w', encoding='utf-8') as f:
+                yaml.dump(instance, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+        return GenerationResult(
+            success=True,
+            workflow_path=str(output_path) if output_path else None,
+            warnings=warnings,
+            generated_workflow=instance,
+            step_count=len(instance["steps"])
         )
 
 
