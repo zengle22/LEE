@@ -526,8 +526,11 @@ def _release_project_run_lock(lock_fp) -> None:
 @click.option("--branch", help="目标分支")
 @click.option("--project-dir", default=".", help="项目目录")
 @click.option("--max-steps", default=10, show_default=True, help="最大执行步数")
+@click.option("--executor", help="强制指定执行器类型（覆盖 spec 中的配置）", type=click.Choice([
+    "llm", "shell", "metagpt", "claude_code", "codex", "langgraph"
+]))
 def run(workflow_key: str, spec: str | None, env: str | None, version: str | None,
-        branch: str | None, project_dir: str, max_steps: int) -> None:
+        branch: str | None, project_dir: str, max_steps: int, executor: str | None) -> None:
     """运行指定工作流"""
     registry = _load_registry()
     workflows = registry.get("workflows", {})
@@ -602,12 +605,18 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         rendered_path = _render_workflow_template(template_path, params, project_root)
 
         # Create workflow instance (L3 task)
+        # 如果指定了 executor override，将其加入 data 中传递给 workflow
+        workflow_data: Dict[str, Any] = {"params": params, "workflow_key": workflow_key}
+        if executor:
+            workflow_data["executor_override"] = executor
+            click.echo(f"Executor override: {executor}")
+
         create_result = pm_workflow(
             "create",
             project_dir=str(project_root),
             level="task",
             template_id=str(rendered_path),
-            data={"params": params, "workflow_key": workflow_key},
+            data=workflow_data,
         )
 
         if "error" in create_result:

@@ -447,6 +447,11 @@ class SkillRunner(StepRunnerBase):
         execution_config = step.config.get("execution", {}) if step.config else {}
         input_data = {**params, **execution_config}
 
+        # 解析 executor_type：CLI 参数优先级最高
+        executor_type = workflow_data.get("executor_override") if workflow_data else None
+        if not executor_type:
+            executor_type = step.executor_type or "shell"
+
         # 自动加载 skill 规范并注入默认值/命令
         skill_spec = None
         skill_spec_path = None
@@ -474,7 +479,7 @@ class SkillRunner(StepRunnerBase):
             id=execution_id,
             workflow_id=workflow_id,
             step_name=step.id,
-            executor_type=step.executor_type or "shell",
+            executor_type=executor_type,
             input_data=input_data,
             status=TaskExecutionStatus.RUNNING,
             started_at=datetime.now(),
@@ -499,7 +504,7 @@ class SkillRunner(StepRunnerBase):
                         "command": str(command),
                         "timeout": input_data.get("timeout", 600),
                     }
-                    result = await ctx.executor_factory.create("shell").execute(command_input)
+                    result = await ctx.executor_factory.create(executor_type).execute(command_input)
                     results.append(
                         {
                             "name": env,
@@ -540,7 +545,7 @@ class SkillRunner(StepRunnerBase):
                     else:
                         input_data["command"] = "true"
                     used_fallback_command = True
-                executor = ctx.executor_factory.create(step.executor_type or "shell")
+                executor = ctx.executor_factory.create(executor_type)
                 output = await executor.execute(input_data)
 
             if self._is_failed_shell_output(output):

@@ -85,9 +85,12 @@ class LLMRunner(StepRunnerBase):
         except Exception:
             pass  # token 签发失败不阻塞执行
 
-        # 2. 调用 LLM Executor
+        # 2. 解析 executor_type：CLI 参数优先级最高
+        executor_type = instance.data.get("executor_override") or step.executor_type or "llm"
+
+        # 3. 调用 LLM Executor
         executor = ctx.executor_factory.create(
-            step.executor_type or "llm",
+            executor_type,
             profile=os.getenv("LLM_PROFILE", "zhipu"),
             agent_id=step.agent_id or ""
         )
@@ -107,7 +110,7 @@ class LLMRunner(StepRunnerBase):
             id=execution_id,
             workflow_id=workflow_id,
             step_name=step.id,
-            executor_type=step.executor_type or "llm",
+            executor_type=executor_type,
             input_data=input_data,
             status=TaskExecutionStatus.RUNNING,
             started_at=datetime.now(),
@@ -391,7 +394,11 @@ class ClaudeCodeRunner(StepRunnerBase):
         except Exception:
             pass
 
-        # 3. 构建 claude_code 输入
+        # 3. 解析 executor_type：CLI 参数优先级最高
+        # 对于 claude_code 步骤，executor_override 可能指定为 "codex"
+        executor_type = instance.data.get("executor_override") or "claude_code"
+
+        # 4. 构建 claude_code 输入
         claude_config = step.config.get("claude_code", {}) if step.config else {}
         workspace = ctx.resolve_workdir(step, instance.data.get("run_id", workflow_id))
         success_criteria = self._get_success_criteria(step)
@@ -447,13 +454,13 @@ class ClaudeCodeRunner(StepRunnerBase):
         )
         input_data["evidence_base"] = evidence_base
 
-        # 4. 创建 task_execution 记录
+        # 5. 创建 task_execution 记录
         execution_id = uuid.uuid4().hex
         execution = TaskExecution(
             id=execution_id,
             workflow_id=workflow_id,
             step_name=step.id,
-            executor_type="claude_code",
+            executor_type=executor_type,
             input_data={k: v for k, v in input_data.items() if k != "token_context"},
             status=TaskExecutionStatus.RUNNING,
             started_at=datetime.now(),
@@ -461,8 +468,8 @@ class ClaudeCodeRunner(StepRunnerBase):
         await ctx.store.create_task_execution(execution)
 
         try:
-            # 5. v3.4: AsyncRetryExecutor 包裹 Claude Code 调用
-            executor = ctx.executor_factory.create("claude_code")
+            # 6. v3.4: AsyncRetryExecutor 包裹 Claude Code/Codex 调用
+            executor = ctx.executor_factory.create(executor_type)
             retry_executor = AsyncRetryExecutor(policy=DEFAULT_RETRY_POLICY)
             retry_result = await retry_executor.execute(executor.execute, input_data)
 
