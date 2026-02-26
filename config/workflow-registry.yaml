@@ -1,23 +1,33 @@
-version: "1.0"
+version: "1.1"
 
 workflows:
+  # ========== Dev 工作流 ==========
   dev.feature:
-    path: spec-global/departments/dev/workflows/feature/v1/workflow.yaml
-    description: "开发特性工作流"
+    path: spec-global/departments/dev/workflows/templates/feature-l2-template.yaml
+    kind: l2_workflow_template
+    description: "特性开发工作流 (L2)"
     required_params:
-      - spec
+      - project
+      - module
+      - feature_point_id
+    optional_params:
+      - feature_spec
+      - repo_frontend
+      - repo_backend
 
   dev.bugfix:
-    path: spec-global/departments/dev/workflows/bug-fix/v1/workflow.yaml
-    description: "Bug 修复工作流"
+    path: spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml
+    kind: l3_workflow_template
+    description: "Bug 修复工作流 (L3) - 单个 Bug 的完整修复流程"
     required_params:
-      - spec
-
-  qa.regression:
-    path: spec-global/departments/qa/workflows/regression/v1/workflow.yaml
-    description: "回归测试工作流"
-    required_params:
-      - spec
+      - bug_id
+      - bug_description
+      - project
+      - repo
+    optional_params:
+      - reproduction_steps
+      - severity
+      - assignee
 
   devops.deploy:
     path: spec-global/departments/devops/workflows/deploy/v1/workflow.yaml
@@ -26,10 +36,11 @@ workflows:
       - env
       - version
 
-  # ========== QA 新工作流 ==========
+  # ========== QA 工作流 ==========
   qa.test-set-production:
-    path: spec-global/departments/qa/workflows/test-set-production/v1/workflow.yaml
-    description: "生产 Test Set 设计资产"
+    path: spec-global/departments/qa/workflows/templates/test-set-production-l3-template.yaml
+    kind: l3_workflow_template
+    description: "生产 Test Set 设计资产 (L3) - 从需求文档生成 Test Set"
     required_params:
       - module
       - requirement_doc
@@ -37,13 +48,26 @@ workflows:
       - tech_design
 
   qa.test-plan-execution:
-    path: spec-global/departments/qa/workflows/test-plan-execution/v1/workflow.yaml
-    description: "执行 Test Plan"
+    path: spec-global/departments/qa/workflows/templates/test-plan-l2-template.yaml
+    kind: l2_workflow_template
+    description: "执行 Test Plan (L2) - 执行测试批次并汇总结果"
     required_params:
       - test_plan_id
       - build_version
       - build_commit
     optional_params:
+      - environment
+      - target_test_sets
+
+  qa.test-set-execution:
+    path: spec-global/departments/qa/workflows/templates/test-set-l3-template.yaml
+    kind: l3_workflow_template
+    description: "执行 Test Set (L3) - 单个 Test Set 执行"
+    required_params:
+      - test_run_id
+      - test_set_id
+    optional_params:
+      - build_version
       - environment
 
   # ========== Office 工作流 ==========

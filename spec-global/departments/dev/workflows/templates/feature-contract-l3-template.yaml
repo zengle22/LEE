@@ -1,0 +1,118 @@
+# Feature Contract Design L3 Template
+# 特性协议设计与冻结子流程（L3）
+#
+# L2 调用方: template.dev.feature (Phase 1: contract_design)
+# 职责: 需求分析 → 协议设计 → DTO 定义 → 自检 → 冻结门禁
+
+kind: l3_workflow_template
+version: "1.1"
+id: template.dev.feature_contract_l3
+name: Feature Contract Design L3 Template
+description: |
+  L3 template for API Contract design and freeze.
+
+  This template defines the standard 3-stage workflow for designing
+  and freezing API contracts before implementation begins.
+
+  Key Design:
+  - Stage 1: Analyze spec and design contract
+  - Stage 2: Self-check contract quality
+  - Stage 3: Freeze gate (human approval required)
+
+owner: development
+tags: [template, dev, feature, contract, l3, contract-first]
+
+# Standard 3-stage L3 process
+stages:
+  - id: design
+    name: "Contract Design"
+    kind: agent
+    description: "Analyze feature spec and design API contract"
+    agent_id: agent.dev.contract_designer
+    mandatory: true
+    depends_on: []
+    outputs:
+      - contract_analysis
+      - api_contract
+
+  - id: selfcheck
+    name: "Contract Self-Check"
+    kind: agent
+    description: "Verify contract quality and completeness"
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on: [design]
+    outputs:
+      - selfcheck_result
+      - validation_report
+
+  - id: freeze
+    name: "Contract Freeze Gate"
+    kind: gate
+    description: "Human gate to freeze contract - after passing, contract cannot be privately modified"
+    gate_id: gate.dev.contract_freeze_gate
+    mandatory: true
+    depends_on: [selfcheck]
+    outputs:
+      - freeze_status
+      - contract_hash
+
+# Default execution order
+execution_order:
+  - design
+  - selfcheck
+  - freeze
+
+# Contract quality rules
+contract_quality_rules:
+  description: "Quality standards for API contracts"
+
+  required_fields:
+    - rule: "endpoint_has_method_path"
+      description: "Every endpoint must have Method + Path"
+    - rule: "dto_has_type"
+      description: "Every DTO field must have explicit type"
+    - rule: "field_naming_snake_case"
+      description: "Field names must be snake_case"
+
+  forbidden_patterns:
+    - pattern: "any"
+      description: "Ambiguous type 'any' is forbidden"
+    - pattern: "object.*without.*properties"
+      description: "Unstructured 'object' is forbidden"
+
+  versioning:
+    rule: "semver"
+      description: "Version must follow SemVer format (major.minor.patch)"
+
+# Instance schema
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+    - phase_id  # Parent L2 phase that spawned this L3
+  context_fields:
+    - feature_spec
+    - project
+    - module
+    - feature_point_id
+    - existing_contracts
+  output_fields:
+    - api_contract_path
+    - freeze_status
+    - contract_hash
+    - rollback_request
+
+# Contract freeze constraints
+freeze_constraints:
+  description: "Constraints after contract freeze"
+
+  no_private_modifications:
+    rule: "After freeze gate, contract modifications require explicit L2 rollback"
+    violation_action: "invalidate_l3_outputs"
+
+  version_bump_required:
+    rule: "Any contract change after freeze requires version bump"
+    violation_action: "require_explicit_approval"
