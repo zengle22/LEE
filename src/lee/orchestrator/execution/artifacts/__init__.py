@@ -17,6 +17,11 @@ from .integration import (
     create_artifact_handler,
 )
 from .handover import HandoverManager
+from .cleanup import (
+    ArtifactCleaner,
+    CleanupPolicy,
+    rebuild_registry,
+)
 
 __all__ = [
     "ArtifactType",
@@ -33,6 +38,9 @@ __all__ = [
     "GateArtifactHandler",
     "create_artifact_handler",
     "HandoverManager",
+    "ArtifactCleaner",
+    "CleanupPolicy",
+    "rebuild_registry",
 ]
 
 __version__ = "2.1.0"

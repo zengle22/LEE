@@ -222,6 +222,57 @@ class ArtifactRegistry:
         ids = self._by_run.get(run_id, set())
         return [self._artifacts[id] for id in ids if id in self._artifacts]
 
+    def get_by_run_id(self, run_id: str) -> List[ArtifactMetadata]:
+        """获取指定 run 的所有产出物（别名方法）"""
+        return self.get_by_run(run_id)
+
+    def list_all(self) -> List[ArtifactMetadata]:
+        """获取所有产出物"""
+        return list(self._artifacts.values())
+
+    def unregister(self, artifact_id: str) -> bool:
+        """
+        从注册表中注销产出物
+
+        Args:
+            artifact_id: 产出物 ID
+
+        Returns:
+            是否成功注销
+        """
+        if not self.acquire_lock():
+            raise RuntimeError("Failed to acquire registry lock")
+
+        try:
+            if artifact_id not in self._artifacts:
+                return False
+
+            self._remove_from_index(artifact_id)
+            self._save()
+            return True
+        finally:
+            self.release_lock()
+
+    def rebuild_from_disk(self, artifacts_root: Path) -> int:
+        """
+        从磁盘重建注册表
+
+        扫描所有 manifest.yaml 文件，重建完整索引。
+        这是"救命/修复"工具，当 registry 损坏时使用。
+
+        Args:
+            artifacts_root: .artifacts/ 根目录
+
+        Returns:
+            重建的 artifact 数量
+        """
+        self.root_path = artifacts_root
+        self.registry_file = artifacts_root / ".registry.json"
+        self.lock_file = artifacts_root / ".registry.lock"
+
+        self.rebuild()
+        return len(self._artifacts)
+
     def get_by_type(self, artifact_type: str) -> List[ArtifactMetadata]:
         """获取指定类型的所有产出物"""
         ids = self._by_type.get(artifact_type, set())
