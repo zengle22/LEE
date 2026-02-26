@@ -80,6 +80,3 @@ nul
 .env
 .env.local
 
-# Spec-global generated directories
-spec-global/
-
