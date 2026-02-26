@@ -5,7 +5,7 @@
 > 状态: 设计评审通过，待实施
 >
 > **v2.1 变更说明**：
-> - 新增 project 维度目录结构：`active/{project}/{run_id}/`
+> - active/ 按部门分类组织（适应单一项目场景）
 > - 明确路径规范：`ArtifactMetadata.path` 一律用相对路径
 > - 新增 `.workflow/` 桥接模式约定
 > - 明确 `adopt()` 的两种模式（copy_mode / reference_mode）
@@ -101,50 +101,84 @@
 
 ### 3.1 完整目录结构
 
-```
 .artifacts/                              # 产出物根目录
 │
 ├── config.yaml                          # 配置文件
 │
 ├── active/                              # 活跃运行产出物
-│   ├── {project}/                       # 按项目组织（支持多项目）
-│   │   └── {run_id}/                    # 按 run_id 组织
-│   │       ├── manifest.yaml            # 【关键】run 级 manifest
-│   │   │
-│   │   ├── inputs/                      # 输入文件
-│   │   │   ├── requirements/            # 需求文档
-│   │   │   ├── contracts/               # 契约引用
-│   │   │   └── handovers/               # 接收的交接文档
-│   │   │
-│   │   ├── outputs/                     # 输出文件
-│   │   │   ├── contracts/               # 契约产出
-│   │   │   │   ├── prd/
-│   │   │   │   ├── dev/
-│   │   │   │   ├── qa/
-│   │   │   │   └── ...
-│   │   │   ├── documents/               # 文档产出
-│   │   │   │   ├── design/
-│   │   │   │   ├── review/
-│   │   │   │   └── analysis/
-│   │   │   ├── code/                    # 代码产出（主要是 patch）
-│   │   │   │   └── patches/
-│   │   │   ├── tests/                   # 测试产出
-│   │   │   │   ├── test_cases/
-│   │   │   │   ├── test_reports/
-│   │   │   │   └── coverage/
-│   │   │   └── scripts/                 # 生成的脚本
-│   │   │
-│   │   ├── intermediate/                # 中间产物
-│   │   │   ├── drafts/                  # 草稿
-│   │   │   ├── partials/                # 部分结果
-│   │   │   └── cache/                   # 临时缓存
-│   │   │
-│   │   └── handover/                    # 交接文档
-│   │       ├── to-{dept}/               # 交接给某部门
-│   │       └── from-{dept}/             # 从某部门接收
+│   │                                   # 【按部门分类组织】
 │   │
+│   ├── prd/                             # PRD 部门产出物
+│   │   ├── {run_id}/                    # 按运行 ID 组织
+│   │   │   ├── manifest.yaml            # 【单一事实源】
+│   │   │   ├── inputs/
+│   │   │   ├── outputs/
+│   │   │   │   ├── requirements/        # 需求文档
+│   │   │   │   ├── documents/          # 分析文档
+│   │   │   │   └── contracts/          # PRD 契约
+│   │   │   ├── intermediate/            # 中间产物
+│   │   │   └── handover/                # 交接文档
+│   │   │
+│   │   └── {run_id}/
+│   │
+│   ├── dev/                             # Dev 部门产出物
+│   │   ├── {run_id}/
+│   │   │   ├── manifest.yaml
+│   │   │   ├── inputs/
+│   │   │   ├── outputs/
+│   │   │   │   ├── contracts/          # API 契约、技术架构
+│   │   │   │   ├── code/               # 补丁文件
+│   │   │   │   │   └── patches/
+│   │   │   │   └── documents/          # 设计文档
+│   │   │   ├── intermediate/
+│   │   │   └── handover/
+│   │   │
+│   │   └── {run_id}/
+│   │
+│   ├── qa/                              # QA 部门产出物
+│   │   ├── {run_id}/
+│   │   │   ├── manifest.yaml
+│   │   │   ├── inputs/
+│   │   │   ├── outputs/
+│   │   │   │   ├── contracts/          # 测试计划、测试用例
+│   │   │   │   ├── tests/              # 测试报告、覆盖率
+│   │   │   │   │   ├── test_cases/
+│   │   │   │   │   ├── test_reports/
+│   │   │   │   │   └── coverage/
+│   │   │   │   └── bugs/               # Bug 报告
+│   │   │   ├── intermediate/
+│   │   │   └── handover/
+│   │   │
+│   │   └── {run_id}/
+│   │
+│   ├── ui/                              # UI 部门产出物
+│   │   ├── {run_id}/
+│   │   │   ├── manifest.yaml
+│   │   │   ├── outputs/
+│   │   │   │   ├── contracts/          # UI 契约
+│   │   │   │   ├── prototypes/         # 原型文件
+│   │   │   │   └── assets/             # 设计资源
+│   │   │   └── handover/
+│   │
+│   ├── devops/                          # DevOps 部门产出物
+│   │   ├── {run_id}/
+│   │   │   ├── manifest.yaml
+│   │   │   ├── outputs/
+│   │   │   │   ├── contracts/          # 部署配置
+│   │   │   │   ├── scripts/            # 部署脚本
+│   │   │   │   └── reports/            # 部署报告
+│   │   │   └── handover/
+│   │
+│   └── stg/                             # Strategy 部门产出物
+│       ├── {run_id}/
+│       │   ├── manifest.yaml
+│       │   ├── outputs/
+│       │   │   ├── contracts/          # 分析契约
+│       │   │   └── documents/          # 策略文档
+│       │   └── handover/
+│
 ├── frozen/                              # 冻结的产出物（不可变）
-│   ├── contracts/                       # 冻结契约
+│   ├── contracts/                       # 冻结契约（跨部门共享）
 │   │   ├── prd/
 │   │   │   └── FDPRD-{YYYY}-{NNN}.yaml
 │   │   ├── dev/
@@ -153,6 +187,8 @@
 │   │   │   └── API-{YYYY}-{NNN}.yaml    # API Contract
 │   │   ├── qa/
 │   │   │   └── FTEST-{YYYY}-{NNN}.yaml  # Frozen Test Plan
+│   │   ├── ui/
+│   │   │   └── FUIP-{YYYY}-{NNN}.yaml    # Frozen UI Prototype
 │   │   └── ...
 │   │
 │   └── baselines/                       # 基线版本
@@ -161,8 +197,11 @@
 ├── archive/                             # 归档产出物
 │   ├── by-date/                         # 按日期归档
 │   │   └── {YYYY}/{MM}/{DD}/
-│   └── by-project/                      # 按项目归档
-│       └── {project_name}/
+│   └── by-department/                   # 按部门归档
+│       ├── prd/
+│       ├── dev/
+│       ├── qa/
+│       └── ...
 │
 ├── logs/                                # 执行日志（独立存储）
 │   ├── workflows/                       # 工作流日志
@@ -181,6 +220,12 @@
     └── by-workflow/                     # 按工作流索引
 ```
 
+### 3.2 关键设计决策
+
+1. **department + run_id 作为二级组织单位**
+   - 按 `{department}/{run_id}` 组织，与 LEE 的部门分工一致
+   - 便于按部门查看、清理、统计
+   - 每个部门独立管理自己的产出物空间
 ### 3.2 关键设计决策
 
 1. **project + run_id 作为二级组织单位**
