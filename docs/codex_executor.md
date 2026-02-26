@@ -40,6 +40,23 @@ export OPENAI_API_KEY="sk-..."
 
 ## 基本使用
 
+### 通过 CLI 使用（推荐）
+
+使用 `--executor` 参数指定使用 Codex Executor 执行工作流：
+
+```bash
+# 使用 Codex Executor 执行工作流
+lee run my-workflow --executor codex
+
+# 指定项目目录
+lee run my-workflow --executor codex --project-dir /path/to/project
+
+# 指定分支
+lee run my-workflow --executor codex --branch feature/new-feature
+```
+
+**注意**：`--executor` 参数会覆盖 spec 文件中配置的 executor 类型，优先级最高。
+
 ### 通过 ExecutorFactory 创建
 
 ```python
@@ -155,6 +172,39 @@ result = await executor.execute({
 | `CODEX_BINARY` | Codex CLI 可执行文件路径 |
 | `CODEX_MODEL` | 默认模型 |
 | `OPENAI_API_KEY` | OpenAI API Key |
+
+## CLI 参数
+
+### `--executor`
+
+强制指定执行器类型，覆盖 spec 文件中的配置。
+
+**语法**：
+```bash
+lee run <workflow_key> --executor <executor_type>
+```
+
+**支持的执行器类型**：
+- `llm` - LLM Executor（默认）
+- `shell` - Shell Executor
+- `metagpt` - MetaGPT Executor
+- `claude_code` - Claude Code Executor
+- `codex` - Codex Executor
+- `langgraph` - LangGraph Executor
+
+**优先级**：
+```
+CLI --executor 参数 > spec 文件配置 > 默认执行器
+```
+
+**示例**：
+```bash
+# 覆盖 spec 中的 claude_code 配置，改用 codex
+lee run my-workflow --executor codex
+
+# 覆盖 spec 中的 llm 配置，改用 claude_code
+lee run my-workflow --executor claude_code
+```
 
 ## 与 Claude Code Executor 对比
 
