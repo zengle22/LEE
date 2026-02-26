@@ -1,0 +1,15 @@
+run_id: test-run-001
+workflow_id: test-workflow
+department: pm
+status: running
+artifacts: []
+started_at: '2026-02-26T23:56:34.360208'
+completed_at: null
+executor: claude
+executor_version: '4.6'
+parent_run_id: null
+root_run_id: null
+input_artifacts: []
+handover_to: null
+handover_artifacts: []
+properties: {}
