@@ -7,12 +7,12 @@ Handover Management
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .manager import ArtifactManager
 from .manifest import ManifestManager
 from .models import ArtifactMetadata, RunManifest
-from .types import ArtifactStatus
+from .types import ArtifactStatus, ArtifactType
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ class HandoverManager:
         self,
         project_root: Optional[Path] = None,
         artifacts_root: Optional[Path] = None,
+        manager: Optional[ArtifactManager] = None,
     ):
         """
         初始化
@@ -35,6 +36,7 @@ class HandoverManager:
         Args:
             project_root: 项目根目录
             artifacts_root: .artifacts/ 根目录
+            manager: 共享的 ArtifactManager 实例 (可选)
         """
         self.project_root = (project_root or Path.cwd()).resolve()
 
@@ -45,7 +47,11 @@ class HandoverManager:
         else:
             self.artifacts_root = self.project_root / ".artifacts"
 
-        self.manager = ArtifactManager(self.artifacts_root)
+        if manager:
+            self.manager = manager
+        else:
+            self.manager = ArtifactManager(self.artifacts_root)
+
         self.manifest_manager = ManifestManager(self.artifacts_root, self.manager.registry)
 
     def create_handover(

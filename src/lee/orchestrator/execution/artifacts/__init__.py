@@ -16,6 +16,7 @@ from .integration import (
     GateArtifactHandler,
     create_artifact_handler,
 )
+from .handover import HandoverManager
 
 __all__ = [
     "ArtifactType",
@@ -31,6 +32,7 @@ __all__ = [
     "ArtifactFileOutputHandler",
     "GateArtifactHandler",
     "create_artifact_handler",
+    "HandoverManager",
 ]
 
 __version__ = "2.1.0"
