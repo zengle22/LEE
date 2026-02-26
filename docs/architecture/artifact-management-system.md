@@ -1,8 +1,17 @@
 # LEE 产出物管理系统设计方案
 
-> 版本: v2.0 (收缩版)
+> 版本: v2.1 (第二轮修订版)
 > 创建日期: 2026-02-26
 > 状态: 设计评审通过，待实施
+>
+> **v2.1 变更说明**：
+> - 新增 project 维度目录结构：`active/{project}/{run_id}/`
+> - 明确路径规范：`ArtifactMetadata.path` 一律用相对路径
+> - 新增 `.workflow/` 桥接模式约定
+> - 明确 `adopt()` 的两种模式（copy_mode / reference_mode）
+> - 新增 Manifest vs Registry 权威源说明
+> - 清理逻辑新增"引用保护"机制
+> - ID 生成策略说明（sequence 文件 + file lock）
 
 ---
 
@@ -98,8 +107,9 @@
 ├── config.yaml                          # 配置文件
 │
 ├── active/                              # 活跃运行产出物
-│   ├── {run_id}/                        # 按 run_id 组织
-│   │   ├── manifest.yaml                # 【关键】run 级 manifest
+│   ├── {project}/                       # 按项目组织（支持多项目）
+│   │   └── {run_id}/                    # 按 run_id 组织
+│   │       ├── manifest.yaml            # 【关键】run 级 manifest
 │   │   │
 │   │   ├── inputs/                      # 输入文件
 │   │   │   ├── requirements/            # 需求文档
@@ -133,8 +143,6 @@
 │   │       ├── to-{dept}/               # 交接给某部门
 │   │       └── from-{dept}/             # 从某部门接收
 │   │
-│   └── current/                         # 当前活跃项目（符号链接）
-│
 ├── frozen/                              # 冻结的产出物（不可变）
 │   ├── contracts/                       # 冻结契约
 │   │   ├── prd/
@@ -164,6 +172,10 @@
 │
 └── registry/                            # 注册表（元数据索引）
     ├── index.json                       # 全局索引
+    ├── sequences/                       # ID 序列文件（用于 NNN 计数）
+    │   ├── frozen_prd.seq
+    │   ├── frozen_dev_package.seq
+    │   └── ...
     ├── by-type/                         # 按类型索引
     ├── by-department/                   # 按部门索引
     └── by-workflow/                     # 按工作流索引
@@ -171,9 +183,9 @@
 
 ### 3.2 关键设计决策
 
-1. **run_id 作为一级组织单位**
-   - 每个 run 都有自己的目录空间
-   - 便于整包清理、归档、追溯
+1. **project + run_id 作为二级组织单位**
+   - 按 `{project}/{run_id}` 组织，支持多项目场景
+   - 便于跨项目隔离和查找
 
 2. **manifest.yaml 作为单一事实源**
    - 记录该 run 的所有产出物信息
@@ -187,7 +199,24 @@
    - 仅作为 executor runtime 临时目录
    - 真正要留存的一律通过 ArtifactManager 挂到 `.artifacts/active` 下
 
-### 3.3 与代码仓库的关系
+### 3.3 路径规范（v2.1 新增）
+
+**重要约定**：所有路径使用相对 `.artifacts/` 的路径
+
+```python
+# ArtifactMetadata.path 规范
+path: str                    # 相对于 .artifacts/ 的路径
+                            # 示例: "active/ai-marathon-coach/RUN-20260226-abc123/outputs/..."
+                            # 示例: "frozen/contracts/prd/FDPRD-2026-001.yaml"
+
+# absolute_path 不持久化
+absolute_path: str           # 运行时动态计算，不写入配置/manifest
+                            # 用法: Path(artifacts_root) / artifact.path
+```
+
+**迁移友好性**：当 `.artifacts/` 根目录需要迁移时，只需更新配置，无需修改所有 manifest。
+
+### 3.4 与代码仓库的关系
 
 ```
 代码仓库 vs .artifacts 存储原则：
@@ -198,13 +227,52 @@
 │ source_code         │ 只存引用：repo + git SHA + file path    │
 │ test_code           │ 只存引用：repo + git SHA + file path    │
 │ config              │ 只存引用：repo + git SHA + file path    │
-│ patch               │ 存文件：.artifacts/active/{run_id}/...  │
-│ script              │ 存文件：.artifacts/active/{run_id}/...  │
+│ patch               │ 存文件：.artifacts/active/{project}/{run_id}/...  │
+│ script              │ 存文件：.artifacts/active/{project}/{run_id}/...  │
 │ contracts           │ 存文件：.artifacts/frozen/contracts/    │
-│ documents           │ 存文件：.artifacts/active/{run_id}/...  │
-│ tests               │ 存文件：.artifacts/active/{run_id}/...  │
+│ documents           │ 存文件：.artifacts/active/{project}/{run_id}/...  │
+│ tests               │ 存文件：.artifacts/active/{project}/{run_id}/...  │
 └─────────────────────┴─────────────────────────────────────────┘
 ```
+
+### 3.5 .workflow/ 桥接模式（v2.1 新增）
+
+为避免现有 executor 直接写死 `.workflow/` 路径，定义标准桥接模式：
+
+```python
+# 标准桥接流程
+
+# 1. Step 执行时：临时写入 .workflow
+# Agent/Executor 输出 → .workflow/{run_id}/{step}/... （临时）
+
+# 2. Step 结束时：FileOutputHandler 统一桥接
+def bridge_workflow_to_artifacts(run_id: str, step_name: str):
+    """
+    标准桥接：从 .workflow 迁移到 .artifacts
+
+    流程：
+    1. 从 .workflow/{run_id}/{step}/ 读取输出
+    2. 调用 ArtifactManager.create()/adopt()
+    3. 复制/转换到 .artifacts/active/{project}/{run_id}/
+    4. 更新 manifest + registry
+    """
+
+# 3. Run 完成时：可选清理 .workflow
+def cleanup_workflow_scratch(run_id: str, keep_recent: int = 3):
+    """
+    清理 .workflow 临时文件
+
+    策略：
+    - 保留最近 N 次运行用于调试
+    - 删除更早的 .workflow/{run_id}/
+    """
+```
+
+**约定**：
+- Step 输出先落 `.workflow/{run_id}/{step}/`（临时）
+- 由 `FileOutputHandler` 统一通过 `create()/adopt()` 注入 `.artifacts`
+- Run 完成后 `.workflow/{run_id}` 可按策略清理
+- **禁止**直接从 `.workflow/` 读取"半持久化"数据
 
 ---
 
@@ -297,15 +365,29 @@ class ArtifactMetadata:
     category: ArtifactCategory   # 具体分类（强类型，从配置生成）
     status: ArtifactStatus       # 状态
 
-    # === 路径信息 ===
-    path: str                    # 文件路径（相对路径，相对于 .artifacts/）
-    absolute_path: str           # 绝对路径（运行时计算）
+    # === 路径信息（v2.1 明确规范） ===
+    path: str                    # 相对于 .artifacts/ 的路径
+                                # 示例: "active/ai-marathon-coach/RUN-xxx/outputs/..."
+                                # 对于 CODE_REF 类型：可为空或虚拟 URI（如 "git://..."）
+    # absolute_path 不持久化，运行时计算
+
+    # === 外部路径（v2.1 新增） ===
+    # 用于 adopt() 的 reference_mode，记录未复制文件的原始位置
+    external_path: Optional[str] = None
+                                # 当文件未复制到 .artifacts 时，记录原始位置
+                                # 例如：".workflow/outputs/xxx.yaml"
+                                # 如果为 None，表示文件已复制到 .artifacts 内
 
     # === 对于代码引用类型 ===
     ref_type: Optional[str] = None  # "git" | "file" | None
     repo_name: Optional[str] = None
     git_commit: Optional[str] = None
     git_path: Optional[str] = None
+
+    # === adopt 模式（v2.1 新增） ===
+    adopt_mode: Optional[str] = None  # "copy" | "reference" | None
+                                    # copy: 文件已复制到 .artifacts（默认）
+                                    # reference: 只记录引用，未复制（用于代码类）
 
     # === 所属信息 ===
     run_id: str                  # 所属运行 ID（必填）
@@ -341,7 +423,44 @@ class ArtifactMetadata:
     attributes: Dict[str, Any] = field(default_factory_dict)
 ```
 
-### 4.5 RunManifest 数据模型
+### 4.5 adopt() 两种模式（v2.1 新增）
+
+```python
+# adopt() 接口模式说明
+
+async def adopt(
+    self,
+    path: str,
+    category: ArtifactCategory,
+    run_id: str,
+    mode: str = "auto",  # "auto" | "copy" | "reference"
+    metadata: dict = None,
+) -> ArtifactMetadata:
+    """
+    认领现有文件
+
+    模式说明：
+    ---------
+    1. copy_mode（默认，用于文档/测试报告/契约等）
+       - 复制文件到 .artifacts/active/{project}/{run_id}/
+       - path 指向副本
+       - external_path 记录原始位置（可选）
+       - 适用于：需要长期保留的文档、测试报告等
+
+    2. reference_mode（用于代码类/配置类）
+       - 不复制文件
+       - 只记录 git 信息或 external_path
+       - path 可为空或虚拟 URI
+       - 适用于：source_code, test_code_ref, config_ref
+
+    3. auto 模式
+       - 根据 category 的 storage 配置自动选择
+       - storage: "reference" → reference_mode
+       - storage: "copy" 或默认 → copy_mode
+    """
+```
+
+### 4.6 RunManifest 数据模型
 
 ```python
 @dataclass
@@ -403,7 +522,40 @@ class RunManifest:
         return cls.from_dict(data)
 ```
 
-### 4.6 HandoverInfo 数据模型
+### 4.7 Manifest vs Registry 权威源（v2.1 新增）
+
+**权威源原则**：当 manifest 和 registry 信息不一致时，**以 manifest 为权威**。
+
+```python
+# rebuild_index 实现原则
+async def rebuild_index(self) -> int:
+    """
+    重建索引 - 从 manifest 恢复 registry
+
+    原则：
+    1. 扫描所有 .artifacts/active/{project}/*/manifest.yaml
+    2. 扫描 .artifacts/frozen/ 中的契约文件
+    3. 以 manifest 为真，重建 registry/index.json
+    4. 重建 by-type, by-dept, by-workflow 索引
+
+    这是"救命/修复"工具，当 registry 损坏时使用。
+    """
+
+# 事务性操作原则
+# 所有产出物变更操作视为『文件 + manifest + registry』三步操作：
+# 1. 写文件（或复制/move）      # 物理文件优先
+# 2. 更新 manifest             # manifest 其次
+# 3. 更新 registry             # registry 最后（可从 manifest 重建）
+#
+# 出错时以 文件 + manifest 为权威
+```
+
+**去重原则**：
+- Manifest 存完整信息（作为 run 级单一事实源）
+- Registry 存索引信息（用于快速查找）
+- 避免大段信息重复
+
+### 4.8 HandoverInfo 数据模型
 
 ```python
 @dataclass
@@ -433,6 +585,123 @@ class HandoverInfo:
 
     created_at: datetime = field(default_factory=datetime.utcnow)
     acknowledged_at: Optional[datetime] = None
+```
+
+### 4.9 ID 生成策略（v2.1 新增）
+
+```python
+# ID 生成实现
+
+class IDGenerator:
+    """
+    ID 生成器 - 使用持久化序列文件
+
+    格式：{PREFIX}-{YYYY}-{NNN}
+    示例：FDPRD-2026-001, FPKG-2026-002
+    """
+
+    def __init__(self, registry_dir: str):
+        self.sequences_dir = Path(registry_dir) / "sequences"
+        self.sequences_dir.mkdir(parents=True, exist_ok=True)
+        self._locks = {}  # 文件锁
+
+    async def next_id(self, category: ArtifactCategory, year: int = None) -> str:
+        """
+        生成下一个 ID
+
+        实现：
+        1. 获取 category 对应的 sequence 文件（如 frozen_prd.seq）
+        2. 使用 file lock 确保并发安全
+        3. 读取当前计数，+1，写回
+        4. 返回格式化 ID
+
+        并发安全：使用 fcntl.flock() 或类似机制
+        """
+        if year is None:
+            year = datetime.utcnow().year
+
+        prefix = self._get_prefix(category)
+        seq_file = self.sequences_dir / f"{category.value}.seq"
+
+        # 文件锁保护
+        async with self._lock_file(seq_file):
+            current = self._read_sequence(seq_file, default=0)
+            next_val = current + 1
+            self._write_sequence(seq_file, next_val)
+
+        return f"{prefix}-{year}-{next_val:03d}"
+
+    # 备选方案：如果 sequence 成本太高，可改用
+    # {PREFIX}-{YYYYMMDD}-{short_uuid}
+    # 示例：FDPRD-20260226-a1b2c3
+```
+
+### 4.10 引用保护与清理（v2.1 新增）
+
+```python
+# 清理逻辑：引用保护
+
+class ArtifactCleaner:
+    """
+    产出物清理器 - 带引用保护
+    """
+
+    async def clean(
+        self,
+        before_date: datetime = None,
+        status: ArtifactStatus = None,
+        dry_run: bool = False,
+    ) -> List[str]:
+        """
+        清理过期产出物
+
+        引用保护机制：
+        1. 扫描所有 RunManifest，构建"被引用 artifact_id 集合"
+        2. 扫描所有 Handover，构建"被交接 artifact_id 集合"
+        3. 候选删除集合中，排除被引用的 ID
+        4. 只删除未被引用的产出物
+
+        防止：误删仍被其他 run 或 handover 引用的产出物
+        """
+        # 1. 构建引用集合
+        referenced_ids = await self._build_reference_set()
+
+        # 2. 获取候选删除集合
+        candidates = await self._get_cleanup_candidates(before_date, status)
+
+        # 3. 过滤被引用的
+        safe_to_delete = [a for a in candidates if a.id not in referenced_ids]
+
+        # 4. 执行清理
+        if not dry_run:
+            for artifact in safe_to_delete:
+                await self._delete_artifact(artifact)
+
+        return [a.id for a in safe_to_delete]
+
+    async def _build_reference_set(self) -> Set[str]:
+        """
+        构建被引用的 artifact_id 集合
+
+        来源：
+        - 所有 RunManifest.inputs 中的 ID
+        - 所有 RunManifest.artifacts 中的 ID
+        - 所有 Handover.artifacts 中的 ID
+        """
+        referenced = set()
+
+        # 扫描所有 manifest
+        for manifest_path in Path(".artifacts/active").rglob("manifest.yaml"):
+            manifest = RunManifest.load(manifest_path)
+            referenced.update(manifest.inputs.values())
+            referenced.update(manifest.artifacts.keys())
+
+        # 扫描所有 handover
+        for handover_path in Path(".artifacts/active").rglob("handover/*.yaml"):
+            handover = HandoverInfo.load(handover_path)
+            referenced.update(handover.artifacts)
+
+        return referenced
 ```
 
 ---
@@ -1380,6 +1649,11 @@ auto_archive:
       max_age_days: 90
       action: "archive"
 
+  # 引用保护（v2.1 新增）
+  reference_protection:
+    enabled: true
+    description: "执行删除前检查产出物是否仍被任何 RunManifest 或 Handover 引用"
+
 # === 验证配置 ===
 validation:
   enabled: true
@@ -1388,14 +1662,25 @@ validation:
   strict: false          # 验证失败是否阻止
   auto_fix: false        # 是否尝试自动修复
 
-# === ID 生成规则 ===
-id_patterns:
-  frozen_prd: "FDPRD-{YYYY}-{NNN}"
-  frozen_dev_package: "FPKG-{YYYY}-{NNN}"
-  frozen_ui_prototype: "FUIP-{YYYY}-{NNN}"
-  api_contract: "API-{YYYY}-{NNN}"
-  test_plan: "FTEST-{YYYY}-{NNN}"
-  handover: "HANDOVER-{YYYYMMDD}-{NNN}"
+# === ID 生成规则（v2.1 更新） ===
+id_generation:
+  # 格式模式
+  patterns:
+    frozen_prd: "FDPRD-{YYYY}-{NNN}"
+    frozen_dev_package: "FPKG-{YYYY}-{NNN}"
+    frozen_ui_prototype: "FUIP-{YYYY}-{NNN}"
+    api_contract: "API-{YYYY}-{NNN}"
+    test_plan: "FTEST-{YYYY}-{NNN}"
+    handover: "HANDOVER-{YYYYMMDD}-{NNN}"
+
+  # 序列文件配置（用于 {NNN} 计数）
+  sequences:
+    dir: ".artifacts/registry/sequences"
+    lock_timeout: 5  # 文件锁超时（秒）
+
+  # 备选方案（如果 sequence 成本太高）
+  fallback_format: "{PREFIX}-{YYYYMMDD}-{SHORT_UUID}"
+  # 示例：FDPRD-20260226-a1b2c3d4
 
 # === 存储配置 ===
 storage:
@@ -1645,4 +1930,5 @@ lee artifacts rebuild-index
 | 版本 | 日期 | 变更说明 |
 |------|------|----------|
 | v1.0 | 2026-02-26 | 初版设计 |
-| v2.0 | 2026-02-26 | 根据评审意见收缩，聚焦核心功能 |
+| v2.0 | 2026-02-26 | 根据第一轮评审意见收缩，聚焦核心功能 |
+| v2.1 | 2026-02-26 | 根据第二轮评审意见微调：新增 project 维度目录、路径规范、.workflow 桥接模式、adopt 两种模式、Manifest vs Registry 权威源、引用保护机制、ID 生成策略 |
