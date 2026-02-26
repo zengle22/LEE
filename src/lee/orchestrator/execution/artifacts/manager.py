@@ -16,6 +16,9 @@ from .models import ArtifactMetadata, RunManifest
 from .registry import ArtifactRegistry
 from .types import ArtifactType, ArtifactStatus, AdoptMode, ArtifactCategoryRegistry
 
+# 最大文件大小限制 (100 MB)
+MAX_ARTIFACT_SIZE_BYTES = 100 * 1024 * 1024
+
 
 class ArtifactManager:
     """
@@ -49,6 +52,48 @@ class ArtifactManager:
         """确保目录结构存在"""
         for dir_name in ["active", "frozen", "archive", "logs", "cache"]:
             (self.root_path / dir_name).mkdir(parents=True, exist_ok=True)
+
+    def _validate_path(self, path: Path) -> bool:
+        """
+        验证路径安全性，防止路径遍历攻击
+
+        Args:
+            path: 要验证的路径
+
+        Returns:
+            路径是否安全
+        """
+        # 转换为绝对路径
+        try:
+            abs_path = path.resolve()
+            # 确保路径在 artifacts_root 之内
+            abs_root = self.root_path.resolve()
+            abs_path.is_relative_to(abs_root)
+            try:
+                abs_path.relative_to(abs_root)
+                return True
+            except ValueError:
+                return False
+        except (OSError, RuntimeError):
+            return False
+
+    def _sanitize_filename(self, filename: str) -> str:
+        """
+        清理文件名，移除危险字符
+
+        Args:
+            filename: 原始文件名
+
+        Returns:
+            安全的文件名
+        """
+        # 移除路径遍历字符
+        dangerous = {"..", "~", "\x00"}
+        for part in dangerous:
+            filename = filename.replace(part, "")
+        # 只保留安全字符
+        safe_chars = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+        return "".join(c if c in safe_chars else "_" for c in filename)
 
     def _generate_id(self) -> str:
         """
@@ -132,11 +177,17 @@ class ArtifactManager:
 
         # 计算目标路径
         if department:
-            artifact_dir = self.root_path / "active" / department / run_id
+            # 清理 department 名称，防止路径遍历
+            safe_department = self._sanitize_filename(department)
+            artifact_dir = self.root_path / "active" / safe_department / run_id
         else:
             artifact_dir = self.root_path / "active" / run_id
 
         artifact_dir.mkdir(parents=True, exist_ok=True)
+
+        # 验证目标路径安全性
+        if not self._validate_path(artifact_dir):
+            raise ValueError(f"Invalid artifact path: {artifact_dir}")
 
         # 确定文件扩展名
         ext = self._get_extension_for_category(category)
@@ -148,8 +199,24 @@ class ArtifactManager:
                 content_bytes = content.encode("utf-8")
             else:
                 content_bytes = content
+            # 检查大小限制
+            if len(content_bytes) > MAX_ARTIFACT_SIZE_BYTES:
+                raise ValueError(
+                    f"Content size ({len(content_bytes)} bytes) exceeds "
+                    f"maximum allowed size ({MAX_ARTIFACT_SIZE_BYTES} bytes)"
+                )
             artifact_path.write_bytes(content_bytes)
         elif isinstance(content, Path):
+            # 验证源路径并检查大小
+            source_path = Path(content)
+            if not source_path.exists():
+                raise FileNotFoundError(f"Source file not found: {source_path}")
+            source_size = source_path.stat().st_size
+            if source_size > MAX_ARTIFACT_SIZE_BYTES:
+                raise ValueError(
+                    f"Source file size ({source_size} bytes) exceeds "
+                    f"maximum allowed size ({MAX_ARTIFACT_SIZE_BYTES} bytes)"
+                )
             shutil.copy2(content, artifact_path)
         else:
             raise TypeError(f"Unsupported content type: {type(content)}")
@@ -480,6 +547,7 @@ class ArtifactManager:
                 cwd=file_path.parent,
                 capture_output=True,
                 text=True,
+                timeout=30,  # 30 秒超时
             )
 
             if git_root.returncode != 0:
@@ -493,6 +561,7 @@ class ArtifactManager:
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
+                timeout=30,  # 30 秒超时
             )
 
             if git_sha.returncode != 0:
@@ -549,6 +618,7 @@ class ArtifactManager:
                 ["git", "show", metadata.git_sha],
                 cwd=repo_path,
                 capture_output=True,
+                timeout=60,  # 60 秒超时 (大文件可能需要更长时间)
             )
 
             if result.returncode == 0:
