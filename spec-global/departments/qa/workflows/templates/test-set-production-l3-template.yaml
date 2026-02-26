@@ -1,0 +1,210 @@
+# Test Set Production L3 Template
+# 生产 Test Set 设计资产工作流（L3）
+#
+# 职责: 将模块需求转化为 Test Set 设计资产
+#
+# 这是一个 L3 蓝本，用于从需求文档生成 Test Set
+
+kind: l3_workflow_template
+version: "1.1"
+id: template.qa.test_set_production
+name: Test Set Production L3 Template
+description: |
+  L3 template for generating Test Set design assets from requirement documents.
+
+  This template defines the 4-stage workflow for creating Test Sets:
+  - Stage 1: Requirement Analysis - Analyze requirements and extract testable features
+  - Stage 2: Test Strategy Design - Design test strategy and risk areas
+  - Stage 3: Test Set Generation - Generate standardized Test Set YAML
+  - Stage 4: Test Set Review - Review completeness and executability
+
+owner: qa-governance
+tags: [template, qa, test-set, design-asset, l3]
+
+# Standard 4-stage L3 process
+stages:
+  - id: requirement_analysis
+    name: "Requirement Analysis"
+    kind: agent
+    description: "Analyze requirement document and extract testable features"
+    agent_id: agent.qa.requirement_analyzer
+    mandatory: true
+    depends_on: []
+    gate:
+      type: human_review
+      gate_id: gate.qa.analysis_review
+    outputs:
+      - module_boundary
+      - testable_features
+      - analysis_report
+
+  - id: strategy_design
+    name: "Test Strategy Design"
+    kind: agent
+    description: "Design test strategy, focus areas, and risk areas"
+    agent_id: agent.qa.test_strategist
+    mandatory: true
+    depends_on: [requirement_analysis]
+    gate:
+      type: human_review
+      gate_id: gate.qa.strategy_review
+    outputs:
+      - test_strategy
+      - risk_areas
+      - test_focus
+      - strategy_draft
+
+  - id: test_set_generation
+    name: "Test Set Generation"
+    kind: agent
+    description: "Generate standardized Test Set YAML from strategy"
+    agent_id: agent.qa.test_set_generator
+    mandatory: true
+    depends_on: [strategy_design]
+    outputs:
+      - test_set_yaml  # Path to generated Test Set YAML
+
+  - id: test_set_review
+    name: "Test Set Review"
+    kind: agent
+    description: "Review Test Set completeness and executability"
+    agent_id: agent.qa.test_set_reviewer
+    mandatory: true
+    depends_on: [test_set_generation]
+    gate:
+      type: human_approval
+      gate_id: gate.qa.test_set_approval
+    outputs:
+      - review_result
+      - approval_status
+
+# Default execution order
+execution_order:
+  - requirement_analysis
+  - strategy_design
+  - test_set_generation
+  - test_set_review
+
+# Input parameters
+input_params:
+  module:
+    type: string
+    required: true
+    description: "Module name"
+
+  requirement_doc:
+    type: string
+    required: true
+    description: "Path to requirement document (PRD/User Story)"
+
+  tech_design:
+    type: string
+    required: false
+    description: "Path to technical design document (optional)"
+
+# Output contract
+output_contract:
+  test_set:
+    path: "qa/test-sets/ts-{module}.yaml"
+    schema: ../../contracts/test-set/v1/schema.yaml
+    description: "Generated Test Set design asset"
+
+  analysis_report:
+    path: "qa/test-sets/ts-{module}/analysis.md"
+    description: "Requirement analysis report"
+
+  strategy_draft:
+    path: "qa/test-sets/ts-{module}/strategy-draft.yaml"
+    description: "Test strategy draft"
+
+# Human gates configuration
+human_gates:
+  analysis_review:
+    type: human_review
+    timeout: 24h
+    required_approvers:
+      - role: qa_lead
+    prompt: "请审核需求分析结果，确认模块边界和可测试特性"
+
+  strategy_review:
+    type: human_review
+    timeout: 24h
+    required_approvers:
+      - role: qa_lead
+    prompt: "请审核测试策略，确认测试重点和风险区域"
+
+  test_set_approval:
+    type: human_approval
+    timeout: 48h
+    required_approvers:
+      - role: qa_lead
+      - role: pm
+    prompt: "请最终确认 Test Set，批准后将正式生效"
+
+# Instance schema
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+  context_fields:
+    - module
+    - requirement_doc
+    - tech_design
+  output_fields:
+    - test_set_path
+    - analysis_report_path
+    - strategy_draft_path
+    - review_status
+
+# State machine
+state_machine:
+  states:
+    - INIT: "初始化"
+    - REQUIREMENT_ANALYSIS: "需求分析"
+    - STRATEGY_DESIGN: "测试策略设计"
+    - TEST_SET_GENERATION: "Test Set 生成"
+    - TEST_SET_REVIEW: "Test Set 审评"
+    - COMPLETED: "完成"
+    - FAILED: "失败"
+
+  transitions:
+    INIT:
+      - to: REQUIREMENT_ANALYSIS
+        trigger: workflow_started
+
+    REQUIREMENT_ANALYSIS:
+      - to: STRATEGY_DESIGN
+        trigger: analysis_approved
+      - to: REQUIREMENT_ANALYSIS
+        trigger: analysis_rejected
+      - to: FAILED
+        trigger: doc_invalid
+
+    STRATEGY_DESIGN:
+      - to: TEST_SET_GENERATION
+        trigger: strategy_approved
+      - to: STRATEGY_DESIGN
+        trigger: strategy_rejected
+
+    TEST_SET_GENERATION:
+      - to: TEST_SET_REVIEW
+        trigger: test_set_generated
+      - to: FAILED
+        trigger: generation_failed
+
+    TEST_SET_REVIEW:
+      - to: COMPLETED
+        trigger: test_set_approved
+      - to: TEST_SET_GENERATION
+        trigger: test_set_rejected
+
+# Output structure
+output_structure: |
+  qa/
+  └── test-sets/
+      ├── ts-{module}.yaml              # Test Set 设计资产
+      └── ts-{module}/
+          ├── analysis.md               # 需求分析报告
+          └── strategy-draft.yaml       # 测试策略草稿
