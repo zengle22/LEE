@@ -11,6 +11,11 @@ from .models import ArtifactMetadata, RunManifest, ArtifactReference
 from .registry import ArtifactRegistry
 from .manifest import ManifestManager
 from .manager import ArtifactManager
+from .integration import (
+    ArtifactFileOutputHandler,
+    GateArtifactHandler,
+    create_artifact_handler,
+)
 
 __all__ = [
     "ArtifactType",
@@ -23,6 +28,9 @@ __all__ = [
     "ArtifactRegistry",
     "ManifestManager",
     "ArtifactManager",
+    "ArtifactFileOutputHandler",
+    "GateArtifactHandler",
+    "create_artifact_handler",
 ]
 
 __version__ = "2.1.0"

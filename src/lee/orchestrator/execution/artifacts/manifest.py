@@ -100,7 +100,16 @@ class ManifestManager:
 
     def save(self, manifest: RunManifest) -> None:
         """保存 manifest"""
-        manifest.save()
+        # manifest.manifest_path 返回的是 ".artifacts/active/..."
+        # root_path 是 ".artifacts" 目录
+        # 需要去掉 manifest_path 中的 ".artifacts" 前缀
+        manifest_rel_path = manifest.manifest_path
+        if manifest_rel_path.parts[0] == ".artifacts":
+            # 去掉 ".artifacts" 前缀
+            manifest_rel_path = Path(*manifest_rel_path.parts[1:])
+        target_path = self.root_path / manifest_rel_path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(manifest.to_yaml(), encoding="utf-8")
 
     def add_artifact(self, run_id: str, artifact: ArtifactMetadata, department: Optional[str] = None) -> None:
         """
@@ -232,8 +241,11 @@ class ManifestManager:
         frozen_path.parent.mkdir(parents=True, exist_ok=True)
         frozen_path.write_text(manifest.to_yaml(), encoding="utf-8")
 
-        # 删除原 manifest
-        old_manifest_path = manifest.manifest_path
+        # 删除原 manifest (去掉 ".artifacts" 前缀)
+        manifest_rel_path = manifest.manifest_path
+        if manifest_rel_path.parts[0] == ".artifacts":
+            manifest_rel_path = Path(*manifest_rel_path.parts[1:])
+        old_manifest_path = self.root_path / manifest_rel_path
         if old_manifest_path.exists():
             old_manifest_path.unlink()
 
@@ -359,13 +371,19 @@ class ManifestManager:
                 if dry_run:
                     print(f"Would cleanup run: {run.run_id}")
                 else:
-                    # 删除 manifest 文件
-                    manifest_path = run.manifest_path
+                    # 删除 manifest 文件 (去掉 ".artifacts" 前缀)
+                    manifest_rel_path = run.manifest_path
+                    if manifest_rel_path.parts[0] == ".artifacts":
+                        manifest_rel_path = Path(*manifest_rel_path.parts[1:])
+                    manifest_path = self.root_path / manifest_rel_path
                     if manifest_path.exists():
                         manifest_path.unlink()
 
-                    # 删除产出物目录
-                    artifacts_dir = run.artifacts_dir
+                    # 删除产出物目录 (去掉 ".artifacts" 前缀)
+                    artifacts_rel_path = run.artifacts_dir
+                    if artifacts_rel_path.parts[0] == ".artifacts":
+                        artifacts_rel_path = Path(*artifacts_rel_path.parts[1:])
+                    artifacts_dir = self.root_path / artifacts_rel_path
                     if artifacts_dir.exists():
                         import shutil
                         shutil.rmtree(artifacts_dir)
