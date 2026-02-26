@@ -53,6 +53,8 @@ class ArtifactRegistry:
     def acquire_lock(self) -> bool:
         """获取文件锁"""
         try:
+            # 确保父目录存在
+            self.lock_file.parent.mkdir(parents=True, exist_ok=True)
             self.lock_fd = open(self.lock_file, "w")
             fcntl.flock(self.lock_fd.fileno(), fcntl.LOCK_EX)
             return True

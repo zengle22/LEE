@@ -59,8 +59,9 @@ class ArtifactManager:
         Returns:
             格式为 ART-xxxxx 的 ID
         """
-        # 获取文件锁
+        # 获取文件锁 (确保父目录存在)
         lock_file = self.sequence_file.with_suffix(".lock")
+        lock_file.parent.mkdir(parents=True, exist_ok=True)
         lock_fd = open(lock_file, "w")
 
         try:
