@@ -5,15 +5,70 @@
 """
 
 import yaml
-from jinja2 import Environment, BaseLoader
+from datetime import datetime
+import random
+import string
+from jinja2 import Environment, BaseLoader, Undefined
 from typing import Dict, Any, List
+
+
+class SilentUndefined(Undefined):
+    """静默未定义变量 - 访问未定义变量时返回空字符串而不是报错"""
+    def __getitem__(self, item):
+        return ""
+    def __getattr__(self, item):
+        return ""
+
+
+def _date_filter(value, format_string):
+    """日期格式化过滤器"""
+    if isinstance(value, str):
+        # 尝试解析字符串
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    if isinstance(value, datetime):
+        return value.strftime(format_string)
+    return value
+
+
+def _now():
+    """获取当前时间"""
+    return datetime.now()
+
+
+def _random_suffix(length=4):
+    """生成随机后缀"""
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
+
+def _slugify(value):
+    """将字符串转换为 slug 格式（用于文件名）"""
+    if not isinstance(value, str):
+        value = str(value)
+    # 替换空格和特殊字符为下划线
+    import re
+    # 替换非字母数字为下划线
+    slug = re.sub(r'[^a-zA-Z0-9\-_\.]', '_', value)
+    # 多个连续下划线合并为一个
+    slug = re.sub(r'_+', '_', slug)
+    # 移除首尾下划线
+    slug = slug.strip('_')
+    return slug
 
 
 class TemplateEngine:
     """模板引擎"""
 
     def __init__(self):
-        self.jinja_env = Environment(loader=BaseLoader())
+        self.jinja_env = Environment(loader=BaseLoader(), undefined=SilentUndefined)
+        # 添加自定义过滤器
+        self.jinja_env.filters['date'] = _date_filter
+        self.jinja_env.filters['slugify'] = _slugify
+        # 添加自定义全局函数
+        self.jinja_env.globals['now'] = _now
+        self.jinja_env.globals['random_suffix'] = _random_suffix
 
     def render_string(
         self,

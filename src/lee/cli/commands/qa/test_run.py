@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import random
+import string
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import click
 import yaml
@@ -13,13 +15,26 @@ from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
 
 
-REGISTRY_PATH = Path("config/workflow-registry.yaml")
+def _get_registry_path(project_dir: str = ".") -> Path:
+    """获取 workflow registry 路径"""
+    # 首先在 project_dir 中查找
+    project_path = Path(project_dir).resolve()
+    registry_path = project_path / "config" / "workflow-registry.yaml"
+    if registry_path.exists():
+        return registry_path
+
+    # 回退到 LEE 框架的配置
+    lee_root = Path(__file__).parent.parent.parent.parent.parent.parent
+    registry_path = lee_root / "config" / "workflow-registry.yaml"
+    if registry_path.exists():
+        return registry_path
+
+    raise FileNotFoundError(f"Workflow registry not found in {project_dir} or {lee_root}")
 
 
-def _load_registry() -> Dict[str, Any]:
-    if not REGISTRY_PATH.exists():
-        raise FileNotFoundError(f"Workflow registry not found: {REGISTRY_PATH}")
-    with open(REGISTRY_PATH, encoding="utf-8") as f:
+def _load_registry(project_dir: str = ".") -> Dict[str, Any]:
+    registry_path = _get_registry_path(project_dir)
+    with open(registry_path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
@@ -27,11 +42,28 @@ def _render_workflow_template(template_path: Path, params: Dict[str, Any], proje
     with open(template_path, encoding="utf-8") as f:
         content = f.read()
 
-    engine = TemplateEngine()
-    rendered = engine.render_string(content, {"params": params})
-    yaml.safe_load(rendered)
+    # 生成运行时变量
+    runtime = {
+        "test_run_id": f"TR-{datetime.now().strftime('%Y-%m-%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}",
+    }
 
+    engine = TemplateEngine()
+    # SilentUndefined 会处理未定义的变量，返回空字符串
+    rendered = engine.render_string(content, {
+        "params": params,
+        "runtime": runtime,
+        "current_test_set": {"test_set_id": ""},
+    })
+
+    # 先保存渲染结果，用于调试
     out_dir = project_dir / ".workflow" / "rendered"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    out_path = out_dir / f"{template_path.stem}-{stamp}.yaml"
+    out_path.write_text(rendered, encoding="utf-8")
+
+    # 然后验证 YAML
+    yaml.safe_load(rendered)
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d%H%M%S")
     out_path = out_dir / f"{template_path.stem}-{stamp}.yaml"
@@ -47,8 +79,8 @@ def test_run():
 
 @test_run.command("start")
 @click.argument("test_plan_id")
-@click.option("--build", required=True, help="构建版本")
-@click.option("--commit", required=True, help="构建 commit")
+@click.option("--build", default=None, help="构建版本（可选，用于记录）")
+@click.option("--commit", default=None, help="构建 commit（可选，用于记录）")
 @click.option("--env", default="test", help="测试环境")
 @click.option("--project-dir", default=".", help="项目目录")
 @click.option("--max-steps", default=50, show_default=True, help="最大执行步数")
@@ -61,7 +93,7 @@ def start(test_plan_id: str, build: str, commit: str, env: str,
 def _start_test_run(test_plan_id: str, build: str, commit: str, env: str,
                     project_dir: str, max_steps: int) -> None:
     """启动 Test Run 的实际实现"""
-    registry = _load_registry()
+    registry = _load_registry(project_dir)
     workflows = registry.get("workflows", {})
     workflow_key = "qa.test-plan-execution"
 
@@ -71,14 +103,15 @@ def _start_test_run(test_plan_id: str, build: str, commit: str, env: str,
     entry = workflows[workflow_key]
     template_path = Path(entry.get("path", ""))
     if not template_path.is_absolute():
-        template_path = (REGISTRY_PATH.parent.parent / template_path).resolve()
+        registry_path = _get_registry_path(project_dir)
+        template_path = (registry_path.parent.parent / template_path).resolve()
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
     params: Dict[str, Any] = {
         "test_plan_id": test_plan_id,
-        "build_version": build,
-        "build_commit": commit,
+        "build_version": build or "",
+        "build_commit": commit or "",
         "environment": env,
     }
 
@@ -103,12 +136,16 @@ def _start_test_run(test_plan_id: str, build: str, commit: str, env: str,
         raise click.ClickException(create_result["error"])
 
     workflow_id = create_result.get("workflow_id")
-    test_run_id = f"TR-{datetime.now().strftime('%Y-%m-%d')}-{commit[:7]}"
+    commit_short = commit[:7] if commit else "N/A"
+    test_run_id = f"TR-{datetime.now().strftime('%Y-%m-%d')}-{commit_short}"
 
     click.echo(f"✓ 已创建 Test Run: {test_run_id}")
     click.echo(f"  Workflow ID: {workflow_id}")
     click.echo(f"  Test Plan: {test_plan_id}")
-    click.echo(f"  Build: {build} ({commit[:7]})")
+    if build:
+        click.echo(f"  Build: {build} ({commit_short})")
+    else:
+        click.echo(f"  Build: (未指定)")
     click.echo(f"  Environment: {env}")
 
     summary = pm_workflow(
