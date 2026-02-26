@@ -265,7 +265,6 @@ retry:
 
         return {
             "kind": "workflow-instance",
-            "version": "1.0",
             "id": wf_id,
             "name": template.get("name", "Workflow"),
             "template_ref": template.get("id", ""),

@@ -40,6 +40,7 @@ class WorkflowRunConfig:
     plan_mode: str = "suggest"  # simple/suggest/force
     skip_plan: bool = False
     instance_id: Optional[str] = None  # 指定从 Instance 运行
+    auto_approve: bool = False  # 自动批准（测试用，生产环境应为 False）
 
 
 @dataclass
@@ -115,7 +116,7 @@ class WorkflowRunner:
         needs_review = plan_result.instance.get("plan", {}).get("needs_review", False)
 
         # 检查是否需要审批
-        gate = ReviewGate(auto_approve=True)  # TODO: 从配置读取
+        gate = ReviewGate(auto_approve=self.config.auto_approve)
         decision = await gate.check(plan_result, plan_mode)
 
         if not decision.approved:
