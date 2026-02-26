@@ -1,8 +1,13 @@
-# Workspace Cleanup Workflow v1.0
+# Workspace Cleanup Workflow v1.1
 # 工作区整理工作流
+#
+# v1.1 变更: 支持 Workflow Instance
+#   - 新增 planning 配置节，支持 Plan → Instance → Execute 流程
+#   - 添加 Review Gate 配置 (simple/suggest/force)
+#   - 添加成功/失败标准和重试配置
 
 kind: workflow
-version: 1.0
+version: 1.1
 
 # ============================================
 # 基础标识
@@ -37,6 +42,40 @@ roles:
     - skill.office.submodule_committer      # 程序：子模块提交 (新增)
   gates:
     - gate.office.commit_approval           # 人类：批准提交
+
+# ============================================
+# Plan 配置 (v1.1 新增 - Workflow Instance 支持)
+# ============================================
+planning:
+  mode: suggest  # simple/suggest/force - Plan 模式
+  skip_conditions:
+    - "steps.length <= 3"  # 少于等于3步自动跳过 Plan
+  review_criteria:
+    - "complexity == high"  # 高复杂度需要 Review
+    - "gate_count > 0"      # 有 Human Gate 需要 Review
+
+  # 成功标准
+  success_criteria:
+    simple:
+      - "all_stages_completed"  # 所有 Stage 完成
+      - "gitignore_updated"     # .gitignore 已更新
+    expressions:
+      - "cleanup_summary_generated == true"
+
+  # 失败标准
+  failure_criteria:
+    simple:
+      - "any_stage_failed"  # 任意 Stage 失败
+    expressions:
+      - "file_analysis_failed == true"
+
+  # 重试配置
+  retry:
+    enabled: true
+    max_attempts: 3
+    strategy: exponential
+    base_delay: 10
+    side_effects_analysis: true  # 触发重试时分析副作用
 
 # ============================================
 # 参数定义
