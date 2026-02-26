@@ -1,1 +1,85 @@
-.archive/
+# .gitignore for LEE framework
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+.Python
+.venv/
+venv/
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# LEE runtime
+.lee/
+.workflow/
+evidence/
+
+# Claude Code
+.claude/
+.mcp/
+
+# Demo and examples
+demo_*.db
+examples/*/*.db
+examples/*/__pycache__/
+examples/*/*/__pycache__/
+examples/*/*/*/__pycache__/
+demo_l3_orchestration/output/
+
+# Generated files
+contracts/
+nul
+
+# Backup files
+*.backup
+*_backup/
+.gitignore.gitignore.backup
+.workflow/.secret
+.workflow/gates.backup/
+.workflow/state.yaml.backup
+
+# Workflow artifacts
+.workflow/tokens/
+.workflow/traces/
+.workflow/workspace-cleanup/
+.workflow/claude-code/
+
+# Environment
+.env
+.env.local
+
+# Spec-global generated directories
+spec-global/
+
