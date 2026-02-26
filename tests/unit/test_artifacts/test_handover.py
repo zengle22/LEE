@@ -2,11 +2,9 @@
 HandoverManager Tests
 """
 
-import os
 import tempfile
 import shutil
 from pathlib import Path
-from datetime import datetime
 import pytest
 
 from lee.orchestrator.execution.artifacts import (
@@ -79,39 +77,6 @@ def handover_manager(sample_artifacts, temp_artifacts_dir):
         artifacts_root=temp_artifacts_dir,
         manager=sample_artifacts["manager"],
     )
-
-    run_id = "TEST-RUN-001"
-    department = "engineering"
-
-    manifest = manifest_manager.create(
-        run_id=run_id,
-        workflow_id="test-workflow",
-        department=department,
-    )
-
-    # Create sample artifacts (use valid categories for DOCUMENT type)
-    valid_categories = ["readme", "usage_guide", "investigation_report"]
-    for i in range(3):
-        artifact = manager.create(
-            artifact_type=ArtifactType.DOCUMENT,
-            category=valid_categories[i],
-            content=f"Test content {i}",
-            run_id=run_id,
-            title=f"Test Artifact {i}",
-            description=f"Test artifact description {i}",
-            department=department,
-            tags=["test"],
-        )
-        artifacts.append(artifact)
-        manifest_manager.add_artifact(run_id, artifact, department)
-
-    return {
-        "artifacts": artifacts,
-        "run_id": run_id,
-        "department": department,
-        "manager": manager,
-        "manifest_manager": manifest_manager,
-    }
 
 
 class TestHandoverManager:

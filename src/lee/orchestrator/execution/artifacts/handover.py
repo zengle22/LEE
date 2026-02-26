@@ -5,6 +5,7 @@ Handover Management
 """
 
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -12,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from .manager import ArtifactManager
 from .manifest import ManifestManager
 from .models import ArtifactMetadata, RunManifest
-from .types import ArtifactStatus, ArtifactType
+from .types import ArtifactType
 
 logger = logging.getLogger(__name__)
 
@@ -349,7 +350,6 @@ class HandoverManager:
             return []
 
         # 简单解析：查找 **ART-XXXXX** 模式
-        import re
         pattern = r"\*\*ART-(\d+)\*\*"
         matches = re.findall(pattern, content)
         return [f"ART-{m}" for m in matches]
