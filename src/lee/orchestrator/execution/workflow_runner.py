@@ -10,11 +10,14 @@ Workflow Runner - Plan → Instance → Execute 流程控制器
 """
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 from lee.orchestrator.core.template_engine import TemplateEngine
 from lee.orchestrator.core.template_resolver import TemplateResolver
@@ -83,6 +86,7 @@ class WorkflowRunner:
             else:
                 return await self._run_with_plan()
         except Exception as e:
+            logger.error(f"Workflow run failed: {e}", exc_info=True)
             return WorkflowRunResult(
                 workflow_id="",
                 instance_path=None,

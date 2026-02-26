@@ -5,11 +5,14 @@ Instance Loader Mixin - 支持从 Instance 文件加载执行
 使 Orchestrator 可以从 Plan 生成的 Instance 执行。
 """
 
+import logging
 import yaml
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from lee.orchestrator.execution.template_manager import Step
+
+logger = logging.getLogger(__name__)
 
 
 class InstanceLoaderMixin:
@@ -38,14 +41,12 @@ class InstanceLoaderMixin:
         # 检查路径中是否包含 instances
         if "instances" in str(path):
             return True
-        # 检查文件名是否是 wf_*-v*.yaml 格式
+        # 检查文件名是否是 wf_*-v*.yaml 格式（严格的版本号验证）
         name = path.stem
         if "-v" in name:
-            try:
-                version = int(name.split("-v")[-1])
+            parts = name.split("-v")
+            if len(parts) == 2 and parts[1].isdigit():
                 return True
-            except ValueError:
-                pass
         return False
 
     def _load_instance_file(self, template_id: str) -> Optional[Dict[str, Any]]:
@@ -65,7 +66,8 @@ class InstanceLoaderMixin:
         try:
             with open(path, encoding="utf-8") as f:
                 return yaml.safe_load(f)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to load instance file {template_id}: {e}")
             return None
 
     def _get_steps_from_instance(

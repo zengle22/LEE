@@ -28,9 +28,13 @@ class PlanResult:
 @dataclass
 class PlanConfig:
     """Plan 配置"""
-    mode: str = "suggest"  # simple/suggest/force
+    mode: str = "suggest"  # simple/suggest/force (使用 ReviewMode 枚举)
     skip_conditions: List[str] = field(default_factory=list)
     review_criteria: List[str] = field(default_factory=list)
+
+    def get_mode(self) -> str:
+        """获取模式字符串"""
+        return self.mode
 
 
 class PlanAgent:
