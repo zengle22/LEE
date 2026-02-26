@@ -9,7 +9,8 @@ Artifact Integration
 3. Run 完成处理: 自动归档 manifest
 """
 
-import os
+import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +18,8 @@ from .manager import ArtifactManager
 from .manifest import ManifestManager
 from .models import ArtifactMetadata
 from .types import ArtifactType, ArtifactCategoryRegistry
+
+logger = logging.getLogger(__name__)
 
 
 class ArtifactFileOutputHandler:
@@ -78,53 +81,31 @@ class ArtifactFileOutputHandler:
             )
 
     def _infer_artifact_type(self, file_path: str, content: str) -> ArtifactType:
-        """从文件路径和内容推断产出物类型"""
-        # 契约类文件
-        contract_patterns = [
-            "contract", "spec", "schema", "prd", "requirement",
-            "api", "openapi", "swagger",
-        ]
-        # 测试类文件
-        test_patterns = [
-            "test", "spec", "coverage",
-        ]
-        # 文档类文件
-        doc_patterns = [
-            "readme", "doc", "guide", "manual", "tutorial",
-            "investigation", "report", "handover",
-        ]
-        # 补丁类文件
-        patch_patterns = [
-            ".patch", ".diff",
-        ]
-        # 日志类文件
-        log_patterns = [
-            ".log", "log",
-        ]
+        """
+        从文件路径和内容推断产出物类型
 
+        优先级检查顺序: PATCH > LOG > CONTRACT > TEST > DOCUMENT
+        """
         path_lower = file_path.lower()
 
-        for pattern in patch_patterns:
-            if pattern in path_lower:
-                return ArtifactType.PATCH
+        # 补丁类文件 (最高优先级，因为有明确扩展名)
+        if ".patch" in path_lower or ".diff" in path_lower:
+            return ArtifactType.PATCH
 
-        for pattern in log_patterns:
-            if pattern in path_lower:
-                return ArtifactType.LOG
+        # 日志类文件
+        if ".log" in path_lower or "/log/" in path_lower:
+            return ArtifactType.LOG
 
-        for pattern in contract_patterns:
-            if pattern in path_lower:
-                return ArtifactType.CONTRACT
+        # 契约类文件
+        contract_keywords = ["contract", "prd", "requirement", "api", "openapi", "swagger"]
+        if any(kw in path_lower for kw in contract_keywords):
+            return ArtifactType.CONTRACT
 
-        for pattern in test_patterns:
-            if pattern in path_lower:
-                return ArtifactType.TEST
+        # 测试类文件 (排除 test_plan 这种契约类)
+        if "test" in path_lower and "test_plan" not in path_lower:
+            return ArtifactType.TEST
 
-        for pattern in doc_patterns:
-            if pattern in path_lower:
-                return ArtifactType.DOCUMENT
-
-        # 默认为文档
+        # 文档类文件 (默认)
         return ArtifactType.DOCUMENT
 
     def _infer_category(self, artifact_type: ArtifactType, file_path: str) -> str:
@@ -239,13 +220,19 @@ class ArtifactFileOutputHandler:
         if not ArtifactCategoryRegistry.is_valid_category(artifact_type.value, category):
             category = list(ArtifactCategoryRegistry.get_categories(artifact_type.value))[0]
 
+        # 获取文件名用于标题
+        if isinstance(rel_path, Path):
+            filename = rel_path.name
+        else:
+            filename = Path(rel_path).name
+
         # 创建产出物
         metadata = self.manager.create(
             artifact_type=artifact_type,
             category=category,
             content=content,
             run_id=self.run_id,
-            title=title or rel_path.name,
+            title=title or filename,
             description=description,
             department=self.department,
             workflow_id=self.workflow_id,
@@ -363,7 +350,7 @@ class GateArtifactHandler:
                     frozen.append(frozen_artifact)
                 except Exception as e:
                     # 记录错误但继续处理其他产出物
-                    print(f"Warning: Failed to freeze {artifact.id}: {e}")
+                    logger.warning(f"Failed to freeze {artifact.id}: {e}")
 
         return frozen
 
@@ -394,7 +381,6 @@ class GateArtifactHandler:
             if not manifest.properties:
                 manifest.properties = {}
             manifest.properties["approved_gates"] = manifest.properties.get("approved_gates", [])
-            from datetime import datetime
             manifest.properties["approved_gates"].append({
                 "gate_id": gate_id,
                 "timestamp": datetime.now().isoformat(),
