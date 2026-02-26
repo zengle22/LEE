@@ -29,12 +29,6 @@ workflows:
       - severity
       - assignee
 
-  qa.regression:
-    path: spec-global/departments/qa/workflows/regression/v1/workflow.yaml
-    description: "回归测试工作流"
-    required_params:
-      - spec
-
   devops.deploy:
     path: spec-global/departments/devops/workflows/deploy/v1/workflow.yaml
     description: "部署工作流"
