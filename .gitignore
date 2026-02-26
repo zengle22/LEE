@@ -64,6 +64,7 @@ nul
 
 # Backup files
 *.backup
+*.bak
 *_backup/
 .gitignore.gitignore.backup
 .workflow/.secret
