@@ -16,14 +16,18 @@ workflows:
       - repo_backend
 
   dev.bugfix:
-    path: spec-global/departments/dev/workflows/templates/bug-fix-l2-template.yaml
-    kind: l2_workflow_template
-    description: "Bug 修复工作流 (L2)"
+    path: spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml
+    kind: l3_workflow_template
+    description: "Bug 修复工作流 (L3) - 单个 Bug 的完整修复流程"
     required_params:
       - bug_id
+      - bug_description
       - project
-    optional_params:
       - repo
+    optional_params:
+      - reproduction_steps
+      - severity
+      - assignee
 
   qa.regression:
     path: spec-global/departments/qa/workflows/regression/v1/workflow.yaml

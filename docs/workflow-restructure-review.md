@@ -19,6 +19,8 @@
 | `c138307` | refactor(qa): restructure workflows to template-only model | QA 删除实例，保留模板 |
 | `291a5d0` | refactor(dev): restructure workflows to template-only model | Dev 删除实例，新建模板 |
 | `451f074` | feat(qa): add test-set-production L3 template and update registry | 恢复 test-set-production，更新注册表 |
+| `8322107` | docs(qa): add workflow restructuring review report | 添加评审报告 |
+| **(pending)** | fix(dev): downgrade bug-fix from L2 to L3 | Bug Fix 降级为 L3 |
 
 ### 2.2 文件变更统计
 
@@ -47,7 +49,7 @@
 | 文件 | 类型 | 用途 |
 |------|------|------|
 | `feature-l2-template.yaml` | L2 | Feature 开发 (4 phases) |
-| `bug-fix-l2-template.yaml` | L2 | Bug 修复 (4 phases) |
+| `bug-fix-l3-template.yaml` | L3 | Bug 修复 (5 steps) |
 | `feature-contract-l3-template.yaml` | L3 | API 协议设计 (3 stages) |
 | `feature-fe-l3-template.yaml` | L3 | 前端实现 (4 stages) |
 | `feature-be-l3-template.yaml` | L3 | 后端实现 (4 stages) |
@@ -69,7 +71,7 @@ QA:
 
 Dev:
   feature-l2-template.yaml:            kind: l2_workflow_template ✅
-  bug-fix-l2-template.yaml:            kind: l2_workflow_template ✅
+  bug-fix-l3-template.yaml:            kind: l3_workflow_template ✅
   feature-contract-l3-template.yaml:   kind: l3_workflow_template ✅
   feature-fe-l3-template.yaml:         kind: l3_workflow_template ✅
   feature-be-l3-template.yaml:         kind: l3_workflow_template ✅
@@ -130,9 +132,9 @@ workflows:
     description: "特性开发工作流 (L2)"
 
   dev.bugfix:
-    path: spec-global/departments/dev/workflows/templates/bug-fix-l2-template.yaml
-    kind: l2_workflow_template
-    description: "Bug 修复工作流 (L2)"
+    path: spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml
+    kind: l3_workflow_template
+    description: "Bug 修复工作流 (L3) - 单个 Bug 的完整修复流程"
 
   # ... (L3 templates 通过 L2 调用)
 ```
@@ -254,9 +256,9 @@ lee run spec-global/departments/qa/workflows/templates/test-set-production-l3-te
 lee run spec-global/departments/dev/workflows/templates/feature-l2-template.yaml \
   --project running_master --module timing --feature-point-id F1
 
-# L2: Bug 修复
-lee run spec-global/departments/dev/workflows/templates/bug-fix-l2-template.yaml \
-  --bug-id BUG-1234
+# L3: Bug 修复 (单个 Bug)
+lee run spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml \
+  --bug-id BUG-1234 --bug-description "..." --project running_master --repo backend
 ```
 
 ---
@@ -273,3 +275,93 @@ lee run spec-global/departments/dev/workflows/templates/bug-fix-l2-template.yaml
 - Workflow Registry 已更新
 
 **下一步**: 合并到 main 分支并 push。
+
+---
+
+## 十一、Bug Fix L2/L3 降级说明
+
+### 11.1 问题分析
+
+原始 `bug-fix-l2-template.yaml` 被错误地设计为 L2 工作流，但实际上：
+- **单个 Bug 修复**是任务级操作，应该是 L3
+- **批量 Bug 修复 + 发版提测**才是部门级操作，应该是 L2
+
+### 11.2 L2 vs L3 区别
+
+| 维度 | L2 (部门级) | L3 (任务级) |
+|------|------------|------------|
+| 范围 | 批量任务编排 | 单个任务执行 |
+| Bug Fix | 批量修复 + 发版 | 单个 Bug 修复 |
+| Test Set | 批量 Test Set 执行 | 单个 Test Set 执行 |
+| 输出 | 部门级报告 | 任务级产物 |
+
+### 11.3 Bug Fix 降级变更
+
+**变更前 (L2)**:
+```yaml
+kind: l2_workflow_template
+phases:
+  - root_cause_analysis    # Direct
+  - fix_implementation     # Spawns L3
+  - verification           # Spawns L3
+  - merge_review           # Direct
+```
+
+**变更后 (L3)**:
+```yaml
+kind: l3_workflow_template
+steps:
+  - root_cause_analysis    # Agent step
+  - fix_implementation     # Agent step
+  - verification           # Agent step
+  - code_review            # Agent step
+  - merge_decision         # Agent step
+```
+
+### 11.4 输入/输出契约
+
+**输入契约**:
+```yaml
+required_fields:
+  - bug_id: string          # Bug 标识
+  - bug_description: string # Bug 描述
+  - project: string         # 项目名称
+  - repo: string            # 仓库名称
+
+optional_fields:
+  - reproduction_steps: string
+  - severity: string
+  - assignee: string
+```
+
+**输出契约**:
+```yaml
+artifacts:
+  - root_cause_report: dev/bug-fixes/{bug_id}/root-cause.md
+  - fix_diff: dev/bug-fixes/{bug_id}/fix.patch
+  - test_results: dev/bug-fixes/{bug_id}/test-results.yaml
+  - review_report: dev/bug-fixes/{bug_id}/review.md
+  - merge_report: dev/bug-fixes/{bug_id}/merge.md
+```
+
+### 11.5 未来扩展：批量 Bug Fix L2
+
+如果未来需要批量 Bug Fix L2 工作流，可以创建：
+
+```yaml
+kind: l2_workflow_template
+id: template.dev.batch_bug_fix
+phases:
+  - id: bug_deduplication
+    description: "去重和分类 Bug"
+
+  - id: batch_fix_execution
+    spawns_l3: true
+    l3_template_id: template.dev.bug_fix  # 调用单个 Bug Fix L3
+
+  - id: release_testing
+    description: "发版回归测试"
+
+  - id: release_decision
+    description: "发版决策"
+```
