@@ -52,6 +52,7 @@ from lee.orchestrator.execution.llm_executor import LLMExecutor as RealLLMExecut
 from lee.orchestrator.execution.mock_executor import MockLLMExecutor
 from lee.orchestrator.execution.metagpt_executor import MetaGPTExecutor as RealMetaGPTExecutor
 from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor
+from lee.orchestrator.execution.codex_executor import CodexExecutor
 
 
 class LLMExecutor(BaseExecutor):
@@ -180,6 +181,7 @@ class ExecutorFactory:
         "shell": ShellExecutor,
         "metagpt": MetaGPTExecutor,
         "claude_code": ClaudeCodeExecutor,
+        "codex": CodexExecutor,
     }
 
     @classmethod
