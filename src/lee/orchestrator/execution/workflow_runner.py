@@ -1,0 +1,277 @@
+"""
+Workflow Runner - Plan → Instance → Execute 流程控制器
+
+负责：
+1. 加载和渲染模板
+2. 调用 Plan Agent 生成 Plan
+3. 处理 Review Gate
+4. 生成 Instance 文件
+5. 触发 Orchestrator 执行
+"""
+
+import asyncio
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import yaml
+
+from lee.orchestrator.core.template_engine import TemplateEngine
+from lee.orchestrator.core.template_resolver import TemplateResolver
+from lee.orchestrator.core.instance_generator import InstanceGenerator
+from lee.orchestrator.execution.plan_agent import PlanAgent, PlanConfig, create_plan
+from lee.orchestrator.execution.llm_executor import LLMExecutor
+from lee.orchestrator.execution.review_gate import ReviewGate, check_review_gate
+
+
+def _get_pm_workflow():
+    """Lazy import to avoid circular import"""
+    from lee.orchestrator.api import pm_workflow
+    return pm_workflow
+
+
+@dataclass
+class WorkflowRunConfig:
+    """工作流运行配置"""
+    workflow_key: str
+    template_path: Path
+    params: Dict[str, Any]
+    project_root: Path
+    plan_mode: str = "suggest"  # simple/suggest/force
+    skip_plan: bool = False
+    instance_id: Optional[str] = None  # 指定从 Instance 运行
+
+
+@dataclass
+class WorkflowRunResult:
+    """工作流运行结果"""
+    workflow_id: str
+    instance_path: Optional[Path]
+    plan_summary: Optional[str]
+    success: bool
+    error: Optional[str] = None
+
+
+class WorkflowRunner:
+    """
+    Workflow Runner - 统一执行入口
+
+    支持两种模式：
+    1. Plan 模式：Template → Plan → Instance → Execute
+    2. Instance 模式：直接加载 Instance 执行
+    """
+
+    def __init__(self, config: WorkflowRunConfig):
+        self.config = config
+        self.plan_agent: Optional[PlanAgent] = None
+        self.instance_generator: Optional[InstanceGenerator] = None
+
+    async def run(self) -> WorkflowRunResult:
+        """
+        执行工作流
+
+        Returns:
+            WorkflowRunResult
+        """
+        try:
+            # 1. 确定执行模式
+            if self.config.instance_id:
+                return await self._run_from_instance()
+            elif self.config.skip_plan:
+                return await self._run_direct()
+            else:
+                return await self._run_with_plan()
+        except Exception as e:
+            return WorkflowRunResult(
+                workflow_id="",
+                instance_path=None,
+                plan_summary=None,
+                success=False,
+                error=str(e)
+            )
+
+    async def _run_with_plan(self) -> WorkflowRunResult:
+        """使用 Plan 模式执行"""
+        # 1. 加载和渲染模板
+        template = await self._load_template()
+
+        # 2. 调用 Plan Agent
+        plan_config = PlanConfig(
+            mode=self.config.plan_mode,
+            skip_conditions=["steps.length <= 3"],
+            review_criteria=["complexity == high", "gate_count > 0"]
+        )
+
+        llm = LLMExecutor()
+        plan_result = await create_plan(
+            template=template,
+            params=self.config.params,
+            llm_executor=llm,
+            config=plan_config
+        )
+
+        # 3. 检查 Review Gate
+        plan_mode = plan_result.instance.get("plan", {}).get("mode", "simple")
+        needs_review = plan_result.instance.get("plan", {}).get("needs_review", False)
+
+        # 检查是否需要审批
+        gate = ReviewGate(auto_approve=True)  # TODO: 从配置读取
+        decision = await gate.check(plan_result, plan_mode)
+
+        if not decision.approved:
+            # 需要人类审批
+            user_decision = await gate.request_approval(
+                plan_result.summary,
+                self.config.workflow_key
+            )
+            if not user_decision.approved:
+                return WorkflowRunResult(
+                    workflow_id="",
+                    instance_path=None,
+                    plan_summary=plan_result.summary,
+                    success=False,
+                    error=f"Plan rejected: {user_decision.reason}"
+                )
+
+        # 4. 生成 Instance
+        self.instance_generator = InstanceGenerator(self.config.project_root)
+        instance_meta = self.instance_generator.generate(
+            plan_result=plan_result,
+            phase_id=self.config.params.get("phase_id", ""),
+            tier="l2"
+        )
+
+        # 5. 创建工作流实例
+        workflow_id = await self._create_workflow(instance_meta.instance_path)
+
+        return WorkflowRunResult(
+            workflow_id=workflow_id,
+            instance_path=instance_meta.instance_path,
+            plan_summary=plan_result.summary,
+            success=True
+        )
+
+    async def _run_from_instance(self) -> WorkflowRunResult:
+        """从 Instance 文件执行"""
+        self.instance_generator = InstanceGenerator(self.config.project_root)
+
+        # 加载 Instance
+        instance = self.instance_generator.load_latest(
+            workflow_id=self.config.instance_id,
+            tier="l2"
+        )
+
+        if not instance:
+            return WorkflowRunResult(
+                workflow_id="",
+                instance_path=None,
+                plan_summary=None,
+                success=False,
+                error=f"Instance not found: {self.config.instance_id}"
+            )
+
+        # 直接创建工作流，传递 instance_path
+        instance_path = self.instance_generator.instances_dir / "l2" / f"{self.config.instance_id}-v{instance.get('version', 1)}.yaml"
+        workflow_id = await self._create_workflow(instance_path)
+
+        return WorkflowRunResult(
+            workflow_id=workflow_id,
+            instance_path=instance_path,
+            plan_summary=None,
+            success=True
+        )
+
+    async def _run_direct(self) -> WorkflowRunResult:
+        """直接执行（跳过 Plan）"""
+        # 渲染模板
+        template = await self._load_template()
+
+        # 直接创建工作流
+        workflow_id = await self._create_workflow(self.config.template_path)
+
+        return WorkflowRunResult(
+            workflow_id=workflow_id,
+            instance_path=None,
+            plan_summary=None,
+            success=True
+        )
+
+    async def _load_template(self) -> Dict[str, Any]:
+        """加载和渲染模板"""
+        # 读取模板文件
+        with open(self.config.template_path, encoding="utf-8") as f:
+            template_content = f.read()
+
+        # 渲染模板
+        engine = TemplateEngine()
+        from datetime import datetime
+        rendered = engine.render_string(
+            template_content,
+            {
+                "params": self.config.params,
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "timestamp": datetime.now().strftime("%Y%m%d%H%M%S"),
+                "now": datetime.now(),
+            }
+        )
+
+        # 解析为 Dict
+        return yaml.safe_load(rendered)
+
+    async def _create_workflow(self, instance_path: Path) -> str:
+        """创建工作流实例"""
+        pm_workflow = _get_pm_workflow()
+        result = pm_workflow(
+            "create",
+            project_dir=str(self.config.project_root),
+            level="task",
+            template_id=str(instance_path),
+            data={
+                "params": self.config.params,
+                "workflow_key": self.config.workflow_key,
+                "instance_path": str(instance_path)
+            }
+        )
+
+        if "error" in result:
+            raise Exception(result.get("error"))
+
+        return result.get("workflow_id", "")
+
+
+async def run_workflow(
+    workflow_key: str,
+    template_path: Path,
+    params: Dict[str, Any],
+    project_root: Path,
+    plan_mode: str = "suggest",
+    skip_plan: bool = False,
+    instance_id: Optional[str] = None
+) -> WorkflowRunResult:
+    """
+    便捷函数：运行工作流
+
+    Args:
+        workflow_key: Workflow key
+        template_path: 模板路径
+        params: 参数
+        project_root: 项目根目录
+        plan_mode: Plan 模式
+        skip_plan: 是否跳过 Plan
+        instance_id: Instance ID（从 Instance 运行）
+
+    Returns:
+        WorkflowRunResult
+    """
+    config = WorkflowRunConfig(
+        workflow_key=workflow_key,
+        template_path=template_path,
+        params=params,
+        project_root=project_root,
+        plan_mode=plan_mode,
+        skip_plan=skip_plan,
+        instance_id=instance_id
+    )
+
+    runner = WorkflowRunner(config)
+    return await runner.run()

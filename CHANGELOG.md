@@ -14,9 +14,41 @@ last_updated: 2026-02-19
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| [v0.2.0](changelogs/v0.2.0.md) | 2026-02-26 | ✨ Workflow Instance |
 | [v0.1.0](changelogs/v0.1.0.md) | 2026-01-22 | 🎉 初始版本 |
 
 ## 最新版本
+
+### v0.2.0 - 2026-02-26
+
+#### 新增特性
+
+- **Workflow Instance** - 统一的 Plan → Instance → Execute 流程
+  - Plan Agent: LLM 分析模板，生成执行计划
+  - Instance Generator: Instance 文件生成和版本管理
+  - Review Gate: simple/suggest/force 三种审批模式
+  - Orchestrator 支持从 Instance 文件加载执行
+
+- **CLI 新增选项**
+  - `--plan-only`: 只生成 Plan，不执行
+  - `--skip-plan`: 跳过 Plan，直接执行
+  - `--plan-mode`: Plan 模式 (simple/suggest/force)
+  - `--instance`: 从指定 Instance 运行
+
+#### 文件变更
+
+- `src/lee/orchestrator/core/instance_generator.py` (新增)
+- `src/lee/orchestrator/execution/plan_agent.py` (新增)
+- `src/lee/orchestrator/execution/workflow_runner.py` (新增)
+- `src/lee/orchestrator/execution/instance_loader.py` (新增)
+- `src/lee/orchestrator/execution/review_gate.py` (新增)
+- `src/lee/cli/commands/run.py` (更新)
+
+#### 测试
+
+- 新增 30 个测试用例
+
+---
 
 ### v0.1.0 - 2026-01-22
 

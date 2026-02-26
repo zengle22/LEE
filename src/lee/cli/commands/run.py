@@ -529,8 +529,13 @@ def _release_project_run_lock(lock_fp) -> None:
 @click.option("--executor", help="强制指定执行器类型（覆盖 spec 中的配置）", type=click.Choice([
     "llm", "shell", "metagpt", "claude_code", "codex", "langgraph"
 ]))
+@click.option("--plan-only", is_flag=True, help="只生成 Plan，不执行")
+@click.option("--skip-plan", is_flag=True, help="跳过 Plan，直接执行")
+@click.option("--plan-mode", type=click.Choice(["simple", "suggest", "force"]), default="suggest", help="Plan 模式")
+@click.option("--instance", help="从指定 Instance ID 运行")
 def run(workflow_key: str, spec: str | None, env: str | None, version: str | None,
-        branch: str | None, project_dir: str, max_steps: int, executor: str | None) -> None:
+        branch: str | None, project_dir: str, max_steps: int, executor: str | None,
+        plan_only: bool, skip_plan: bool, plan_mode: str, instance: str | None) -> None:
     """运行指定工作流"""
     registry = _load_registry()
     workflows = registry.get("workflows", {})
@@ -602,6 +607,54 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
                 if "error" not in pause_result:
                     click.echo(f"已暂停旧流程: {item['id']}")
 
+        # 新增: 使用 WorkflowRunner 处理 Plan -> Instance -> Execute
+        if not instance and not skip_plan:
+            # 使用 Plan 模式
+            from lee.orchestrator.execution.workflow_runner import run_workflow
+
+            click.echo(f"[Plan Mode] 生成执行计划...")
+
+            result = run_workflow(
+                workflow_key=workflow_key,
+                template_path=template_path,
+                params=params,
+                project_root=project_root,
+                plan_mode=plan_mode,
+                skip_plan=False,
+                instance_id=instance
+            )
+
+            if not result.success:
+                raise click.ClickException(f"Plan 失败: {result.error}")
+
+            if plan_only:
+                click.echo(f"\n✅ Plan 已生成")
+                click.echo(f"Instance: {result.instance_path}")
+                if result.plan_summary:
+                    click.echo(f"\n--- Plan Summary ---\n{result.plan_summary}")
+                return
+
+            workflow_id = result.workflow_id
+            click.echo(f"Created workflow: {workflow_id}")
+            click.echo(f"Instance: {result.instance_path}")
+
+            if result.plan_summary:
+                click.echo(f"\n--- Plan Summary ---\n{result.plan_summary[:500]}...")
+
+            click.echo(f"\n执行中... (使用 'lee status {workflow_id}' 查看详细状态)")
+
+            # 执行工作流
+            stop_event, monitor = _start_progress_monitor(project_root, workflow_id)
+            try:
+                summary = _run_until_settled_with_gates(project_root, workflow_id, max_steps)
+            finally:
+                stop_event.set()
+                monitor.join(timeout=1)
+            _print_summary(project_root, workflow_id, summary)
+            _release_project_run_lock(lock_fp)
+            return
+
+        # 原有逻辑: 直接执行
         rendered_path = _render_workflow_template(template_path, params, project_root)
 
         # Create workflow instance (L3 task)

@@ -10,6 +10,10 @@ from lee.orchestrator.execution.executors import ExecutorFactory, BaseExecutor
 from lee.orchestrator.execution.langgraph_executor import LangGraphExecutor, register_langgraph_executor
 from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor, register_claude_code_executor
 
+# Plan 和 Instance（新增）
+from lee.orchestrator.execution.plan_agent import PlanAgent, PlanConfig, PlanResult, create_plan
+from lee.orchestrator.execution.workflow_runner import WorkflowRunner, WorkflowRunConfig, WorkflowRunResult, run_workflow
+
 # Agent 系统（从 v1 迁移）
 from lee.orchestrator.execution.agent_loader import AgentLoader, AgentSpec
 from lee.orchestrator.execution.agent_injector import AgentContext, InjectorRegistry
@@ -42,6 +46,15 @@ __all__ = [
     "register_langgraph_executor",
     "ClaudeCodeExecutor",
     "register_claude_code_executor",
+    # Plan 和 Instance
+    "PlanAgent",
+    "PlanConfig",
+    "PlanResult",
+    "create_plan",
+    "WorkflowRunner",
+    "WorkflowRunConfig",
+    "WorkflowRunResult",
+    "run_workflow",
     # Agent 系统
     "AgentLoader",
     "AgentSpec",
