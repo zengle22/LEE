@@ -2,8 +2,25 @@
 Pytest fixtures for QA module tests.
 """
 
-import pytest
+import sys
 from pathlib import Path
+
+# Add lee module to Python path (qa is in lee/lee/qa/)
+# tests/qa/conftest.py → tests/qa → tests → lee → lee (module root)
+project_root = Path(__file__).parent.parent.parent  # tests/qa → lee
+
+# Remove conflicting lee paths from sys.path (like /Users/zengle/git/ai/lee)
+sys.path = [p for p in sys.path if 'ai/lee' not in str(p)]
+
+# Add local project root to front of path
+sys.path.insert(0, str(project_root))
+
+# Clear any cached lee modules to ensure we use the local version
+for mod in list(sys.modules.keys()):
+    if mod.startswith('lee'):
+        del sys.modules[mod]
+
+import pytest
 from unittest.mock import Mock
 
 

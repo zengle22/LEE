@@ -21,7 +21,8 @@ class SelectorValidator:
     # Selector stability scores (higher = more stable)
     STABILITY_SCORES = {
         r'\[data-testid[=\s]?["\']?\w+["\']?\]': 1.0,  # Best: data-testid
-        r'\[id[\s]*=[\s]*["\']?\w+["\']?\]': 0.9,       # Very good: id
+        r'\[id[\s]*=[\s]*["\']?\w+["\']?\]': 0.9,       # Very good: id attribute
+        r'#[\w-]+': 0.9,                                # Very good: id shorthand (#id)
         r'\[role=[\s]*["\']?\w+["\']?\]': 0.8,          # Good: ARIA role
         r'\.[\w-]+': 0.5,                               # Fair: class
         r'text[\s]*=[\s]*["\'][^"\']+["\']': 0.4,       # Poor: text selector
@@ -89,8 +90,10 @@ class SelectorValidator:
             Dict with validation summary
         """
         # Extract selectors from code
-        # Matches: locator("selector"), page.locator("selector")
-        selectors = re.findall(r'locator\(["\']([^"\']+)["\']\)', code)
+        # Matches: locator("selector"), page.locator("selector"), locator('selector')
+        # Handle nested quotes in data-testid='...'
+        selectors = re.findall(r'locator\((["\'])([^\1]*?)\1\)', code)
+        selectors = [s[1] for s in selectors]  # Extract the selector part
 
         results = {
             "total": len(selectors),

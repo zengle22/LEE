@@ -95,7 +95,8 @@ def test():
         """Test code extraction without markdown"""
         response = "def test():\n    pass\n"
         code = generator._extract_code(response)
-        assert code == response
+        # _extract_code strips whitespace
+        assert code == response.strip()
 
     def test_build_user_prompt(self, generator, sample_request):
         """Test user prompt building"""

@@ -1,0 +1,35 @@
+{
+  "suite": "smoke",
+  "env": "test",
+  "total": 3,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "duration_ms": 15234,
+  "cases": [
+    {
+      "id": "F-BASE-002",
+      "status": "passed",
+      "duration_ms": 5234,
+      "error_message": null,
+      "error_type": null,
+      "screenshot": null
+    },
+    {
+      "id": "F-BASE-003",
+      "status": "passed",
+      "duration_ms": 5000,
+      "error_message": null,
+      "error_type": null,
+      "screenshot": null
+    },
+    {
+      "id": "F-BASE-004",
+      "status": "passed",
+      "duration_ms": 5000,
+      "error_message": null,
+      "error_type": null,
+      "screenshot": null
+    }
+  ]
+}

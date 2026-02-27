@@ -217,7 +217,7 @@ from playwright.sync_api import sync_playwright, expect
 
 @pytest.fixture(scope="module")
 def browser_context():
-    '''Browser context fixture'''
+    \"\"\"Browser context fixture\"\"\"
     base_url = os.getenv("BASE_URL", "{{ base_url }}")
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -228,7 +228,7 @@ def browser_context():
 
 {% for test in tests %}
 def test_{{ test.name }}(page):
-    '''
+    \"\"\"
     {{ test.title }}
 
     {% if test.steps %}
@@ -239,7 +239,7 @@ def test_{{ test.name }}(page):
     {% endif %}
 
     预期: {{ test.expected }}
-    '''
+    \"\"\"
     {{ test.code }}
 {% endfor %}
 """

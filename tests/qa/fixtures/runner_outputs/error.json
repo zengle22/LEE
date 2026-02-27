@@ -1,0 +1,11 @@
+{
+  "suite": "smoke",
+  "env": "test",
+  "total": 0,
+  "passed": 0,
+  "failed": 0,
+  "skipped": 0,
+  "duration_ms": 0,
+  "error": "Infrastructure error: Docker container failed to start",
+  "cases": []
+}

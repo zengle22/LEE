@@ -1,0 +1,84 @@
+# Sample test cases for testing
+
+test_cases:
+  - case_id: "F-BASE-002"
+    title: "开发测试登录"
+    priority: "P0"
+    type: "positive"
+    preconditions:
+      - "用户未登录"
+      - "登录页面可访问"
+    steps:
+      - step_num: 1
+        action: "访问登录页"
+        expected: "页面加载成功"
+      - step_num: 2
+        action: "输入用户名和密码"
+        expected: "输入框接受输入"
+      - step_num: 3
+        action: "点击登录按钮"
+        expected: "登录成功，跳转到首页"
+    expected_result: "用户登录成功"
+
+  - case_id: "F-BASE-003"
+    title: "登录失败 - 错误密码"
+    priority: "P1"
+    type: "negative"
+    preconditions:
+      - "用户未登录"
+      - "登录页面可访问"
+    steps:
+      - step_num: 1
+        action: "访问登录页"
+        expected: "页面加载成功"
+      - step_num: 2
+        action: "输入正确的用户名和错误的密码"
+        expected: "输入框接受输入"
+      - step_num: 3
+        action: "点击登录按钮"
+        expected: "显示错误提示，不跳转"
+    expected_result: "登录失败，显示错误信息"
+
+  - case_id: "F-BASE-004"
+    title: "退出登录"
+    priority: "P1"
+    type: "positive"
+    preconditions:
+      - "用户已登录"
+    steps:
+      - step_num: 1
+        action: "点击退出按钮"
+        expected: "退出确认对话框显示"
+      - step_num: 2
+        action: "确认退出"
+        expected: "退出成功，跳转到登录页"
+    expected_result: "用户退出登录"
+
+  - case_id: "F-UI-001"
+    title: "页面响应式布局"
+    priority: "P2"
+    type: "positive"
+    preconditions: []
+    steps:
+      - step_num: 1
+        action: "访问首页"
+        expected: "页面加载成功"
+      - step_num: 2
+        action: "调整浏览器窗口大小"
+        expected: "布局自适应调整"
+    expected_result: "页面在不同窗口尺寸下正常显示"
+
+  - case_id: "F-API-001"
+    title: "API 接口响应时间"
+    priority: "P1"
+    type: "performance"
+    preconditions:
+      - "后端服务正常运行"
+    steps:
+      - step_num: 1
+        action: "调用 API 接口"
+        expected: "接口返回数据"
+      - step_num: 2
+        action: "测量响应时间"
+        expected: "响应时间 < 500ms"
+    expected_result: "API 响应时间符合要求"

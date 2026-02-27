@@ -66,19 +66,27 @@ class ErrorClassifier:
         # API usage errors
         (r"AttributeError:.*'Page' object has no attribute", ErrorType.CODE_API),
         (r"AttributeError:.*'Locator' object has no attribute", ErrorType.CODE_API),
+        (r"AttributeError:", ErrorType.CODE_API),  # Generic AttributeError
         (r"TypeError:.*missing \d+ required positional argument", ErrorType.CODE_API),
         (r"TypeError:.*takes \d+ positional argument but \d+ were given", ErrorType.CODE_API),
+        (r"TypeError:", ErrorType.CODE_API),  # Generic TypeError
 
         # Selector errors (code issue - wrong selector in test)
+        # More specific patterns first
         (r"Timeout.*waiting for selector.*strict mode violation", ErrorType.CODE_SELECTOR),
         (r"Timeout.*waiting for selector.*waiting for hidden", ErrorType.CODE_SELECTOR),
         (r"Timeout.*\d+ms exceeded while waiting for element", ErrorType.CODE_SELECTOR),
+        (r"Timeout \d+ms exceeded.*waiting for", ErrorType.CODE_SELECTOR),  # Timeout XXXms exceeded
         (r"playwright\.sync_api\.errors\.TimeoutError.*waiting for", ErrorType.CODE_SELECTOR),
         (r"Element.*not found.*waiting for", ErrorType.CODE_SELECTOR),
         (r"locator\(\):.*didn't match any elements", ErrorType.CODE_SELECTOR),
         (r"No element found", ErrorType.CODE_SELECTOR),
+        (r"strict mode violation.*waiting for", ErrorType.CODE_SELECTOR),  # Strict mode violation
+        # General selector timeout (must be before generic timeout)
+        (r"Timeout.*waiting for selector", ErrorType.CODE_SELECTOR),
+        (r"Timeout waiting for selector", ErrorType.CODE_SELECTOR),
 
-        # Timeout configuration issues
+        # Timeout configuration issues (generic timeout without selector)
         (r"Timeout.*exceeded.*\d+ms", ErrorType.CODE_TIMEOUT),
     ]
 
@@ -87,6 +95,7 @@ class ErrorClassifier:
         # Assertion failures (expected behavior didn't match)
         (r"AssertionError", ErrorType.SYSTEM_ASSERTION),
         (r"assert .*failed", ErrorType.SYSTEM_ASSERTION),
+        (r"assert .*, but got", ErrorType.SYSTEM_ASSERTION),  # assert X, but got Y
         (r"Expected .+ but found", ErrorType.SYSTEM_ASSERTION),
         (r"Expected value .+ to be", ErrorType.SYSTEM_ASSERTION),
 
@@ -292,7 +301,7 @@ class ErrorClassifier:
         Returns:
             List of ErrorClassification results
         """
-        return [cls classify(error, context) for error in errors]
+        return [cls.classify(error, context) for error in errors]
 
     @classmethod
     def get_statistics(

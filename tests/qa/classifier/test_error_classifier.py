@@ -57,8 +57,9 @@ class TestErrorClassifier:
             "page_elements": {"[data-testid='button']": {"tag": "button"}},
         }
         result = ErrorClassifier.classify("Timeout waiting for selector", context)
-        # Should be uncertain or system (timing issue)
-        assert result.type in ["uncertain", "system_issue"]
+        # Pattern matches selector timeout directly
+        assert result.type == "code_issue"
+        assert result.category == "code_selector"
 
     def test_timeout_with_selector_missing(self):
         """Test timeout classification when selector is missing"""
@@ -67,9 +68,9 @@ class TestErrorClassifier:
             "page_elements": {},
         }
         result = ErrorClassifier.classify("Timeout waiting for selector", context)
-        # Should be code issue (selector doesn't exist)
+        # Pattern matches selector timeout directly
         assert result.type == "code_issue"
-        assert result.category == "selector_not_found"
+        assert result.category == "code_selector"
 
     def test_code_syntax_suggested_action(self):
         """Test suggested action for syntax errors"""

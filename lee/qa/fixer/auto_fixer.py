@@ -99,9 +99,13 @@ class AutoFixer:
         error_msg = classification.details.get("error_message", "")
 
         # Try to extract selector from error message
-        selector_match = re.search(r'selector ["\']([^"\']+)["\']', error_msg)
-        if not selector_match:
-            selector_match = re.search(r'locator\(["\']([^"\']+)["\']\)', error_msg)
+        # Multiple patterns to match different error message formats
+        selector_match = (
+            re.search(r'selector ["\']([^"\']+)["\']', error_msg) or  # selector "#id"
+            re.search(r'selector\s+([^\s,]+)', error_msg) or  # selector #id
+            re.search(r'locator\(["\']([^"\']+)["\']\)', error_msg) or  # locator("#id")
+            re.search(r'waiting for\s+["\']?([^"\'\s,]+)["\']?', error_msg)  # waiting for #id
+        )
 
         if selector_match:
             bad_selector = selector_match.group(1)

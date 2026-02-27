@@ -19,7 +19,7 @@ class TestSyntaxValidator:
         """Test detection of syntax errors"""
         result = SyntaxValidator.validate(invalid_syntax_code)
         assert not result.is_valid
-        assert any(e["type"] == "syntax_error" for e in result.errors)
+        assert any(e["category"] == "syntax_error" for e in result.errors)
 
     def test_missing_page_parameter(self):
         """Test detection of missing page parameter"""

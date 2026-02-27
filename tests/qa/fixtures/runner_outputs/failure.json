@@ -1,0 +1,37 @@
+{
+  "suite": "regression",
+  "env": "test",
+  "total": 3,
+  "passed": 1,
+  "failed": 2,
+  "skipped": 0,
+  "duration_ms": 18456,
+  "cases": [
+    {
+      "id": "F-BASE-002",
+      "status": "passed",
+      "duration_ms": 5000,
+      "error_message": null,
+      "error_type": null,
+      "screenshot": null
+    },
+    {
+      "id": "F-BASE-005",
+      "status": "failed",
+      "duration_ms": 6500,
+      "error_message": "AssertionError: Expected 'Success' but found 'Error'",
+      "error_type": "system_assertion",
+      "screenshot": "screenshots/F-BASE-005.png",
+      "is_code_issue": false
+    },
+    {
+      "id": "F-BASE-006",
+      "status": "failed",
+      "duration_ms": 6956,
+      "error_message": "Timeout waiting for selector [data-testid='submit-button']",
+      "error_type": "code_selector",
+      "screenshot": "screenshots/F-BASE-006.png",
+      "is_code_issue": true
+    }
+  ]
+}
