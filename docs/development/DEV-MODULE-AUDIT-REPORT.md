@@ -10,10 +10,12 @@
 
 | 问题类型 | 严重程度 | 数量 | 状态 |
 |----------|----------|------|------|
-| Agent 引用错误 | 🔴 高 | 1 | 阻塞运行 |
-| Contract Schema 缺失 | 🔴 高 | 8 | 阻塞验证 |
-| ArtifactManager 未集成 | 🟡 中 | 1 | 功能缺失 |
+| Agent 引用错误 | 🔴 高 | 1 | ✅ 已修复 (commit 31469f2) |
+| Contract Schema 缺失 | 🔴 高 | 8 | ✅ 已修复 (commit 31469f2) |
+| ArtifactManager 未集成 | 🟡 中 | 1 | ✅ 已修复 (commit 31469f2) |
 | L3 实例生成集成 | 🟢 低 | 1 | 已实现 |
+
+**P0 和 P1 问题已全部修复！**
 
 ---
 
@@ -44,22 +46,33 @@ run: agent.dev.backend_engineer   # ❌ 不存在
 - 后端开发阶段无法执行
 - 整个 L2 工作流会失败
 
-### 修复建议
+### 修复状态
 
-将所有 `agent.dev.backend_engineer` 替换为 `agent.dev.go_backend_engineer`：
+✅ **已修复** (commit 31469f2)
 
-```yaml
-agents:
-  - agent.dev.go_backend_engineer   # ✅ 正确
+将所有 `agent.dev.backend_engineer` 替换为 `agent.dev.go_backend_engineer`。
 
-run: agent.dev.go_backend_engineer  # ✅ 正确
-```
+修复文件: `lee/spec-global/departments/dev/workflows/feature/v3/workflow.yaml`
 
 ---
 
 ## 二、Contract Schema 缺失 (🔴 阻塞)
 
-### 缺失的 Contract Schema 列表
+### 修复状态
+
+✅ **已修复** (commit 31469f2)
+
+已创建全部 8 个缺失的 Contract Schema：
+- `spec-global/departments/dev/contracts/code-diff/v1/schema.json`
+- `spec-global/departments/dev/contracts/test-report/v1/schema.json`
+- `spec-global/departments/dev/contracts/code-review/v1/schema.json`
+- `spec-global/departments/dev/contracts/l2-outputs/v1/schema.json`
+- `spec-global/departments/dev/contracts/l3-outputs/v1/schema.json`
+- `spec-global/departments/dev/contracts/l3-phase-context/v1/schema.json`
+- `spec-global/departments/dev/contracts/retrospective/v1/schema.json`
+- `spec-global/departments/dev/contracts/requirement-analysis/v1/schema.json`
+
+### 缺失的 Contract Schema 列表 (原问题)
 
 | Schema 路径 | 引用位置 | 用途 | 严重程度 |
 |-------------|----------|------|----------|
@@ -134,6 +147,19 @@ run: agent.dev.go_backend_engineer  # ✅ 正确
 ---
 
 ## 三、ArtifactManager 未集成 (🟡 中)
+
+### 修复状态
+
+✅ **已修复** (commit 31469f2)
+
+已将 ArtifactManager 集成到 Orchestrator：
+- 在 `__init__` 中初始化 `self.artifact_manager` 和 `self.manifest_manager`
+- 在 `create_workflow` 中创建 manifest
+- 新增 `_record_step_artifacts` 方法记录步骤产出物
+
+修复文件: `src/lee/orchestrator/execution/orchestrator.py`
+
+### 原问题描述
 
 ### 问题描述
 
@@ -256,6 +282,55 @@ L3 spawning 功能已正确实现在 `Orchestrator._spawn_l3_for_point()` 中。
 ---
 
 ## 六、优先级修复建议
+
+### 已完成 (2026-02-27)
+
+✅ **P0 (必须立即修复 - 阻塞运行)**
+
+1. **修复 Agent 引用错误** ✅
+   - 文件: `spec-global/departments/dev/workflows/feature/v3/workflow.yaml`
+   - 修改: `agent.dev.backend_engineer` → `agent.dev.go_backend_engineer`
+
+2. **创建缺失的 Contract Schema** ✅
+   - `contracts/code-diff/v1/schema.json`
+   - `contracts/test-report/v1/schema.json`
+   - `contracts/l2-outputs/v1/schema.json`
+   - `contracts/l3-outputs/v1/schema.json`
+   - `contracts/l3-phase-context/v1/schema.json`
+
+✅ **P1 (高优先级 - 影响功能)**
+
+3. **创建剩余的 Contract Schema** ✅
+   - `contracts/code-review/v1/schema.json`
+   - `contracts/retrospective/v1/schema.json`
+   - `contracts/requirement-analysis/v1/schema.json`
+
+4. **集成 ArtifactManager 到 Orchestrator** ✅
+   - 在步骤执行时记录产出物
+   - 在 run 完成时生成 manifest
+
+### 待处理
+
+**⚠️ Phase OpenSpec Flow - 13 个缺失 Agent**
+
+`spec-global/departments/dev/workflows/phase-openspec-flow/v1/workflow.yaml` 引用了 13 个不存在的 Agent：
+- agent.dev.ai_engineer
+- agent.dev.database_engineer
+- agent.dev.devops_engineer
+- agent.dev.implementation_executor
+- agent.dev.knowledge_extractor
+- agent.dev.openspec_proposal_creator
+- agent.dev.phase_handover_generator
+- agent.dev.phase_retrospector
+- agent.dev.qa_engineer
+- agent.dev.requirement_calibrator
+- agent.dev.tech_lead
+- agent.dev.test_automation_engineer
+- agent.dev.ui_implementation_reviewer
+
+**注意**: 这些 Agent 超出 Dev 模块 L2/L3 工作流范围，属于 Phase OpenSpec 子流程，需要单独规划处理。
+
+## 原 P0/P1 修复建议 (已完成)
 
 ### P0 (必须立即修复 - 阻塞运行)
 
