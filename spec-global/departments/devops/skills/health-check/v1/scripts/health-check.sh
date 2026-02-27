@@ -28,7 +28,8 @@ RESULT_FILE="${RESULT_DIR}/health-$(date +%Y%m%d%H%M%S).json"
 for i in $(seq 1 "$RETRIES"); do
   HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" --connect-timeout 5 "$URL" 2>/dev/null || echo "000")
   if [[ "$HTTP_CODE" =~ ^2[0-9]{2}$ ]]; then
-    RESULT="{\"ok\":true,\"env\":\"$ENV\",\"url\":\"$URL\",\"http_code\":$HTTP_CODE,\"attempt\":$i}"
+    # 输出兼容 QA 工作流的格式: status 字段为 "healthy" 或 "unhealthy"
+    RESULT="{\"ok\":true,\"status\":\"healthy\",\"env\":\"$ENV\",\"url\":\"$URL\",\"http_code\":$HTTP_CODE,\"attempt\":$i,\"result_path\":\"$RESULT_FILE\"}"
     echo "$RESULT" | tee "$RESULT_FILE"
     exit 0
   fi
@@ -36,6 +37,6 @@ for i in $(seq 1 "$RETRIES"); do
   sleep "$INTERVAL"
 done
 
-RESULT="{\"ok\":false,\"env\":\"$ENV\",\"url\":\"$URL\",\"http_code\":$HTTP_CODE,\"attempts\":$RETRIES}"
+RESULT="{\"ok\":false,\"status\":\"unhealthy\",\"env\":\"$ENV\",\"url\":\"$URL\",\"http_code\":$HTTP_CODE,\"attempts\":$RETRIES,\"result_path\":\"$RESULT_FILE\"}"
 echo "$RESULT" | tee "$RESULT_FILE"
 exit 1

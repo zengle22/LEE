@@ -32,6 +32,10 @@ interface:
     properties:
       ok:
         type: boolean
+      status:
+        type: string
+        enum: ["healthy", "unhealthy"]
+        description: "健康状态，兼容 QA 工作流"
       http_code:
         type: integer
       result_path:
