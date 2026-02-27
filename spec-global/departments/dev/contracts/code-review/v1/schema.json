@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/schema/contracts/code-review/v1",
+  "title": "Code Review Contract",
+  "description": "代码评审输出契约，验证代码评审步骤的输出",
+  "type": "object",
+  "required": ["review_result", "issues_found", "approval_status"],
+  "properties": {
+    "review_result": {"type": "string", "description": "评审结果摘要"},
+    "approval_status": {
+      "type": "string",
+      "enum": ["approved", "approved_with_comments", "needs_revision", "rejected"],
+      "description": "审批状态"
+    },
+    "issues_found": {
+      "type": "array",
+      "description": "发现的问题列表",
+      "items": {
+        "type": "object",
+        "required": ["severity", "description"],
+        "properties": {
+          "severity": {"type": "string", "enum": ["critical", "major", "minor", "info"], "description": "严重程度"},
+          "category": {"type": "string", "enum": ["correctness", "performance", "security", "style", "documentation", "testing"], "description": "问题类别"},
+          "description": {"type": "string", "description": "问题描述"},
+          "file_path": {"type": "string", "description": "问题所在文件"},
+          "line_number": {"type": "integer", "minimum": 1, "description": "问题所在行号"},
+          "suggestion": {"type": "string", "description": "修复建议"}
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "代码质量指标",
+      "properties": {
+        "total_issues": {"type": "integer", "minimum": 0},
+        "critical_issues": {"type": "integer", "minimum": 0},
+        "major_issues": {"type": "integer", "minimum": 0},
+        "minor_issues": {"type": "integer", "minimum": 0},
+        "code_quality_score": {"type": "integer", "minimum": 0, "maximum": 100, "description": "代码质量评分"}
+      }
+    },
+    "reviewer": {"type": "string", "description": "评审者"},
+    "reviewed_at": {"type": "string", "format": "date-time", "description": "评审时间"},
+    "comments": {
+      "type": "array",
+      "description": "评审意见",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {"type": "string"},
+          "line": {"type": "integer"},
+          "comment": {"type": "string"}
+        }
+      }
+    }
+  }
+}
