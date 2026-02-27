@@ -210,6 +210,8 @@ agent.devops:
 #   LLM_TIMEOUT        - 请求超时时间(秒)
 #   LLM_PROVIDER       - Provider 类型 (openai, anthropic, custom, etc.)
 #   LLM_PROFILE        - 默认 profile 名称
+#   LLM_FALLBACK_PROVIDERS - Fallback providers 列表，用逗号分隔
+#                          例如: deepseek,zhipu,ollama
 #
 # Provider 专用环境变量:
 #   OPENAI_*           - OpenAI 专用配置
@@ -231,6 +233,24 @@ agent.devops:
 # Demo 模式:
 #   LEE_LLM_MOCK       - 设置为 1/true/yes 时启用 Mock Executor
 #   LEE_DEMO_MODE       - 设置为 1/true/yes 时启用 Demo 模式
+
+# ============================================
+# Fallback Provider 配置
+# ============================================
+# 当主 Provider 失败时，按顺序尝试备用 Provider
+# 触发条件：429 (Rate Limit), 500, 502, 503, 504 等错误
+#
+# 配置格式：
+# fallback_providers:
+#   - provider_name1  # 高优先级
+#   - provider_name2
+#   - provider_name3  # 最低优先级（兜底）
+#
+# 示例：从 deepseek 开始，失败则尝试 zhipu，然后 ollama
+fallback_providers:
+  - deepseek      # 高优先级
+  - zhipu         # 中优先级
+  - ollama        # 最低优先级（本地兜底）
 
 # ============================================
 # Profile 优先级

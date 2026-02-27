@@ -13,7 +13,7 @@ import os
 import asyncio
 import aiohttp
 import yaml
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pathlib import Path
 from datetime import datetime
 
@@ -129,25 +129,44 @@ class LLMExecutor:
     配置文件: flowcore/engines/llm/config.yaml
     """
 
-    def __init__(self, profile: str = "antigravity", config_path: Optional[str] = None):
+    def __init__(self, profile: str = "antigravity", config_path: Optional[str] = None,
+                 fallback_providers: Optional[List[str]] = None):
         """
         初始化 LLM 执行器
 
         Args:
             profile: 配置文件名称（default, antigravity, zhipu, agent.prd, agent.dev）
             config_path: 配置文件路径
+            fallback_providers: 备用 provider 列表，当主 provider 失败时自动切换
         """
         self.config_manager = LLMConfig(config_path)
         self.profile = profile
         self.config = self.config_manager.get_config(profile)
 
+        # 加载全局 fallback 配置
+        self._fallback_providers = fallback_providers or self._load_fallback_providers()
+
         # 验证必要配置
         if not self.config.get("api_key"):
             raise ValueError(f"LLM config '{profile}' missing api_key")
 
+    def _load_fallback_providers(self) -> List[str]:
+        """从配置文件或环境变量加载 fallback providers"""
+        # 优先从环境变量读取
+        env_fallback = os.getenv("LLM_FALLBACK_PROVIDERS", "")
+        if env_fallback:
+            return [p.strip() for p in env_fallback.split(",") if p.strip()]
+
+        # 其次从配置文件读取
+        global_config = self.config_manager.configs
+        fallback = global_config.get("fallback_providers", [])
+        if isinstance(fallback, list):
+            return [str(p) for p in fallback if p]
+        return []
+
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        执行 LLM 任务
+        执行 LLM 任务，支持 Fallback 机制
 
         Args:
             input_data: 应包含 prompt, system_message 等字段
@@ -165,48 +184,83 @@ class LLMExecutor:
         import time as _time
         call_start = _time.monotonic()
 
-        try:
-            # 调用 LLM API
-            response = await self._call_with_retry(
-                self._call_llm,
-                system_message,
-                prompt
-            )
+        # 收集所有尝试的 provider 信息
+        attempts_log = []
 
-            call_duration = _time.monotonic() - call_start
+        # 主 provider + fallback providers
+        all_providers = [self.profile] + [p for p in self._fallback_providers if p != self.profile]
 
-            # v3.2: 支持增强返回（dict）和旧格式（str）
-            if isinstance(response, dict):
-                response_text = response.get("content", "")
-                model_used = response.get("model", self.config.get("model", "unknown"))
-                input_tokens = response.get("input_tokens", 0)
-                output_tokens = response.get("output_tokens", 0)
-                stop_reason = response.get("stop_reason")
-            else:
-                response_text = response
-                model_used = self.config.get("model", "unknown")
-                input_tokens = 0
-                output_tokens = 0
-                stop_reason = None
+        last_error = None
+        for provider_idx, provider_name in enumerate(all_providers):
+            try:
+                # 如果是 fallback provider，需要重新加载配置
+                if provider_idx > 0:
+                    print(f"[LLM Executor] Trying fallback provider: {provider_name}")
+                    self.profile = provider_name
+                    self.config = self.config_manager.get_config(provider_name)
+                    # 验证必要配置
+                    if not self.config.get("api_key"):
+                        print(f"[LLM Executor] Skipping {provider_name}: no api_key")
+                        continue
 
-            return {
-                "generated_text": response_text,
-                "model": model_used,
-                "provider": self.config.get("provider", "custom"),
-                "tokens_used": input_tokens + output_tokens,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "duration_seconds": round(call_duration, 3),
-                "stop_reason": stop_reason,
-                "status": "completed",
-            }
+                # 调用 LLM API
+                response = await self._call_with_fallback(
+                    self._call_llm,
+                    system_message,
+                    prompt,
+                    provider_name
+                )
 
-        except Exception as e:
-            return {
-                "generated_text": "",
-                "error": str(e),
-                "status": "failed",
-            }
+                call_duration = _time.monotonic() - call_start
+
+                # v3.2: 支持增强返回（dict）和旧格式（str）
+                if isinstance(response, dict):
+                    response_text = response.get("content", "")
+                    model_used = response.get("model", self.config.get("model", "unknown"))
+                    input_tokens = response.get("input_tokens", 0)
+                    output_tokens = response.get("output_tokens", 0)
+                    stop_reason = response.get("stop_reason")
+                else:
+                    response_text = response
+                    model_used = self.config.get("model", "unknown")
+                    input_tokens = 0
+                    output_tokens = 0
+                    stop_reason = None
+
+                return {
+                    "generated_text": response_text,
+                    "model": model_used,
+                    "provider": self.config.get("provider", "custom"),
+                    "profile": provider_name,
+                    "tokens_used": input_tokens + output_tokens,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "duration_seconds": round(call_duration, 3),
+                    "stop_reason": stop_reason,
+                    "status": "completed",
+                    "attempts": attempts_log,
+                }
+
+            except Exception as e:
+                last_error = str(e)
+                attempts_log.append({
+                    "profile": provider_name,
+                    "error": last_error,
+                })
+                print(f"[LLM Executor] Provider {provider_name} failed: {last_error}")
+
+                # 如果还有 fallback providers，继续尝试
+                if provider_idx < len(all_providers) - 1:
+                    continue
+                # 否则返回错误
+
+        # 所有 provider 都失败了
+        return {
+            "generated_text": "",
+            "error": f"All providers failed. Last error: {last_error}",
+            "status": "failed",
+            "attempts": attempts_log,
+        }
 
     async def _call_with_retry(
         self,
@@ -217,10 +271,32 @@ class LLMExecutor:
         initial_delay: float = 1.0
     ) -> str:
         """
-        带重试的 LLM API 调用
+        带重试的 LLM API 调用（保留兼容旧代码）
 
         处理：
         - HTTP 429 (Too Many Requests) - 速率限制
+        - HTTP 500/502/503/504 - 服务器错误
+        - 网络超时
+        """
+        return await self._call_with_fallback(call_func, system_prompt, user_message,
+                                              provider_name=self.profile,
+                                              max_retries=max_retries,
+                                              initial_delay=initial_delay)
+
+    async def _call_with_fallback(
+        self,
+        call_func,
+        system_prompt: str,
+        user_message: str,
+        provider_name: str = "default",
+        max_retries: int = 3,
+        initial_delay: float = 1.0
+    ) -> str:
+        """
+        带重试和退避的 LLM API 调用
+
+        处理：
+        - HTTP 429 (Too Many Requests) - 速率限制（触发更长的等待时间）
         - HTTP 500/502/503/504 - 服务器错误
         - 网络超时
         """
@@ -238,11 +314,18 @@ class LLMExecutor:
                 # 检查是否为可重试的瞬态错误
                 if e.status in [429, 500, 502, 503, 504]:
                     if attempt < max_retries - 1:
-                        # 指数退避 + 抖动
-                        delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
-                        delay = min(delay, 30)  # 最多等待 30 秒
+                        # 429 错误需要更长的等待时间
+                        if e.status == 429:
+                            # 429 错误：等待更长时间（30-60秒）
+                            delay = initial_delay * (4 ** attempt) + random.uniform(10, 30)
+                            delay = min(delay, 60)  # 最多等待 60 秒
+                            print(f"[LLM Executor] Rate limit (429) on {provider_name}, retrying in {delay:.1f}s...")
+                        else:
+                            # 其他错误：指数退避 + 抖动
+                            delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
+                            delay = min(delay, 30)  # 最多等待 30 秒
+                            print(f"[LLM Executor] API error {e.status} on {provider_name} (attempt {attempt + 1}/{max_retries}), retrying in {delay:.1f}s...")
 
-                        print(f"[LLM Executor] API error {e.status} (attempt {attempt + 1}/{max_retries}), retrying in {delay:.1f}s...")
                         await asyncio.sleep(delay)
                         continue
                     else:

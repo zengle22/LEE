@@ -66,12 +66,18 @@ class LLMExecutor(BaseExecutor):
     - Anthropic (Claude)
     - Azure OpenAI
     - 其他兼容 OpenAI API 的服务
+    - Fallback: 支持多 Provider 自动切换
 
     配置文件: flowcore/engines/llm/config.yaml
     """
 
-    def __init__(self, profile: str = "antigravity", config_path: str = None, **kwargs):
-        self._executor = RealLLMExecutor(profile=profile, config_path=config_path)
+    def __init__(self, profile: str = "antigravity", config_path: str = None,
+                 fallback_providers: list = None, **kwargs):
+        self._executor = RealLLMExecutor(
+            profile=profile,
+            config_path=config_path,
+            fallback_providers=fallback_providers
+        )
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """执行 LLM 任务"""
