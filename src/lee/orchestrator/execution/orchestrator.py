@@ -1693,10 +1693,15 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # 记录文件类型产出物
         if isinstance(output, dict):
             # 检查输出中的文件路径
+            # 优先匹配后缀规则，再匹配特定关键字（无标准后缀的）
             for key, value in output.items():
                 if key.endswith("_file") or key.endswith("_path") or key in [
-                    "patch_file", "code_diff", "test_report", "coverage_report",
-                    "review_report", "output_file"
+                    # 无标准后缀的关键字需要显式列出：
+                    "code_diff",        # 代码差异输出
+                    "test_report",      # 测试报告
+                    "coverage_report",  # 覆盖率报告
+                    "review_report",    # 代码审查报告
+                    # 注意：patch_file, output_file 等已被 *_file 后缀覆盖，无需显式列出
                 ]:
                     if isinstance(value, str) and value:
                         try:
