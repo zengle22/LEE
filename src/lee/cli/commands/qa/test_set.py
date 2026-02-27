@@ -13,13 +13,25 @@ from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
 
 
-REGISTRY_PATH = Path("config/workflow-registry.yaml")
+def _get_registry_path(project_dir: str = ".") -> Path:
+    """获取 workflow registry 路径"""
+    project_path = Path(project_dir).resolve()
+    registry_path = project_path / "config" / "workflow-registry.yaml"
+    if registry_path.exists():
+        return registry_path
+
+    # 回退到 LEE 框架的配置
+    lee_root = Path(__file__).parent.parent.parent.parent.parent
+    registry_path = lee_root / "config" / "workflow-registry.yaml"
+    if registry_path.exists():
+        return registry_path
+
+    raise FileNotFoundError(f"Workflow registry not found in {project_dir} or {lee_root}")
 
 
-def _load_registry() -> Dict[str, Any]:
-    if not REGISTRY_PATH.exists():
-        raise FileNotFoundError(f"Workflow registry not found: {REGISTRY_PATH}")
-    with open(REGISTRY_PATH, encoding="utf-8") as f:
+def _load_registry(project_dir: str = ".") -> Dict[str, Any]:
+    registry_path = _get_registry_path(project_dir)
+    with open(registry_path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
@@ -159,6 +171,98 @@ def show_test_set(test_set_id: str, project_dir: str) -> None:
         data = yaml.safe_load(f)
 
     click.echo(yaml.dump(data, allow_unicode=True, default_flow_style=False))
+
+
+@test_set.command("run")
+@click.argument("test_set_id")
+@click.option("--test-run-id", default=None, help="Test Run ID (自动生成)")
+@click.option("--build-version", default="dev", help="构建版本")
+@click.option("--build-commit", default="", help="Git commit")
+@click.option("--environment", default="test", help="测试环境")
+@click.option("--project-dir", default=".", help="项目目录")
+@click.option("--max-steps", default=20, show_default=True, help="最大执行步数")
+def run_test_set(test_set_id: str, test_run_id: str, build_version: str,
+                 build_commit: str, environment: str, project_dir: str, max_steps: int) -> None:
+    """直接运行 L3 Test Set (跳过 L2)"""
+    import random
+    import string
+
+    project_root = Path(project_dir).resolve()
+
+    # 查找 Test Set 文件
+    possible_paths = [
+        project_root / "qa" / "test-sets" / f"{test_set_id}.yaml",
+        project_root / "qa" / "test-sets" / f"ts-{test_set_id}.yaml",
+        project_root / "qa" / "test-sets" / f"ts-{test_set_id.lower().replace('_', '-')}.yaml",
+    ]
+
+    test_set_path = None
+    for p in possible_paths:
+        if p.exists():
+            test_set_path = p
+            break
+
+    if not test_set_path:
+        raise click.ClickException(f"Test Set not found: {test_set_id}")
+
+    # 加载 Test Set 定义
+    with open(test_set_path, encoding="utf-8") as f:
+        test_set_definition = yaml.safe_load(f)
+
+    # 生成 Test Run ID
+    if not test_run_id:
+        suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        test_run_id = f"TR-{datetime.now().strftime('%Y-%m-%d')}-{suffix}"
+
+    click.echo(f"=== L3 Test Set 调试模式 ===")
+    click.echo(f"Test Set: {test_set_id}")
+    click.echo(f"Test Run: {test_run_id}")
+    click.echo(f"Build: {build_version}")
+    click.echo(f"Environment: {environment}")
+    click.echo()
+
+    # 创建 L3 工作流 - 使用完整路径
+    template_path = "lee/spec-global/departments/qa/workflows/templates/test-set-l3-template.yaml"
+    create_result = pm_workflow(
+        "create",
+        project_dir=str(project_root),
+        level="task",
+        template_id=template_path,
+        data={
+            "test_run_id": test_run_id,
+            "test_set_id": test_set_id,
+            "test_set_definition": test_set_definition,
+            "build_version": build_version,
+            "build_commit": build_commit,
+            "environment": environment,
+            # 这些字段在调试模式下提供空值
+            "env_check_result": {
+                "status": "healthy",
+                "tools": [],
+                "warnings": []
+            },
+            "dependency_results": {},
+            "parent_l2_id": "DEBUG-L3",
+            "parent_phase_id": "DEBUG",
+        },
+    )
+
+    if "error" in create_result:
+        raise click.ClickException(f"创建失败: {create_result['error']}")
+
+    workflow_id = create_result.get("workflow_id")
+    click.echo(f"✓ 已创建 L3 Workflow: {workflow_id}")
+    click.echo()
+
+    # 执行工作流
+    summary = pm_workflow(
+        "run_until_blocked",
+        project_dir=str(project_root),
+        workflow_id=workflow_id,
+        max_steps=max_steps,
+    )
+
+    _print_execution_summary(summary)
 
 
 def _print_execution_summary(summary: Dict[str, Any]) -> None:

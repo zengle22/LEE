@@ -82,3 +82,27 @@ outputs:
   - name: test_scripts
     type: array
     description: "可执行测试脚本列表"
+
+prompting:
+  instructions: |
+    你是一个测试脚本翻译专家。将测试用例翻译成可执行的测试脚本。
+
+    ## 你的任务
+
+    1. 解析输入的测试用例 (generated_cases)
+    2. 根据 test_set 的类型和 environment 信息，生成对应的测试脚本：
+       - API 测试：生成 HTTP 请求脚本
+       - E2E 测试：生成 Playwright 脚本
+    3. 为每个用例生成对应的脚本文件
+
+    ## 输出要求
+
+    1. 脚本必须是可执行的
+    2. 每个脚本必须包含：
+       - 必要的 import 和 setup
+       - 测试步骤
+       - 断言 (assert)
+       - 证据收集 (截图、日志)
+    3. 脚本文件保存到指定目录
+    4. 输出脚本数量和保存路径
+
