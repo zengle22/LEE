@@ -1,7 +1,7 @@
 """
-test_runner CLI — E2E 测试执行器 v0.1
+test_runner CLI — E2E 测试执行器 v0.2
 
-封装 Docker + Playwright 执行，产出标准化 e2e-report.json。
+支持本地和 Docker 两种执行模式，集成新的 QA 模块。
 
 Exit Code 约定:
   0 — CLI 执行成功，且至少跑过一个用例（不代表所有都 PASS）
@@ -42,7 +42,7 @@ _DEFAULT_RUNNER_SCRIPT = os.path.join(
 
 @click.group()
 def test_runner():
-    """E2E 测试执行器 (test_runner v0.1)"""
+    """E2E 测试执行器 (test_runner v0.2)"""
     pass
 
 
@@ -59,6 +59,8 @@ def test_runner():
 @click.option("--runner-script", default=None,
               help="run-e2e-docker.sh 路径（默认取 spec-global 下）")
 @click.option("--docker-image", default="e2e-runner:latest", help="Docker 镜像名")
+@click.option("--mode", default="docker", type=click.Choice(["local", "docker"]),
+              help="执行模式: local（本地）或 docker（容器）")
 def run_e2e(
     suite: str,
     environment: str,
@@ -68,8 +70,14 @@ def run_e2e(
     base_url: Optional[str],
     runner_script: Optional[str],
     docker_image: str,
+    mode: str,
 ) -> None:
-    """执行 E2E Playwright 测试套件，产出标准化报告。"""
+    """执行 E2E Playwright 测试套件，产出标准化报告。
+
+    v0.2 新增:
+      - --mode 参数支持本地执行
+      - 集成新的 QA 模块进行错误分类
+    """
 
     # 1. 校验参数 ─────────────────────────────────────────
     out_path = Path(out_dir)
@@ -78,64 +86,296 @@ def run_e2e(
     report_path = Path(report_json)
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
-    script = Path(runner_script) if runner_script else Path(_DEFAULT_RUNNER_SCRIPT).resolve()
-    if not script.exists():
-        _emit_error(f"Runner script 不存在: {script}")
-        sys.exit(EXIT_INVALID_ARGS)
-    if not os.access(script, os.X_OK):
-        _emit_error(f"Runner script 不可执行: {script}")
-        sys.exit(EXIT_INVALID_ARGS)
+    # 2. 选择执行模式 ─────────────────────────────────────
+    if mode == "local":
+        exit_code = _run_local(
+            suite=suite,
+            environment=environment,
+            test_set=test_set,
+            out_dir=out_path,
+            report_path=report_path,
+            base_url=base_url,
+        )
+    else:  # docker
+        exit_code = _run_docker(
+            suite=suite,
+            environment=environment,
+            test_set=test_set,
+            out_dir=out_path,
+            report_path=report_path,
+            base_url=base_url,
+            runner_script=runner_script,
+            docker_image=docker_image,
+        )
 
-    # 2. 构造环境变量 ─────────────────────────────────────
+    sys.exit(exit_code)
+
+
+@test_runner.command("validate")
+@click.option("--code", "code_path", required=True,
+              type=click.Path(exists=True), help="Python 测试代码文件")
+def validate_code(code_path: str) -> None:
+    """验证生成的测试代码质量。
+
+    使用 QA 模块的多层验证器检查代码。
+    """
+    try:
+        from lee.qa.validator.schema_validator import SchemaValidator
+        from lee.qa.validator.syntax_validator import SyntaxValidator
+        from lee.qa.validator.selector_validator import SelectorValidator
+        from lee.qa.validator.timeout_validator import TimeoutValidator
+    except ImportError:
+        click.echo("[ERROR] QA 模块未安装", err=True)
+        sys.exit(EXIT_INFRA_ERROR)
+
+    code = Path(code_path).read_text(encoding="utf-8")
+
+    # 运行所有验证层
+    results = {
+        "L1_Schema": SchemaValidator.validate(code),
+        "L2_Syntax": SyntaxValidator.validate(code),
+        "L3_Selector": SelectorValidator.validate(code),
+        "L3_Timeout": TimeoutValidator.validate(code),
+    }
+
+    # 汇总结果
+    all_valid = all(r.is_valid for r in results.values())
+
+    for layer, result in results.items():
+        status = "✓" if result.is_valid else "✗"
+        click.echo(f"{status} {layer}: {len(result.errors)} errors, {len(result.warnings)} warnings")
+
+        if result.errors:
+            for err in result.errors:
+                click.echo(f"  - ERROR: {err['category']}: {err['message']}", err=True)
+
+        if result.warnings:
+            for warn in result.warnings:
+                click.echo(f"  - WARN: {warn['category']}: {warn['message']}", err=True)
+
+    sys.exit(EXIT_SUCCESS if all_valid else EXIT_TEST_FAILURE)
+
+
+@test_runner.command("classify")
+@click.option("--error", "error_msg", required=True, help="错误消息")
+def classify_error(error_msg: str) -> None:
+    """分类测试错误为 code_issue 或 system_issue。"""
+    try:
+        from lee.qa.classifier.error_classifier import ErrorClassifier
+    except ImportError:
+        click.echo("[ERROR] QA 模块未安装", err=True)
+        sys.exit(EXIT_INFRA_ERROR)
+
+    result = ErrorClassifier.classify(error_msg)
+
+    click.echo(f"Type: {result.type}")
+    click.echo(f"Category: {result.category}")
+    click.echo(f"Confidence: {result.confidence}")
+    click.echo(f"Is False Fail: {result.is_false_fail}")
+    click.echo(f"Suggested Action: {result.suggested_action}")
+    click.echo(f"Explanation: {result.explanation}")
+
+    sys.exit(EXIT_SUCCESS)
+
+
+# ── 内部执行函数 ───────────────────────────────────────────
+
+def _run_local(
+    suite: str,
+    environment: str,
+    test_set: str,
+    out_dir: Path,
+    report_path: Path,
+    base_url: Optional[str],
+) -> int:
+    """本地执行模式（使用新的 QA 模块）"""
+    try:
+        from lee.qa.runner.local import LocalRunner
+        from lee.qa.runner.base import TestConfig
+        from lee.qa.classifier.error_classifier import ErrorClassifier
+        import yaml
+    except ImportError as e:
+        _emit_error(f"QA 模块导入失败: {e}")
+        return EXIT_INFRA_ERROR
+
+    # 1. 加载测试用例
+    with open(test_set, encoding="utf-8") as f:
+        test_data = yaml.safe_load(f)
+
+    # 2. 生成测试脚本（如果有 generator）
+    scripts = _get_scripts_from_test_set(test_data, out_dir)
+    if not scripts:
+        _emit_error("没有找到测试脚本")
+        return EXIT_INVALID_ARGS
+
+    # 3. 配置执行器
+    config = TestConfig(
+        scripts=scripts,
+        base_url=base_url or test_data.get("base_url", "http://localhost:3000"),
+        output_dir=out_dir / "output",
+        headless=True,
+        environment=environment,
+    )
+
+    # 4. 检查环境
+    runner = LocalRunner(config)
+    env_checks = runner.check_environment()
+
+    if not all(env_checks.values()):
+        missing = [k for k, v in env_checks.items() if not v]
+        _emit_error(f"环境检查失败: {', '.join(missing)}")
+        return EXIT_INFRA_ERROR
+
+    # 5. 执行测试
+    result = runner.execute()
+
+    # 6. 生成报告
+    std_report = _transform_result_to_report(result, suite, environment)
+
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(std_report, f, ensure_ascii=False, indent=2)
+
+    click.echo(f"[test_runner] 报告已写入: {report_path}", err=True)
+
+    # 7. 确定退出码
+    if result.exit_code >= 2:
+        return EXIT_INFRA_ERROR
+    elif result.failed > 0:
+        return EXIT_TEST_FAILURE
+    elif result.total == 0:
+        return EXIT_INFRA_ERROR
+    else:
+        return EXIT_SUCCESS
+
+
+def _run_docker(
+    suite: str,
+    environment: str,
+    test_set: str,
+    out_dir: Path,
+    report_path: Path,
+    base_url: Optional[str],
+    runner_script: Optional[str],
+    docker_image: str,
+) -> int:
+    """Docker 执行模式（原有逻辑）"""
+    script = Path(runner_script) if runner_script else Path(_DEFAULT_RUNNER_SCRIPT).resolve()
+
+    if not script.exists():
+        # 如果脚本不存在，尝试使用新的 DockerRunner
+        try:
+            from lee.qa.runner.docker import DockerRunner
+            from lee.qa.runner.base import TestConfig
+            import yaml
+
+            with open(test_set, encoding="utf-8") as f:
+                test_data = yaml.safe_load(f)
+
+            scripts = _get_scripts_from_test_set(test_data, out_dir)
+
+            config = TestConfig(
+                scripts=scripts,
+                base_url=base_url or test_data.get("base_url", "http://localhost:3000"),
+                output_dir=out_dir / "output",
+                environment=environment,
+            )
+
+            runner = DockerRunner(config)
+            env_checks = runner.check_environment()
+
+            if not env_checks.get("docker"):
+                _emit_error("Docker 不可用")
+                return EXIT_INFRA_ERROR
+
+            result = runner.execute()
+
+            # 生成报告
+            std_report = _transform_result_to_report(result, suite, environment)
+
+            with open(report_path, "w", encoding="utf-8") as f:
+                json.dump(std_report, f, ensure_ascii=False, indent=2)
+
+            if result.exit_code >= 2:
+                return EXIT_INFRA_ERROR
+            elif result.failed > 0:
+                return EXIT_TEST_FAILURE
+            else:
+                return EXIT_SUCCESS
+
+        except Exception as e:
+            _emit_error(f"DockerRunner 执行失败: {e}")
+            return EXIT_INFRA_ERROR
+    else:
+        # 原有的脚本执行逻辑
+        return _run_docker_script(
+            suite=suite,
+            environment=environment,
+            test_set=test_set,
+            out_dir=out_dir,
+            report_path=report_path,
+            base_url=base_url,
+            script=script,
+            docker_image=docker_image,
+        )
+
+
+def _run_docker_script(
+    suite: str,
+    environment: str,
+    test_set: str,
+    out_dir: Path,
+    report_path: Path,
+    base_url: Optional[str],
+    script: Path,
+    docker_image: str,
+) -> int:
+    """执行 Docker 脚本（原有逻辑）"""
+    # 1. 构造环境变量
     env = os.environ.copy()
     env.update({
         "LEE_ENV": environment,
         "SUITE": suite,
         "TEST_SET_PATH": str(Path(test_set).resolve()),
-        "WORK_DIR": str(out_path.resolve()),
+        "WORK_DIR": str(out_dir.resolve()),
         "DOCKER_IMAGE": docker_image,
     })
     if base_url:
         env["BASE_URL"] = base_url
 
-    # 3. 调用 run-e2e-docker.sh ──────────────────────────
+    # 2. 调用脚本
     click.echo(f"[test_runner] 开始执行: suite={suite} env={environment}", err=True)
-    click.echo(f"[test_runner] runner script: {script}", err=True)
-    click.echo(f"[test_runner] out-dir: {out_path}", err=True)
 
     try:
         result = subprocess.run(
             [str(script)],
             env=env,
-            cwd=str(out_path),
-            capture_output=False,          # 让 stdout/stderr 直接流向 stderr
+            cwd=str(out_dir),
+            capture_output=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=600,                   # 10 分钟硬超时
+            timeout=600,
         )
         docker_exit = result.returncode
-        # 把 shell 脚本的 stdout/stderr 流到自己的 stderr
+
         if result.stderr:
             sys.stderr.buffer.write(result.stderr)
         if result.stdout:
             sys.stderr.buffer.write(result.stdout)
+
     except FileNotFoundError:
         _emit_error(f"无法执行脚本: {script}")
-        sys.exit(EXIT_INFRA_ERROR)
+        return EXIT_INFRA_ERROR
     except subprocess.TimeoutExpired:
         _emit_error("Runner 执行超时（600s）")
-        sys.exit(EXIT_INFRA_ERROR)
+        return EXIT_INFRA_ERROR
     except Exception as exc:
         _emit_error(f"Runner 执行异常: {exc}")
-        sys.exit(EXIT_INFRA_ERROR)
+        return EXIT_INFRA_ERROR
 
-    click.echo(f"[test_runner] Docker exit code: {docker_exit}", err=True)
-
-    # 4. 收集 Playwright JSON 报告 ──────────────────────
-    # playwright.config.ts 输出到 output/e2e-report.json (相对 WORK_DIR)
+    # 3. 收集报告并转换
     pw_report_candidates = [
-        out_path / "output" / "e2e-report.json",
-        out_path / "e2e-report.json",
+        out_dir / "output" / "e2e-report.json",
+        out_dir / "e2e-report.json",
     ]
     pw_report = None
     for candidate in pw_report_candidates:
@@ -143,22 +383,15 @@ def run_e2e(
             pw_report = candidate
             break
 
-    if pw_report is None and docker_exit not in (2, 3):
-        # Docker 跑完了但没找到报告——当作 infra 错误
-        _emit_error("Playwright JSON 报告未找到")
-        sys.exit(EXIT_INFRA_ERROR)
-
-    # 5. 转换为标准报告 ──────────────────────────────────
     if pw_report and pw_report.exists():
         try:
             with open(pw_report, "r", encoding="utf-8") as f:
                 pw_data = json.load(f)
-            std_report = _transform_playwright_report(pw_data, suite, environment, out_path)
+            std_report = _transform_playwright_report(pw_data, suite, environment, out_dir)
         except Exception as exc:
             _emit_error(f"Playwright 报告解析失败: {exc}")
-            sys.exit(EXIT_INFRA_ERROR)
+            return EXIT_INFRA_ERROR
     else:
-        # Docker 就挂了，给一个空报告
         std_report = {
             "suite": suite,
             "env": environment,
@@ -168,39 +401,66 @@ def run_e2e(
             "cases": [],
         }
 
-    # 6. 写标准报告 ──────────────────────────────────────
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(std_report, f, ensure_ascii=False, indent=2)
 
-    click.echo(f"[test_runner] 报告已写入: {report_path}", err=True)
-
-    # 7. 确定最终 exit code ─────────────────────────────
+    # 4. 确定退出码
     total = std_report.get("total", 0)
     failed = std_report.get("failed", 0)
 
     if docker_exit >= 2:
-        final_exit = EXIT_INFRA_ERROR
+        return EXIT_INFRA_ERROR
     elif total == 0:
-        # Docker exit 0 但没跑任何用例——也算 infra 问题
-        final_exit = EXIT_INFRA_ERROR
+        return EXIT_INFRA_ERROR
     elif failed > 0:
-        final_exit = EXIT_TEST_FAILURE
+        return EXIT_TEST_FAILURE
     else:
-        final_exit = EXIT_SUCCESS
+        return EXIT_SUCCESS
 
-    # 8. stdout 输出 summary JSON ───────────────────────
-    summary = {
-        "report_json": str(report_path),
-        "total": total,
-        "passed": std_report.get("passed", 0),
-        "failed": failed,
+
+def _get_scripts_from_test_set(test_data: Dict, out_dir: Path) -> List[Path]:
+    """从 test set 获取脚本路径"""
+    scripts_dir = out_dir / "scripts"
+    scripts = []
+
+    # 查找已存在的脚本
+    if scripts_dir.exists():
+        scripts = list(scripts_dir.glob("test_*.py"))
+        scripts.extend(scripts_dir.glob("*_test.py"))
+
+    # 如果没有脚本，返回空列表（需要先生成）
+    return scripts
+
+
+def _transform_result_to_report(result, suite: str, environment: str) -> Dict:
+    """将 TestResult 转换为标准报告"""
+    cases = []
+    for case in result.cases:
+        case_data = {
+            "id": case.case_id,
+            "status": case.status,
+            "duration_ms": case.duration_ms,
+        }
+        if case.error:
+            case_data["error_message"] = case.error
+        if case.error_type:
+            case_data["error_type"] = case.error_type
+        if case.screenshot_path:
+            case_data["screenshot"] = case.screenshot_path
+        cases.append(case_data)
+
+    return {
+        "suite": suite,
+        "env": environment,
+        "total": result.total,
+        "passed": result.passed,
+        "failed": result.failed,
+        "skipped": result.skipped,
+        "cases": cases,
     }
-    click.echo(json.dumps(summary, ensure_ascii=False))
-
-    sys.exit(final_exit)
 
 
-# ── 内部工具函数 ────────────────────────────────────────────
+# ── 原有工具函数 ────────────────────────────────────────────
 
 def _emit_error(message: str) -> None:
     """向 stderr 输出结构化错误。"""
@@ -220,7 +480,6 @@ def _transform_playwright_report(
     passed = 0
     failed = 0
 
-    # Playwright JSON reporter 结构: { suites: [...], stats: {...} }
     for pw_suite in pw_data.get("suites", []):
         for spec in pw_suite.get("specs", []):
             for test in spec.get("tests", []):
@@ -236,9 +495,8 @@ def _transform_playwright_report(
                         failed += 1
                         mapped_status = "failed"
                     else:
-                        mapped_status = status  # skipped, timedOut, etc.
+                        mapped_status = status
 
-                    # 错误信息
                     error_msg = None
                     error_type = None
                     if mapped_status == "failed":
@@ -250,7 +508,6 @@ def _transform_playwright_report(
                         )
                         error_type = _classify_error(error_msg, status)
 
-                    # Artifacts 路径（相对 out_dir）
                     attachments = result.get("attachments", [])
                     screenshot = _find_attachment(attachments, "screenshot", out_dir)
                     trace = _find_attachment(attachments, "trace", out_dir)
@@ -263,7 +520,7 @@ def _transform_playwright_report(
                         "error_message": error_msg,
                         "screenshot": screenshot,
                         "trace": trace,
-                        "logs": None,  # v0.1 不解析日志路径
+                        "logs": None,
                     })
 
     return {
@@ -283,7 +540,6 @@ def _classify_error(error_msg: str, pw_status: str) -> str:
 
     lower = error_msg.lower()
 
-    # Infra 错误
     infra_keywords = [
         "econnrefused", "enotfound", "dns", "etimedout",
         "net::err_", "network error", "socket hang up",
@@ -292,19 +548,16 @@ def _classify_error(error_msg: str, pw_status: str) -> str:
         if kw in lower:
             return "infra_error"
 
-    # 超时 / Locator 错误 → script_error
     script_keywords = ["timeout", "locator", "waitfor", "selector"]
     for kw in script_keywords:
         if kw in lower:
             return "script_error"
 
-    # 断言失败
     assertion_keywords = ["expect", "assert", "toBe", "toHave", "toEqual", "toContain"]
     for kw in assertion_keywords:
         if kw in lower:
             return "assertion_failed"
 
-    # 默认
     return "assertion_failed" if pw_status in ("failed", "unexpected") else "script_error"
 
 
@@ -320,7 +573,6 @@ def _find_attachment(
         path = att.get("path", "")
         if content_type_prefix in name or content_type_prefix in ct:
             if path:
-                # 尝试转为相对路径
                 try:
                     return str(Path(path).relative_to(out_dir))
                 except ValueError:
