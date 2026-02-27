@@ -19,6 +19,13 @@ class RuleBasedLayoutProcessor:
         self.result: List[str] = []
         self.line_index = 0
         self.code_block_placeholders: dict = {}  # 存储代码块的占位符映射
+        # 层级编号计数器
+        self.chapter_counter = 0  # 主章节计数器（H1 和顶级 H2 共享）
+        self.subsection_counter = 0  # 子节计数器（H2 子节 或 H3）
+        self.subsubsection_counter = 0  # 三级子节（H3 的子节）
+        self.last_chapter = 0
+        self.last_subsection = 0
+        self.has_parent_h1 = False  # 是否在 H1 下面
 
     def process(self, markdown_content: str) -> str:
         """
@@ -95,20 +102,34 @@ class RuleBasedLayoutProcessor:
         if stripped in ('---', '***'):
             return '<hr>', 1
 
-        # H1 标题
+        # H1 标题（一级章节：1, 2, 3...）
         if stripped.startswith('# '):
             content = self._clean_markdown(stripped[2:].strip())
-            return f'<h1>{content}</h1>', 1
+            numbered_content, has_number = self._convert_chapter_number(content, 1)
+            # 一级标题：最醒目，红色大字体
+            return f'<h1 style="color:#cf1322;font-size:22px;font-weight:700;margin:24px 0 16px 0;">{numbered_content}</h1><hr>', 1
 
-        # H2 标题
+        # H2 标题（二级章节：1.1, 1.2, 2.1...）
         if stripped.startswith('## '):
             content = self._clean_markdown(stripped[3:].strip())
-            return f'<h2>{content}</h2>', 1
+            numbered_content, has_number = self._convert_chapter_number(content, 2)
+            if has_number:
+                # 二级标题：红色，较大字体
+                return f'<h2 style="color:#cf1322;font-size:18px;font-weight:600;margin:20px 0 12px 0;">{numbered_content}</h2><hr>', 1
+            else:
+                # 无编号的二级标题：稍弱但仍突出
+                return f'<h2 style="color:#555555;font-size:17px;font-weight:600;margin:20px 0 12px 0;">{numbered_content}</h2><hr>', 1
 
-        # H3 标题
+        # H3 标题（三级章节：1.1.1, 1.1.2...）
         if stripped.startswith('### '):
             content = self._clean_markdown(stripped[4:].strip())
-            return f'<h3>{content}</h3>', 1
+            numbered_content, has_number = self._convert_chapter_number(content, 3)
+            if has_number:
+                # 三级标题：深红色，中等字体
+                return f'<h3 style="color:#cf1322;font-size:16px;font-weight:600;margin:16px 0 8px 0;">{numbered_content}</h3><hr>', 1
+            else:
+                # 无编号的三级标题：普通样式
+                return f'<h3 style="color:#555555;font-size:15px;font-weight:600;margin:16px 0 8px 0;">{numbered_content}</h3><hr>', 1
 
         # 引用块
         if stripped.startswith('>'):
@@ -343,6 +364,130 @@ class RuleBasedLayoutProcessor:
         text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
         return text
 
+    def _is_real_chapter(self, text: str, level: int) -> bool:
+        """
+        判断是否为真正的"章节"（需要编号）
+
+        规则：
+        - 原文已有编号标记（圆圈数字、emoji数字、中文数字、阿拉伯数字）
+        - 或者是一个完整的小节标题（通常较长，包含关键词）
+
+        不编号的情况：
+        - 一句话
+        - 排比句
+        - 简短的过渡句
+        """
+        # 圆圈数字映射
+        circle_nums = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮'
+        # Emoji 数字映射
+        emoji_nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
+
+        # 检查是否有任何编号标记
+        for char in circle_nums:
+            if char in text:
+                return True
+        for emoji in emoji_nums:
+            if emoji in text:
+                return True
+
+        # 检查中文数字
+        chinese_nums = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+        for ch in chinese_nums:
+            if re.match(rf'^{ch}[、.．]\s*', text):
+                return True
+
+        # 检查阿拉伯数字
+        if re.match(r'^\d+[.、．]\s*', text):
+            return True
+
+        # 对于 H1/H2，如果标题较长（>10字符）或包含章节关键词，也认为是章节
+        if level in (1, 2):
+            chapter_keywords = ['真实', '事故', '为什么', '怎么', '解决', '治理', '启示',
+                              '错误', '修复', '效果', '定义', '标准', '机制', '规则']
+            for kw in chapter_keywords:
+                if kw in text:
+                    return True
+            # 标题较长也认为是章节
+            if len(text) > 10:
+                return True
+
+        return False
+
+    def _convert_chapter_number(self, text: str, level: int) -> tuple:
+        """
+        转换章节编号为分层阿拉伯数字（1, 1.1, 1.1.1）
+        H1 和顶级 H2 共享主章节计数器，确保编号连续
+
+        Args:
+            text: 原始标题文本
+            level: 标题级别 (1, 2, 3)
+
+        Returns:
+            (转换后的标题文本, 是否需要编号)
+        """
+        # 圆圈数字映射
+        circle_nums = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮'
+        # Emoji 数字映射
+        emoji_nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
+
+        # 首先判断是否需要编号
+        needs_number = self._is_real_chapter(text, level)
+
+        # 清理原文中的编号标记
+        cleaned_text = text
+        for char in circle_nums:
+            cleaned_text = cleaned_text.replace(char, '')
+        for emoji in emoji_nums:
+            cleaned_text = cleaned_text.replace(emoji, '')
+
+        # 清理中文数字
+        chinese_nums = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+        for ch in chinese_nums:
+            cleaned_text = re.sub(rf'^{ch}[、.．]\s*', '', cleaned_text)
+
+        # 清理阿拉伯数字
+        cleaned_text = re.sub(r'^\d+[.、．]\s*', '', cleaned_text)
+        cleaned_text = cleaned_text.strip()
+
+        if not needs_number:
+            return cleaned_text, False
+
+        # 生成层级编号
+        if level == 1:
+            # H1：主章节，标记进入 H1 作用域
+            self.chapter_counter += 1
+            self.subsection_counter = 0
+            self.subsubsection_counter = 0
+            self.last_chapter = self.chapter_counter
+            self.has_parent_h1 = True
+            number = f"{self.chapter_counter}"
+        elif level == 2:
+            # H2：如果在 H1 作用域内，则作为子节；否则作为主章节
+            if self.has_parent_h1:
+                # 作为 H1 的子节
+                self.subsection_counter += 1
+                self.subsubsection_counter = 0
+                self.last_subsection = self.subsection_counter
+                number = f"{self.last_chapter}.{self.subsection_counter}"
+            else:
+                # 作为主章节（与 H1 共享计数器）
+                self.chapter_counter += 1
+                self.subsection_counter = 0
+                self.subsubsection_counter = 0
+                self.last_chapter = self.chapter_counter
+                number = f"{self.chapter_counter}"
+        else:  # level == 3
+            # H3：子节
+            self.subsubsection_counter += 1
+            if self.last_subsection > 0:
+                # 有 H2 子节，格式：1.1.1
+                number = f"{self.last_chapter}.{self.last_subsection}.{self.subsubsection_counter}"
+            else:
+                # 直接在主章节下，格式：1.1
+                number = f"{self.last_chapter}.{self.subsubsection_counter}"
+
+        return f"{number}. {cleaned_text}", True
+
     def _process_blockquote(self, start_index: int) -> tuple:
         """
         处理引用块（可能是多行）
@@ -367,7 +512,9 @@ class RuleBasedLayoutProcessor:
         combined_text = ' '.join(lines)
         is_highlight = any(keyword in combined_text for keyword in [
             '结论', '关键', '重要', '核心', '本质', '没有展示',
-            '更像是', '而不是', '才关键'
+            '更像是', '而不是', '才关键', '不会', '没有', '无法',
+            '完成', '验证', '证据', '定义', '人类', 'Agent',
+            '责任', '结果', '语言', '治理', '结构', '文化'
         ])
 
         # 构建引用块内容（使用 <br> 连接多行）
