@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/schema/contracts/requirement-analysis/v1",
+  "title": "Requirement Analysis Contract",
+  "description": "需求分析输出契约，验证需求分析步骤的输出",
+  "type": "object",
+  "required": ["feature_points", "acceptance_criteria"],
+  "properties": {
+    "task_id": {"type": "string", "description": "任务 ID"},
+    "point_id": {"type": "string", "description": "功能点 ID"},
+    "summary": {"type": "string", "description": "需求概述"},
+    "feature_points": {
+      "type": "array",
+      "description": "功能点列表",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "description"],
+        "properties": {
+          "id": {"type": "string", "description": "功能点 ID"},
+          "title": {"type": "string", "description": "功能点标题"},
+          "description": {"type": "string", "description": "功能点描述"},
+          "layer": {"type": "string", "enum": ["ui", "service", "data", "integration"], "description": "功能层级"},
+          "priority": {"type": "string", "enum": ["must_have", "should_have", "nice_to_have"], "description": "优先级"},
+          "complexity": {"type": "string", "enum": ["S", "M", "L"], "description": "复杂度"},
+          "dependencies": {"type": "array", "items": {"type": "string"}, "description": "依赖的功能点 ID"}
+        }
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "description": "验收标准列表",
+      "items": {
+        "type": "object",
+        "required": ["criteria"],
+        "properties": {
+          "point_id": {"type": "string", "description": "关联的功能点 ID"},
+          "criteria": {"type": "string", "description": "验收标准描述"},
+          "verification_method": {"type": "string", "enum": ["manual_test", "automated_test", "code_review", "documentation"], "description": "验证方式"}
+        }
+      }
+    },
+    "edge_cases": {
+      "type": "array",
+      "description": "边界条件列表",
+      "items": {
+        "type": "object",
+        "properties": {
+          "scenario": {"type": "string", "description": "场景描述"},
+          "input": {"type": "string", "description": "输入条件"},
+          "expected_behavior": {"type": "string", "description": "预期行为"},
+          "priority": {"type": "string", "enum": ["high", "medium", "low"], "description": "处理优先级"}
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "description": "输入定义",
+      "properties": {
+        "user_inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "type": {"type": "string"},
+              "required": {"type": "boolean"},
+              "constraints": {"type": "string"}
+            }
+          }
+        },
+        "api_dependencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "api": {"type": "string"},
+              "method": {"type": "string"},
+              "purpose": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "description": "输出定义",
+      "properties": {
+        "ui_changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "component": {"type": "string"},
+              "change": {"type": "string"}
+            }
+          }
+        },
+        "data_changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entity": {"type": "string"},
+              "operation": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "description": "假设条件",
+      "items": {"type": "string"}
+    },
+    "out_of_scope": {
+      "type": "array",
+      "description": "明确不做的事项",
+      "items": {"type": "string"}
+    },
+    "author": {"type": "string", "description": "分析作者"},
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

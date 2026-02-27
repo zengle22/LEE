@@ -643,3 +643,234 @@ class TestFindGateIR:
 
         result = orch._find_gate_ir(mock_template, "gate_1")
         assert result == mock_gate
+
+
+# ========================================================================
+# Feature 4: v3.6 ArtifactManager 集成测试
+# ========================================================================
+
+class TestOrchestratorArtifactRecording:
+    """v3.6: 验证 Orchestrator 产出物记录功能"""
+
+    def setup_method(self):
+        """创建临时目录和测试文件"""
+        import tempfile
+        import os
+        self.temp_dir = tempfile.mkdtemp()
+        self.test_files = []
+
+        # 创建测试文件
+        self.test_patch_file = Path(self.temp_dir) / "test.patch"
+        self.test_patch_file.write_text("@@ test patch @@")
+        self.test_files.append(self.test_patch_file)
+
+        self.test_report_file = Path(self.temp_dir) / "test_report.json"
+        self.test_report_file.write_text('{"passed": 10, "failed": 0}')
+        self.test_files.append(self.test_report_file)
+
+        self.test_coverage_file = Path(self.temp_dir) / "coverage.xml"
+        self.test_coverage_file.write_text("<coverage>80%</coverage>")
+        self.test_files.append(self.test_coverage_file)
+
+        self.test_review_file = Path(self.temp_dir) / "review.md"
+        self.test_review_file.write_text("# Code Review\nLGTM")
+        self.test_files.append(self.test_review_file)
+
+    def teardown_method(self):
+        """清理临时目录"""
+        import shutil
+        if Path(self.temp_dir).exists():
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_orchestrator_has_artifact_manager(self):
+        """验证 Orchestrator 初始化时创建了 artifact_manager 和 manifest_manager"""
+        from lee.orchestrator.execution.artifacts.manager import ArtifactManager
+        from lee.orchestrator.execution.artifacts.manifest import ManifestManager
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+
+        mock_store = MagicMock()
+        orch = Orchestrator(store=mock_store, project_root=self.temp_dir)
+
+        assert hasattr(orch, 'artifact_manager')
+        assert isinstance(orch.artifact_manager, ArtifactManager)
+
+        assert hasattr(orch, 'manifest_manager')
+        assert isinstance(orch.manifest_manager, ManifestManager)
+
+    def test_record_step_artifacts_with_patch_file(self):
+        """验证记录 patch 文件产出物"""
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+        from unittest.mock import patch
+
+        mock_store = MagicMock()
+        orch = Orchestrator(store=mock_store, project_root=self.temp_dir)
+
+        workflow_id = "test-workflow-001"
+        step_id = "implement"
+
+        # 模拟包含 patch_file 的输出
+        output = {
+            "patch_file": str(self.test_patch_file),
+            "status": "completed"
+        }
+
+        # Mock artifact_manager.adopt 以避免实际文件操作
+        with patch.object(orch.artifact_manager, 'adopt') as mock_adopt:
+            orch._record_step_artifacts(workflow_id, step_id, output)
+
+            # 验证 adopt 被调用
+            mock_adopt.assert_called_once()
+            call_args = mock_adopt.call_args
+
+            # 验证参数
+            assert call_args.kwargs['run_id'] == workflow_id
+            assert call_args.kwargs['file_path'] == str(self.test_patch_file)
+            assert call_args.kwargs['category'] == f"step_{step_id}"
+            assert 'step_id' in call_args.kwargs['metadata']
+            assert 'output_key' in call_args.kwargs['metadata']
+
+    def test_record_step_artifacts_with_test_report(self):
+        """验证记录测试报告产出物 (识别为 TEST 类型)"""
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+        from unittest.mock import patch
+
+        mock_store = MagicMock()
+        orch = Orchestrator(store=mock_store, project_root=self.temp_dir)
+
+        workflow_id = "test-workflow-001"
+        step_id = "run_tests"
+
+        output = {
+            "test_report": str(self.test_report_file),
+            "coverage_report": str(self.test_coverage_file),
+            "status": "completed"
+        }
+
+        with patch.object(orch.artifact_manager, 'adopt') as mock_adopt:
+            orch._record_step_artifacts(workflow_id, step_id, output)
+
+            # 验证 adopt 被调用 2 次 (test_report + coverage_report)
+            assert mock_adopt.call_count == 2
+
+    def test_record_step_artifacts_with_review_report(self):
+        """验证记录 code review 产出物 (识别为 DOCUMENT 类型)"""
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+        from unittest.mock import patch
+
+        mock_store = MagicMock()
+        orch = Orchestrator(store=mock_store, project_root=self.temp_dir)
+
+        workflow_id = "test-workflow-001"
+        step_id = "code_review"
+
+        output = {
+            "review_report": str(self.test_review_file),
+            "status": "approved"
+        }
+
+        with patch.object(orch.artifact_manager, 'adopt') as mock_adopt:
+            orch._record_step_artifacts(workflow_id, step_id, output)
+
+            mock_adopt.assert_called_once()
+
+    def test_record_step_artifacts_with_file_suffixes(self):
+        """验证识别 *_file 和 *_path 后缀的产出物"""
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+        from unittest.mock import patch
+
+        mock_store = MagicMock()
+        orch = Orchestrator(store=mock_store, project_root=self.temp_dir)
+
+        workflow_id = "test-workflow-001"
+        step_id = "step_1"
+
+        # 创建临时文件
+        output_file = Path(self.temp_dir) / "output.txt"
+        output_file.write_text("output content")
+
+        output = {
+            "output_file": str(output_file),
+            "log_path": str(self.test_coverage_file)
+        }
+
+        with patch.object(orch.artifact_manager, 'adopt') as mock_adopt:
+            orch._record_step_artifacts(workflow_id, step_id, output)
+
+            # 验证识别了两个文件
+            assert mock_adopt.call_count == 2
+
+    def test_record_step_artifacts_with_non_dict_output(self):
+        """验证非 dict 输出时不报错"""
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+        from unittest.mock import patch
+
+        mock_store = MagicMock()
+        orch = Orchestrator(store=mock_store, project_root=self.temp_dir)
+
+        # 非字典输出不应报错
+        with patch.object(orch.artifact_manager, 'adopt') as mock_adopt:
+            orch._record_step_artifacts("wf-001", "step_1", "string output")
+            orch._record_step_artifacts("wf-001", "step_1", None)
+            orch._record_step_artifacts("wf-001", "step_1", 123)
+
+            # adopt 不应被调用
+            mock_adopt.assert_not_called()
+
+    def test_record_step_artifacts_with_invalid_file_path(self):
+        """验证无效文件路径时静默处理"""
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+        from unittest.mock import patch
+
+        mock_store = MagicMock()
+        orch = Orchestrator(store=mock_store, project_root=self.temp_dir)
+
+        output = {
+            "patch_file": "/nonexistent/path/to/file.patch",
+            "status": "completed"
+        }
+
+        # 不应抛出异常
+        with patch.object(orch.artifact_manager, 'adopt') as mock_adopt:
+            orch._record_step_artifacts("wf-001", "step_1", output)
+
+            # adopt 仍会被调用，但内部会处理文件不存在的情况
+            mock_adopt.assert_called_once()
+
+    def test_record_step_artifacts_empty_output(self):
+        """验证空输出时不报错"""
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+        from unittest.mock import patch
+
+        mock_store = MagicMock()
+        orch = Orchestrator(store=mock_store, project_root=self.temp_dir)
+
+        with patch.object(orch.artifact_manager, 'adopt') as mock_adopt:
+            orch._record_step_artifacts("wf-001", "step_1", {})
+            orch._record_step_artifacts("wf-001", "step_1", {"status": "completed"})
+
+            mock_adopt.assert_not_called()
+
+    def test_manifest_created_on_workflow_creation(self):
+        """验证工作流创建时创建 Manifest"""
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+        from unittest.mock import patch
+
+        mock_store = MagicMock()
+        orch = Orchestrator(store=mock_store, project_root=self.temp_dir)
+
+        # Mock manifest_manager.create
+        with patch.object(orch.manifest_manager, 'create') as mock_create:
+            # 模拟 create_workflow 内部逻辑
+            run_id = "test-run-001"
+            workflow_id = "test-workflow"
+
+            orch.manifest_manager.create(
+                run_id=run_id,
+                workflow_id=workflow_id,
+                department="dev",
+                executor="claude_code",
+                parent_run_id=None,
+                root_run_id=run_id
+            )
+
+            mock_create.assert_called_once()

@@ -31,7 +31,7 @@ tags: [workflow, dev, feature, l2, l3, v3]
 roles:
   agents:
     - agent.dev.uniapp_frontend_engineer
-    - agent.dev.backend_engineer
+    - agent.dev.go_backend_engineer
     - agent.dev.code_self_reviewer
     - agent.pm.planning  # PMA for L complexity
   skills:
@@ -115,7 +115,7 @@ phases:
       - id: p1_1_api_design
         name: "API 契约设计"
         type: agent
-        run: agent.dev.backend_engineer
+        run: agent.dev.go_backend_engineer
         inputs:
           - tech_ref: "$inputs.frozen_dev_package.package_content.tech_ref"
           - ui_ref: "$inputs.frozen_dev_package.package_content.ui_ref"
@@ -163,7 +163,7 @@ phases:
           - id: p2_2_be_impl
             name: "后端实现"
             type: agent
-            run: agent.dev.backend_engineer
+            run: agent.dev.go_backend_engineer
             inputs:
               - tech_ref: "$inputs.frozen_dev_package.package_content.tech_ref"
               - api_contract: "output/api-contract.yaml"

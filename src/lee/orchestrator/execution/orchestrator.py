@@ -188,6 +188,15 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # v3.4: TraceLog 追踪日志
         self.trace_log = TraceLog(project_root or ".")
 
+        # v3.6: ArtifactManager 产出物管理
+        from lee.orchestrator.execution.artifacts import ArtifactManager, ManifestManager
+        artifacts_root = Path(project_root or ".") / ".artifacts"
+        self.artifact_manager = ArtifactManager(artifacts_root)
+        self.manifest_manager = ManifestManager(
+            artifacts_root,
+            registry=self.artifact_manager.registry
+        )
+
     # ============ 工作流管理 ============
 
     async def create_workflow(
@@ -244,6 +253,25 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         # 写入数据库
         await self.store.create_workflow(instance)
+
+        # v3.6: 创建产出物 Manifest
+        try:
+            run_id = data.get("run_id", workflow_id)
+            department = data.get("department") or (
+                template.owner if hasattr(template, "owner") else None
+            )
+            self.manifest_manager.create(
+                run_id=run_id,
+                workflow_id=workflow_id,
+                department=department,
+                executor=data.get("executor"),
+                executor_version=data.get("executor_version"),
+                parent_run_id=parent_id,
+                root_run_id=data.get("root_run_id")
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to create manifest: {e}")
 
         # v3.2: 记录工作流创建事件
         self.event_log.run_id = data.get("run_id", workflow_id)
@@ -640,7 +668,14 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                         output,
                         step_outputs=step_to_execute.outputs if hasattr(step_to_execute, 'outputs') else None
                     )
-                    
+
+                    # v3.6: 记录步骤产出物到 ArtifactManager
+                    try:
+                        self._record_step_artifacts(workflow_id, step_to_execute.id, output)
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).warning(f"Failed to record artifacts: {e}")
+
                     # v3.5: Publish EventBus event
                     get_event_bus().publish(Event(
                         type=EventType.STEP_COMPLETED,
@@ -1642,6 +1677,69 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             ))
         except Exception:
             pass
+
+    def _record_step_artifacts(self, workflow_id: str, step_id: str, output: Any) -> None:
+        """Record step output as artifacts.
+
+        Args:
+            workflow_id: Workflow ID
+            step_id: Step ID
+            output: Step output data
+        """
+        from lee.orchestrator.execution.artifacts import ArtifactType
+
+        run_id = workflow_id  # 简化：使用 workflow_id 作为 run_id
+
+        # 记录文件类型产出物
+        if isinstance(output, dict):
+            # 检查输出中的文件路径
+            # 优先匹配后缀规则，再匹配特定关键字（无标准后缀的）
+            for key, value in output.items():
+                if key.endswith("_file") or key.endswith("_path") or key in [
+                    # 无标准后缀的关键字需要显式列出：
+                    "code_diff",        # 代码差异输出
+                    "test_report",      # 测试报告
+                    "coverage_report",  # 覆盖率报告
+                    "review_report",    # 代码审查报告
+                    # 注意：patch_file, output_file 等已被 *_file 后缀覆盖，无需显式列出
+                ]:
+                    if isinstance(value, str) and value:
+                        try:
+                            # 判断产出物类型
+                            artifact_type = ArtifactType.PATCH
+                            if "test" in key.lower():
+                                artifact_type = ArtifactType.TEST
+                            elif "review" in key.lower():
+                                artifact_type = ArtifactType.DOCUMENT
+                            elif "contract" in key.lower():
+                                artifact_type = ArtifactType.CONTRACT
+
+                            # adopt 外部文件
+                            self.artifact_manager.adopt(
+                                run_id=run_id,
+                                artifact_type=artifact_type,
+                                file_path=value,
+                                category=f"step_{step_id}",
+                                metadata={"step_id": step_id, "output_key": key}
+                            )
+                        except Exception:
+                            pass  # 文件不存在或其他错误，静默处理
+
+            # 记录日志类型产出物（非文件输出）
+            if "message" in output or "summary" in output or "result" in output:
+                try:
+                    import json
+                    content = json.dumps(output, ensure_ascii=False, indent=2)
+                    self.artifact_manager.create(
+                        run_id=run_id,
+                        artifact_type=ArtifactType.LOG,
+                        category=f"step_{step_id}",
+                        content=content.encode("utf-8"),
+                        filename=f"{step_id}_output.json",
+                        metadata={"step_id": step_id}
+                    )
+                except Exception:
+                    pass
 
     def _publish_pma_split_completed(self, workflow_id: str, phase_id: str, point_count: int, confidence: float) -> None:
         """Publish event when PMA split completes."""

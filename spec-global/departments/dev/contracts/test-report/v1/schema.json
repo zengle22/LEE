@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/schema/contracts/test-report/v1",
+  "title": "Test Report Contract",
+  "description": "测试报告输出契约，用于验证测试执行步骤的输出",
+  "type": "object",
+  "required": ["test_results", "coverage"],
+  "properties": {
+    "test_results": {
+      "type": "object",
+      "description": "测试结果",
+      "required": ["total", "passed", "failed"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0, "description": "总测试数"},
+        "passed": {"type": "integer", "minimum": 0, "description": "通过的测试数"},
+        "failed": {"type": "integer", "minimum": 0, "description": "失败的测试数"},
+        "skipped": {"type": "integer", "minimum": 0, "description": "跳过的测试数"},
+        "duration_ms": {"type": "integer", "minimum": 0, "description": "测试执行时长（毫秒）"}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "description": "测试覆盖率",
+      "required": ["percentage"],
+      "properties": {
+        "percentage": {"type": "number", "minimum": 0, "maximum": 100, "description": "覆盖率百分比"},
+        "lines": {
+          "type": "object",
+          "description": "行覆盖率",
+          "properties": {
+            "total": {"type": "integer", "minimum": 0},
+            "covered": {"type": "integer", "minimum": 0},
+            "skipped": {"type": "integer", "minimum": 0}
+          }
+        },
+        "branches": {
+          "type": "object",
+          "description": "分支覆盖率",
+          "properties": {
+            "total": {"type": "integer", "minimum": 0},
+            "covered": {"type": "integer", "minimum": 0}
+          }
+        },
+        "functions": {
+          "type": "object",
+          "description": "函数覆盖率",
+          "properties": {
+            "total": {"type": "integer", "minimum": 0},
+            "covered": {"type": "integer", "minimum": 0}
+          }
+        },
+        "statements": {
+          "type": "object",
+          "description": "语句覆盖率",
+          "properties": {
+            "total": {"type": "integer", "minimum": 0},
+            "covered": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "failures": {
+      "type": "array",
+      "description": "失败的测试详情",
+      "items": {
+        "type": "object",
+        "properties": {
+          "test_name": {"type": "string"},
+          "error_message": {"type": "string"},
+          "error_stack": {"type": "string"}
+        }
+      }
+    },
+    "report_file": {"type": "string", "description": "报告文件路径"}
+  }
+}
