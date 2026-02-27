@@ -4,10 +4,10 @@
 
 | 项目 | 内容 |
 |------|------|
-| **版本** | v2.0 最终评审版 |
+| **版本** | v3.0（含单元测试/集成/评审） |
 | **日期** | 2026-02-27 |
 | **状态** | 待评审 |
-| **预计工期** | 5-6 天（人类） |
+| **预计工期** | 11-13 天（人类） |
 
 ---
 
@@ -19,6 +19,12 @@
 - [四、LLM 代码生成质量保证](#四llm-代码生成质量保证)
 - [五、错误分类与诊断](#五错误分类与诊断)
 - [六、实施计划](#六实施计划)
+  - [6.1 时间估算](#61-时间估算)
+  - [6.2 实施顺序](#62-实施顺序)
+  - [6.3 里程碑](#63-里程碑)
+  - [6.4 单元测试策略](#64-单元测试策略)
+  - [6.5 系统集成测试](#65-系统集成测试)
+  - [6.6 代码评审流程](#66-代码评审流程)
 - [七、风险评估](#七风险评估)
 
 ---
@@ -1564,35 +1570,812 @@ class AutoFixer:
 | ├── ErrorClassifier | 1天 | 无 |
 | ├── ContextCollector | 0.5天 | playwright |
 | └── AutoFixer | 0.5天 | 无 |
-| **集成测试** | | |
-| ├── 端到端测试 | 1天 | 所有模块 |
-| ├── 文档编写 | 0.5天 | 无 |
+| **单元测试** | | |
+| ├── Generator 测试 | 0.5天 | Generator |
+| ├── Validator 测试 | 0.5天 | Validator |
+| ├── Classifier 测试 | 0.5天 | Classifier |
+| ├── Runner 测试 | 0.5天 | Runner |
+| ├── Mock 数据建设 | 0.5天 | 无 |
+| **系统集成** | | |
+| ├── L3 工作流集成 | 1天 | 所有模块 |
+| ├── Agent 对接测试 | 0.5天 | Orchestrator |
+| ├── 端到端测试 | 0.5天 | 所有模块 |
+| ├── 性能测试 | 0.5天 | 无 |
+| **代码评审** | | |
+| ├── 第一轮评审（设计） | 0.5天 | 设计完成 |
+| ├── 第二轮评审（核心实现） | 0.5天 | 核心模块完成 |
+| ├── 第三轮评审（集成验证） | 0.5天 | 集成完成 |
+| ├── 评审意见修复 | 0.5天 | 评审反馈 |
+| **文档与交付** | | |
+| ├── API 文档 | 0.5天 | 无 |
+| ├── 用户手册 | 0.5天 | 无 |
 | ├── Bug 修复 | 0.5天 | - |
-| **总计** | **6-7 天** | - |
+| **总计** | **11-13 天** | - |
 
 ### 6.2 实施顺序
 
 ```
-Week 1: 核心框架
+Week 1: 核心框架 + 单元测试
 ├── Day 1: Generator + Validator 基础
 ├── Day 2: LocalRunner 实现
-├── Day 3: 单元测试
-
-Week 2: 质量保证 + 错误分类
+├── Day 3: 单元测试（Generator + Validator）
 ├── Day 4: Classifier + AutoFixer
-├── Day 5: 集成测试
-└── Day 6-7: Bug 修复 + 文档
+└── Day 5: 单元测试（Classifier + Runner）
+
+Week 2: 系统集成 + 代码评审
+├── Day 6: L3 工作流集成
+├── Day 7: Agent 对接 + 端到端测试
+├── Day 8: 性能测试 + 优化
+├── Day 9: 第一轮代码评审（设计+架构）
+├── Day 10: 第二轮代码评审（核心实现）
+└── Day 11: 第三轮代码评审（集成验证）
+
+Week 3: 修复与交付
+├── Day 12: 评审意见修复 + Bug 修复
+└── Day 13: 文档完善 + 交付
 ```
 
 ### 6.3 里程碑
 
-| 里程碑 | 标准 |
-|--------|------|
-| M1: 代码生成 | LLM 能生成通过语法验证的代码 |
-| M2: 本地执行 | 能在本地执行简单测试 |
-| M3: 错误分类 | 能区分代码/系统问题，准确率 > 80% |
-| M4: 自动修复 | 能自动修复常见的代码问题 |
-| M5: 完整闭环 | 端到端流程跑通 |
+| 里程碑 | 标准 | 验收方式 |
+|--------|------|----------|
+| M1: 代码生成 | LLM 能生成通过语法验证的代码 | 单元测试通过 |
+| M2: 本地执行 | 能在本地执行简单测试 | 手动验证 |
+| M3: 错误分类 | 能区分代码/系统问题，准确率 > 80% | 单元测试 + 人工验证 |
+| M4: 自动修复 | 能自动修复常见的代码问题 | 单元测试 |
+| M5: 单元测试覆盖 | 覆盖率 ≥ 80% | pytest-cov 报告 |
+| M6: 系统集成 | L3 工作流端到端跑通 | 集成测试 |
+| M7: 性能达标 | 单个用例执行 < 30s | 性能测试 |
+| M8: 代码评审通过 | 三轮评审无重大问题 | 评审记录 |
+| M9: 完整闭环 | 端到端流程跑通 + 文档齐全 | 验收测试 |
+
+---
+
+### 6.4 单元测试策略
+
+#### 6.4.1 测试目录结构
+
+```
+tests/qa/
+├── __init__.py
+├── conftest.py                          # pytest fixtures
+├── fixtures/                            # 测试数据
+│   ├── test_cases.yaml                 # 模拟测试用例
+│   ├── generated_code/                 # 模拟生成的代码
+│   │   ├── valid_code.py
+│   │   ├── syntax_error.py
+│   │   ├── bad_selector.py
+│   │   └── timeout_issue.py
+│   └── runner_outputs/                 # 模拟执行结果
+│       ├── success.json
+│       ├── failure.json
+│       └── error.json
+├── generator/                           # Generator 测试
+│   ├── __init__.py
+│   ├── test_base.py
+│   ├── test_playwright_gen.py
+│   └── test_templates.py
+├── validator/                           # Validator 测试
+│   ├── __init__.py
+│   ├── test_schema_validator.py
+│   ├── test_syntax_validator.py
+│   ├── test_selector_validator.py
+│   └── test_timeout_validator.py
+├── classifier/                          # Classifier 测试
+│   ├── __init__.py
+│   ├── test_error_classifier.py
+│   ├── test_patterns.py
+│   └── test_context_collector.py
+├── runner/                              # Runner 测试
+│   ├── __init__.py
+│   ├── test_base.py
+│   ├── test_local_runner.py
+│   └── test_docker_runner.py
+└── integration/                         # 集成测试
+    ├── __init__.py
+    ├── test_workflow.py
+    └── test_e2e.py
+```
+
+#### 6.4.2 测试用例设计
+
+**Generator 测试**
+
+```python
+# tests/qa/generator/test_playwright_gen.py
+
+import pytest
+from qa.generator.playwright_gen import PlaywrightGenerator
+from qa.generator.base import GenerationRequest
+
+class TestPlaywrightGenerator:
+    """Playwright 生成器测试"""
+
+    @pytest.fixture
+    def generator(self, mock_llm_client):
+        return PlaywrightGenerator(llm_client=mock_llm_client)
+
+    @pytest.fixture
+    def sample_request(self):
+        return GenerationRequest(
+            test_cases=[{
+                "case_id": "F-BASE-002",
+                "title": "开发测试登录",
+                "priority": "P0",
+                "steps": [
+                    {"step_num": 1, "action": "访问登录页", "expected": "页面加载"},
+                    {"step_num": 2, "action": "点击登录", "expected": "登录成功"},
+                ],
+                "expected_result": "用户登录成功",
+            }],
+            base_url="http://localhost:3000",
+        )
+
+    def test_generate_returns_code(self, generator, sample_request):
+        """测试生成代码"""
+        result = generator.generate(sample_request)
+        assert result.code is not None
+        assert len(result.code) > 0
+
+    def test_generate_includes_imports(self, generator, sample_request):
+        """测试生成代码包含必需导入"""
+        result = generator.generate(sample_request)
+        assert "from playwright.sync_api import" in result.code
+        assert "import pytest" in result.code
+
+    def test_generate_includes_test_functions(self, generator, sample_request):
+        """测试生成代码包含测试函数"""
+        result = generator.generate(sample_request)
+        assert "def test_" in result.code
+
+    def test_validation_on_syntax_error(self, generator, sample_request, mock_llm_syntax_error):
+        """测试语法错误时重试"""
+        result = generator.generate(sample_request)
+        assert result.validation.is_valid
+        assert result.retries > 0
+
+    def test_max_retries_exceeded(self, generator, sample_request, mock_llm_always_error):
+        """测试超过最大重试次数"""
+        with pytest.raises(CodeGenerationError):
+            generator.generate(sample_request)
+```
+
+**Validator 测试**
+
+```python
+# tests/qa/validator/test_syntax_validator.py
+
+import pytest
+from qa.validator.syntax_validator import SyntaxValidator
+
+class TestSyntaxValidator:
+    """语法验证器测试"""
+
+    def test_valid_code_passes(self):
+        """测试有效代码通过验证"""
+        code = """
+import pytest
+from playwright.sync_api import sync_playwright
+
+def test_example(page):
+    assert page.title() == "Example"
+"""
+        result = SyntaxValidator.validate(code)
+        assert result.is_valid
+        assert len(result.errors) == 0
+
+    def test_syntax_error_detected(self):
+        """测试检测语法错误"""
+        code = "def test(\n"  # 语法错误
+        result = SyntaxValidator.validate(code)
+        assert not result.is_valid
+        assert any(e["type"] == "syntax_error" for e in result.errors)
+
+    def test_missing_page_parameter(self):
+        """测试检测缺少 page 参数"""
+        code = """
+def test_example():  # 缺少 page 参数
+    pass
+"""
+        result = SyntaxValidator.validate(code)
+        assert not result.is_valid
+        assert any("page" in e.get("message", "") for e in result.errors)
+
+    def test_missing_docstring(self):
+        """测试检测缺少 docstring"""
+        code = "def test_example(page):\n    pass"
+        result = SyntaxValidator.validate(code)
+        assert not result.is_valid
+        assert any("docstring" in e.get("message", "") for e in result.errors)
+```
+
+**Classifier 测试**
+
+```python
+# tests/qa/classifier/test_error_classifier.py
+
+import pytest
+from qa.classifier.error_classifier import ErrorClassifier, ErrorType
+
+class TestErrorClassifier:
+    """错误分类器测试"""
+
+    @pytest.mark.parametrize("error_message,expected_type", [
+        ("SyntaxError: invalid syntax", ErrorType.CODE_SYNTAX),
+        ("ModuleNotFoundError: no module named 'playwright'", ErrorType.CODE_IMPORT),
+        ("Timeout waiting for selector", ErrorType.CODE_SELECTOR),
+        ("AssertionError: Expected true but got false", ErrorType.SYSTEM_ASSERTION),
+        ("NET::ERR_CONNECTION_REFUSED", ErrorType.SYSTEM_NETWORK),
+    ])
+    def test_classification_patterns(self, error_message, expected_type):
+        """测试错误分类模式"""
+        result = ErrorClassifier.classify(error_message)
+        assert result.category == expected_type.value
+
+    def test_code_issue_is_false_fail(self):
+        """测试代码问题是假失败"""
+        result = ErrorClassifier.classify("SyntaxError: invalid syntax")
+        assert result.is_false_fail is True
+        assert result.suggested_action == "auto_fix"
+
+    def test_system_issue_is_true_fail(self):
+        """测试系统问题是真失败"""
+        result = ErrorClassifier.classify("AssertionError: Expected X but got Y")
+        assert result.is_false_fail is False
+        assert result.suggested_action == "file_bug"
+
+    def test_uncertain_classification(self):
+        """测试不确定错误分类"""
+        result = ErrorClassifier.classify("Unknown error occurred")
+        assert result.type == "uncertain"
+        assert result.suggested_action == "manual_review"
+```
+
+#### 6.4.3 Mock 数据建设
+
+```python
+# tests/qa/conftest.py
+
+import pytest
+from unittest.mock import Mock, MagicMock
+from pathlib import Path
+
+@pytest.fixture
+def mock_llm_client():
+    """Mock LLM 客户端"""
+    mock = Mock()
+    mock.complete.return_value = """
+```python
+import pytest
+from playwright.sync_api import sync_playwright, expect
+
+@pytest.fixture(scope="module")
+def browser_context():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        yield page
+        browser.close()
+
+def test_example(page):
+    '''Test example'''
+    page.goto("http://localhost:3000")
+    expect(page).to_have_title("Example")
+```
+"""
+    return mock
+
+@pytest.fixture
+def mock_llm_syntax_error(mock_llm_client):
+    """Mock LLM 返回语法错误（第一次）"""
+    call_count = [0]
+    def side_effect(*args, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return "```python\ndef test(\n```"  # 语法错误
+        return mock_llm_client.complete(*args, **kwargs)
+    mock_llm_client.complete.side_effect = side_effect
+    return mock_llm_client
+
+@pytest.fixture
+def sample_test_case():
+    """示例测试用例"""
+    return {
+        "case_id": "F-BASE-002",
+        "title": "开发测试登录",
+        "priority": "P0",
+        "type": "positive",
+        "preconditions": ["用户未登录"],
+        "steps": [
+            {"step_num": 1, "action": "访问登录页", "expected": "页面加载"},
+            {"step_num": 2, "action": "点击登录", "expected": "登录成功"},
+        ],
+        "expected_result": "用户登录成功",
+    }
+```
+
+#### 6.4.4 测试覆盖率目标
+
+| 模块 | 覆盖率目标 | 重点 |
+|------|------------|------|
+| generator/ | ≥ 85% | LLM 调用、重试逻辑 |
+| validator/ | ≥ 90% | 各种错误模式 |
+| classifier/ | ≥ 85% | 分类准确性 |
+| runner/ | ≥ 75% | 执行逻辑、错误处理 |
+| fixer/ | ≥ 80% | 修复策略 |
+| **总体** | **≥ 80%** | - |
+
+---
+
+### 6.5 系统集成测试
+
+#### 6.5.1 L3 工作流集成
+
+**集成点验证**
+
+```python
+# tests/qa/integration/test_workflow.py
+
+import pytest
+from pathlib import Path
+import yaml
+
+class TestL3WorkflowIntegration:
+    """L3 工作流集成测试"""
+
+    @pytest.fixture
+    def test_set_definition(self):
+        """加载 Test Set 定义"""
+        return yaml.safe_load("""
+id: test-set-001
+name: 登录功能测试集
+type: e2e_chrome
+base_url: http://localhost:3000
+cases:
+  - case_id: F-BASE-002
+    title: 开发测试登录
+    priority: P0
+""")
+
+    def test_script_generation_integration(self, test_set_definition):
+        """测试脚本生成集成"""
+        from qa.generator.playwright_gen import PlaywrightGenerator
+
+        generator = PlaywrightGenerator()
+        request = GenerationRequest(
+            test_cases=test_set_definition["cases"],
+            base_url=test_set_definition["base_url"],
+        )
+
+        result = generator.generate(request)
+        assert result.validation.is_valid
+        assert "def test_" in result.code
+
+    def test_runner_execution_integration(self, tmp_path):
+        """测试执行器集成"""
+        from qa.runner.local import LocalRunner
+        from qa.runner.base import TestConfig
+
+        # 创建临时脚本
+        script_path = tmp_path / "test_script.py"
+        script_path.write_text("""
+import pytest
+from playwright.sync_api import sync_playwright
+
+def test_simple():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto("about:blank")
+        assert page.title() == ""
+        browser.close()
+""")
+
+        config = TestConfig(
+            scripts=[script_path],
+            base_url="about:blank",
+            output_dir=tmp_path / "output",
+            headless=True,
+        )
+
+        runner = LocalRunner(config)
+        result = runner.execute()
+
+        assert result.exit_code == 0
+        assert result.total == 1
+
+    def test_classifier_integration(self):
+        """测试分类器集成"""
+        from qa.classifier.error_classifier import ErrorClassifier
+
+        test_errors = [
+            ("SyntaxError", "code_issue", True),
+            ("AssertionError", "system_issue", False),
+            ("Timeout", "code_issue", True),
+        ]
+
+        for error_msg, expected_type, expected_false_fail in test_errors:
+            result = ErrorClassifier.classify(error_msg)
+            assert result.type == expected_type
+            assert result.is_false_fail == expected_false_fail
+```
+
+#### 6.5.2 Agent 对接测试
+
+**Script Translator Agent 对接**
+
+```yaml
+# tests/qa/fixtures/agent_script_translator_test.yaml
+# 用于验证 agent.qa.script_translator 能正确调用生成器
+
+test_case:
+  input:
+    agent: "agent.qa.script_translator"
+    input:
+      generated_cases:
+        - case_id: "F-BASE-002"
+          title: "开发测试登录"
+          priority: "P0"
+      environment:
+        base_url: "http://localhost:3000"
+      test_set:
+        type: "e2e_chrome"
+
+  expected_output:
+    test_scripts:
+      - path: "scripts/test_f_base_002.py"
+        framework: "playwright"
+        status: "generated"
+```
+
+**Result Judge Agent 对接**
+
+```yaml
+# tests/qa/fixtures/agent_result_judge_test.yaml
+# 用于验证 agent.qa.result_judge 能正确使用分类器
+
+test_case:
+  input:
+    agent: "agent.qa.result_judge"
+    input:
+      runner_output:
+        cases:
+          - case_id: "F-BASE-002"
+            status: "failed"
+            error: "SyntaxError: invalid syntax"
+      expected_results:
+        - case_id: "F-BASE-002"
+          expected: "登录成功"
+
+  expected_output:
+    results:
+      - case_id: "F-BASE-002"
+        status: "invalid_run"
+        error_type: "code_issue"
+        is_false_fail: true
+```
+
+#### 6.5.3 端到端测试
+
+```python
+# tests/qa/integration/test_e2e.py
+
+import pytest
+import tempfile
+import shutil
+from pathlib import Path
+
+class TestE2E:
+    """端到端测试"""
+
+    @pytest.fixture
+    def workspace(self, tmp_path):
+        """创建临时工作空间"""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        yield workspace
+        shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_full_pipeline(self, workspace):
+        """测试完整流程：用例 → 脚本 → 执行 → 判定"""
+        from qa.generator.playwright_gen import PlaywrightGenerator
+        from qa.runner.local import LocalRunner
+        from qa.classifier.error_classifier import ErrorClassifier
+
+        # 1. 生成脚本
+        request = GenerationRequest(
+            test_cases=[{
+                "case_id": "F-BASE-001",
+                "title": "简单页面访问",
+                "priority": "P0",
+                "steps": [{"step_num": 1, "action": "访问 about:blank", "expected": "页面加载"}],
+                "expected_result": "页面加载成功",
+            }],
+            base_url="about:blank",
+        )
+
+        generator = PlaywrightGenerator()
+        gen_result = generator.generate(request)
+        assert gen_result.validation.is_valid
+
+        # 2. 保存脚本
+        script_path = workspace / "test_script.py"
+        script_path.write_text(gen_result.code)
+
+        # 3. 执行测试
+        from qa.runner.base import TestConfig
+        config = TestConfig(
+            scripts=[script_path],
+            base_url="about:blank",
+            output_dir=workspace / "output",
+            headless=True,
+        )
+
+        runner = LocalRunner(config)
+        run_result = runner.execute()
+
+        # 4. 验证结果
+        assert run_result.exit_code == 0
+        assert run_result.passed > 0
+
+    def test_error_classification_flow(self, workspace):
+        """测试错误分类流程"""
+        # 生成一个有错误的脚本
+        bad_code = """
+def test_with_error(page):
+    page.locator("[data-testid='non-existent']").click()
+"""
+
+        script_path = workspace / "bad_script.py"
+        script_path.write_text(bad_code)
+
+        # 执行并分类错误
+        # ... 执行逻辑 ...
+
+        # 验证分类结果
+        # 模拟错误分类
+        classification = ErrorClassifier.classify(
+            "Timeout waiting for selector [data-testid='non-existent']"
+        )
+
+        assert classification.type in ["code_issue", "uncertain"]
+        assert classification.suggested_action in ["auto_fix", "verify_selector"]
+```
+
+#### 6.5.4 性能测试
+
+```python
+# tests/qa/integration/test_performance.py
+
+import pytest
+import time
+
+class TestPerformance:
+    """性能测试"""
+
+    @pytest.mark.performance
+    def test_code_generation_performance(self):
+        """测试代码生成性能"""
+        from qa.generator.playwright_gen import PlaywrightGenerator
+
+        generator = PlaywrightGenerator()
+        request = GenerationRequest(
+            test_cases=[{"case_id": "F-001", "title": "测试", "priority": "P0", "steps": [], "expected_result": ""}],
+            base_url="http://localhost:3000",
+        )
+
+        start = time.time()
+        result = generator.generate(request)
+        duration = time.time() - start
+
+        # 代码生成应在 30 秒内完成（含 LLM 调用）
+        assert duration < 30
+
+    @pytest.mark.performance
+    def test_validation_performance(self):
+        """测试验证性能"""
+        from qa.validator.syntax_validator import SyntaxValidator
+
+        # 生成一个较大的代码文件
+        large_code = "def test_{}(page):\n    pass\n" * 1000
+
+        start = time.time()
+        result = SyntaxValidator.validate(large_code)
+        duration = time.time() - start
+
+        # 验证应在 1 秒内完成
+        assert duration < 1
+
+    @pytest.mark.performance
+    def test_classification_performance(self):
+        """测试分类性能"""
+        from qa.classifier.error_classifier import ErrorClassifier
+
+        start = time.time()
+        for _ in range(1000):
+            ErrorClassifier.classify("SyntaxError: invalid syntax")
+        duration = time.time() - start
+
+        # 1000 次分类应在 1 秒内完成
+        assert duration < 1
+```
+
+---
+
+### 6.6 代码评审流程
+
+#### 6.6.1 评审轮次与内容
+
+| 轮次 | 时机 | 评审重点 | 参与者 | 通过标准 |
+|------|------|----------|--------|----------|
+| **R1: 设计评审** | 设计完成后 | 架构合理性、模块划分、接口设计 | 架构师 + Tech Lead | 设计文档批准 |
+| **R2: 核心实现评审** | 核心模块完成后 | 代码质量、错误处理、测试覆盖 | Tech Lead + 开发团队 | 核心代码批准 |
+| **R3: 集成评审** | 集成完成后 | 集成质量、端到端验证、性能 | 全团队 + QA | 集成测试通过 |
+
+#### 6.6.2 评审检查清单
+
+**设计评审（R1）**
+
+```markdown
+## 设计评审检查清单
+
+### 架构设计
+- [ ] 模块职责是否清晰？
+- [ ] 模块间依赖是否合理？
+- [ ] 接口抽象是否恰当？
+- [ ] 扩展性是否足够？
+
+### 技术选型
+- [ ] 依赖库是否成熟稳定？
+- [ ] 是否有替代方案？
+- [ ] 版本兼容性如何？
+
+### 风险评估
+- [ ] 潜在风险是否识别？
+- [ ] 是否有缓解措施？
+- [ ] 时间估算是否合理？
+
+### 文档质量
+- [ ] 设计文档是否完整？
+- [ ] 接口文档是否清晰？
+- [ ] 示例代码是否正确？
+```
+
+**核心实现评审（R2）**
+
+```markdown
+## 核心实现评审检查清单
+
+### 代码质量
+- [ ] 代码风格是否一致？
+- [ ] 命名是否清晰？
+- [ ] 注释是否充分？
+- [ ] 是否有代码重复？
+
+### 错误处理
+- [ ] 异常是否被正确捕获？
+- [ ] 错误信息是否清晰？
+- [ ] 是否有资源泄漏？
+
+### 测试覆盖
+- [ ] 单元测试是否充分？
+- [ ] 边界条件是否测试？
+- [ ] 异常路径是否测试？
+- [ ] Mock 是否合理？
+
+### 性能考虑
+- [ ] 是否有明显性能问题？
+- [ ] 是否有不必要的重复计算？
+- [ ] 资源使用是否高效？
+```
+
+**集成评审（R3）**
+
+```markdown
+## 集成评审检查清单
+
+### 集成质量
+- [ ] 模块间集成是否正确？
+- [ ] 数据流转是否正确？
+- [ ] 错误传播是否正确？
+
+### 端到端验证
+- [ ] 完整流程是否跑通？
+- [ ] L3 工作流是否能正常执行？
+- [ ] Agent 对接是否正确？
+
+### 性能验证
+- [ ] 性能指标是否达标？
+- [ ] 是否有性能瓶颈？
+- [ ] 是否有内存泄漏？
+
+### 文档完整性
+- [ ] API 文档是否完整？
+- [ ] 用户手册是否清晰？
+- [ ] 部署文档是否详细？
+```
+
+#### 6.6.3 评审意见追踪
+
+```python
+# 评审意见追踪表（示例）
+
+review_comments = [
+    {
+        "id": "R1-001",
+        "round": "R1",
+        "category": "架构",
+        "severity": "major",
+        "comment": "Generator 和 Validator 的职责边界不够清晰",
+        "proposed_by": "架构师A",
+        "status": "resolved",
+        "resolution": "明确接口契约，Validator 只负责验证不负责生成",
+    },
+    {
+        "id": "R2-001",
+        "round": "R2",
+        "category": "代码质量",
+        "severity": "minor",
+        "comment": "ErrorClassifier 的模式匹配缺少对多行错误的支持",
+        "proposed_by": "Tech Lead B",
+        "status": "resolved",
+        "resolution": "增加多行模式匹配支持",
+    },
+    {
+        "id": "R3-001",
+        "round": "R3",
+        "category": "性能",
+        "severity": "major",
+        "comment": "LocalRunner 每次都启动新浏览器，性能较差",
+        "proposed_by": "QA C",
+        "status": "open",
+        "resolution": "待优化",
+    },
+]
+```
+
+#### 6.6.4 评审通过标准
+
+```yaml
+# 评审通过标准定义
+
+approval_criteria:
+  R1_design_review:
+    required_approvers: 2  # 至少 2 人批准
+    veto_power: [架构师]   # 架构师有一票否决权
+    block_issues:
+      - severity: major
+        count: 0  # 不能有 major 问题
+      - severity: minor
+        count: 3  # 最多 3 个 minor 问题
+
+  R2_core_implementation_review:
+    required_approvers: 2
+    veto_power: [Tech Lead]
+    block_issues:
+      - severity: critical
+        count: 0
+      - severity: major
+        count: 1  # 最多 1 个 major 问题
+    code_coverage_threshold: 80  # 代码覆盖率必须 ≥ 80%
+
+  R3_integration_review:
+    required_approvers: 3  # 需要更多人批准
+    veto_power: []
+    block_issues:
+      - severity: critical
+        count: 0
+      - severity: major
+        count: 0  # 不能有 major 问题
+    must_pass_tests:
+      - unit_tests
+      - integration_tests
+      - e2e_tests
+    performance_threshold:
+      code_generation: 30s
+      test_execution: 60s
+```
 
 ---
 
@@ -1688,6 +2471,7 @@ Week 2: 质量保证 + 错误分类
 - v1.0（初版）：Docker 强制执行
 - v1.1（修订）：双模式，简化架构
 - v2.0（最终版）：整合质量保证 + 错误分类
+- v3.0（当前版）：添加单元测试、系统集成、代码评审环节
 
 **下一步**：
 1. 等待评审反馈
