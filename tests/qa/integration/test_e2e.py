@@ -6,7 +6,7 @@ import pytest
 import tempfile
 import shutil
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import time
 
 
@@ -73,7 +73,21 @@ def test_simple_page(page):
             headless=True,
         )
 
-        with patch('lee.qa.runner.local.sync_playwright'):
+        with patch('playwright.sync_api.sync_playwright') as mock_pw:
+            # Setup mock playwright context manager
+            mock_pw_instance = MagicMock()
+            mock_pw.return_value = mock_pw_instance
+            mock_pw_instance.__enter__ = MagicMock(return_value=mock_pw_instance)
+            mock_pw_instance.__exit__ = MagicMock(return_value=False)
+
+            mock_browser = MagicMock()
+            mock_context = MagicMock()
+            mock_page = MagicMock()
+
+            mock_pw_instance.chromium.launch.return_value = mock_browser
+            mock_browser.new_context.return_value = mock_context
+            mock_context.new_page.return_value = mock_page
+
             runner = LocalRunner(config)
             run_result = runner.execute()
 
@@ -199,7 +213,7 @@ def test_login(page):
         from lee.qa.utils.llm import MockLLMClient
 
         mock_llm = MockLLMClient()
-        mock_llm.set_response("complex", """
+        mock_llm.set_response("cart", """
 ```python
 import pytest
 from playwright.sync_api import sync_playwright, expect

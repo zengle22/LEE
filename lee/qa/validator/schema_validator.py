@@ -34,7 +34,7 @@ class SchemaValidator:
     FORBIDDEN_PATTERNS = [
         (r"page\.wait_for_timeout\(\d+\)", "使用硬编码超时，用 wait_for_* 替代"),
         (r"time\.sleep\(", "禁止使用 time.sleep"),
-        (r"\.click\(\)", "使用 locator.click() 而非 page.click()"),
+        (r"page\.click\(", "使用 locator.click() 而非 page.click()"),
     ]
 
     # Recommended patterns (best practices)

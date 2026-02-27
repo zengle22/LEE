@@ -36,6 +36,12 @@ class TestConfig:
         if self.video_dir is None:
             self.video_dir = self.output_dir / "videos"
 
+        # Create output directories
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.screenshot_dir.mkdir(parents=True, exist_ok=True)
+        self.trace_dir.mkdir(parents=True, exist_ok=True)
+        self.video_dir.mkdir(parents=True, exist_ok=True)
+
 
 @dataclass
 class CaseResult:

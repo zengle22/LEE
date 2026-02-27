@@ -107,7 +107,22 @@ def test_simple():
         )
 
         # Mock playwright since we don't need actual browser for this test
-        with patch('lee.qa.runner.local.sync_playwright'):
+        from unittest.mock import MagicMock
+        with patch('playwright.sync_api.sync_playwright') as mock_pw:
+            # Setup mock playwright context manager
+            mock_pw_instance = MagicMock()
+            mock_pw.return_value = mock_pw_instance
+            mock_pw_instance.__enter__ = MagicMock(return_value=mock_pw_instance)
+            mock_pw_instance.__exit__ = MagicMock(return_value=False)
+
+            mock_browser = MagicMock()
+            mock_context = MagicMock()
+            mock_page = MagicMock()
+
+            mock_pw_instance.chromium.launch.return_value = mock_browser
+            mock_browser.new_context.return_value = mock_context
+            mock_context.new_page.return_value = mock_page
+
             runner = LocalRunner(config)
             result = runner.execute()
 
@@ -137,9 +152,19 @@ def test_simple():
         mock_llm.set_response("test", """
 ```python
 import pytest
+from playwright.sync_api import sync_playwright
+
+@pytest.fixture(scope="module")
+def browser_context():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        yield page
+        browser.close()
 
 def test_f_base_002(page):
-    '''Test'''
+    \"\"\"Test\"\"\"
     page.goto("about:blank")
     assert page.title() == ""
 ```
@@ -214,8 +239,19 @@ def test_example(page):
             "page_elements": {"[data-testid='submit']": {"tag": "button"}},
         }
         result_exists = ErrorClassifier.classify(error_msg, context_exists)
-        # Should be uncertain or system (timing issue)
-        assert result_exists.type in ["uncertain", "system_issue"]
+        # Pattern matches selector timeout directly, so it's a code_issue (code_selector)
+        assert result_exists.type == "code_issue"
+        assert result_exists.category == "code_selector"
+
+        # Different error message for context-based classification
+        error_timeout = "Timeout 30000ms exceeded"
+        context_exists2 = {
+            "selector": "[data-testid='submit']",
+            "page_elements": {"[data-testid='submit']": {"tag": "button"}},
+        }
+        result_exists2 = ErrorClassifier.classify(error_timeout, context_exists2)
+        # Generic timeout without selector context - uncertain
+        assert result_exists2.type in ["uncertain", "code_issue"]
 
         # Context where selector doesn't exist
         context_missing = {

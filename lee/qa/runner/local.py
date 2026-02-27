@@ -265,9 +265,10 @@ class LocalRunner(BaseRunner):
             case_result.error = str(e)
             case_result.exit_code = 2
 
-            # Classify the error
+            # Classify the error - include exception type for better classification
             context_before = ContextCollector.collect_before_test(page)
-            classification = ErrorClassifier.classify(str(e), context_before)
+            error_message = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
+            classification = ErrorClassifier.classify(error_message, context_before)
 
             case_result.error_type = classification.type
             case_result.is_code_issue = classification.is_false_fail

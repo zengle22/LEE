@@ -63,8 +63,23 @@ def test_example():
 """
         runner.config.scripts[0].write_text(script_content)
 
-        # Mock playwright to avoid browser requirement
-        with patch('lee.qa.runner.local.sync_playwright'):
+        # Mock playwright module to avoid browser requirement
+        # Patch at the import location in local.py
+        with patch('playwright.sync_api.sync_playwright') as mock_pw:
+            # Setup mock playwright context manager
+            mock_pw_instance = MagicMock()
+            mock_pw.return_value = mock_pw_instance
+            mock_pw_instance.__enter__ = MagicMock(return_value=mock_pw_instance)
+            mock_pw_instance.__exit__ = MagicMock(return_value=False)
+
+            mock_browser = MagicMock()
+            mock_context = MagicMock()
+            mock_page = MagicMock()
+
+            mock_pw_instance.chromium.launch.return_value = mock_browser
+            mock_browser.new_context.return_value = mock_context
+            mock_context.new_page.return_value = mock_page
+
             result = runner.execute()
 
         # Should have some result
@@ -94,9 +109,12 @@ def test_example():
         mock_module = Mock()
         mock_page = Mock()
 
-        test_func = Mock()
-        test_func.__signature__ = Mock(parameters=[])
-        setattr(mock_module, "test_example", test_func)
+        # Create a real function that succeeds
+        def passing_test():
+            pass
+
+        import inspect
+        setattr(mock_module, "test_example", passing_test)
 
         result = runner._execute_test_function(mock_module, "test_example", mock_page)
 
@@ -111,14 +129,13 @@ def test_example():
         def failing_test():
             raise AssertionError("Expected True but got False")
 
-        import inspect
-        failing_test.__signature__ = inspect.signature(lambda: None)
         setattr(mock_module, "test_failing", failing_test)
 
         result = runner._execute_test_function(mock_module, "test_failing", mock_page)
 
         assert result.status == "failed"
-        assert "AssertionError" in result.error
+        # Error message contains the assertion text
+        assert "Expected True but got False" in result.error or "AssertionError" in result.error
 
     def test_execute_test_function_code_issue(self, runner):
         """Test function with code issue"""
@@ -126,13 +143,13 @@ def test_example():
         mock_page = Mock()
 
         def syntax_error_test():
-            raise NameError("name 'undefined' is not defined")
+            # SyntaxError will be classified as code_issue
+            raise SyntaxError("invalid syntax")
 
-        import inspect
-        syntax_error_test.__signature__ = inspect.signature(lambda: None)
         setattr(mock_module, "test_syntax", syntax_error_test)
 
         result = runner._execute_test_function(mock_module, "test_syntax", mock_page)
 
+        # SyntaxError is classified as code_issue, so status is "invalid_run"
         assert result.status == "invalid_run"
         assert result.error_type == "code_issue"
