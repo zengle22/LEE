@@ -372,7 +372,8 @@ class WorkflowParser:
         return ExecutableStep(
             id=step_id,
             name=step_def.get("name", step_id),
-            agent_id=step_def.get("run", ""),
+            # 支持 agent_id 或 run 字段
+            agent_id=step_def.get("agent_id") or step_def.get("run", ""),
             stage_id=stage_id,
             description=step_def.get("description"),
             deps=deps,

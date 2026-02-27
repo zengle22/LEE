@@ -69,13 +69,14 @@ from lee.orchestrator.core.event_bus import get_event_bus, Event, EventType
 from lee.orchestrator.execution.step_runners import StepRunnerMixin
 from lee.orchestrator.execution.gate_operations import GateOperationsMixin
 from lee.orchestrator.execution.subworkflow_ops import SubworkflowMixin
+from lee.orchestrator.execution.instance_loader import InstanceLoaderMixin
 
 
 # ========================================================================
 # 核心调度器（Orchestrator）
 # ========================================================================
 
-class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
+class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, InstanceLoaderMixin):
     """
     LEE Orchestrator v3.1 - 核心调度器
 
@@ -353,8 +354,16 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         if not instance:
             return []
 
-        # 获取模板步骤
-        all_steps = self.template_manager.get_steps(instance.template_id)
+        # 检查是否从 Instance 文件加载
+        if self._is_instance_path(instance.template_id):
+            instance_data = self._load_instance_file(instance.template_id)
+            if instance_data:
+                all_steps = self._get_steps_from_instance(instance_data)
+            else:
+                all_steps = []
+        else:
+            # 从模板加载
+            all_steps = self.template_manager.get_steps(instance.template_id)
 
         # 调用 WorkflowStateMachine.get_ready_steps
         return await self.state_machine.get_ready_steps(workflow_id, all_steps)
@@ -1016,8 +1025,17 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin):
         if not instance:
             return
 
-        # 获取模板的所有步骤
-        all_steps = self.template_manager.get_steps(instance.template_id)
+        # 检查是否从 Instance 文件加载
+        if self._is_instance_path(instance.template_id):
+            instance_data = self._load_instance_file(instance.template_id)
+            if instance_data:
+                all_steps = self._get_steps_from_instance(instance_data)
+            else:
+                all_steps = []
+        else:
+            # 获取模板的所有步骤
+            all_steps = self.template_manager.get_steps(instance.template_id)
+
         completed_steps = instance.data.get("completed_steps", [])
 
         # 检查是否所有步骤都已完成

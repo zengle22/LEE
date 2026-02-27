@@ -820,9 +820,13 @@ class TemplateManager:
             # 解析 depends_on
             depends_on = step_data.get("depends_on", [])
 
+            # 解析 agent_id（支持 agent_id 或 run 字段）
+            agent_id = step_data.get("agent_id") or step_data.get("run", "")
+
             steps.append(Step(
                 id=step_id,
                 kind=kind,
+                agent_id=agent_id,  # L3 模板中的 agent_id
                 executor_type="llm" if kind == "agent" else "shell",
                 depends_on=depends_on,
                 input={
