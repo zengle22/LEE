@@ -1,0 +1,59 @@
+# 测试契约 - LEE Workflow Instance
+
+## 测试场景
+
+### T1: Plan 生成测试
+
+| 场景 | 输入 | 预期输出 |
+|------|------|----------|
+| T1.1 简单模板 | 3步模板，无参数 | 生成 Instance，Review 模式 simple |
+| T1.2 复杂模板 | 13步模板，带参数 | 生成 Instance + Plan Summary |
+| T1.3 Plan 失败 | LLM 返回错误 | 自动换 LLM 重试 |
+| T1.4 LLM 都失败 | 3个 LLM 都失败 | 返回错误，不生成 Instance |
+
+### T2: Instance 文件测试
+
+| 场景 | 输入 | 预期输出 |
+|------|------|----------|
+| T2.1 生成 Instance | Plan 结果 | 生成 v1.yaml |
+| T2.2 重新 Plan | 审批不通过 | 生成 v2.yaml |
+| T2.3 加载最新版本 | workflow_id | 加载 v2.yaml |
+
+### T3: Review Gate 测试
+
+| 场景 | 配置 | 预期行为 |
+|------|------|----------|
+| T3.1 simple | skip_conditions 满足 | 自动跳过审批 |
+| T3.2 suggest | LLM 判断需审批 | 触发 Gate |
+| T3.3 force | 始终强制 | 触发 Gate |
+| T3.4 审批不通过 | reject | 版本号 +1，重新 Plan |
+
+### T4: Orchestrator 执行测试
+
+| 场景 | 输入 | 预期输出 |
+|------|------|----------|
+| T4.1 加载 Instance | workflow_id | 解析 Instance YAML |
+| T4.2 执行步骤 | Instance | 步骤状态更新 |
+| T4.3 触发 Gate | 需要审批 | 暂停，等待审批 |
+
+### T5: 重试副作用测试
+
+| 场景 | 触发条件 | 预期输出 |
+|------|----------|----------|
+| T5.1 步骤失败 | retry enabled | 分析副作用，记录日志 |
+| T5.2 重试成功 | 无副作用 | 继续执行 |
+| T5.3 有副作用 | 副作用存在 | 标记警告，继续执行 |
+
+## 验证矩阵
+
+| ID | 场景 | 验证方式 |
+|----|------|----------|
+| V1 | Plan 生成 | 检查输出 YAML |
+| V2 | Instance 版本 | 文件名递增 |
+| V3 | Review Gate | 触发/跳过验证 |
+| V4 | Orchestrator 执行 | 状态更新验证 |
+| V5 | 副作用分析 | 日志记录验证 |
+
+## 测试数据
+
+使用 `phase-openspec-flow` 模板作为测试数据。
