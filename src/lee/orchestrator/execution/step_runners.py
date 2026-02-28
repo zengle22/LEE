@@ -77,6 +77,25 @@ class StepRunnerMixin:
         runner = registry.get_runner("human_gate")
         return await runner.execute(workflow_id, step, ctx)
 
+    async def _run_auto_check_gate_step(
+        self,
+        workflow_id: str,
+        step,
+    ) -> StepResult:
+        """处理 Auto Check Gate 步骤 → 委托给 AutoCheckGateRunner"""
+        ctx = self._build_runner_context()
+        registry = self._get_runner_registry()
+        runner = registry.get_runner("auto_check_gate")
+        if not runner:
+            # 兼容旧版本：直接返回成功
+            return StepResult(
+                status="success",
+                step_id=step.id,
+                workflow_id=workflow_id,
+                message="Auto check gate passed (no runner registered)",
+            )
+        return await runner.execute(workflow_id, step, ctx)
+
     async def _run_agent_step(
         self,
         workflow_id: str,

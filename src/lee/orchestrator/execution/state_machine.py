@@ -258,20 +258,26 @@ class WorkflowStateMachine(IStateMachine):
         完成步骤
 
         操作：
-        1. 更新 TaskExecution 状态
-        2. 将 step_id 添加到 completed_steps
-        3. 存储 step_outputs 用于后续 $outputs 引用解析
-        4. 计算下一个就绪步骤
-        5. 检查工作流是否完成
+        1. 将 step_id 添加到 completed_steps
+        2. 存储 step_outputs 用于后续 $outputs 引用解析
+        3. 原子性更新 data 和清除 current_step（BUG-2026-0040）
+        4. 构建 StepResult
         """
+        import logging
+
         instance = await self.store.get_workflow(workflow_id)
         if not instance:
             raise ValueError(f"Workflow not found: {workflow_id}")
+
+        # P0-5: 记录步骤完成日志
+        logging.info(f"[StateMachine] Completing step {step_id} for workflow {workflow_id}")
 
         # 更新 completed_steps
         completed_steps = instance.data.get("completed_steps", [])
         if step_id not in completed_steps:
             completed_steps.append(step_id)
+            # P0-5: 记录步骤添加到已完成列表日志
+            logging.info(f"[StateMachine] Step {step_id} added to completed_steps")
 
         # 更新 step_outputs 映射
         step_outputs_map = dict(instance.data.get("step_outputs", {}))
@@ -293,18 +299,19 @@ class WorkflowStateMachine(IStateMachine):
                 merged_paths = list(dict.fromkeys(existing + output_paths))  # Preserve order, remove dupes
                 step_outputs_map[step_id] = {"paths": merged_paths}
 
-        await self.store.update_workflow_data(workflow_id, {
-            **instance.data,
-            "completed_steps": completed_steps,
-            "step_outputs": step_outputs_map,
-        })
-
-        # 清除 current_step
-        await self.store.update_workflow_status(
+        # P0-3: 原子性更新 data 和清除 current_step（BUG-2026-0040）
+        await self.store.update_workflow_data_and_clear_current_step(
             workflow_id,
+            {
+                **instance.data,
+                "completed_steps": completed_steps,
+                "step_outputs": step_outputs_map,
+            },
             instance.status,
-            clear_current_step=True
         )
+
+        # P0-5: 记录原子性更新完成日志
+        logging.info(f"[StateMachine] Atomically updated data and cleared current_step for workflow {workflow_id}")
 
         # 构建 StepResult
         result = StepResult(
@@ -654,11 +661,15 @@ class WorkflowStateMachine(IStateMachine):
 
         算法：
         1. 获取已完成的步骤列表
-        2. 遍历所有步骤
-        3. 检查步骤是否已完成
-        4. 检查所有依赖是否已完成
-        5. 返回满足条件的步骤
+        2. 获取正在执行的任务记录
+        3. 遍历所有步骤
+        4. 检查步骤是否已完成
+        5. 检查步骤是否正在执行（避免重复执行）
+        6. 检查所有依赖是否已完成
+        7. 返回满足条件的步骤
         """
+        from lee.orchestrator.storage.models import TaskExecutionStatus
+
         instance = await self.store.get_workflow(workflow_id)
         if not instance:
             return []
@@ -669,10 +680,21 @@ class WorkflowStateMachine(IStateMachine):
 
         completed_steps = instance.data.get("completed_steps", [])
 
+        # P0-2: 获取正在执行的任务记录（BUG-2026-0039）
+        executions = await self.store.get_task_executions(workflow_id)
+        running_step_ids = {
+            e.step_name for e in executions
+            if e.status == TaskExecutionStatus.RUNNING
+        }
+
         ready_steps = []
         for step in all_steps:
             # 跳过已完成的步骤
             if step.id in completed_steps:
+                continue
+
+            # P0-2: 跳过正在执行的步骤（避免重复执行）
+            if step.id in running_step_ids:
                 continue
 
             # 检查所有依赖是否已完成

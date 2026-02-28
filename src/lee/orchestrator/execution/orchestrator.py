@@ -566,6 +566,16 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     return await self._run_subworkflow_step(workflow_id, step_to_execute)
                 elif step_to_execute.kind == "human_gate":
                     return await self._handle_human_gate(workflow_id, step_to_execute)
+                elif step_to_execute.kind == "gate":
+                    # 处理 kind: gate，根据 type 分发到 auto_check 或 human_review
+                    gate_type = step_to_execute.config.get("gate", {}).get("type", "auto_check") if step_to_execute.config else "auto_check"
+                    if gate_type == "auto_check":
+                        return await self._run_auto_check_gate_step(workflow_id, step_to_execute)
+                    elif gate_type in ("human_review", "human_decision"):
+                        return await self._handle_human_gate(workflow_id, step_to_execute)
+                    else:
+                        # 默认当作 auto_check 处理
+                        return await self._run_auto_check_gate_step(workflow_id, step_to_execute)
                 elif step_to_execute.kind == "orchestrator_cli":
                     return await self._run_orchestrator_cli_step(workflow_id, step_to_execute)
                 elif step_to_execute.kind == "compliance_gate":
@@ -1048,6 +1058,60 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
     def _generate_run_id(self) -> str:
         """生成 run_id"""
         return f"RUN-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4]}"
+
+    async def check_stale_task_executions(
+        self,
+        threshold_minutes: int = 30,
+    ) -> Dict[str, Any]:
+        """
+        检查长时间处于 RUNNING 状态的 task_executions（BUG-2026-0038 监控）
+
+        Args:
+            threshold_minutes: 阈值（分钟），默认 30 分钟
+
+        Returns:
+            摘要字典，包含：
+            - count: stale 记录数量
+            - oldest_started_at: 最早的启动时间
+            - workflows: 受影响的工作流 ID 列表
+            - alert: 是否需要告警
+        """
+        summary = await self.store.get_stale_task_executions_summary(threshold_minutes)
+        summary["alert"] = summary["count"] > 0
+        return summary
+
+    async def cleanup_stale_task_executions(
+        self,
+        threshold_minutes: int = 30,
+        error_message: str = "Task execution timeout; marked as failed by monitoring",
+    ) -> int:
+        """
+        清理长时间处于 RUNNING 状态的 task_executions
+
+        Args:
+            threshold_minutes: 阈值（分钟），默认 30 分钟
+            error_message: 错误信息
+
+        Returns:
+            清理的记录数量
+        """
+        stale_executions = await self.store.find_stale_task_executions(threshold_minutes)
+        cleaned_count = 0
+
+        for execution in stale_executions:
+            # 检查对应的工作流是否还在运行
+            workflow = await self.store.get_workflow(execution.workflow_id)
+            if workflow and workflow.status == WorkflowStatus.RUNNING:
+                # 工作流仍在运行，标记 task_execution 为 FAILED
+                await self.store.update_task_execution(
+                    execution.id,
+                    TaskExecutionStatus.FAILED,
+                    error_message=error_message,
+                    completed_at=datetime.now(),
+                )
+                cleaned_count += 1
+
+        return cleaned_count
 
     async def _check_workflow_completion(self, workflow_id: str) -> None:
         """

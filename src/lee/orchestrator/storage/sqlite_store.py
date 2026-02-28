@@ -366,6 +366,38 @@ class SQLiteStore:
         ))
         await self._conn.commit()
 
+    async def update_workflow_data_and_clear_current_step(
+        self,
+        workflow_id: str,
+        data: Dict[str, Any],
+        status: WorkflowStatus
+    ):
+        """
+        原子性更新工作流数据并清除 current_step（BUG-2026-0040）
+
+        在单个事务中完成：
+        1. 更新 workflow_instances.data
+        2. 清除 current_step（设置为 NULL）
+        3. 更新 updated_at
+
+        这确保了 completed_steps 更新和 current_step 清除的原子性。
+        """
+        updated_at = datetime.now()
+        await self._conn.execute("""
+            UPDATE workflow_instances
+            SET data = ?,
+                current_step = NULL,
+                status = ?,
+                updated_at = ?
+            WHERE id = ?
+        """, (
+            json.dumps(data),
+            status.value,
+            updated_at.isoformat(),
+            workflow_id,
+        ))
+        await self._conn.commit()
+
     async def get_children(
         self,
         parent_id: str
@@ -534,8 +566,121 @@ class SQLiteStore:
         返回受影响的记录条数。
         """
         done_at = (completed_at or datetime.now()).isoformat()
-        cursor = await self._conn.execute(
-            """
+        cursor = await self._conn.execute("""
+            UPDATE task_executions
+            SET status = ?,
+                error_message = COALESCE(?, error_message),
+                completed_at = COALESCE(?, completed_at)
+            WHERE workflow_id = ?
+              AND status = 'running'
+            """,
+            (
+                TaskExecutionStatus.FAILED.value,
+                error_message,
+                done_at,
+                workflow_id,
+            ),
+        )
+        await self._conn.commit()
+        return cursor.rowcount or 0
+
+    async def find_stale_task_executions(
+        self,
+        threshold_minutes: int = 30,
+    ) -> List[TaskExecution]:
+        """
+        查找长时间处于 RUNNING 状态的 task_executions（BUG-2026-0038 监控）
+
+        Args:
+            threshold_minutes: 阈值（分钟），超过此时间的 RUNNING 记录被视为 stale
+
+        Returns:
+            所有 stale 的 task_execution 列表
+        """
+        from datetime import timedelta
+
+        threshold_time = datetime.now() - timedelta(minutes=threshold_minutes)
+
+        cursor = await self._conn.execute("""
+            SELECT * FROM task_executions
+            WHERE status = 'running'
+              AND started_at < ?
+            ORDER BY started_at ASC
+        """, (threshold_time.isoformat(),))
+
+        rows = await cursor.fetchall()
+        return [self._row_to_task_execution(row) for row in rows]
+
+    async def get_stale_task_executions_summary(
+        self,
+        threshold_minutes: int = 30,
+    ) -> Dict[str, Any]:
+        """
+        获取 stale task_executions 的摘要信息
+
+        Args:
+            threshold_minutes: 阈值（分钟）
+
+        Returns:
+            摘要字典，包含：
+            - count: stale 记录数量
+            - oldest_started_at: 最早的启动时间
+            - workflows: 受影响的工作流 ID 列表
+        """
+        from datetime import timedelta
+
+        threshold_time = datetime.now() - timedelta(minutes=threshold_minutes)
+
+        # 获取数量
+        cursor = await self._conn.execute("""
+            SELECT COUNT(*) FROM task_executions
+            WHERE status = 'running' AND started_at < ?
+        """, (threshold_time.isoformat(),))
+        count_row = await cursor.fetchone()
+        count = count_row[0] if count_row else 0
+
+        if count == 0:
+            return {
+                "count": 0,
+                "oldest_started_at": None,
+                "workflows": [],
+            }
+
+        # 获取最早的启动时间
+        cursor = await self._conn.execute("""
+            SELECT MIN(started_at) FROM task_executions
+            WHERE status = 'running' AND started_at < ?
+        """, (threshold_time.isoformat(),))
+        oldest_row = await cursor.fetchone()
+        oldest_started_at = oldest_row[0] if oldest_row else None
+
+        # 获取受影响的工作流 ID 列表
+        cursor = await self._conn.execute("""
+            SELECT DISTINCT workflow_id FROM task_executions
+            WHERE status = 'running' AND started_at < ?
+        """, (threshold_time.isoformat(),))
+        workflow_rows = await cursor.fetchall()
+        workflows = [row[0] for row in workflow_rows]
+
+        return {
+            "count": count,
+            "oldest_started_at": oldest_started_at,
+            "workflows": workflows,
+        }
+
+    async def fail_running_task_executions(
+        self,
+        workflow_id: str,
+        error_message: str = "Workflow interrupted; running step marked as failed",
+        completed_at: Optional[datetime] = None,
+    ) -> int:
+        """
+        将工作流下所有 RUNNING 的 task_executions 收敛为 FAILED。
+
+        返回受影响的记录条数。
+        """
+        done_at = (completed_at or datetime.now()).isoformat()
+        cursor = await self._conn.execute("""
             UPDATE task_executions
             SET status = ?,
                 error_message = COALESCE(error_message, ?),

@@ -61,6 +61,7 @@ class StepRunnerRegistry:
         """注册所有内置 runner"""
         from lee.orchestrator.execution.runners.llm_runner import LLMRunner, ClaudeCodeRunner
         from lee.orchestrator.execution.runners.gate_runner import HumanGateRunner, ComplianceGateRunner
+        from lee.orchestrator.execution.runners.auto_check_gate_runner import AutoCheckGateRunner
         from lee.orchestrator.execution.runners.shell_runner import SkillRunner, OrchestratorCLIRunner
         from lee.orchestrator.execution.runners.patch_apply_runner import PatchApplyRunner
 
@@ -69,6 +70,7 @@ class StepRunnerRegistry:
         self.register(PatchApplyRunner())
         self.register(HumanGateRunner())
         self.register(ComplianceGateRunner())
+        self.register(AutoCheckGateRunner())
         self.register(SkillRunner())
         self.register(OrchestratorCLIRunner())
 

@@ -117,6 +117,10 @@ class LLMRunner(StepRunnerBase):
         )
         await ctx.store.create_task_execution(execution)
 
+        # P0-5: 记录步骤执行开始日志
+        import logging
+        logging.info(f"[LLMRunner] Starting execution for step {step.id} (workflow={workflow_id}, execution={execution_id})")
+
         try:
             # v3.4: AsyncRetryExecutor 包裹 LLM 调用
             retry_executor = AsyncRetryExecutor(policy=DEFAULT_RETRY_POLICY)
@@ -238,12 +242,21 @@ class LLMRunner(StepRunnerBase):
                 step_outputs=step.outputs if hasattr(step, 'outputs') else None
             )
 
-            await ctx.store.update_task_execution(
-                execution_id,
-                TaskExecutionStatus.COMPLETED,
-                output_data=output_data,
-                completed_at=datetime.now()
-            )
+            # P0-1: 确保 task_execution 状态更新（BUG-2026-0038）
+            # 使用 try-except 确保即使 update 失败也不会丢失步骤完成状态
+            try:
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.COMPLETED,
+                    output_data=output_data,
+                    completed_at=datetime.now()
+                )
+                # P0-5: 记录 task_execution 更新日志
+                import logging
+                logging.info(f"[LLMRunner] Updated task_execution {execution_id} to COMPLETED for step {step.id}")
+            except Exception as update_error:
+                # 记录错误但不抛出，因为步骤已经完成
+                logging.error(f"[LLMRunner] Failed to update task_execution {execution_id}: {update_error}")
 
             ctx.event_log.log_step_completed(
                 step_id=step.id,
@@ -467,6 +480,10 @@ class ClaudeCodeRunner(StepRunnerBase):
         )
         await ctx.store.create_task_execution(execution)
 
+        # P0-5: 记录步骤执行开始日志
+        import logging
+        logging.info(f"[ClaudeCodeRunner] Starting execution for step {step.id} (workflow={workflow_id}, execution={execution_id})")
+
         try:
             # 6. v3.4: AsyncRetryExecutor 包裹 Claude Code/Codex 调用
             executor = ctx.executor_factory.create(executor_type)
@@ -625,12 +642,21 @@ class ClaudeCodeRunner(StepRunnerBase):
                 step_outputs=step.outputs if hasattr(step, 'outputs') else None
             )
 
-            await ctx.store.update_task_execution(
-                execution_id,
-                TaskExecutionStatus.COMPLETED,
-                output_data=output,
-                completed_at=datetime.now(),
-            )
+            # P0-1: 确保 task_execution 状态更新（BUG-2026-0038）
+            # 使用 try-except 确保即使 update 失败也不会丢失步骤完成状态
+            try:
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.COMPLETED,
+                    output_data=output,
+                    completed_at=datetime.now(),
+                )
+                # P0-5: 记录 task_execution 更新日志
+                import logging
+                logging.info(f"[ClaudeCodeRunner] Updated task_execution {execution_id} to COMPLETED for step {step.id}")
+            except Exception as update_error:
+                # 记录错误但不抛出，因为步骤已经完成
+                logging.error(f"[ClaudeCodeRunner] Failed to update task_execution {execution_id}: {update_error}")
 
             changed = output.get("changed_files", [])
             ctx.event_log.log_step_completed(
