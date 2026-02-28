@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/schema/contracts/retrospective/v1",
+  "title": "Retrospective Contract",
+  "description": "复盘文档契约，验证复盘步骤的输出",
+  "type": "object",
+  "required": ["summary", "lessons_learned"],
+  "properties": {
+    "task_id": {"type": "string", "description": "任务 ID"},
+    "task_title": {"type": "string", "description": "任务标题"},
+    "summary": {"type": "string", "description": "任务总结"},
+    "lessons_learned": {
+      "type": "array",
+      "description": "经验教训列表",
+      "items": {
+        "type": "object",
+        "required": ["type", "content"],
+        "properties": {
+          "type": {"type": "string", "enum": ["positive", "negative", "neutral"], "description": "经验类型"},
+          "category": {"type": "string", "enum": ["technical", "process", "communication", "documentation"], "description": "经验类别"},
+          "content": {"type": "string", "description": "经验内容"},
+          "action_item": {"type": "string", "description": "后续行动项"}
+        }
+      }
+    },
+    "highlights": {
+      "type": "array",
+      "description": "亮点列表",
+      "items": {"type": "string"}
+    },
+    "challenges": {
+      "type": "array",
+      "description": "遇到的挑战",
+      "items": {
+        "type": "object",
+        "properties": {
+          "challenge": {"type": "string", "description": "挑战描述"},
+          "solution": {"type": "string", "description": "解决方案"},
+          "time_spent_minutes": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "任务指标",
+      "properties": {
+        "estimated_time_minutes": {"type": "integer", "minimum": 0},
+        "actual_time_minutes": {"type": "integer", "minimum": 0},
+        "files_changed": {"type": "integer", "minimum": 0},
+        "lines_added": {"type": "integer", "minimum": 0},
+        "lines_deleted": {"type": "integer", "minimum": 0}
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "description": "改进建议",
+      "items": {
+        "type": "object",
+        "properties": {
+          "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+          "recommendation": {"type": "string"},
+          "target": {"type": "string", "description": "建议对象（团队/个人/流程）"}
+        }
+      }
+    },
+    "author": {"type": "string", "description": "复盘作者"},
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/schema/contracts/code-diff/v1",
+  "title": "Code Diff Contract",
+  "description": "代码补丁输出契约，用于验证代码实现步骤的输出",
+  "type": "object",
+  "required": ["files_changed", "diff_summary"],
+  "properties": {
+    "files_changed": {
+      "type": "array",
+      "description": "变更文件列表",
+      "items": {
+        "type": "object",
+        "required": ["path", "change_type"],
+        "properties": {
+          "path": {"type": "string", "description": "文件相对路径"},
+          "change_type": {"type": "string", "enum": ["added", "modified", "deleted"], "description": "变更类型"},
+          "lines_added": {"type": "integer", "minimum": 0, "description": "新增行数"},
+          "lines_deleted": {"type": "integer", "minimum": 0, "description": "删除行数"}
+        }
+      }
+    },
+    "diff_summary": {"type": "string", "description": "代码变更摘要"},
+    "patch_file": {"type": "string", "description": "补丁文件路径"},
+    "stats": {
+      "type": "object",
+      "description": "变更统计",
+      "properties": {
+        "total_files": {"type": "integer", "minimum": 0},
+        "total_lines_added": {"type": "integer", "minimum": 0},
+        "total_lines_deleted": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

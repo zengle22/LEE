@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/schema/contracts/l3-phase-context/v1",
+  "title": "L3 Phase Context Contract",
+  "description": "L3 阶段上下文契约，定义从 L2 传递到 L3 的上下文信息",
+  "type": "object",
+  "required": ["parent_l2_id", "parent_phase_id", "point_id"],
+  "properties": {
+    "parent_l2_id": {"type": "string", "description": "父 L2 工作流 ID"},
+    "parent_phase_id": {"type": "string", "description": "父阶段 ID（如 p2_1_fe_development）"},
+    "point_id": {"type": "string", "description": "功能点 ID"},
+    "point_title": {"type": "string", "description": "功能点标题"},
+    "point_description": {"type": "string", "description": "功能点详细描述"},
+    "frozen_dev_package": {
+      "type": "object",
+      "description": "研发冻结包引用",
+      "properties": {
+        "package_id": {"type": "string", "description": "冻结包 ID"},
+        "prd_ref": {"type": "string", "description": "PRD 文件路径"},
+        "tech_ref": {"type": "string", "description": "技术架构文件路径"},
+        "ui_ref": {"type": "string", "description": "UI 原型文件路径"}
+      }
+    },
+    "repo_id": {"type": "string", "description": "目标仓库 ID"},
+    "branch": {"type": "string", "description": "开发分支名"},
+    "complexity": {"type": "string", "enum": ["S", "M", "L"], "description": "任务复杂度"},
+    "context": {
+      "type": "object",
+      "description": "额外上下文信息",
+      "properties": {
+        "project": {"type": "string"},
+        "module": {"type": "string"},
+        "feature_spec_path": {"type": "string"},
+        "files_hint": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

@@ -7,6 +7,7 @@ id: skill.devops.deploy_test_env
 name: Deploy Test Environment
 description: >
   部署测试环境供 QA 回归测试使用。
+  输出包含环境 URL 和状态，供 QA 工作流使用。
 owner: devops-team
 tags: [devops, qa, deploy]
 
@@ -17,8 +18,14 @@ interface:
     properties:
       env:
         type: string
+        description: "环境名称 (dev/test/staging)"
       version:
         type: string
+        description: "部署版本"
+      compose_file:
+        type: string
+        default: "docker-compose.test.yml"
+        description: "Docker Compose 文件路径"
   outputs:
     type: object
     properties:
@@ -26,11 +33,28 @@ interface:
         type: boolean
       status:
         type: string
+        enum: ["deployed", "failed"]
+        description: "部署状态"
+      env:
+        type: string
+        description: "环境名称"
+      version:
+        type: string
+        description: "部署的版本"
+      type:
+        type: string
+        description: "环境类型"
+      url:
+        type: string
+        description: "环境访问 URL"
+      port:
+        type: integer
+        description: "服务端口"
 
 runtime:
   type: shell
   script: "scripts/deploy-test-env.sh"
-  args_template: "--env {{ inputs.env }} --version {{ inputs.version }}"
+  args_template: "--env {{ inputs.env }} --version {{ inputs.version }} --compose-file {{ inputs.compose_file }}"
   exit_codes:
     0: "测试环境部署成功"
     1: "测试环境部署失败"

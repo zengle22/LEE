@@ -29,14 +29,19 @@ else
   # Inline fallback
   export APP_VERSION="$VERSION"
   export DEPLOY_ENV="$ENV"
-  
+
   echo "Deploying test env: version=${VERSION} env=${ENV} ..."
-  
+
   if ! docker compose -f "$COMPOSE_FILE" up -d --remove-orphans 2>&1; then
     echo "{\"ok\":false,\"error\":\"test env deploy failed\"}"
     exit 1
   fi
-  
-  echo "{\"ok\":true,\"env\":\"${ENV}\",\"version\":\"${VERSION}\",\"type\":\"test\"}"
+
+  # 构建环境 URL，供 QA 工作流使用
+  # 默认格式: {env}.test.local 或从环境变量读取
+  BASE_URL="${BASE_URL:-${ENV}.test.local}"
+  BASE_PORT="${BASE_PORT:-8080}"
+
+  echo "{\"ok\":true,\"status\":\"deployed\",\"env\":\"${ENV}\",\"version\":\"${VERSION}\",\"type\":\"test\",\"url\":\"${BASE_URL}\",\"port\":${BASE_PORT}}"
   exit 0
 fi

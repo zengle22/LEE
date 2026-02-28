@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/schema/contracts/l3-outputs/v1",
+  "title": "L3 Outputs Contract",
+  "description": "L3 工作流输出契约，验证 L3 各步骤的输出汇总",
+  "type": "object",
+  "required": ["l3_id", "point_id", "steps"],
+  "properties": {
+    "l3_id": {"type": "string", "description": "L3 工作流 ID"},
+    "point_id": {"type": "string", "description": "功能点 ID"},
+    "point_title": {"type": "string", "description": "功能点标题"},
+    "status": {"type": "string", "enum": ["in_progress", "completed", "failed", "cancelled"], "description": "L3 状态"},
+    "parent_l2_id": {"type": "string", "description": "父 L2 工作流 ID"},
+    "parent_phase_id": {"type": "string", "description": "父阶段 ID"},
+    "steps": {
+      "type": "array",
+      "description": "各步骤输出",
+      "items": {
+        "type": "object",
+        "required": ["step_id", "status"],
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "enum": ["align_requirement", "design_tests", "implement", "run_tests", "code_review", "retrospective"],
+            "description": "步骤 ID"
+          },
+          "step_name": {"type": "string", "description": "步骤名称"},
+          "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "failed", "skipped"], "description": "步骤状态"},
+          "output_file": {"type": "string", "description": "输出文件路径"},
+          "started_at": {"type": "string", "format": "date-time"},
+          "completed_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "description": "产出物清单",
+      "properties": {
+        "requirement_analysis": {"type": "string", "description": "需求分析文件路径"},
+        "test_code_diff": {"type": "string", "description": "测试代码补丁路径"},
+        "code_diff": {"type": "string", "description": "实现代码补丁路径"},
+        "test_report": {"type": "string", "description": "测试报告路径"},
+        "coverage_report": {"type": "string", "description": "覆盖率报告路径"},
+        "review_report": {"type": "string", "description": "评审报告路径"},
+        "retrospective": {"type": "string", "description": "复盘文档路径"}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "执行摘要",
+      "properties": {
+        "total_steps": {"type": "integer", "minimum": 0},
+        "completed_steps": {"type": "integer", "minimum": 0},
+        "failed_steps": {"type": "integer", "minimum": 0},
+        "total_tests": {"type": "integer", "minimum": 0},
+        "passed_tests": {"type": "integer", "minimum": 0},
+        "coverage_percentage": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    "repo_id": {"type": "string", "description": "关联仓库 ID"},
+    "branch": {"type": "string", "description": "开发分支"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"}
+  }
+}
