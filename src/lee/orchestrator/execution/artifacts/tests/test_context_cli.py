@@ -28,19 +28,6 @@ def temp_artifacts_dir():
 
 
 @pytest.fixture
-def runner(temp_artifacts_dir):
-    """创建 CLI Runner"""
-    import os
-    original_cwd = os.getcwd()
-    artifacts_parent = temp_artifacts_dir.parent
-    os.chdir(str(artifacts_parent))
-
-    yield CliRunner()
-
-    os.chdir(original_cwd)
-
-
-@pytest.fixture
 def artifact_manager(temp_artifacts_dir):
     """创建 ArtifactManager 实例"""
     manager = ArtifactManager(root_path=temp_artifacts_dir)
@@ -51,6 +38,34 @@ def artifact_manager(temp_artifacts_dir):
 def context_builder(artifact_manager):
     """创建 ContextBuilder 实例"""
     return ContextBuilder(artifact_manager)
+
+
+@pytest.fixture
+def runner(artifact_manager, monkeypatch):
+    """创建 CLI Runner，并让 CLI 命令使用测试的 artifact_manager"""
+    import os
+    original_cwd = os.getcwd()
+    original_init = ArtifactManager.__init__
+
+    # 切换到 artifacts 目录的父目录
+    artifacts_parent = artifact_manager.root_path.parent
+    os.chdir(str(artifacts_parent))
+
+    # Monkeypatch ArtifactManager.__init__
+    def mocked_init(self, root_path=None):
+        if root_path is None or root_path == artifact_manager.root_path:
+            self.root_path = artifact_manager.root_path
+            self.sequence_file = artifact_manager.sequence_file
+            self.registry = artifact_manager.registry
+        else:
+            original_init(self, root_path=root_path)
+
+    monkeypatch.setattr(ArtifactManager, "__init__", mocked_init)
+
+    yield CliRunner()
+
+    os.chdir(original_cwd)
+    monkeypatch.undo()
 
 
 class TestContextListCommand:

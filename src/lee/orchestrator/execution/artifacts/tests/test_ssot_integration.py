@@ -31,16 +31,17 @@ def temp_artifacts_dir():
 
 
 @pytest.fixture
-def artifact_manager(temp_artifacts_dir):
-    """创建 ArtifactManager 实例"""
-    manager = ArtifactManager(root_path=temp_artifacts_dir)
-    yield manager
+def gate_handler(temp_artifacts_dir):
+    """创建 GateArtifactHandler 实例"""
+    # 直接使用 temp_artifacts_dir 作为 project_root
+    # GateArtifactHandler 会检测到这是 .artifacts 目录并直接使用
+    return GateArtifactHandler(project_root=temp_artifacts_dir)
 
 
 @pytest.fixture
-def gate_handler(artifact_manager):
-    """创建 GateArtifactHandler 实例"""
-    return GateArtifactHandler(project_root=artifact_manager.root_path.parent)
+def artifact_manager(gate_handler):
+    """创建 ArtifactManager 实例 (与 gate_handler 共享同一个实例)"""
+    yield gate_handler.manager
 
 
 class TestGateSSOTIntegration:

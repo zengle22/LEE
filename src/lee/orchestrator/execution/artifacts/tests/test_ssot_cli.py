@@ -27,26 +27,41 @@ def temp_artifacts_dir():
 
 
 @pytest.fixture
-def runner(temp_artifacts_dir):
-    """创建 CLI Runner"""
-    # 保存原始 cwd
-    import os
-    original_cwd = os.getcwd()
-    # 切换到临时目录以便使用其 artifacts
-    artifacts_parent = temp_artifacts_dir.parent
-    os.chdir(str(artifacts_parent))
-
-    yield CliRunner()
-
-    # 恢复原始 cwd
-    os.chdir(original_cwd)
-
-
-@pytest.fixture
 def artifact_manager(temp_artifacts_dir):
     """创建 ArtifactManager 实例"""
     manager = ArtifactManager(root_path=temp_artifacts_dir)
     yield manager
+
+
+@pytest.fixture
+def runner(artifact_manager, monkeypatch):
+    """创建 CLI Runner，并让 CLI 命令使用测试的 artifact_manager"""
+    import os
+    # 保存原始 cwd 和原始的 ArtifactManager.__init__
+    original_cwd = os.getcwd()
+    original_init = ArtifactManager.__init__
+
+    # 切换到 artifacts 目录的父目录，这样 CLI 会找到 .artifacts
+    artifacts_parent = artifact_manager.root_path.parent
+    os.chdir(str(artifacts_parent))
+
+    # Monkeypatch ArtifactManager.__init__ 以使用测试的 manager
+    def mocked_init(self, root_path=None):
+        # 如果 root_path 相同，使用测试的 manager
+        if root_path is None or root_path == artifact_manager.root_path:
+            self.root_path = artifact_manager.root_path
+            self.sequence_file = artifact_manager.sequence_file
+            self.registry = artifact_manager.registry
+        else:
+            original_init(self, root_path=root_path)
+
+    monkeypatch.setattr(ArtifactManager, "__init__", mocked_init)
+
+    yield CliRunner()
+
+    # 恢复原始 cwd 和 ArtifactManager.__init__
+    os.chdir(original_cwd)
+    monkeypatch.undo()
 
 
 class TestSSOTValidateCommand:
@@ -285,12 +300,22 @@ class TestSSOTImpactCommand:
         """测试 JSON 格式输出"""
         run_id = "test-run-impact-json"
 
+        # 创建 PRD 和依赖它的 API，以便有 impact
         prd = artifact_manager.create(
             artifact_type=ArtifactType.CONTRACT,
             category="prd_contract",
             content="PRD",
             run_id=run_id,
             governance_kind=GovernanceKind.TRANSFER,
+        )
+
+        api = artifact_manager.create(
+            artifact_type=ArtifactType.CONTRACT,
+            category="api_contract",
+            content="API",
+            run_id=run_id,
+            governance_kind=GovernanceKind.TRANSFER,
+            derived_from=prd.id,
         )
 
         result = runner.invoke(ssot, ["impact", prd.id, "--format", "json"])

@@ -397,17 +397,26 @@ class GateArtifactHandler:
 
         # 更新 manifest
         manifest = self.manifest_manager.get(run_id, department)
-        if manifest:
-            # 添加门禁信息到 properties
-            if not manifest.properties:
-                manifest.properties = {}
-            manifest.properties["approved_gates"] = manifest.properties.get("approved_gates", [])
-            manifest.properties["approved_gates"].append({
-                "gate_id": gate_id,
-                "timestamp": datetime.now().isoformat(),
-                "ssot_validated": valid,
-            })
-            self.manifest_manager.save(manifest)
+        if not manifest:
+            # 如果 manifest 不存在，创建一个新的
+            from .models import RunManifest
+            manifest = RunManifest(
+                run_id=run_id,
+                department=department,
+                artifacts=[],
+                properties={},
+            )
+
+        # 添加门禁信息到 properties
+        if not manifest.properties:
+            manifest.properties = {}
+        manifest.properties["approved_gates"] = manifest.properties.get("approved_gates", [])
+        manifest.properties["approved_gates"].append({
+            "gate_id": gate_id,
+            "timestamp": datetime.now().isoformat(),
+            "ssot_validated": valid,
+        })
+        self.manifest_manager.save(manifest)
 
         return {
             "frozen_count": len(frozen_artifacts),
