@@ -425,7 +425,8 @@ def _get_scripts_from_test_set(test_data: Dict, out_dir: Path) -> List[Path]:
     if scripts_path:
         scripts_dir = Path(scripts_path)
     else:
-        scripts_dir = out_dir / "scripts"
+        # 回退到 out_dir 的父目录（evidence/ 的父目录是 tse-xxx/）
+        scripts_dir = out_dir.parent / "scripts"
     scripts = []
 
     # 查找已存在的脚本
