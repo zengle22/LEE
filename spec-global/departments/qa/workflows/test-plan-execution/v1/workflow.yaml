@@ -538,7 +538,7 @@ stages:
         inputs:
           - suite: "{{ current_test_set.test_set_id }}"
           - env: "{{ params.environment }}"
-          - test_set_path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/tse.yaml"
+          - test_set_path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/cases.yaml"
           - artifacts_dir: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/evidence/"
           - base_url: "$outputs.s2_1_provision_env.environment_info.base_url"
         outputs:
