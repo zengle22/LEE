@@ -359,6 +359,7 @@ class GateArtifactHandler:
         run_id: str,
         gate_id: str,
         department: Optional[str] = None,
+        enforce: bool = True,  # v1.5: 默认启用强制模式
     ) -> Dict[str, Any]:
         """
         处理门禁通过时的产出物操作
@@ -367,23 +368,29 @@ class GateArtifactHandler:
             run_id: run ID
             gate_id: 门禁 ID
             department: 部门
+            enforce: 是否启用强制模式 (v1.5 默认为 True)
 
         Returns:
             操作结果
         """
-        # SSOT 校验 (v1 warning 模式)
+        # SSOT 校验
         from .ssot_service import SSOTService
 
         service = SSOTService(self.manager)
         valid, errors = service.validate(run_id=run_id)
 
         if not valid:
-            logger.warning(f"SSOT validation warnings for run {run_id}:")
-            for err in errors:
-                logger.warning(f"  - {err}")
-            # v1 warning 模式：只打印警告，不失败
-            # v1.5 enforce 模式：取消下面注释
-            # raise Exception(f"SSOT validation failed: {errors}")
+            if enforce:
+                # v1.5 enforce 模式：强制失败
+                logger.error(f"SSOT validation failed for run {run_id}:")
+                for err in errors:
+                    logger.error(f"  - {err}")
+                raise Exception(f"SSOT validation failed: {errors}")
+            else:
+                # v1 warning 模式：只打印警告，不失败 (向后兼容)
+                logger.warning(f"SSOT validation warnings for run {run_id}:")
+                for err in errors:
+                    logger.warning(f"  - {err}")
 
         # 冻结当前 run 的产出物
         frozen_artifacts = self.freeze_run_artifacts(run_id, department)
@@ -406,7 +413,7 @@ class GateArtifactHandler:
             "frozen_count": len(frozen_artifacts),
             "frozen_artifacts": [a.id for a in frozen_artifacts],
             "ssot_validated": valid,
-            "ssot_errors": errors,
+            "ssot_errors": errors if not valid else None,
         }
 
 

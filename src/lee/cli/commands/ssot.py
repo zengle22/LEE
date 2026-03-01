@@ -3,7 +3,9 @@ SSOT CLI Commands - SSOT 真理链管理命令
 """
 
 import json
+import yaml
 import click
+from pathlib import Path
 from typing import Optional
 
 from lee.orchestrator.execution.artifacts import ArtifactManager
@@ -14,6 +16,96 @@ from lee.orchestrator.execution.artifacts.ssot_service import SSOTService
 def ssot():
     """SSOT 真理链管理命令"""
     pass
+
+
+@ssot.command("build-index")
+@click.option("--output", "-o", default=None, help="输出文件路径 (默认：.artifacts/trace/ssot-index.yaml)")
+@click.option("--release", help="仅构建指定 release 的索引")
+def build_index(output: Optional[str], release: Optional[str]):
+    """构建/更新 SSOT 索引缓存"""
+    manager = ArtifactManager()
+
+    # 确定输出路径
+    if output is None:
+        output = Path(manager.root_path) / "trace" / "ssot-index.yaml"
+    else:
+        output = Path(output)
+
+    # 确保目录存在
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    # 获取所有 artifacts
+    all_artifacts = list(manager.registry._artifacts.values())
+
+    # 按 release 过滤
+    if release:
+        all_artifacts = [a for a in all_artifacts if release in (a.tags or [])]
+
+    # 构建节点
+    nodes = []
+    for a in all_artifacts:
+        nodes.append({
+            "id": a.id,
+            "type": a.type.value,
+            "category": a.category,
+            "governance_kind": a.governance_kind.value if a.governance_kind else None,
+        })
+
+    # 构建边
+    edges = []
+    by_id = {a.id: a for a in all_artifacts}
+
+    for a in all_artifacts:
+        # derived_from 边
+        if a.derived_from:
+            edges.append({
+                "from": a.id,
+                "to": a.derived_from,
+                "type": "derived_from",
+            })
+
+        # implements 边
+        for impl_id in a.implements or []:
+            edges.append({
+                "from": a.id,
+                "to": impl_id,
+                "type": "implements",
+            })
+
+        # verifies 边
+        for ver_id in a.verifies or []:
+            edges.append({
+                "from": a.id,
+                "to": ver_id,
+                "type": "verifies",
+            })
+
+        # supersedes 边
+        if a.supersedes:
+            edges.append({
+                "from": a.id,
+                "to": a.supersedes,
+                "type": "supersedes",
+            })
+
+    # 生成索引文件
+    index_data = {
+        "nodes": nodes,
+        "edges": edges,
+        "metadata": {
+            "generated_at": Path(output).stat().st_mtime if Path(output).exists() else None,
+            "artifact_count": len(nodes),
+            "edge_count": len(edges),
+            "release_filter": release,
+        },
+    }
+
+    # 写入文件
+    with open(output, "w", encoding="utf-8") as f:
+        yaml.dump(index_data, f, allow_unicode=True, sort_keys=False)
+
+    click.echo(f"✅ SSOT index built: {output}")
+    click.echo(f"   Nodes: {len(nodes)}, Edges: {len(edges)}")
 
 
 @ssot.command("validate")

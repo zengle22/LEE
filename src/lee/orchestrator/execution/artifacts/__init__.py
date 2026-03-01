@@ -22,7 +22,8 @@ from .cleanup import (
     CleanupPolicy,
     rebuild_registry,
 )
-from .context import TaskContextBundle, ContextBuilder
+from .context import TaskContextBundle, ContextBuilder, PromptSnapshot
+from .task_brief import TaskBrief, TaskBriefGenerator
 
 __all__ = [
     "ArtifactType",
@@ -45,6 +46,9 @@ __all__ = [
     "rebuild_registry",
     "TaskContextBundle",
     "ContextBuilder",
+    "PromptSnapshot",
+    "TaskBrief",
+    "TaskBriefGenerator",
 ]
 
 __version__ = "2.1.0"

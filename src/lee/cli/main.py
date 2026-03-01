@@ -43,6 +43,9 @@ from lee.cli.commands.chat import chat
 from lee.cli.commands.watch import watch
 from lee.cli.commands import gates_cmd as gates
 from lee.cli.commands.artifacts import artifacts
+from lee.cli.commands.ssot import ssot
+from lee.cli.commands.context import context
+from lee.cli.commands.task_brief import task_brief
 
 try:
     import fcntl
@@ -193,6 +196,9 @@ cli.add_command(chat)
 cli.add_command(watch)
 cli.add_command(gates.gates)
 cli.add_command(artifacts)
+cli.add_command(ssot)
+cli.add_command(context)
+cli.add_command(task_brief)
 
 
 def main():
