@@ -532,35 +532,20 @@ stages:
         run: skill.runner.test_e2e
         description: |
           所有 E2E 用例必须通过统一命令执行：
-          test_runner run --case {case_id} --env {environment}
+          test-runner run-e2e --suite {suite} --env {env} --test-set {test_set_path} --out-dir {artifacts_dir}
 
           AI 必须调用此命令才能宣称执行过。
         inputs:
-          - test_scripts: "$loop_outputs.s4_1_translate_scripts[current_test_set.test_set_id]"
-          - environment: "$outputs.s2_1_provision_env.environment_info"
-          - runner_config:
-              command_template: "test_runner run --case {{ case.case_id }} --env {{ params.environment }}"
-              evidence_dir: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/evidence/"
-              capture:
-                logs: true
-                screenshots: true
-                video: false  # 可选
-                network_trace: true
+          - suite: "{{ current_test_set.test_set_id }}"
+          - env: "{{ params.environment }}"
+          - test_set_path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/tse.yaml"
+          - artifacts_dir: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/evidence/"
+          - base_url: "$outputs.s2_1_provision_env.environment_info.base_url"
         outputs:
-          - path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/runner-output.json"
-            description: "test_runner CLI 的原始输出"
-          - path: "qa/test-runs/{{ runtime.test_run_id }}/tse-{{ current_test_set.test_set_id | slugify }}/evidence/"
-            description: "执行证据目录（日志、截图等）"
-          - var: "runner_output"
-            description: "Runner CLI 返回的结构化结果"
-          - var: "runtime_errors"
-            description: |
-              只有以下来源的错误才合法：
-              1. Runner CLI 的退出码 + stderr
-              2. Orchestrator 的环境探测（s2_5_1_check_tools）
-              3. 人工明确标记
-
-              禁止 AI 自己造错误理由。
+          - var: "report_json"
+            description: "标准 E2E 报告 JSON 文件路径"
+          - var: "summary"
+            description: "测试总结（total, passed, failed）"
         verifiers:
           - type: evidence_exists
             config:

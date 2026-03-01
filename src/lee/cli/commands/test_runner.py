@@ -420,7 +420,12 @@ def _run_docker_script(
 
 def _get_scripts_from_test_set(test_data: Dict, out_dir: Path) -> List[Path]:
     """从 test set 获取脚本路径"""
-    scripts_dir = out_dir / "scripts"
+    # 优先使用 tse.yaml 中 paths.scripts 配置
+    scripts_path = test_data.get("paths", {}).get("scripts")
+    if scripts_path:
+        scripts_dir = Path(scripts_path)
+    else:
+        scripts_dir = out_dir / "scripts"
     scripts = []
 
     # 查找已存在的脚本

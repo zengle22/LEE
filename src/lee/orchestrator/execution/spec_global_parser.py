@@ -438,7 +438,12 @@ class SpecGlobalParser:
             elif "skill" in step_data:
                 step_type = "skill"
             elif "gate" in step_data:
-                step_type = "human_gate"
+                # 检查 gate.type 以区分 auto_check 和 human_review
+                gate_type = step_data.get("gate", {}).get("type", "human_review")
+                if gate_type == "auto_check":
+                    step_type = "gate"
+                else:
+                    step_type = "human_gate"
             elif isinstance(run_ref_for_infer, str):
                 if run_ref_for_infer.startswith("skill."):
                     step_type = "skill"
