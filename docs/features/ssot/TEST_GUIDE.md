@@ -14,14 +14,23 @@
 
 | 测试类别 | 测试文件 | 测试用例数 |
 |---------|---------|-----------|
+| **SSOT 核心测试** | | |
 | SSOT 服务层 | `test_ssot_service.py` | 14 |
 | Context Builder | `test_context_builder.py` | 19 |
 | Task Brief | `test_task_brief.py` | 21 |
 | SSOT 集成 | `test_ssot_integration.py` | 11 |
+| **SSOT CLI 测试** | | |
 | SSOT CLI | `test_ssot_cli.py` | 15 |
 | Context CLI | `test_context_cli.py` | 12 |
 | Task Brief CLI | `test_task_brief_cli.py` | 17 |
-| **总计** | | **109** |
+| **基础测试** | | |
+| Artifact Manager | `test_manager.py` | 18 |
+| Manifest Manager | `test_manifest.py` | 12 |
+| Artifact Models | `test_models.py` | 15 |
+| Artifact Registry | `test_registry.py` | 14 |
+| Integration | `test_integration.py` | 14 |
+| Types | `test_types.py` | 7 |
+| **总计** | | **189** |
 
 ### 1.2 测试环境要求
 
