@@ -371,6 +371,20 @@ class GateArtifactHandler:
         Returns:
             操作结果
         """
+        # SSOT 校验 (v1 warning 模式)
+        from .ssot_service import SSOTService
+
+        service = SSOTService(self.manager)
+        valid, errors = service.validate(run_id=run_id)
+
+        if not valid:
+            logger.warning(f"SSOT validation warnings for run {run_id}:")
+            for err in errors:
+                logger.warning(f"  - {err}")
+            # v1 warning 模式：只打印警告，不失败
+            # v1.5 enforce 模式：取消下面注释
+            # raise Exception(f"SSOT validation failed: {errors}")
+
         # 冻结当前 run 的产出物
         frozen_artifacts = self.freeze_run_artifacts(run_id, department)
 
@@ -384,12 +398,15 @@ class GateArtifactHandler:
             manifest.properties["approved_gates"].append({
                 "gate_id": gate_id,
                 "timestamp": datetime.now().isoformat(),
+                "ssot_validated": valid,
             })
             self.manifest_manager.save(manifest)
 
         return {
             "frozen_count": len(frozen_artifacts),
             "frozen_artifacts": [a.id for a in frozen_artifacts],
+            "ssot_validated": valid,
+            "ssot_errors": errors,
         }
 
 

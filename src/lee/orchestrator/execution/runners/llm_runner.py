@@ -190,8 +190,11 @@ class LLMRunner(StepRunnerBase):
                     )
                 except Exception as e:
                     print(f"[FileOutputHandler] Warning: {e}")
+
+            # v1.0: SSOT 集成 - 注册写入的文件为产出物
             if written_files:
                 await self._collect_evidence(ctx, workflow_id, step.id, written_files)
+                await self._register_artifacts(ctx, workflow_id, step.id, written_files, generated_text)
 
             # 4. Verifiers (if configured)
             verifier_results = await self._run_verifiers(ctx, workflow_id, step)
@@ -292,6 +295,85 @@ class LLMRunner(StepRunnerBase):
                     ctx.token_manager.revoke_token(step_token.token_id, reason="step_completed")
                 except Exception:
                     pass
+
+    async def _register_artifacts(
+        self,
+        ctx: RunnerContext,
+        workflow_id: str,
+        step_id: str,
+        written_files: List[str],
+        llm_output: str,
+    ) -> None:
+        """
+        v1.0: 注册写入的文件为产出物 (SSOT 集成)
+
+        Args:
+            ctx: RunnerContext
+            workflow_id: Workflow ID
+            step_id: Step ID
+            written_files: 已写入的文件路径列表
+            llm_output: LLM 原始输出 (用于记录 Context Bundle)
+        """
+        try:
+            from lee.orchestrator.execution.artifacts import (
+                create_artifact_handler,
+                ContextBuilder,
+                ArtifactManager,
+            )
+
+            # 获取 run_id 和部门信息
+            instance = await ctx.store.get_workflow(workflow_id)
+            if not instance:
+                return
+
+            run_id = instance.data.get("run_id")
+            if not run_id:
+                return
+
+            department = instance.data.get("department")
+            template_id = instance.template_id or ""
+
+            # 创建产出物处理器
+            handler = create_artifact_handler(
+                run_id=run_id,
+                workflow_id=workflow_id,
+                department=department,
+                project_root=Path(ctx.file_output_handler.project_root),
+            )
+
+            # 注册写入的文件
+            handler.register_files_from_output(written_files)
+
+            # v1.0: 记录 Context Bundle (简化版 v0.9)
+            # 仅在配置启用时记录
+            if getattr(ctx, "enable_context_bundle", True):
+                try:
+                    manager = ArtifactManager()
+                    context_builder = ContextBuilder(manager)
+
+                    # 构建 prompt 快照 (system + user)
+                    # 注意：这里只能使用 llm_output，因为 system/user prompt 在 agent_ctx 中
+                    # 简化版只记录最终输出
+                    context_builder.record_llm_call(
+                        run_id=run_id,
+                        step_id=step_id,
+                        prompt_text=f"[Step Output] {step_id}\n\n{llm_output[:10000]}",  # 限制大小
+                        department=department,
+                        workflow_id=workflow_id,
+                    )
+                except Exception as bundle_error:
+                    # Context Bundle 记录失败不阻塞主流程
+                    import logging
+                    logging.getLogger(__name__).debug(
+                        f"Failed to record Context Bundle for step {step_id}: {bundle_error}"
+                    )
+
+        except Exception as e:
+            # 产出物注册失败不阻塞主流程 (warning 模式)
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Failed to register artifacts for step {step_id}: {e}"
+            )
 
 
 class ClaudeCodeRunner(StepRunnerBase):

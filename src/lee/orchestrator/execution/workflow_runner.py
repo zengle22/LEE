@@ -40,10 +40,11 @@ class WorkflowRunConfig:
     template_path: Path
     params: Dict[str, Any]
     project_root: Path
-    plan_mode: str = "suggest"  # simple/suggest/force
+    plan_mode: str = "simple"  # simple/suggest/force
     skip_plan: bool = False
     instance_id: Optional[str] = None  # 指定从 Instance 运行
     auto_approve: bool = False  # 自动批准（测试用，生产环境应为 False）
+    ssot_root_id: Optional[str] = None  # SSOT Root ID (任务立项 ID)
 
 
 @dataclass
@@ -251,7 +252,8 @@ async def run_workflow(
     project_root: Path,
     plan_mode: str = "suggest",
     skip_plan: bool = False,
-    instance_id: Optional[str] = None
+    instance_id: Optional[str] = None,
+    ssot_root_id: Optional[str] = None
 ) -> WorkflowRunResult:
     """
     便捷函数：运行工作流
@@ -264,6 +266,7 @@ async def run_workflow(
         plan_mode: Plan 模式
         skip_plan: 是否跳过 Plan
         instance_id: Instance ID（从 Instance 运行）
+        ssot_root_id: SSOT Root ID（任务立项 ID）
 
     Returns:
         WorkflowRunResult
@@ -275,7 +278,8 @@ async def run_workflow(
         project_root=project_root,
         plan_mode=plan_mode,
         skip_plan=skip_plan,
-        instance_id=instance_id
+        instance_id=instance_id,
+        ssot_root_id=ssot_root_id
     )
 
     runner = WorkflowRunner(config)

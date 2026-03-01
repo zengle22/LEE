@@ -16,6 +16,8 @@ import yaml
 
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
+from lee.orchestrator.execution.artifacts import ArtifactManager, ManifestManager
+from lee.orchestrator.execution.artifacts.types import ArtifactType
 
 try:
     import fcntl
@@ -533,9 +535,12 @@ def _release_project_run_lock(lock_fp) -> None:
 @click.option("--skip-plan", is_flag=True, help="跳过 Plan，直接执行")
 @click.option("--plan-mode", type=click.Choice(["simple", "suggest", "force"]), default="suggest", help="Plan 模式")
 @click.option("--instance", help="从指定 Instance ID 运行")
+@click.option("--task-id", help="关联现有 Task ID (SSOT Root)")
+@click.option("--new-task", help="创建新 Task 作为 SSOT Root (提供任务描述)")
 def run(workflow_key: str, spec: str | None, env: str | None, version: str | None,
         branch: str | None, project_dir: str, max_steps: int, executor: str | None,
-        plan_only: bool, skip_plan: bool, plan_mode: str, instance: str | None) -> None:
+        plan_only: bool, skip_plan: bool, plan_mode: str, instance: str | None,
+        task_id: str | None, new_task: str | None) -> None:
     """运行指定工作流"""
     registry = _load_registry()
     workflows = registry.get("workflows", {})
@@ -570,6 +575,33 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         raise click.ClickException(f"Missing required params: {', '.join(missing)}")
 
     project_root = Path(project_dir).resolve()
+
+    # SSOT Root 确认 (v1 简化版)
+    ssot_root_id = task_id
+    if new_task and not task_id:
+        # 创建新 Task Card 作为 SSOT root
+        artifacts_root = project_root / ".artifacts"
+        artifact_manager = ArtifactManager(artifacts_root)
+        task_card = artifact_manager.create(
+            artifact_type=ArtifactType.CONTRACT,
+            category="task_card",
+            content=f"# Task Card\n\n{new_task}",
+            run_id=f"task-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+            title=new_task[:50],
+            governance_kind="transfer",  # type: ignore
+        )
+        ssot_root_id = task_card.id
+        click.echo(f"✅ Created Task Card: {ssot_root_id}")
+    elif not task_id and not new_task:
+        # 检查工作流是否会修改持久状态 (简化：所有 workflow 都视为会修改)
+        click.echo(
+            "\n⚠️  提示：此工作流会修改持久状态。\n"
+            "建议使用 --task-id 或 --new-task 来指定 SSOT Root。\n"
+            "例如:\n"
+            f"   lee run {workflow_key} --task-id TASK-xxx\n"
+            f"   lee run {workflow_key} --new-task \"任务描述\"\n"
+        )
+
     lock_fp = _acquire_project_run_lock(project_root)
     try:
         existing = _list_existing_same_workflows(project_root, workflow_key)
@@ -611,18 +643,20 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         if not instance and not skip_plan:
             # 使用 Plan 模式
             from lee.orchestrator.execution.workflow_runner import run_workflow
+            import asyncio
 
             click.echo(f"[Plan Mode] 生成执行计划...")
 
-            result = run_workflow(
+            result = asyncio.run(run_workflow(
                 workflow_key=workflow_key,
                 template_path=template_path,
                 params=params,
                 project_root=project_root,
                 plan_mode=plan_mode,
                 skip_plan=False,
-                instance_id=instance
-            )
+                instance_id=instance,
+                ssot_root_id=ssot_root_id
+            ))
 
             if not result.success:
                 raise click.ClickException(f"Plan 失败: {result.error}")

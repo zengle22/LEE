@@ -15,6 +15,7 @@ from lee.orchestrator.execution.artifacts import (
     ArtifactType,
     ManifestManager,
     AdoptMode,
+    GovernanceKind,
 )
 
 
@@ -30,8 +31,9 @@ def artifacts():
 @click.option("--status", help="按状态筛选")
 @click.option("--department", help="按部门筛选")
 @click.option("--run-id", help="按 run ID 筛选")
+@click.option("--kind", "governance_kind", help="按治理类别筛选")
 @click.option("--format", "output_format", default="table", type=click.Choice(["table", "json", "yaml"]), help="输出格式")
-def list_artifacts(artifact_type, category, status, department, run_id, output_format):
+def list_artifacts(artifact_type, category, status, department, run_id, governance_kind, output_format):
     """列出产出物"""
     manager = ArtifactManager()
 
@@ -55,6 +57,8 @@ def list_artifacts(artifact_type, category, status, department, run_id, output_f
         artifacts = [a for a in artifacts if a.category == category]
     if status:
         artifacts = [a for a in artifacts if a.status.value == status]
+    if governance_kind:
+        artifacts = [a for a in artifacts if a.governance_kind.value == governance_kind]
 
     # 输出
     if output_format == "json":

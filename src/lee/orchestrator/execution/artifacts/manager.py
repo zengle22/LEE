@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Union
 
 from .models import ArtifactMetadata, RunManifest
 from .registry import ArtifactRegistry
-from .types import ArtifactType, ArtifactStatus, AdoptMode, ArtifactCategoryRegistry
+from .types import ArtifactType, ArtifactStatus, AdoptMode, GovernanceKind, ArtifactCategoryRegistry
 
 # 最大文件大小限制 (100 MB)
 MAX_ARTIFACT_SIZE_BYTES = 100 * 1024 * 1024
@@ -144,6 +144,11 @@ class ArtifactManager:
         tags: Optional[List[str]] = None,
         status: ArtifactStatus = ArtifactStatus.ACTIVE,
         properties: Optional[Dict] = None,
+        # v1.0 新增参数
+        governance_kind: Optional[GovernanceKind] = None,
+        implements: Optional[List[str]] = None,
+        verifies: Optional[List[str]] = None,
+        supersedes: Optional[str] = None,
     ) -> ArtifactMetadata:
         """
         创建新的产出物
@@ -162,6 +167,10 @@ class ArtifactManager:
             tags: 标签列表
             status: 初始状态
             properties: 扩展属性
+            governance_kind: 治理类别 (v1.0 新增)
+            implements: 实现哪些契约 (v1.0 新增)
+            verifies: 验证哪些契约 (v1.0 新增)
+            supersedes: 替代哪个旧真理 (v1.0 新增)
 
         Returns:
             创建的 ArtifactMetadata 对象
@@ -242,6 +251,10 @@ class ArtifactManager:
             department=department,
             depends_on=depends_on or [],
             derived_from=derived_from,
+            implements=implements or [],
+            verifies=verifies or [],
+            supersedes=supersedes,
+            governance_kind=governance_kind or GovernanceKind.TRANSFER,
             title=title,
             description=description,
             tags=tags or [],
@@ -272,6 +285,11 @@ class ArtifactManager:
         derived_from: Optional[str] = None,
         tags: Optional[List[str]] = None,
         properties: Optional[Dict] = None,
+        # v1.0 新增参数
+        governance_kind: Optional[GovernanceKind] = None,
+        implements: Optional[List[str]] = None,
+        verifies: Optional[List[str]] = None,
+        supersedes: Optional[str] = None,
     ) -> ArtifactMetadata:
         """
         Adopt 外部文件到产出物系统
@@ -294,6 +312,10 @@ class ArtifactManager:
             derived_from: 派生自哪个产出物
             tags: 标签列表
             properties: 扩展属性
+            governance_kind: 治理类别 (v1.0 新增)
+            implements: 实现哪些契约 (v1.0 新增)
+            verifies: 验证哪些契约 (v1.0 新增)
+            supersedes: 替代哪个旧真理 (v1.0 新增)
 
         Returns:
             创建的 ArtifactMetadata 对象
@@ -328,6 +350,10 @@ class ArtifactManager:
                 derived_from=derived_from,
                 tags=tags,
                 properties=properties,
+                governance_kind=governance_kind,
+                implements=implements,
+                verifies=verifies,
+                supersedes=supersedes,
                 now=now,
             )
         else:
@@ -346,6 +372,10 @@ class ArtifactManager:
                 derived_from=derived_from,
                 tags=tags,
                 properties=properties,
+                governance_kind=governance_kind,
+                implements=implements,
+                verifies=verifies,
+                supersedes=supersedes,
                 now=now,
             )
 
@@ -365,6 +395,10 @@ class ArtifactManager:
         tags: Optional[List[str]],
         properties: Optional[Dict],
         now: datetime,
+        governance_kind: Optional[GovernanceKind] = None,
+        implements: Optional[List[str]] = None,
+        verifies: Optional[List[str]] = None,
+        supersedes: Optional[str] = None,
     ) -> ArtifactMetadata:
         """copy_mode adopt 实现"""
 
@@ -401,6 +435,10 @@ class ArtifactManager:
             department=department,
             depends_on=depends_on or [],
             derived_from=derived_from,
+            implements=implements or [],
+            verifies=verifies or [],
+            supersedes=supersedes,
+            governance_kind=governance_kind or GovernanceKind.TRANSFER,
             title=title or external_path.stem,
             description=description,
             tags=tags or [],
@@ -430,6 +468,10 @@ class ArtifactManager:
         tags: Optional[List[str]],
         properties: Optional[Dict],
         now: datetime,
+        governance_kind: Optional[GovernanceKind] = None,
+        implements: Optional[List[str]] = None,
+        verifies: Optional[List[str]] = None,
+        supersedes: Optional[str] = None,
     ) -> ArtifactMetadata:
         """reference_mode adopt 实现"""
 
@@ -464,6 +506,10 @@ class ArtifactManager:
             department=department,
             depends_on=depends_on or [],
             derived_from=derived_from,
+            implements=implements or [],
+            verifies=verifies or [],
+            supersedes=supersedes,
+            governance_kind=governance_kind or GovernanceKind.TRANSFER,
             title=title or external_path.stem,
             description=description,
             tags=tags or [],

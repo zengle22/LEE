@@ -38,6 +38,25 @@ class AdoptMode(str, Enum):
     REFERENCE = "reference_mode"  # 仅保存 git 引用
 
 
+class GovernanceKind(str, Enum):
+    """
+    治理类别 (v1.0 新增)
+
+    正交于 type/category 的维度，用于文件治理策略：
+    - EVIDENCE: 过程证据 (测试报告、运行日志、Context Bundle)
+    - TRANSFER: 中间产物 (PRD/API 契约、设计文档、测试计划)
+    - DELIVERABLE: 制成品 (实现代码、可发布包)
+    - KNOWLEDGE: 知识沉淀 (陷阱指南、规范文档)
+    - STATE: 系统状态 (保留接口，暂不使用)
+    """
+
+    EVIDENCE = "evidence"
+    TRANSFER = "transfer"
+    DELIVERABLE = "deliverable"
+    KNOWLEDGE = "knowledge"
+    STATE = "state"  # 暂不使用，预留接口
+
+
 class ArtifactCategoryRegistry:
     """
     产出物类别注册表

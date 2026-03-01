@@ -6,7 +6,7 @@ LEE Artifact Management System
 版本: v2.1
 """
 
-from .types import ArtifactType, ArtifactCategory, ArtifactStatus, AdoptMode
+from .types import ArtifactType, ArtifactCategory, ArtifactStatus, AdoptMode, GovernanceKind
 from .models import ArtifactMetadata, RunManifest, ArtifactReference
 from .registry import ArtifactRegistry
 from .manifest import ManifestManager
@@ -22,12 +22,14 @@ from .cleanup import (
     CleanupPolicy,
     rebuild_registry,
 )
+from .context import TaskContextBundle, ContextBuilder
 
 __all__ = [
     "ArtifactType",
     "ArtifactCategory",
     "ArtifactStatus",
     "AdoptMode",
+    "GovernanceKind",
     "ArtifactMetadata",
     "RunManifest",
     "ArtifactReference",
@@ -41,6 +43,8 @@ __all__ = [
     "ArtifactCleaner",
     "CleanupPolicy",
     "rebuild_registry",
+    "TaskContextBundle",
+    "ContextBuilder",
 ]
 
 __version__ = "2.1.0"
