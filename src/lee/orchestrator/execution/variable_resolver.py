@@ -29,6 +29,7 @@ class VariableResolver:
     # 正则表达式
     STEP_OUTPUT_PATTERN = re.compile(r'\$s(\d+)_(\d+)(?:_(.+))?')
     INPUTS_PATTERN = re.compile(r'\$inputs\.([a-zA-Z_][a-zA-Z0-9_.]*)')
+    LOOP_OUTPUTS_PATTERN = re.compile(r'\$loop_outputs\.([a-zA-Z_][a-zA-Z0-9_.]*)\[([^\]]+)\](?:\.(.+))?')
 
     def __init__(self):
         self.variables: Dict[str, Any] = {}
@@ -84,6 +85,24 @@ class VariableResolver:
                 path=path,
             )
 
+        # 尝试匹配循环输出引用：$loop_outputs.step_name[key] 或 $loop_outputs.step_name[key].path
+        loop_match = self.LOOP_OUTPUTS_PATTERN.match(reference)
+        if loop_match:
+            step_name = loop_match.group(1)
+            loop_key = loop_match.group(2)
+            output_path = loop_match.group(3)
+
+            # 构建路径
+            path = [step_name, loop_key]
+            if output_path:
+                path.extend(output_path.split("."))
+
+            return VariableIR(
+                reference=reference,
+                source_type="loop_outputs",
+                path=path,
+            )
+
         # 默认为上下文引用（去掉 $ 前缀）
         ref_without_dollar = reference[1:]
         path = ref_without_dollar.split(".")
@@ -122,6 +141,8 @@ class VariableResolver:
             return self._get_from_inputs(var_ir.path, context.get("inputs", {}))
         elif var_ir.source_type == "step":
             return self._get_from_step(var_ir, context)
+        elif var_ir.source_type == "loop_outputs":
+            return self._get_from_loop_outputs(var_ir, context)
         elif var_ir.source_type == "context":
             return self._get_from_context(var_ir.path, context)
 
@@ -176,6 +197,57 @@ class VariableResolver:
                 value = value[key]
             elif isinstance(value, dict):
                 # 键不存在，返回 None
+                return None
+            else:
+                raise ValueError(f"Cannot access key '{key}' on non-dict value (path: {'.'.join(var_ir.path)})")
+
+        return value
+
+    def _get_from_loop_outputs(self, var_ir: VariableIR, context: Dict[str, Any]) -> Any:
+        """
+        从循环步骤输出获取值（支持 $loop_outputs.step_name[key] 格式）
+
+        Args:
+            var_ir: VariableIR 对象
+            context: 上下文数据，包含 loop_outputs
+
+        Returns:
+            变量值
+
+        Raises:
+            ValueError: 如果变量未定义
+        """
+        loop_outputs = context.get("loop_outputs", {})
+
+        # path[0] 是 step_name (如 s3_2_generate_cases)
+        # path[1] 是 loop_key (如 current_test_set.test_set_id)
+        if len(var_ir.path) < 2:
+            raise ValueError(f"Invalid loop_outputs path: {var_ir.path}")
+
+        step_name = var_ir.path[0]
+        loop_key = var_ir.path[1]
+
+        # 从 loop_outputs 获取对应步骤的输出
+        step_outputs = loop_outputs.get(step_name, {})
+
+        if not step_outputs:
+            # loop_outputs 中不存在，尝试从 step_outputs 获取
+            step_outputs = context.get("step_outputs", {}).get(step_name, {})
+
+        # 从步骤输出中获取对应 key 的值
+        value = step_outputs.get(loop_key)
+
+        if value is None:
+            # 可能是字典形式的键不存在，返回 None
+            if isinstance(step_outputs, dict):
+                return None
+            raise ValueError(f"Loop output not found: {var_ir.reference}")
+
+        # 处理剩余的路径（如果有）
+        for key in var_ir.path[2:]:
+            if isinstance(value, dict) and key in value:
+                value = value[key]
+            elif isinstance(value, dict):
                 return None
             else:
                 raise ValueError(f"Cannot access key '{key}' on non-dict value (path: {'.'.join(var_ir.path)})")
