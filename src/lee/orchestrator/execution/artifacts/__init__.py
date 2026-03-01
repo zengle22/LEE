@@ -24,6 +24,7 @@ from .cleanup import (
 )
 from .context import TaskContextBundle, ContextBuilder, PromptSnapshot
 from .task_brief import TaskBrief, TaskBriefGenerator
+from .ssot_service import SSOTService
 
 __all__ = [
     "ArtifactType",
@@ -49,6 +50,7 @@ __all__ = [
     "PromptSnapshot",
     "TaskBrief",
     "TaskBriefGenerator",
+    "SSOTService",
 ]
 
 __version__ = "2.1.0"
