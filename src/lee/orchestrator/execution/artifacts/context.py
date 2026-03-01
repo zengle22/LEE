@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 from .manager import ArtifactManager
+from .models import ArtifactMetadata
 from .types import ArtifactType, GovernanceKind
 
 
@@ -74,7 +75,11 @@ class TaskContextBundle:
             self.prompt_snapshot = PromptSnapshot(system="", user=self.prompt_text)
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典格式，用于 YAML 序列化"""
+        """转换为字典格式，用于 YAML 序列化
+
+        v1.0 格式：包含 artifacts 和 prompt_snapshot
+        v0.9 格式：包含 prompt_text 和 prompt_snapshot (向后兼容)
+        """
         result = {
             "id": self.id,
             "run_id": self.run_id,
@@ -83,12 +88,19 @@ class TaskContextBundle:
             "created_at": self.created_at.isoformat(),
         }
 
+        # v1.0 格式：有 artifacts
         if self.artifacts:
             result["artifacts"] = self.artifacts
 
+        # prompt_snapshot 总是存在 (从 prompt_text 自动转换或显式设置)
         if self.prompt_snapshot:
             result["prompt_snapshot"] = self.prompt_snapshot.to_dict()
         elif self.prompt_text:
+            # 如果没有 prompt_snapshot 但有 prompt_text，创建一个
+            result["prompt_snapshot"] = PromptSnapshot(system="", user=self.prompt_text).to_dict()
+
+        # v0.9 兼容：如果有 prompt_text，也输出它
+        if self.prompt_text:
             result["prompt_text"] = self.prompt_text
 
         if self.config:

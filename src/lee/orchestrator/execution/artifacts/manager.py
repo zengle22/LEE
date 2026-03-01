@@ -4,10 +4,10 @@ Artifact Manager
 产出物管理器 - 提供创建、adopt、freeze 等核心操作。
 """
 
-import fcntl
 import hashlib
 import shutil
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Union
@@ -15,6 +15,10 @@ from typing import Dict, List, Optional, Union
 from .models import ArtifactMetadata, RunManifest
 from .registry import ArtifactRegistry
 from .types import ArtifactType, ArtifactStatus, AdoptMode, GovernanceKind, ArtifactCategoryRegistry
+
+# Windows 兼容性：fcntl 不可用
+if sys.platform != "win32":
+    import fcntl
 
 # 最大文件大小限制 (100 MB)
 MAX_ARTIFACT_SIZE_BYTES = 100 * 1024 * 1024
@@ -110,7 +114,9 @@ class ArtifactManager:
         lock_fd = open(lock_file, "w")
 
         try:
-            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
+            # Windows 不支持 fcntl 锁，跳过
+            if sys.platform != "win32":
+                fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
 
             # 读取当前序号
             if self.sequence_file.exists():
@@ -126,7 +132,9 @@ class ArtifactManager:
 
             return f"ART-{sequence:05d}"
         finally:
-            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+            # Windows 不支持 fcntl 锁，跳过
+            if sys.platform != "win32":
+                fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
             lock_fd.close()
 
     def create(

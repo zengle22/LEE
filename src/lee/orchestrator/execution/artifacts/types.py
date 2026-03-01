@@ -70,12 +70,16 @@ class ArtifactCategoryRegistry:
             "api_contract",
             "test_plan",
             "design_doc",
+            "prd_contract",  # SSOT v1.0 新增
+            "task_card",     # Task Card (SSOT root)
         },
         "DOCUMENT": {
             "readme",
             "usage_guide",
             "investigation_report",
             "handover_doc",
+            "task_brief",                # Task Brief (压缩视图)
+            "task_context_bundle",       # Context Bundle (展开视图)
         },
         "CODE_REF": {
             "implementation",
@@ -91,6 +95,7 @@ class ArtifactCategoryRegistry:
             "test_report",
             "test_case",
             "coverage_report",
+            "test_plan",  # SSOT v1.0 新增 (test_plan 也可以是 TEST 类型)
         },
         "HANDOVER": {
             "to_qa",

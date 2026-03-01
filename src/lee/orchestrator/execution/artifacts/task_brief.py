@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from .manager import ArtifactManager
+from .models import ArtifactMetadata
 from .types import ArtifactType, GovernanceKind
 
 
@@ -32,6 +33,10 @@ class TaskBrief:
     id: str
     run_id: str
     department: str
+
+    # 任务基本信息
+    title: str = ""
+    description: str = ""
 
     # 任务类型
     task_type: str = "feature"  # feature, bugfix, incident, refactor
@@ -70,6 +75,8 @@ class TaskBrief:
             "id": self.id,
             "run_id": self.run_id,
             "department": self.department,
+            "title": self.title,
+            "description": self.description,
             "task_type": self.task_type,
             "related_ssot": self.related_ssot,
             "scope": self.scope,
@@ -108,8 +115,10 @@ class TaskBriefGenerator:
 
     def generate_id(self) -> str:
         """生成 Task Brief ID"""
+        import random
         now = datetime.now()
-        return f"TB-{now.strftime('%Y%m%d-%H%M%S')}"
+        # 添加微秒和随机后缀确保唯一性
+        return f"TB-{now.strftime('%Y%m%d-%H%M%S')}-{now.microsecond:06d}-{random.randint(100, 999)}"
 
     def create_from_task_card(
         self,
@@ -270,6 +279,8 @@ class TaskBriefGenerator:
             id=self.generate_id(),
             run_id=run_id,
             department=department,
+            title=title,
+            description=description,
             task_type=task_type,
             related_ssot=related_ssot or {},
             scope={

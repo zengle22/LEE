@@ -10,6 +10,8 @@ artifact_types:
       - api_contract
       - test_plan
       - design_doc
+      - prd_contract      # SSOT v1.0: PRD 契约
+      - task_card         # SSOT v1.0: Task Card (SSOT root)
 
   DOCUMENT:
     description: "文档类产出物 - 说明、记录、总结等"
@@ -18,6 +20,9 @@ artifact_types:
       - usage_guide
       - investigation_report
       - handover_doc
+      - note                  # 通用笔记
+      - task_brief               # SSOT v1.5: Task Brief (压缩视图)
+      - task_context_bundle      # SSOT v1.0: Context Bundle (展开视图)
 
   CODE_REF:
     description: "代码引用类 - 通过 git SHA 引用代码"
@@ -39,6 +44,7 @@ artifact_types:
       - test_report
       - test_case
       - coverage_report
+      - test_plan         # SSOT v1.0: 测试计划 (也可作为 TEST 类型)
 
   HANDOVER:
     description: "移交类产出物 - 部门间或阶段间移交"

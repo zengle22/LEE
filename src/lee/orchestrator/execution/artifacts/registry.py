@@ -9,14 +9,18 @@ Artifact Registry
 - Registry 损坏可以重建，但 Manifest 损坏则数据丢失
 """
 
-import fcntl
 import hashlib
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from .models import ArtifactMetadata, RunManifest
+
+# Windows 兼容性：fcntl 不可用
+if sys.platform != "win32":
+    import fcntl
 
 
 class ArtifactRegistry:
@@ -56,7 +60,9 @@ class ArtifactRegistry:
             # 确保父目录存在
             self.lock_file.parent.mkdir(parents=True, exist_ok=True)
             self.lock_fd = open(self.lock_file, "w")
-            fcntl.flock(self.lock_fd.fileno(), fcntl.LOCK_EX)
+            # Windows 不支持 fcntl，跳过文件锁
+            if sys.platform != "win32":
+                fcntl.flock(self.lock_fd.fileno(), fcntl.LOCK_EX)
             return True
         except Exception:
             return False
@@ -65,7 +71,9 @@ class ArtifactRegistry:
         """释放文件锁"""
         try:
             if hasattr(self, "lock_fd"):
-                fcntl.flock(self.lock_fd.fileno(), fcntl.LOCK_UN)
+                # Windows 不支持 fcntl，跳过文件锁
+                if sys.platform != "win32":
+                    fcntl.flock(self.lock_fd.fileno(), fcntl.LOCK_UN)
                 self.lock_fd.close()
         except Exception:
             pass
