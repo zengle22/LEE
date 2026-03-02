@@ -444,6 +444,8 @@ class SkillRunner(StepRunnerBase):
             runtime_args = runtime.get("args_template")
             if runtime_command and runtime_args:
                 try:
+                    # 跨平台兼容：自动检测 python/python3 (BUG-2026-0058)
+                    runtime_command = SkillRunner._resolve_python_command(runtime_command)
                     # 支持 Jinja2 模板 ({{ }}) 和 Python format ({}) 两种格式
                     command = SkillRunner._render_template(str(runtime_command), jinja_context, format_values)
                     args = SkillRunner._render_template(str(runtime_args), jinja_context, format_values)
@@ -459,6 +461,36 @@ class SkillRunner(StepRunnerBase):
             return [str(execution_config["command"])]
 
         return commands
+
+    @staticmethod
+    def _resolve_python_command(command: str) -> str:
+        """
+        跨平台解析 Python 解释器命令 (BUG-2026-0058)
+
+        - Windows: 使用 python
+        - Linux/macOS: 优先使用 python3，回退到 python
+
+        Args:
+            command: 原始命令字符串
+
+        Returns:
+            解析后的命令字符串
+        """
+        import shutil
+
+        if command != "python":
+            return command
+
+        # Windows 保持 python
+        if platform.system() == "Windows":
+            return "python"
+
+        # Linux/macOS 优先使用 python3
+        if shutil.which("python3"):
+            return "python3"
+
+        # 回退到 python（可能不存在，但让 shell 报错更明确）
+        return "python"
 
     @staticmethod
     def _render_template(template_str: str, jinja_context: Dict[str, Any], format_values: Dict[str, str]) -> str:

@@ -5,6 +5,8 @@ Tests the $outputs.step_id.field reference resolution feature.
 """
 
 import json
+import platform
+import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -438,6 +440,51 @@ class TestRenderTemplate:
         # Jinja2 renders empty string for missing variables
         assert "--suite" in result
         assert "--env test" in result
+
+
+class TestResolvePythonCommand:
+    """Test the _resolve_python_command method for cross-platform compatibility (BUG-0058)."""
+
+    def test_resolve_python_command_on_windows(self, monkeypatch):
+        """Test Windows uses 'python'."""
+        monkeypatch.setattr(platform, "system", lambda: "Windows")
+
+        result = SkillRunner._resolve_python_command("python")
+
+        assert result == "python"
+
+    def test_resolve_python_command_on_linux_with_python3(self, monkeypatch):
+        """Test Linux with python3 available uses 'python3'."""
+        monkeypatch.setattr(platform, "system", lambda: "Linux")
+        monkeypatch.setattr("shutil.which", lambda cmd: cmd == "python3")
+
+        result = SkillRunner._resolve_python_command("python")
+
+        assert result == "python3"
+
+    def test_resolve_python_command_on_linux_without_python3(self, monkeypatch):
+        """Test Linux without python3 falls back to 'python'."""
+        monkeypatch.setattr(platform, "system", lambda: "Linux")
+        monkeypatch.setattr("shutil.which", lambda cmd: None)
+
+        result = SkillRunner._resolve_python_command("python")
+
+        assert result == "python"
+
+    def test_resolve_python_command_non_python_command(self):
+        """Test non-python commands are passed through unchanged."""
+        result = SkillRunner._resolve_python_command("node")
+
+        assert result == "node"
+
+    def test_resolve_python_command_on_macos(self, monkeypatch):
+        """Test macOS uses 'python3' when available."""
+        monkeypatch.setattr(platform, "system", lambda: "Darwin")
+        monkeypatch.setattr("shutil.which", lambda cmd: cmd == "python3")
+
+        result = SkillRunner._resolve_python_command("python")
+
+        assert result == "python3"
 
 
 if __name__ == "__main__":
