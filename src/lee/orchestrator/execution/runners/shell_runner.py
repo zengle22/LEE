@@ -341,8 +341,9 @@ class SkillRunner(StepRunnerBase):
         if not isinstance(execution, dict):
             return []
 
-        # 构建 format values
+        # 构建 format values 和 jinja2 context
         format_values: Dict[str, str] = {}
+        jinja_context: Dict[str, Any] = {}
 
         # 添加 skill_dir 占位符
         if skill_spec_path:
@@ -351,12 +352,14 @@ class SkillRunner(StepRunnerBase):
             if platform.system() == "Windows":
                 skill_dir = skill_dir.replace("\\", "/")
             format_values["skill_dir"] = skill_dir
+            jinja_context["skill_dir"] = skill_dir
 
         # 添加 workspace_path
         workspace = input_data.get("workspace_path") or str(Path(project_root or ".").resolve())
         if platform.system() == "Windows":
             workspace = workspace.replace("\\", "/")
         format_values["workspace_path"] = workspace
+        jinja_context["workspace_path"] = workspace
 
         # 添加 patterns_json 特殊处理
         patterns_to_add = input_data.get("patterns_to_add", [])
@@ -364,6 +367,7 @@ class SkillRunner(StepRunnerBase):
             # 转义单引号以兼容 shell 命令
             patterns_json = json.dumps(patterns_to_add, ensure_ascii=False)
             format_values["patterns_json"] = patterns_json
+            jinja_context["patterns_json"] = patterns_json
 
         # 添加 input_data 中的其他值
         for key, value in input_data.items():
@@ -377,10 +381,13 @@ class SkillRunner(StepRunnerBase):
                 if platform.system() == "Windows":
                     str_value = str_value.replace("\\", "/")
                 format_values[str(key)] = str_value
+            # Jinja2 context 保留原始结构
+            jinja_context[str(key)] = value
 
         # 分支未显式指定时，回退到当前分支
         if not input_data.get("branch"):
             format_values["branch"] = "$(git branch --show-current)"
+            jinja_context["branch"] = "$(git branch --show-current)"
 
         commands: List[str] = []
 
@@ -417,14 +424,13 @@ class SkillRunner(StepRunnerBase):
             runtime_args = runtime.get("args_template")
             if runtime_command and runtime_args:
                 try:
-                    # 替换 command 中的占位符
-                    command = str(runtime_command).format_map(_SafeFormatDict(format_values)).strip()
-                    # 替换 args_template 中的占位符
-                    args = str(runtime_args).format_map(_SafeFormatDict(format_values)).strip()
+                    # 支持 Jinja2 模板 ({{ }}) 和 Python format ({}) 两种格式
+                    command = self._render_template(str(runtime_command), jinja_context, format_values)
+                    args = self._render_template(str(runtime_args), jinja_context, format_values)
                     full_command = f"{command} {args}".strip()
                     if full_command:
                         commands.append(full_command)
-                except KeyError:
+                except (KeyError, Exception):
                     pass
 
         # 允许 step.config.execution.command 覆盖 skill 规范
@@ -433,6 +439,35 @@ class SkillRunner(StepRunnerBase):
             return [str(execution_config["command"])]
 
         return commands
+
+    @staticmethod
+    def _render_template(template_str: str, jinja_context: Dict[str, Any], format_values: Dict[str, str]) -> str:
+        """
+        渲染模板字符串，支持 Jinja2 ({{ }}) 和 Python format ({}) 两种格式
+
+        Args:
+            template_str: 模板字符串
+            jinja_context: Jinja2 上下文变量字典（支持嵌套结构）
+            format_values: Python format 扁平化字典
+
+        Returns:
+            渲染后的字符串
+        """
+        import re
+
+        # 检测是否使用 Jinja2 语法 ({{ }})
+        if re.search(r'\{\{\s*\w+', template_str):
+            # 使用 Jinja2 渲染
+            try:
+                from jinja2 import Template
+                template = Template(template_str)
+                return template.render(**jinja_context).strip()
+            except Exception:
+                # Jinja2 渲染失败，回退到 Python format
+                pass
+
+        # 使用 Python format
+        return template_str.format_map(_SafeFormatDict(format_values)).strip()
 
     @staticmethod
     def _is_failed_shell_output(output: Dict[str, Any]) -> bool:
