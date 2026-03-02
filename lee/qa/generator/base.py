@@ -128,7 +128,7 @@ class BaseGenerator(ABC):
 
             return GenerationResult(
                 code=code,
-                files=self._split_into_files(code),
+                files=self._split_into_files(code, request),
                 validation=ValidationResult.merge(
                     schema_result, syntax_result, static_result
                 ),
@@ -205,12 +205,19 @@ class BaseGenerator(ABC):
 
         return result
 
-    def _split_into_files(self, code: str) -> Dict[str, str]:
+    def _split_into_files(self, code: str, request: GenerationRequest) -> Dict[str, str]:
         """
         Split generated code into multiple files.
 
         Default implementation returns a single file.
         Subclasses can override for more sophisticated splitting.
+
+        Args:
+            code: Generated code string
+            request: Generation request (for accessing base_url, etc.)
+
+        Returns:
+            Dictionary of filename -> content
         """
         return {
             "test_main.py": code,
