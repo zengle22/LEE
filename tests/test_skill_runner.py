@@ -270,3 +270,200 @@ async def test_skill_runner_loads_runtime_cleanup_skill_commands(tmp_path: Path)
     assert any("rm -f .lee/chat_history.txt .lee/cli.lock input.mode" in cmd for cmd in commands)
     assert any("find .lee/pm_agent_sessions -type f -name '*.json' -delete" in cmd for cmd in commands)
     assert all(cmd.startswith(f"cd {tmp_path}") for cmd in commands)
+
+
+# ============================================
+# BUG-2026-0051: runtime configuration tests
+# ============================================
+
+
+class TestBuildSkillCommandsRuntimeConfig:
+    """Tests for _build_skill_commands with runtime config (BUG-2026-0051)"""
+
+    def test_build_skill_commands_execution_command(self):
+        """Test that execution.command still works"""
+        step = MockStep()
+        skill_spec = {
+            "execution": {
+                "command": "echo hello"
+            }
+        }
+        input_data = {}
+
+        commands = SkillRunner._build_skill_commands(
+            step, skill_spec, input_data, None
+        )
+
+        assert commands == ["echo hello"]
+
+    def test_build_skill_commands_execution_steps(self):
+        """Test that execution.steps[].command works"""
+        step = MockStep()
+        skill_spec = {
+            "execution": {
+                "steps": [
+                    {"command": "echo step1"},
+                    {"command": "echo step2"},
+                ]
+            }
+        }
+        input_data = {}
+
+        commands = SkillRunner._build_skill_commands(
+            step, skill_spec, input_data, None
+        )
+
+        assert commands == ["echo step1", "echo step2"]
+
+    def test_build_skill_commands_runtime_config(self):
+        """Test runtime.command + runtime.args_template format (BUG-2026-0051)"""
+        step = MockStep()
+        skill_spec = {
+            "runtime": {
+                "type": "cli",
+                "command": "lee",
+                "args_template": "test-runner run-e2e --env {{ env }}"
+            }
+        }
+        input_data = {"env": "test"}
+
+        commands = SkillRunner._build_skill_commands(
+            step, skill_spec, input_data, None
+        )
+
+        assert len(commands) == 1
+        assert "lee" in commands[0]
+        assert "test-runner" in commands[0]
+        assert "run-e2e" in commands[0]
+        assert "--env test" in commands[0]
+
+    def test_build_skill_commands_runtime_with_full_args(self):
+        """Test runtime with full arguments"""
+        step = MockStep()
+        skill_spec = {
+            "runtime": {
+                "type": "cli",
+                "command": "lee",
+                "args_template": """
+                    test-runner run-e2e
+                    --suite {{ suite }}
+                    --env {{ env }}
+                    --test-set {{ test_set_path }}
+                    --out-dir {{ artifacts_dir }}
+                """
+            }
+        }
+        input_data = {
+            "suite": "smoke",
+            "env": "staging",
+            "test_set_path": "qa/test-sets/login.yaml",
+            "artifacts_dir": "qa/test-runs/TR-001/evidence"
+        }
+
+        commands = SkillRunner._build_skill_commands(
+            step, skill_spec, input_data, None
+        )
+
+        assert len(commands) == 1
+        cmd = commands[0]
+        assert")
+        assert cmd.startswith("lee")
+        assert "--suite smoke" in cmd
+        assert "--env staging" in cmd
+        assert "--test-set" in cmd
+        assert "--out-dir" in cmd
+
+    def test_build_skill_commands_runtime_fallback_to_execution(self):
+        """Test that execution.command takes priority over runtime"""
+        step = MockStep()
+        skill_spec = {
+            "execution": {
+                "command": "echo from_execution"
+            },
+            "runtime": {
+                "command": "echo from_runtime",
+                "args_template": "should not be used"
+            }
+        }
+        input_data = {}
+
+        commands = SkillRunner._build_skill_commands(
+            step, skill_spec, input_data, None
+        )
+
+        assert commands == ["echo from_execution"]
+
+    def test_build_skill_commands_runtime_missing_args(self):
+        """Test runtime with missing args_template"""
+        step = MockStep()
+        skill_spec = {
+            "runtime": {
+                "command": "lee"
+                # args_template is missing
+            }
+        }
+        input_data = {}
+
+        commands = SkillRunner._build_skill_commands(
+            step, skill_spec, input_data, None
+        )
+
+        assert commands == []
+
+    def test_build_skill_commands_runtime_missing_command(self):
+        """Test runtime with missing command"""
+        step = MockStep()
+        skill_spec = {
+            "runtime": {
+                "type": "cli",
+                "args_template": "some args"
+                # command is missing
+            }
+        }
+        input_data = {}
+
+        commands = SkillRunner._build_skill_commands(
+            step, skill_spec, input_data, None
+        )
+
+        assert commands == []
+
+    def test_build_skill_commands_runtime_with_workspace_path(self):
+        """Test runtime config with workspace_path placeholder"""
+        step = MockStep()
+        skill_spec = {
+            "runtime": {
+                "command": "cd {workspace_path} && lee test",
+                "args_template": "--flag"
+            }
+        }
+        input_data = {"workspace_path": "/path/to/workspace"}
+
+        commands = SkillRunner._build_skill_commands(
+            step, skill_spec, input_data, "/project/root"
+        )
+
+        assert len(commands) == 1
+        assert "/path/to/workspace" in commands[0]
+
+    def test_build_skill_commands_step_config_overrides_runtime(self):
+        """Test that step.config.execution.command overrides runtime"""
+        step = MockStep()
+        step.config = {
+            "execution": {
+                "command": "echo from_step_config"
+            }
+        }
+        skill_spec = {
+            "runtime": {
+                "command": "echo from_runtime",
+                "args_template": "should not be used"
+            }
+        }
+        input_data = {}
+
+        commands = SkillRunner._build_skill_commands(
+            step, skill_spec, input_data, None
+        )
+
+        assert commands == ["echo from_step_config"]
