@@ -456,6 +456,11 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # 获取可执行步骤
         ready_steps = await self.get_ready_steps(workflow_id)
 
+        # 继续执行 run_step 的剩余逻辑
+        return await self._continue_run_step(
+            workflow_id, instance, reopened_from_failed, ready_steps, step_id
+        )
+
     async def _inject_loop_variables_if_needed(
         self,
         workflow_id: str,
@@ -572,6 +577,15 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             import logging
             logging.getLogger(__name__).warning(f"Failed to inject loop variables: {e}")
 
+    async def _continue_run_step(
+        self,
+        workflow_id: str,
+        instance: WorkflowInstance,
+        reopened_from_failed: bool,
+        ready_steps: List[Step],
+        step_id: Optional[str] = None,
+    ):
+        """继续执行 run_step 方法的剩余逻辑"""
         # v3.6: Check for L2 instance with complexity routing
         # If this is an L2 instance, route phases through complexity-based execution
         if self._is_l2_instance(instance):
