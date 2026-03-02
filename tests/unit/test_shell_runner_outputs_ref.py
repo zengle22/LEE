@@ -378,5 +378,67 @@ class TestResolveParams:
         assert result["patterns_to_add"] == ["*.tmp"]
 
 
+class TestRenderTemplate:
+    """Test the _render_template method with Jinja2 and Python format support."""
+
+    def test_render_jinja2_template_with_inputs(self):
+        """Test rendering Jinja2 template with nested inputs context (BUG-0056)."""
+        template = "test-runner run-e2e --suite {{ inputs.suite }} --env {{ inputs.env }}"
+        jinja_context = {
+            "suite": "smoke",
+            "env": "test",
+            "inputs": {
+                "suite": "smoke",
+                "env": "test",
+                "test_set_path": "/path/to/cases.yaml"
+            }
+        }
+        format_values = {"suite": "smoke", "env": "test"}
+
+        result = SkillRunner._render_template(template, jinja_context, format_values)
+
+        assert "--suite smoke" in result
+        assert "--env test" in result
+
+    def test_render_jinja2_template_flat_variables(self):
+        """Test rendering Jinja2 template with flat variable names."""
+        template = "run --suite {{ suite }} --env {{ env }}"
+        jinja_context = {
+            "suite": "regression",
+            "env": "staging"
+        }
+        format_values = {"suite": "regression", "env": "staging"}
+
+        result = SkillRunner._render_template(template, jinja_context, format_values)
+
+        assert "--suite regression" in result
+        assert "--env staging" in result
+
+    def test_render_python_format_fallback(self):
+        """Test fallback to Python format when no Jinja2 syntax detected."""
+        template = "run --suite {suite} --env {env}"
+        jinja_context = {}
+        format_values = {"suite": "unit", "env": "dev"}
+
+        result = SkillRunner._render_template(template, jinja_context, format_values)
+
+        assert "--suite unit" in result
+        assert "--env dev" in result
+
+    def test_render_jinja2_with_missing_variable(self):
+        """Test Jinja2 rendering with missing variable (should keep placeholder)."""
+        template = "run --suite {{ inputs.missing }} --env {{ inputs.env }}"
+        jinja_context = {
+            "inputs": {"env": "test"}  # missing 'suite'
+        }
+        format_values = {"env": "test"}
+
+        result = SkillRunner._render_template(template, jinja_context, format_values)
+
+        # Jinja2 renders empty string for missing variables
+        assert "--suite" in result
+        assert "--env test" in result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

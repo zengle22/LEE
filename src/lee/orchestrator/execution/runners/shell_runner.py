@@ -401,6 +401,9 @@ class SkillRunner(StepRunnerBase):
             # Jinja2 context 保留原始结构
             jinja_context[str(key)] = value
 
+        # 构建嵌套的 inputs 结构以兼容 skill.yaml 中的 {{ inputs.xxx }} 格式
+        jinja_context["inputs"] = input_data
+
         # 分支未显式指定时，回退到当前分支
         if not input_data.get("branch"):
             format_values["branch"] = "$(git branch --show-current)"
@@ -442,8 +445,8 @@ class SkillRunner(StepRunnerBase):
             if runtime_command and runtime_args:
                 try:
                     # 支持 Jinja2 模板 ({{ }}) 和 Python format ({}) 两种格式
-                    command = self._render_template(str(runtime_command), jinja_context, format_values)
-                    args = self._render_template(str(runtime_args), jinja_context, format_values)
+                    command = SkillRunner._render_template(str(runtime_command), jinja_context, format_values)
+                    args = SkillRunner._render_template(str(runtime_args), jinja_context, format_values)
                     full_command = f"{command} {args}".strip()
                     if full_command:
                         commands.append(full_command)
