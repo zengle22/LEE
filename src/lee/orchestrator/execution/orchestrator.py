@@ -565,10 +565,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
                 # 保存更新后的 instance.data
                 await self.store.update_workflow_data(workflow_id, instance.data)
-                logger.info(f"[LOOP] Injected loop variable '{loop_as}' = {current_loop_value}")
+                import logging
+                logging.getLogger(__name__).info(f"[LOOP] Injected loop variable '{loop_as}' = {current_loop_value}")
 
         except Exception as e:
-            logger.warning(f"Failed to inject loop variables: {e}")
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to inject loop variables: {e}")
 
         # v3.6: Check for L2 instance with complexity routing
         # If this is an L2 instance, route phases through complexity-based execution
