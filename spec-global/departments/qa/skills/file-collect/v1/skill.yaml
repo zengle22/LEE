@@ -71,9 +71,9 @@ interface:
 
 runtime:
   type: cli
-  command: "lee"
+  command: "python"
   args_template: >
-    file-collect
+    -m lee file-collect
     --pattern {{ inputs.pattern }}
     --base-dir {{ inputs.base_dir | default('.') }}
     --recursive {{ inputs.recursive }}

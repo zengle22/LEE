@@ -66,8 +66,8 @@ interface:
 # ============================================
 runtime:
   type: cli
-  command: "lee"
-  args_template: "check-env qa-e2e"
+  command: "python"
+  args_template: "-m lee check-env qa-e2e"
   timeout_ms: 30000  # 30 秒
 
 # ============================================

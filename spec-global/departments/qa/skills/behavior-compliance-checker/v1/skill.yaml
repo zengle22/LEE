@@ -70,9 +70,9 @@ interface:
 # ============================================
 runtime:
   type: cli
-  command: "lee"
+  command: "python"
   args_template: >
-    behavior-check verify
+    -m lee behavior-check verify
     --report-json {{ inputs.report_json }}
   timeout_ms: 10000  # 10 秒
 

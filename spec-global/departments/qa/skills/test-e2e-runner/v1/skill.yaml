@@ -76,9 +76,9 @@ interface:
 # ============================================
 runtime:
   type: cli
-  command: "lee"
+  command: "python"
   args_template: >
-    test-runner run-e2e
+    -m lee test-runner run-e2e
     --suite {{ inputs.suite }}
     --env {{ inputs.env }}
     --test-set {{ inputs.test_set_path }}

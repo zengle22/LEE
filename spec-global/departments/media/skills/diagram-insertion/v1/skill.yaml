@@ -170,8 +170,8 @@ example:
 # 运行时配置
 runtime:
   type: cli
-  command: "lee"
-  args_template: "diagram-insert insert --article {{ inputs.article_md }} --assets {{ inputs.diagram_assets_json }} --output {{ outputs.article_file }} --report {{ outputs.report_json }}"
+  command: "python"
+  args_template: "-m lee diagram-insert insert --article {{ inputs.article_md }} --assets {{ inputs.diagram_assets_json }} --output {{ outputs.article_file }} --report {{ outputs.report_json }}"
   exit_codes:
     0: "插入成功"
     1: "插入失败"

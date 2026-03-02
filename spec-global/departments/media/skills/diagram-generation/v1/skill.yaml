@@ -133,8 +133,8 @@ example:
 # 运行时配置
 runtime:
   type: cli
-  command: "lee"
-  args_template: "diagram-gen render --input {{ inputs.dsl_json }} --output {{ outputs.mermaid_file }}"
+  command: "python"
+  args_template: "-m lee diagram-gen render --input {{ inputs.dsl_json }} --output {{ outputs.mermaid_file }}"
   exit_codes:
     0: "生成成功"
     1: "生成失败"
