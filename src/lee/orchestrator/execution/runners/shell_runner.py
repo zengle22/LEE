@@ -115,6 +115,20 @@ class SkillRunner(StepRunnerBase):
             if output_path:
                 output_paths = [output_path]
 
+        # 如果没有文件路径，尝试直接从 step_outputs 中读取值（支持嵌套字段）
+        if not output_paths:
+            # 尝试直接从 output_info 中按 field_path 获取值
+            result = output_info
+            for field in field_path:
+                if isinstance(result, dict):
+                    result = result.get(field)
+                else:
+                    result = None
+                    break
+            if result is not None:
+                logger.debug(f"Resolved {ref_string} directly from workflow_data")
+                return result
+
         if not output_paths:
             logger.debug(f"No output paths found for step '{step_id}' in workflow_data. "
                         f"Available steps: {list(step_outputs.keys())}")
@@ -257,17 +271,20 @@ class SkillRunner(StepRunnerBase):
             # 先处理 outputs 引用
             if isinstance(value, str):
                 stripped = value.strip()
-                if stripped.startswith("$outputs.") and search_paths:
+                if stripped.startswith("$outputs."):
                     # Try each search path until we find the output
-                    for base_path in search_paths:
-                        output_value = SkillRunner._resolve_outputs_ref(
-                            stripped, base_path, workflow_data
-                        )
-                        if output_value is not None:
-                            resolved[key] = output_value
-                            break
-                    else:
-                        # If not found in any path, keep the original value
+                    output_value = None
+                    if search_paths:
+                        for base_path in search_paths:
+                            output_value = SkillRunner._resolve_outputs_ref(
+                                stripped, base_path, workflow_data
+                            )
+                            if output_value is not None:
+                                resolved[key] = output_value
+                                break
+                    # If search_paths is empty or no file-based output found,
+                    # try to resolve from workflow_data directly
+                    if output_value is None:
                         resolved[key] = SkillRunner._resolve_param_value(value, workflow_params)
                     continue
             resolved[key] = SkillRunner._resolve_param_value(value, workflow_params)
