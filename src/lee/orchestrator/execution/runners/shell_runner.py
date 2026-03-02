@@ -322,7 +322,12 @@ class SkillRunner(StepRunnerBase):
         project_root: Optional[str],
         skill_spec_path: Optional[Path] = None,
     ) -> List[str]:
-        """从 skill spec 的 execution.command 或 execution.steps[].command 生成可执行命令列表。
+        """从 skill spec 的 execution.command 或 runtime 配置生成可执行命令列表。
+
+        支持的配置格式：
+        1. execution.command: 单一命令
+        2. execution.steps[].command: 多步骤命令
+        3. runtime.command + runtime.args_template: CLI 运行配置
 
         支持的占位符：
         - {skill_dir}: skill spec 文件所在目录
@@ -330,7 +335,9 @@ class SkillRunner(StepRunnerBase):
         - {key}: input_data 中的任意键
         - {patterns_json}: 将 patterns_to_add 转换为 JSON 字符串
         """
+        # 支持 execution 和 runtime 两种配置格式
         execution = skill_spec.get("execution", {})
+        runtime = skill_spec.get("runtime", {})
         if not isinstance(execution, dict):
             return []
 
@@ -403,6 +410,20 @@ class SkillRunner(StepRunnerBase):
                         commands.append(command)
                 except KeyError:
                     continue
+
+        # 支持 runtime.command + runtime.args_template 格式 (BUG-2026-0051)
+        if not commands and isinstance(runtime, dict):
+            runtime_command = runtime.get("command")
+            runtime_args = runtime.get("args_template")
+            if runtime_command and runtime_args:
+                try:
+                    # 组合 command 和 args_template
+                    args = str(runtime_args).format_map(_SafeFormatDict(format_values)).strip()
+                    command = f"{runtime_command} {args}".strip()
+                    if command:
+                        commands.append(command)
+                except KeyError:
+                    pass
 
         # 允许 step.config.execution.command 覆盖 skill 规范
         execution_config = step.config.get("execution", {}) if step.config else {}
