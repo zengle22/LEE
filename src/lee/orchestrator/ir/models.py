@@ -442,16 +442,36 @@ class LoopConfigIR:
     用于 Stage 级别的自动修复循环：
     patch → test → analyze → retry，带收敛检测。
 
-    YAML 示例:
+    也支持变量循环（如遍历 effective_test_sets）：
+        loop:
+          enabled: true
+          over: "$runtime.effective_test_sets"  # 循环变量源
+          as: "current_test_set"                # 循环变量名
+          max_iterations: 3
+          stop_on_same_output: true
+
+    YAML 示例 (自动修复循环):
         loop:
           enabled: true
           max_iterations: 3
           stop_on_same_output: true
           completion_check_step: run_tests
           completion_status: passed
+
+    YAML 示例 (变量循环):
+        loop:
+          enabled: true
+          over: "$runtime.effective_test_sets"
+          as: "current_test_set"
+          max_iterations: 3
     """
     enabled: bool = False
     max_iterations: int = 3
+
+    # 变量循环支持（新增）
+    over: Optional[str] = None  # 循环变量源，如 "$runtime.effective_test_sets"
+    as_var: Optional[str] = None  # 循环变量名，如 "current_test_set"
+
     # 收敛检测
     stop_on_same_output: bool = True       # 检测到相同输出时停止
     # 完成条件

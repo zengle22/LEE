@@ -170,10 +170,14 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         # v1.4 新增组件
         self.context_index = ContextIndex(self.repo_registry)
+        # 创建模板引擎用于路径渲染
+        from lee.orchestrator.core.template_engine import TemplateEngine
+        self.template_engine = TemplateEngine()
         self.agent_context_builder = AgentContextBuilder(
             agent_loader=agent_loader,
             project_root=project_root,
-            context_index=self.context_index
+            context_index=self.context_index,
+            template_engine=self.template_engine
         )
         self.file_output_handler = FileOutputHandler(
             project_root=project_root
@@ -406,6 +410,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         """
         执行单个步骤
 
+        v3.6 新增：在执行属于带循环 stage 的步骤前，注入循环变量到 instance.data
+
         Args:
             workflow_id: 工作流 ID
             step_id: 步骤 ID（可选，不指定则执行第一个就绪步骤）
@@ -443,8 +449,126 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             reopened_from_failed = True
             instance = await self.store.get_workflow(workflow_id)  # 刷新实例状态
 
+        # v3.6 新增：在执行步骤前，检查是否属于带循环的 stage，如果是则注入循环变量
+        # 这确保模板渲染时能访问 current_test_set 等循环变量
+        await self._inject_loop_variables_if_needed(workflow_id, instance)
+
         # 获取可执行步骤
         ready_steps = await self.get_ready_steps(workflow_id)
+
+    async def _inject_loop_variables_if_needed(
+        self,
+        workflow_id: str,
+        instance: WorkflowInstance,
+    ) -> None:
+        """
+        检查就绪步骤是否属于带循环的 stage，如果是则注入循环变量
+
+        Args:
+            workflow_id: 工作流 ID
+            instance: WorkflowInstance 对象
+        """
+        try:
+            # 获取就绪步骤
+            ready_steps = await self.get_ready_steps(workflow_id)
+            if not ready_steps:
+                return
+
+            # 获取第一个就绪步骤（我们即将执行的步骤）
+            step = ready_steps[0]
+
+            # 获取步骤所属的 stage_id
+            stage_id = step.config.get("stage_id") if step.config else None
+            if not stage_id:
+                return
+
+            # 从模板获取 stage 信息
+            template = self.template_manager.get_template(instance.template_id)
+            if not template:
+                return
+
+            # 从 template 的 departments/tasks 中查找 stage 配置
+            # spec-global 格式的 stage 信息存储在 config 中
+            stages = template.config.get("stages", []) if template.config else []
+
+            # 查找对应的 stage
+            stage_config = None
+            for stage in stages:
+                if stage.get("id") == stage_id:
+                    stage_config = stage
+                    break
+
+            if not stage_config:
+                return
+
+            # 检查 stage 是否有 loop.over 配置
+            loop_config = stage_config.get("loop", {})
+            if not loop_config or not loop_config.get("over"):
+                return
+
+            # 获取循环变量配置
+            loop_over = loop_config.get("over")  # 如 "$runtime.effective_test_sets"
+            loop_as = loop_config.get("as")  # 如 "current_test_set"
+
+            if not loop_over or not loop_as:
+                return
+
+            # 解析 loop.over 表达式获取变量列表
+            from lee.orchestrator.execution.variable_resolver import VariableResolver
+            resolver = VariableResolver()
+
+            # 构建解析上下文
+            context = {
+                "runtime": instance.data.get("runtime", {}),
+                "inputs": instance.data.get("inputs", {}),
+                "step_outputs": instance.data.get("step_outputs", {}),
+            }
+
+            try:
+                loop_over_value = resolver.resolve_reference(loop_over, context)
+            except ValueError:
+                # 无法解析，尝试直接从 instance.data 获取
+                if loop_over.startswith("$runtime."):
+                    key = loop_over[9:]  # 去掉 "$runtime."
+                    loop_over_value = instance.data.get("runtime", {}).get(key, [])
+                else:
+                    loop_over_value = []
+
+            if not loop_over_value:
+                return
+
+            if not isinstance(loop_over_value, list):
+                loop_over_value = [loop_over_value]
+
+            # 确定当前应该执行哪个循环迭代
+            # 简单策略：使用第一个未被执行的循环变量
+            # 更复杂的策略：跟踪已执行的循环变量
+
+            # 检查 instance.data 中是否已有当前循环变量
+            current_loop_value = instance.data.get(loop_as)
+
+            # 如果是第一次执行这个 stage 的步骤，注入第一个循环变量
+            if current_loop_value is None:
+                # 使用第一个循环变量
+                current_loop_value = loop_over_value[0] if loop_over_value else None
+
+            if current_loop_value:
+                # 注入循环变量到 instance.data
+                if isinstance(current_loop_value, dict):
+                    # 如果是字典，将键值对展开到 data 中
+                    instance.data[loop_as] = current_loop_value
+                    # 同时展开顶层变量（支持 {{ current_test_set.test_set_id }} 访问）
+                    for key, value in current_loop_value.items():
+                        instance.data[f"{loop_as}.{key}"] = value
+                else:
+                    instance.data[loop_as] = current_loop_value
+
+                # 保存更新后的 instance.data
+                await self.store.update_workflow_data(workflow_id, instance.data)
+                logger.info(f"[LOOP] Injected loop variable '{loop_as}' = {current_loop_value}")
+
+        except Exception as e:
+            logger.warning(f"Failed to inject loop variables: {e}")
 
         # v3.6: Check for L2 instance with complexity routing
         # If this is an L2 instance, route phases through complexity-based execution
@@ -789,98 +913,214 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         self,
         workflow_id: str,
         stage,
+        context: Optional[Dict[str, Any]] = None,
     ) -> List[StepResult]:
         """
         执行带循环的 Stage
 
-        当 stage.loop.enabled=True 时，执行 patch → test → analyze → retry 的
-        收敛循环，直到满足停止条件。
+        支持两种循环模式：
+        1. 自动修复循环（loop.enabled=True, loop.over=None）：patch → test → analyze → retry
+        2. 变量循环（loop.over 不为空）：遍历变量源（如 effective_test_sets）
 
         Args:
             workflow_id: 工作流 ID
             stage: StageIR 对象（需要有 loop、steps 属性）
+            context: 执行上下文（包含 inputs、step_outputs 等）
 
         Returns:
             所有迭代中产生的 StepResult 列表
         """
         from lee.orchestrator.execution.loop_controller import LoopController
         from lee.orchestrator.storage.event_log import EventType
+        from lee.orchestrator.execution.variable_resolver import VariableResolver
+        from lee.orchestrator.storage.models import WorkflowInstance
 
-        controller = LoopController(
-            config=stage.loop,
-            evidence_collector=self.evidence_collector,
-            run_id=workflow_id,
-        )
-
+        resolver = VariableResolver()
         all_results: List[StepResult] = []
 
-        while controller.should_continue():
-            loop_ctx = controller.get_loop_context()
-            iteration = loop_ctx.get("iteration", 0) + 1
+        # 获取工作流实例用于更新 data
+        instance = await self.store.get_workflow(workflow_id)
 
-            # 记录循环迭代开始
-            self.event_log.log(
-                event_type=EventType.STEP_STARTED,
-                data={
-                    "type": "loop_iteration_start",
-                    "stage_id": stage.id,
-                    "iteration": iteration,
-                    "max_iterations": stage.loop.max_iterations,
-                },
+        # 检查是否是变量循环（loop.over 不为空）
+        if stage.loop and stage.loop.over:
+            # 变量循环模式：遍历 loop.over 指定的变量源
+            try:
+                # 解析 loop.over 表达式获取变量列表
+                loop_over_value = resolver.resolve_reference(stage.loop.over, context or {})
+
+                if not isinstance(loop_over_value, list):
+                    # 如果是字典，转换为列表
+                    if isinstance(loop_over_value, dict):
+                        loop_over_value = [loop_over_value]
+                    else:
+                        logger.warning(f"loop.over value is not a list: {type(loop_over_value)}")
+                        loop_over_value = [loop_over_value]
+
+                loop_variable_name = stage.loop.as_var or "item"
+
+                # 遍历每个变量值
+                for idx, loop_value in enumerate(loop_over_value):
+                    iteration = idx + 1
+
+                    # 记录循环迭代开始
+                    self.event_log.log(
+                        event_type=EventType.STEP_STARTED,
+                        data={
+                            "type": "loop_iteration_start",
+                            "stage_id": stage.id,
+                            "iteration": iteration,
+                            "loop_variable": loop_variable_name,
+                            "loop_value": loop_value if isinstance(loop_value, (str, int, float)) else str(loop_value),
+                        },
+                    )
+
+                    # 注入循环变量到 instance.data（这样步骤执行时可以访问）
+                    # 同时支持直接访问（如 data.current_test_set）和嵌套访问（如 data.current_test_set.test_set_id）
+                    if isinstance(loop_value, dict):
+                        # 如果是字典，将键值对展开到 data 中
+                        instance.data[loop_variable_name] = loop_value
+                        # 同时展开顶层变量（支持 {{ current_test_set.test_set_id }} 访问）
+                        for key, value in loop_value.items():
+                            instance.data[f"{loop_variable_name}.{key}"] = value
+                    else:
+                        instance.data[loop_variable_name] = loop_value
+
+                    # 保存更新后的 instance.data
+                    await self.store.update_workflow_data(workflow_id, instance.data)
+
+                    # 执行 stage 内的所有步骤
+                    stage_results: Dict[str, Any] = {}
+                    blocked = False
+
+                    for step in stage.steps:
+                        result = await self.run_step(workflow_id, step.id)
+                        stage_results[step.id] = {
+                            "status": result.status,
+                            "message": getattr(result, "message", ""),
+                            "output": getattr(result, "output", None),
+                        }
+                        all_results.append(result)
+
+                        # Gate 阻塞则暂停循环
+                        if result.status in ("blocked", "waiting_approval"):
+                            blocked = True
+                            break
+
+                    if blocked:
+                        break
+
+                    # 记录循环迭代完成
+                    self.event_log.log(
+                        event_type=EventType.STEP_COMPLETED,
+                        data={
+                            "type": "loop_iteration_end",
+                            "stage_id": stage.id,
+                            "iteration": iteration,
+                            "loop_variable": loop_variable_name,
+                        },
+                    )
+
+                    # 检查是否达到最大迭代次数
+                    if iteration >= stage.loop.max_iterations:
+                        logger.warning(f"Loop reached max iterations: {stage.loop.max_iterations}")
+                        break
+
+                # 记录循环总结
+                self.event_log.log(
+                    event_type=EventType.STEP_COMPLETED,
+                    data={
+                        "type": "loop_summary",
+                        "stage_id": stage.id,
+                        "total_iterations": len(loop_over_value),
+                        "loop_variable": loop_variable_name,
+                    },
+                )
+
+            except Exception as e:
+                logger.error(f"Variable loop execution failed: {e}")
+                self.event_log.log(
+                    event_type=EventType.STEP_FAILED,
+                    data={
+                        "type": "loop_error",
+                        "stage_id": stage.id,
+                        "error": str(e),
+                    },
+                )
+        else:
+            # 自动修复循环模式（原有逻辑）
+            controller = LoopController(
+                config=stage.loop,
+                evidence_collector=self.evidence_collector,
+                run_id=workflow_id,
             )
 
-            # 执行 stage 内的所有步骤
-            stage_results: Dict[str, Any] = {}
-            blocked = False
+            while controller.should_continue():
+                loop_ctx = controller.get_loop_context()
+                iteration = loop_ctx.get("iteration", 0) + 1
 
-            for step in stage.steps:
-                result = await self.run_step(workflow_id, step.id)
-                stage_results[step.id] = {
-                    "status": result.status,
-                    "message": getattr(result, "message", ""),
-                    "output": getattr(result, "output", None),
-                }
-                all_results.append(result)
+                # 记录循环迭代开始
+                self.event_log.log(
+                    event_type=EventType.STEP_STARTED,
+                    data={
+                        "type": "loop_iteration_start",
+                        "stage_id": stage.id,
+                        "iteration": iteration,
+                        "max_iterations": stage.loop.max_iterations,
+                    },
+                )
 
-                # Gate 阻塞则暂停循环
-                if result.status in ("blocked", "waiting_approval"):
-                    blocked = True
+                # 执行 stage 内的所有步骤
+                stage_results: Dict[str, Any] = {}
+                blocked = False
+
+                for step in stage.steps:
+                    result = await self.run_step(workflow_id, step.id)
+                    stage_results[step.id] = {
+                        "status": result.status,
+                        "message": getattr(result, "message", ""),
+                        "output": getattr(result, "output", None),
+                    }
+                    all_results.append(result)
+
+                    # Gate 阻塞则暂停循环
+                    if result.status in ("blocked", "waiting_approval"):
+                        blocked = True
+                        break
+
+                if blocked:
                     break
 
-            if blocked:
-                break
+                # 记录本轮结果 + 收敛判断
+                decision = controller.record_iteration(stage_results)
+                controller.write_iteration_evidence(
+                    controller.state.current_iteration, stage_results
+                )
 
-            # 记录本轮结果 + 收敛判断
-            decision = controller.record_iteration(stage_results)
-            controller.write_iteration_evidence(
-                controller.state.current_iteration, stage_results
-            )
+                # 记录循环迭代完成事件
+                self.event_log.log(
+                    event_type=EventType.STEP_COMPLETED,
+                    data={
+                        "type": "loop_iteration_end",
+                        "stage_id": stage.id,
+                        "iteration": controller.state.current_iteration,
+                        "decision": decision,
+                        "loop_status": controller.state.status,
+                    },
+                )
 
-            # 记录循环迭代完成事件
+                if decision != "continue":
+                    break
+
+            # 记录循环总结
+            summary = controller.get_summary()
             self.event_log.log(
                 event_type=EventType.STEP_COMPLETED,
                 data={
-                    "type": "loop_iteration_end",
+                    "type": "loop_summary",
                     "stage_id": stage.id,
-                    "iteration": controller.state.current_iteration,
-                    "decision": decision,
-                    "loop_status": controller.state.status,
+                    **summary,
                 },
             )
-
-            if decision != "continue":
-                break
-
-        # 记录循环总结
-        summary = controller.get_summary()
-        self.event_log.log(
-            event_type=EventType.STEP_COMPLETED,
-            data={
-                "type": "loop_summary",
-                "stage_id": stage.id,
-                **summary,
-            },
-        )
 
         return all_results
 

@@ -398,14 +398,41 @@ Verification items:
         """
         解析路径变量
 
-        支持 ${PROJECT_NAME} 等变量替换
+        支持：
+        - ${PROJECT_NAME} 等简单变量替换
+        - {{ variable }} Jinja2 模板语法（包括过滤器如 | slugify）
+
+        Args:
+            path: 路径字符串
+            context: 上下文数据（包含 current_test_set 等变量）
+
+        Returns:
+            解析后的路径
         """
-        # 简单变量替换
+        # 1. 简单变量替换（向后兼容）
         if "${PROJECT_NAME}" in path:
             project_name = context.get("project_name", context.get("data", {}).get("project_name", "ai-marathon-coach"))
             path = path.replace("${PROJECT_NAME}", project_name)
 
-        # 转换为绝对路径
+        # 2. Jinja2 模板渲染（支持 {{ variable | filter }} 语法）
+        if "{{" in path and "}}" in path:
+            if self.template_engine:
+                try:
+                    # 构建渲染上下文：合并 data 和顶层变量
+                    render_context = {}
+                    # 添加 data 中的变量
+                    if "data" in context:
+                        render_context.update(context["data"])
+                    # 添加顶层变量（如 current_test_set）
+                    render_context.update({k: v for k, v in context.items() if k != "data"})
+
+                    path = self.template_engine.render_string(path, render_context)
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).warning(f"Failed to render path template '{path}': {e}")
+                    # 渲染失败，保留原始路径
+
+        # 3. 转换为绝对路径
         if not os.path.isabs(path):
             path = str(self.project_root / path)
 
