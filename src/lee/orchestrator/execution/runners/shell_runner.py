@@ -417,11 +417,13 @@ class SkillRunner(StepRunnerBase):
             runtime_args = runtime.get("args_template")
             if runtime_command and runtime_args:
                 try:
-                    # 组合 command 和 args_template
+                    # 替换 command 中的占位符
+                    command = str(runtime_command).format_map(_SafeFormatDict(format_values)).strip()
+                    # 替换 args_template 中的占位符
                     args = str(runtime_args).format_map(_SafeFormatDict(format_values)).strip()
-                    command = f"{runtime_command} {args}".strip()
-                    if command:
-                        commands.append(command)
+                    full_command = f"{command} {args}".strip()
+                    if full_command:
+                        commands.append(full_command)
                 except KeyError:
                     pass
 

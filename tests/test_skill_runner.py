@@ -322,7 +322,7 @@ class TestBuildSkillCommandsRuntimeConfig:
             "runtime": {
                 "type": "cli",
                 "command": "lee",
-                "args_template": "test-runner run-e2e --env {{ env }}"
+                "args_template": "test-runner run-e2e --env {env}"
             }
         }
         input_data = {"env": "test"}
@@ -344,13 +344,7 @@ class TestBuildSkillCommandsRuntimeConfig:
             "runtime": {
                 "type": "cli",
                 "command": "lee",
-                "args_template": """
-                    test-runner run-e2e
-                    --suite {{ suite }}
-                    --env {{ env }}
-                    --test-set {{ test_set_path }}
-                    --out-dir {{ artifacts_dir }}
-                """
+                "args_template": "test-runner run-e2e --suite {suite} --env {env} --test-set {test_set_path} --out-dir {artifacts_dir}"
             }
         }
         input_data = {
@@ -366,7 +360,6 @@ class TestBuildSkillCommandsRuntimeConfig:
 
         assert len(commands) == 1
         cmd = commands[0]
-        assert")
         assert cmd.startswith("lee")
         assert "--suite smoke" in cmd
         assert "--env staging" in cmd
