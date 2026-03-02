@@ -34,6 +34,7 @@ from lee.orchestrator.ir.models import (
     StepInputIR,
     StepOutputIR,
     VariableIR,
+    LoopConfigIR,
 )
 from lee.orchestrator.execution.variable_resolver import VariableResolver
 
@@ -379,6 +380,19 @@ class SpecGlobalParser:
                 name=stage_data.get("name", ""),
                 description=stage_data.get("description", ""),
             )
+
+            # 解析 loop 配置（新增）
+            loop_config = stage_data.get("loop", {})
+            if loop_config:
+                stage_ir.loop = LoopConfigIR(
+                    enabled=loop_config.get("enabled", False),
+                    over=loop_config.get("over"),  # 循环变量源，如 "$runtime.effective_test_sets"
+                    as_var=loop_config.get("as"),  # 循环变量名，如 "current_test_set"
+                    max_iterations=loop_config.get("max_iterations", 3),
+                    stop_on_same_output=loop_config.get("stop_on_same_output", True),
+                    completion_check_step=loop_config.get("completion_check_step"),
+                    completion_status=loop_config.get("completion_status", "passed"),
+                )
 
             # 解析 stage 中的 steps
             for step_data in stage_data.get("steps", []):
