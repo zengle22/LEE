@@ -74,8 +74,13 @@ def _should_lock(argv: list[str]) -> bool:
     - `lee gates list/show ...` 是只读查询，允许并发执行
     - `lee gates approve/reject/decide/revise/flag ...` 用于门禁决策，允许与 `lee run` 并发
     - `lee approve ...` (独立命令) 用于门禁决策，允许与 `lee run` 并发
+    - 工作流内部调用的子命令（通过 CLAUDE_CODE_ENTRYPOINT 标记）不需要锁
     - 其他命令默认需要加锁，避免并发写 workflow/db
     """
+    # 工作流内部调用豁免锁检查 (BUG-2026-0060)
+    if os.getenv("CLAUDE_CODE_ENTRYPOINT"):
+        return False
+
     if not argv:
         return False
 
