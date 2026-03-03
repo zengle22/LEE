@@ -1,0 +1,47 @@
+# YAML Read Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.yaml.read
+name: YAML Read
+description: >
+  读取并解析 YAML 文件，返回解析后的对象。
+  适用于需要访问 YAML 文件中特定字段的场景。
+owner: dev-team
+tags: [io, dev, yaml]
+
+interface:
+  inputs:
+    type: object
+    required: [path]
+    properties:
+      path:
+        type: string
+        description: "YAML 文件路径"
+      encoding:
+        type: string
+        description: "文件编码"
+        default: "utf-8"
+  outputs:
+    type: object
+    properties:
+      data:
+        type: object
+        description: "解析后的 YAML 对象"
+      content:
+        type: string
+        description: "原始文件内容"
+
+runtime:
+  type: cli
+  command: "python"
+  args_template: >
+    -c "import yaml,json,sys; f=open('{{ inputs.path }}','r',encoding='{{ inputs.encoding|default('utf-8') }}'); print(json.dumps({'data':yaml.safe_load(f),'content':f.read()})); f.close()"
+  exit_codes:
+    0: "读取成功"
+    1: "文件不存在或 YAML 格式错误"
+
+constraints:
+  - must_pass: "exit_code == 0"
+    on_fail: "YAML 文件读取失败，检查路径和格式"
