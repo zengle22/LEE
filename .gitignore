@@ -81,3 +81,4 @@ nul
 .env
 .env.local
 
+.artifacts
