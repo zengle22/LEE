@@ -82,3 +82,4 @@ nul
 .env.local
 
 .artifacts
+.workflow
