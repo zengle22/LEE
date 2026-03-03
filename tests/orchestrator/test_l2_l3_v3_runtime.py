@@ -30,7 +30,7 @@ class TestRuntimeDirPath:
     """TEST-001: Test runtime_dir path logic.
 
     Verify that L3 instances are created in .workflow/instances/l3/,
-    NOT in the framework directory (lee/spec-global/...).
+    NOT in the framework directory (spec-global/...).
     """
 
     @pytest.mark.asyncio
@@ -146,7 +146,7 @@ steps:
             # Framework instances dir should not be used
             framework_path = framework_instances_dir / "test-point.yaml"
             assert l3_path != framework_path
-            assert "lee/spec-global" not in str(l3_path)
+            assert "spec-global" not in str(l3_path)
 
         await store.close()
 
@@ -665,7 +665,7 @@ class TestWorkflowGeneratorL3V3:
     def test_generate_l3_v3_instance(self, tmp_path):
         """Test L3 v3 instance generation."""
         # Create template directory structure matching what WorkflowGenerator expects
-        # WorkflowGenerator looks for: lee/spec-global/departments/dev/workflows/templates/task-l3-template.yaml
+        # WorkflowGenerator looks for: spec-global/departments/dev/workflows/templates/task-l3-template.yaml
         # We'll create the v3 template and patch the generator to use it
 
         # First, create v3 template

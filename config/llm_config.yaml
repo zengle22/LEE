@@ -96,6 +96,19 @@ deepseek:
   timeout: 300
   description: "DeepSeek 官方 Coder 模型（高优先级）"
 
+# 阿里云 Qwen (DashScope)
+# 优先级：高
+qwen:
+  type: llm
+  provider: openai
+  base_url: https://coding.dashscope.aliyuncs.com/v1
+  api_key: sk-sp-9d5a89bb7b994af08299f047dd1bc1df
+  model: qwen3.5-plus
+  temperature: 0.7
+  max_tokens: 8000
+  timeout: 120
+  description: "阿里云 Qwen3.5 Plus 模型 (DashScope)"
+
 # OpenAI (GPT-4, GPT-3.5)
 # 优先级：高
 openai:
@@ -247,10 +260,24 @@ agent.devops:
 #   - provider_name3  # 最低优先级（兜底）
 #
 # 示例：从 deepseek 开始，失败则尝试 zhipu，然后 ollama
+# 阿里云 Qwen (DashScope)
+# 优先级：高
+qwen:
+  type: llm
+  provider: openai
+  base_url: https://coding.dashscope.aliyuncs.com/v1
+  api_key: sk-sp-9d5a89bb7b994af08299f047dd1bc1df
+  model: qwen3.5-plus
+  temperature: 0.7
+  max_tokens: 8000
+  timeout: 120
+  description: "阿里云 Qwen3.5 Plus 模型 (DashScope)"
+
 fallback_providers:
-  - deepseek      # 高优先级
-  - zhipu         # 中优先级
-  - ollama        # 最低优先级（本地兜底）
+  - qwen         # 优先使用 qwen
+  - deepseek     # 高优先级
+  - zhipu        # 中优先级
+  - ollama       # 最低优先级（本地兜底）
 
 # ============================================
 # Profile 优先级

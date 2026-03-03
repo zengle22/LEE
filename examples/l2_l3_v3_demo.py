@@ -336,7 +336,7 @@ def section_9_file_structure():
 
     print("""
 # 框架模板目录 (版本控制管理)
-lee/spec-global/departments/dev/workflows/
+spec-global/departments/dev/workflows/
 ├── templates/
 │   ├── l3/
 │   │   └── task-l3-v3-template.yaml      # L3 v3 模板（6 步）
@@ -371,9 +371,9 @@ def section_10_code_changes():
     print_success("新增文件\n")
 
     files = [
-        ("lee/spec-global/departments/dev/workflows/feature/v3/workflow.yaml",
+        ("spec-global/departments/dev/workflows/feature/v3/workflow.yaml",
          "L2 v3 工作流模板"),
-        ("lee/spec-global/departments/dev/workflows/templates/l3/task-l3-v3-template.yaml",
+        ("spec-global/departments/dev/workflows/templates/l3/task-l3-v3-template.yaml",
          "L3 v3 模板（6 步 TDD 流程）"),
         (".workflow/instances/l2/l2-v3/running-notes-feature.yaml",
          "L2 v3 实例（运行时生成）"),

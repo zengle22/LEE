@@ -222,7 +222,7 @@ def run_test_set(test_set_id: str, test_run_id: str, build_version: str,
     click.echo()
 
     # 创建 L3 工作流 - 使用完整路径
-    template_path = "lee/spec-global/departments/qa/workflows/templates/test-set-l3-template.yaml"
+    template_path = "spec-global/departments/qa/workflows/templates/test-set-l3-template.yaml"
     create_result = pm_workflow(
         "create",
         project_dir=str(project_root),

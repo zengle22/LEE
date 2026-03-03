@@ -11,7 +11,7 @@ LEE Orchestrator v3.5 — Externalized Configuration (M4)
 
 示例 .lee/config.yaml:
 ```yaml
-spec_root: lee/spec-global          # 相对于 project_root
+spec_root: spec-global          # 相对于 project_root
 demo_mode: false
 
 retry:
@@ -147,7 +147,7 @@ class LeeConfig:
     所有配置项都有默认值，配置文件不存在时完全可用。
     """
     # 路径
-    spec_root: Optional[str] = None  # 相对于 project_root，默认 "lee/spec-global"
+    spec_root: Optional[str] = None  # 相对于 project_root，默认 "spec-global"
     demo_mode: bool = False
 
     # 子配置

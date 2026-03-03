@@ -6,6 +6,7 @@ Local test runner using Python Playwright API.
 
 import asyncio
 import importlib.util
+import json
 import subprocess
 import sys
 import traceback
@@ -127,6 +128,9 @@ class LocalRunner(BaseRunner):
             # Update exit code based on case results
             if case.exit_code not in [0, 1]:
                 results["exit_code"] = 2
+
+        # Generate runner-output.json with per-case evidence references
+        self._generate_runner_output(results["cases"])
 
         return TestResult(
             exit_code=results["exit_code"],
@@ -283,6 +287,11 @@ class LocalRunner(BaseRunner):
         end_ms = int(time.time() * 1000)
         case_result.duration_ms = end_ms - start_ms
 
+        # Save per-case evidence bundle
+        case_id = case_result.case_id
+        evidence_dir = self._save_evidence_bundle(case_id, case_result)
+        case_result.evidence_dir = evidence_dir
+
         return case_result
 
     def _take_screenshot(self, page, func_name: str) -> Optional[str]:
@@ -302,3 +311,97 @@ class LocalRunner(BaseRunner):
             return str(screenshot_path)
         except Exception:
             return None
+
+    def _generate_runner_output(self, cases: List[CaseResult]) -> None:
+        """
+        Generate runner-output.json with per-case evidence references.
+
+        Args:
+            cases: List of CaseResult objects
+        """
+        output = {
+            "execution_status": "success" if all(c.exit_code == 0 for c in cases) else "failed",
+            "total_cases": len(cases),
+            "cases": []
+        }
+
+        for case in cases:
+            case_data = {
+                "case_id": case.case_id,
+                "status": case.status,
+                "exit_code": case.exit_code,
+                "duration_ms": case.duration_ms,
+            }
+
+            # Add evidence bundle reference
+            if case.evidence_dir:
+                case_data["evidence_bundle"] = {
+                    "path": str(case.evidence_dir),
+                    "bundle_file": str(case.evidence_dir / "bundle.yaml"),
+                }
+
+            # Add optional fields
+            if case.error:
+                case_data["error"] = case.error
+            if case.screenshot_path:
+                case_data["screenshot"] = case.screenshot_path
+            if case.log_path:
+                case_data["log"] = case.log_path
+
+            output["cases"].append(case_data)
+
+        # Write runner-output.json
+        output_path = self.config.output_dir / "runner-output.json"
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(output, f, ensure_ascii=False, indent=2)
+
+    def _save_evidence_bundle(
+        self,
+        case_id: str,
+        case_result: CaseResult,
+    ) -> Path:
+        """
+        Save per-case evidence bundle.
+
+        Args:
+            case_id: Case identifier
+            case_result: CaseResult object with evidence data
+
+        Returns:
+            Path to the evidence bundle directory
+        """
+        # Create per-case evidence directory
+        evidence_dir = self.config.evidence_dir / case_id
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build bundle data
+        bundle = {
+            "case_id": case_id,
+            "status": case_result.status,
+            "exit_code": case_result.exit_code,
+            "duration_ms": case_result.duration_ms,
+            "commands": [f"test_runner run --case {case_id}"],
+            "logs": case_result.log_path or "",
+            "runner_result_ref": f"runner-output.json#{case_id}",
+            "stderr": case_result.error or "",
+        }
+
+        # Add screenshots if available
+        if case_result.screenshot_path:
+            bundle["screenshots"] = [case_result.screenshot_path]
+
+        # Add video if available
+        if case_result.video_path:
+            bundle["video"] = case_result.video_path
+
+        # Add network trace if available
+        if case_result.network_trace_path:
+            bundle["network_trace"] = case_result.network_trace_path
+
+        # Save bundle.yaml
+        bundle_path = evidence_dir / "bundle.yaml"
+        import yaml
+        with open(bundle_path, "w", encoding="utf-8") as f:
+            yaml.dump(bundle, f, allow_unicode=True)
+
+        return evidence_dir

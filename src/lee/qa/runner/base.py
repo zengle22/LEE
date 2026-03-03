@@ -23,6 +23,7 @@ class TestConfig:
     trace_dir: Path = None
     video_dir: Path = None
     environment: str = "local"
+    evidence_dir: Path = None  # Per-case evidence bundle directory
 
     def __post_init__(self):
         if self.output_dir is None:
@@ -35,12 +36,15 @@ class TestConfig:
             self.trace_dir = self.output_dir / "traces"
         if self.video_dir is None:
             self.video_dir = self.output_dir / "videos"
+        if self.evidence_dir is None:
+            self.evidence_dir = self.output_dir / "evidence"
 
         # Create output directories
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.screenshot_dir.mkdir(parents=True, exist_ok=True)
         self.trace_dir.mkdir(parents=True, exist_ok=True)
         self.video_dir.mkdir(parents=True, exist_ok=True)
+        self.evidence_dir.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass
@@ -54,6 +58,13 @@ class CaseResult:
     exit_code: int = 0
     duration_ms: int = 0
     screenshot_path: Optional[str] = None
+
+    # Per-case evidence bundle fields (v1.1)
+    evidence_dir: Optional[Path] = None  # Path to evidence directory for this case
+    log_path: Optional[str] = None  # Path to log file
+    video_path: Optional[str] = None  # Path to video (optional)
+    network_trace_path: Optional[str] = None  # Path to network trace (optional)
+    runner_result_ref: Optional[str] = None  # Reference in runner-output.json
 
 
 @dataclass
