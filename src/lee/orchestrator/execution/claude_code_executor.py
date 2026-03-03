@@ -419,7 +419,13 @@ class ClaudeCodeExecutor(BaseExecutor):
   "test_results": {{"passed": 0, "failed": 0}},
   "error": null
 }}
-```"""
+```
+
+重要提示 (BUG-2026-0061):
+- 任务完成后立即退出：完成任务后请立即输出 JSON 结果，不要进行额外的检查或验证操作。
+- 避免重复操作：不要重复执行已经成功的命令。
+- 在执行过程中完成验证：如果需要验证文件存在，请在任务执行过程中完成。
+- 提前退出是成功的：任务已完成时输出成功并退出是正确的行为。"""
 
         if system_prompt_extra:
             prompt += f"\n\n## 额外约束\n\n{system_prompt_extra}"

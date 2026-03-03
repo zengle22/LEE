@@ -416,6 +416,46 @@ class ClaudeCodeRunner(StepRunnerBase):
         except Exception:
             return None
 
+    @staticmethod
+    def _check_outputs_completed(step, workspace: str, project_root: Optional[str] = None) -> bool:
+        """
+        智能完成检测 (BUG-2026-0061)
+
+        检测 step.outputs 中定义的文件是否已生成。
+        如果所有必需文件都已存在，认为任务已完成，即使达到迭代上限也返回成功。
+
+        Args:
+            step: 步骤对象
+            workspace: 工作目录
+            project_root: 项目根目录
+
+        Returns:
+            bool: 所有必需输出文件是否都已存在
+        """
+        outputs = getattr(step, 'outputs', None)
+        if not outputs:
+            return False
+
+        base_path = Path(workspace) if workspace else Path(project_root or ".")
+
+        for out in outputs:
+            # 只检查文件类型输出，忽略目录
+            path = getattr(out, 'path', None)
+            if not path:
+                continue
+            out_type = getattr(out, 'type', None) or ("dir" if path.endswith("/") else "file")
+            if out_type == "dir":
+                continue
+
+            target = Path(path)
+            if not target.is_absolute():
+                target = base_path / target
+
+            if not target.exists():
+                return False
+
+        return True
+
     @classmethod
     def _validate_success_criteria(
         cls,
@@ -717,6 +757,21 @@ class ClaudeCodeRunner(StepRunnerBase):
                     )
                 else:
                     print(f"[OutputValidation] Warning: Step {step.id} output schema validation failed (soft mode)")
+
+            # BUG-2026-0061: 智能完成检测
+            # 即使状态是 fail，如果是因达到迭代上限但输出文件已完成，仍视为成功
+            iterations_used = output.get("iterations_used", 0)
+            max_iterations = input_data.get("max_iterations", 5)
+            if status == "fail" and iterations_used >= max_iterations:
+                # 检测输出文件是否已完成
+                if self._check_outputs_completed(step, workspace, ctx.project_root):
+                    logging.info(
+                        f"[ClaudeCodeRunner] Smart completion: step {step.id} reached max iterations "
+                        f"({iterations_used}/{max_iterations}) but outputs are complete, treating as success"
+                    )
+                    status = "success"
+                    output["status"] = "success"
+                    output["smart_completion"] = True
 
             # 11. 完成步骤
             result = await ctx.state_machine.complete_step(
