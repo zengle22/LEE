@@ -1,0 +1,387 @@
+kind: l3_workflow_template
+version: "1.1"
+id: template.qa.test_set_l3
+name: Test Set Execution L3 Template
+description: |
+  L3 template for single Test Set execution.
+
+  This template defines the standard 7-step workflow for executing
+  one Test Set, from case generation to bug drafting.
+
+  Key Design:
+  - Step 1-2: Agent-driven (case generation, script translation)
+  - Step 3: Skill-driven execution (executor role only)
+  - Step 4: Compliance gate (anti-mock) - with enforce/warn mode
+  - Step 5: Agent-driven judgment (judge role only)
+  - Step 6-7: Agent-driven assembly and bug drafting
+
+  Version 1.1 Changes:
+  - Added invalid_run_reason enumeration
+  - Enhanced behavior_compliance with 5 checks and category
+  - Added evidence_bundle completeness_rules
+  - Added execution_mode configuration (enforce/warn)
+  - Added observability metrics and tracing
+
+# Execution mode configuration
+execution_mode:
+  description: "Controls behavior_compliance enforcement level"
+  default: enforce  # Default to enforce in production
+  modes:
+    enforce:
+      description: "Fail compliance check = invalid_run, terminate workflow"
+      invalid_run_on_fail: true
+    warn:
+      description: "Log warning but continue execution"
+      invalid_run_on_fail: false
+      environments: ["dev", "test", "local"]  # Only allowed in these environments
+  environment_variable: "EXECUTION_MODE"
+  prod_enforce: true  # Production environment always enforces
+
+# Standard 7-step L3 process
+steps:
+  - id: case_generation
+    name: "Case Generation"
+    kind: agent
+    description: "Dynamically generate test cases from Test Set strategy"
+    agent_id: agent.qa.case_generator
+    mandatory: true
+    depends_on: []
+    outputs:
+      - cases_path  # Path to generated cases.yaml
+      - cases_count
+
+  - id: script_translation
+    name: "Script Translation"
+    kind: agent
+    description: "Translate cases to executable scripts"
+    agent_id: agent.qa.script_translator
+    mandatory: true
+    depends_on: [case_generation]
+    outputs:
+      - scripts_dir  # Path to scripts directory
+      - scripts_count
+
+  - id: script_execution
+    name: "Script Execution"
+    kind: skill
+    description: |
+      Execute test scripts via test_runner CLI.
+      Role: EXECUTOR - can only call runner and collect evidence, cannot judge results.
+      On failure: continue to behavior_compliance (not abort immediately).
+    skill_id: skill.runner.test_e2e
+    mandatory: true
+    depends_on: [script_translation]
+    on_failure: continue_to_compliance  # Continue even if execution fails
+    role_constraints:
+      role: executor
+      allowed_actions:
+        - call_test_runner
+        - collect_evidence
+        - report_runner_output
+      forbidden_actions:
+        - judge_pass_fail
+        - fabricate_errors
+        - mock_execution
+    outputs:
+      - runner_output_path  # Path to runner-output.json
+      - evidence_dir  # Path to evidence directory
+      - runtime_errors  # Only from runner_cli/orchestrator/human
+      - execution_status  # success | failed | crashed | timeout
+
+  - id: behavior_compliance
+    name: "Behavior Compliance Check"
+    kind: skill
+    description: |
+      Anti-mock compliance gate.
+      Check for mock/fabrication violations.
+      ALWAYS executes after script_execution (regardless of execution status).
+      If validation fails, marks run as invalid_run and aborts workflow.
+    skill_id: skill.qa.behavior_compliance_checker
+    mandatory: true
+    depends_on: [script_execution]
+    gate:
+      type: auto_check
+      on_pass: proceed_to_judgment
+      on_fail: mark_invalid_run_and_abort
+    checks:
+      - id: ensure_evidence_for_critical_cases
+        category: evidence_integrity
+        description: "P0/P1 cases must have evidence_bundle"
+        severity: error
+      - id: verify_no_unauthorized_mock
+        category: execution_integrity
+        description: "No unauthorized mock detected"
+        severity: error
+      - id: verify_runtime_errors_origin
+        category: execution_integrity
+        description: "runtime_errors must come from runner_cli/orchestrator/human"
+        severity: error
+      - id: verify_executor_did_not_judge
+        category: role_compliance
+        description: "Executor role cannot judge pass/fail"
+        severity: error
+      - id: verify_execution_completeness
+        category: execution_integrity
+        description: "Check for crash or timeout"
+        severity: error
+        fail_on_crash: true
+        fail_on_timeout: true
+    outputs:
+      - compliance_result_path
+      - compliance_status  # pass | fail
+      - violations  # List of violation details
+
+  - id: result_judgment
+    name: "Result Judgment"
+    kind: agent
+    description: |
+      Judge pass/fail based on evidence.
+      Role: JUDGE - can only read evidence and judge, cannot modify or re-execute.
+    agent_id: agent.qa.result_judge
+    mandatory: true
+    depends_on: [behavior_compliance]
+    role_constraints:
+      role: judge
+      allowed_actions:
+        - read_evidence
+        - judge_pass_fail
+        - write_results
+      forbidden_actions:
+        - call_test_runner
+        - modify_evidence
+        - fabricate_evidence
+    outputs:
+      - results_path  # Path to results.yaml
+      - pass_count
+      - fail_count
+      - failures  # List of failure details
+
+  - id: tse_assembly
+    name: "TSE Assembly"
+    kind: agent
+    description: "Assemble Test Set Execution file"
+    agent_id: agent.qa.tse_assembler
+    mandatory: true
+    depends_on: [result_judgment]
+    outputs:
+      - tse_path  # Path to tse.yaml
+
+  - id: bug_drafting
+    name: "Bug Drafting"
+    kind: agent
+    description: |
+      Draft bugs for failed cases.
+      Multiple bugs may be drafted from one Test Set.
+    agent_id: agent.qa.bug_drafter
+    mandatory: true
+    depends_on: [tse_assembly]
+    condition: "fail_count > 0"
+    outputs:
+      - bug_drafts  # List of bug draft file paths
+
+# Default execution order
+execution_order:
+  - case_generation
+  - script_translation
+  - script_execution
+  - behavior_compliance
+  - result_judgment
+  - tse_assembly
+  - bug_drafting
+
+# evidence_bundle structure definition
+evidence_bundle_schema:
+  description: |
+    Each case execution must produce an evidence bundle.
+    No evidence_bundle = invalid_run.
+
+  properties:
+    commands:
+      type: array
+      description: "Executed command list"
+      example:
+        - "test_runner run --case TC_LOGIN_001 --env test"
+
+    logs:
+      type: string
+      description: "Log file path"
+      required: true
+
+    screenshots:
+      type: array
+      description: "Screenshot paths"
+
+    video:
+      type: string
+      description: "Screen recording path (optional)"
+
+    network_trace:
+      type: string
+      description: "Network trace path (optional)"
+
+    runner_result_ref:
+      type: string
+      description: "Reference in runner-output.json"
+      required: true
+
+    exit_code:
+      type: integer
+      description: "test_runner exit code"
+
+    stderr:
+      type: string
+      description: "Standard error output (if any)"
+
+  completeness_rules:
+    - when: "case.level in ['P0', 'P1']"
+      require: ["logs", "runner_result_ref"]
+      optional: ["screenshots"]
+    - when: "case.level == 'P0'"
+      require: ["logs", "runner_result_ref", "screenshots"]
+      optional: ["video", "network_trace"]
+    - when: "case.level in ['P2', 'P3']"
+      require: ["runner_result_ref"]
+      optional: ["logs", "screenshots"]
+
+# invalid_run_reason enumeration
+invalid_run_reason_enum:
+  description: "Reasons why a Test Set execution is marked as invalid_run"
+  reasons:
+    - id: missing_critical_evidence
+      description: "P0/P1 cases missing evidence_bundle"
+      suggestion: "Check if runner crashed or environment issue"
+    - id: unauthorized_mock_detected
+      description: "Unapproved mock usage detected"
+      suggestion: "Check case.meta.allow_mock flag"
+    - id: invalid_error_origin
+      description: "runtime_errors source not from runner_cli/orchestrator/human"
+      suggestion: "Check error origin is compliant"
+    - id: executor_role_violation
+      description: "Executor step exceeded role boundaries"
+      suggestion: "Check role_constraints enforcement"
+    - id: execution_incomplete
+      description: "Runner crashed or timed out"
+      suggestion: "Check environment stability"
+    - id: evidence_tampered
+      description: "Evidence modified after generation"
+      suggestion: "Check evidence integrity"
+
+# Anti-Mock constraints for L3
+anti_mock_constraints:
+  description: "Constraints to prevent AI from fabricating execution"
+  enforced_by: behavior_compliance_checker
+
+  no_mock_execution:
+    rule: "AI cannot use mock/simulate unless case.meta.allow_mock == true"
+    violation_action: invalid_run
+    invalid_run_reason: unauthorized_mock_detected
+
+  evidence_required:
+    rule: "All P0/P1 cases must have evidence_bundle"
+    violation_action: invalid_run
+    invalid_run_reason: missing_critical_evidence
+
+  no_fabricated_errors:
+    rule: "runtime_errors can only come from runner_cli/orchestrator/human"
+    violation_action: invalid_run
+    invalid_run_reason: invalid_error_origin
+
+  no_judge_in_executor:
+    rule: "script_execution step cannot judge pass/fail"
+    violation_action: invalid_run
+    invalid_run_reason: executor_role_violation
+
+  no_re_execute_in_judge:
+    rule: "result_judgment step cannot call test_runner"
+    violation_action: invalid_run
+    invalid_run_reason: executor_role_violation
+
+  execution_completeness:
+    rule: "Runner must complete execution (no crash/timeout)"
+    violation_action: invalid_run
+    invalid_run_reason: execution_incomplete
+
+# Observability configuration
+observability:
+  description: "Metrics and tracing configuration for L3 execution"
+  metrics:
+    - name: l3_execution_duration
+      type: histogram
+      description: "L3 workflow execution duration in seconds"
+      labels:
+        - test_set_id
+        - status
+      buckets: [1, 5, 10, 30, 60, 120, 300]
+
+    - name: compliance_check_duration
+      type: histogram
+      description: "Behavior compliance check duration"
+      labels:
+        - check_id
+        - result
+      buckets: [0.1, 0.5, 1, 5, 10]
+
+    - name: invalid_run_total
+      type: counter
+      description: "Total number of invalid runs"
+      labels:
+        - invalid_run_reason
+        - test_set_id
+        - execution_mode
+
+    - name: evidence_bundle_size
+      type: histogram
+      description: "Evidence bundle size in bytes"
+      labels:
+        - case_level
+      buckets: [1024, 10240, 102400, 1048576]
+
+  tracing:
+    description: "Distributed tracing spans for L3 workflow"
+    spans:
+      - name: l3_execution
+        description: "Full L3 workflow execution"
+        start_step: case_generation
+        end_step: bug_drafting
+        attributes:
+          - test_set_id
+          - environment
+
+      - name: compliance_validation
+        description: "Behavior compliance check"
+        start_step: behavior_compliance
+        end_step: result_judgment
+        attributes:
+          - compliance_status
+          - violations_count
+
+# Instance schema
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+    - test_set_id
+    - parent_l2_id
+    - parent_phase_id
+  context_fields:
+    - test_run_id
+    - test_set_id
+    - test_set_definition
+    - build_version
+    - build_commit
+    - environment
+    - env_check_result
+    - dependency_results  # Results from dependent Test Sets
+    - execution_mode  # enforce | warn
+  output_fields:
+    - test_set_id
+    - status  # completed, failed, skipped, invalid_run
+    - invalid_run_reason  # One of invalid_run_reason_enum
+    - tse_path
+    - results_summary
+    - bug_drafts
+    - skip_reason
+    - failure_reason
+    - compliance_result_path
