@@ -1,0 +1,505 @@
+# Product MVP Workflow v1.0
+# 产品 MVP 工作流 - 跨部门 L1 主流程
+#
+# 核心设计原则:
+# 1. L1 编联层串联多个 L2 执行层
+# 2. 每个 L2 的输出"冻结包"成为下一个 L2 的输入
+# 3. 冻结包是部门间交接的唯一合法形式
+# 4. 人类 Gate 在关键节点验证交接质量
+
+kind: workflow
+id: workflow.cross.product_mvp
+name: 产品 MVP 工作流
+version: "1.0"
+
+description: >
+  这是一个跨部门的产品 MVP 开发主流程，串行编排各部门 L2 工作流。
+
+  核心思想：
+  - L1 不做具体的部门工作，只负责编排
+  - 每个 L2 输出"冻结包"作为下游 L2 的输入
+  - 冻结包是部门间交接的唯一合法形式
+  - 上游 L2 未完成，下游 L2 不得启动
+
+  流程概览：
+  Step 1: STG 产出"商业机会冻结包"
+  Step 2: PRD 接收"商业机会冻结包"，产出"研发冻结包"
+  Step 3: UI 接收"商业机会冻结包"，产出"原型冻结包"
+  Step 4: Dev 接收"研发冻结包"+"原型冻结包"，产出"提测冻结包"
+  Step 5: QA 接收"提测冻结包"，产出"可交付版本"
+
+# ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+# 注：L1 工作流不直接包含 Agent/Skill，通过 workflow_spawn 委派给 L2
+roles:
+  workflows:
+    - workflow.stg.opportunity_discovery   # L2：商业机会发现
+    - workflow.product.product_to_dev_pipeline  # L2：产品到研发
+    - workflow.ui.ui_design_pipeline       # L2：UI 设计
+    - workflow.dev.development_pipeline    # L2：研发流水线
+    - workflow.qa.test_plan_execution_v1   # L2：测试执行
+  agents: []
+  skills: []
+  gates:
+    - gate.cross.handoff_gate              # 人类：部门间交接门禁
+
+# ============================================
+# 工作流步骤
+# ============================================
+steps:
+  # ============================================
+  # Step 1: STG - 商业机会发现（L2）
+  # ============================================
+  - id: stg_opportunity_discovery
+    name: 商业机会发现
+    kind: workflow_spawn
+    workflow: workflow.stg.opportunity_discovery
+    level: department
+    description: |
+      STG 部门执行商业机会发现流程，产出"商业机会冻结包"。
+
+      这是整个 L1 流程的起点，定义了：
+      - 我们要做什么生意？（一句话机会定义）
+      - 目标用户是谁？
+      - 为什么是现在？（Why Now）
+      - 风险是什么？（Reasons NOT to Do）
+
+    inputs: []  # L1 起点，无上游输入
+
+    outputs:
+      - path: contracts/business_opportunity_freeze/v1/freeze.yaml
+        required: true
+        description: 商业机会冻结包
+
+    completion_gate:
+      type: automated
+      checks:
+        - "business_opportunity_freeze.yaml exists"
+        - "freeze.status == 'frozen'"
+        - "freeze.approved_by contains ['stg_lead', 'product_lead']"
+
+  # ============================================
+  # Step 2: PRD - 产品需求编写（L2）
+  # ============================================
+  - id: prd_requirement_freeze
+    name: 产品需求冻结
+    kind: workflow_spawn
+    workflow: workflow.prd.product_to_dev_pipeline
+    level: department
+    depends_on:
+      - stg_opportunity_discovery
+    description: |
+      PRD 部门接收"商业机会冻结包"，产出"研发冻结包"。
+
+      核心职责：
+      - 将商业机会转化为产品需求
+      - 定义验收标准
+      - 编写技术规格
+      - 冻结后不可变更
+
+    inputs:
+      - from_step: stg_opportunity_discovery
+        contract: contracts/business_opportunity_freeze/v1/freeze.yaml
+
+    outputs:
+      - path: contracts/dev_freeze_package/v1/freeze.yaml
+        required: true
+        description: 研发冻结包
+
+    completion_gate:
+      type: automated
+      checks:
+        - "dev_freeze_package.yaml exists"
+        - "freeze.status == 'frozen'"
+        - "freeze.approved_by contains ['prd_lead', 'dev_lead']"
+
+  # ============================================
+  # Step 3: UI - 原型设计（L2）
+  # ============================================
+  - id: ui_prototype_freeze
+    name: 原型设计冻结
+    kind: workflow_spawn
+    workflow: workflow.ui.design_pipeline
+    level: department
+    depends_on:
+      - stg_opportunity_discovery
+    description: |
+      UI 部门接收"商业机会冻结包"，产出"原型冻结包"。
+
+      核心职责：
+      - 基于商业机会设计用户界面
+      - 定义交互流程
+      - 设计视觉规范
+      - 冻结后作为 Dev 的设计输入
+
+    inputs:
+      - from_step: stg_opportunity_discovery
+        contract: contracts/business_opportunity_freeze/v1/freeze.yaml
+
+    outputs:
+      - path: contracts/prototype_freeze_package/v1/freeze.yaml
+        required: true
+        description: 原型冻结包
+
+    completion_gate:
+      type: automated
+      checks:
+        - "prototype_freeze_package.yaml exists"
+        - "freeze.status == 'frozen'"
+        - "freeze.approved_by contains ['ui_lead', 'product_lead']"
+
+  # ============================================
+  # Step 4: Dev - 研发实现（L2）
+  # ============================================
+  - id: dev_implementation
+    name: 研发实现
+    kind: workflow_spawn
+    workflow: workflow.dev.development_pipeline
+    level: department
+    depends_on:
+      - prd_requirement_freeze
+      - ui_prototype_freeze
+    description: |
+      Dev 部门接收"研发冻结包"+"原型冻结包"，产出"提测冻结包"。
+
+      核心职责：
+      - 解冻研发规格，理解需求
+      - 参考 UI 原型进行开发
+      - 执行 OpenSpec 13 步流程
+      - 完成代码、测试、评审
+      - 产出可交付的提测包
+
+    inputs:
+      - from_step: prd_requirement_freeze
+        contract: contracts/dev_freeze_package/v1/freeze.yaml
+        description: "研发冻结包 - 定义需求和技术规格"
+
+      - from_step: ui_prototype_freeze
+        contract: contracts/prototype_freeze_package/v1/freeze.yaml
+        description: "原型冻结包 - 定义 UI/UX 设计"
+
+    outputs:
+      - path: contracts/test_submission_freeze_package/v1/freeze.yaml
+        required: true
+        description: 提测冻结包
+
+    completion_gate:
+      type: automated
+      checks:
+        - "test_submission_freeze_package.yaml exists"
+        - "freeze.status == 'frozen'"
+        - "freeze.approved_by contains ['dev_lead', 'qa_lead']"
+        - "freeze.contains_test_report == true"
+        - "freeze.contains_source_code == true"
+
+  # ============================================
+  # Step 5: QA - 测试交付（L2）
+  # ============================================
+  - id: qa_testing_delivery
+    name: 测试交付
+    kind: workflow_spawn
+    workflow: workflow.qa.testing_pipeline
+    level: department
+    depends_on:
+      - dev_implementation
+    description: |
+      QA 部门接收"提测冻结包"，执行测试主流程，产出"可交付版本"。
+
+      核心职责：
+      - 多轮测试（最多 3 轮）
+      - Bug 生命周期管理
+      - 质量门控
+      - 产出可交付版本
+
+    inputs:
+      - from_step: dev_implementation
+        contract: contracts/test_submission_freeze_package/v1/freeze.yaml
+
+    outputs:
+      - path: contracts/deliverable_release/v1/release.yaml
+        required: true
+        description: 可交付版本
+
+    completion_gate:
+      type: automated
+      checks:
+        - "deliverable_release.yaml exists"
+        - "release.status == 'ready'"
+        - "release.approved_by contains ['qa_lead', 'product_lead']"
+        - "release.test_rounds_completed > 0"
+        - "release.all_critical_bugs_closed == true"
+
+  # ============================================
+  # Step 6: 发布批准（L1 Human Gate）
+  # ============================================
+  - id: release_approval
+    name: 发布批准
+    kind: human_gate
+    depends_on:
+      - qa_testing_delivery
+    description: |
+      L1 最终发布批准门禁。
+
+      这是产品 MVP 的最终质量验证点，确认：
+      - 产品符合商业机会预期
+      - 质量达到发布标准
+      - 所有部门完成交接
+      - 可以正式发布
+
+    inputs:
+      - from_step: stg_opportunity_discovery
+        contract: contracts/business_opportunity_freeze/v1/freeze.yaml
+
+      - from_step: prd_requirement_freeze
+        contract: contracts/dev_freeze_package/v1/freeze.yaml
+
+      - from_step: ui_prototype_freeze
+        contract: contracts/prototype_freeze_package/v1/freeze.yaml
+
+      - from_step: dev_implementation
+        contract: contracts/test_submission_freeze_package/v1/freeze.yaml
+
+      - from_step: qa_testing_delivery
+        contract: contracts/deliverable_release/v1/release.yaml
+
+    outputs:
+      - path: contracts/product_mvp_release/v1/release.yaml
+        required: true
+        description: 产品 MVP 发布包
+
+    gate_rules:
+      reviewers:
+        - role: product_owner
+          description: "产品负责人"
+        - role: tech_lead
+          description: "技术负责人"
+
+      approval_criteria:
+        - label: "商业价值实现"
+          criteria: "产品实现了商业机会冻结包中的核心价值"
+          required: true
+
+        - label: "质量达标"
+          criteria: "测试通过率 ≥ 95%，无 P0/P1 Bug"
+          required: true
+
+        - label: "完整性"
+          criteria: "所有功能、设计、测试文档齐全"
+          required: true
+
+        - label: "可维护性"
+          criteria: "代码质量、文档质量达到交付标准"
+          required: true
+
+      rejection_criteria:
+        - "商业价值未实现"
+        - "存在 P0/P1 阻塞 Bug"
+        - "文档不完整"
+        - "技术债务过重"
+
+# ============================================
+# 工作流配置
+# ============================================
+config:
+  execution_mode: serial  # 串行执行，确保上游完成下游才能启动
+  timeout:
+    stg_opportunity_discovery: 1209600    # 14 days
+    prd_requirement_freeze: 604800        # 7 days
+    ui_prototype_freeze: 604800           # 7 days
+    dev_implementation: 1209600           # 14 days
+    qa_testing_delivery: 604800           # 7 days
+    release_approval: 86400               # 1 day
+
+  dependencies:
+    strict: true  # 严格依赖模式，上游必须成功完成
+
+# ============================================
+# 冻结包定义
+# ============================================
+freeze_packages:
+  business_opportunity_freeze:
+    path: contracts/business_opportunity_freeze/v1/freeze.yaml
+    producer: stg
+    consumers: [prd, ui]
+    required_fields:
+      - one_liner
+      - target_user
+      - why_now
+      - differentiation
+      - reasons_not_to_do
+      - validation_path
+
+  dev_freeze_package:
+    path: contracts/dev_freeze_package/v1/freeze.yaml
+    producer: prd
+    consumers: [dev]
+    required_fields:
+      - requirements
+      - acceptance_criteria
+      - technical_specs
+      - api_contracts
+      - data_models
+
+  prototype_freeze_package:
+    path: contracts/prototype_freeze_package/v1/freeze.yaml
+    producer: ui
+    consumers: [dev]
+    required_fields:
+      - design_system
+      - page_flows
+      - component_specs
+      - interaction_patterns
+      - visual_specs
+
+  test_submission_freeze_package:
+    path: contracts/test_submission_freeze_package/v1/freeze.yaml
+    producer: dev
+    consumers: [qa]
+    required_fields:
+      - source_code
+      - test_report
+      - deployment_guide
+      - known_issues
+      - release_notes
+
+  deliverable_release:
+    path: contracts/deliverable_release/v1/release.yaml
+    producer: qa
+    consumers: [release]
+    required_fields:
+      - release_version
+      - test_summary
+      - bug_report
+      - quality_metrics
+      - deployment_artifacts
+
+# ============================================
+# 质量门控
+# ============================================
+quality_gates:
+  - name: "STG 冻结包完整性"
+    at_step: stg_opportunity_discovery
+    checks:
+      - type: "required_fields"
+        required: [one_liner, target_user, why_now, differentiation, reasons_not_to_do]
+
+      - type: "approval_check"
+        required_approvers: [stg_lead, product_lead]
+
+  - name: "PRD 冻结包完整性"
+    at_step: prd_requirement_freeze
+    checks:
+      - type: "required_fields"
+        required: [requirements, acceptance_criteria, technical_specs]
+
+      - type: "approval_check"
+        required_approvers: [prd_lead, dev_lead]
+
+  - name: "UI 冻结包完整性"
+    at_step: ui_prototype_freeze
+    checks:
+      - type: "required_fields"
+        required: [design_system, page_flows, component_specs]
+
+      - type: "approval_check"
+        required_approvers: [ui_lead, product_lead]
+
+  - name: "Dev 提测包完整性"
+    at_step: dev_implementation
+    checks:
+      - type: "required_fields"
+        required: [source_code, test_report, deployment_guide]
+
+      - type: "test_coverage"
+        minimum_coverage: 80
+
+      - type: "approval_check"
+        required_approvers: [dev_lead, qa_lead]
+
+  - name: "QA 交付包完整性"
+    at_step: qa_testing_delivery
+    checks:
+      - type: "required_fields"
+        required: [release_version, test_summary, bug_report]
+
+      - type: "bug_check"
+        max_p0_bugs: 0
+        max_p1_bugs: 0
+
+      - type: "approval_check"
+        required_approvers: [qa_lead, product_lead]
+
+# ============================================
+# 输出产物清单
+# ============================================
+artifacts:
+  - name: "商业机会冻结包"
+    path: contracts/business_opportunity_freeze/v1/freeze.yaml
+    producer: "STG (L2)"
+    consumers: ["PRD (L2)", "UI (L2)"]
+
+  - name: "研发冻结包"
+    path: contracts/dev_freeze_package/v1/freeze.yaml
+    producer: "PRD (L2)"
+    consumers: ["Dev (L2)"]
+
+  - name: "原型冻结包"
+    path: contracts/prototype_freeze_package/v1/freeze.yaml
+    producer: "UI (L2)"
+    consumers: ["Dev (L2)"]
+
+  - name: "提测冻结包"
+    path: contracts/test_submission_freeze_package/v1/freeze.yaml
+    producer: "Dev (L2)"
+    consumers: ["QA (L2)"]
+
+  - name: "可交付版本"
+    path: contracts/deliverable_release/v1/release.yaml
+    producer: "QA (L2)"
+    consumers: ["Release (L1)"]
+
+  - name: "产品 MVP 发布包"
+    path: contracts/product_mvp_release/v1/release.yaml
+    producer: "L1 (Human Gate)"
+    consumers: ["Production"]
+
+# ============================================
+# 依赖关系图
+# ============================================
+dependency_graph:
+  stg_opportunity_discovery:
+    outputs: [business_opportunity_freeze]
+
+  prd_requirement_freeze:
+    inputs: [business_opportunity_freeze]
+    outputs: [dev_freeze_package]
+
+  ui_prototype_freeze:
+    inputs: [business_opportunity_freeze]
+    outputs: [prototype_freeze_package]
+
+  dev_implementation:
+    inputs: [dev_freeze_package, prototype_freeze_package]
+    outputs: [test_submission_freeze_package]
+
+  qa_testing_delivery:
+    inputs: [test_submission_freeze_package]
+    outputs: [deliverable_release]
+
+  release_approval:
+    inputs: [deliverable_release, business_opportunity_freeze]
+    outputs: [product_mvp_release]
+
+# ============================================
+# 版本历史
+# ============================================
+changelog:
+  - version: "1.0"
+    date: "2026-01-28"
+    changes:
+      - "初始版本：定义 L1 产品 MVP 工作流"
+      - "串行编排 5 个部门的 L2 流程"
+      - "定义 5 种冻结包及其流转关系"
+      - "建立严格的质量门控机制"

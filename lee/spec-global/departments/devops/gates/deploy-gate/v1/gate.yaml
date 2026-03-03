@@ -1,0 +1,52 @@
+# Deploy Gate v1.0
+# 部署审批门禁
+
+kind: gate
+version: 1.0
+
+id: gate.devops.deploy_gate
+name: Deploy Gate
+description: >
+  部署审批门禁，确保部署报告完整并通过健康检查。
+owner: devops-governance
+tags: [gate, devops, deploy]
+
+input_contract:
+  ref: ../../contracts/deploy-report/v1/schema.json
+  description: "部署报告"
+
+rules:
+  - id: report_present
+    name: 部署报告存在
+    description: 必须提供部署报告
+    condition: "status != null"
+    severity: blocker
+    on_fail:
+      verdict: FAIL
+      message: "缺少部署报告"
+      action: reject
+
+  - id: status_success
+    name: 部署成功
+    description: 部署状态必须为 success
+    condition: "status == 'success'"
+    severity: blocker
+    on_fail:
+      verdict: FAIL
+      message: "部署未成功"
+      action: reject
+
+verdicts:
+  PASS:
+    conditions:
+      - "report_present"
+      - "status_success"
+    actions:
+      - continue_to_next_stage
+    message: "部署成功，审批通过"
+  FAIL:
+    conditions:
+      - "!report_present || !status_success"
+    actions:
+      - request_changes
+    message: "部署报告不符合要求"

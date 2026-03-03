@@ -1,0 +1,195 @@
+# Release Version Template
+# 发布版本模板
+
+kind: template
+id: template.devops.release_version
+name: 发布版本模板
+version: "1.0.0"
+department: devops
+
+description: >
+  这是发布版本信息的模板文件。
+
+  使用方法：
+  1. 在发布时复制此模板
+  2. 填写实际的版本信息
+  3. 将其放在 release/ 目录下
+
+# ============================================
+# 模板定义
+# ============================================
+template:
+  # 版本信息
+  version: "<version>"
+
+  # 构建信息
+  build:
+    commit: "<git_commit_hash>"
+    branch: "<git_branch>"
+    committer: "<committer_name>"
+    built_at: "<build_timestamp>"
+    builder: "ai-orchestrator"
+
+  # 目标环境
+  target_environments:
+    - dev
+    - test
+    # - staging  # 可选
+    # - prod     # 可选
+
+  # 发布产物
+  artifacts:
+    - type: "docker_image"
+      name: "<image_name>"
+      tag: "<image_tag>"
+      digest: "<image_digest>"
+
+    - type: "source_code"
+      url: "<source_repo_url>"
+      commit: "<source_commit>"
+
+    - type: "infrastructure"
+      path: "infra/"
+      description: "基础设施即代码"
+
+    - type: "cicd"
+      path: "cicd/"
+      description: "CI/CD 配置"
+
+  # 部署清单
+  deployment_manifest:
+    - environment: "dev"
+      config: "env/env-config.dev.yaml"
+      deployed_at: "<deploy_timestamp>"
+      status: "success"
+
+    - environment: "test"
+      config: "env/env-config.test.yaml"
+      deployed_at: "<deploy_timestamp>"
+      status: "success"
+
+    # - environment: "staging"
+    #   config: "env/env-config.staging.yaml"
+    #   deployed_at: "<deploy_timestamp>"
+    #   status: "pending"
+
+    # - environment: "prod"
+    #   config: "env/env-config.prod.yaml"
+    #   deployed_at: "<deploy_timestamp>"
+    #   status: "pending"
+
+  # 质量检查
+  quality_checks:
+    unit_tests:
+      status: "passed"
+      coverage: "<coverage_percentage>%"
+      report: "reports/unit-test-report.html"
+
+    integration_tests:
+      status: "passed"
+      report: "reports/integration-test-report.html"
+
+    # security_scan:
+    #   status: "passed"
+    #   report: "reports/security-scan-report.html"
+
+    # performance_test:
+    #   status: "passed"
+    #   report: "reports/performance-test-report.html"
+
+  # 变更内容
+  changes:
+    features:
+      - "<feature_description_1>"
+      - "<feature_description_2>"
+
+    bugfixes:
+      - "<bugfix_description_1>"
+
+    improvements:
+      - "<improvement_description_1>"
+
+    known_issues:
+      - "<known_issue_description_1>"
+
+  # 回滚信息
+  rollback:
+    previous_version: "<previous_version>"
+    rollback_script: "deploy/rollback-prod.sh"
+    rollback_plan: "docs/rollback-plan.md"
+    estimated_rollback_time: "<estimated_time>"
+
+  # 审批信息
+  approvals:
+    - phase: "p1_architecture"
+      approver: "<approver_name>"
+      approved_at: "<approval_timestamp>"
+
+    - phase: "p3_env_config"
+      approver: "<approver_name>"
+      approved_at: "<approval_timestamp>"
+
+    - phase: "p5_verification"
+      approver: "<approver_name>"
+      approved_at: "<approval_timestamp>"
+
+    - phase: "p6_release_freeze"
+      approver: "<approver_name>"
+      approved_at: "<approval_timestamp>"
+
+  # 元数据
+  metadata:
+    project: "<project_name>"
+    component: "<component_name>"
+    team: "<team_name>"
+    release_notes_url: "<release_notes_url>"
+    jira_ticket: "<jira_ticket>"
+    slack_announcement: "<slack_announcement_url>"
+
+# ============================================
+# 必需字段说明
+# ============================================
+required_fields:
+  - version
+  - build.commit
+  - build.built_at
+  - build.builder
+  - target_environments
+  - artifacts
+  - deployment_manifest
+  - changes
+  - rollback.previous_version
+  - approvals
+
+# ============================================
+# 占位符说明
+# ============================================
+placeholder_guide:
+  - pattern: "<placeholder>"
+    description: "尖括号内的内容需要替换为实际值"
+
+placeholders:
+  "<version>": "版本号（如 1.0.0）"
+  "<git_commit_hash>": "Git 提交哈希"
+  "<git_branch>": "Git 分支名"
+  "<committer_name>": "提交者姓名"
+  "<build_timestamp>": "构建时间戳（ISO 8601）"
+  "<image_name>": "Docker 镜像名"
+  "<image_tag>": "Docker 镜像标签"
+  "<image_digest>": "Docker 镜像摘要"
+  "<deploy_timestamp>": "部署时间戳（ISO 8601）"
+  "<coverage_percentage>": "测试覆盖率百分比"
+  "<previous_version>": "上一个版本号"
+  "<estimated_time>": "预估回滚时间"
+  "<project_name>": "项目名称"
+  "<component_name>": "组件名称"
+  "<team_name>": "团队名称"
+
+# ============================================
+# 版本历史
+# ============================================
+changelog:
+  - version: "1.0.0"
+    date: "2026-01-29"
+    changes:
+      - "初始版本：定义发布版本模板"

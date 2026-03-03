@@ -1,0 +1,122 @@
+# Env Provisioner Agent v1.0
+# 环境准备 Agent - Test Plan Execution 工作流
+
+kind: agent
+version: 1.0
+
+id: agent.qa.env_provisioner
+name: Env Provisioner
+description: >
+  准备测试环境，部署待测版本，执行健康检查，
+  确保环境就绪后才能开始测试。
+
+  依赖 DevOps 模块的技能实现：
+  - skill.devops.deploy_test_env: 部署测试环境
+  - skill.devops.health_check: 健康检查
+  - skill.devops.deploy: Docker 部署
+  - skill.devops.check_env: 环境检查
+
+owner: qa-governance
+tags: [qa, env, provision, test-plan-execution, devops-integration]
+
+# 契约定义
+contracts:
+  input_schemas:
+    - test_run: "Test Run 对象"
+    - build_version: "构建版本"
+    - build_commit: "构建 commit"
+    - environment: "环境名称"
+  output_schema:
+    environment_info:
+      type: object
+      description: "环境信息，包含 status 字段供 QA 工作流门控检查"
+      properties:
+        status:
+          type: string
+          enum: ["healthy", "unhealthy"]
+          description: "环境健康状态，供 Phase 2 Gate 检查: environment_info.status == 'healthy'"
+        url:
+          type: string
+          description: "环境访问 URL"
+        env:
+          type: string
+          description: "环境名称"
+        version:
+          type: string
+          description: "部署的版本"
+        services:
+          type: object
+          description: "各服务状态"
+        health_check_result:
+          type: object
+          description: "健康检查详细结果"
+    env_health:
+      type: object
+      description: "环境健康报告（详细）"
+
+# 角色定义
+persona:
+  role: "环境管理专家"
+  style: "稳定可靠"
+  tone: professional
+
+# 策略定义
+policy:
+  decision_rules:
+    - if: "environment_available"
+      then: "deploy_version"
+    - if: "deploy_success"
+      then: "run_health_check"
+    - if: "health_check_pass"
+      then: "mark_env_ready"
+
+  quality_bar:
+    must_have:
+      - "环境可访问"
+      - "版本部署正确"
+      - "健康检查通过"
+    should_have:
+      - "服务状态完整"
+      - "日志收集就绪"
+
+# 职责边界
+responsibility:
+  summary: "准备测试环境，确保就绪"
+  in_scope:
+    - "部署待测版本"
+    - "执行健康检查"
+    - "收集环境信息"
+  out_of_scope:
+    - "执行测试"
+    - "分析测试结果"
+
+# 技能引用
+# 注意: QA 环境准备复用 DevOps 模块的技能实现
+capabilities:
+  - skill.devops.deploy_test_env    # 部署测试环境 (原 skill.qa.env_provision)
+  - skill.devops.health_check       # 健康检查 (原 skill.qa.health_check)
+  - skill.devops.deploy             # Docker 部署 (原 skill.qa.docker_deploy)
+  - skill.devops.check_env          # 环境检查
+
+# 输入输出
+inputs:
+  - name: test_run
+    type: object
+    description: "Test Run 对象"
+  - name: build_version
+    type: string
+    description: "构建版本"
+  - name: build_commit
+    type: string
+    description: "构建 commit"
+  - name: environment
+    type: string
+    description: "环境名称"
+
+outputs:
+  - name: environment_info
+    type: object
+    description: "环境信息（url, status, services）"
+  - name: env_health
+    type: object
+    description: "环境健康报告"

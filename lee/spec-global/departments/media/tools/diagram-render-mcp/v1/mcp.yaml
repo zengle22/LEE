@@ -1,0 +1,214 @@
+# Diagram Render MCP v1.0
+# 图表渲染 MCP - 将 Mermaid 文本渲染为 PNG 图片
+
+kind: mcp
+version: "1.0"
+
+id: mcp.media.diagram_renderer
+name: Diagram Render MCP
+description: >
+  将 Mermaid 文本渲染为 PNG 图片。
+  这是整个方案中最重要的"去 AI 化"步骤：
+  - 接收 Mermaid 文本
+  - 渲染为 PNG/SVG
+  - 返回文件路径
+  
+  不允许 AI 自己画图，不允许 LLM 决定颜色、字体、布局。
+
+owner: media-ai
+tags:
+  - media
+  - mcp
+  - diagram
+  - render
+  - mermaid
+  - png
+
+# 工具定义
+tools:
+  - id: render_mermaid_to_png
+    name: Render Mermaid to PNG
+    description: 将 Mermaid 文本渲染为 PNG 图片
+    
+    input:
+      type: object
+      required:
+        - mermaid_source
+        - output_path
+      properties:
+        mermaid_source:
+          type: string
+          description: Mermaid 图表源码
+        
+        output_path:
+          type: string
+          description: 输出文件路径（相对路径）
+          example: "images/diagram_001.png"
+        
+        options:
+          type: object
+          description: 渲染选项（确定性参数）
+          properties:
+            width:
+              type: integer
+              description: 图片宽度
+              default: 800
+              maximum: 2000
+            
+            height:
+              type: integer
+              description: 图片高度（可选，默认自动）
+            
+            theme:
+              type: string
+              description: 主题（预定义，非 AI 决定）
+              enum: [neutral, default]
+              default: neutral
+            
+            background:
+              type: string
+              description: 背景色
+              enum: [white, transparent]
+              default: white
+            
+            scale:
+              type: number
+              description: "缩放比例（默认 2x，生成高清图，适合公众号）"
+              default: 2
+    
+    output:
+      type: object
+      required:
+        - success
+        - file_path
+      properties:
+        success:
+          type: boolean
+        
+        file_path:
+          type: string
+          description: 生成的 PNG 文件路径
+        
+        dimensions:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+        
+        error:
+          type: string
+          description: 错误信息（如果失败）
+
+# 实现配置
+implementation:
+  # 底层使用 mermaid-cli (mmdc) 或 puppeteer
+  backend: mermaid-cli
+  
+  # 命令模板
+  command_template: |
+    mmdc -i {temp_input} -o {output_path} \
+         -w {width} \
+         -b {background} \
+         -s {scale}
+  
+  # 主题配置（预定义，非 AI 决定）
+  themes:
+    neutral:
+      primaryColor: "#f9f9f9"
+      primaryTextColor: "#333"
+      primaryBorderColor: "#666"
+      lineColor: "#666"
+      secondaryColor: "#fff"
+      tertiaryColor: "#f0f0f0"
+
+# 约束与边界
+constraints:
+  - id: no_ai_styling
+    description: MCP 不接受 AI 提供的样式参数
+    check: |
+      输入中不得包含：
+      - 颜色值
+      - 字体名称
+      - CSS 样式
+      - 布局参数
+  
+  - id: deterministic_rendering
+    description: 相同的 Mermaid 源码必须产生相同的 PNG
+    test: |
+      对相同的 mermaid_source 渲染 10 次，
+      像素级对比差异 < 0.1%
+  
+  - id: valid_output_format
+    description: 只输出 PNG 格式
+    restriction: |
+      虽然底层可能支持 SVG，但本 MCP 只输出 PNG
+      以确保公众号兼容性
+
+# 错误处理
+error_handling:
+  - condition: Mermaid 语法错误
+    action: |
+      返回错误信息，包含：
+      1. 语法错误位置
+      2. 建议检查输入的 structure_dsl
+  
+  - condition: 输出目录不存在
+    action: 自动创建目录
+  
+  - condition: 文件写入失败
+    action: 返回错误，建议检查磁盘空间
+
+# 性能要求
+performance:
+  timeout_seconds: 30
+  max_concurrent: 5
+  
+  resources:
+    memory_mb: 512
+    cpu: 1.0
+
+# 使用说明
+usage: |
+  ## 这是整个方案中最重要的"去 AI 化"步骤
+  
+  调用方式：
+  ```yaml
+  tool: mcp.media.diagram_renderer.render_mermaid_to_png
+  input:
+    mermaid_source: |
+      flowchart TD
+        A["节点A"] --> B["节点B"]
+    output_path: "images/diagram_001.png"
+    options:
+      width: 800
+      theme: neutral
+  ```
+  
+  关键原则：
+  1. ❌ AI 不决定颜色、字体、布局
+  2. ✅ 所有样式来自预定义的 theme
+  3. ✅ 渲染是纯粹的技术执行
+  
+  为什么这样做：
+  - 保证每次渲染结果一致
+  - 避免 LLM 在像素级决策上的不稳定
+  - 让人类/程序控制视觉风格
+
+# 依赖
+requirements:
+  - nodejs >= 16
+  - "@mermaid-js/mermaid-cli >= 10.0"
+  - chromium（puppeteer 依赖）
+
+# 安装说明
+installation: |
+  ```bash
+  npm install -g @mermaid-js/mermaid-cli
+  ```
+  
+  或使用 puppeteer 的备用方案：
+  ```bash
+  npm install puppeteer mermaid
+  ```

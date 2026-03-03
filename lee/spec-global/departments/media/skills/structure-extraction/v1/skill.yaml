@@ -1,0 +1,118 @@
+# Structure Extraction Skill Specification v1.0
+# 结构抽取技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.media.structure_extraction
+name: Structure Extraction
+description: >
+  从原始文章中抽取结构化信息，生成与样式分离的中间表示。
+  不做任何样式判断，只识别层级、区块类型和重要性级别。
+owner: media-ai
+tags: [media, structure, extraction, parsing]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [raw_content, source_format]
+    properties:
+      raw_content:
+        type: string
+        description: 原始文章内容
+      source_format:
+        type: string
+        enum: [markdown, plain_text, html]
+      context:
+        type: object
+        description: 上下文信息
+
+  outputs:
+    type: object
+    required: [article_structure]
+    properties:
+      article_structure:
+        $ref: contracts/article-structure-contract/v1/schema.yaml#output_schema
+
+# ============================================
+# 结构识别规则
+# ============================================
+structure_rules:
+  # 标题识别
+  heading_detection:
+    markdown:
+      h1: "^#\\s+(.+)$"
+      h2: "^##\\s+(.+)$"
+      h3: "^###\\s+(.+)$"
+
+  # 区块类型识别
+  section_classification:
+    highlight:
+      patterns:
+        - "列表内容 + 强调关键词"
+        - "数字/项目符号列表"
+        - "「规模」「特点」「优势」等标题"
+
+    code:
+      patterns:
+        - "```(\\w+)?\\n([\\s\\S]+?)\\n```"
+        - "缩进4个空格的代码块"
+
+    quote:
+      patterns:
+        - "^>\\s+(.+)$"
+
+    warning:
+      patterns:
+        - "标题包含「警告」「注意」「小心」"
+
+    conclusion:
+      patterns:
+        - "标题包含「总结」「结论」「结语」"
+
+  # 重要性判断
+  importance_detection:
+    high:
+      indicators:
+        - "包含数字数据"
+        - "加粗标记 **"
+        - "强调关键词"
+
+    critical:
+      indicators:
+        - "命令行操作"
+        - "必须执行的动作"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: llm
+  timeout_ms: 30000
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: none
+
+# ============================================
+# 测试钩子
+# ===========================================
+tests:
+  smoke:
+    - name: extract_markdown
+      input:
+        raw_content: "# Title\n\nContent"
+        source_format: markdown
+      assert:
+        - path: "$.article_structure.title.text"
+          op: "=="
+          value: "Title"

@@ -1,0 +1,345 @@
+# Knowledge Access Protocol v1.0
+# 知识库访问协议 - 研发 Agent 必须遵守
+#
+# 所有研发相关的 Agent 在执行任务前必须阅读知识库，
+# 避免重复踩坑，复用最佳实践。
+
+kind: protocol
+version: "1.0"
+
+# ============================================
+# 基础信息
+# ============================================
+metadata:
+  id: protocol.dev.knowledge_access
+  name: Knowledge Access Protocol
+  version: "1.0.0"
+  description: |
+    研发 Agent 知识库访问协议。
+    强制要求所有研发相关的 Agent 在执行任务前：
+    1. 阅读项目知识库中的 pitfalls（踩坑记录）
+    2. 阅读相关的 patterns（技术模式）
+    3. 阅读相关的 best-practices（最佳实践）
+    4. 将知识库内容纳入决策考量
+  author: dev-governance
+  created_at: "2026-01-09"
+  tags:
+    - protocol
+    - knowledge
+    - development
+    - mandatory
+
+# ============================================
+# 适用范围
+# ============================================
+applies_to:
+  agent_categories:
+    - development  # 研发类 Agent
+    - testing      # 测试类 Agent
+    - review       # 审查类 Agent
+    - devops       # 运维类 Agent
+
+  specific_agents:
+    - agent.dev.go_backend_engineer
+    - agent.dev.uniapp_frontend_engineer
+    - agent.dev.database_engineer
+    - agent.dev.ai_engineer
+    - agent.dev.qa_engineer
+    - agent.dev.test_automation_engineer
+    - agent.dev.code_reviewer
+    - agent.dev.implementation_executor
+    - agent.dev.tech_lead
+    - agent.dev.frontend_architect
+    - agent.dev.backend_architect
+    - agent.dev.devops_engineer
+    - agent.dev.secops
+    - agent.dev.ui_implementation_reviewer
+    - agent.dev.phase_retrospector
+    - agent.dev.requirement_calibrator
+    - agent.dev.openspec_proposal_creator
+
+# ============================================
+# 知识库位置
+# ============================================
+knowledge_locations:
+  # 项目级知识库
+  project_level:
+    patterns: "{project_dir}/knowledge/patterns/"
+    best_practices: "{project_dir}/knowledge/best-practices/"
+    pitfalls: "{project_dir}/knowledge/pitfalls/"
+    tips: "{project_dir}/knowledge/tips/"
+
+  # Phase 级知识库
+  phase_level:
+    patterns: "{phase_dir}/knowledge/patterns/"
+    best_practices: "{phase_dir}/knowledge/best-practices/"
+    pitfalls: "{phase_dir}/knowledge/pitfalls/"
+    tips: "{phase_dir}/knowledge/tips/"
+
+  # 组织级知识库（跨项目共享）
+  organization_level:
+    patterns: "ai-spec/knowledge/patterns/"
+    best_practices: "ai-spec/knowledge/best-practices/"
+    pitfalls: "ai-spec/knowledge/pitfalls/"
+    tips: "ai-spec/knowledge/tips/"
+
+# ============================================
+# 强制执行配置
+# ============================================
+enforcement:
+  mandatory: true
+  skip_allowed: false
+
+  # 必须阅读的知识类型
+  required_reading:
+    - pitfalls: "必须阅读，避免重复踩坑"
+    - patterns: "必须阅读，复用技术模式"
+
+  # 建议阅读的知识类型
+  recommended_reading:
+    - best_practices: "建议阅读，参考最佳实践"
+    - tips: "建议阅读，提高效率"
+
+# ============================================
+# 执行前协议 (Pre-Execution Protocol)
+# ============================================
+pre_execution:
+  steps:
+    - id: PKB-01
+      name: 扫描知识库
+      description: 扫描项目和 Phase 知识库目录
+      action: scan_knowledge_directories
+      required: true
+      output:
+        - knowledge_index: "可用知识项列表"
+
+    - id: PKB-02
+      name: 加载 Pitfalls
+      description: 加载所有踩坑记录，识别与当前任务相关的条目
+      action: load_pitfalls
+      required: true
+      filter:
+        - by_tags: "与任务相关的标签"
+        - by_context: "与任务相似的场景"
+      output:
+        - relevant_pitfalls: "相关踩坑记录列表"
+
+    - id: PKB-03
+      name: 加载 Patterns
+      description: 加载技术模式，识别可复用的方案
+      action: load_patterns
+      required: true
+      filter:
+        - by_type: "与任务相关的技术类型"
+        - by_problem: "与任务相似的问题"
+      output:
+        - applicable_patterns: "可应用的技术模式列表"
+
+    - id: PKB-04
+      name: 加载 Best Practices
+      description: 加载最佳实践，参考验证有效的方法
+      action: load_best_practices
+      required: false
+      output:
+        - relevant_practices: "相关最佳实践列表"
+
+    - id: PKB-05
+      name: 生成知识摘要
+      description: 汇总知识库内容，生成执行前参考摘要
+      action: generate_knowledge_summary
+      required: true
+      output:
+        - knowledge_summary: |
+            ## 知识库参考摘要
+
+            ### 踩坑记录 (必读)
+            {pitfalls_list}
+
+            ### 技术模式 (可复用)
+            {patterns_list}
+
+            ### 最佳实践 (参考)
+            {best_practices_list}
+
+    - id: PKB-06
+      name: 纳入决策
+      description: 将知识库内容纳入任务执行的决策考量
+      action: incorporate_into_decision
+      required: true
+      rules:
+        - "遇到 pitfall 描述的场景时，必须使用 pitfall 中的解决方案"
+        - "存在可复用 pattern 时，优先使用 pattern 而非重新设计"
+        - "参考 best practice 优化实现方案"
+
+# ============================================
+# 知识匹配规则
+# ============================================
+matching_rules:
+  # 按 Agent 类型匹配
+  by_agent_type:
+    go_backend_engineer:
+      focus_tags: [go, backend, api, database, concurrency]
+      priority_types: [pitfall, pattern]
+
+    uniapp_frontend_engineer:
+      focus_tags: [uniapp, vue, frontend, ui, mobile]
+      priority_types: [pitfall, pattern]
+
+    database_engineer:
+      focus_tags: [database, sql, migration, schema, postgresql]
+      priority_types: [pitfall, pattern]
+
+    qa_engineer:
+      focus_tags: [testing, test-design, coverage, quality]
+      priority_types: [best_practice, pitfall]
+
+    test_automation_engineer:
+      focus_tags: [testing, automation, mock, unit-test, integration]
+      priority_types: [pitfall, pattern]
+
+    code_reviewer:
+      focus_tags: [code-review, security, performance, architecture]
+      priority_types: [pitfall, best_practice]
+
+    devops_engineer:
+      focus_tags: [devops, ci-cd, deployment, docker, kubernetes]
+      priority_types: [pitfall, pattern]
+
+    secops:
+      focus_tags: [security, vulnerability, authentication, encryption]
+      priority_types: [pitfall, best_practice]
+
+  # 按任务类型匹配
+  by_task_type:
+    implementation:
+      focus_types: [pitfall, pattern]
+      focus_sections: [solution, caveats]
+
+    testing:
+      focus_types: [pitfall, best_practice]
+      focus_sections: [problem, solution]
+
+    review:
+      focus_types: [pitfall, best_practice]
+      focus_sections: [problem, caveats]
+
+    architecture:
+      focus_types: [pattern, best_practice]
+      focus_sections: [context, solution, benefits]
+
+# ============================================
+# 知识引用格式
+# ============================================
+citation_format:
+  in_code_comment: |
+    // 参考知识库: {knowledge_id}
+    // 问题: {problem}
+    // 解决方案: {solution}
+
+  in_documentation: |
+    > **知识库参考**: [{knowledge_id}]({knowledge_file})
+    > **场景**: {context}
+    > **解决方案**: {solution}
+
+  in_commit_message: |
+    应用知识库 {knowledge_id}: {title}
+
+# ============================================
+# 执行后协议 (Post-Execution Protocol)
+# ============================================
+post_execution:
+  steps:
+    - id: PKB-POST-01
+      name: 记录知识应用
+      description: 记录本次任务中应用的知识库内容
+      action: log_knowledge_usage
+      output:
+        - applied_knowledge: "已应用的知识列表"
+
+    - id: PKB-POST-02
+      name: 识别新知识
+      description: 识别本次任务中产生的新知识（待复盘沉淀）
+      action: identify_new_knowledge
+      output:
+        - potential_knowledge: "潜在的新知识列表"
+
+# ============================================
+# Agent 集成指令
+# ============================================
+integration_directive: |
+  ## 知识库访问协议 (必须遵守)
+
+  在执行任何任务前，你必须：
+
+  1. **扫描知识库**
+     ```
+     检查以下目录是否存在：
+     - {phase_dir}/knowledge/pitfalls/
+     - {phase_dir}/knowledge/patterns/
+     - {phase_dir}/knowledge/best-practices/
+     - {project_dir}/knowledge/pitfalls/
+     - {project_dir}/knowledge/patterns/
+     ```
+
+  2. **阅读踩坑记录 (必须)**
+     ```
+     读取所有 pitfalls/*.yaml 文件
+     识别与当前任务相关的条目
+     ```
+
+  3. **阅读技术模式 (必须)**
+     ```
+     读取所有 patterns/*.yaml 文件
+     识别可复用的技术方案
+     ```
+
+  4. **纳入决策**
+     - 遇到 pitfall 描述的场景 → 必须使用 pitfall 中的解决方案
+     - 存在可复用 pattern → 优先使用 pattern 而非重新设计
+     - 参考 best practice → 优化实现方案
+
+  5. **引用知识**
+     在代码注释或文档中引用使用的知识：
+     ```
+     // 参考知识库: KNW-P2-005 (SQLite CGO 问题)
+     // 解决方案: 使用 Mock Repository 或 PostgreSQL 容器
+     ```
+
+  **违规处理**: 如果执行任务时未遵守此协议，代码审查将标记为问题。
+
+# ============================================
+# 示例
+# ============================================
+examples:
+  - name: Go Backend Engineer 执行前知识读取
+    scenario: 实现用户认证 Service
+    knowledge_read:
+      - id: KNW-P2-005
+        title: SQLite CGO 在 Windows 的编译问题
+        type: pitfall
+        relevance: "测试时避免使用 SQLite"
+        action: "使用 Mock Repository 进行测试"
+
+      - id: KNW-P2-001
+        title: JWT 双 Token 认证模式
+        type: pattern
+        relevance: "认证实现方案"
+        action: "复用 JWT 双 Token 模式"
+
+      - id: KNW-P2-003
+        title: 分层架构依赖注入
+        type: best_practice
+        relevance: "架构设计"
+        action: "遵循分层架构，使用依赖注入"
+
+# ============================================
+# 版本历史
+# ============================================
+version_history:
+  - version: "1.0.0"
+    date: "2026-01-09"
+    changes:
+      - "初始版本"
+      - "定义知识库访问协议"
+      - "定义强制执行配置"
+      - "定义 Agent 集成指令"

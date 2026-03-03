@@ -1,0 +1,393 @@
+# AI Walkthrough Validator Agent Specification v1.0
+# AI 盲跑验证器 Agent 规范
+
+kind: agent
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: agent.ui.ai_walkthrough_validator
+name: AI Walkthrough Validator
+description: >
+  AI 盲跑验证器。验证"完全不理解业务意图的 AI，仅凭 UI 顺序就能跑通主路径"。
+  这是设计验收的硬标准。
+owner: ui-governance
+tags: [validation, ai, walkthrough, ux, quality]
+
+# ============================================
+# 契约定义
+# ============================================
+contracts:
+  input_schema:
+    type: object
+    required: [flow_contract, page_contracts]
+    properties:
+      flow_contract:
+        type: object
+        description: "User Flow Contract 定义"
+      page_contracts:
+        type: array
+        description: "关联的 Page Contract 列表"
+      prototype_url:
+        type: string
+        description: "可选的原型 URL（用于实际交互验证）"
+      mode:
+        type: string
+        enum: [contract_only, interactive]
+        default: contract_only
+        description: "验证模式：仅契约分析 或 交互式验证"
+
+  output_schema:
+    type: object
+    required: [passed, walkthrough_result, issues]
+    properties:
+      passed:
+        type: boolean
+        description: "是否通过验证"
+      walkthrough_result:
+        type: object
+        properties:
+          steps_attempted:
+            type: integer
+          steps_completed:
+            type: integer
+          path_taken:
+            type: array
+            items:
+              type: string
+          completion_reached:
+            type: boolean
+          blocked_at:
+            type: string
+            description: "如果被阻断，在哪一步"
+          blocking_reason:
+            type: string
+      issues:
+        type: array
+        items:
+          $ref: "#/definitions/WalkthroughIssue"
+      recommendations:
+        type: array
+        items:
+          type: string
+      ai_friendly_score:
+        type: integer
+        minimum: 0
+        maximum: 100
+        description: "AI 友好度评分"
+
+# ============================================
+# 角色定义
+# ============================================
+persona:
+  role: "AI 盲跑验证器"
+  style: "客观、严格、不假设业务知识"
+  tone: analytical
+  constraints:
+    - "不使用任何业务领域知识"
+    - "仅依赖 UI 元素的可见性和可交互性"
+    - "严格按顺序执行路径"
+    - "遇到模糊选择时视为失败"
+
+# ============================================
+# 策略定义
+# ============================================
+policy:
+  decision_rules:
+    # 路径发现规则
+    - if: "entry.trigger is clear and visible"
+      then: "proceed_to_entry"
+    - if: "entry.trigger is hidden or disabled"
+      then: "fail_with_reason: entry_not_accessible"
+
+    # 步骤执行规则
+    - if: "current_step.trigger is clear and unique"
+      then: "execute_trigger"
+    - if: "multiple_possible_triggers"
+      then: "fail_with_reason: ambiguous_path"
+    - if: "no_visible_trigger"
+      then: "fail_with_reason: dead_end"
+
+    # 完成态判断
+    - if: "completion.feedback is shown"
+      then: "mark_success"
+    - if: "unexpected_state_reached"
+      then: "fail_with_reason: unhandled_state"
+
+  quality_bar:
+    must_have:
+      - "主路径完全可盲跑"
+      - "每一步只有一个明确的下一步"
+      - "完成态明确可识别"
+      - "错误状态有恢复指引"
+
+  refusal:
+    conditions:
+      - "asks_to_use_business_knowledge"
+      - "asks_to_guess_next_step"
+      - "asks_to_skip_validation"
+
+# ============================================
+# 验证规则
+# ============================================
+validation_rules:
+  # 入口可达性
+  entry_accessibility:
+    - id: entry_visible
+      check: "entry.trigger 在入口页面可见"
+      severity: blocker
+    - id: entry_enabled
+      check: "entry.trigger 可交互（非 disabled）"
+      severity: blocker
+    - id: entry_unique
+      check: "只有一个入口触发器"
+      severity: blocker
+
+  # 路径唯一性
+  path_uniqueness:
+    - id: single_next_step
+      check: "每一步只有一个明确的'下一步'"
+      severity: blocker
+    - id: no_branching
+      check: "V1 阶段不存在路径分支"
+      severity: blocker
+    - id: sequential_enforcement
+      check: "步骤顺序强制执行"
+      severity: blocker
+
+  # 状态可识别性
+  state_recognition:
+    - id: loading_recognizable
+      check: "加载状态可通过 UI 识别"
+      severity: major
+    - id: error_recognizable
+      check: "错误状态可通过 UI 识别且有下一步指引"
+      severity: blocker
+    - id: completion_recognizable
+      check: "完成态可通过 UI 明确识别"
+      severity: blocker
+
+  # 恢复路径
+  recovery_path:
+    - id: error_has_recovery
+      check: "所有错误状态都有明确的恢复路径"
+      severity: blocker
+    - id: recovery_leads_to_main_path
+      check: "恢复路径最终回到主路径"
+      severity: blocker
+
+# ============================================
+# 执行流程
+# ============================================
+execution_flow:
+  phases:
+    - id: contract_analysis
+      name: "契约分析"
+      steps:
+        - "读取 flow_contract"
+        - "验证 entry 定义完整性"
+        - "验证 main_path 定义完整性"
+        - "验证 exit_points 定义完整性"
+        - "检查 blocked_patterns"
+
+    - id: static_walkthrough
+      name: "静态路径验证"
+      steps:
+        - "从 entry 开始"
+        - "逐步分析 main_path.steps"
+        - "验证每步的 trigger 唯一性"
+        - "验证 preconditions 的 not_met_action"
+        - "验证 completion 可达性"
+
+    - id: issue_detection
+      name: "问题检测"
+      steps:
+        - "检测死胡同（没有下一步）"
+        - "检测模糊选择（多个可能的下一步）"
+        - "检测隐式跳转（依赖业务知识）"
+        - "检测未处理状态（黑洞状态）"
+
+    - id: scoring
+      name: "评分"
+      steps:
+        - "计算路径清晰度"
+        - "计算状态可识别度"
+        - "计算恢复路径完整度"
+        - "生成 AI 友好度评分"
+
+# ============================================
+# 问题定义
+# ============================================
+definitions:
+  WalkthroughIssue:
+    type: object
+    required: [id, type, severity, location, description]
+    properties:
+      id:
+        type: string
+      type:
+        type: string
+        enum:
+          - dead_end           # 死胡同
+          - ambiguous_path     # 路径模糊
+          - hidden_state       # 隐式状态
+          - missing_recovery   # 缺少恢复路径
+          - implicit_jump      # 隐式跳转
+          - unrecognizable_state  # 状态不可识别
+          - business_knowledge_required  # 需要业务知识
+      severity:
+        type: string
+        enum: [blocker, major, minor]
+      location:
+        type: string
+        description: "问题位置（step_id 或 page_ref）"
+      description:
+        type: string
+      fix_suggestion:
+        type: string
+
+# ============================================
+# 评分标准
+# ============================================
+scoring:
+  ai_friendly_score:
+    # 100 分制，各维度权重
+    dimensions:
+      - name: path_clarity
+        weight: 40
+        description: "路径清晰度 - 每一步是否只有唯一下一步"
+        criteria:
+          - "100%: 所有步骤只有唯一明确的下一步"
+          - "80%: 存在1-2处需要简单推理的选择"
+          - "60%: 存在3-5处模糊选择"
+          - "0%: 存在死胡同或完全模糊的路径"
+
+      - name: state_visibility
+        weight: 30
+        description: "状态可见度 - 当前状态是否可通过 UI 识别"
+        criteria:
+          - "100%: 所有状态都有明确的 UI 反馈"
+          - "80%: 大部分状态可识别，少数需要等待"
+          - "60%: 部分状态不明确"
+          - "0%: 存在黑洞状态"
+
+      - name: recovery_completeness
+        weight: 20
+        description: "恢复完整度 - 错误状态是否都有恢复路径"
+        criteria:
+          - "100%: 所有错误状态都有明确恢复路径"
+          - "80%: 大部分错误可恢复"
+          - "60%: 部分错误无恢复路径"
+          - "0%: 存在不可恢复的错误"
+
+      - name: entry_accessibility
+        weight: 10
+        description: "入口可达性 - 入口是否明确可见"
+        criteria:
+          - "100%: 入口明确可见且可交互"
+          - "50%: 入口需要简单操作才能发现"
+          - "0%: 入口隐藏或需要业务知识"
+
+    pass_threshold: 80  # 80 分以上通过
+
+# ============================================
+# 输出模板
+# ============================================
+output_templates:
+  summary: |
+    ## AI 盲跑验证报告
+
+    ### 概要
+    - **验证结果**: {{ passed ? "通过" : "未通过" }}
+    - **AI 友好度评分**: {{ ai_friendly_score }}/100
+    - **步骤完成度**: {{ steps_completed }}/{{ steps_attempted }}
+    - **完成态到达**: {{ completion_reached ? "是" : "否" }}
+
+    ### 路径记录
+    {{ path_taken | join(" → ") }}
+
+    ### 问题列表
+    {% for issue in issues %}
+    - **[{{ issue.severity }}]** {{ issue.type }}: {{ issue.description }}
+      - 位置: {{ issue.location }}
+      - 修复建议: {{ issue.fix_suggestion }}
+    {% endfor %}
+
+    ### 改进建议
+    {% for rec in recommendations %}
+    - {{ rec }}
+    {% endfor %}
+
+# ============================================
+# 可观测性
+# ============================================
+observability:
+  log_level: info
+  emit:
+    - walkthrough_started
+    - step_attempted
+    - step_completed
+    - step_failed
+    - walkthrough_completed
+    - issue_detected
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: simple_flow_pass
+      input:
+        flow_contract:
+          id: flow.test_simple
+          entry:
+            trigger: click(start_button)
+          main_path:
+            steps:
+              - id: step_1
+                trigger: click(next_button)
+            completion:
+              state: success
+          exit_points:
+            - id: complete
+              type: complete
+      assert:
+        - path: "$.passed"
+          op: "=="
+          value: true
+
+    - name: ambiguous_path_fail
+      input:
+        flow_contract:
+          id: flow.test_ambiguous
+          entry:
+            trigger: click(start_button)
+          main_path:
+            steps:
+              - id: step_1
+                # 缺少明确的 trigger
+            completion:
+              state: success
+          exit_points:
+            - id: complete
+              type: complete
+      assert:
+        - path: "$.passed"
+          op: "=="
+          value: false
+        - path: "$.issues[0].type"
+          op: "=="
+          value: "ambiguous_path"
+
+# ============================================
+# 职责边界
+# ============================================
+responsibility:
+  summary: "验证 AI 能否仅凭 UI 顺序盲跑通过主路径"
+  hard_boundary: "不使用任何业务领域知识，不猜测下一步"
+  out_of_scope:
+    - "业务逻辑正确性验证"
+    - "视觉设计评审"
+    - "性能测试"
+    - "安全测试"

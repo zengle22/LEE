@@ -1,0 +1,116 @@
+# Contract Freeze Gate v1.0
+# 协议冻结门禁
+
+kind: gate
+version: 1.0
+
+# ============================================
+# Dev 部门宪法引用 (强制)
+# ============================================
+constitution:
+  ref: ../../AGENTS.md
+  version: "1.0"
+  mandatory: true
+
+id: gate.dev.contract_freeze_gate
+name: Contract Freeze Gate
+description: >
+  协议冻结门禁。验证协议文件完整性、版本更新、changelog 记录。
+  通过此门禁后，协议进入冻结状态，不得私改。
+owner: dev-governance
+tags: [gate, dev, contract, freeze, quality]
+
+# ============================================
+# 门禁类型
+# ============================================
+type: automated
+priority: blocker
+
+# ============================================
+# 触发条件
+# ============================================
+trigger:
+  event: "contract_design_complete"
+  source: "agent.dev.contract_designer"
+
+# ============================================
+# 检查项
+# ============================================
+checks:
+  - id: contract_file_exists
+    name: "协议文件存在"
+    description: "检查 contracts/*.yaml 文件是否存在"
+    type: file_exists
+    rule: "contracts/*.yaml exists"
+    severity: blocker
+    required: true
+
+  - id: version_updated
+    name: "版本号更新"
+    description: "检查版本号是否符合 semver 且已更新"
+    type: field_check
+    rule: "contract.version matches semver AND version > previous_version"
+    severity: blocker
+    required: true
+
+  - id: changelog_updated
+    name: "Changelog 更新"
+    description: "检查 changelog 是否包含当前版本的变更记录"
+    type: field_check
+    rule: "contract.changelog contains entry for current version"
+    severity: blocker
+    required: true
+
+  - id: field_naming_convention
+    name: "字段命名规范"
+    description: "检查所有字段命名是否符合 snake_case"
+    type: naming_convention
+    rule: "all dto fields match snake_case pattern"
+    severity: major
+    required: true
+
+  - id: type_clarity
+    name: "类型定义清晰"
+    description: "检查所有字段是否有明确的类型定义"
+    type: field_check
+    rule: "all dto fields have explicit type definition"
+    severity: major
+    required: true
+
+  - id: no_ambiguous_fields
+    name: "无模糊字段"
+    description: "检查是否存在 data/info/extra 等模糊字段名"
+    type: naming_check
+    rule: "no fields named data/info/extra/misc/other"
+    severity: major
+    required: true
+
+# ============================================
+# 通过条件
+# ============================================
+pass_criteria:
+  all_required: true
+  max_blocker: 0
+  max_major: 0
+  description: "所有 blocker 和 major 检查必须通过"
+
+# ============================================
+# 失败处理
+# ============================================
+on_fail:
+  action: "block_and_return"
+  message: "协议冻结门禁未通过，请修正后重新提交"
+  return_to: "agent.dev.contract_designer"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "dev-workflow-architect"
+  created_at: "2026-02-11"
+  version: "1.0"
+  changelog:
+    - version: "1.0"
+      date: "2026-02-11"
+      changes:
+        - "新建协议冻结门禁"

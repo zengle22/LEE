@@ -1,0 +1,239 @@
+# Media Publisher Agent Specification v1.0
+# 媒体发布 Agent 规范
+
+kind: agent
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: agent.media.media_publisher
+name: Media Publisher
+description: >
+  将格式化内容发布到目标平台。
+  支持直接 API 发布和生成复制粘贴内容。
+owner: media-ai
+tags: [media, publish, platform, distribution]
+
+# ============================================
+# 契约定义
+# ============================================
+contracts:
+  input_schema:
+    type: object
+    required: [formatted_content, platform, publish_mode]
+    properties:
+      formatted_content:
+        $ref: contracts/formatted-content-contract/v1/schema.yaml
+      platform:
+        type: string
+        enum: [wechat, xhs, notion, feishu, generic]
+      publish_mode:
+        type: string
+        enum: [api, manual, preview]
+        description: |
+          api: 直接通过 API 发布
+          manual: 生成可供复制粘贴的内容
+          preview: 生成预览链接
+
+      publish_config:
+        type: object
+        description: 发布配置（API 模式需要）
+        properties:
+          api_key:
+            type: string
+          account_id:
+            type: string
+          article_id:
+            type: string
+
+  output_schema:
+    type: object
+    required: [publish_status, result]
+    properties:
+      publish_status:
+        type: string
+        enum: [success, failed, preview]
+
+      result:
+        type: object
+        properties:
+          url:
+            type: string
+            description: 发布后的文章 URL
+
+          article_id:
+            type: string
+            description: 文章 ID
+
+          published_at:
+            type: string
+            format: date-time
+
+          clipboard_content:
+            type: string
+            description: 复制粘贴模式的内容
+
+          preview_url:
+            type: string
+            description: 预览 URL
+
+# ============================================
+# 角色定义
+# ============================================
+persona:
+  role: "媒体发布专家"
+  style: "高效、准确、可追踪"
+  tone: professional
+
+# ============================================
+# 发布模式
+# ============================================
+publish_modes:
+  api:
+    description: "通过平台 API 直接发布"
+    supported_platforms: [wechat, feishu]
+    requirements:
+      - "有效的 API 凭证"
+      - "平台 API 访问权限"
+    steps:
+      - name: "验证 API 凭证"
+      - name: "上传内容"
+      - name: "等待发布结果"
+      - name: "返回文章 URL"
+
+  manual:
+    description: "生成可供复制粘贴的内容"
+    supported_platforms: [wechat, xhs, notion, feishu, generic]
+    requirements:
+      - "无"
+    steps:
+      - name: "格式化内容为可复制格式"
+      - name: "生成复制指南"
+      - name: "返回内容"
+
+  preview:
+    description: "生成预览链接"
+    supported_platforms: [wechat, feishu]
+    requirements:
+      - "平台预览功能"
+    steps:
+      - name: "创建草稿"
+      - name: "生成预览链接"
+      - name: "返回链接"
+
+# ============================================
+# 策略定义
+# ============================================
+policy:
+  decision_rules:
+    - if: "publish_mode == 'api' AND platform == 'wechat'"
+      then: "use_wechat_api"
+    - if: "publish_mode == 'manual'"
+      then: "generate_clipboard_content"
+    - if: "publish_mode == 'preview'"
+      then: "create_draft_preview"
+
+  quality_bar:
+    must_have:
+      - "发布内容与冻结内容一致"
+      - "发布过程可追踪"
+      - "错误有明确提示"
+
+  refusal:
+    conditions:
+      - "api_credentials_invalid"
+      - "platform_not_supported"
+      - "content_not_frozen"
+
+# ============================================
+# 技能引用
+# ============================================
+capabilities:
+  - skill.io.file_read
+  - skill.io.file_write
+  - skill.media.platform_publish
+
+# ============================================
+# 提示工程
+# ============================================
+prompting:
+  system: |
+    You are a Media Publisher. Your job is to publish formatted content to target platforms.
+
+    Publish modes:
+    1. API: Direct publishing via platform API
+    2. Manual: Generate copy-paste content
+    3. Preview: Generate preview link
+
+    Key principles:
+    - Ensure published content matches frozen content
+    - Track all publish operations
+    - Provide clear error messages
+
+  instructions:
+    - "验证发布配置"
+    - "确保内容与冻结版本一致"
+    - "追踪发布状态"
+    - "返回发布结果"
+
+  output_format: json
+
+# ============================================
+# 可观测性
+# ============================================
+observability:
+  log_level: info
+  emit:
+    - publish_initiated
+    - publish_completed
+    - publish_failed
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: manual_mode_generate_content
+      input:
+        formatted_content:
+          formatted_content: "<h1>Title</h1>"
+          metadata:
+            platform: wechat
+        platform: wechat
+        publish_mode: manual
+      assert:
+        - path: "$.publish_status"
+          op: "=="
+          value: "success"
+        - path: "$.result.clipboard_content"
+          op: "!="
+          value: null
+
+# ============================================
+# 职责边界
+# ============================================
+responsibility:
+  summary: "将格式化内容发布到目标平台"
+  in_scope:
+    - "API 发布"
+    - "生成复制粘贴内容"
+    - "生成预览链接"
+  out_of_scope:
+    - "修改内容"
+    - "重新排版"
+    - "平台内容管理"
+
+# ============================================
+# 输出要求
+# ============================================
+output_requirements:
+  # 输出目录规则：相对于输入文件所在目录的 output 子目录
+  output_directory_rule: |
+    所有输出文件应放置在输入文件所在目录的 output 子目录中。
+    例如：输入文件为 /path/to/article.md，输出目录为 /path/to/output/
+
+  outputs:
+    - type: json
+      description: "发布结果"
+      path_pattern: "{input_directory}/output/{content_id}_publish_result.json"

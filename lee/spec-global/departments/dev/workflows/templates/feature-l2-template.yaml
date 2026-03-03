@@ -1,69 +1,116 @@
+# Feature Development L2 Template
+# 特性开发主工作流（L2 编排）
+#
+# 核心流程：协议冻结 → 前后端并行 → 连调验证 → 冒烟守门
+
 kind: l2_workflow_template
-version: "1.0"
-id: template.dev.feature_l2
+version: "2.1"
+id: template.dev.feature
 name: Feature Development L2 Template
 description: |
-  L2 template for feature development with 5 phases and complexity-aware execution.
+  L2 template for Feature development with 4 phases.
 
-  This template defines the structure for department-level feature workflows.
-  Each phase can have its complexity set to S/M/L to determine execution strategy:
-  - S (Simple): Direct execution of phase steps
-  - M (Medium): Spawn single L3 task instance
-  - L (Large): PMA split into multiple L3 task instances
+  This template defines the structure for dev department-level feature workflows.
+  Phase 1 spawns L3 for contract design, Phase 2 spawns L3s for FE/BE parallel development,
+  Phase 3 spawns L3 for integration testing, Phase 4 handles smoke test gates.
 
-  P1: Phases support depends_on for parallel execution when possible.
+  Workflow Flow:
+  - Phase 1: Contract Design (L3) - Design and freeze API contract
+  - Phase 2: Parallel Development (L3s) - FE and BE development in parallel
+  - Phase 3: Integration (L3) - Integration testing and verification
+  - Phase 4: Smoke Test (Direct) - Smoke test gate and code review
 
+owner: development
+tags: [template, dev, feature, l2, contract-first]
+
+# ============================================
 # Phase definitions - structural elements that cannot be omitted
+# ============================================
 phases:
-  - id: plan
-    name: "Planning Phase"
-    description: "Requirements analysis and technical planning"
-    default_complexity: M  # Can be overridden in instance
-    depends_on: []  # No dependencies, can start immediately
-
-  - id: api_align
-    name: "API Alignment Phase"
-    description: "Contract design and API specification"
-    default_complexity: M
-    depends_on: ["plan"]  # Requires plan to complete
+  - id: contract_design
+    name: "Contract Design"
+    description: "Design and freeze API contract with L3 sub-workflow"
+    default_complexity: L  # Spawns L3
+    depends_on: []
+    spawns_l3: true
+    l3_template_id: template.dev.feature_contract_l3
 
   - id: frontend_dev
-    name: "Frontend Development Phase"
-    description: "UI implementation and user interaction"
-    default_complexity: M
-    depends_on: ["api_align"]  # Requires API alignment
+    name: "Frontend Development"
+    description: "Frontend implementation following frozen contract"
+    default_complexity: L  # Spawns L3
+    depends_on: [contract_design]
+    spawns_l3: true
+    l3_template_id: template.dev.feature_fe_l3
 
   - id: backend_dev
-    name: "Backend Development Phase"
-    description: "Service implementation and business logic"
-    default_complexity: M
-    depends_on: ["api_align"]  # Requires API alignment, can run parallel with frontend_dev
+    name: "Backend Development"
+    description: "Backend implementation following frozen contract"
+    default_complexity: L  # Spawns L3
+    depends_on: [contract_design]
+    spawns_l3: true
+    l3_template_id: template.dev.feature_be_l3
 
   - id: integration
-    name: "Integration Phase"
-    description: "Frontend-backend integration testing"
-    default_complexity: S  # Usually straightforward
-    depends_on: ["frontend_dev", "backend_dev"]  # Requires both to complete
+    name: "Integration Testing"
+    description: "Integration testing and verification"
+    default_complexity: L  # Spawns L3
+    depends_on: [frontend_dev, backend_dev]
+    spawns_l3: true
+    l3_template_id: template.dev.feature_integration_l3
+
+  - id: smoke_test
+    name: "Smoke Test"
+    description: "Smoke test gate - blocks merge on failure"
+    default_complexity: S  # Direct execution
+    depends_on: [integration]
 
 # Execution strategy by complexity
 execution_strategies:
   S:
-    description: "Direct execution - run phase steps inline"
+    description: "Direct execution - run phase steps inline in L2"
     spawns_l3: false
-  M:
-    description: "Single task - spawn one L3 instance for entire phase"
-    spawns_l3: true
-    default_l3_count: 1
   L:
-    description: "PMA split - use PM Agent to split phase into multiple L3 instances"
+    description: "Spawn L3 - create L3 instance(s) for feature point execution"
     spawns_l3: true
-    uses_pma: true
-    default_l3_count: 2-5
 
-# Parallel execution configuration
-parallel_execution:
-  enabled: true
-  allow_frontend_backend_parallel: true  # frontend_dev and backend_dev can run in parallel
+# Contract-first constraints
+contract_first_policy:
+  description: "Contract must be frozen before any implementation"
+  rules:
+    - rule: "contract_freeze_required"
+      description: "Phase 1 (contract_design) must pass before Phase 2/3"
+      violation_action: "block_parallel_development"
+    - rule: "contract_binding"
+      description: "FE/BE must follow frozen contract strictly"
+      violation_action: "rollback_to_contract_design"
+    - rule: "structural_rollback"
+      description: "Integration issues due to contract structure → rollback to Phase 1"
+      max_rollback: 2
+      violation_action: "trigger_human_gate"
+
+# L2 to L3 data contract (for Phase 1: Contract Design)
+l3_input_schema:
+  description: "Input data passed to Contract Design L3 instance"
+  required_fields:
+    - feature_spec
+    - project
+    - module
+    - feature_point_id
+  optional_fields:
+    - existing_contracts
+    - contract_version
+
+# L3 to L2 data contract
+l3_output_schema:
+  description: "Output data returned from L3 instances"
+  required_fields:
+    - phase_id
+    - status  # completed, failed, blocked
+    - artifacts
+  optional_fields:
+    - contract_violation
+    - rollback_request
 
 # Instance schema (for validation)
 instance_schema:
@@ -77,14 +124,42 @@ instance_schema:
   context_fields:
     - project
     - module
-    - module_version
-    - prd_path
-    - repos
+    - feature_point_id
+    - feature_spec_path
+    - repo_frontend
+    - repo_backend
   phase_fields:
     - id
     - complexity
     - status
     - l3_instance_ids
-    - depends_on  # P1: Phase dependencies
-  phase_optional_fields:
-    - parallel_allowed  # Allow parallel execution with other phases
+    - depends_on
+
+# Anti-Rollback Constitution
+constitution:
+  id: contract_first_constitution_v1
+  name: "Contract-First Development Constitution"
+  version: "1.0"
+  description: |
+    In dev L2/L3 workflows:
+    - Contract must be frozen before implementation
+    - No private changes to frozen contract
+    - Structural issues trigger rollback to contract design
+    - Smoke test failure blocks merge
+
+  principles:
+    - id: contract_freeze_first
+      name: "Contract Freeze First"
+      rule: "Phase 1 must complete successfully before Phase 2/3"
+
+    - id: contract_binding_strict
+      name: "Contract Binding Strict"
+      rule: "FE/BE implementation must match frozen contract exactly"
+
+    - id: no_private_contract_changes
+      name: "No Private Contract Changes"
+      rule: "Contract changes require explicit rollback to Phase 1"
+
+    - id: smoke_gate_blocking
+      name: "Smoke Gate Blocking"
+      rule: "Smoke test failure blocks merge with highest priority"

@@ -1,0 +1,87 @@
+# File Update Skill v1.0
+# 更新文件内容
+
+kind: skill
+version: 1.0
+
+id: skill.file.update
+name: File Update
+description: >
+  更新 YAML 文件中的特定字段，支持添加新字段或更新现有字段。
+  用于 L2 Phase 8 更新 Test Run 最终状态。
+
+owner: qa-governance
+tags: [io, qa, file, yaml]
+
+interface:
+  inputs:
+    type: object
+    required: [file_path, updates]
+    properties:
+      file_path:
+        type: string
+        description: "文件路径"
+      updates:
+        type: object
+        description: "要更新的字段键值对"
+        example:
+          exit_decision: "pass"
+          retrospective_path: "qa/test-runs/TR-2026-xxx/retrospective.md"
+          status: "completed"
+      create_backup:
+        type: boolean
+        default: true
+        description: "是否创建备份文件"
+
+  outputs:
+    type: object
+    required: [success, updated_fields]
+    properties:
+      success:
+        type: boolean
+        description: "更新是否成功"
+      updated_fields:
+        type: array
+        items:
+          type: string
+        description: "已更新的字段列表"
+      backup_path:
+        type: string
+        description: "备份文件路径（如果创建）"
+      error:
+        type: string
+        description: "错误信息（如果失败）"
+
+runtime:
+  type: cli
+  command: "python"
+  args_template: >
+    -m lee file-update
+    --file {{ inputs.file_path }}
+    --updates {{ inputs.updates | yaml }}
+    --backup {{ inputs.create_backup }}
+  timeout_ms: 5000
+
+exit_codes:
+  0: "更新成功"
+  1: "更新失败"
+  2: "文件不存在"
+  3: "YAML 解析错误"
+
+constraints:
+  deterministic: true
+  side_effects: modifies_files
+  pii: forbidden
+
+validation:
+  - rule: "file_must_exist"
+    check: "file_exists(inputs.file_path)"
+    error: "文件不存在"
+
+  - rule: "updates_must_be_object"
+    check: "inputs.updates is object"
+    error: "updates 必须是对象"
+
+  - rule: "yaml_must_be_valid_after_update"
+    check: "yaml_parse(output.updated_content) != null"
+    error: "更新后的 YAML 格式无效"

@@ -1,0 +1,15 @@
+# AI 走查员 Spec
+# 自动生成的存根 — 需完善 prompt 和具体能力描述
+
+kind: agent
+version: 1.0
+
+id: agent.ui.ai_walkthrough
+name: "AI 走查员"
+description: "AI 驱动的 UI 走查"
+department: ui
+
+role: |
+  负责对 UI 设计进行 AI 自动走查
+
+capabilities: []

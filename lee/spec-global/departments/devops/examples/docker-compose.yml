@@ -1,0 +1,192 @@
+# DevOps MVP - Docker Compose 配置
+#
+# 这是一个最小可运行的 DevOps MVP 配置
+# 包含：应用服务 + 数据库 + Redis + Nginx 反向代理
+#
+# 使用方法：
+# 1. 复制此文件到项目根目录
+# 2. 修改环境变量占位符（${VAR_NAME}）
+# 3. docker-compose up -d
+#
+# **重要**: AI 只生成模板，真实凭证由人类注入
+
+version: '3.8'
+
+services:
+  # ============================================
+  # 应用服务（后端 API）
+  # ============================================
+  app:
+    image: ${DOCKER_REGISTRY}/${APP_NAME}:${APP_VERSION}
+    container_name: ${APP_NAME}-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      # 应用配置
+      - APP_ENV=${APP_ENV}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - APP_LOG_LEVEL=${APP_LOG_LEVEL:-info}
+
+      # 数据库连接
+      - DB_HOST=${DB_HOST:-db}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+      # Redis 连接
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+
+      # 外部服务（示例）
+      - API_KEY=${API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+
+    volumes:
+      # 配置文件挂载
+      - ./config:/app/config:ro
+      # 日志挂载
+      - ./logs:/app/logs
+      # 静态文件挂载（如需要）
+      - ./static:/app/static:ro
+
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    networks:
+      - app-network
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
+  # 数据库服务（PostgreSQL）
+  # ============================================
+  db:
+    image: postgres:${POSTGRES_VERSION:-15-alpine}
+    container_name: ${APP_NAME}-db
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT_EXPOSE:-5432}:5432"
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      # 数据持久化
+      - db-data:/var/lib/postgresql/data
+      # 初始化脚本
+      - ./scripts/db-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - app-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Redis 缓存服务
+  # ============================================
+  redis:
+    image: redis:${REDIS_VERSION:-7-alpine}
+    container_name: ${APP_NAME}-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT_EXPOSE:-6379}:6379"
+    command: >
+      sh -c '
+        if [ -n "${REDIS_PASSWORD}" ]; then
+          redis-server --requirepass ${REDIS_PASSWORD}
+        else
+          redis-server
+        fi
+      '
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Nginx 反向代理（可选）
+  # ============================================
+  nginx:
+    image: nginx:${NGINX_VERSION:-alpine}
+    container_name: ${APP_NAME}-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./static:/usr/share/nginx/html:ro
+    depends_on:
+      - app
+    networks:
+      - app-network
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ============================================
+# 数据卷定义
+# ============================================
+volumes:
+  db-data:
+    driver: local
+  redis-data:
+    driver: local
+
+# ============================================
+# 网络定义
+# ============================================
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${NETWORK_SUBNET:-172.20.0.0/16}
+
+# ============================================
+# 配置说明
+# ============================================
+# 环境变量占位符说明（人类需要填写）：
+# - ${DOCKER_REGISTRY}: Docker 镜像仓库地址
+# - ${APP_NAME}: 应用名称
+# - ${APP_VERSION}: 应用版本
+# - ${APP_ENV}: 运行环境 (dev/test/staging/prod)
+# - ${DB_NAME}: 数据库名称
+# - ${DB_USER}: 数据库用户
+# - ${DB_PASSWORD}: 数据库密码（敏感）
+# - ${REDIS_PASSWORD}: Redis 密码（敏感）
+# - ${API_KEY}: 外部 API 密钥（敏感）
+# - ${SECRET_KEY}: 应用密钥（敏感）
+#
+# 端口说明：
+# - APP_PORT: 应用端口（默认 8000）
+# - DB_PORT_EXPOSE: 数据库端口（默认 5432）
+# - REDIS_PORT_EXPOSE: Redis 端口（默认 6379）
+# - NGINX_HTTP_PORT: HTTP 端口（默认 80）
+# - NGINX_HTTPS_PORT: HTTPS 端口（默认 443）

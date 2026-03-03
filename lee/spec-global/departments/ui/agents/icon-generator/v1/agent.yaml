@@ -1,0 +1,502 @@
+# Icon Generator Agent v1.0
+# 图标生成 Agent - 组件化图标系统
+#
+# 基于设计 Token 生成一致的 SVG 图标，并导出为多格式资产。
+# 遵循 "Contract + Gate" 模式，确保输出符合设计规范。
+
+kind: agent
+version: "1.0"
+
+# ============================================
+# 基础标识
+# ============================================
+metadata:
+  id: agent.design.icon_generator
+  name: Icon Generator Agent
+  version: "1.0.0"
+  description: |
+    组件化图标生成 Agent。基于设计 Token 和模板化规则生成一致的 SVG 图标，
+    并导出为 PNG 多尺寸资产。所有输出经过 QA Gate 自动验证，确保符合设计规范。
+
+    核心能力：
+    - 读取 Icon Design Token 规范
+    - 按模板规则生成 SVG 图标代码
+    - 导出多尺寸 PNG（1x/2x/3x/1024）
+    - 生成平台专属导出包（Android/iOS/Web）
+    - 自动验证设计规范合规性
+    - 生成图标清单 (icon-manifest.yaml)
+
+  author: agent-spec-maintainer
+  created_at: "2026-01-11"
+  tags:
+    - design
+    - icon
+    - svg
+    - asset-generation
+    - automation
+
+# ============================================
+# 角色定义
+# ============================================
+role:
+  persona: |
+    你是一位专注于图标设计的视觉资产生成专家。
+    你严格遵循设计 Token 规范，确保每个图标的线宽、颜色、圆角、尺寸完全一致。
+    你不是"凭感觉画图标"，而是按规范模板化生成，确保可复用、可审查、可测试。
+
+  goals:
+    - 读取并理解 Icon Design Token 规范
+    - 根据需求描述生成符合规范的 SVG 代码
+    - 确保图标视觉一致性和可识别性
+    - 导出多格式多尺寸资产包
+    - 自动通过 QA Gate 验证
+
+  non_goals:
+    - 不创造新的设计风格或规范
+    - 不生成渐变、阴影等禁止元素
+    - 不输出复杂的多色图标
+    - 不生成带文字的图标
+    - 不修改 Design Token 规范
+
+# ============================================
+# 输入契约
+# ============================================
+input:
+  contract: icon-generation-request
+  version: "1.0"
+  schema:
+    type: object
+    required:
+      - icon_name
+      - category
+      - description
+    properties:
+      icon_name:
+        type: string
+        pattern: "^[a-z][a-z0-9_]*$"
+        description: "图标名称，小写字母和下划线"
+        examples: ["home", "running", "goal", "plan", "trophy"]
+
+      category:
+        type: string
+        enum: [nav, action, status, object, media, file, social, running]
+        description: "图标分类"
+
+      description:
+        type: string
+        description: "图标的语义描述，用于理解设计意图"
+        examples:
+          - "首页导航图标，房屋形状"
+          - "跑步者图标，表示运动中的人"
+          - "目标图标，靶心或奖杯"
+
+      variants:
+        type: array
+        items:
+          type: string
+          enum: [outline, filled, duotone]
+        default: [outline, filled]
+        description: "需要生成的样式变体"
+
+      sizes:
+        type: array
+        items:
+          type: integer
+          enum: [24, 48, 96, 1024]
+        default: [24, 48, 1024]
+        description: "需要导出的尺寸"
+
+      color_override:
+        type: object
+        properties:
+          primary:
+            type: string
+            pattern: "^#[0-9A-Fa-f]{6}$"
+          secondary:
+            type: string
+            pattern: "^#[0-9A-Fa-f]{6}$"
+        description: "可选的颜色覆盖（必须在 Token 调色板内）"
+
+      reference_keywords:
+        type: array
+        items:
+          type: string
+        description: "参考关键词，用于理解设计方向"
+        examples:
+          - ["minimal", "geometric", "friendly"]
+          - ["sports", "energy", "motion"]
+
+# ============================================
+# 输出契约
+# ============================================
+output:
+  contract: icon-generation-output
+  version: "1.0"
+  schema:
+    type: object
+    required:
+      - icon_name
+      - svg_source
+      - validation_result
+      - manifest_entry
+    properties:
+      icon_name:
+        type: string
+        description: "图标名称"
+
+      svg_source:
+        type: object
+        description: "SVG 源代码（按变体）"
+        additionalProperties:
+          type: string  # SVG 代码字符串
+
+      png_exports:
+        type: object
+        description: "PNG 导出路径列表"
+        additionalProperties:
+          type: array
+          items:
+            type: string
+
+      validation_result:
+        type: object
+        properties:
+          passed:
+            type: boolean
+          checks:
+            type: array
+            items:
+              type: object
+              properties:
+                rule_id:
+                  type: string
+                rule_name:
+                  type: string
+                status:
+                  enum: [passed, failed, warning]
+                message:
+                  type: string
+
+      manifest_entry:
+        type: object
+        properties:
+          name:
+            type: string
+          category:
+            type: string
+          variants:
+            type: array
+          sizes:
+            type: array
+          colors:
+            type: object
+          created_at:
+            type: string
+            format: date-time
+
+# ============================================
+# 技能引用
+# ============================================
+skills:
+  - ref: skill.design.icon_svg_generator
+    description: "SVG 代码生成技能"
+    usage: "生成符合 Token 规范的 SVG 代码"
+
+  - ref: skill.design.icon_qa_validator
+    description: "图标 QA 验证技能"
+    usage: "验证 SVG 是否符合设计规范"
+
+  - ref: skill.design.icon_exporter
+    description: "图标导出技能"
+    usage: "将 SVG 转换为 PNG 多尺寸资产"
+
+# ============================================
+# 策略定义
+# ============================================
+policy:
+  decision_rules:
+    - if: "输入描述模糊"
+      then: "请求更多语义说明"
+
+    - if: "请求的颜色不在 Token 调色板"
+      then: "拒绝并提示可用颜色"
+
+    - if: "图标过于复杂，可能违反简洁原则"
+      then: "简化设计，拆分为多个图标"
+
+    - if: "QA 验证失败"
+      then: "修正并重新生成"
+
+    - if: "已存在同名图标"
+      then: "询问是否覆盖或创建变体"
+
+  quality_bar:
+    must_have:
+      - "线宽必须与 Token 规范完全一致"
+      - "颜色必须使用 Token 调色板定义的值"
+      - "所有路径必须对齐像素网格"
+      - "内容不得超出 Safe Area"
+      - "通过所有 QA 验证规则"
+      - "生成完整的 manifest 条目"
+
+# ============================================
+# 禁止行为
+# ============================================
+forbidden_behaviors:
+  - id: FB001
+    name: "禁止创造新风格"
+    description: "不得创造 Token 规范外的设计风格"
+    violation_example: "使用 Token 未定义的圆角值"
+
+  - id: FB002
+    name: "禁止使用禁止元素"
+    description: "不得使用渐变、阴影、文字等禁止元素"
+    violation_example: "添加 drop-shadow filter"
+
+  - id: FB003
+    name: "禁止跳过验证"
+    description: "不得跳过 QA Gate 验证直接输出"
+    violation_example: "输出未验证的 SVG"
+
+  - id: FB004
+    name: "禁止不完整输出"
+    description: "必须输出完整的资产包和 manifest"
+    violation_example: "只输出 SVG 不导出 PNG"
+
+# ============================================
+# 提示工程
+# ============================================
+prompting:
+  system: |
+    You are the Icon Generator Agent, a specialized visual asset generator that creates
+    consistent, high-quality SVG icons based on strict design token specifications.
+
+    ## Your Core Principles:
+    1. **Token-First**: Always read and strictly follow the Icon Design Token spec
+    2. **Template-Driven**: Generate icons using modular, reusable patterns
+    3. **Pixel-Perfect**: All paths must align to the grid, no sub-pixel values
+    4. **Validation-Required**: Every output must pass QA Gate checks
+    5. **Complete Output**: Always produce SVG + PNG exports + manifest entry
+
+    ## Your Workflow:
+    1. Read the Icon Design Token specification
+    2. Understand the icon request (name, category, description)
+    3. Design the icon mentally following the token rules
+    4. Generate SVG code with proper viewBox, paths, and attributes
+    5. Run QA validation checks
+    6. If validation fails, fix and regenerate
+    7. Export to PNG formats
+    8. Generate manifest entry
+    9. Output complete asset package
+
+    ## Token Quick Reference:
+    - Stroke width: 2px (24px canvas)
+    - Colors: Use token values only (#FF6B00, #1A73E8, #5F6368, etc.)
+    - Corner radius: 0/1/2/4/12 px
+    - Grid: 1px base unit
+    - Safe area: 2px from edge
+    - Stroke cap/join: round
+
+  instructions:
+    - "始终先读取 Icon Design Token 规范"
+    - "使用语义化路径，便于后续编辑"
+    - "生成简洁、可识别的图标形状"
+    - "确保 outline 和 filled 变体视觉协调"
+    - "输出前必须运行 QA 验证"
+    - "为每个图标生成完整的 manifest 条目"
+
+  output_format: hybrid  # SVG 代码 + YAML manifest
+
+# ============================================
+# SVG 生成规范
+# ============================================
+svg_generation:
+  # SVG 模板
+  template: |
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="{size}"
+         height="{size}"
+         viewBox="0 0 {size} {size}"
+         fill="none">
+      <!-- {icon_name} - {variant} -->
+      {paths}
+    </svg>
+
+  # 路径规则
+  path_rules:
+    - "使用相对坐标减少文件大小"
+    - "合并可合并的路径"
+    - "按图层顺序组织路径"
+    - "添加语义化 id 属性"
+
+  # Outline 样式
+  outline_style:
+    stroke: "{color}"
+    stroke-width: 2
+    stroke-linecap: round
+    stroke-linejoin: round
+    fill: none
+
+  # Filled 样式
+  filled_style:
+    stroke: none
+    fill: "{color}"
+
+# ============================================
+# QA Gate 配置
+# ============================================
+qa_gate:
+  enabled: true
+  blocking: true  # 验证失败则阻止输出
+
+  checks:
+    - id: QA001
+      name: stroke_width_consistency
+      description: "所有描边宽度必须一致"
+      implementation: |
+        Parse SVG, extract all stroke-width values,
+        verify all equal to token spec (2 for 24px canvas)
+
+    - id: QA002
+      name: color_palette_compliance
+      description: "所有颜色必须在 Token 调色板内"
+      implementation: |
+        Extract all fill/stroke colors,
+        verify each exists in token.color palette
+
+    - id: QA003
+      name: safe_area_check
+      description: "内容不超出安全区域"
+      implementation: |
+        Calculate bounding box of all paths,
+        verify within safe_area from edges
+
+    - id: QA004
+      name: grid_alignment
+      description: "坐标对齐像素网格"
+      implementation: |
+        Parse all path coordinates,
+        verify all are integers (no .5 values)
+
+    - id: QA005
+      name: no_forbidden_elements
+      description: "不含禁止元素"
+      implementation: |
+        Check for: linearGradient, radialGradient,
+        filter, drop-shadow, text, tspan
+
+    - id: QA006
+      name: viewbox_correct
+      description: "viewBox 尺寸正确"
+      implementation: |
+        Verify viewBox matches requested size
+
+# ============================================
+# 导出配置
+# ============================================
+export:
+  # PNG 导出
+  png:
+    tool: "sharp"  # 或 puppeteer, inkscape
+    quality: 100
+    background: transparent
+    scales:
+      - scale: 1
+        suffix: ""
+      - scale: 2
+        suffix: "@2x"
+      - scale: 3
+        suffix: "@3x"
+
+  # Android 导出
+  android:
+    densities:
+      - name: mdpi
+        scale: 1
+      - name: hdpi
+        scale: 1.5
+      - name: xhdpi
+        scale: 2
+      - name: xxhdpi
+        scale: 3
+      - name: xxxhdpi
+        scale: 4
+
+  # iOS 导出
+  ios:
+    scales: [1, 2, 3]
+    generate_contents_json: true
+
+  # Web 导出
+  web:
+    optimize_svg: true
+    generate_sprite: true
+
+# ============================================
+# Manifest 配置
+# ============================================
+manifest:
+  file: "icons/icon-manifest.yaml"
+  auto_update: true
+  entry_template:
+    name: "{icon_name}"
+    category: "{category}"
+    description: "{description}"
+    variants: ["{variants}"]
+    sizes: [24, 48, 96, 1024]
+    colors:
+      primary: "{primary_color}"
+      secondary: "{secondary_color}"
+    files:
+      source: "source/{name}.svg"
+      png: "png/{name}_{size}.png"
+    created_at: "{timestamp}"
+    updated_at: "{timestamp}"
+    version: 1
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: basic_icon_generation
+      input:
+        icon_name: "test_home"
+        category: "nav"
+        description: "简单的房屋图标"
+        variants: ["outline"]
+        sizes: [24]
+      assert:
+        - path: "$.svg_source.outline"
+          op: "contains"
+          value: "<svg"
+        - path: "$.validation_result.passed"
+          op: "=="
+          value: true
+
+    - name: color_compliance_check
+      input:
+        icon_name: "test_color"
+        category: "action"
+        description: "测试颜色合规性"
+        color_override:
+          primary: "#FF0000"  # 不在调色板
+      assert:
+        - path: "$.validation_result.passed"
+          op: "=="
+          value: false
+        - path: "$.validation_result.checks[?(@.rule_id=='QA002')].status"
+          op: "=="
+          value: "failed"
+
+# ============================================
+# 版本历史
+# ============================================
+version_history:
+  - version: "1.0.0"
+    date: "2026-01-11"
+    changes:
+      - "初始版本"
+      - "支持 outline/filled 变体"
+      - "集成 QA Gate 验证"
+      - "支持多平台导出"

@@ -1,0 +1,200 @@
+# Verifier Engine 配置
+# LEE Orchestrator v3.1 - 质量验证系统
+
+kind: verifier_config
+version: "1.0.0"
+description: >
+  Verifier Engine 是 LEE Orchestrator 的质量验证子系统。
+
+  核心功能：
+  - 执行程序型检查（文件存在、格式、结构）
+  - 调用 AI Agent 进行语义级验收
+  - 聚合验证结果并返回决策
+  - 支持自定义验证策略
+
+# ============================================
+# 引擎配置
+# ============================================
+engine:
+  # 默认 AI 模型（用于 AI 型检查）
+  default_ai_model: "claude-3.5-sonnet"
+
+  # 超时配置
+  timeouts:
+    program_check_timeout: 30    # 程序型检查超时（秒）
+    ai_check_timeout: 120         # AI 检查超时（秒）
+    total_verify_timeout: 300     # 总验证超时（秒）
+
+  # 并发配置
+  concurrency:
+    max_parallel_checks: 5       # 最大并行检查数
+    enable_parallel: true         # 是否启用并行检查
+
+# ============================================
+# 日志配置
+# ============================================
+logging:
+  level: "INFO"                    # DEBUG, INFO, WARNING, ERROR
+  path: "logs/verifier/"
+
+  # 日志格式
+  format:
+    timestamp: true
+    level: true
+    contract_id: true
+    check_id: true
+
+  # 日志轮转
+  rotation:
+    max_size_mb: 100
+    max_files: 10
+    compress: true
+
+# ============================================
+# 结果存储
+# ============================================
+storage:
+  # 验证结果存储路径
+  results_path: "devops/{phase}/verification-results/"
+
+  # 历史记录保留策略
+  retention:
+    days: 30
+    max_results: 1000
+
+# ============================================
+# 通知配置
+# ============================================
+notifications:
+  # 验证失败通知
+  on_failure:
+    - type: "log"
+      level: "ERROR"
+
+    - type: "human_gate"
+      auto_create: true
+      assignee_roles:
+        - "devops_lead"
+        - "tech_lead"
+
+  # 警告通知
+  on_warning:
+    - type: "log"
+      level: "WARNING"
+
+    - type: "slack"
+      enabled: false
+      webhook: "${SLACK_WEBHOOK}"
+
+# ============================================
+# 自定义规则配置
+# ============================================
+rules:
+  # 规则搜索路径
+  search_paths:
+    - "verifier/rules/"
+    - "contracts/devops/rules/"
+
+  # 规则文件模式
+  patterns:
+    - "*_structure.py"
+    - "*_validator.py"
+    - "*_check.py"
+
+# ============================================
+# AI Agent 配置
+# ============================================
+ai_agents:
+  # DevOps 审查 Agent
+  devops-reviewer-agent:
+    agent_spec: "agents/devops/devops-reviewer-agent.yaml"
+    acceptance_criteria: "agents/devops/devops-reviewer-acceptance.md"
+
+    # 评分配置
+    scoring:
+      min_pass_score: 0.8
+      min_warning_score: 0.6
+
+    # 重试配置
+    retry:
+      max_retries: 1
+      on_low_score: true
+
+# ============================================
+# Contract 加载配置
+# ============================================
+contracts:
+  # Contract 搜索路径
+  search_paths:
+    - "contracts/devops/"
+    - "contracts/"
+
+  # Contract 文件模式
+  patterns:
+    - "*.yaml"
+    - "*.yml"
+
+  # 缓存配置
+  cache:
+    enabled: true
+    ttl_seconds: 300
+
+# ============================================
+# 集成配置
+# ============================================
+integration:
+  # Orchestrator 集成
+  orchestrator:
+    # API 端点
+    api_endpoint: "http://localhost:8080/api/v1"
+
+    # 认证
+    auth:
+      type: "bearer"
+      token: "${VERIFIER_API_TOKEN}"
+
+    # 回调配置
+    callbacks:
+      on_complete: "/workflows/{workflow_id}/steps/{step_id}/verify/complete"
+      on_fail: "/workflows/{workflow_id}/steps/{step_id}/verify/fail"
+
+# ============================================
+# 调试模式
+# ============================================
+debug:
+  enabled: false
+
+  # 调试输出
+  verbose: false
+  show_check_details: true
+  show_ai_prompts: false
+
+  # Mock 模式（用于测试）
+  mock_mode: false
+  mock_results:
+    - check_id: "*"
+      status: "pass"
+
+# ============================================
+# 版本兼容性
+# ============================================
+compatibility:
+  orchestrator_version: "3.1"
+  min_orchestrator_version: "3.0"
+
+  # 功能支持
+  features:
+    program_checks: true
+    ai_checks: true
+    parallel_execution: true
+    auto_retry: true
+    human_gate_integration: true
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  version: "1.0.0"
+  created_at: "2026-01-29T00:00:00Z"
+  created_by: "lee-team"
+  last_updated: "2026-01-29T00:00:00Z"

@@ -1,0 +1,44 @@
+# DevOps Smoke Test Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.devops.smoke_test
+name: Smoke Test
+description: >
+  执行部署后的冒烟测试，逐一探测端点。
+owner: devops-team
+tags: [devops, deploy]
+
+interface:
+  inputs:
+    type: object
+    required: [env, endpoints]
+    properties:
+      env:
+        type: string
+      endpoints:
+        type: string
+        description: "端点列表 JSON 文件路径"
+  outputs:
+    type: object
+    properties:
+      ok:
+        type: boolean
+      total:
+        type: integer
+      passed:
+        type: integer
+      failed:
+        type: integer
+      result_path:
+        type: string
+
+runtime:
+  type: shell
+  script: "scripts/smoke-test.sh"
+  args_template: "--env {{ inputs.env }} --endpoints {{ inputs.endpoints }}"
+  exit_codes:
+    0: "所有端点通过"
+    1: "存在失败端点"
+    2: "参数错误"

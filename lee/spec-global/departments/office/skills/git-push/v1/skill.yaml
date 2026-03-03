@@ -1,0 +1,158 @@
+# Git Push Skill Specification v1.0
+# Git Push 技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.office.git_push
+name: Git Push
+name_zh: Git 推送
+description: >
+  安全地将本地提交推送到远程仓库。
+  包含推送前检查、冲突检测、备份等安全机制。
+owner: office-ai
+tags: [git, push, automation, safety]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [workspace_path]
+    properties:
+      workspace_path:
+        type: string
+        description: 工作区路径
+
+      remote:
+        type: string
+        description: 远程仓库名称
+        default: "origin"
+
+      branch:
+        type: string
+        description: 分支名称（默认为当前分支）
+
+      force:
+        type: boolean
+        description: 是否强制推送
+        default: false
+
+      dry_run:
+        type: boolean
+        description: 仅模拟推送，不实际执行
+        default: false
+
+  outputs:
+    type: object
+    required: [success, commits_pushed, remote_url]
+    properties:
+      success:
+        type: boolean
+        description: 推送是否成功
+
+      commits_pushed:
+        type: integer
+        description: 推送的提交数量
+
+      remote_url:
+        type: string
+        description: 远程仓库 URL
+
+      branch:
+        type: string
+        description: 推送的分支
+
+      errors:
+        type: array
+        items:
+          type: string
+        description: 错误信息列表
+
+# ============================================
+# 安全检查
+# ============================================
+safety_checks:
+  pre_push:
+    - name: "检查未提交的更改"
+      description: "确保工作区干净，没有未提交的更改"
+      action: "warn"
+
+    - name: "检查远程分支"
+      description: "检查远程分支是否存在"
+      action: "inform"
+
+    - name: "检查是否需要拉取"
+      description: "检查远程是否有新的提交"
+      action: "warn"
+
+    - name: "主分支保护"
+      description: "推送到 main/master 需要确认"
+      action: "require_confirmation"
+
+  post_push:
+    - name: "验证推送"
+      description: "验证提交已成功推送到远程"
+
+# ============================================
+# 执行逻辑
+# ============================================
+execution:
+  steps:
+    - name: "检查 Git 状态"
+      description: "运行 git status 检查工作区状态"
+      command: "git status --porcelain"
+
+    - name: "获取当前分支"
+      description: "如果未指定分支，获取当前分支名"
+      command: "git branch --show-current"
+
+    - name: "获取远程信息"
+      description: "获取远程仓库 URL 和状态"
+      command: "git remote get-url {remote}"
+
+    - name: "检查远程更新"
+      description: "获取远程分支最新状态"
+      command: "git fetch {remote} {branch}"
+
+    - name: "比较本地和远程"
+      description: "检查本地是否领先远程"
+      command: "git rev-list --count {remote}/{branch}..HEAD"
+
+    - name: "执行推送"
+      description: "推送提交到远程"
+      command: "git push {remote} {branch}"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: script
+  timeout_ms: 60000
+  requires_network: true
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: false
+  side_effects: remote_changes
+  requires_confirmation: true
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: dry_run_push
+      input:
+        workspace_path: "/tmp/test-repo"
+        dry_run: true
+      assert:
+        - path: "$.success"
+          op: "=="
+          value: true

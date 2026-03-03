@@ -1,0 +1,65 @@
+# Running Coach - Test Environment Variables
+# 测试环境变量配置
+
+# ============================================
+# 环境标识
+# ============================================
+env: test
+zone: cn-south-1
+project: running-coach
+
+# ============================================
+# 应用配置
+# ============================================
+app_config:
+  name: running-coach
+  version: "1.0.0"
+  domain: test.api.running-coach.local
+  log_level: info
+  debug_mode: false
+
+# ============================================
+# 数据库配置
+# ============================================
+db_config:
+  host: test-db-1
+  port: 5432
+  name: running_coach_test
+  user: test_user
+  max_connections: 50
+  ssl_mode: disable
+
+# ============================================
+# Redis 配置
+# ============================================
+redis_config:
+  host: test-redis-1
+  port: 6379
+  db: 0
+
+# ============================================
+# API 配置
+# ============================================
+api_config:
+  port: 8080
+  workers: 4
+  timeout: 30
+  cors_origins:
+    - "http://test.running-coach.local"
+
+# ============================================
+# 部署配置
+# ============================================
+deploy_config:
+  docker_registry: registry.example.com
+  image_tag: "1.0.0-test"
+  replicas: 2
+  health_check_interval: 30s
+
+# ============================================
+# 监控配置
+# ============================================
+monitoring:
+  enabled: true
+  prometheus_port: 9090
+  log_retention_days: 14

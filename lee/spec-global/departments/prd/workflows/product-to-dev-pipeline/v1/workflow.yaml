@@ -1,0 +1,624 @@
+# Product to Dev Pipeline Workflow v1.1
+# 产品到研发全流程 - 从原始需求/商业机会到研发冻结包
+#
+# 输入: 原始需求描述 或 商业机会冻结文档
+# 输出: 研发冻结包 (dev-freeze-package)
+#
+# 人类冻结点:
+# 1. value-freeze (产品价值冻结)
+# 2. requirement-freeze (需求冻结)
+# 3. prd-freeze (PRD冻结)
+# 4. architecture-freeze (技术架构冻结)
+# 5. ui-freeze (UI设计+Web原型冻结)
+# 6. dev-freeze (研发冻结包)
+#
+# v1.1 变更:
+# - 增加 Web 原型生成步骤 (prototype_generation)
+# - UI 冻结前必须生成可访问的 Web 原型供人类评审
+
+kind: workflow
+version: 1.1
+
+# ============================================
+# 基础标识
+# ============================================
+id: workflow.product.product_to_dev_pipeline
+name: Product to Dev Pipeline
+description: >
+  产品到研发的完整流程。
+  将原始需求或商业机会转化为可执行的研发冻结包。
+  包含 3 个阶段、15 个步骤、6 次人类冻结确认。
+  v1.1 新增 Web 原型生成，方便人类可视化评审。
+owner: product-ai
+tags: [product, workflow, pipeline, dev-freeze]
+
+# ============================================
+# 角色地图（Role Map）
+# ============================================
+# 参见 core/constitution.yaml → execution_taxonomy
+roles:
+  agents:
+    - agent.analysis.product_goal          # LLM：产品价值分析
+    - agent.product.requirement_alignment  # LLM：问题空间翻译
+    - agent.product.requirement_decomposer # LLM：需求单元拆解
+    - agent.review.requirement_reviewer    # LLM：需求评审
+    - agent.product.prd_writer             # LLM：PRD 编写
+    - agent.dev.tech_architect             # LLM：技术架构设计
+    - agent.design.ui_designer             # LLM：UI/UX 设计
+    - agent.design.ui_design_executor      # LLM：Web 原型生成
+    - agent.dev.freeze_orchestrator        # LLM：研发冻结包组装
+    - agent.governance.approval_reviewer   # LLM：冻结审批（6 次）
+  skills: []
+  gates:
+    - gate.prd.h1_value_freeze             # 人类：产品价值冻结
+    - gate.prd.h2_requirement_freeze       # 人类：需求冻结
+    - gate.prd.h3_prd_freeze               # 人类：PRD 冻结
+    - gate.prd.h4_architecture_freeze      # 人类：技术架构冻结
+    - gate.prd.h5_ui_freeze                # 人类：UI 设计冻结
+    - gate.prd.h6_dev_freeze               # 人类：研发冻结
+
+# ============================================
+# 流水线概览
+# ============================================
+overview:
+  input_types:
+    - type: raw_requirement
+      description: 原始需求描述
+    - type: business_opportunity_freeze
+      description: 商业机会冻结文档
+      contract: contracts/business-opportunity-freeze/v1/schema.json
+
+  output:
+    type: dev_freeze_package
+    contract: contracts/frozen-dev-package-contract/v1/schema.json
+
+  stages:
+    # Phase 1: 价值与需求定义
+    - id: value_requirement
+      name: "价值与需求定义"
+      steps: [value_analysis, value_freeze, problem_translation, requirement_decomposition, requirement_review, requirement_freeze]
+      freezes: [value-freeze, requirement-freeze]
+
+    # Phase 2: 详细设计
+    - id: detailed_design
+      name: "详细设计"
+      steps: [prd_writing, prd_freeze, architecture_design, architecture_freeze, ui_design, prototype_generation, ui_freeze]
+      freezes: [prd-freeze, architecture-freeze, ui-freeze]
+      parallel_capable: [prd_writing, architecture_design, ui_design]
+
+    # Phase 3: 研发冻结
+    - id: dev_freeze
+      name: "研发冻结"
+      steps: [dev_package_assembly, dev_freeze_validation]
+      freezes: [dev-freeze]
+
+# ============================================
+# Phase 1: 价值与需求定义
+# ============================================
+steps:
+  # ---------- Step 1.1: 产品价值分析 ----------
+  - id: value_analysis
+    phase: value_requirement
+    name: 产品价值分析
+    description: >
+      分析原始需求/商业机会，提取产品核心目标和业务价值。
+      输出产品价值提案供人类确认。
+    agent: agent.analysis.product_goal
+    inputs:
+      - source: external
+        type: [raw_requirement, business_opportunity_freeze]
+        required: true
+    outputs:
+      - path: output/analysis/product-value-proposal.md
+        contract: contracts/product-value-proposal/v1/schema.json
+        freeze: false
+    non_goals:
+      - 功能设计
+      - 技术方案
+      - 优先级排序
+    thinking_boundary: |
+      ✅ 可以思考：产品解决什么问题、目标用户、价值主张、成功指标
+      ❌ 禁止思考：用什么技术、界面设计、具体功能
+    on_success: [value_freeze]
+
+  # ---------- Step 1.2: 产品价值冻结 ----------
+  - id: value_freeze
+    phase: value_requirement
+    name: 产品价值冻结
+    description: 人类确认产品价值主张
+    agent: agent.governance.approval_reviewer
+    depends_on: [value_analysis]
+    inputs:
+      - source: value_analysis
+        required: true
+    outputs:
+      - path: output/design-frozen/{project}-value-freeze.md
+        freeze: true
+        includes:
+          - 产品愿景
+          - 目标用户画像
+          - 核心价值主张
+          - 成功指标定义
+    human_gate: h1_value_freeze
+    on_success: [problem_translation]
+
+  # ---------- Step 1.3: 问题空间翻译 ----------
+  - id: problem_translation
+    phase: value_requirement
+    name: 问题空间翻译
+    description: >
+      将冻结的价值目标翻译成问题空间。
+      识别核心问题、描绘用户旅程、明确非目标。
+    agent: agent.product.requirement_alignment
+    depends_on: [value_freeze]
+    inputs:
+      - source: value_freeze
+        required: true
+    outputs:
+      - path: output/analysis/problem-definition.md
+        contract: contracts/problem-definition/v1/schema.json
+        freeze: false
+    non_goals:
+      - 解决方案设计
+      - 功能定义
+    thinking_boundary: |
+      ✅ 可以思考：用户面临什么问题、问题根因、Before/After旅程
+      ❌ 禁止思考：如何解决问题、需要什么功能
+    on_success: [requirement_decomposition]
+
+  # ---------- Step 1.4: 需求单元拆解 ----------
+  - id: requirement_decomposition
+    phase: value_requirement
+    name: 需求单元拆解
+    description: >
+      将问题空间拆解为可讨论的需求单元。
+      输出结构化需求清单供人类讨论。
+    agent: agent.product.requirement_decomposer
+    depends_on: [problem_translation]
+    inputs:
+      - source: problem_translation
+        required: true
+    outputs:
+      - path: output/analysis/requirement-breakdown.md
+        contract: contracts/requirement-breakdown/v1/schema.json
+        freeze: false
+    non_goals:
+      - 优先级判定
+      - 可行性评估
+    thinking_boundary: |
+      ✅ 可以思考：需求如何结构化、需求单元边界、讨论点
+      ❌ 禁止思考：哪个需求更重要、这个需求能不能实现
+    on_success: [requirement_review]
+
+  # ---------- Step 1.5: 需求评审 ----------
+  - id: requirement_review
+    phase: value_requirement
+    name: 需求价值对齐评审
+    description: >
+      验证需求单元与价值冻结的对齐度。
+      总结讨论点供人类确认。
+    agent: agent.review.requirement_reviewer
+    depends_on: [requirement_decomposition]
+    inputs:
+      - source: value_freeze
+        required: true
+      - source: requirement_decomposition
+        required: true
+    outputs:
+      - path: output/analysis/requirement-review.md
+        contract: contracts/requirement-review/v1/schema.json
+        freeze: false
+    non_goals:
+      - 添加新需求
+      - 重新设计价值目标
+    on_success: [requirement_freeze]
+
+  # ---------- Step 1.6: 需求冻结 ----------
+  - id: requirement_freeze
+    phase: value_requirement
+    name: 需求冻结
+    description: 人类确认需求与价值目标对齐
+    agent: agent.governance.approval_reviewer
+    depends_on: [requirement_review]
+    inputs:
+      - source: requirement_review
+        required: true
+    outputs:
+      - path: output/design-frozen/{project}-requirement-freeze.md
+        freeze: true
+        includes:
+          - 问题定义
+          - 结构化需求列表
+          - 对齐验证报告
+    human_gate: h2_requirement_freeze
+    on_success: [prd_writing, architecture_design, ui_design]  # 触发并行
+
+# ============================================
+# Phase 2: 详细设计 (可并行)
+# ============================================
+  # ---------- Step 2.1: PRD 编写 ----------
+  - id: prd_writing
+    phase: detailed_design
+    name: PRD 详细编写
+    description: >
+      基于冻结的需求，编写详细的产品需求文档。
+      包含功能点、验收标准、优先级。
+    agent: agent.product.prd_writer
+    depends_on: [requirement_freeze]
+    parallel_group: design_parallel
+    inputs:
+      - source: requirement_freeze
+        required: true
+      - source: value_freeze
+        required: true
+    outputs:
+      - path: output/prds/{project}-detailed-prd.md
+        contract: contracts/frozen-detailed-prd-contract/v1/schema.json
+        freeze: false
+      - path: output/prds/{project}-detailed-prd.json
+        format: json
+    prd_requirements:
+      - functional_requirements: true
+      - non_functional_requirements: true
+      - acceptance_criteria: true
+      - priority_classification: true  # P0/P1/P2
+      - out_of_scope: true  # 明确不做什么
+    on_success: [prd_freeze]
+
+  # ---------- Step 2.2: PRD 冻结 ----------
+  - id: prd_freeze
+    phase: detailed_design
+    name: PRD 冻结
+    description: 人类确认 PRD 内容
+    agent: agent.governance.approval_reviewer
+    depends_on: [prd_writing]
+    inputs:
+      - source: prd_writing
+        required: true
+    outputs:
+      - path: output/design-frozen/{project}-prd-freeze.md
+        freeze: true
+    human_gate: h3_prd_freeze
+    on_success: [dev_package_assembly]
+
+  # ---------- Step 2.3: 技术架构设计 ----------
+  - id: architecture_design
+    phase: detailed_design
+    name: 技术架构设计
+    description: >
+      基于冻结的需求，设计技术架构。
+      包含技术选型、系统架构、风险评估。
+    agent: agent.dev.tech_architect
+    depends_on: [requirement_freeze]
+    parallel_group: design_parallel
+    inputs:
+      - source: requirement_freeze
+        required: true
+      - source: prd_writing  # 可选，如果已完成
+        required: false
+    outputs:
+      - path: output/architecture/{project}-tech-architecture.md
+        contract: contracts/frozen-technical-architecture-contract/v1/schema.json
+        freeze: false
+      - path: output/architecture/{project}-tech-architecture.json
+        format: json
+    architecture_requirements:
+      - technology_stack: true
+      - system_components: true
+      - data_flow: true
+      - api_contracts: true
+      - risk_assessment: true
+      - simplification_points: true  # Q2 简化点
+      - core_uncertainties: true     # Q3 不确定性
+    on_success: [architecture_freeze]
+
+  # ---------- Step 2.4: 技术架构冻结 ----------
+  - id: architecture_freeze
+    phase: detailed_design
+    name: 技术架构冻结
+    description: 技术负责人确认架构设计
+    agent: agent.governance.approval_reviewer
+    depends_on: [architecture_design]
+    inputs:
+      - source: architecture_design
+        required: true
+    outputs:
+      - path: output/design-frozen/{project}-architecture-freeze.md
+        freeze: true
+    human_gate: h4_architecture_freeze
+    on_success: [dev_package_assembly]
+
+  # ---------- Step 2.5: UI 设计 ----------
+  - id: ui_design
+    phase: detailed_design
+    name: UI/UX 设计
+    description: >
+      基于冻结的需求，设计 UI/UX。
+      包含交互流程、原型草图、设计原则。
+    agent: agent.design.ui_designer
+    depends_on: [requirement_freeze]
+    parallel_group: design_parallel
+    inputs:
+      - source: requirement_freeze
+        required: true
+      - source: prd_writing  # 可选
+        required: false
+    outputs:
+      - path: output/ui-specs/{project}-ui-design.md
+        contract: contracts/frozen-ui-prototype-contract/v1/schema.json
+        freeze: false
+      - path: output/ui-specs/{project}-ui-design.json
+        format: json
+    ui_requirements:
+      - user_flows: true
+      - wireframes: true
+      - design_principles: true
+      - component_inventory: true
+      - ui_priorities: true  # Q4 UI优先级划分
+    on_success: [prototype_generation]
+
+  # ---------- Step 2.6: Web 原型生成 ----------
+  - id: prototype_generation
+    phase: detailed_design
+    name: Web 原型生成
+    description: >
+      基于 UI 设计规范，生成可访问的 Web 原型。
+      原型支持状态切换(default/loading/empty/error)，
+      方便人类在浏览器中直接评审和测试。
+    agent: agent.design.ui_design_executor
+    depends_on: [ui_design]
+    inputs:
+      - source: ui_design
+        required: true
+      - source: requirement_freeze
+        required: true
+    outputs:
+      - path: prototype/index.html
+        description: Web 原型入口
+      - path: prototype/css/tokens.css
+        description: Design Token
+      - path: prototype/css/components.css
+        description: 组件样式
+    prototype_requirements:
+      - web_accessible: true        # 必须可在浏览器访问
+      - state_switcher: true        # 必须支持状态切换
+      - responsive: true            # 必须响应式
+      - no_external_fonts: true     # 禁止外部字体
+      - single_brand_color: true    # 仅 1 个品牌色
+    quality_gate:
+      - all_pages_rendered: true
+      - all_states_covered: true
+      - clickable_prototype: true
+    on_success: [ui_freeze]
+
+  # ---------- Step 2.7: UI 设计冻结 ----------
+  - id: ui_freeze
+    phase: detailed_design
+    name: UI 设计冻结
+    description: >
+      设计负责人确认 UI 设计和 Web 原型。
+      人类通过浏览器访问 Web 原型进行可视化评审。
+    agent: agent.governance.approval_reviewer
+    depends_on: [prototype_generation]
+    inputs:
+      - source: ui_design
+        required: true
+      - source: prototype_generation
+        required: true
+    outputs:
+      - path: output/design-frozen/{project}-ui-freeze.md
+        freeze: true
+        includes:
+          - UI 设计规范
+          - Web 原型路径
+          - 状态覆盖检查
+    human_gate: h5_ui_freeze
+    review_method: |
+      1. 打开 prototype/index.html
+      2. 在手机/桌面上测试交互
+      3. 使用状态切换器查看 loading/empty/error
+      4. 确认符合设计预期
+    on_success: [dev_package_assembly]
+
+# ============================================
+# Phase 3: 研发冻结
+# ============================================
+  # ---------- Step 3.1: 研发冻结包组装 ----------
+  - id: dev_package_assembly
+    phase: dev_freeze
+    name: 研发冻结包组装
+    description: >
+      组装所有冻结产物为研发冻结包。
+      包含 Web 原型供研发参考。
+      执行 5 问排期校验。
+    agent: agent.dev.freeze_orchestrator
+    depends_on: [prd_freeze, architecture_freeze, ui_freeze]
+    inputs:
+      - source: value_freeze
+        required: true
+      - source: requirement_freeze
+        required: true
+      - source: prd_freeze
+        required: true
+      - source: architecture_freeze
+        required: true
+      - source: ui_freeze
+        required: true
+      - source: prototype_generation
+        required: true
+        description: Web 原型目录
+    outputs:
+      - path: output/frozen-packages/{project}-dev-freeze.json
+        contract: contracts/frozen-dev-package-contract/v1/schema.json
+        format: json
+      - path: output/frozen-packages/{project}-dev-freeze-review.md
+        format: markdown
+    assembly_rules:
+      - verify_all_frozen: true
+      - execute_5q_validation: true
+      - generate_review_doc: true
+    on_success: [dev_freeze_validation]
+
+  # ---------- Step 3.2: 研发冻结包验证与冻结 ----------
+  - id: dev_freeze_validation
+    phase: dev_freeze
+    name: 研发冻结包验证
+    description: >
+      验证 5 问排期校验通过。
+      人类团队评审并确认研发冻结。
+    agent: agent.governance.approval_reviewer
+    depends_on: [dev_package_assembly]
+    inputs:
+      - source: dev_package_assembly
+        required: true
+    outputs:
+      - path: output/frozen-packages/{project}-dev-freeze-final.md
+        freeze: true
+    validation_checklist:
+      - q1_non_goals: "不做什么必须明确"
+      - q2_simplification: "简化点必须列出"
+      - q3_uncertainties: "不确定性必须识别"
+      - q4_ui_priorities: "UI优先级必须划分"
+      - q5_cut_sequence: "砍减顺序必须明确"
+    human_gate: h6_dev_freeze
+    on_success: []  # 流程完成
+
+# ============================================
+# 人类介入点 (6 个冻结门禁)
+# ============================================
+human_in_the_loop:
+  - id: h1_value_freeze
+    step: value_freeze
+    purpose: "确认产品价值主张"
+    required: true
+    type: decision
+    actions:
+      - approve: "确认价值主张，进入问题翻译"
+      - request_revision: "返回重新分析"
+      - reject: "终止流程"
+
+  - id: h2_requirement_freeze
+    step: requirement_freeze
+    purpose: "确认需求与价值对齐"
+    required: true
+    type: validation
+    actions:
+      - confirm_alignment: "确认需求对齐，进入详细设计"
+      - flag_misalignment: "返回修正"
+
+  - id: h3_prd_freeze
+    step: prd_freeze
+    purpose: "确认 PRD 详细内容"
+    required: true
+    type: review
+    reviewers: [product_owner]
+    actions:
+      - approve: "PRD 冻结"
+      - request_changes: "修改后重新提交"
+
+  - id: h4_architecture_freeze
+    step: architecture_freeze
+    purpose: "确认技术架构设计"
+    required: true
+    type: review
+    reviewers: [tech_lead]
+    actions:
+      - approve: "架构冻结"
+      - request_changes: "修改后重新提交"
+
+  - id: h5_ui_freeze
+    step: ui_freeze
+    purpose: "确认 UI 设计和 Web 原型"
+    required: true
+    type: review
+    reviewers: [design_lead]
+    review_artifacts:
+      - ui_design_spec: "output/ui-specs/{project}-ui-design.md"
+      - web_prototype: "prototype/index.html"
+    review_instructions: |
+      1. 打开 Web 原型 (prototype/index.html)
+      2. 测试页面交互和响应式
+      3. 使用状态切换器检查 loading/empty/error
+      4. 确认视觉风格和交互符合预期
+    actions:
+      - approve: "UI + 原型冻结"
+      - request_changes: "修改后重新提交"
+
+  - id: h6_dev_freeze
+    step: dev_freeze_validation
+    purpose: "确认研发冻结包"
+    required: true
+    type: team_approval
+    reviewers: [product_owner, tech_lead, design_lead]
+    actions:
+      - approve: "研发冻结，进入研发阶段"
+      - reject: "返回补充内容"
+
+# ============================================
+# 流水线约束
+# ============================================
+constraints:
+  serial_phases: |
+    Phase 1 (价值与需求定义) 必须完成后才能进入 Phase 2。
+    Phase 2 内部的 PRD、架构、UI 可以并行执行。
+    Phase 3 必须等待 Phase 2 所有冻结完成。
+
+  freeze_immutability: |
+    冻结文件一旦生成，下游步骤必须基于冻结版本工作。
+    修改上游冻结需要：解冻 → 修改 → 重新冻结 → 重跑下游。
+
+  parallel_execution: |
+    Phase 2 中的 prd_writing, architecture_design, ui_design 可以并行。
+    但各自的冻结步骤必须等待对应设计完成。
+
+  5q_mandatory: |
+    研发冻结包必须回答 5 个排期校验问题:
+    Q1: 不做什么？
+    Q2: 哪些允许先简化？
+    Q3: 技术最不确定的点？
+    Q4: UI 优先级划分？
+    Q5: 延期砍减顺序？
+
+# ============================================
+# 完成条件
+# ============================================
+completion:
+  required_outputs:
+    - output/design-frozen/{project}-value-freeze.md
+    - output/design-frozen/{project}-requirement-freeze.md
+    - output/design-frozen/{project}-prd-freeze.md
+    - output/design-frozen/{project}-architecture-freeze.md
+    - output/design-frozen/{project}-ui-freeze.md
+    - output/frozen-packages/{project}-dev-freeze-final.md
+    - prototype/index.html  # Web 原型入口
+
+  final_output:
+    path: output/frozen-packages/{project}-dev-freeze.json
+    description: 完整的研发冻结包，包含 Web 原型，可交给研发团队执行
+
+  handoff_to:
+    workflow: workflow.dev.development_pipeline
+    with:
+      - dev_freeze_package
+    description: 研发冻结包交给研发流水线执行
+
+# ============================================
+# 执行时间估算
+# ============================================
+estimated_duration:
+  phase_1:
+    name: "价值与需求定义"
+    steps: 6
+    estimated_hours: 4-8
+  phase_2:
+    name: "详细设计"
+    steps: 6
+    estimated_hours: 8-16
+    note: "可并行执行，实际时间取决于最长任务"
+  phase_3:
+    name: "研发冻结"
+    steps: 2
+    estimated_hours: 2-4
+  total:
+    estimated_hours: 14-28
+    note: "包含人类审批等待时间"

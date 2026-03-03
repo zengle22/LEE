@@ -1,0 +1,46 @@
+# DevOps Validate Version Skill v1.0
+
+kind: skill
+version: 1.0
+
+id: skill.devops.validate_version
+name: Validate Version
+description: >
+  校验待部署版本号格式和镜像存在性。
+owner: devops-team
+tags: [devops, deploy]
+
+interface:
+  inputs:
+    type: object
+    required: [version]
+    properties:
+      version:
+        type: string
+        description: "版本号 (semver 格式)"
+      registry:
+        type: string
+        description: "Docker 镜像仓库地址"
+      image:
+        type: string
+        description: "镜像名称"
+  outputs:
+    type: object
+    properties:
+      ok:
+        type: boolean
+      format_valid:
+        type: boolean
+      exists:
+        type: boolean
+      message:
+        type: string
+
+runtime:
+  type: shell
+  script: "scripts/validate-version.sh"
+  args_template: "--version {{ inputs.version }} {% if inputs.image %}--image {{ inputs.image }}{% endif %} {% if inputs.registry %}--registry {{ inputs.registry }}{% endif %}"
+  exit_codes:
+    0: "版本校验通过"
+    1: "版本不存在或格式错误"
+    2: "参数错误"

@@ -1,0 +1,324 @@
+# DevOps Release Freeze Checklist
+# DevOps 发布冻结检查清单
+
+kind: checklist
+id: checklist.devops.release_freeze
+name: DevOps 发布冻结检查清单
+version: "1.0.0"
+department: devops
+
+description: >
+  这是 DevOps 版本冻结的最终检查清单，确保所有准备工作就绪。
+
+  适用阶段：
+  - p6_release_freeze (版本冻结最终审批)
+
+  核心原则：
+  - 所有验证检查必须通过
+  - 审计跟踪必须完整
+  - 回滚方案必须可行
+  - 需要最高级别审批
+
+# ============================================
+# 冻结前置条件
+# ============================================
+preconditions:
+  - id: pf_all_phases_completed
+    text: "所有前置阶段（p1-p5）已完成"
+    required: true
+
+  - id: pf_all_gates_approved
+    text: "所有 Human Gate 已获得批准"
+    required: true
+
+  - id: pf_verification_passed
+    text: "环境验收所有检查通过"
+    required: true
+
+# ============================================
+# 发布包完整性检查
+# ============================================
+release_package_checks:
+  - id: rpc_version_tagged
+    category: "版本管理"
+    text: "版本已正确标记（Git tag 或 version.yaml）"
+    type: "validation"
+    required: true
+    validation_method: "检查 version.yaml 或 Git tag"
+
+  - id: rpc_artifacts_complete
+    category: "发布产物"
+    text: "发布包包含所有必需文件"
+    type: "validation"
+    required: true
+    required_files:
+      - "release/version.yaml"
+      - "release/manifests/"
+      - "deploy/deploy-prod.sh"
+      - "deploy/rollback-prod.sh"
+
+  - id: rpc_documentation_complete
+    category: "文档"
+    text: "所有文档完整且更新"
+    type: "validation"
+    required: true
+    required_documents:
+      - "部署文档"
+      - "回滚文档"
+      - "配置说明"
+      - "发布说明"
+
+  - id: rpc_image_digest_locked
+    category: "容器镜像"
+    text: "容器镜像 digest 已锁定（如适用）"
+    type: "validation"
+    required: false
+    validation_method: "检查 image-digest.lock 文件"
+
+# ============================================
+# 部署验证检查
+# ============================================
+deployment_checks:
+  - id: dvc_dev_success
+    category: "开发环境"
+    text: "开发环境部署成功并验证通过"
+    type: "confirmation"
+    required: true
+
+  - id: dvc_test_success
+    category: "测试环境"
+    text: "测试环境部署成功并通过所有测试"
+    type: "validation"
+    required: true
+    validation_method: "检查测试报告"
+
+  - id: dvc_staging_verified
+    category: "预发布环境"
+    text: "预发布环境验证通过（如适用）"
+    type: "confirmation"
+    required: false
+    condition: "存在 staging 环境"
+
+  - id: dvc_services_healthy
+    category: "服务健康"
+    text: "所有服务健康检查通过"
+    type: "validation"
+    required: true
+    validation_method: "健康检查端点响应"
+
+  - id: dvc_monitoring_configured
+    category: "监控配置"
+    text: "监控和告警已正确配置"
+    type: "validation"
+    required: true
+    validation_method: "检查监控配置文件"
+
+# ============================================
+# 安全检查
+# ============================================
+security_checks:
+  - id: sc_no_hardcoded_secrets
+    category: "密钥安全"
+    text: "无硬编码密钥或凭证"
+    type: "validation"
+    required: true
+    validation_method: "代码扫描 + 人工审查"
+
+  - id: sc_placeholders_replaced
+    category: "配置安全"
+    text: "所有占位符已正确替换为实际配置"
+    type: "validation"
+    required: true
+    validation_method: "检查配置文件"
+
+  - id: sc_permissions_correct
+    category: "权限配置"
+    text: "文件和服务权限配置正确"
+    type: "validation"
+    required: true
+    validation_method: "权限审计"
+
+  - id: sc_vulnerabilities_scanned
+    category: "漏洞扫描"
+    text: "已完成安全漏洞扫描，无高危漏洞"
+    type: "validation"
+    required: true
+    validation_method: "安全扫描工具"
+
+  - id: sc_compliance_verified
+    category: "合规性"
+    text: "符合安全和合规要求"
+    type: "validation"
+    required: true
+    validation_method: "合规检查清单"
+
+# ============================================
+# 回滚准备检查
+# ============================================
+rollback_checks:
+  - id: rc_rollback_plan_exists
+    category: "回滚方案"
+    text: "回滚方案已文档化并评审通过"
+    type: "validation"
+    required: true
+    validation_method: "检查 rollback-plan.md"
+
+  - id: rc_rollback_script_tested
+    category: "回滚脚本"
+    text: "回滚脚本已在测试环境验证"
+    type: "validation"
+    required: true
+    validation_method: "回滚演练记录"
+
+  - id: rc_backup_created
+    category: "数据备份"
+    text: "生产数据备份已完成（如适用）"
+    type: "confirmation"
+    required: true
+    validation_method: "检查备份记录"
+
+  - id: rc_rollback_sla_defined
+    category: "回滚 SLA"
+    text: "回滚 SLA 已定义（RTO/RPO）"
+    type: "validation"
+    required: true
+    validation_method: "检查 SLA 文档"
+
+# ============================================
+# 审计和追溯检查
+# ============================================
+audit_checks:
+  - id: ac_audit_trail_complete
+    category: "审计跟踪"
+    text: "审计跟踪记录完整"
+    type: "validation"
+    required: true
+    validation_method: "检查 audit-trail.yaml"
+
+  - id: ac_changes_documented
+    category: "变更记录"
+    text: "所有变更已记录和归档"
+    type: "validation"
+    required: true
+    validation_method: "检查变更日志"
+
+  - id: ac_approvals_recorded
+    category: "审批记录"
+    text: "所有审批已记录"
+    type: "validation"
+    required: true
+    validation_method: "检查审批记录"
+
+  - id: ac_commits_traced
+    category: "代码追溯"
+    text: "所有提交可追溯到需求或 Bug"
+    type: "validation"
+    required: true
+    validation_method: "检查提交记录"
+
+# ============================================
+# 风险评估
+# ============================================
+risk_assessment:
+  - id: ra_impact_assessed
+    category: "影响评估"
+    text: "已评估本次发布的影响范围"
+    type: "assessment"
+    required: true
+    assessment_fields:
+      - "影响的服务"
+      - "影响的用户"
+      - "潜在的影响时长"
+
+  - id: ra_rollback_risk_assessed
+    category: "回滚风险"
+    text: "已评估回滚风险和可行性"
+    type: "assessment"
+    required: true
+    assessment_fields:
+      - "回滚复杂度"
+      - "回滚所需时间"
+      - "回滚可能的影响"
+
+  - id: ra_monitoring_plan_defined
+    category: "监控计划"
+    text: "已定义发布后的监控计划"
+    type: "confirmation"
+    required: true
+    validation_method: "检查监控计划"
+
+# ============================================
+# 最终审批
+# ============================================
+final_approval:
+  - id: fa_devops_approval
+    role: devops_lead
+    text: "DevOps 负责人确认所有技术准备就绪"
+    required: true
+
+  - id: fa_tech_lead_approval
+    role: tech_lead
+    text: "技术负责人确认架构和技术方案"
+    required: true
+
+  - id: fa_qa_approval
+    role: qa_lead
+    text: "测试负责人确认测试覆盖和质量"
+    required: true
+
+  - id: fa_product_approval
+    role: product_owner
+    text: "产品负责人最终确认发布"
+    required: true
+    condition: "涉及生产环境"
+
+# ============================================
+# 冻结确认
+# ============================================
+freeze_confirmation:
+  - id: fc_ready_to_freeze
+    text: "确认所有检查项通过，可以冻结版本"
+    type: "final_confirmation"
+    required: true
+
+  - id: fc_freeze_version
+    text: "确认冻结的版本号"
+    type: "version_confirmation"
+    required: true
+
+  - id: fc_freeze_timestamp
+    text: "记录冻结时间戳"
+    type: "timestamp"
+    auto_generated: true
+
+# ============================================
+# 解冻条件
+# ============================================
+unfreeze_conditions:
+  - id: uf_critical_bug_found
+    description: "发现严重 Bug 需要修复"
+    requires_approval:
+      - devops_lead
+      - tech_lead
+
+  - id: uf_security_issue_found
+    description: "发现安全问题需要修复"
+    requires_approval:
+      - devops_lead
+      - security_team
+
+  - id: uf_rollback_required
+    description: "需要执行回滚"
+    requires_approval:
+      - devops_lead
+      - tech_lead
+      - product_owner
+
+# ============================================
+# 版本历史
+# ============================================
+changelog:
+  - version: "1.0.0"
+    date: "2026-01-29"
+    changes:
+      - "初始版本：定义 DevOps 发布冻结检查清单"

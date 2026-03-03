@@ -1,0 +1,90 @@
+# Bug Fix Plan Gate Specification v1.0
+# 修复方案评审门禁
+
+kind: gate
+version: 1.0
+
+# ============================================
+# Dev 部门宪法引用 (强制)
+# ============================================
+constitution:
+  ref: ../../AGENTS.md
+  version: "1.0"
+  mandatory: true
+
+# ============================================
+# 基础标识
+# ============================================
+id: gate.dev.bugfix_plan_gate
+name: Bug Fix Plan Gate
+description: >
+  修复方案评审门禁，确保方案与根因一致、风险可控、验证与回滚完整。
+owner: dev-governance
+tags: [gate, dev, bugfix, review]
+
+# ============================================
+# 触发条件
+# ============================================
+trigger:
+  when:
+    - fix_plan_submitted
+    - manual_gate_check
+  context:
+    requires:
+      - bug_fix_plan: "output/bug-fix-plan.yaml"
+
+# ============================================
+# 检查规则
+# ============================================
+checks:
+  - id: plan_complete
+    name: 修复方案完整
+    description: 方案必须包含修复步骤、测试计划、回滚方案
+    severity: blocker
+    rule: |
+      exists("output/bug-fix-plan.yaml")
+    message: "修复方案缺失或不完整"
+    fix: "补充修复步骤、测试计划与回滚方案"
+
+  - id: risk_assessed
+    name: 风险评估
+    description: 必须包含风险评估
+    severity: major
+    rule: |
+      bug_fix_plan.risk_assessment.level in ["LOW", "MEDIUM", "HIGH"]
+    message: "缺少风险评估"
+    fix: "补充风险等级与风险项"
+
+  - id: rollback_plan
+    name: 回滚方案
+    description: 需要明确回滚步骤
+    severity: major
+    rule: |
+      size(bug_fix_plan.rollback_plan.steps) > 0
+    message: "缺少回滚方案"
+    fix: "补充回滚步骤"
+
+  - id: test_plan
+    name: 验证计划
+    description: 需要明确验证与测试范围
+    severity: major
+    rule: |
+      bug_fix_plan.test_plan.strategy != null
+    message: "缺少验证计划"
+    fix: "补充验证策略与测试清单"
+
+# ============================================
+# 通过条件
+# ============================================
+pass_criteria:
+  blocker: 0
+  major: 2
+  minor: null
+
+# ============================================
+# 输出产物
+# ============================================
+outputs:
+  - type: report
+    format: json
+    path: "output/bugfix-plan-gate-report.json"

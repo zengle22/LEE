@@ -1,0 +1,67 @@
+# Runtime State Cleanup Skill Specification v1.0
+# 运行时状态清理技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.office.runtime_state_cleanup
+name: Runtime State Cleanup
+name_zh: 运行时状态清理
+description: >
+  清理工作区中的运行时状态文件，避免 chat 会话、锁文件和临时输入文件污染工作区。
+owner: office-ai
+tags: [cleanup, runtime, workspace, automation]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [workspace_path]
+    properties:
+      workspace_path:
+        type: string
+        description: 工作区路径
+
+  outputs:
+    type: object
+    required: [success, report_path]
+    properties:
+      success:
+        type: boolean
+        description: 是否清理成功
+      report_path:
+        type: string
+        description: 清理报告路径
+
+# ============================================
+# 执行逻辑
+# ============================================
+execution:
+  steps:
+    - name: "创建报告目录"
+      command: "python -c \"import os; os.makedirs('.workflow/workspace-cleanup', exist_ok=True)\""
+    - name: "清理运行时文件"
+      command: "python -c \"import os, glob; [os.remove(f) for f in glob.glob('.lee/chat_history.txt') + glob.glob('.lee/cli.lock') + glob.glob('input.mode') if os.path.exists(f)]\""
+    - name: "清理 PM Agent 会话文件"
+      command: "python -c \"import os, glob; [os.remove(f) for f in glob.glob('.lee/pm_agent_sessions/*.json') if os.path.isfile(f)]\""
+    - name: "写入清理报告"
+      command: "python -c \"from datetime import datetime; content = f'success: true\\\\ncleaned_at: {datetime.utcnow().isoformat()}Z\\\\nreport_path: .workflow/workspace-cleanup/runtime-cleanup.yaml\\\\nremoved_paths:\\\\n  - .lee/chat_history.txt\\\\n  - .lee/cli.lock\\\\n  - input.mode\\\\n  - .lee/pm_agent_sessions/*.json\\\\n'; open('.workflow/workspace-cleanup/runtime-cleanup.yaml', 'w').write(content)\""
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: script
+  timeout_ms: 10000
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: modifies_files

@@ -1,0 +1,258 @@
+# Readable Color Layout Agent Specification v1.0
+# 可读性排版 Agent 规范
+
+kind: agent
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: agent.media.readable_color_layout
+name: Readable Color Layout Agent
+description: >
+  根据文章结构和主题配置，生成具有清晰层级、颜色强调的格式化内容。
+  遵循「样式可配置、结果稳定」原则。
+owner: media-ai
+tags: [media, layout, formatting, styling]
+
+# ============================================
+# 契约定义
+# ============================================
+contracts:
+  input_schema:
+    type: object
+    required: [article_structure, theme_config]
+    properties:
+      article_structure:
+        $ref: contracts/article-structure-contract/v1/schema.yaml#output_schema
+      theme_config:
+        type: object
+        required: [theme_name]
+        properties:
+          theme_name:
+            type: string
+            enum: [red, blue, minimal, custom]
+          custom_theme:
+            type: object
+      platform:
+        type: string
+        enum: [wechat, xhs, notion, feishu, generic]
+        default: generic
+
+  output_schema:
+    type: object
+    required: [formatted_content, metadata]
+    properties:
+      formatted_content:
+        type: string
+        description: "Markdown with inline HTML"
+      metadata:
+        type: object
+
+# ============================================
+# 角色定义
+# ============================================
+persona:
+  role: "可读性排版专家"
+  style: "规则驱动、结果稳定、平台安全"
+  tone: professional
+
+# ============================================
+# 策略定义
+# ============================================
+policy:
+  decision_rules:
+    - if: "section.type == 'highlight'"
+      then: "apply_highlight_section_style"
+    - if: "section.type == 'code'"
+      then: "apply_code_block_style"
+    - if: "section.type == 'quote'"
+      then: "apply_quote_block_style"
+    - if: "block.importance == 'critical'"
+      then: "apply_critical_emphasis_style"
+
+  quality_bar:
+    must_have:
+      - "所有颜色来自主题配置"
+      - "HTML 标签符合目标平台安全规范"
+      - "同一内容多次运行结果一致"
+      - "不使用主题外的样式"
+
+  refusal:
+    conditions:
+      - "theme_config_invalid"
+      - "article_structure_missing_required_fields"
+      - "platform_not_supported"
+
+# ============================================
+# 样式应用规则
+# ============================================
+style_rules:
+  # 绝对禁止
+  forbidden:
+    - "发明主题文件中没有的颜色"
+    - "使用目标平台禁止的 HTML 标签"
+    - "内联样式超过平台限制长度"
+    - "使用外部 CSS 或 JavaScript"
+
+  # 必须遵守
+  required:
+    - "从主题文件读取所有颜色值"
+    - "使用平台允许的 HTML 标签集合"
+    - "内联样式必须完整且有效"
+    - "保持区块间的视觉一致性"
+
+# ============================================
+# 技能引用
+# ============================================
+tools:
+  - ref: skill.media.readable_color_layout
+  - ref: skill.media.platform_safe_rendering
+
+capabilities:
+  - skill.io.file_read
+  - skill.io.file_write
+
+# ============================================
+# 主题加载
+# ============================================
+theme_loader:
+  type: file_based
+  theme_path_pattern: "departments/media/themes/{theme_name}/v1/theme.yaml"
+
+  fallback:
+    default_theme: red
+    minimal_theme: minimal
+
+# ============================================
+# 提示工程
+# ============================================
+prompting:
+  system: |
+    You are a Readable Color Layout Agent. Your job is to apply styles to article structure based on theme configuration.
+
+    CRITICAL RULES:
+    1. NEVER invent colors - always use values from theme file
+    2. NEVER use HTML tags not allowed by target platform
+    3. NEVER add external CSS or JavaScript
+    4. ALWAYS produce consistent output for same input
+
+    Process:
+    1. Load theme configuration
+    2. Apply styles according to section type and importance
+    3. Generate platform-safe HTML/CSS
+    4. Output as Markdown with inline HTML
+
+  instructions:
+    - "从主题文件读取所有颜色值"
+    - "根据区块类型应用对应样式"
+    - "检查目标平台的 HTML 标签白名单"
+    - "生成符合平台安全规范的内联样式"
+    - "确保同一内容多次渲染结果一致"
+
+  output_format: markdown_with_inline_html
+
+  grounding:
+    theme_source: file
+    platform_rules: file
+
+# ============================================
+# 可观测性
+# ============================================
+observability:
+  log_level: info
+  emit:
+    - theme_loaded
+    - styles_applied
+    - platform_safety_checked
+    - content_rendered
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: render_with_red_theme
+      input:
+        article_structure:
+          title:
+            text: "测试标题"
+            level: h1
+          sections:
+            - type: highlight
+              title: "重点"
+              blocks:
+                - text: "内容"
+                  importance: high
+        theme_config:
+          theme_name: red
+        platform: wechat
+      assert:
+        - path: "$.formatted_content"
+          op: "contains"
+          value: "#ff4d4f"
+        - path: "$.metadata.theme_used"
+          op: "=="
+          value: "red"
+
+    - name: platform_safety_check
+      input:
+        article_structure:
+          title:
+            text: "测试"
+            level: h1
+          sections: []
+        theme_config:
+          theme_name: red
+        platform: wechat
+      assert:
+        - path: "$.formatted_content"
+          op: "not_contains"
+          value: "<script"
+        - path: "$.formatted_content"
+          op: "not_contains"
+          value: "onclick="
+
+  regression:
+    - name: consistency_test
+      description: "同一输入多次运行结果一致"
+      iterations: 5
+      variance_threshold: 0
+
+# ============================================
+# 职责边界
+# ============================================
+responsibility:
+  summary: "根据主题配置将文章结构渲染为格式化内容"
+  in_scope:
+    - "加载主题配置文件"
+    - "应用区块类型样式"
+    - "生成平台安全的 HTML/CSS"
+    - "输出 Markdown with inline HTML"
+  out_of_scope:
+    - "修改文章结构"
+    - "发明新的样式规则"
+    - "修改主题配置"
+    - "内容审核"
+
+# ============================================
+# 输出要求
+# ============================================
+output_requirements:
+  # 输出目录规则：相对于输入文件所在目录的 output 子目录
+  output_directory_rule: |
+    所有输出文件应放置在输入文件所在目录的 output 子目录中。
+    例如：输入文件为 /path/to/article.md，输出目录为 /path/to/output/
+
+  outputs:
+    - type: markdown
+      description: "格式化后的内容"
+      path_pattern: "{input_directory}/output/{article_id}_formatted.md"
+      content_requirements:
+        - "包含清晰的层级结构"
+        - "重点内容有颜色强调"
+        - "代码块有语法高亮样式"
+        - "符合目标平台安全规范"
+    - type: json
+      description: "渲染元数据"
+      path_pattern: "{input_directory}/output/{article_id}_metadata.json"

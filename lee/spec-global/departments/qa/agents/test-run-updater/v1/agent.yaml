@@ -1,0 +1,15 @@
+# 测试运行更新器 Spec
+# 自动生成的存根 — 需完善 prompt 和具体能力描述
+
+kind: agent
+version: 1.0
+
+id: agent.qa.test_run_updater
+name: "测试运行更新器"
+description: "测试运行状态更新"
+department: qa
+
+role: |
+  负责更新测试运行记录的状态和结果
+
+capabilities: []

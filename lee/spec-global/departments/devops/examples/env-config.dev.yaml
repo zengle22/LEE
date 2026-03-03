@@ -1,0 +1,270 @@
+# Dev 环境配置文件
+#
+# **重要**: 此文件包含真实配置，由人类填写
+# AI 不会生成真实的密钥或凭证
+#
+# 使用方法：
+# 1. 复制此文件为 env-config.dev.yaml
+# 2. 填写真实配置值
+# 3. 使用 lee run devops inject-config 命令注入到环境
+
+kind: environment_config
+id: env.dev
+name: Development Environment
+version: "1.0"
+environment: dev
+
+description: >
+  这是开发环境的配置文件。
+  Dev 环境用于日常开发和快速验证。
+
+# ============================================
+# 基础配置
+# ============================================
+basic_config:
+  app_name: "my-app"
+  app_version: "0.1.0"
+  app_env: "dev"
+  app_debug: "true"
+  app_log_level: "debug"
+
+# ============================================
+# Docker 配置
+# ============================================
+docker_config:
+  docker_registry: "docker.io/myorg"
+  app_image: "${DOCKER_REGISTRY}/${app_name}:${app_version}"
+
+  # 端口配置
+  app_port: 8000
+  db_port_expose: 5432
+  redis_port_expose: 6379
+  nginx_http_port: 8080
+  nginx_https_port: 8443
+
+  # 网络配置
+  network_subnet: "172.20.0.0/16"
+
+# ============================================
+# 数据库配置（敏感信息）
+# ============================================
+database_config:
+  db_host: "db"
+  db_port: 5432
+  db_name: "${DB_NAME}"  # 人类填写：数据库名称
+  db_user: "${DB_USER}"  # 人类填写：数据库用户
+  db_password: "${DB_PASSWORD}"  # 人类填写：数据库密码（敏感）
+
+  postgres_version: "15-alpine"
+
+  # 备份配置
+  backup_enabled: true
+  backup_schedule: "0 2 * * *"  # 每天凌晨 2 点
+  backup_retention_days: 7
+
+# ============================================
+# Redis 配置（敏感信息）
+# ============================================
+redis_config:
+  redis_host: "redis"
+  redis_port: 6379
+  redis_password: "${REDIS_PASSWORD}"  # 人类填写：Redis 密码（敏感）
+
+  redis_version: "7-alpine"
+
+  # 持久化配置
+  persist_enabled: true
+  persist_policy: "everysec"
+
+# ============================================
+# 外部服务配置（敏感信息）
+# ============================================
+external_services:
+  # API 密钥
+  api_key: "${API_KEY}"  # 人类填写：外部 API 密钥
+  secret_key: "${SECRET_KEY}"  # 人类填写：应用密钥
+
+  # 第三方服务示例
+  smtp_host: "${SMTP_HOST}"
+  smtp_port: 587
+  smtp_user: "${SMTP_USER}"
+  smtp_password: "${SMTP_PASSWORD}"
+
+  # 云服务配置（如需要）
+  aws_access_key_id: "${AWS_ACCESS_KEY_ID}"
+  aws_secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+  aws_region: "us-east-1"
+
+# ============================================
+# 应用配置
+# ============================================
+application_config:
+  # 功能开关
+  features:
+    feature_a: true
+    feature_b: false
+    feature_c: true
+
+  # 限流配置
+  rate_limiting:
+    enabled: false
+    requests_per_minute: 1000
+
+  # CORS 配置
+  cors:
+    allowed_origins:
+      - "http://localhost:3000"
+      - "http://localhost:8080"
+    allowed_methods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+    allowed_headers:
+      - "Content-Type"
+      - "Authorization"
+
+# ============================================
+# 监控与日志配置
+# ============================================
+monitoring_config:
+  # 日志级别
+  log_level: "debug"
+
+  # 日志输出
+  log_output:
+    - "console"
+    - "file"
+
+  # 监控端点
+  metrics_enabled: true
+  metrics_port: 9090
+  health_check_enabled: true
+  health_check_path: "/health"
+
+# ============================================
+# 资源限制（Dev 环境通常较低）
+# ============================================
+resource_limits:
+  app:
+    memory: "512M"
+    cpus: "0.5"
+
+  db:
+    memory: "1G"
+    cpus: "0.5"
+
+  redis:
+    memory: "256M"
+    cpus: "0.25"
+
+  nginx:
+    memory: "128M"
+    cpus: "0.25"
+
+# ============================================
+# 部署配置
+# ============================================
+deployment_config:
+  # 部署策略
+  strategy: "rolling"
+  replicas: 1
+
+  # 健康检查
+  health_check:
+    enabled: true
+    interval: 30
+    timeout: 10
+    retries: 3
+
+  # 启动超时
+  startup_timeout: 120
+
+# ============================================
+# 安全配置
+# ============================================
+security_config:
+  # HTTPS（Dev 环境通常关闭）
+  https_enabled: false
+  ssl_cert_path: ""
+  ssl_key_path: ""
+
+  # 基本认证（如需要）
+  basic_auth_enabled: false
+  basic_auth_user: ""
+  basic_auth_password: ""
+
+# ============================================
+# 审计配置
+# ============================================
+audit_config:
+  # 审计日志
+  audit_enabled: true
+  audit_log_path: "./logs/audit.log"
+
+  # 操作记录
+  log_all_commands: true
+  log_all_api_calls: false
+
+# ============================================
+# 回滚配置
+# ============================================
+rollback_config:
+  # 回滚版本
+  previous_version: "0.0.9"
+
+  # 回滚脚本
+  rollback_script: "./deploy/rollback-dev.sh"
+
+  # 回滚时间估算
+  estimated_rollback_time: "5 minutes"
+
+# ============================================
+# 配置验证
+# ============================================
+validation:
+  # 必填字段检查
+  required_fields:
+    - db_name
+    - db_user
+    - db_password
+    - redis_password
+    - secret_key
+
+  # 敏感字段检查
+  sensitive_fields:
+    - db_password
+    - redis_password
+    - api_key
+    - secret_key
+    - smtp_password
+    - aws_secret_access_key
+
+# ============================================
+# 配置元数据
+# ============================================
+metadata:
+  created_at: "2026-01-29T00:00:00Z"
+  created_by: "human"
+  updated_at: "2026-01-29T00:00:00Z"
+  updated_by: "human"
+  version: "1.0"
+
+  # 配置来源
+  source: "human_filled"
+  # AI 生成占位符，人类填写真实值
+
+# ============================================
+# 配置说明
+# ============================================
+# 填写说明：
+# 1. 所有 ${VAR_NAME} 格式的占位符需要替换为真实值
+# 2. 敏感信息（密码、密钥）应该使用环境变量或密钥管理系统
+# 3. 不要将包含真实密钥的配置文件提交到版本控制
+# 4. 使用 .gitignore 排除包含敏感信息的文件
+#
+# 安全建议：
+# - 使用密钥管理服务（如 AWS Secrets Manager、HashiCorp Vault）
+# - 定期轮换密钥和密码
+# - 为不同环境使用不同的凭证
+# - 启用审计日志记录所有配置变更

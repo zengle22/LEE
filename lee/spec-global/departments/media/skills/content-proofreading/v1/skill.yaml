@@ -1,0 +1,229 @@
+# Content Proofreading Skill Specification v1.0
+# 内容校对技能规范
+
+kind: skill
+version: 1.0
+
+# ============================================
+# 基础标识
+# ============================================
+id: skill.media.content_proofreading
+name: Content Proofreading
+name_zh: 内容校对
+description: >
+  校对格式化内容，发现并修复可读性问题。
+  包括：暗色字体、对比度不足、颜色冲突等。
+owner: media-ai
+tags: [media, proofreading, qa, readability]
+
+# ============================================
+# 接口定义
+# ============================================
+interface:
+  inputs:
+    type: object
+    required: [formatted_content]
+    properties:
+      formatted_content:
+        type: string
+        description: 格式化的 HTML 内容
+
+      platform:
+        type: string
+        enum: [wechat, xhs, notion, feishu, generic]
+        default: wechat
+
+  outputs:
+    type: object
+    required: [proofread_content, issues_found, issues_fixed]
+    properties:
+      proofread_content:
+        type: string
+        description: 校对并修复后的内容
+
+      issues_found:
+        type: array
+        description: 发现的问题列表
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [dark_text, low_contrast, forbidden_tag, color_conflict]
+            location:
+              type: string
+            description:
+              type: string
+            original_value:
+              type: string
+            fixed_value:
+              type: string
+
+      issues_fixed:
+        type: integer
+        description: 修复的问题数量
+
+# ============================================
+# 校对规则
+# ============================================
+proofreading_rules:
+  # 颜色对比度规则
+  color_contrast:
+    # 禁止的暗色文本颜色
+    forbidden_text_colors:
+      - "#262626"   # 深灰，在浅背景下看不清
+      - "#595959"   # 中灰，对比度不足
+      - "#8c8c8c"   # 浅灰
+      - "#bfbfbf"   # 极浅灰
+      - "#000000"   # 纯黑（在某些背景下刺眼）
+
+    # 推荐的文本颜色
+    recommended_text_colors:
+      wechat:
+        primary: "#555555"      # 主要文本（中灰，确保可读）
+        secondary: "#666666"    # 次要文本
+        deep: "#4a4a4a"        # 重点内容/重要引用
+        emphasis: "#ff4d4f"     # 强调色（红）
+        emphasis_dark: "#cf1322" # 深强调色
+      generic:
+        primary: "#555555"
+        secondary: "#666666"
+        deep: "#4a4a4a"        # 重点内容/重要引用
+
+    # 引用块颜色
+    quote_colors:
+      text: "#4a4a4a"          # 引用文本使用深色（重点内容）
+      border: "#d9d9d9"         # 边框颜色
+      background: "#f5f5f5"     # 背景色
+
+  # 标签安全规则
+  tag_safety:
+    forbidden_tags:
+      - div
+      - section
+      - article
+      - script
+      - style
+      - link
+
+    allowed_tags:
+      - p
+      - span
+      - h1
+      - h2
+      - h3
+      - strong
+      - em
+      - blockquote
+      - pre
+      - code
+      - ul
+      - ol
+      - li
+      - br
+
+# ============================================
+# 自动修复规则
+# ============================================
+auto_fix_rules:
+  # 颜色替换规则
+  color_replacement:
+    - find: "color:#262626"
+      replace_with: "color:#555555"
+      reason: "深灰色改为标准文本色，提高可读性"
+
+    - find: "color:#333333"
+      replace_with: "color:#555555"
+      reason: "灰色改为更亮的文本色，确保可读"
+
+    - find: "color:#595959"
+      replace_with: "color:#666666"
+      reason: "中灰色改为次要文本色"
+
+    - find: "color:#8c8c8c"
+      replace_with: "color:#999999"
+      reason: "浅灰色改为更深的颜色"
+
+    - find: "color:#bfbfbf"
+      replace_with: "color:#999999"
+      reason: "极浅灰色改为可见的颜色"
+
+    - find: "<blockquote style=\"color:#595959"
+      replace_with: "<blockquote style=\"color:#4a4a4a"
+      reason: "引用块文本使用深色（重点内容）"
+
+    - find: "<blockquote style=\"color:#333333"
+      replace_with: "<blockquote style=\"color:#4a4a4a"
+      reason: "引用块文本使用深色（重点内容）"
+
+    - find: "<blockquote style=\"color:#666666"
+      replace_with: "<blockquote style=\"color:#4a4a4a"
+      reason: "引用块文本应使用深色以确保对比度"
+
+  # 标签替换规则
+  tag_replacement:
+    - find: "<div"
+      replace_with: "<p"
+      reason: "div 不被公众号支持，替换为 p"
+
+# ============================================
+# 运行时配置
+# ============================================
+runtime:
+  type: script
+  timeout_ms: 15000
+
+# ============================================
+# 约束声明
+# ============================================
+constraints:
+  deterministic: true
+  side_effects: modifies_content
+
+# ============================================
+# 测试钩子
+# ============================================
+tests:
+  smoke:
+    - name: detect_dark_text
+      input:
+        formatted_content: '<p style="color:#262626">暗色文本</p>'
+      assert:
+        - path: "$.issues_found[0].type"
+          op: "=="
+          value: "dark_text"
+        - path: "$.proofread_content"
+          op: "contains"
+          value: "color:#555555"
+
+    - name: detect_forbidden_tag
+      input:
+        formatted_content: '<div style="background:#fff">内容</div>'
+      assert:
+        - path: "$.issues_found[0].type"
+          op: "=="
+          value: "forbidden_tag"
+
+    - name: fix_multiple_issues
+      input:
+        formatted_content: '<p style="color:#262626">文本1</p><p style="color:#595959">文本2</p>'
+      assert:
+        - path: "$.issues_fixed"
+          op: ">="
+          value: 2
+
+# ============================================
+# 输出要求
+# ============================================
+output_requirements:
+  output_directory_rule: |
+    所有输出文件应放置在输入文件所在目录的 output 子目录中。
+
+  outputs:
+    - type: markdown
+      description: "校对后的内容"
+      path_pattern: "{input_directory}/output/{article_id}_proofread.md"
+
+    - type: json
+      description: "校对报告"
+      path_pattern: "{input_directory}/output/{article_id}_proofread_report.json"

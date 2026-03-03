@@ -1,0 +1,102 @@
+# Running Coach - 环境配置矩阵
+# Phase 1 输出 by agent.devops.architect
+
+kind: environment_matrix
+version: "1.0.0"
+project: running-coach
+
+# ============================================
+# 环境差异配置
+# ============================================
+environments:
+  dev:
+    # 基础信息
+    domain: dev.api.running-coach.local
+    log_level: debug
+    debug_mode: true
+
+    # 资源配置
+    api_replicas: 1
+    api_workers: 2
+
+    # 数据库
+    db_name: running_coach_dev
+    db_max_connections: 20
+
+    # 缓存
+    redis_db: 0
+
+    # 部署
+    image_tag_suffix: "-dev"
+    auto_deploy: true
+    require_human_gate: false
+
+    # inventory 引用（v1.2）
+    inventory_path: ./00-inventory/dev
+
+  test:
+    domain: test.api.running-coach.local
+    log_level: info
+    debug_mode: false
+
+    api_replicas: 2
+    api_workers: 4
+
+    db_name: running_coach_test
+    db_max_connections: 50
+
+    redis_db: 0
+
+    image_tag_suffix: "-test"
+    auto_deploy: true
+    require_human_gate: false
+
+    inventory_path: ./00-inventory/test
+
+  staging:
+    domain: staging.api.running-coach.com
+    log_level: info
+    debug_mode: false
+
+    api_replicas: 2
+    api_workers: 8
+
+    db_name: running_coach_staging
+    db_max_connections: 100
+
+    redis_db: 0
+
+    image_tag_suffix: "-staging"
+    auto_deploy: false
+    require_human_gate: true
+
+    inventory_path: ./00-inventory/staging
+
+  prod:
+    domain: api.running-coach.com
+    log_level: warn
+    debug_mode: false
+
+    api_replicas: 3
+    api_workers: 16
+
+    db_name: running_coach_prod
+    db_max_connections: 200
+
+    redis_db: 0
+
+    image_tag_suffix: ""
+    auto_deploy: false
+    require_human_gate: true
+
+    inventory_path: ./00-inventory/prod
+
+# ============================================
+# 共享配置
+# ============================================
+shared:
+  docker_registry: registry.example.com
+  app_name: running-coach
+  base_image: golang:1.21-alpine
+  health_check_path: /health
+  metrics_path: /metrics
