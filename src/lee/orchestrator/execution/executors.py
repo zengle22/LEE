@@ -110,11 +110,16 @@ class ShellExecutor(BaseExecutor):
 
         try:
             # 执行命令
+            # 设置环境变量标记工作流内部调用，豁免 CLI 进程锁 (BUG-2026-0060)
+            env = os.environ.copy()
+            env["CLAUDE_CODE_ENTRYPOINT"] = "lee-executor"
+
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=working_dir,
+                env=env,
             )
 
             stdout, stderr = await asyncio.wait_for(
