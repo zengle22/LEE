@@ -66,7 +66,7 @@ class TestL2InstanceGeneration:
 
     def test_generate_l2_instance(self, tmp_path):
         """Test L2 instance generation."""
-        template_path = Path("lee/spec-global/departments/dev/workflows/templates")
+        template_path = Path("spec-global/departments/dev/workflows/templates")
         if not template_path.exists():
             pytest.skip("Template path not found")
 
@@ -115,7 +115,7 @@ class TestL3InstanceGeneration:
 
     def test_generate_l3_instance(self, tmp_path):
         """Test L3 instance generation."""
-        template_path = Path("lee/spec-global/departments/dev/workflows/templates")
+        template_path = Path("spec-global/departments/dev/workflows/templates")
         if not template_path.exists():
             pytest.skip("Template path not found")
 
@@ -339,10 +339,10 @@ class TestYamlTemplates:
 
     def test_l2_template_exists(self):
         """Test L2 template file exists."""
-        template_path = Path("lee/spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
+        template_path = Path("spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
         if not template_path.exists():
             # Try absolute path
-            template_path = Path("/Users/zengle/git/ai/lee/lee/spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
+            template_path = Path("/Users/zengle/git/ai/lee/spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
 
         assert template_path.exists(), "L2 template file not found"
 
@@ -357,10 +357,10 @@ class TestYamlTemplates:
 
     def test_l3_template_exists(self):
         """Test L3 template file exists."""
-        template_path = Path("lee/spec-global/departments/dev/workflows/templates/task-l3-template.yaml")
+        template_path = Path("spec-global/departments/dev/workflows/templates/task-l3-template.yaml")
         if not template_path.exists():
             # Try absolute path
-            template_path = Path("/Users/zengle/git/ai/lee/lee/spec-global/departments/dev/workflows/templates/task-l3-template.yaml")
+            template_path = Path("/Users/zengle/git/ai/lee/spec-global/departments/dev/workflows/templates/task-l3-template.yaml")
 
         assert template_path.exists(), "L3 template file not found"
 
@@ -375,9 +375,9 @@ class TestYamlTemplates:
 
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
-        instance_path = Path("lee/spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
+        instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
         if not instance_path.exists():
-            instance_path = Path("/Users/zengle/git/ai/lee/lee/spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
+            instance_path = Path("/Users/zengle/git/ai/lee/spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
 
         assert instance_path.exists(), "Example L2 instance not found"
 

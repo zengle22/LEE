@@ -2195,7 +2195,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         )
 
         # Find L3 v3 template path (template remains in framework directory)
-        template_base = Path(self.project_root) / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates" if self.project_root else Path("lee/spec-global/departments/dev/workflows/templates")
+        template_base = Path(self.project_root) / "spec-global" / "departments" / "dev" / "workflows" / "templates" if self.project_root else Path("spec-global/departments/dev/workflows/templates")
         # Try L3 v3 template first
         l3_template_path = template_base / "l3" / "task-l3-v3-template.yaml"
         if not l3_template_path.exists():

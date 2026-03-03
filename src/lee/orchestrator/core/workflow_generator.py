@@ -567,7 +567,7 @@ class WorkflowGenerator:
         warnings = []
 
         # Load L2 template
-        template_path = Path("lee/spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
+        template_path = Path("spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
         if not template_path.exists():
             # Try relative to project root
             template_path = Path(self.template_path).parent.parent.parent.parent / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates" / "feature-l2-template.yaml"
@@ -667,7 +667,7 @@ class WorkflowGenerator:
 
         if not template_path.exists():
             # Fallback to default L3 template location
-            template_path = Path("lee/spec-global/departments/dev/workflows/templates/task-l3-template.yaml")
+            template_path = Path("spec-global/departments/dev/workflows/templates/task-l3-template.yaml")
             if not template_path.exists():
                 # Try relative to project root
                 template_path = Path(self.template_path).parent.parent.parent.parent / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates" / "task-l3-template.yaml"
