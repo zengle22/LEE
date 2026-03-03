@@ -725,20 +725,19 @@ class ClaudeCodeRunner(StepRunnerBase):
             )
 
             # P0-1: 确保 task_execution 状态更新（BUG-2026-0038）
-            # 使用 try-except 确保即使 update 失败也不会丢失步骤完成状态
-            try:
-                await ctx.store.update_task_execution(
-                    execution_id,
-                    TaskExecutionStatus.COMPLETED,
-                    output_data=output,
-                    completed_at=datetime.now(),
-                )
-                # P0-5: 记录 task_execution 更新日志
-                import logging
+            # 使用重试机制确保状态更新成功
+            updated = await self._update_task_execution_with_retry(
+                ctx,
+                execution_id,
+                TaskExecutionStatus.COMPLETED,
+                max_retries=3,
+                output_data=output,
+                completed_at=datetime.now(),
+            )
+            if updated:
                 logging.info(f"[ClaudeCodeRunner] Updated task_execution {execution_id} to COMPLETED for step {step.id}")
-            except Exception as update_error:
-                # 记录错误但不抛出，因为步骤已经完成
-                logging.error(f"[ClaudeCodeRunner] Failed to update task_execution {execution_id}: {update_error}")
+            else:
+                logging.error(f"[ClaudeCodeRunner] Failed to update task_execution {execution_id} after retries")
 
             changed = output.get("changed_files", [])
             ctx.event_log.log_step_completed(
@@ -757,9 +756,12 @@ class ClaudeCodeRunner(StepRunnerBase):
 
         except Exception as e:
             await ctx.state_machine.fail_step(workflow_id, step.id, str(e))
-            await ctx.store.update_task_execution(
+            # 使用重试机制更新失败状态 (BUG-2026-0038)
+            await self._update_task_execution_with_retry(
+                ctx,
                 execution_id,
                 TaskExecutionStatus.FAILED,
+                max_retries=3,
                 error_message=str(e),
                 completed_at=datetime.now(),
             )

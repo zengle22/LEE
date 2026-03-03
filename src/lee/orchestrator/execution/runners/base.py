@@ -14,6 +14,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Any, TYPE_CHECKING
 
+import asyncio
+import logging
+
 from lee.orchestrator.storage.models import (
     TaskExecution,
     TaskExecutionStatus,
@@ -444,3 +447,51 @@ class StepRunnerBase(StepRunnerStrategy):
         # 这个方法在 Orchestrator 中有具体实现
         # Runner 层面不需要做任何事情，由 StepRunnerMixin dispatch 层调用
         pass
+
+    async def _update_task_execution_with_retry(
+        self,
+        ctx: RunnerContext,
+        execution_id: str,
+        status: TaskExecutionStatus,
+        max_retries: int = 3,
+        backoff_base: float = 0.1,
+        **kwargs
+    ) -> bool:
+        """
+        带重试的 task_execution 状态更新 (BUG-2026-0038)
+
+        Args:
+            ctx: Runner 上下文
+            execution_id: Task execution ID
+            status: 目标状态
+            max_retries: 最大重试次数
+            backoff_base: 退避基数（秒）
+            **kwargs: 传递给 update_task_execution 的其他参数
+
+        Returns:
+            bool: 是否成功更新
+        """
+        logger = logging.getLogger(__name__)
+
+        for attempt in range(max_retries):
+            try:
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    status,
+                    **kwargs
+                )
+                return True
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    logger.error(
+                        f"[TaskExecutionUpdater] Failed to update {execution_id} "
+                        f"to {status.value} after {max_retries} attempts: {e}"
+                    )
+                    return False
+                wait_time = backoff_base * (2 ** attempt)
+                logger.warning(
+                    f"[TaskExecutionUpdater] Attempt {attempt + 1} failed, "
+                    f"retrying in {wait_time}s: {e}"
+                )
+                await asyncio.sleep(wait_time)
+        return False

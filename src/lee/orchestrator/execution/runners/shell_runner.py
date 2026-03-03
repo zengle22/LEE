@@ -661,9 +661,12 @@ class SkillRunner(StepRunnerBase):
             if self._is_failed_shell_output(output):
                 error_msg = output.get("stderr") or f"Skill step {step.id} command failed"
                 await ctx.state_machine.fail_step(workflow_id, step.id, error_msg)
-                await ctx.store.update_task_execution(
+                # 使用重试机制更新失败状态 (BUG-2026-0038)
+                await self._update_task_execution_with_retry(
+                    ctx,
                     execution_id,
                     TaskExecutionStatus.FAILED,
+                    max_retries=3,
                     output_data=output,
                     error_message=error_msg,
                     completed_at=datetime.now(),
@@ -703,22 +706,28 @@ class SkillRunner(StepRunnerBase):
             if evidence_paths:
                 await self._collect_evidence(ctx, workflow_id, step.id, evidence_paths)
 
-            await ctx.store.update_task_execution(
+            # 使用重试机制更新完成状态 (BUG-2026-0038)
+            await self._update_task_execution_with_retry(
+                ctx,
                 execution_id,
                 TaskExecutionStatus.COMPLETED,
+                max_retries=3,
                 output_data=output,
-                completed_at=datetime.now()
+                completed_at=datetime.now(),
             )
 
             return result
 
         except Exception as e:
             await ctx.state_machine.fail_step(workflow_id, step.id, str(e))
-            await ctx.store.update_task_execution(
+            # 使用重试机制更新失败状态 (BUG-2026-0038)
+            await self._update_task_execution_with_retry(
+                ctx,
                 execution_id,
                 TaskExecutionStatus.FAILED,
+                max_retries=3,
                 error_message=str(e),
-                completed_at=datetime.now()
+                completed_at=datetime.now(),
             )
             return StepResult(
                 status="failed",
