@@ -31,6 +31,84 @@
 
 ### 2.1 P0 高优先级
 
+#### [P0-QA-01] QA L2/L3 工作流 Week 2 核心功能
+
+**描述**: 实现 QA L2/L3 工作流升级的 Week 2 核心功能（P1 级别）。
+
+**现状**:
+- ✅ Week 1 完成：模板版本化（v1.1/v2.1）、Test Runner per-case evidence 增强
+- ⚠️ Week 2 待实现：enforce 模式、env_check 阻断、依赖调度
+
+**待完成**:
+- [ ] **behavior_compliance enforce 模式**
+  - 文件：`src/lee/orchestrator/verifiers/behavior_compliance.py`
+  - 添加环境白名单机制：`WARN_ONLY_ENVIRONMENTS = ["dev", "test", "local"]`
+  - 生产环境强制 enforce
+  - 添加 invalid_run_reason 枚举映射
+  - 单元测试：`tests/verifiers/test_behavior_compliance_enforce.py`
+  - 集成测试：`tests/integration/test_enforce_mode.py`
+
+- [ ] **env_check 强制阻断**
+  - 文件：`src/lee/orchestrator/execution/orchestrator.py`
+  - 在 test_set_execution 前检查 env_check_result
+  - env_check 失败时阻断 L3 spawn
+  - 单元测试：`tests/orchestrator/test_env_check_blocking.py`
+  - 集成测试：`tests/integration/test_env_check_blocking.py`
+
+- [ ] **Test Set 依赖调度**
+  - 文件：`src/lee/orchestrator/execution/orchestrator.py`
+  - 实现拓扑排序算法：`topological_sort(test_sets)`
+  - 实现依赖失败跳过逻辑：`should_skip_due_to_dependency()`
+  - 串行执行 L3 实例
+  - 单元测试：`tests/orchestrator/test_topological_sort.py`, `tests/orchestrator/test_dependency_skip.py`
+  - 集成测试：`tests/integration/test_dependency_execution.py`
+
+**影响**: QA 测试执行治理能力
+
+**预估工作量**: 3-5 天
+
+**参考文档**:
+- `spec-global/departments/qa/docs/qa-workflow-implementation-plan.md`
+- `spec-global/departments/qa/workflows/templates/test-set-l3-template-v1.1.yaml`
+- `spec-global/departments/qa/workflows/templates/test-plan-l2-template-v2.1.yaml`
+
+---
+
+#### [P0-QA-02] QA L2/L3 工作流 Week 3-4 增强功能
+
+**描述**: 实现 QA L2/L3 工作流的高级功能（P2/P3 级别）。
+
+**现状**:
+- Week 1-2 核心功能完成后实施
+
+**待完成**:
+- [ ] **L3 Output Validation**
+  - 新建 `src/lee/orchestrator/execution/l3_output_validator.py`
+  - 实现 schema 验证（必需字段检查）
+  - 实现 status 枚举验证
+  - 实现 evidence 关联验证
+
+- [ ] **State Machine 扩展**
+  - 文件：`src/lee/orchestrator/storage/models.py`
+  - 扩展 WorkflowStatus 枚举：添加 `INVALID_RUN = "invalid_run"`
+
+- [ ] **Metrics 上报**
+  - 新建 `src/lee/orchestrator/metrics/qa_metrics.py`
+  - 实现 L3 级别指标：l3_execution_duration, invalid_run_total
+  - 实现 L2 级别指标：l2_execution_duration
+
+- [ ] **Artifact Registry 集成**
+- [ ] **Human Gate 完整实现**
+- [ ] **Tracing 集成**
+
+**影响**: QA 测试可观测性、完整性
+
+**预估工作量**: 5-7 天
+
+---
+
+### 2.2 P1 中优先级
+
 #### [P0-01] Gate 审批与 CI/CD 集成
 
 **描述**: 实现 Gate 审批与外部 CI/CD 系统（如 Jenkins、GitHub Actions）的集成。
@@ -317,6 +395,7 @@ graph TD
 | 日期 | 变更内容 | 负责人 |
 |------|---------|--------|
 | 2026-03-01 | 初始版本，记录 SSOT v1.0/v1.5 技术债 | - |
+| 2026-03-03 | 添加 QA L2/L3 工作流技术债（P0-QA-01, P0-QA-02） | Claude |
 
 ---
 
