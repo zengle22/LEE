@@ -778,7 +778,8 @@ class OrchestratorCLIRunner(StepRunnerBase):
                         break
 
                 run_id = instance.data.get("run_id", "RUN-UNKNOWN") if instance else "RUN-UNKNOWN"
-                output_path = str(Path(ctx.project_root or ".") / f".workflow/env-check/{run_id}-{step.id}.json")
+                from lee.orchestrator.core.path_policy import WORKFLOW_SUBDIRS
+                output_path = str(Path(ctx.project_root or ".") / WORKFLOW_SUBDIRS["env_check"] / f"{run_id}-{step.id}.json")
 
                 result = run_check_env(checks, output_path)
 

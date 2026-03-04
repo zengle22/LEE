@@ -146,9 +146,11 @@ class ComplianceGateRunner(StepRunnerBase):
         }
         result = verifier.verify(context)
 
-        # 保存检查结果
+        # 保存检查结果到 .workflow/compliance/ 目录
         run_id = instance.data.get("run_id", "RUN-UNKNOWN") if instance else "RUN-UNKNOWN"
-        output_path = Path(ctx.project_root or ".") / f".workflow/compliance/{run_id}-{step.id}.json"
+        # 使用 path_policy 常量，避免硬编码
+        from lee.orchestrator.core.path_policy import WORKFLOW_SUBDIRS
+        output_path = Path(ctx.project_root or ".") / WORKFLOW_SUBDIRS["compliance"] / f"{run_id}-{step.id}.json"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps({
             "status": result.status.value,

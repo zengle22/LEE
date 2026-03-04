@@ -2205,7 +2205,10 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         generator = WorkflowGenerator(template_path=str(l3_template_path))
 
         # Instance files go to runtime directory (.workflow/instances/l3/), NOT in framework directory
-        runtime_dir = Path(self.project_root) / ".workflow" if self.project_root else Path(".workflow")
+        # 使用 path_policy 中的工具目录常量
+        from lee.orchestrator.core.path_policy import TOOL_DIRECTORIES
+        workflow_dir = next(d for d in TOOL_DIRECTORIES if d == ".workflow")
+        runtime_dir = Path(self.project_root) / workflow_dir if self.project_root else Path(workflow_dir)
         l3_path = runtime_dir / "instances" / "l3" / f"{point.id}.yaml"
         result = generator.generate_l3_instance(config, str(l3_path))
 

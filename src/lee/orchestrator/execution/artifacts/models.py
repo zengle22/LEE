@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .types import ArtifactType, ArtifactStatus, AdoptMode, GovernanceKind
+from lee.orchestrator.core.path_policy import ARTIFACTS_SUBDIRS, TOOL_DIRECTORIES
 
 
 @dataclass
@@ -77,8 +78,9 @@ class ArtifactMetadata:
         """计算绝对路径"""
         from pathlib import Path
 
-        # 获取 .artifacts/ 根目录
-        artifacts_root = Path.cwd() / ".artifacts"
+        # 获取 .artifacts/ 根目录 (从 path_policy 获取)
+        artifacts_dir = next(d for d in TOOL_DIRECTORIES if d == ".artifacts")
+        artifacts_root = Path.cwd() / artifacts_dir
         return artifacts_root / self.path
 
     @property
@@ -245,16 +247,20 @@ class RunManifest:
     @property
     def manifest_path(self) -> Path:
         """获取 manifest 文件路径"""
+        # 返回相对路径，与原始代码保持一致
+        # 使用 path_policy 中的常量构建路径
         if self.department:
-            return Path(".artifacts") / "active" / self.department / self.run_id / "manifest.yaml"
-        return Path(".artifacts") / "active" / self.run_id / "manifest.yaml"
+            return Path(ARTIFACTS_SUBDIRS["active"]) / self.department / self.run_id / "manifest.yaml"
+        return Path(ARTIFACTS_SUBDIRS["active"]) / self.run_id / "manifest.yaml"
 
     @property
     def artifacts_dir(self) -> Path:
         """获取产出物目录路径"""
+        # 返回相对路径，与原始代码保持一致
+        # 使用 path_policy 中的常量构建路径
         if self.department:
-            return Path(".artifacts") / "active" / self.department / self.run_id
-        return Path(".artifacts") / "active" / self.run_id
+            return Path(ARTIFACTS_SUBDIRS["active"]) / self.department / self.run_id
+        return Path(ARTIFACTS_SUBDIRS["active"]) / self.run_id
 
     def add_artifact(self, artifact: ArtifactMetadata) -> None:
         """添加产出物"""
