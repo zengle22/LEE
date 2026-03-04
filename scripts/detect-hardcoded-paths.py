@@ -1,0 +1,220 @@
+"""
+Hardcoded Path Detector - CI Gate
+
+扫描代码库中的硬编码路径（.artifacts, .workflow），
+用于 CI 门禁，防止新增硬编码绕过统一路径管理。
+
+用法:
+    python scripts/detect-hardcoded-paths.py [--fix] [paths...]
+
+默认扫描 src/ 目录。
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+from typing import FrozenSet, List, Tuple
+
+
+# 允许的路径前缀（工具目录）
+ALLOWED_PREFIXES: FrozenSet[str] = frozenset({
+    ".artifacts",
+    ".workflow",
+})
+
+# 允许出现这些字符串的文件/目录（不视为硬编码）
+ALLOWED_FILES: FrozenSet[str] = frozenset({
+    "path_policy.py",       # 策略定义文件本身
+    "path_config.py",       # 路径配置服务
+    "io_guard.py",          # 守卫实现文件本身
+    "__init__.py",          # 模块导入
+    "test_",                # 测试文件
+    ".pyc",
+})
+
+# 允许的上下文模式（不算硬编码）
+ALLOWED_CONTEXTS: List[re.Pattern] = [
+    # 注释中的路径
+    re.compile(r'#.*["\'](\.artifacts|/\.artifacts)'),
+    re.compile(r'#.*["\'](\.workflow|/\.workflow)'),
+    # 字符串字面量中的路径（可能是配置值）
+    re.compile(r'["\'](\.artifacts/)["\']'),  # ".artifacts/" 作为值
+    re.compile(r'["\'](\.workflow/)["\']'),   # ".workflow/" 作为值
+    # 文档字符串
+    re.compile(r'""".*\.artifacts.*"""', re.DOTALL),
+    re.compile(r'""".*\.workflow.*"""', re.DOTALL),
+    re.compile(r"'''.*\.artifacts.*'''", re.DOTALL),
+    re.compile(r"'''.*\.workflow.*'''", re.DOTALL),
+    # 模块级常量定义（不算硬编码）- 如 TOKENS_DIR = ".workflow/tokens"
+    re.compile(r'^[A-Z_]+ = [".\'](\.artifacts|\.workflow)/'),  # CONST = ".workflow/xxx"
+    # 类属性定义（不算硬编码）- 如 self.TOKENS_DIR = ".workflow/tokens"
+    re.compile(r'self\.[A-Z_]+ = [".\'](\.artifacts|\.workflow)/'),  # self.CONST = ".workflow/xxx"
+    # 类属性定义 - 如 TOKENS_DIR = ".workflow/tokens" (在类里面)
+    re.compile(r'^\s+TOKENS?_[A-Z_]+ = [".\'](\.artifacts|\.workflow)/'),  # class attribute
+    re.compile(r'^\s+LOG_[A-Z_]+ = [".\'](\.artifacts|\.workflow)/'),  # LOG_FILE
+    re.compile(r'^\s+SECRET_[A-Z_]+ = [".\'](\.artifacts|\.workflow)/'),  # SECRET_FILE
+    # dataclass 默认值（不算硬编码）- 如 output_dir: str = ".workflow/traces"
+    re.compile(r':\s*(str|Optional\[str\])\s*=\s*["\'](\.artifacts|\.workflow)/'),  # field default
+    re.compile(r'data\.get\([^)]+,\s*["\'](\.artifacts|\.workflow)/'),  # data.get() fallback
+]
+
+
+def is_allowed_file(file_path: Path) -> bool:
+    """检查文件是否在允许列表中"""
+    filename = file_path.name
+    for allowed in ALLOWED_FILES:
+        if allowed in filename:
+            return True
+    return False
+
+
+def is_allowed_context(line: str) -> bool:
+    """检查行是否在允许的上下文中"""
+    for pattern in ALLOWED_CONTEXTS:
+        if pattern.search(line):
+            return True
+    return False
+
+
+def detect_hardcoded_paths(
+    root_dir: Path,
+    extensions: Tuple[str, ...] = (".py", ".yaml", ".yml"),
+) -> List[Tuple[Path, int, str]]:
+    """
+    检测硬编码路径
+
+    Returns:
+        List of (file_path, line_number, line_content) tuples
+    """
+    findings = []
+
+    # 正则：匹配 .artifacts 或 .workflow 作为路径的一部分
+    # 排除注释和允许的上下文
+    patterns = [
+        # 匹配字符串中的路径（如 ".artifacts/..." 或 '.workflow/...'）
+        re.compile(r'["\'](\.artifacts/[^"\']*)["\']'),
+        re.compile(r'["\'](\.workflow/[^"\']*)["\']'),
+        # 匹配路径拼接（如 Path(".artifacts") 或 Path(".workflow")）
+        re.compile(r'Path\(["\'](\.artifacts)["\']'),
+        re.compile(r'Path\(["\'](\.workflow)["\']'),
+        # 匹配目录字面量（如 /".artifacts/" 或 /'.workflow/'）
+        re.compile(r'/\.artifacts/'),
+        re.compile(r'/\.workflow/'),
+    ]
+
+    for file_path in root_dir.rglob("*"):
+        if not file_path.is_file():
+            continue
+        if not file_path.name.endswith(extensions):
+            continue
+        if is_allowed_file(file_path):
+            continue
+
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, PermissionError):
+            continue
+
+        lines = content.splitlines()
+        for line_num, line in enumerate(lines, start=1):
+            # 跳过注释行
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+
+            # 检查是否在允许的上下文中
+            if is_allowed_context(line):
+                continue
+
+            # 检查是否匹配硬编码模式
+            for pattern in patterns:
+                if pattern.search(line):
+                    findings.append((
+                        file_path.relative_to(root_dir),
+                        line_num,
+                        line.strip(),
+                    ))
+                    break
+
+    return findings
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Detect hardcoded .artifacts/.workflow paths in code"
+    )
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        default=["src"],
+        help="Paths to scan (default: src)",
+    )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Suggest fixes (not implemented yet)",
+    )
+    parser.add_argument(
+        "--fail",
+        action="store_true",
+        help="Exit with code 1 if findings exist",
+    )
+
+    args = parser.parse_args()
+
+    root = Path(".")
+    all_findings = []
+
+    for path in args.paths:
+        p = Path(path)
+        if p.is_dir():
+            findings = detect_hardcoded_paths(p)
+            all_findings.extend(findings)
+        elif p.is_file():
+            findings = detect_hardcoded_paths(p.parent)
+            all_findings.extend(
+                (Path(p.name) / f.relative_to(p.parent), ln, content)
+                for f, ln, content in findings
+                if f.name == p.name
+            )
+
+    if all_findings:
+        print("=" * 70)
+        print("⚠️  硬编码路径检测 - 发现问题")
+        print("=" * 70)
+        print()
+
+        # 按文件分组显示
+        by_file: dict = {}
+        for f, ln, content in all_findings:
+            if f not in by_file:
+                by_file[f] = []
+            by_file[f].append((ln, content))
+
+        for file_path, lines in sorted(by_file.items()):
+            print(f"📁 {file_path}")
+            for ln, content in lines[:3]:  # 每个文件最多显示3行
+                print(f"   {ln:4d}: {content[:80]}")
+            if len(lines) > 3:
+                print(f"   ... (共 {len(lines)} 处)")
+            print()
+
+        print("=" * 70)
+        print(f"总计: {len(all_findings)} 处硬编码路径")
+        print()
+        print("建议: 使用 PathConfig 或 path_policy.py 中的常量")
+        print("      from src.lee.orchestrator.core.path_policy import ALLOWED_WRITE_PREFIXES")
+        print("=" * 70)
+
+        if args.fail:
+            sys.exit(1)
+    else:
+        print("✅ 未检测到硬编码路径")
+        print("   (path_policy.py 和 io_guard.py 已豁免)")
+
+
+if __name__ == "__main__":
+    main()

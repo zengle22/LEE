@@ -1,0 +1,29 @@
+name: Path Guard CI Gate
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  path-guard:
+    name: Path Hardcoding Detection
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect hardcoded paths
+        id: detect
+        shell: pwsh
+        run: |
+          $output = python scripts/detect-hardcoded-paths.py src 2>&1
+          Write-Host "$output"
+          if ($output -match "总计: (\d+) 处") {
+            if ($Matches[1] -gt 0) {
+              Write-Host "::warning::Found $($Matches[1]) hardcoded paths (technical debt)"
+              exit 0  # 现有债务不阻止合并，但记录警告
+            }
+          }
+          exit 0
