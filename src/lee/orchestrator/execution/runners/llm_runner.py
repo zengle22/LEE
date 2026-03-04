@@ -103,9 +103,11 @@ class LLMRunner(StepRunnerBase):
         executor_type = instance.data.get("executor_override") or step.executor_type or "llm"
 
         # 3. 调用 LLM Executor
+        # 优先使用环境变量，否则从配置文件读取 default_profile，最后兜底为 huawei_deepseek
+        default_profile = ctx.llm_config_loader.get_default_profile() if hasattr(ctx, 'llm_config_loader') else "huawei_deepseek"
         executor = ctx.executor_factory.create(
             executor_type,
-            profile=os.getenv("LLM_PROFILE", "zhipu"),
+            profile=os.getenv("LLM_PROFILE", default_profile),
             agent_id=step.agent_id or ""
         )
 
