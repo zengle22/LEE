@@ -20,9 +20,10 @@ LEE 框架是一个通用的 AI 工作流编排系统，用于管理和执行复
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   LEE/ (本项目 - 框架仓库)                                       │
-│   ├── flowcore/        # 框架核心代码                           │
+│   ├── src/              # 源代码目录                            │
+│   │   ├── lee/          # 框架核心代码                          │
+│   │   └── flowcore/     # 兼容性重定向包 (已弃用)               │
 │   ├── spec-global/      # 全局规范模板（按部门组织）             │
-│   ├── config/           # 配置模板                              │
 │   ├── docs/             # 框架文档                              │
 │   └── changelogs/       # 变更日志                              │
 │          ↑                                                     │
@@ -50,12 +51,21 @@ LEE 框架是一个通用的 AI 工作流编排系统，用于管理和执行复
 
 ```
 LEE/
-├── flowcore/                    # 核心代码包
-│   ├── orchestrator/             # 工作流编排器
-│   ├── engines/                  # 执行引擎
-│   │   └── metagpt/              # MetaGPT 适配层
-│   ├── utils/                    # 工具模块
-│   └── cli/                      # 命令行工具
+├── src/
+│   ├── lee/                     # 核心代码包
+│   │   ├── cli/                 # 命令行工具
+│   │   ├── orchestrator/        # 工作流编排器
+│   │   │   ├── api/             # API 层
+│   │   │   ├── core/            # 核心功能
+│   │   │   ├── execution/       # 执行层
+│   │   │   │   ├── runners/     # Step 执行器
+│   │   │   │   ├── validators/  # 验证器
+│   │   │   │   └── artifacts/   # 产出物管理
+│   │   │   ├── storage/         # 存储层
+│   │   │   └── verifiers/       # 验证引擎
+│   │   ├── qa/                  # QA E2E 模块
+│   │   └── runtime/             # 运行时
+│   └── flowcore/                # 兼容性重定向包 (已弃用)
 ├── spec-global/                  # 全局规范模板（按部门组织）
 │   ├── core/                     # 平台级基础规范
 │   ├── departments/              # 按部门组织（pm/dev/qa/devops）
@@ -92,7 +102,7 @@ git submodule update --init --recursive
 
 ```bash
 cd running-coach/project
-cp ../LEE/config/workspace.template.yaml workspace.yaml
+cp ../LEE/spec-global/core/workspace.template.yaml workspace.yaml
 ```
 
 2. **根据实际情况修改 workspace.yaml**：
@@ -115,7 +125,9 @@ runtime:
 
 ```bash
 cd running-coach/project
-python ../LEE/flowcore/cli/main.py run workflows/my_workflow.yaml
+python -m lee.cli.main run workflows/my_workflow.yaml
+# 或安装后使用
+lee run workflows/my_workflow.yaml
 ```
 
 ### 作为 pip 依赖
@@ -125,24 +137,24 @@ pip install lee-framework
 ```
 
 ```python
-from flowcore.orchestrator.runner import run_workflow
-from flowcore.engines.metagpt.adapter import run_lee_unit
+from lee.orchestrator.execution import run_workflow
+from lee.orchestrator.execution import ExecutorFactory
 ```
 
 ## 使用 LEE CLI
 
 ```bash
 # 查看状态
-python -m flowcore.cli.main status
+lee status
 
 # 运行工作流
-python -m flowcore.cli.main run workflows/my_workflow.yaml
+lee run workflows/my_workflow.yaml
 
 # 审批门禁
-python -m flowcore.cli.main approve gate_id --approver "张三"
+lee approve <gate_id> --approver "张三"
 
-# 查看日志
-python -m flowcore.cli.main log
+# 查看帮助
+lee --help
 ```
 
 ## 文档
@@ -166,9 +178,9 @@ python -m flowcore.cli.main log
 
 ### 模块级文档
 
-- [Orchestrator 模块](flowcore/orchestrator/README.md)
-- [Engines 系统](flowcore/engines/README.md)
-- [MetaGPT 集成](flowcore/engines/metagpt/README.md)
+- [Orchestrator 模块](src/lee/orchestrator/README.md)
+- [Execution 执行层](src/lee/orchestrator/execution/)
+- [Spec 组织结构](docs/Spec-Organization.md)
 
 ### 变更日志
 
@@ -183,29 +195,51 @@ python -m flowcore.cli.main log
 - `code_implementation/` - 代码实现示例
 - `bug_fix/` - Bug 修复示例
 
-## 核心代码包：flowcore
+## 核心代码包：lee
 
-**flowcore** 是 LEE 框架的核心代码包，包含：
+**lee** 是 LEE 框架的核心代码包，包含：
 
-- **orchestrator/**：工作流编排器
-- **engines/**：执行引擎（MetaGPT、单 Agent 等）
-- **utils/**：工具模块
 - **cli/**：命令行工具
+- **orchestrator/**：工作流编排器
+  - **api/**：API 层
+  - **core/**：核心功能（模板引擎、工作流生成器）
+  - **execution/**：执行层（Orchestrator、Runners、Executors）
+  - **storage/**：存储层（SQLite、Models）
+- **qa/**：QA E2E 模块
+- **runtime/**：运行时
 
 ### Import 示例
 
 ```python
 # 核心模块
-from flowcore.orchestrator.runner import run_workflow
-from flowcore.orchestrator.state_machine import StateMachine
+from lee.orchestrator.execution import (
+    Orchestrator,
+    TemplateManager,
+    run_workflow,
+    WorkflowRunner,
+)
 
-# 引擎
-from flowcore.engines.base import LEERequest, LEEResult
-from flowcore.engines.metagpt.adapter import run_lee_unit
+# 执行引擎
+from lee.orchestrator.execution import (
+    ExecutorFactory,
+    LangGraphExecutor,
+    ClaudeCodeExecutor,
+)
 
 # 工具
-from flowcore.utils.logging import setup_logger
-from flowcore.utils.ids import generate_run_id
+from lee.orchestrator.utils import sanitization
+```
+
+### ⚠️ flowcore 包已弃用
+
+`flowcore` 包已被弃用，将在 v0.3.0 中移除。请使用 `lee` 包替代：
+
+```python
+# 旧导入（仍然可用，但会显示警告）
+from flowcore.orchestrator import Orchestrator
+
+# 新导入（推荐）
+from lee.orchestrator.execution import Orchestrator
 ```
 
 ## Spec 全局规范：按部门组织

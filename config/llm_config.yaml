@@ -28,18 +28,6 @@ default:
 # 预定义 Provider 配置
 # ============================================
 
-# 智谱 GLM (coding endpoint)
-# 优先级：低
-zhipu:
-  type: llm
-  provider: zhipu
-  base_url: https://open.bigmodel.cn/api/coding/paas/v4
-  api_key: 1db2c215ff504d33a5cd2ff0cb510ea3.xeWYcHcsWoExmg0q
-  model: glm-5
-  temperature: 0.7
-  max_tokens: 8000
-  timeout: 90
-  description: "智谱 GLM 模型 (低优先级)"
 
 # 本地 Ollama (通用 LLM，最低优先级）
 # 优先级：最低（最先尝试）
@@ -100,7 +88,7 @@ deepseek:
 # 优先级：高
 qwen:
   type: llm
-  provider: openai
+  provider: aliyun
   base_url: https://coding.dashscope.aliyuncs.com/v1
   api_key: sk-sp-9d5a89bb7b994af08299f047dd1bc1df
   model: qwen3.5-plus
@@ -109,43 +97,7 @@ qwen:
   timeout: 120
   description: "阿里云 Qwen3.5 Plus 模型 (DashScope)"
 
-# OpenAI (GPT-4, GPT-3.5)
-# 优先级：高
-openai:
-  type: llm
-  provider: openai
-  base_url: ${OPENAI_BASE_URL:-https://api.minimaxi.com/v1}
-  api_key: ${OPENAI_API_KEY}
-  model: ${OPENAI_MODEL:-gpt-4o}
-  temperature: ${OPENAI_TEMPERATURE:-0.7}
-  max_tokens: ${OPENAI_MAX_TOKENS:-4000}
-  timeout: 60
-  description: "使用 MiniMax API 兼容 OpenAI 格式（高优先级）"
 
-# Anthropic Claude
-# 优先级：高
-anthropic:
-  type: llm
-  provider: anthropic
-  base_url: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com/v1}
-  api_key: ${ANTHROPIC_API_KEY}
-  model: ${ANTHROPIC_MODEL:-claude-sonnet-4-5-20250514}
-  temperature: ${ANTHROPIC_TEMPERATURE:-0.7}
-  max_tokens: ${ANTHROPIC_MAX_TOKENS:-8000}
-  timeout: 90
-  description: "Anthropic Claude 模型（高优先级）"
-
-# Azure OpenAI
-azure_openai:
-  type: llm
-  provider: azure
-  base_url: ${AZURE_OPENAI_BASE_URL}
-  api_key: ${AZURE_OPENAI_API_KEY}
-  model: ${AZURE_OPENAI_MODEL}
-  temperature: ${AZURE_OPENAI_TEMPERATURE:-0.7}
-  max_tokens: ${AZURE_OPENAI_MAX_TOKENS:-4000}
-  timeout: 60
-  description: "Azure OpenAI 服务"
 
 # ============================================
 # Agent 级别配置

@@ -21,8 +21,7 @@ from lee.orchestrator.storage.models import (
 from lee.orchestrator.storage.sqlite_store import SQLiteStore
 from lee.orchestrator.execution.state_machine import WorkflowStateMachine
 from lee.orchestrator.core.event_bus import EventBus
-from lee.orchestrator.core.template_manager import TemplateManager
-from lee.orchestrator.core.template_manager import TemplateManager
+from lee.orchestrator.execution.template_manager import TemplateManager
 from lee.orchestrator.execution.orchestrator import Orchestrator, StepResult
 from lee.orchestrator.execution.runners import ProjectRunner, DepartmentRunner
 from lee.orchestrator.execution.executors import ShellExecutor, LLMExecutor, ExecutorFactory, BaseExecutor
