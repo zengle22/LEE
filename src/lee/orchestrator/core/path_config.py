@@ -95,6 +95,11 @@ class PathConfig:
         """获取 .artifacts 目录（产出物）"""
         return self._project_root / ".artifacts"
 
+    @property
+    def outputs_dir(self) -> Path:
+        """获取 outputs 目录（输出文件）"""
+        return self._project_root / "outputs"
+
     # === 内容目录 ===
     @property
     def spec_dir(self) -> Path:
