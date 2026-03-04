@@ -1,0 +1,25 @@
+# 阿里云 Flow CI 配置
+# 使用方法：https://flow.aliyun.com/
+
+name: Path Guard CI Gate
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  path-guard:
+    name: Path Hardcoding Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect hardcoded paths
+        run: |
+          python scripts/detect-hardcoded-paths.py src
