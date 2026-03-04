@@ -226,10 +226,11 @@ agent.devops:
 # 示例：从 deepseek 开始，失败则尝试 zhipu，然后 ollama
 
 fallback_providers:
-  - deepseek     # 优先使用 DeepSeek（已验证有效）
-  - ollama       # 最低优先级（本地兜底，需启动服务）
+  - huawei_deepseek  # 最高优先级（华为 ModelArts，性价比高）
+  - deepseek         # ⚠️ 兜底（官方 API 价格较高，使用时告警）
+  - ollama           # 本地兜底（需启动服务）
 # 默认 profile
-default_profile: deepseek
+default_profile: huawei_deepseek
 
 # ============================================
 # Profile 优先级

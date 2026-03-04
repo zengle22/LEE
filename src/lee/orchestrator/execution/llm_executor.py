@@ -196,6 +196,14 @@ class LLMExecutor:
                 # 如果是 fallback provider，需要重新加载配置
                 if provider_idx > 0:
                     print(f"[LLM Executor] Trying fallback provider: {provider_name}")
+                    
+                    # ⚠️ 特殊告警：使用昂贵的 deepseek 官方 API
+                    if provider_name == "deepseek":
+                        print(f"\n⚠️ ⚠️ ⚠️ COST ALERT ⚠️ ⚠️ ⚠️")
+                        print(f"[LLM Executor] Using EXPENSIVE deepseek official API as fallback!")
+                        print(f"[LLM Executor] Huawei deepseek failed, falling back to costly provider.")
+                        print(f"⚠️ ⚠️ ⚠️ COST ALERT ⚠️ ⚠️ ⚠️\n")
+                    
                     self.profile = provider_name
                     self.config = self.config_manager.get_config(provider_name)
                     # 验证必要配置
