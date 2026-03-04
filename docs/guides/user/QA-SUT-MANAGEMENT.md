@@ -278,6 +278,79 @@ config = TestConfig(scripts=[], sut_config=sut)
 
 ---
 
+## L2/L3 工作流集成
+
+SUT 配置已完整集成到 QA 测试工作流中。以下是完整的调用路径：
+
+### 完整调用链
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        完整调用路径                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. 用户启动 Test Run                                                    │
+│     └─▶ lee qa test-run start <plan> --env staging --base-url <url>   │
+│              │                                                              │
+│              │ params = {                                                 │
+│              │   environment: "staging",                                  │
+│              │   base_url: "https://..."  ←── SUT 配置已解析           │
+│              │ }                                                          │
+│              ▼                                                            │
+│  2. test_run.py 解析 base_url                                           │
+│     └─▶ resolve_sut_url(env)                                           │
+│         → 检查配置文件 → 返回 URL                                          │
+│              │                                                              │
+│              ▼                                                            │
+│  3. L2: Test Plan Execution                                            │
+│     └─▶ context.base_url = resolved_url                                 │
+│         (存储在 workflow instance data 中)                                │
+│              │                                                              │
+│              ▼                                                            │
+│  4. L2 spawn L3                                                        │
+│     └─▶ l3_input_schema: {                                              │
+│              environment: "staging",                                   │
+│              base_url: "https://..."  ←── 传递给 L3                  │
+│         }                                                                │
+│              │                                                              │
+│              ▼                                                            │
+│  5. L3: Test Set Execution                                             │
+│     └─▶ script_execution step                                          │
+│         → skill.runner.test_e2e                                        │
+│         → --base-url {{ inputs.base_url }}  ←── 使用 L3 输入中的 URL  │
+│              │                                                              │
+│              ▼                                                            │
+│  6. test_runner.py                                                     │
+│     └─▶ resolved_url = base_url  (直接使用，不重复解析)                 │
+│         → Playwright config.baseURL = resolved_url                       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 关键集成点
+
+| 层级 | 文件 | 变更 |
+|------|------|------|
+| CLI | `qa/test_run.py` | 添加 `--base-url` 参数，解析 SUT URL |
+| L2 模板 | `test-plan-l2-template.yaml` | 添加 `base_url` 到 context_fields 和 l3_input_schema |
+| Skill | `test-e2e-runner/skill.yaml` | 添加 `--base-url` CLI 参数 |
+
+### 使用方式
+
+```bash
+# 方式1：使用默认值（从 SUT 配置或环境默认）
+lee qa test-run start TP-001 --env staging
+
+# 方式2：显式指定 URL
+lee qa test-run start TP-001 --env staging --base-url "https://custom.com"
+
+# 方式3：使用预配置的 SUT
+lee qa sut init staging --base-url "https://myapp-staging.com"
+lee qa test-run start TP-001 --env staging
+```
+
+---
+
 ## test_runner 集成
 
 `test_runner` CLI 已集成 SUT 配置，使用方式：
@@ -383,4 +456,5 @@ A: 建议将 `tests/runtime/` 目录加入 `.gitignore`，因为这是运行时�
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| 1.1.0 | 2026-03-04 | 完整 L2/L3 工作流集成，添加 --base-url 参数和模板变更 |
 | 1.0.0 | 2026-03-04 | 初始版本：SUT 配置模块和 CLI 命令 |
