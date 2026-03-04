@@ -79,45 +79,84 @@ class PathConfig:
         """项目根目录"""
         return self._project_root
 
+    # === 工具目录 ===
     @property
-    def artifacts_dir(self) -> Path:
-        """获取 .artifacts 目录"""
-        return self._project_root / ".artifacts"
+    def project_config_dir(self) -> Path:
+        """获取 .project 目录（项目配置）"""
+        return self._project_root / ".project"
 
     @property
     def workflow_dir(self) -> Path:
-        """获取 .workflow 目录"""
+        """获取 .workflow 目录（工作流运行态）"""
         return self._project_root / ".workflow"
 
     @property
-    def outputs_dir(self) -> Path:
-        """获取 outputs 目录"""
-        return self._project_root / "outputs"
+    def artifacts_dir(self) -> Path:
+        """获取 .artifacts 目录（产出物）"""
+        return self._project_root / ".artifacts"
+
+    # === 内容目录 ===
+    @property
+    def spec_dir(self) -> Path:
+        """获取 spec 目录（规格 SSOT）"""
+        return self._project_root / "spec"
+
+    @property
+    def docs_dir(self) -> Path:
+        """获取 docs 目录（解释性文档）"""
+        return self._project_root / "docs"
+
+    @property
+    def src_dir(self) -> Path:
+        """获取 src 目录（源码）"""
+        return self._project_root / "src"
+
+    @property
+    def tests_dir(self) -> Path:
+        """获取 tests 目录（测试）"""
+        return self._project_root / "tests"
+
+    @property
+    def tools_dir(self) -> Path:
+        """获取 tools 目录（项目工具）"""
+        return self._project_root / "tools"
+
+    @property
+    def deploy_dir(self) -> Path:
+        """获取 deploy 目录（部署配置）"""
+        return self._project_root / "deploy"
+
+    @property
+    def legacy_dir(self) -> Path:
+        """获取 legacy 目录（兼容旧版）"""
+        return self._project_root / "legacy"
 
     def get_path(self, name: str) -> Optional[Path]:
         """
         获取指定名称的目录路径
 
         Args:
-            name: 目录名称（如 ".artifacts", "outputs"）
+            name: 目录名称（如 ".artifacts", "spec"）
 
         Returns:
             目录路径，如果不存在返回 None
 
         Example:
             config.get_path(".artifacts")  # -> Path("/path/to/.artifacts")
-            config.get_path("outputs")     # -> Path("/path/to/outputs")
+            config.get_path("spec")       # -> Path("/path/to/spec")
+            config.get_path("tools")       # -> Path("/path/to/tools")
         """
         # 规范化输入
         name = normalize_path(name).rstrip("/")
 
-        # 检查是否在允许的目录列表中
-        if name in TOOL_DIRECTORIES or name in {p.rstrip("/") for p in ALLOWED_WRITE_PREFIXES}:
-            return self._project_root / name
+        # 新标准目录
+        standard_dirs = {
+            ".project", ".workflow", ".artifacts",
+            "spec", "docs", "src", "tests", "tools", "deploy", "legacy"
+        }
 
-        # outputs 不是工具目录但允许写入
-        if name == "outputs":
-            return self._project_root / "outputs"
+        if name in standard_dirs:
+            return self._project_root / name
 
         return None
 

@@ -16,35 +16,46 @@ TOOL_DIRECTORIES: FrozenSet[str] = frozenset({
 
 # 工作流子目录定义 (用于替换硬编码)
 WORKFLOW_SUBDIRS = {
-    "traces": ".workflow/traces",
-    "evidence": ".workflow/evidence",
-    "tokens": ".workflow/tokens",
-    "compliance": ".workflow/compliance",
-    "env_check": ".workflow/env-check",
-    "workspace_cleanup": ".workflow/workspace-cleanup",
-    "events": ".workflow/events.jsonl",
-    "db": ".workflow/orchestrator.db",
-    "instances": ".workflow/instances",
-    "approvals": ".workflow/approvals",
+    "runs": ".workflow/runs",
+    "cache": ".workflow/cache",
 }
 
 # Artifacts 子目录
 ARTIFACTS_SUBDIRS = {
     "active": ".artifacts/active",
+    "frozen": ".artifacts/frozen",
+    "archive": ".artifacts/archive",
+}
+
+# 规格 SSOT 目录
+SPEC_SUBDIRS = {
+    "requirements": "spec/requirements",
+    "api": "spec/api",
+    "data": "spec/data",
+    "ui": "spec/ui",
+    "adr": "spec/adr",
 }
 
 # 允许写入的路径前缀集合 (统一使用正斜杠，兼容 Windows)
 ALLOWED_WRITE_PREFIXES: FrozenSet[str] = frozenset({
-    ".artifacts/",
-    ".workflow/",
-    "outputs/",
+    ".artifacts/",      # 产出物
+    ".workflow/",       # 工作流运行态
+    "tools/",          # 项目工具
+    "deploy/",         # 部署配置
 })
 
-# 冻结目录前缀集合 (禁止写入/删除)
+# 冻结目录前缀集合 (禁止写入/删除 - 业务核心)
 FROZEN_PREFIXES: FrozenSet[str] = frozenset({
-    "contracts/",
-    "src/",
-    "specs/",
+    "spec/",           # 规格 SSOT
+    "src/",            # 源码
+    "tests/",         # 测试
+    "docs/",          # 文档
+    "legacy/",         # 兼容旧版（只读）
+})
+
+# 项目配置目录（只读）
+PROJECT_CONFIG_PREFIXES: FrozenSet[str] = frozenset({
+    ".project/",       # 项目配置
 })
 
 
