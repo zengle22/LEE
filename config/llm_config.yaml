@@ -43,18 +43,18 @@ ollama:
   description: "本地 Ollama 服务，使用 Qwen2.5 模型（最低优先级，兜底）"
 
 
-# 华为 DeepSeek (ModelArts 部署)
+# 华为 DeepSeek (ModelArts 部署 - OpenAI 兼容端点)
 # 优先级：高
 huawei_deepseek:
   type: llm
-  provider: huawei_deepseek
-  base_url: https://api.modelarts-maas.com/v2/chat/completions
-  api_key: RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ
-  model: DeepSeek-R1
-  temperature: 0.5
+  provider: openai
+  base_url: https://api.modelarts-maas.com/openai/v1
+  api_key: 6LGK3QzeXXuucUO99ZHrP048nmw6xZbkyOZ8QL2UpEDKNX_J8a-SlJLYyg_Ncs5Any4tJFKyOmBAkwd2FCuLkw
+  model: DeepSeek-R1-0528
+  temperature: 0.7
   max_tokens: 16000
   timeout: 300
-  description: "华为 ModelArts 部署的 DeepSeek-R1 模型（高优先级）"
+  description: "华为 ModelArts 部署的 DeepSeek-R1-0528 模型（OpenAI 兼容端点）"
 
 
 
