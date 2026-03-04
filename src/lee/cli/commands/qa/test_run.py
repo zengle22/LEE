@@ -82,17 +82,20 @@ def test_run():
 @click.option("--build", default=None, help="构建版本（可选，用于记录）")
 @click.option("--commit", default=None, help="构建 commit（可选，用于记录）")
 @click.option("--env", default="test", help="测试环境")
+@click.option("--base-url", default=None, help="显式指定 SUT base URL（覆盖环境配置）")
 @click.option("--project-dir", default=".", help="项目目录")
 @click.option("--max-steps", default=50, show_default=True, help="最大执行步数")
-def start(test_plan_id: str, build: str, commit: str, env: str,
+def start(test_plan_id: str, build: str, commit: str, env: str, base_url: str | None,
           project_dir: str, max_steps: int) -> None:
     """启动 Test Run"""
-    _start_test_run(test_plan_id, build, commit, env, project_dir, max_steps)
+    _start_test_run(test_plan_id, build, commit, env, base_url, project_dir, max_steps)
 
 
-def _start_test_run(test_plan_id: str, build: str, commit: str, env: str,
+def _start_test_run(test_plan_id: str, build: str, commit: str, env: str, base_url: str | None,
                     project_dir: str, max_steps: int) -> None:
     """启动 Test Run 的实际实现"""
+    from lee.qa.runner.sut import resolve_sut_url
+
     registry = _load_registry(project_dir)
     workflows = registry.get("workflows", {})
     workflow_key = "qa.test-plan-execution"
@@ -108,11 +111,15 @@ def _start_test_run(test_plan_id: str, build: str, commit: str, env: str,
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
+    # 解析 base_url（优先级：CLI > 配置文件 > 默认值）
+    resolved_base_url = base_url or resolve_sut_url(env)
+
     params: Dict[str, Any] = {
         "test_plan_id": test_plan_id,
         "build_version": build or "",
         "build_commit": commit or "",
         "environment": env,
+        "base_url": resolved_base_url,
     }
 
     project_root = Path(project_dir).resolve()
@@ -147,6 +154,7 @@ def _start_test_run(test_plan_id: str, build: str, commit: str, env: str,
     else:
         click.echo(f"  Build: (未指定)")
     click.echo(f"  Environment: {env}")
+    click.echo(f"  Base URL: {resolved_base_url}")
 
     summary = pm_workflow(
         "run_until_blocked",

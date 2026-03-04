@@ -84,6 +84,7 @@ runtime:
     --test-set {{ inputs.test_set_path }}
     --out-dir {{ inputs.artifacts_dir }}
     --report-json {{ inputs.artifacts_dir }}/e2e-report.json
+    {% if inputs.base_url %}--base-url {{ inputs.base_url }}{% endif %}
   timeout_ms: 600000  # 10 分钟
 
 # ============================================

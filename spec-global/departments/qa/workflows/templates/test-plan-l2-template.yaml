@@ -170,6 +170,7 @@ l3_input_schema:
     - environment
     - env_check_result
     - execution_mode  # enforce | warn
+    - base_url  # SUT base URL (resolved from SUT config)
   optional_fields:
     - dependency_results  # Results from dependent Test Sets
 
@@ -280,6 +281,7 @@ instance_schema:
     - environment
     - execution_mode
     - target_test_sets  # Optional: specific Test Sets to execute
+    - base_url  # SUT base URL (resolved from SUT config or CLI)
   phase_fields:
     - id
     - complexity
