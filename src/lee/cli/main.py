@@ -46,6 +46,7 @@ from lee.cli.commands.artifacts import artifacts
 from lee.cli.commands.ssot import ssot
 from lee.cli.commands.context import context
 from lee.cli.commands.task_brief import task_brief
+from lee.orchestrator.core.io_guard import init_path_guard
 
 try:
     import fcntl
@@ -209,6 +210,10 @@ cli.add_command(task_brief)
 def main():
     lock_fd: Optional[int] = None
     try:
+        # 初始化路径守卫（只在 dev/CI 模式下启用）
+        project_root = _resolve_project_dir(sys.argv[1:])
+        init_path_guard(str(project_root))
+
         if (
             os.getenv(LOCK_ENV_DISABLE, "0") not in ("1", "true", "TRUE")
             and _should_lock(sys.argv[1:])
