@@ -16,6 +16,8 @@ from enum import Enum
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 
+from lee.orchestrator.core.path_policy import WORKFLOW_SUBDIRS
+
 
 class EventType(Enum):
     """事件类型"""
@@ -98,7 +100,7 @@ class Event:
 class EventLog:
     """事件日志管理器"""
 
-    LOG_FILE = ".workflow/events.jsonl"
+    LOG_FILE = WORKFLOW_SUBDIRS["events"]
 
     def __init__(self, project_dir: str, run_id: str = None):
         self.project_dir = Path(project_dir)

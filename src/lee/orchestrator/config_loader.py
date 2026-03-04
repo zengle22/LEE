@@ -44,6 +44,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from lee.orchestrator.core.path_policy import WORKFLOW_SUBDIRS
+
 logger = logging.getLogger(__name__)
 
 
@@ -101,25 +103,25 @@ class ExecutorConfig:
 class TracingConfig:
     """追踪配置"""
     enabled: bool = True
-    output_dir: str = ".workflow/traces"
+    output_dir: str = WORKFLOW_SUBDIRS["traces"]
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TracingConfig":
         return cls(
             enabled=data.get("enabled", True),
-            output_dir=data.get("output_dir", ".workflow/traces"),
+            output_dir=data.get("output_dir", WORKFLOW_SUBDIRS["traces"]),
         )
 
 
 @dataclass
 class EvidenceConfig:
     """证据收集配置"""
-    output_dir: str = ".workflow/evidence"
+    output_dir: str = WORKFLOW_SUBDIRS["evidence"]
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "EvidenceConfig":
         return cls(
-            output_dir=data.get("output_dir", ".workflow/evidence"),
+            output_dir=data.get("output_dir", WORKFLOW_SUBDIRS["evidence"]),
         )
 
 

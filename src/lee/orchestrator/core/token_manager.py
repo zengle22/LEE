@@ -18,6 +18,8 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 
+from .path_policy import WORKFLOW_SUBDIRS
+
 
 @dataclass
 class StepToken:
@@ -40,8 +42,8 @@ class StepToken:
 class TokenManager:
     """令牌管理器"""
 
-    TOKENS_DIR = ".workflow/tokens"
-    SECRET_FILE = ".workflow/.secret"
+    TOKENS_DIR = WORKFLOW_SUBDIRS["tokens"]
+    SECRET_FILE = WORKFLOW_SUBDIRS["tokens"] + "/.secret"
     DEFAULT_VALIDITY_HOURS = 4
 
     def __init__(self, project_dir: str):

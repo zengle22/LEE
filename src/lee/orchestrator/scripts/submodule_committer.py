@@ -11,6 +11,8 @@ from pathlib import Path
 import json
 import re
 
+from lee.orchestrator.core.path_policy import WORKFLOW_SUBDIRS
+
 
 def run_git(cwd, *args):
     """执行 git 命令"""
@@ -144,7 +146,8 @@ def main():
         "total": len(commits)
     }
 
-    output_path = os.path.join(main_repo, ".workflow/workspace-cleanup/submodule-commit-result.yaml")
+    # 使用 path_policy 常量，避免硬编码
+    output_path = os.path.join(main_repo, WORKFLOW_SUBDIRS["workspace_cleanup"], "submodule-commit-result.yaml")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     with open(output_path, "w") as f:

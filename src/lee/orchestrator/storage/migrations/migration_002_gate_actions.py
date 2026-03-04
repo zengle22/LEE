@@ -18,6 +18,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from lee.orchestrator.core.path_policy import WORKFLOW_SUBDIRS
+
 
 # ============================================================================
 # Configuration
@@ -395,7 +397,7 @@ def main():
         sys.exit(1)
 
     command = sys.argv[1]
-    db_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(".workflow/orchestrator.db")
+    db_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(WORKFLOW_SUBDIRS["db"])
 
     if not db_path.exists():
         print(f"❌ Database not found: {db_path}")
