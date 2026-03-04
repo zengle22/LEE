@@ -59,6 +59,8 @@ ALLOWED_CONTEXTS: List[re.Pattern] = [
     # dataclass 默认值（不算硬编码）- 如 output_dir: str = ".workflow/traces"
     re.compile(r':\s*(str|Optional\[str\])\s*=\s*["\'](\.artifacts|\.workflow)/'),  # field default
     re.compile(r'data\.get\([^)]+,\s*["\'](\.artifacts|\.workflow)/'),  # data.get() fallback
+    # 字典键中的路径（文档说明）- 如 ".workflow/runs": "description"
+    re.compile(r'["\'](\.artifacts|\.workflow)/[^"\'\s]+["\']:\s*["\']'),  # dict key with description
 ]
 
 

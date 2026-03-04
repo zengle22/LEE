@@ -254,6 +254,69 @@ def _create_repo_registry(project_root: Path, auto_discover: bool = True, max_de
     click.echo(f"  ✓ Created .lee/repos.yaml ({repo_count} repo{'s' if repo_count > 1 else ''} found)")
 
 
+def _create_directory_structure(project_root: Path) -> dict:
+    """
+    创建完整的项目目录结构
+
+    Returns:
+        创建的目录字典
+    """
+    directories = {
+        # 工具目录（LEE 元数据）
+        ".project": "LEE 项目配置，元数据（SSOT of project）",
+        ".project/registry": "各类注册表索引（可选）",
+        # 注意: .project/config.yaml 由 _create_config 函数创建
+
+        ".workflow": "工作流运行态（可清理/可重建）",
+        ".workflow/runs": "每次 run 的工作目录（中间物都在这里）",  # WORKFLOW_SUBDIRS["runs"]
+        ".workflow/cache": "模型缓存、临时索引",  # WORKFLOW_SUBDIRS["cache"]
+
+        ".artifacts": "产出物（需要长期保留/可追溯）",
+        ".artifacts/active": "当前有效产物",  # ARTIFACTS_SUBDIRS["active"]
+        ".artifacts/frozen": "冻结版本（对外/对下游的接口）",  # ARTIFACTS_SUBDIRS["frozen"]
+        ".artifacts/archive": "归档历史",  # ARTIFACTS_SUBDIRS["archive"]
+
+        # 内容目录（业务输出）
+        "spec": "规格 SSOT（可 gate、可冻结）",
+        "spec/requirements": "需求/范围/验收标准（Definition of Done）",  # SPEC_SUBDIRS["requirements"]
+        "spec/api": "OpenAPI/Proto/AsyncAPI/DTO Schema",  # SPEC_SUBDIRS["api"]
+        "spec/data": "数据库/数据模型/迁移规范",  # SPEC_SUBDIRS["data"]
+        "spec/ui": "UI 规格（路由/页面/交互/文案）",  # SPEC_SUBDIRS["ui"]
+        "spec/adr": "架构决策记录（为什么这么做）",  # SPEC_SUBDIRS["adr"]
+
+        "docs": "解释性文档（生成/沉淀/知识）",
+        "docs/guides": "使用指南/开发指南",
+        "docs/reports": "阶段性报告/评审报告",
+        "docs/archive": "历史文档归档",
+
+        "src": "源码（前后端分离建议明确边界）",
+        "src/backend": "后端代码",
+        "src/frontend": "前端代码",
+
+        "tests": "测试（镜像 src 结构）",
+        "tests/unit": "单元测试",
+        "tests/integration": "集成测试",
+        "tests/e2e": "端到端测试",
+
+        "tools": "项目工具（代码生成、lint、自检脚本）",
+        "deploy": "部署（docker/helm/terraform）",
+
+        # 兼容旧版（默认只读）
+        "legacy": "兼容旧版（默认只读）",
+        "legacy/spec": "原 spec/dev|qa|devops 等迁移过来",
+        "legacy/evidence": "证据数据",
+        "legacy/env": "环境配置",
+    }
+
+    created = {}
+    for dir_path, description in directories.items():
+        full_path = project_root / dir_path
+        full_path.mkdir(parents=True, exist_ok=True)
+        created[dir_path] = description
+
+    return created
+
+
 def _create_config(project_root: Path, force: bool = False) -> None:
     """Create .lee/config.yaml if not exists"""
     lee_dir = project_root / ".lee"
@@ -298,14 +361,17 @@ def init(project_dir: str, no_discover: bool, depth: int, force: bool) -> None:
         click.echo(f"Initializing LEE project at: {project_root}")
     click.echo()
 
-    # Create standard directories
-    (project_root / "spec" / "dev").mkdir(parents=True, exist_ok=True)
-    (project_root / "spec" / "qa").mkdir(parents=True, exist_ok=True)
-    (project_root / "spec" / "devops").mkdir(parents=True, exist_ok=True)
-    (project_root / "evidence").mkdir(parents=True, exist_ok=True)
-    (project_root / "env").mkdir(parents=True, exist_ok=True)
-    (project_root / ".workflow").mkdir(parents=True, exist_ok=True)
-    click.echo("  ✓ Created standard directories (spec/, evidence/, env/, .workflow/)")
+    # Create complete directory structure
+    dirs = _create_directory_structure(project_root)
+
+    # 分类显示
+    tool_dirs = [d for d in dirs if d.startswith(".")]
+    content_dirs = [d for d in dirs if not d.startswith(".")]
+    legacy_dirs = ["spec/dev", "spec/qa", "spec/devops", "evidence", "env"]
+
+    click.echo(f"  ✓ Created tool directories: {', '.join(tool_dirs)}")
+    click.echo(f"  ✓ Created content directories: {', '.join(content_dirs[:5])}...")
+    click.echo(f"  ✓ Created legacy directories: {', '.join(legacy_dirs)}")
 
     # Create .lee directory with config files
     _create_repo_registry(project_root, auto_discover=not no_discover, max_depth=depth, force=force)
