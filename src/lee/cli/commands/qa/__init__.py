@@ -7,6 +7,7 @@ import click
 from .test_set import test_set
 from .test_plan import test_plan
 from .test_run import test_run
+from .sut import sut
 
 
 @click.group()
@@ -18,6 +19,7 @@ def qa():
 qa.add_command(test_set)
 qa.add_command(test_plan)
 qa.add_command(test_run)
+qa.add_command(sut)
 
 
 # 快捷命令
