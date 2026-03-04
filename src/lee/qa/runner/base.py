@@ -10,12 +10,15 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 import time
 
+# 导入 SUT 配置
+from lee.qa.runner.sut import SUTType, SUTConfig
+
 
 @dataclass
 class TestConfig:
     """Configuration for test execution"""
     scripts: List[Path]  # List of test script paths
-    base_url: str = "http://localhost:3000"
+    base_url: str = ""  # 空字符串表示使用 SUT 配置
     output_dir: Path = None
     headless: bool = True
     timeout: int = 30000
@@ -23,9 +26,21 @@ class TestConfig:
     trace_dir: Path = None
     video_dir: Path = None
     environment: str = "local"
+
+    # SUT 配置
+    sut_type: SUTType = SUTType.WEB
+    sut_config: Optional[SUTConfig] = None
+
     evidence_dir: Path = None  # Per-case evidence bundle directory
 
     def __post_init__(self):
+        # 如果 base_url 为空，尝试从 SUT 配置获取
+        if not self.base_url and self.sut_config:
+            self.base_url = self.sut_config.base_url
+        elif not self.base_url:
+            # 使用环境默认值
+            from lee.qa.runner.sut import URLResolver
+            self.base_url = URLResolver.DEFAULT_URLS.get(self.environment, "http://localhost:3000")
         if self.output_dir is None:
             self.output_dir = Path.cwd() / "test_output"
         self.output_dir = Path(self.output_dir)

@@ -203,6 +203,7 @@ def _run_local(
     try:
         from lee.qa.runner.local import LocalRunner
         from lee.qa.runner.base import TestConfig
+        from lee.qa.runner.sut import SUTConfigLoader, SUTType, resolve_sut_url
         from lee.qa.classifier.error_classifier import ErrorClassifier
         import yaml
     except ImportError as e:
@@ -227,16 +228,31 @@ def _run_local(
 
     logger.info(f"[INFO] 找到 {len(scripts)} 个测试脚本")
 
-    # 3. 配置执行器
+    # 3. 解析 base_url（使用 SUT 配置）
+    # 优先级：CLI --base-url > test_set.base_url > 环境默认值
+    resolved_base_url = base_url
+    if not resolved_base_url:
+        # 尝试从 test_set 获取 base_url
+        test_set_base_url = test_data.get("base_url")
+        if test_set_base_url:
+            resolved_base_url = test_set_base_url
+        else:
+            # 使用 SUT 配置解析
+            resolved_base_url = resolve_sut_url(environment)
+
+    logger.info(f"[INFO] 使用 base_url: {resolved_base_url}")
+
+    # 4. 配置执行器
     config = TestConfig(
         scripts=scripts,
-        base_url=base_url or test_data.get("base_url", "http://localhost:3000"),
+        base_url=resolved_base_url,
         output_dir=out_dir / "output",
         headless=True,
         environment=environment,
+        sut_type=SUTType.WEB,
     )
 
-    # 4. 检查环境
+    # 5. 检查环境
     runner = LocalRunner(config)
     env_checks = runner.check_environment()
 
