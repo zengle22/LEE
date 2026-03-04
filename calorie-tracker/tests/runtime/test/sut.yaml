@@ -1,9 +1,0 @@
-auth_type: null
-base_path: ''
-base_url: http://8.137.77.8:3002/
-enabled: true
-extras: {}
-metadata: {}
-name: test-default
-protocol: http
-sut_type: web

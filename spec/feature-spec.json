@@ -1,5 +1,0 @@
-{
-  "title": "Demo Feature",
-  "summary": "Add a demo flag to L3 pipeline",
-  "acceptance": ["Pipeline runs end-to-end in demo mode"]
-}

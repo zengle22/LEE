@@ -1,3 +1,0 @@
-# L3 Test Orchestration Demo Requirements
-# Single source of truth: project root pyproject.toml
--e ..
