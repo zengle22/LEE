@@ -43,6 +43,15 @@ last_updated: 2026-02-19
 - [V2 增强设计](architecture/v2-enhancement-design.md) - V2 版本增强设计
 - [改进项目计划](architecture/IMPROVEMENT_PROJECT_PLAN.md) - 框架改进计划
 
+## 🚀 框架演进
+
+LEE 框架的未来演进提案，作为后续宪法与实现规范的输入池。
+
+- [演进方向索引](lee-evolution/README.md) - 演进提案总览
+- [L1/L2/L3 分层宪法草案](lee-evolution/2026-02-11-l2-l3-layering-constitution-draft.md) - 责任闭环、授权拒绝、反模式清单
+- [Executor 双引擎演进](lee-evolution/2026-02-13-executor-dual-engine-langgraph.md) - LangGraph 渐进式替换方案
+- [LEE 2.0 风险控制模型](lee-evolution/2026-02-17-risk-control-model.md) - 风险指数、预算机制、三层干预策略
+
 ## 📖 用户指南
 
 ### 安装与设置
