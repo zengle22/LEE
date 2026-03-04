@@ -18,6 +18,7 @@ TOOL_DIRECTORIES: FrozenSet[str] = frozenset({
 WORKFLOW_SUBDIRS = {
     "runs": ".workflow/runs",
     "cache": ".workflow/cache",
+    "tokens": ".workflow/tokens",
 }
 
 # Artifacts 子目录
