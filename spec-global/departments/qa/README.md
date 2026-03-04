@@ -1,10 +1,10 @@
 # Testing Framework - Complete Guide
 # 完整的测试框架使用指南
 
-> **版本:** v2.0
-> **更新日期:** 2026-01-15
+> **版本:** v2.1
+> **更新日期:** 2026-03-03
 > **状态:** 生产就绪
-> **重大升级:** v1.0 → v2.0 引入双流程架构、多轮循环、完整用例管理体系
+> **重大升级:** v2.0 → v2.1 增强 L3 输出验证、DAG 依赖、可观测性
 
 ---
 
@@ -490,6 +490,42 @@ project/my-project/testing/
 ### Q4: 如何防止自证闭环？
 
 **A:** 严格角色权限，验证规则: `verified_by != owner_agent`
+
+---
+
+## 版本管理规则
+
+### 文件命名规范
+
+所有规范文件（contracts、agents、skills、gates、workflows）遵循以下命名规则：
+
+1. **不带版本号后缀**：文件名不包含版本号，如 `test-plan-l2-template.yaml`
+2. **版本在文件内部声明**：通过 `version` 字段注明当前版本
+3. **只保留最新版本**：目录中只保留一个最新版本的文件
+
+### 示例
+
+```yaml
+# test-plan-l2-template.yaml
+kind: l2_workflow_template
+version: "2.1"  # 版本号在此声明
+id: template.qa.test_plan_l2
+name: Test Plan Execution L2 Template
+...
+```
+
+### 版本升级流程
+
+1. 直接修改现有文件，更新 `version` 字段
+2. 在 README.md 的「版本变更」章节记录变更内容
+3. **不要**创建带版本号后缀的新文件（如 `-v2.1`）
+
+### 为什么这样设计？
+
+- ✅ 避免文件冗余（无需同时维护多个版本）
+- ✅ 简化引用路径（`workflow-registry.yaml` 无需更新）
+- ✅ 强制使用最新版本（防止误用旧版本）
+- ✅ 历史记录通过 Git 管理（无需文件级版本存档）
 
 ---
 

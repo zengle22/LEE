@@ -28,18 +28,6 @@ default:
 # 预定义 Provider 配置
 # ============================================
 
-# 智谱 GLM (coding endpoint)
-# 优先级：低
-zhipu:
-  type: llm
-  provider: zhipu
-  base_url: https://open.bigmodel.cn/api/coding/paas/v4
-  api_key: 1db2c215ff504d33a5cd2ff0cb510ea3.xeWYcHcsWoExmg0q
-  model: glm-5
-  temperature: 0.7
-  max_tokens: 8000
-  timeout: 90
-  description: "智谱 GLM 模型 (低优先级)"
 
 # 本地 Ollama (通用 LLM，最低优先级）
 # 优先级：最低（最先尝试）
@@ -69,18 +57,6 @@ huawei_deepseek:
   description: "华为 ModelArts 部署的 DeepSeek-R1 模型（高优先级）"
 
 
-# MiniMax (Alibaba)
-# 优先级：高
-minimax:
-  type: llm
-  provider: minimax
-  base_url: ${MINIMAX_BASE_URL:-https://api.minimaxi.com/anthropic}
-  api_key: ${MINIMAX_API_KEY:-sk-cp-0rOf7PG_XXzW0ptsjBGPPaRpcBhcskrm2JmxS0LZctAJs_kT809LxG0mGa5NCjd14-eaRXbR2hJvc5afdsfF-Ve_XBjr-r5iXtbiWo6H6V73S5eNuvnJDDo6gZpDSkeumPMIHU0MlQ}
-  model: ${MINIMAX_MODEL:-MiniMax-M2.1}
-  temperature: 0.7
-  max_tokens: 8000
-  timeout: 90
-  description: "MiniMax 模型（通过 Anthropic 兼容 API）"
 
 # DeepSeek 官方
 # 优先级：高
@@ -96,18 +72,6 @@ deepseek:
   timeout: 300
   description: "DeepSeek 官方 Coder 模型（高优先级）"
 
-# 阿里云 Qwen (DashScope)
-# 优先级：高
-qwen:
-  type: llm
-  provider: openai
-  base_url: https://coding.dashscope.aliyuncs.com/v1
-  api_key: sk-sp-9d5a89bb7b994af08299f047dd1bc1df
-  model: qwen3.5-plus
-  temperature: 0.7
-  max_tokens: 8000
-  timeout: 120
-  description: "阿里云 Qwen3.5 Plus 模型 (DashScope)"
 
 # OpenAI (GPT-4, GPT-3.5)
 # 优先级：高
@@ -260,24 +224,12 @@ agent.devops:
 #   - provider_name3  # 最低优先级（兜底）
 #
 # 示例：从 deepseek 开始，失败则尝试 zhipu，然后 ollama
-# 阿里云 Qwen (DashScope)
-# 优先级：高
-qwen:
-  type: llm
-  provider: openai
-  base_url: https://coding.dashscope.aliyuncs.com/v1
-  api_key: sk-sp-9d5a89bb7b994af08299f047dd1bc1df
-  model: qwen3.5-plus
-  temperature: 0.7
-  max_tokens: 8000
-  timeout: 120
-  description: "阿里云 Qwen3.5 Plus 模型 (DashScope)"
 
 fallback_providers:
-  - qwen         # 优先使用 qwen
-  - deepseek     # 高优先级
-  - zhipu        # 中优先级
-  - ollama       # 最低优先级（本地兜底）
+  - deepseek     # 优先使用 DeepSeek（已验证有效）
+  - ollama       # 最低优先级（本地兜底，需启动服务）
+# 默认 profile
+default_profile: deepseek
 
 # ============================================
 # Profile 优先级

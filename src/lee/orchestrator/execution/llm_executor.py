@@ -373,7 +373,9 @@ class LLMExecutor:
         elif not url.endswith("/chat/completions"):
             url = f"{url}/chat/completions"
 
-        timeout = aiohttp.ClientTimeout(total=float(os.getenv("LLM_TIMEOUT_SECONDS", "60")))
+        # 使用配置中的 timeout，环境变量优先
+        timeout_seconds = float(os.getenv("LLM_TIMEOUT_SECONDS", self.config.get("timeout", "300")))
+        timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
                 url,

@@ -140,6 +140,10 @@ steps:
     agent_id: agent.qa.result_judge
     mandatory: true
     depends_on: [behavior_compliance]
+    input:
+      runner_output: "{{ outputs.script_execution.runner_output_path }}"
+      evidence_dir: "{{ outputs.script_execution.evidence_dir }}"
+      expected_results: "{{ outputs.case_generation.cases_path }}"
     role_constraints:
       role: judge
       allowed_actions:
