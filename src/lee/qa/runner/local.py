@@ -51,10 +51,10 @@ class LocalRunner(BaseRunner):
         except Exception:
             checks["chromium"] = False
 
-        # Check pytest
+        # Check pytest (使用 python -m pytest 确保兼容性)
         try:
             result = subprocess.run(
-                ["pytest", "--version"],
+                [sys.executable, "-m", "pytest", "--version"],
                 capture_output=True,
                 timeout=5
             )
