@@ -9,6 +9,9 @@ import shutil
 
 import click
 import yaml
+from datetime import datetime
+
+from lee.orchestrator.core.project_config import DirectoryStructureConfig, DirectoryConfig
 
 
 def _copy_tree(src: Path, dest: Path) -> None:
@@ -317,6 +320,128 @@ def _create_directory_structure(project_root: Path) -> dict:
     return created
 
 
+def _create_dirs_yaml(project_root: Path, force: bool = False) -> None:
+    """Create .project/dirs.yaml - Directory structure SSOT"""
+    project_config_dir = project_root / ".project"
+    project_config_dir.mkdir(parents=True, exist_ok=True)
+
+    config_file = project_config_dir / "dirs.yaml"
+
+    if config_file.exists() and not force:
+        click.echo(f"  ✓ dirs.yaml already exists (use --force to regenerate)")
+        return
+
+    # Create directory structure config matching path_policy.py
+    directories = {
+        "config_dir": DirectoryConfig(
+            name="config_dir",
+            path=".project",
+            description="Project configuration and metadata (SSOT of project)",
+            subdirs=["registry"],
+            structure="flat",
+            naming="default",
+        ),
+        "workflow_dir": DirectoryConfig(
+            name="workflow_dir",
+            path=".workflow",
+            description="Workflow execution state and temporary files",
+            subdirs=["runs", "cache", "traces", "evidence", "tokens", "compliance", "env-check", "instances", "approvals"],
+            structure="flat",
+            naming="default",
+        ),
+        "artifacts_dir": DirectoryConfig(
+            name="artifacts_dir",
+            path=".artifacts",
+            description="Build artifacts and outputs (long-term retention)",
+            subdirs=["active", "frozen", "archive"],
+            structure="layered",
+            naming="default",
+        ),
+        "spec_dir": DirectoryConfig(
+            name="spec_dir",
+            path="spec",
+            description="Specification SSOT (gate-able, freezable)",
+            subdirs=["requirements", "api", "data", "ui", "adr"],
+            structure="flat",
+            naming="default",
+        ),
+        "docs_dir": DirectoryConfig(
+            name="docs_dir",
+            path="docs",
+            description="Explanatory documentation (generated/precipitated/knowledge)",
+            subdirs=["guides", "reports", "archive"],
+            structure="flat",
+            naming="descriptive",
+        ),
+        "src_dir": DirectoryConfig(
+            name="src_dir",
+            path="src",
+            description="Source code (backend/frontend separation recommended)",
+            subdirs=["backend", "frontend"],
+            structure="module",
+            naming="default",
+        ),
+        "tests_dir": DirectoryConfig(
+            name="tests_dir",
+            path="tests",
+            description="Test files (mirror src structure)",
+            subdirs=["unit", "integration", "e2e"],
+            structure="hierarchical",
+            naming="default",
+        ),
+        "tools_dir": DirectoryConfig(
+            name="tools_dir",
+            path="tools",
+            description="Project tools (code generation, lint, self-check scripts)",
+            subdirs=[],
+            structure="flat",
+            naming="default",
+        ),
+        "deploy_dir": DirectoryConfig(
+            name="deploy_dir",
+            path="deploy",
+            description="Deployment configuration (docker/helm/terraform)",
+            subdirs=[],
+            structure="flat",
+            naming="default",
+        ),
+        "legacy_dir": DirectoryConfig(
+            name="legacy_dir",
+            path="legacy",
+            description="Legacy compatibility (read-only by default)",
+            subdirs=["spec", "evidence", "env"],
+            structure="flat",
+            naming="default",
+            cleanup=None,
+        ),
+    }
+
+    config = DirectoryStructureConfig(
+        project_dir=project_root,
+        version="1.0",
+        initialized_at=datetime.now().isoformat(),
+        initialized_by="lee-init",
+        project_name=project_root.name,
+        directories=directories,
+        naming_conventions={
+            "contracts": "{layer}/{version}/{contract_name}.yaml",
+            "docs": "{category}/{YYYY-MM-DD}-{title}.md",
+            "source": "{module}/{file_name}.{ext}",
+            "tests": "{type}/{test_name}_test.{ext}",
+            "outputs": "{step_id}/{artifact_name}.{ext}",
+        },
+        constraints={
+            "strict_path_validation": True,
+            "forbid_creation_outside_defined_dirs": True,
+            "require_initialization": True,
+            "allow_overrides": False,
+        },
+    )
+
+    config.save()
+    click.echo(f"  ✓ Created .project/dirs.yaml")
+
+
 def _create_config(project_root: Path, force: bool = False) -> None:
     """Create .lee/config.yaml if not exists"""
     lee_dir = project_root / ".lee"
@@ -372,6 +497,9 @@ def init(project_dir: str, no_discover: bool, depth: int, force: bool) -> None:
     click.echo(f"  ✓ Created tool directories: {', '.join(tool_dirs)}")
     click.echo(f"  ✓ Created content directories: {', '.join(content_dirs[:5])}...")
     click.echo(f"  ✓ Created legacy directories: {', '.join(legacy_dirs)}")
+
+    # Create .project/dirs.yaml (Directory structure SSOT)
+    _create_dirs_yaml(project_root, force=force)
 
     # Create .lee directory with config files
     _create_repo_registry(project_root, auto_discover=not no_discover, max_depth=depth, force=force)
