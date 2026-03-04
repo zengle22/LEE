@@ -75,13 +75,29 @@ class TestPathConfig:
             config = PathConfig(tmpdir)
             assert config.workflow_dir == Path(tmpdir) / ".workflow"
 
-    def test_get_outputs_dir(self):
-        """测试获取 outputs 目录"""
+    def test_get_tools_dir(self):
+        """测试获取 tools 目录"""
         from src.lee.orchestrator.core.path_config import PathConfig
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = PathConfig(tmpdir)
-            assert config.outputs_dir == Path(tmpdir) / "outputs"
+            assert config.tools_dir == Path(tmpdir) / "tools"
+
+    def test_get_deploy_dir(self):
+        """测试获取 deploy 目录"""
+        from src.lee.orchestrator.core.path_config import PathConfig
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = PathConfig(tmpdir)
+            assert config.deploy_dir == Path(tmpdir) / "deploy"
+
+    def test_get_legacy_dir(self):
+        """测试获取 legacy 目录"""
+        from src.lee.orchestrator.core.path_config import PathConfig
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = PathConfig(tmpdir)
+            assert config.legacy_dir == Path(tmpdir) / "legacy"
 
     def test_get_path_valid(self):
         """测试获取有效路径"""
@@ -90,8 +106,11 @@ class TestPathConfig:
         with tempfile.TemporaryDirectory() as tmpdir:
             config = PathConfig(tmpdir)
 
+            # 新目录结构
             assert config.get_path(".artifacts") == Path(tmpdir) / ".artifacts"
-            assert config.get_path("outputs") == Path(tmpdir) / "outputs"
+            assert config.get_path("spec") == Path(tmpdir) / "spec"
+            assert config.get_path("tools") == Path(tmpdir) / "tools"
+            assert config.get_path("deploy") == Path(tmpdir) / "deploy"
 
     def test_get_path_invalid(self):
         """测试获取无效路径"""
@@ -107,19 +126,13 @@ class TestPathConfig:
 
         config = PathConfig("/tmp/test-project")
 
-        assert config.is_allowed_write("outputs/test.txt") is True
+        # 新目录结构允许写入
         assert config.is_allowed_write(".artifacts/active/run1") is True
+        assert config.is_allowed_write("tools/file.txt") is True
+        assert config.is_allowed_write("deploy/docker/Dockerfile") is True
+        # src/spec/docs/tests 是冻结目录
         assert config.is_allowed_write("src/test.py") is False
-
-    def test_is_frozen(self):
-        """测试冻结目录检查"""
-        from src.lee.orchestrator.core.path_config import PathConfig
-
-        config = PathConfig("/tmp/test-project")
-
-        assert config.is_frozen("src/test.py") is True
-        assert config.is_frozen("contracts/contract.yaml") is True
-        assert config.is_frozen("outputs/test.txt") is False
+        assert config.is_allowed_write("spec/requirements.yaml") is False
 
 
 class TestPathGuard:
@@ -137,29 +150,38 @@ class TestPathPolicy:
         """测试路径规范化"""
         from src.lee.orchestrator.core.path_policy import normalize_path
 
-        assert normalize_path("outputs/test.txt") == "outputs/test.txt"
-        assert normalize_path(r"outputs\test.txt") == "outputs/test.txt"
+        assert normalize_path("tools/file.txt") == "tools/file.txt"
+        assert normalize_path(r"tools\file.txt") == "tools/file.txt"
         assert normalize_path(r"src\file.py") == "src/file.py"
 
     def test_is_allowed_write_path(self):
         """测试允许写入路径判断"""
         from src.lee.orchestrator.core.path_policy import is_allowed_write_path
 
-        assert is_allowed_write_path("outputs/test.txt") is True
+        # 新目录结构允许写入
         assert is_allowed_write_path(".artifacts/active/run1") is True
-        assert is_allowed_write_path("outputs") is True  # 根目录本身
+        assert is_allowed_write_path("tools/file.txt") is True
+        assert is_allowed_write_path("deploy/docker/Dockerfile") is True
+        assert is_allowed_write_path("tools") is True  # 根目录本身
+        # 冻结目录
         assert is_allowed_write_path("src/test.py") is False
-        assert is_allowed_write_path("contracts/test.yaml") is False
+        assert is_allowed_write_path("spec/requirements.yaml") is False
+        assert is_allowed_write_path("docs/guides/guide.md") is False
 
     def test_is_frozen_path(self):
         """测试冻结目录判断"""
         from src.lee.orchestrator.core.path_policy import is_frozen_path
 
+        # 新目录结构冻结
         assert is_frozen_path("src/test.py") is True
-        assert is_frozen_path("contracts/test.yaml") is True
-        assert is_frozen_path("specs/test.yaml") is True
+        assert is_frozen_path("spec/requirements.yaml") is True
+        assert is_frozen_path("docs/guides/guide.md") is True
+        assert is_frozen_path("tests/unit/test.py") is True
         assert is_frozen_path("src") is True  # 根目录本身
-        assert is_frozen_path("outputs/test.txt") is False
+        # 允许写入目录
+        assert is_frozen_path(".artifacts/active/run1") is False
+        assert is_frozen_path("tools/file.txt") is False
+        assert is_frozen_path("deploy/docker/Dockerfile") is False
 
     def test_is_dev_mode(self):
         """测试 dev 模式判断"""
