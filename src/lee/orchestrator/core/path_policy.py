@@ -19,6 +19,13 @@ WORKFLOW_SUBDIRS = {
     "runs": ".workflow/runs",
     "cache": ".workflow/cache",
     "tokens": ".workflow/tokens",
+    "events": ".workflow/events",
+    "traces": ".workflow/traces",
+    "evidence": ".workflow/evidence",
+    "workspace_cleanup": ".workflow/workspace_cleanup",
+    "db": ".workflow/db",
+    "compliance": ".workflow/compliance",
+    "env_check": ".workflow/env_check",
 }
 
 # Artifacts 子目录
