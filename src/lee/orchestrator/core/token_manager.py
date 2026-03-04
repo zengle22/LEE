@@ -18,8 +18,6 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 
-from .path_policy import WORKFLOW_SUBDIRS
-
 
 @dataclass
 class StepToken:
@@ -42,6 +40,8 @@ class StepToken:
 class TokenManager:
     """令牌管理器"""
 
+    # 使用 path_policy 常量
+    from .path_policy import WORKFLOW_SUBDIRS
     TOKENS_DIR = WORKFLOW_SUBDIRS["tokens"]
     SECRET_FILE = WORKFLOW_SUBDIRS["tokens"] + "/.secret"
     DEFAULT_VALIDITY_HOURS = 4
