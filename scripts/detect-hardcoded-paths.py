@@ -30,9 +30,19 @@ ALLOWED_FILES: FrozenSet[str] = frozenset({
     "path_policy.py",       # 策略定义文件本身
     "path_config.py",       # 路径配置服务
     "io_guard.py",          # 守卫实现文件本身
+    "detect-hardcoded-paths.py",  # CI 门禁脚本本身
     "__init__.py",          # 模块导入
     "test_",                # 测试文件
     ".pyc",
+})
+
+# 豁免的目录（这些目录中的路径不视为硬编码）
+EXCLUDED_DIRS: FrozenSet[str] = frozenset({
+    "evidence",             # 历史运行产物
+    "spec-global",           # 规范定义目录（声明期望的目录结构）
+    "tech-debt",             # 技术债务记录
+    ".workflow",             # 工作流运行态（输出目录）
+    ".artifacts",           # 产出物目录
 })
 
 # 允许的上下文模式（不算硬编码）
@@ -69,6 +79,15 @@ def is_allowed_file(file_path: Path) -> bool:
     filename = file_path.name
     for allowed in ALLOWED_FILES:
         if allowed in filename:
+            return True
+    return False
+
+
+def is_in_excluded_dir(file_path: Path) -> bool:
+    """检查文件是否在豁免目录中"""
+    path_str = str(file_path)
+    for excluded in EXCLUDED_DIRS:
+        if excluded in path_str:
             return True
     return False
 
@@ -113,6 +132,8 @@ def detect_hardcoded_paths(
         if not file_path.name.endswith(extensions):
             continue
         if is_allowed_file(file_path):
+            continue
+        if is_in_excluded_dir(file_path):
             continue
 
         try:
