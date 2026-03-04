@@ -43,32 +43,20 @@ ollama:
   description: "本地 Ollama 服务，使用 Qwen2.5 模型（最低优先级，兜底）"
 
 
-# 华为 DeepSeek (ModelArts 部署)
+# 华为 DeepSeek (ModelArts 部署 - OpenAI 兼容端点)
 # 优先级：高
 huawei_deepseek:
   type: llm
-  provider: huawei_deepseek
-  base_url: https://api.modelarts-maas.com/v2/chat/completions
-  api_key: RgYnotRfG6L7SB-qWJDAt5goaF-z6zpaUlS9QzpfbZtnw3RJk2OtZmR4CKx-vamjWvzqwZpDSkeumPMIHU0MlQ
+  provider: openai
+  base_url: https://api.modelarts-maas.com/openai/v1
+  api_key: 6LGK3QzeXXuucUO99ZHrP048nmw6xZbkyOZ8QL2UpEDKNX_J8a-SlJLYyg_Ncs5Any4tJFKyOmBAkwd2FCuLkw
   model: DeepSeek-R1
-  temperature: 0.5
+  temperature: 0.7
   max_tokens: 16000
   timeout: 300
-  description: "华为 ModelArts 部署的 DeepSeek-R1 模型（高优先级）"
+  description: "华为 ModelArts 部署的 DeepSeek-R1 模型（OpenAI 兼容端点）"
 
 
-# MiniMax (Alibaba)
-# 优先级：高
-minimax:
-  type: llm
-  provider: minimax
-  base_url: ${MINIMAX_BASE_URL:-https://api.minimaxi.com/anthropic}
-  api_key: ${MINIMAX_API_KEY:-sk-cp-0rOf7PG_XXzW0ptsjBGPPaRpcBhcskrm2JmxS0LZctAJs_kT809LxG0mGa5NCjd14-eaRXbR2hJvc5afdsfF-Ve_XBjr-r5iXtbiWo6H6V73S5eNuvnJDDo6gZpDSkeumPMIHU0MlQ}
-  model: ${MINIMAX_MODEL:-MiniMax-M2.1}
-  temperature: 0.7
-  max_tokens: 8000
-  timeout: 90
-  description: "MiniMax 模型（通过 Anthropic 兼容 API）"
 
 # DeepSeek 官方
 # 优先级：高
@@ -212,24 +200,13 @@ agent.devops:
 #   - provider_name3  # 最低优先级（兜底）
 #
 # 示例：从 deepseek 开始，失败则尝试 zhipu，然后 ollama
-# 阿里云 Qwen (DashScope)
-# 优先级：高
-qwen:
-  type: llm
-  provider: openai
-  base_url: https://coding.dashscope.aliyuncs.com/v1
-  api_key: sk-sp-9d5a89bb7b994af08299f047dd1bc1df
-  model: qwen3.5-plus
-  temperature: 0.7
-  max_tokens: 8000
-  timeout: 120
-  description: "阿里云 Qwen3.5 Plus 模型 (DashScope)"
 
 fallback_providers:
-  - qwen         # 优先使用 qwen
-  - deepseek     # 高优先级
-  - zhipu        # 中优先级
-  - ollama       # 最低优先级（本地兜底）
+  - huawei_deepseek  # 最高优先级（华为 ModelArts，性价比高）
+  - deepseek         # ⚠️ 兜底（官方 API 价格较高，使用时告警）
+  - ollama           # 本地兜底（需启动服务）
+# 默认 profile
+default_profile: huawei_deepseek
 
 # ============================================
 # Profile 优先级

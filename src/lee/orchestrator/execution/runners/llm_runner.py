@@ -25,13 +25,27 @@ from lee.orchestrator.storage.models import (
 )
 from lee.orchestrator.execution.retry import AsyncRetryExecutor, DEFAULT_RETRY_POLICY
 from lee.orchestrator.execution.runners.base import StepRunnerBase, RunnerContext
+from lee.orchestrator.execution.llm_executor import LLMExecutor as RealLLMExecutor
 
 
 class LLMRunner(StepRunnerBase):
-    """Agent (LLM) 步骤运行器"""
+    """Agent (LLM) 步骤运行器 - 使用智谱 GLM 模型"""
 
     def can_handle(self, step_kind: str) -> bool:
         return step_kind in ("agent", "llm")
+
+    def __init__(self, profile: str = "qwen", config_path: str = None,
+                 fallback_providers: list = None,
+                 **kwargs):
+        self.profile = profile
+        self.config_path = config_path
+        self.fallback_providers = fallback_providers
+
+        self._executor = RealLLMExecutor(
+            profile=profile,
+            config_path=config_path,
+            fallback_providers=fallback_providers
+        )
 
     async def execute(
         self,
@@ -122,9 +136,33 @@ class LLMRunner(StepRunnerBase):
         logging.info(f"[LLMRunner] Starting execution for step {step.id} (workflow={workflow_id}, execution={execution_id})")
 
         try:
+            # v3.5: 步骤级超时保护
+            import asyncio
+            STEP_TIMEOUT = int(os.getenv("LEE_STEP_TIMEOUT_SECONDS", "300"))  # 5分钟
+
             # v3.4: AsyncRetryExecutor 包裹 LLM 调用
             retry_executor = AsyncRetryExecutor(policy=DEFAULT_RETRY_POLICY)
-            retry_result = await retry_executor.execute(executor.execute, input_data)
+
+            try:
+                retry_result = await asyncio.wait_for(
+                    retry_executor.execute(executor.execute, input_data),
+                    timeout=STEP_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                error_msg = f"Step execution timeout after {STEP_TIMEOUT}s"
+                await ctx.state_machine.fail_step(workflow_id, step.id, error_msg)
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    error_message=error_msg,
+                    completed_at=datetime.now()
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=error_msg,
+                )
 
             if not retry_result.success:
                 error_msg = retry_result.final_error or "LLM call failed after retries"

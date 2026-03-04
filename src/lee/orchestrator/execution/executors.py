@@ -226,8 +226,8 @@ class ExecutorFactory:
                 return MockLLMExecutor(agent_id=kwargs.get("agent_id", ""))
 
             if "profile" not in kwargs:
-                # Default to zhipu for debugging; can be overridden via env var.
-                kwargs["profile"] = os.getenv("LLM_PROFILE", "zhipu")
+                # Default to qwen (fastest); can be overridden via env var.
+                kwargs["profile"] = os.getenv("LLM_PROFILE", "qwen")
 
             try:
                 return executor_class(**kwargs)

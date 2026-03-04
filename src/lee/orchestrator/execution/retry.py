@@ -285,6 +285,10 @@ class AsyncRetryExecutor:
                     total_duration_seconds=total_duration + (end_time - start_time),
                 )
 
+            except asyncio.TimeoutError:
+                # 超时异常不重试，直接向上抛出
+                raise
+
             except Exception as e:
                 end_time = time.time()
                 attempt_record.success = False

@@ -929,7 +929,18 @@ class TemplateManager:
         outputs_raw = step_dict.get("outputs", [])
         outputs = []
         for output_item in outputs_raw:
-            if isinstance(output_item, dict):
+            if isinstance(output_item, str):
+                # 字符串格式：直接作为路径
+                path = output_item
+                output_type = "dir" if path.endswith("/") else "file"
+                outputs.append(OutputSpec(
+                    type=output_type,
+                    path=path,
+                    format=self._infer_format(path),
+                    required=True,
+                    description="",
+                ))
+            elif isinstance(output_item, dict):
                 if "type" not in output_item:
                     path = output_item.get("path", "")
                     output_type = "dir" if path.endswith("/") else "file"
@@ -1064,7 +1075,22 @@ class TemplateManager:
         outputs_raw = step_data.get("outputs", [])
         outputs = []
         for output_item in outputs_raw:
-            if isinstance(output_item, dict):
+            if isinstance(output_item, str):
+                # 字符串格式：直接作为路径
+                path = output_item
+                if path.endswith("/"):
+                    output_type = "dir"
+                else:
+                    output_type = "file"
+
+                outputs.append(OutputSpec(
+                    type=output_type,
+                    path=path,
+                    format=self._infer_format(path),
+                    required=True,
+                    description="",
+                ))
+            elif isinstance(output_item, dict):
                 # 兼容旧格式：{path, required, description}
                 if "type" not in output_item:
                     # 根据 path 判断类型

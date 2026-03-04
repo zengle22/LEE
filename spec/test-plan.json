@@ -1,0 +1,5 @@
+{
+  "title": "Demo Regression Plan",
+  "scopes": ["smoke", "regression"],
+  "environments": ["staging"]
+}
