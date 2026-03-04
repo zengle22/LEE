@@ -1,0 +1,9 @@
+auth_type: null
+base_path: ''
+base_url: http://localhost:3002/
+enabled: true
+extras: {}
+metadata: {}
+name: dev-default
+protocol: http
+sut_type: web
