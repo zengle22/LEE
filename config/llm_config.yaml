@@ -50,11 +50,11 @@ huawei_deepseek:
   provider: openai
   base_url: https://api.modelarts-maas.com/openai/v1
   api_key: 6LGK3QzeXXuucUO99ZHrP048nmw6xZbkyOZ8QL2UpEDKNX_J8a-SlJLYyg_Ncs5Any4tJFKyOmBAkwd2FCuLkw
-  model: DeepSeek-R1-0528
+  model: DeepSeek-R1
   temperature: 0.7
   max_tokens: 16000
   timeout: 300
-  description: "华为 ModelArts 部署的 DeepSeek-R1-0528 模型（OpenAI 兼容端点）"
+  description: "华为 ModelArts 部署的 DeepSeek-R1 模型（OpenAI 兼容端点）"
 
 
 
