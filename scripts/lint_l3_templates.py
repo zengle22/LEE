@@ -120,7 +120,12 @@ L3_SCHEMA = {
                 "input": {"type": "object"},
                 "outputs": {
                     "type": "array",
-                    "items": {"type": "string"}
+                    "items": {
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "object"}
+                        ]
+                    }
                 },
                 "role_constraints": {"type": "object"},
                 "checks": {
