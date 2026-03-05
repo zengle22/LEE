@@ -62,7 +62,7 @@ phases:
       - "env_check.status == 'completed'"
       - "env_check_result == 'pass'"
     spawns_l3: true
-    l3_template_id: template.qa.test_set_l3
+    l3_template_id: template.qa.test_set_execute
     execution_mode: inherit  # Inherit from L2 or specify
 
   - id: l3_output_validation
@@ -133,7 +133,7 @@ execution_strategies:
   L:
     description: "Spawn L3 - create L3 instance(s) for Test Set execution"
     spawns_l3: true
-    l3_template_id: template.qa.test_set_l3
+    l3_template_id: template.qa.test_set_execute
 
 # Test Set dependency configuration
 test_set_dependencies:

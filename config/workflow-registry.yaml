@@ -60,7 +60,7 @@ workflows:
       - target_test_sets
 
   qa.test-set-execution:
-    path: spec-global/departments/qa/workflows/templates/test-set-l3-template.yaml
+    path: spec-global/departments/qa/workflows/templates/test-set-execute-l3-template.yaml
     kind: l3_workflow_template
     description: "执行 Test Set (L3) - 单个 Test Set 执行"
     required_params:

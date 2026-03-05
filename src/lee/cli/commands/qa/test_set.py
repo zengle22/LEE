@@ -35,15 +35,76 @@ def _load_registry(project_dir: str = ".") -> Dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def _load_dirs_config(project_dir: Path) -> Dict[str, Any]:
+    """Load directory structure configuration from .project/dirs.yaml"""
+    config_file = project_dir / ".project" / "dirs.yaml"
+    if not config_file.exists():
+        # Fallback to default
+        return {
+            "directories": {
+                "specs_dir": {"path": "spec"},
+                "spec_dir": {"path": "spec"},  # 别名支持
+                "qa_specs_dir": {"path": "spec/qa"},
+                "src_dir": {"path": "src"},
+                "docs_dir": {"path": "docs"},
+                "tests_dir": {"path": "tests"},
+                "artifacts_dir": {"path": ".artifacts"},
+            }
+        }
+    
+    with open(config_file, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f) or {}
+
+
+def _build_dir_context(project_dir: Path) -> Dict[str, str]:
+    """Build directory context for template rendering."""
+    dirs_config = _load_dirs_config(project_dir)
+    directories = dirs_config.get("directories", {})
+    context = {}
+    
+    # 直接映射目录配置到模板变量
+    if "specs_dir" in directories:
+        context["specs_dir"] = directories["specs_dir"].get("path", "spec")
+    elif "spec_dir" in directories:
+        context["specs_dir"] = directories["spec_dir"].get("path", "spec")
+    else:
+        context["specs_dir"] = "spec"
+    
+    if "qa_specs_dir" in directories:
+        context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", "spec/qa")
+    else:
+        context["qa_specs_dir"] = "spec/qa"
+    
+    # 其他目录直接映射
+    for dir_name in ["src_dir", "docs_dir", "tests_dir", "artifacts_dir"]:
+        if dir_name in directories:
+            context[dir_name] = directories[dir_name].get("path", dir_name.replace("_dir", ""))
+        else:
+            defaults = {
+                "src_dir": "src",
+                "docs_dir": "docs",
+                "tests_dir": "tests",
+                "artifacts_dir": ".artifacts",
+            }
+            context[dir_name] = defaults.get(dir_name, dir_name.replace("_dir", ""))
+    
+    return context
+
+
 def _render_workflow_template(template_path: Path, params: Dict[str, Any], project_dir: Path) -> Path:
     with open(template_path, encoding="utf-8") as f:
         content = f.read()
 
+    # 构建目录上下文
+    dir_context = _build_dir_context(project_dir)
+    
     engine = TemplateEngine()
     # 将 params 展开到 context 中，使模板中的 {{ module }} 等变量可以直接访问
     # 同时保留 params 键以兼容某些使用 {{ params.xxx }} 的模板
     context = dict(params)  # 复制 params 到顶层
     context["params"] = params  # 同时保留 params 嵌套结构
+    context.update(dir_context)  # 注入目录变量
+    
     rendered = engine.render_string(content, context)
     yaml.safe_load(rendered)
 
@@ -85,12 +146,10 @@ def create(module: str, requirement: str, tech_design: str | None,
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
-    # 设置默认的 qa_specs_dir（QA 规格目录）
-    # 可以从项目配置中读取，这里使用默认的 spec/qa 路径
+    # 设置默认参数
     params: Dict[str, Any] = {
         "module": module,
         "requirement_doc": requirement,
-        "qa_specs_dir": "spec/qa",
     }
     if tech_design:
         params["tech_design"] = tech_design
@@ -230,7 +289,7 @@ def run_test_set(test_set_id: str, test_run_id: str, build_version: str,
     click.echo()
 
     # 创建 L3 工作流 - 使用完整路径
-    template_path = "spec-global/departments/qa/workflows/templates/test-set-l3-template.yaml"
+    template_path = "spec-global/departments/qa/workflows/templates/test-set-execute-l3-template.yaml"
     create_result = pm_workflow(
         "create",
         project_dir=str(project_root),
