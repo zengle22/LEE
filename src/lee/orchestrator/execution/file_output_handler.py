@@ -643,6 +643,10 @@ class FileOutputHandler:
         """
         解析路径变量并转换为绝对路径
 
+        支持两种变量格式：
+        1. ${VARIABLE} - 环境变量风格
+        2. {{ variable }} - Jinja2 模板风格
+
         Args:
             path: 原始路径
             context: 工作流上下文
@@ -650,7 +654,37 @@ class FileOutputHandler:
         Returns:
             解析后的绝对路径
         """
-        # 变量替换
+        # 构建模板渲染上下文
+        template_context = {}
+
+        # 从 context 中提取常用变量
+        # 优先使用顶层的 data，如果没有则使用 context 本身
+        if "data" in context:
+            data = context.get("data", {})
+            template_context.update(data)
+
+            # 从 data 中提取 params（模板渲染需要这些变量）
+            if "params" in data:
+                template_context.update(data.get("params", {}))
+        else:
+            # 如果没有 data，直接使用 context
+            template_context.update(context)
+
+        # 添加其他顶层变量（覆盖 data 中的同名变量）
+        for key in ["project_name", "qa_specs_dir", "module"]:
+            if key in context:
+                template_context[key] = context[key]
+
+        # 渲染 Jinja2 模板变量
+        if "{{" in path and "}}" in path:
+            from lee.orchestrator.core.template_engine import TemplateEngine
+            engine = TemplateEngine()
+            try:
+                path = engine.render_string(path, template_context)
+            except Exception:
+                pass  # 渲染失败时保留原样
+
+        # 变量替换 - ${PROJECT_NAME} 风格
         if "${PROJECT_NAME}" in path:
             project_name = context.get("project_name", context.get("data", {}).get("project_name", "ai-marathon-coach"))
             path = path.replace("${PROJECT_NAME}", project_name)

@@ -832,6 +832,31 @@ class TemplateManager:
                     # 解析 agent_id（支持 agent_id 或 run 字段）
                     agent_id = step_data.get("agent_id") or step_data.get("run", "")
 
+                    # 解析 outputs（内联解析，参考 _dict_to_step 中的逻辑）
+                    from lee.orchestrator.storage.models import OutputSpec
+                    outputs = []
+                    for output_item in step_data.get("outputs", []):
+                        if isinstance(output_item, str):
+                            path = output_item
+                            output_type = "dir" if path.endswith("/") else "file"
+                            outputs.append(OutputSpec(
+                                type=output_type,
+                                path=path,
+                                format=self._infer_format(path),
+                                required=True,
+                                description="",
+                            ))
+                        elif isinstance(output_item, dict):
+                            path = output_item.get("path", "")
+                            output_type = output_item.get("type") or ("dir" if path.endswith("/") else "file")
+                            outputs.append(OutputSpec(
+                                type=output_type,
+                                path=path,
+                                format=output_item.get("format") or self._infer_format(path),
+                                required=output_item.get("required", True),
+                                description=output_item.get("description", ""),
+                            ))
+
                     steps.append(Step(
                         id=step_id,
                         kind=kind,
@@ -843,6 +868,7 @@ class TemplateManager:
                             "name": step_data.get("name", ""),
                             "description": step_data.get("description", ""),
                         },
+                        outputs=outputs,
                         config={
                             "name": step_data.get("name", ""),
                             "description": step_data.get("description", ""),
@@ -863,6 +889,31 @@ class TemplateManager:
                 # 解析 agent_id（支持 agent_id 或 run 字段）
                 agent_id = step_data.get("agent_id") or step_data.get("run", "")
 
+                # 解析 outputs（内联解析）
+                from lee.orchestrator.storage.models import OutputSpec
+                outputs = []
+                for output_item in step_data.get("outputs", []):
+                    if isinstance(output_item, str):
+                        path = output_item
+                        output_type = "dir" if path.endswith("/") else "file"
+                        outputs.append(OutputSpec(
+                            type=output_type,
+                            path=path,
+                            format=self._infer_format(path),
+                            required=True,
+                            description="",
+                        ))
+                    elif isinstance(output_item, dict):
+                        path = output_item.get("path", "")
+                        output_type = output_item.get("type") or ("dir" if path.endswith("/") else "file")
+                        outputs.append(OutputSpec(
+                            type=output_type,
+                            path=path,
+                            format=output_item.get("format") or self._infer_format(path),
+                            required=output_item.get("required", True),
+                            description=output_item.get("description", ""),
+                        ))
+
                 steps.append(Step(
                     id=step_id,
                     kind=kind,
@@ -874,6 +925,7 @@ class TemplateManager:
                         "name": step_data.get("name", ""),
                         "description": step_data.get("description", ""),
                     },
+                    outputs=outputs,
                     config={
                         "name": step_data.get("name", ""),
                         "description": step_data.get("description", ""),
