@@ -24,13 +24,59 @@ T = TypeVar("T")
 
 # ==================== 核心 API ====================
 
-def get_builtin_spec_traversable():
+def _find_local_spec_root() -> Optional[Path]:
     """
-    获取包内 spec-global Traversable（不落盘）
+    查找项目本地的 spec-global 目录（优先）
+
+    查找顺序：
+    1. cwd/spec-global
+    2. cwd/../spec-global（父目录）
+    3. cwd/LEE/spec-global（子模块布局）
+    """
+    import os
+    cwd = Path.cwd()
+
+    # 检查常见布局
+    candidates = [
+        cwd / "spec-global",
+        cwd.parent / "spec-global",
+        cwd / "LEE" / "spec-global",
+        cwd / ".." / "LEE" / "spec-global",
+    ]
+
+    for p in candidates:
+        if p.is_dir():
+            return p
+
+    return None
+
+
+def get_builtin_spec_traversable(workspace_root: Optional[Path] = None):
+    """
+    获取 spec-global Traversable（支持本地优先）
+
+    优先级：
+    1. workspace_root/spec-global（本地开发）
+    2. 包内 data/spec-global
+
+    Args:
+        workspace_root: 可选的工作区根目录
 
     Returns:
         Traversable: 可用于读取 YAML/MD 等资源
     """
+    # 优先检查本地 spec-global
+    if workspace_root:
+        local_spec = workspace_root / "spec-global"
+        if local_spec.is_dir():
+            return local_spec
+
+    # 检查 cwd 附近的本地 spec-global
+    local_spec = _find_local_spec_root()
+    if local_spec:
+        return local_spec
+
+    # 退回包内
     return files("lee").joinpath("data/spec-global")
 
 
@@ -44,20 +90,23 @@ def get_builtin_config_traversable():
     return files("lee").joinpath("config")
 
 
-def with_builtin_spec_root(fn: Callable[[Path], T]) -> T:
+def with_builtin_spec_root(
+    fn: Callable[[Path], T],
+    workspace_root: Optional[Path] = None
+) -> T:
     """
     在真实 spec-root 路径上执行回调
 
-    使用 as_file 将 Traversable 展开为真实文件系统路径，
-    确保回调执行期间路径有效。
+    优先使用本地 spec-global（开发时），没有则用包内。
 
     Args:
         fn: 接受 Path 参数的回调函数
+        workspace_root: 可选的工作区根目录
 
     Returns:
         回调函数的返回值
     """
-    t = get_builtin_spec_traversable()
+    t = get_builtin_spec_traversable(workspace_root)
     with as_file(t) as p:
         return fn(p)
 
@@ -110,17 +159,19 @@ class SpecResolveResult:
         kind: 资源类型 (builtin/filesystem)
         value: 原始值
         resolved: 解析后的路径（仅 kind=filesystem 时有效）
+        workspace_root: 工作区根目录（用于 builtin 回退到本地）
     """
     source: Literal["cli", "env", "config", "builtin", "dev"]
     kind: Literal["builtin", "filesystem"]
     value: str
     resolved: Optional[Path] = None
+    workspace_root: Optional[Path] = None
 
     def with_path(self, fn: Callable[[Path], T]) -> T:
         """
         如果需要真实 Path，使用此回调
 
-        - builtin: 使用 with_builtin_spec_root 展开
+        - builtin: 优先本地 spec-global，否则用包内
         - filesystem: 使用 resolved 路径
 
         Args:
@@ -133,7 +184,7 @@ class SpecResolveResult:
             ValueError: 当 filesystem 类型但 resolved 为空时
         """
         if self.kind == "builtin":
-            return with_builtin_spec_root(fn)
+            return with_builtin_spec_root(fn, self.workspace_root)
         elif self.resolved:
             return fn(self.resolved)
         else:
@@ -191,7 +242,8 @@ def resolve_spec(input: SpecResolveInput) -> SpecResolveResult:
     return SpecResolveResult(
         source="builtin",
         kind="builtin",
-        value="builtin"
+        value="builtin",
+        workspace_root=input.workspace_root
     )
 
 
