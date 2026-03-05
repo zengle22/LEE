@@ -800,6 +800,9 @@ class TemplateManager:
         - kind: l3_workflow_template
         - 6 个标准步骤
         - 单点任务执行
+        - 支持两种格式：
+          1. 嵌套格式: stages -> steps (v1.2 新格式)
+          2. 扁平格式: steps 直接在顶层
 
         Args:
             doc: YAML 文档字典
@@ -809,38 +812,74 @@ class TemplateManager:
         Returns:
             WorkflowTemplate 对象
         """
-        # 支持 stages 和 steps 两种字段
-        steps_data = doc.get("stages", []) or doc.get("steps", [])
         steps = []
 
-        # 解析 L3 特有的 steps 格式
-        for step_data in steps_data:
-            step_id = step_data.get("id", "")
-            kind = step_data.get("kind", "agent")
+        # 格式1: 嵌套格式: stages -> steps (v1.2 新格式)
+        if "stages" in doc:
+            for stage in doc.get("stages", []):
+                stage_id = stage.get("id", "")
+                # 解析 stage 级别的 depends_on
+                stage_deps = stage.get("depends_on", [])
 
-            # 解析 depends_on
-            depends_on = step_data.get("depends_on", [])
+                for step_data in stage.get("steps", []):
+                    step_id = step_data.get("id", "")
+                    kind = step_data.get("kind", "agent")
 
-            # 解析 agent_id（支持 agent_id 或 run 字段）
-            agent_id = step_data.get("agent_id") or step_data.get("run", "")
+                    # 合并 stage 和 step 的 depends_on
+                    step_deps = step_data.get("depends_on", [])
+                    combined_deps = list(set(stage_deps + step_deps))
 
-            steps.append(Step(
-                id=step_id,
-                kind=kind,
-                agent_id=agent_id,  # L3 模板中的 agent_id
-                executor_type="llm" if kind == "agent" else "shell",
-                depends_on=depends_on,
-                input={
-                    "step_id": step_id,
-                    "name": step_data.get("name", ""),
-                    "description": step_data.get("description", ""),
-                },
-                config={
-                    "name": step_data.get("name", ""),
-                    "description": step_data.get("description", ""),
-                    "mandatory": step_data.get("mandatory", True),
-                },
-            ))
+                    # 解析 agent_id（支持 agent_id 或 run 字段）
+                    agent_id = step_data.get("agent_id") or step_data.get("run", "")
+
+                    steps.append(Step(
+                        id=step_id,
+                        kind=kind,
+                        agent_id=agent_id,
+                        executor_type="llm" if kind == "agent" else "shell",
+                        depends_on=combined_deps,
+                        input={
+                            "step_id": step_id,
+                            "name": step_data.get("name", ""),
+                            "description": step_data.get("description", ""),
+                        },
+                        config={
+                            "name": step_data.get("name", ""),
+                            "description": step_data.get("description", ""),
+                            "mandatory": step_data.get("mandatory", True),
+                            "stage_id": stage_id,
+                        },
+                    ))
+
+        # 格式2: 扁平 steps (旧格式)
+        elif "steps" in doc:
+            for step_data in doc.get("steps", []):
+                step_id = step_data.get("id", "")
+                kind = step_data.get("kind", "agent")
+
+                # 解析 depends_on
+                depends_on = step_data.get("depends_on", [])
+
+                # 解析 agent_id（支持 agent_id 或 run 字段）
+                agent_id = step_data.get("agent_id") or step_data.get("run", "")
+
+                steps.append(Step(
+                    id=step_id,
+                    kind=kind,
+                    agent_id=agent_id,
+                    executor_type="llm" if kind == "agent" else "shell",
+                    depends_on=depends_on,
+                    input={
+                        "step_id": step_id,
+                        "name": step_data.get("name", ""),
+                        "description": step_data.get("description", ""),
+                    },
+                    config={
+                        "name": step_data.get("name", ""),
+                        "description": step_data.get("description", ""),
+                        "mandatory": step_data.get("mandatory", True),
+                    },
+                ))
 
         return WorkflowTemplate(
             id=doc.get("id", template_id),
@@ -856,6 +895,7 @@ class TemplateManager:
             config={
                 "kind": "l3_workflow_template",
                 "execution_order": doc.get("execution_order", [s.id for s in steps]),
+                "stages": doc.get("stages", []),
             },
         )
 
