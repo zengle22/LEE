@@ -76,7 +76,8 @@ def create(module: str, requirement: str, tech_design: str | None,
     entry = workflows[workflow_key]
     template_path = Path(entry.get("path", ""))
     if not template_path.is_absolute():
-        template_path = (REGISTRY_PATH.parent.parent / template_path).resolve()
+        registry_path = _get_registry_path(project_dir)
+        template_path = (registry_path.parent.parent / template_path).resolve()
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
