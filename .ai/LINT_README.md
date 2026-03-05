@@ -1,89 +1,136 @@
-# L3 模板 Lint 检查 - 阿里云 Flow 配置指南
+# L3 模板 Lint 检查 - 配置指南
 
 ## 概述
 
-本目录包含 L3 Workflow Template 的 Lint 检查工具和在阿里云 Flow 上运行 CI 的配置。
+本目录包含 L3 Workflow Template 的 Lint 检查工具和 CI/CD 配置。
 
 ## 文件说明
 
 ```
 .ai/
 ├── flow-lint-l3.yml          # 阿里云 Flow 流水线配置
-└── LINT_README.md            # 本文件
+├── LINT_README.md            # 本文件
+scripts/
+├── lint_l3_templates.py      # L3 模板 Lint 检查工具
+├── migrate_l3_templates.py   # L3 模板迁移工具
+├── detect-hardcoded-paths.py # 硬编码路径检测工具
+├── git-pre-commit-hook.py    # Git pre-commit hook 实现
+├── git-pre-push-hook.py      # Git pre-push hook 实现
+└── install-git-hooks.py      # Git hooks 安装脚本
 ```
 
-## 在阿里云 Flow 配置 CI
+## 方式一：本地 Git Hooks（推荐）
 
-### 方式一：使用现有配置文件
+### 安装 Git Hooks
+
+```bash
+# 安装 hooks
+python scripts/install-git-hooks.py
+
+# 查看安装状态
+python scripts/install-git-hooks.py --status
+
+# 卸载 hooks
+python scripts/install-git-hooks.py --uninstall
+```
+
+### Hooks 功能
+
+| Hook | 触发时机 | 检查内容 |
+|------|----------|----------|
+| pre-commit | `git commit` 时 | 硬编码路径检测 |
+| pre-push | `git push` 时 | L3 模板 Lint 检查 |
+
+### 临时跳过 Hooks（不推荐）
+
+```bash
+git commit --no-verify
+git push --no-verify
+```
+
+## 方式二：阿里云 Flow CI/CD
+
+### 自动触发
+
+CI 流程会在以下情况自动运行：
+
+- **Push 到 main/master 分支**
+- **创建 Pull Request**
+- **修改路径**：
+  - `spec-global/departments/**/workflows/**/*.yaml`
+  - `scripts/lint_l3_templates.py`
+  - `scripts/detect-hardcoded-paths.py`
+  - `src/**/*.py`
+
+### 在阿里云 Flow 控制台配置
 
 1. 登录 [阿里云 Flow 控制台](https://flow.console.aliyun.com/)
 
-2. 选择你的项目（LEE）
+2. 选择你的项目（LEE/framework）
 
 3. 点击「流水线」→「创建流水线」
 
 4. 选择「导入 YAML 配置」
 
-5. 上传或选择 `.azure-pipelines/flow-lint-l3.yml` 文件
+5. 上传或选择 `azure-pipelines.yml` 文件
 
-6. 点击「创建」
+6. 点击「创建」并启用流水线
 
-### 方式二：手动配置
+### 手动配置
 
 1. 登录 [阿里云 Flow 控制台](https://flow.console.aliyun.com/)
 
-2. 选择你的项目（LEE）
+2. 选择项目 → 点击「流水线」→「创建流水线」
 
-3. 点击「流水线」→「创建流水线」
+3. 选择「空白模板」
 
-4. 选择「空白模板」
+4. 配置触发器（同上）
 
-5. 配置触发器：
-   - 代码推送：选择 `main` 和 `master` 分支
-   - 路径过滤：添加 `spec-global/departments/**/workflows/**/*.yaml`
-
-6. 添加构建步骤：
+5. 添加构建步骤：
    ```bash
-   # 环境设置
+   # 安装依赖
    pip3 install --quiet pyyaml jsonschema
    
-   # 运行 Lint
+   # 硬编码路径检测
+   python3 scripts/detect-hardcoded-paths.py src/
+   
+   # L3 模板 Lint 检查
    python3 scripts/lint_l3_templates.py spec-global/departments
    ```
 
-7. 保存并启用流水线
-
-### 方式三：使用 azure-pipelines.yml（根目录）
-
-阿里云 Flow 也支持 Azure Pipelines 格式，根目录的 `azure-pipelines.yml` 会被自动识别。
-
-## 触发条件
-
-Lint 检查会在以下情况自动运行：
-
-- **Push 到 main/master 分支**，且修改了：
-  - `spec-global/departments/**/workflows/**/*.yaml`
-  - `spec-global/departments/**/workflows/**/*.yml`
-  - `scripts/lint_l3_templates.py`
-
-- **创建 Merge Request** 到 main/master 分支，且修改了上述路径
+6. 保存并启用
 
 ## 本地测试
 
-在推送之前，可以在本地运行 Lint 检查：
+在 commit/push 之前，可以在本地运行检查：
 
 ```bash
 # 安装依赖
 pip install pyyaml jsonschema
 
-# 运行检查
+# 硬编码路径检测
+python scripts/detect-hardcoded-paths.py src/
+
+# L3 模板 Lint 检查
 python scripts/lint_l3_templates.py spec-global/departments
 
 # 检查特定文件
 python scripts/lint_l3_templates.py spec-global/departments/qa/workflows/templates/test-set-l3-template.yaml
 ```
 
-## 修复 Lint 错误
+## 修复问题
+
+### 硬编码路径
+
+如果检测到硬编码路径：
+
+```bash
+# 使用路径变量替代硬编码
+# 错误：.artifacts/qa/test-sets/
+# 正确：{{ qa_specs_dir }}/test-sets/
+```
+
+### L3 模板格式问题
 
 如果 Lint 检查失败，可以使用迁移脚本自动修复：
 
@@ -95,18 +142,13 @@ python scripts/migrate_l3_templates.py spec-global/departments
 python scripts/migrate_l3_templates.py spec-global/departments --no-dry-run
 ```
 
-## 通知配置（可选）
+## Schema 规则
 
-可以在流水线配置中添加钉钉通知：
-
-```yaml
-notifications:
-  failure:
-    - type: dingtalk
-      webhook: $(DINGTALK_WEBHOOK)
-```
-
-在阿里云 Flow 控制台配置环境变量 `DINGTALK_WEBHOOK`。
+- ✅ 根节点必须使用 `stages`（禁止根级别 `steps`）
+- ✅ 每个 `stage` 必须有 `kind: stage`
+- ✅ `step` 支持 `agent` 和 `skill` 两种类型
+- ✅ `agent` step 必须有 `agent_id`
+- ✅ `skill` step 必须有 `skill_id`
 
 ## 相关文档
 

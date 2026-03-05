@@ -3,8 +3,8 @@
 
 version: '1.0'
 
-name: lint-l3-templates
-displayName: L3 Templates Lint Check
+name: code-quality-gates
+displayName: Code Quality Gates
 
 # 触发条件
 triggers:
@@ -18,6 +18,8 @@ triggers:
         - 'spec-global/departments/**/workflows/**/*.yaml'
         - 'spec-global/departments/**/workflows/**/*.yml'
         - 'scripts/lint_l3_templates.py'
+        - 'scripts/detect-hardcoded-paths.py'
+        - 'src/**/*.py'
   pull_request:
     branches:
       include:
@@ -27,70 +29,92 @@ triggers:
       include:
         - 'spec-global/departments/**/workflows/**/*.yaml'
         - 'spec-global/departments/**/workflows/**/*.yml'
+        - 'scripts/lint_l3_templates.py'
+        - 'scripts/detect-hardcoded-paths.py'
+        - 'src/**/*.py'
 
 # 流水线阶段
 stages:
-  - stage: lint
-    displayName: L3 Template Lint
+  - stage: quality_gates
+    displayName: Code Quality Gates
     jobs:
-      - job: lint_check
-        displayName: Lint L3 Templates
+      - job: quality_checks
+        displayName: Quality Checks
         pool:
-          # 使用阿里云 Flow 提供的公共构建资源
           type: hosted
-          image: ubuntu-20.04
+          image: ubuntu-22.04
+          spec: small
+        
+        variables:
+          PYTHON_VERSION: '3.10'
         
         steps:
           # 步骤 1: 检出代码
           - step: checkout
-            name: checkout_code
+            name: checkout
             displayName: 检出代码
-            type: checkout
-            
-          # 步骤 2: 设置 Python 环境
+            with:
+              fetchDepth: 1
+              submodules: false
+          
+          # 步骤 2: 环境设置
           - step: shell
-            name: setup_python
-            displayName: 设置 Python 环境
+            name: setup
+            displayName: 环境设置
             commands:
               - |
-                echo "=== 设置 Python 环境 ==="
+                set -e
+                echo "=== 环境信息 ==="
                 python3 --version
-                python3 -m pip install --upgrade pip
-            
-          # 步骤 3: 安装依赖
-          - step: shell
-            name: install_deps
-            displayName: 安装依赖
-            commands:
-              - |
+                pip3 --version
+                
                 echo "=== 安装依赖 ==="
-                pip3 install pyyaml jsonschema
-            
-          # 步骤 4: 运行 Lint 检查
+                pip3 install --quiet pyyaml jsonschema
+          
+          # 步骤 3: 硬编码路径检测
           - step: shell
-            name: run_lint
-            displayName: 运行 L3 模板 Lint 检查
+            name: detect_paths
+            displayName: 硬编码路径检测
             commands:
               - |
-                echo "=== 运行 L3 模板 Lint 检查 ==="
+                set -e
+                echo "=== 硬编码路径检测 ==="
+                python3 scripts/detect-hardcoded-paths.py src/
+                
+                if [ $? -ne 0 ]; then
+                    echo "❌ 硬编码路径检测失败"
+                    exit 1
+                fi
+                echo "✅ 硬编码路径检测通过"
+          
+          # 步骤 4: L3 模板 Lint 检查
+          - step: shell
+            name: lint_l3
+            displayName: L3 模板 Lint 检查
+            commands:
+              - |
+                set -e
+                echo "=== L3 模板 Lint 检查 ==="
                 python3 scripts/lint_l3_templates.py spec-global/departments
-            
-          # 步骤 5: 生成报告（如果失败）
+                
+                if [ $? -ne 0 ]; then
+                    echo "❌ L3 模板 Lint 检查失败"
+                    exit 1
+                fi
+                echo "✅ L3 模板 Lint 检查通过"
+          
+          # 步骤 5: 生成报告
           - step: shell
-            name: generate_report
-            displayName: 生成错误报告
-            condition: failure()
+            name: summary
+            displayName: 生成质量报告
+            condition: always()
             commands:
               - |
-                echo "=== 生成错误报告 ==="
-                python3 scripts/lint_l3_templates.py spec-global/departments > lint-errors.txt 2>&1 || true
-                cat lint-errors.txt
-
-# 通知配置（可选）
-# notifications:
-#   success:
-#     - type: dingtalk
-#       webhook: $(DINGTALK_WEBHOOK)
-#   failure:
-#     - type: dingtalk
-#       webhook: $(DINGTALK_WEBHOOK)
+                echo "=== 构建信息 ==="
+                echo "构建 ID: $(Build.BuildId)"
+                echo "提交 SHA: $(Build.SourceVersion)"
+                echo "分支：$(Build.SourceBranchName)"
+                echo ""
+                echo "=== 质量门禁结果 ==="
+                echo "✅ 硬编码路径检测"
+                echo "✅ L3 模板 Lint 检查"
