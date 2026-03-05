@@ -43,11 +43,16 @@ stages:
         mandatory: true
         depends_on: []
         outputs:
-          - path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}/analysis.md"
+          - path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}.yaml"
+            type: file
+            format: yaml
+            description: "Test Set 设计资产（冻结）"
+            required: true
+          - path: "{{ tests_dir }}/qa/analysis/ts-{{ module }}/analysis.md"
             type: file
             format: markdown
-            description: "需求分析报告（包含模块边界和可测试特性）"
-            required: true
+            description: "需求分析报告（中间产物）"
+            required: false
 
     step_order:
       - requirement_analysis
@@ -70,11 +75,11 @@ stages:
         mandatory: true
         depends_on: []
         outputs:
-          - path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}/strategy-draft.yaml"
+          - path: "{{ tests_dir }}/qa/strategy/ts-{{ module }}/strategy-draft.yaml"
             type: file
             format: yaml
-            description: "测试策略草稿（包含测试策略、风险区域和测试重点）"
-            required: true
+            description: "测试策略草稿（中间产物）"
+            required: false
 
     step_order:
       - strategy_design
@@ -121,14 +126,69 @@ stages:
         mandatory: true
         depends_on: []
         outputs:
-          - path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}/review-report.md"
+          - path: "{{ tests_dir }}/qa/review/ts-{{ module }}/review-report.md"
             type: file
             format: markdown
-            description: "Test Set 审评报告（包含审评结果和批准状态）"
+            description: "Test Set 审评报告（中间产物）"
             required: false
 
     step_order:
       - test_set_review
+
+  - id: output_validation
+    name: "Output Validation"
+    kind: stage
+    description: "Validate Test Set design asset conforms to schema and all required files exist"
+    depends_on: [test_set_review]
+    gate:
+      type: auto_check
+      gate_id: gate.qa.output_validation
+      on_pass: stage_completed
+      on_fail: mark_failed_and_abort
+
+    steps:
+      - id: output_validation
+        name: "Output Validation"
+        kind: agent
+        description: |
+          Validate Test Set design asset conforms to schema and all required files exist.
+          This is the final quality gate before workflow completion.
+        agent_id: agent.qa.output_validator
+        mandatory: true
+        depends_on: []
+        checks:
+          - id: verify_test_set_exists
+            category: file_existence
+            description: "Test Set design asset must exist in qa_specs_dir"
+            severity: error
+            file_path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}.yaml"
+          - id: verify_test_set_schema
+            category: schema_validation
+            description: "Test Set must conform to test-set schema v1"
+            severity: error
+            schema_path: "../../contracts/test-set/v1/schema.yaml"
+            file_path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}.yaml"
+          - id: verify_analysis_report
+            category: file_existence
+            description: "Analysis report should exist (optional)"
+            severity: warning
+            file_path: "{{ tests_dir }}/qa/analysis/ts-{{ module }}/analysis.md"
+          - id: verify_strategy_draft
+            category: file_existence
+            description: "Strategy draft should exist (optional)"
+            severity: warning
+            file_path: "{{ tests_dir }}/qa/strategy/ts-{{ module }}/strategy-draft.yaml"
+        outputs:
+          - path: "{{ tests_dir }}/qa/validation/ts-{{ module }}/validation-report.json"
+            type: file
+            format: json
+            description: "Output validation report"
+            required: true
+          - validation_status
+          - validation_errors
+
+    step_order:
+      - output_validation
 
 # Default governance order (recommended)
 stage_order:
@@ -136,6 +196,7 @@ stage_order:
   - strategy_design
   - test_set_generation
   - test_set_review
+  - output_validation
 
 # Input parameters
 input_params:
@@ -159,15 +220,24 @@ output_contract:
   test_set:
     path: "{{ qa_specs_dir }}/test-sets/ts-{module}.yaml"
     schema: ../../contracts/test-set/v1/schema.yaml
-    description: "Generated Test Set design asset"
+    description: "Generated Test Set design asset (frozen)"
 
-  analysis_report:
-    path: "{{ qa_specs_dir }}/test-sets/ts-{module}/analysis.md"
-    description: "Requirement analysis report"
-
-  strategy_draft:
-    path: "{{ qa_specs_dir }}/test-sets/ts-{module}/strategy-draft.yaml"
-    description: "Test strategy draft"
+# Output structure
+output_structure: |
+  {{ qa_specs_dir }}/
+  └── test-sets/
+      └── ts-{module}.yaml              # Test Set 设计资产（冻结）
+  
+  {{ tests_dir }}/qa/
+  ├── analysis/
+  │   └── ts-{module}/
+  │       └── analysis.md               # 需求分析报告（中间产物）
+  ├── strategy/
+  │   └── ts-{module}/
+  │       └── strategy-draft.yaml       # 测试策略草稿（中间产物）
+  └── review/
+      └── ts-{module}/
+          └── review-report.md          # Test Set 审评报告（中间产物）
 
 # Human gates configuration
 human_gates:
@@ -206,11 +276,9 @@ instance_schema:
     - tech_design
   output_fields:
     - test_set_path
-    - analysis_report_path
-    - strategy_draft_path
     - review_status
 
-# State machine (kept as-is)
+# State machine
 state_machine:
   states:
     - INIT: "初始化"
@@ -251,12 +319,3 @@ state_machine:
         trigger: test_set_approved
       - to: TEST_SET_GENERATION
         trigger: test_set_rejected
-
-# Output structure (kept as-is)
-output_structure: |
-  {{ qa_specs_dir }}/
-  └── test-sets/
-      ├── ts-{module}.yaml              # Test Set 设计资产
-      └── ts-{module}/
-          ├── analysis.md               # 需求分析报告
-          └── strategy-draft.yaml       # 测试策略草稿
