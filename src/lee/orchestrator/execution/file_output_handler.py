@@ -678,10 +678,15 @@ class FileOutputHandler:
         # 渲染 Jinja2 模板变量
         if "{{" in path and "}}" in path:
             from lee.orchestrator.core.template_engine import TemplateEngine
+            import logging
+            logger = logging.getLogger(__name__)
             engine = TemplateEngine()
+            logger.info(f"Rendering path: {path}, context keys: {list(template_context.keys())}")
             try:
                 path = engine.render_string(path, template_context)
-            except Exception:
+                logger.info(f"Rendered path: {path}")
+            except Exception as e:
+                logger.warning(f"Path rendering failed: {e}")
                 pass  # 渲染失败时保留原样
 
         # 变量替换 - ${PROJECT_NAME} 风格
@@ -703,12 +708,100 @@ class FileOutputHandler:
             path: 文件路径
             content: 文件内容
         """
+        import logging
+        import re
+        logger = logging.getLogger(__name__)
+        
+        # 清理 Markdown 格式（如果内容是 YAML/JSON）
+        if path.endswith(('.yaml', '.yml', '.json')):
+            cleaned_content = self._clean_markdown_format(content)
+            if cleaned_content != content:
+                logger.info(f"Cleaned Markdown format from: {path}")
+                content = cleaned_content
+        
         # 创建目录
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         # 写入文件
         with open(path, 'w', encoding='utf-8') as f:
             f.write(content)
+    
+    def _clean_markdown_format(self, content: str) -> str:
+        """
+        清理 Markdown 格式，提取纯 YAML/JSON 内容
+        
+        Args:
+            content: 可能包含 Markdown 格式的内容
+        
+        Returns:
+            清理后的纯内容
+        """
+        import re
+        
+        original_content = content
+        
+        # 移除文件路径标记（如 **spec/qa/test-sets/ts-xxx.yaml**）
+        content = re.sub(r'^\*\*[^*]+\*\*\s*\n?', '', content, flags=re.MULTILINE)
+        
+        # 移除 Markdown 代码块开始标记（```yaml, ```json, ```）
+        content = re.sub(r'^```(?:yaml|json)?\s*\n?', '', content, flags=re.MULTILINE)
+        
+        # 移除 Markdown 代码块结束标记
+        content = re.sub(r'\n?\s*```\s*$', '', content, flags=re.MULTILINE)
+        
+        # 移除 Markdown 标题标记（###, ##, #）
+        content = re.sub(r'^#+\s+.*$', '', content, flags=re.MULTILINE)
+        
+        # 查找第一个 YAML 键的位置
+        lines = content.split('\n')
+        yaml_start = 0
+        yaml_end = len(lines)
+        
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            # 检查是否是 YAML 键的开始（排除注释和空行）
+            if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*\s*:', stripped):
+                yaml_start = i
+                break
+        
+        # 从后往前找，找到最后一个有效的 YAML 行
+        for i in range(len(lines) - 1, yaml_start, -1):
+            stripped = lines[i].strip()
+            # 如果是空行或注释，继续
+            if not stripped or stripped.startswith('#'):
+                continue
+            # 如果看起来像说明文字（包含数字列表、冒号解释、中文说明等）
+            if re.match(r'^\d+\.', stripped) or \
+               re.match(r'^To\s+complete:', stripped, re.IGNORECASE) or \
+               re.match(r'^This\s+(template|file|YAML)', stripped, re.IGNORECASE) or \
+               re.match(r'^该\s*(YAML|文件|此)', stripped) or \
+               re.match(r'^\d+\.?\s*$', stripped):  # 单独的数字行
+                yaml_end = i
+                break
+        
+        # 提取 YAML 内容
+        yaml_lines = lines[yaml_start:yaml_end]
+        
+        # 移除末尾的说明文字行
+        final_lines = []
+        for line in yaml_lines:
+            stripped = line.strip()
+            # 如果是说明文字的开始，停止
+            if re.match(r'^\d+\.\s+', stripped) or \
+               re.match(r'^To\s+complete:', stripped, re.IGNORECASE) or \
+               re.match(r'^This\s+(template|file|YAML)', stripped, re.IGNORECASE) or \
+               re.match(r'^该\s*(YAML|文件|此)', stripped) or \
+               re.match(r'^\d+\.?\s*$', stripped):
+                break
+            final_lines.append(line)
+        
+        result = '\n'.join(final_lines)
+        
+        # 如果清理后内容为空，返回原始内容
+        if not result.strip():
+            return original_content
+        
+        return result
 
     async def write_directory(
         self,
