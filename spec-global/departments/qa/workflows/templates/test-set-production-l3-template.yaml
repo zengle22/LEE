@@ -2,11 +2,10 @@
 # 生产 Test Set 设计资产工作流（L3）
 #
 # 职责: 将模块需求转化为 Test Set 设计资产
-#
 # 这是一个 L3 蓝本，用于从需求文档生成 Test Set
 
 kind: l3_workflow_template
-version: "1.1"
+version: "1.2"
 id: template.qa.test_set_production
 name: Test Set Production L3 Template
 description: |
@@ -18,68 +17,111 @@ description: |
   - Stage 3: Test Set Generation - Generate standardized Test Set YAML
   - Stage 4: Test Set Review - Review completeness and executability
 
+  NOTE (v1.2): migrated to stage+steps.
+  - Root uses `stages` only (governance layer).
+  - Work is performed by `stages[].steps` (execution layer).
+
 owner: qa-governance
 tags: [template, qa, test-set, design-asset, l3]
 
-# Standard 4-stage L3 process
 stages:
   - id: requirement_analysis
     name: "Requirement Analysis"
-    kind: agent
+    kind: stage
     description: "Analyze requirement document and extract testable features"
-    agent_id: agent.qa.requirement_analyzer
-    mandatory: true
     depends_on: []
     gate:
       type: human_review
       gate_id: gate.qa.analysis_review
-    outputs:
-      - module_boundary
-      - testable_features
-      - analysis_report
+
+    steps:
+      - id: requirement_analysis
+        name: "Requirement Analysis"
+        kind: agent
+        description: "Analyze requirement document and extract testable features"
+        agent_id: agent.qa.requirement_analyzer
+        mandatory: true
+        depends_on: []
+        outputs:
+          - module_boundary
+          - testable_features
+          - analysis_report
+
+    step_order:
+      - requirement_analysis
 
   - id: strategy_design
     name: "Test Strategy Design"
-    kind: agent
+    kind: stage
     description: "Design test strategy, focus areas, and risk areas"
-    agent_id: agent.qa.test_strategist
-    mandatory: true
     depends_on: [requirement_analysis]
     gate:
       type: human_review
       gate_id: gate.qa.strategy_review
-    outputs:
-      - test_strategy
-      - risk_areas
-      - test_focus
-      - strategy_draft
+
+    steps:
+      - id: strategy_design
+        name: "Test Strategy Design"
+        kind: agent
+        description: "Design test strategy, focus areas, and risk areas"
+        agent_id: agent.qa.test_strategist
+        mandatory: true
+        depends_on: []
+        outputs:
+          - test_strategy
+          - risk_areas
+          - test_focus
+          - strategy_draft
+
+    step_order:
+      - strategy_design
 
   - id: test_set_generation
     name: "Test Set Generation"
-    kind: agent
+    kind: stage
     description: "Generate standardized Test Set YAML from strategy"
-    agent_id: agent.qa.test_set_generator
-    mandatory: true
     depends_on: [strategy_design]
-    outputs:
-      - test_set_yaml  # Path to generated Test Set YAML
+
+    steps:
+      - id: test_set_generation
+        name: "Test Set Generation"
+        kind: agent
+        description: "Generate standardized Test Set YAML from strategy"
+        agent_id: agent.qa.test_set_generator
+        mandatory: true
+        depends_on: []
+        outputs:
+          - test_set_yaml  # Path to generated Test Set YAML
+
+    step_order:
+      - test_set_generation
 
   - id: test_set_review
     name: "Test Set Review"
-    kind: agent
+    kind: stage
     description: "Review Test Set completeness and executability"
-    agent_id: agent.qa.test_set_reviewer
-    mandatory: true
     depends_on: [test_set_generation]
     gate:
       type: human_approval
       gate_id: gate.qa.test_set_approval
-    outputs:
-      - review_result
-      - approval_status
 
-# Default execution order
-execution_order:
+    steps:
+      - id: test_set_review
+        name: "Test Set Review"
+        kind: agent
+        description: "Review Test Set completeness and executability"
+        agent_id: agent.qa.test_set_reviewer
+        mandatory: true
+        depends_on: []
+        outputs:
+          - review_result
+          - approval_status
+
+    step_order:
+      - test_set_review
+
+# Default governance order (recommended)
+stage_order:
   - requirement_analysis
   - strategy_design
   - test_set_generation
@@ -105,16 +147,16 @@ input_params:
 # Output contract
 output_contract:
   test_set:
-    path: "qa/test-sets/ts-{module}.yaml"
+    path: "{{ qa_specs_dir }}/test-sets/ts-{module}.yaml"
     schema: ../../contracts/test-set/v1/schema.yaml
     description: "Generated Test Set design asset"
 
   analysis_report:
-    path: "qa/test-sets/ts-{module}/analysis.md"
+    path: "{{ qa_specs_dir }}/test-sets/ts-{module}/analysis.md"
     description: "Requirement analysis report"
 
   strategy_draft:
-    path: "qa/test-sets/ts-{module}/strategy-draft.yaml"
+    path: "{{ qa_specs_dir }}/test-sets/ts-{module}/strategy-draft.yaml"
     description: "Test strategy draft"
 
 # Human gates configuration
@@ -158,7 +200,7 @@ instance_schema:
     - strategy_draft_path
     - review_status
 
-# State machine
+# State machine (kept as-is)
 state_machine:
   states:
     - INIT: "初始化"
@@ -200,9 +242,9 @@ state_machine:
       - to: TEST_SET_GENERATION
         trigger: test_set_rejected
 
-# Output structure
+# Output structure (kept as-is)
 output_structure: |
-  qa/
+  {{ qa_specs_dir }}/
   └── test-sets/
       ├── ts-{module}.yaml              # Test Set 设计资产
       └── ts-{module}/

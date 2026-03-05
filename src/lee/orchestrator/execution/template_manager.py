@@ -809,7 +809,8 @@ class TemplateManager:
         Returns:
             WorkflowTemplate 对象
         """
-        steps_data = doc.get("steps", [])
+        # 支持 stages 和 steps 两种字段
+        steps_data = doc.get("stages", []) or doc.get("steps", [])
         steps = []
 
         # 解析 L3 特有的 steps 格式
