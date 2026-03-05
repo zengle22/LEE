@@ -17,11 +17,27 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+def _get_package_config_path() -> Optional[Path]:
+    """ 目录路径"""
+    from获取包内 config lee.data_path import with_builtin_config_dir
+
+    try:
+        return with_builtin_config_dir(lambda p: p)
+    except Exception:
+        return None
+
+
 # 配置文件路径
-_CONFIG_FILE_PATHS = [
-    Path(__file__).parent.parent.parent.parent.parent.parent / "config" / "llm_config.yaml",
-    Path.cwd() / "config" / "llm_config.yaml",
-]
+_CONFIG_FILE_PATHS = []
+
+# 首先尝试包内配置
+pkg_config = _get_package_config_path()
+if pkg_config:
+    _CONFIG_FILE_PATHS.append(pkg_config / "llm_config.yaml")
+
+# 然后尝试项目配置
+_CONFIG_FILE_PATHS.append(Path.cwd() / "config" / "llm_config.yaml")
 
 
 @dataclass

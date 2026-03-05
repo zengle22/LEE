@@ -265,3 +265,47 @@ def load_config(project_root: Optional[str] = None,
                 config_path: Optional[str] = None) -> LeeConfig:
     """便捷函数：加载项目配置"""
     return ConfigLoader(project_root).load(config_path)
+
+
+# ── Resolver Integration ───────────────────────────────────────────────
+
+def resolve_spec_root(
+    project_root: str,
+    cli_spec_root: Optional[str] = None
+) -> "SpecResolveResult":
+    """
+    使用 Resolver 解析 spec_root
+
+    整合了 CLI 参数、环境变量、配置文件和 dev 模式。
+
+    Args:
+        project_root: 项目根目录
+        cli_spec_root: CLI 参数 --spec-root
+
+    Returns:
+        SpecResolveResult: 解析结果
+    """
+    from lee.data_path import (
+        resolve_spec,
+        SpecResolveInput,
+        load_lee_lock,
+        discover_workspace_root,
+        Path,
+    )
+
+    workspace_root = Path(project_root)
+    lock = load_lee_lock(workspace_root)
+
+    input = SpecResolveInput(
+        workspace_root=workspace_root,
+        cli_spec_root=cli_spec_root,
+        env_spec_root=os.getenv("LEE_SPEC_ROOT"),
+        lock_mode=lock.mode if lock else None,
+        lock_lee_src=lock.lee_src if lock else None,
+    )
+
+    # 还需要从配置文件读取 spec_root
+    config = load_config(project_root)
+    input.config_spec_root = config.spec_root
+
+    return resolve_spec(input)

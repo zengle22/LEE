@@ -46,6 +46,7 @@ from lee.cli.commands.artifacts import artifacts
 from lee.cli.commands.ssot import ssot
 from lee.cli.commands.context import context
 from lee.cli.commands.task_brief import task_brief
+from lee.cli.commands.doctor import doctor
 from lee.orchestrator.core.io_guard import init_path_guard
 
 try:
@@ -112,14 +113,38 @@ def _should_lock(argv: list[str]) -> bool:
 
 def _resolve_project_dir(argv: list[str]) -> Path:
     """
-    从 CLI 参数中解析 project-dir（若未指定则使用当前目录）
+    从 CLI 参数中解析 project-dir（若未指定则使用 discover_workspace_root 发现）
+
+    规则：
+    1. CLI 参数 --project-dir（最高优先级）
+    2. discover_workspace_root 自动发现 .lee 目录
+    3. 退回当前目录（此时 run 等命令应报错提示 init）
     """
+    # 1. CLI 参数
+    cli_project_dir = None
     for idx, arg in enumerate(argv):
         if arg == "--project-dir" and idx + 1 < len(argv):
-            return Path(argv[idx + 1]).resolve()
+            cli_project_dir = argv[idx + 1]
+            break
         if arg.startswith("--project-dir="):
-            return Path(arg.split("=", 1)[1]).resolve()
-    return Path.cwd().resolve()
+            cli_project_dir = arg.split("=", 1)[1]
+            break
+
+    if cli_project_dir:
+        return Path(cli_project_dir).resolve()
+
+    # 2. 使用 discover_workspace_root 自动发现
+    from lee.data_path import discover_workspace_root
+
+    cwd = Path.cwd()
+    workspace = discover_workspace_root(cwd)
+
+    # 如果发现 workspace 且包含 .lee 目录，直接返回
+    if (workspace / ".lee").is_dir():
+        return workspace
+
+    # 3. 退回 cwd（后续命令应检测并报错）
+    return cwd
 
 
 def _acquire_cli_lock(argv: list[str]) -> Optional[int]:
@@ -205,6 +230,7 @@ cli.add_command(artifacts)
 cli.add_command(ssot)
 cli.add_command(context)
 cli.add_command(task_brief)
+cli.add_command(doctor)
 
 
 def main():

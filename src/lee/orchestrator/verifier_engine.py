@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import yaml
 
 from lee.orchestrator.verifiers.base import VerifyResult, VerifyStatus
@@ -12,6 +12,17 @@ from lee.orchestrator.verifiers.coverage import CoverageVerifier
 from lee.orchestrator.verifiers.commit_format import CommitFormatVerifier
 from lee.orchestrator.verifiers.evidence import EvidenceExistsVerifier, EvidenceReferenceVerifier
 from lee.orchestrator.verifiers.behavior_compliance import BehaviorComplianceVerifier
+
+
+def _get_spec_global_path() -> Optional[Path]:
+    """获取包内 spec-global 路径（使用回调确保生命周期）"""
+    from lee.data_path import with_builtin_spec_root
+
+    try:
+        # 使用回调获取路径
+        return with_builtin_spec_root(lambda p: p)
+    except Exception:
+        return None
 
 
 class SchemaVerifier:
@@ -29,23 +40,28 @@ class SchemaVerifier:
         # 尝试多个可能的路径
         possible_paths = []
         project_root = context.get("project_root", ".")
-        lee_root = Path(__file__).parent.parent.parent.parent
-        spec_global = lee_root / "spec-global"
+
+        # 获取包内 spec-global 路径
+        spec_global = _get_spec_global_path()
 
         # 1. 相对于项目根目录
         possible_paths.append(Path(project_root) / schema_path)
 
         # 2. 查找 spec-global 中所有匹配的文件
         # 处理相对路径如 ../../contracts/xxx
-        if schema_path.startswith("../"):
+        if spec_global and schema_path.startswith("../"):
             # 提取文件名和可能的子路径
             basename = schema_path.split("/")[-1]
             # 在 spec-global 中递归查找
-            for match in spec_global.rglob(basename):
-                possible_paths.append(match)
+            try:
+                for match in spec_global.rglob(basename):
+                    possible_paths.append(match)
+            except Exception:
+                pass  # spec-global 可能不存在
 
-        # 3. 相对于 LEE 框架根目录
-        possible_paths.append(lee_root / schema_path)
+        # 3. 相对于 LEE 框架根目录（使用包内路径）
+        if spec_global:
+            possible_paths.append(spec_global.parent / schema_path)
 
         # 4. 作为绝对路径
         if Path(schema_path).is_absolute():

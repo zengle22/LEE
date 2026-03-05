@@ -1,0 +1,19 @@
+# MANIFEST.in - 确保 sdist 包含资源文件
+# 详见: https://setuptools.pypa.io/en/latest/userguide/miscellaneous.html
+
+# 包含所有 Python 文件
+include src/lee/**/*.py
+
+# 包含 spec-global 数据文件
+recursive-include src/lee/data/spec-global *
+recursive-include src/lee/config *
+
+# 包含配置和文档
+include README.md
+include CHANGELOG.md
+include LICENSE
+
+# 排除测试文件
+prune tests/
+prune docs/
+prune examples/

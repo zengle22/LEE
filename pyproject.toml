@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lee-framework"
-version = "0.1.0"
+version = "0.2.0"
 description = "通用 AI 工作流编排框架"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -39,6 +39,22 @@ lee = "lee.cli.main:main"
 where = ["src"]
 include = ["flowcore*", "lee*"]
 exclude = ["tests*", "docs*", "examples*", "demos*", "*.egg*"]
+
+# 打包资源文件（白名单策略）
+[tool.setuptools.package-data]
+lee = [
+    "data/spec-global/**/*.yaml",
+    "data/spec-global/**/*.yml",
+    "data/spec-global/**/*.md",
+    "data/spec-global/**/*.j2",
+    "data/spec-global/**/*.tmpl",
+    "data/spec-global/**/*.json",
+    "data/spec-global/**/*.txt",
+    "data/spec-global/**/*.png",
+    "data/spec-global/**/*.svg",
+    "config/**/*.yaml",
+    "config/**/*.yml",
+]
 
 [tool.black]
 line-length = 100

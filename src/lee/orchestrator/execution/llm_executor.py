@@ -17,16 +17,24 @@ from typing import Dict, Any, Optional, List
 from pathlib import Path
 from datetime import datetime
 
+
+def _get_package_config_path() -> Optional[Path]:
+    """获取包内 config 目录路径（使用回调确保生命周期）"""
+    from lee.data_path import with_builtin_config_dir
+
+    try:
+        return with_builtin_config_dir(lambda p: p)
+    except Exception:
+        return None
+
+
 # 自动加载 .env 文件
+# 注意：这里仍然需要 project_root 来加载 .env，这是用户项目相关的配置
+# 不应该从包内读取
 try:
     from dotenv import load_dotenv
-    # 加载项目根目录的 .env 文件
-    # __file__ = src/lee/orchestrator/execution/llm_executor.py
-    # 需要向上 5 级到项目根目录
-    project_root = Path(__file__).parent.parent.parent.parent.parent
-    env_file = project_root / ".env"
-    if env_file.exists():
-        load_dotenv(env_file)
+    # .env 文件应该从项目根目录加载，由调用方传入 project_root
+    # 这里不自动加载，改为在调用时由外部传入
 except ImportError:
     pass  # 没有安装 python-dotenv 时忽略
 
@@ -39,17 +47,16 @@ class LLMConfig:
         初始化 LLM 配置
 
         Args:
-            config_path: 配置文件路径，默认为 config/llm_config.yaml
+            config_path: 配置文件路径，默认为包内 config/llm_config.yaml
         """
         if config_path is None:
-            # 默认配置文件路径
-            # __file__ = src/lee/orchestrator/execution/llm_executor.py
-            # 需要向上 5 级到项目根目录
-            project_root = Path(__file__).parent.parent.parent.parent.parent
-            config_path = project_root / "config" / "llm_config.yaml"
+            # 优先使用包内配置
+            pkg_config = _get_package_config_path()
+            if pkg_config:
+                config_path = str(pkg_config / "llm_config.yaml")
 
-        self.config_path = Path(config_path)
-        self.configs = self._load_config()
+        self.config_path = Path(config_path) if config_path else None
+        self.configs = self._load_config() if self.config_path else {}
 
     def _load_config(self) -> Dict[str, Any]:
         """加载 YAML 配置文件"""
