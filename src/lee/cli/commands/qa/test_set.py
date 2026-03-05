@@ -131,7 +131,7 @@ def create(module: str, requirement: str, tech_design: str | None,
 def list_test_sets(project_dir: str) -> None:
     """列出所有 Test Set"""
     project_root = Path(project_dir).resolve()
-    test_sets_dir = project_root / "qa" / "test-sets"
+    test_sets_dir = project_root / "spec" / "qa" / "test-sets"
 
     if not test_sets_dir.exists():
         click.echo("暂无 Test Set")
@@ -161,9 +161,9 @@ def show_test_set(test_set_id: str, project_dir: str) -> None:
 
     # 尝试多种命名格式
     possible_paths = [
-        project_root / "qa" / "test-sets" / f"{test_set_id}.yaml",
-        project_root / "qa" / "test-sets" / f"ts-{test_set_id}.yaml",
-        project_root / "qa" / "test-sets" / f"ts-{test_set_id.lower().replace('_', '-')}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"{test_set_id}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"ts-{test_set_id}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"ts-{test_set_id.lower().replace('_', '-')}.yaml",
     ]
 
     test_set_path = None
@@ -199,9 +199,9 @@ def run_test_set(test_set_id: str, test_run_id: str, build_version: str,
 
     # 查找 Test Set 文件
     possible_paths = [
-        project_root / "qa" / "test-sets" / f"{test_set_id}.yaml",
-        project_root / "qa" / "test-sets" / f"ts-{test_set_id}.yaml",
-        project_root / "qa" / "test-sets" / f"ts-{test_set_id.lower().replace('_', '-')}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"{test_set_id}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"ts-{test_set_id}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"ts-{test_set_id.lower().replace('_', '-')}.yaml",
     ]
 
     test_set_path = None
