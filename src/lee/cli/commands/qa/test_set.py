@@ -40,7 +40,11 @@ def _render_workflow_template(template_path: Path, params: Dict[str, Any], proje
         content = f.read()
 
     engine = TemplateEngine()
-    rendered = engine.render_string(content, {"params": params})
+    # 将 params 展开到 context 中，使模板中的 {{ module }} 等变量可以直接访问
+    # 同时保留 params 键以兼容某些使用 {{ params.xxx }} 的模板
+    context = dict(params)  # 复制 params 到顶层
+    context["params"] = params  # 同时保留 params 嵌套结构
+    rendered = engine.render_string(content, context)
     yaml.safe_load(rendered)
 
     out_dir = project_dir / ".workflow" / "rendered"
@@ -81,9 +85,12 @@ def create(module: str, requirement: str, tech_design: str | None,
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
+    # 设置默认的 qa_specs_dir（QA 规格目录）
+    # 可以从项目配置中读取，这里使用默认的 spec/qa 路径
     params: Dict[str, Any] = {
         "module": module,
         "requirement_doc": requirement,
+        "qa_specs_dir": "spec/qa",
     }
     if tech_design:
         params["tech_design"] = tech_design
