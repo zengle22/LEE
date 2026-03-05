@@ -1,0 +1,96 @@
+# 阿里云 Flow 流水线配置文件
+# 放置在此文件后，需要在阿里云 Flow 控制台导入配置
+# 控制台地址：https://flow.console.aliyun.com/
+
+version: '1.0'
+
+name: lint-l3-templates
+displayName: L3 模板规范检查
+description: 自动检查 L3 Workflow Template 是否符合 JSON Schema 规范
+
+triggers:
+  push:
+    branches:
+      include:
+        - main
+        - master
+    paths:
+      include:
+        - 'spec-global/departments/**/workflows/**/*.yaml'
+        - 'spec-global/departments/**/workflows/**/*.yml'
+        - 'scripts/lint_l3_templates.py'
+  mr:  # 阿里云 CodeUp Merge Request 触发
+    branches:
+      include:
+        - main
+        - master
+    paths:
+      include:
+        - 'spec-global/departments/**/workflows/**/*.yaml'
+        - 'spec-global/departments/**/workflows/**/*.yml'
+
+stages:
+  - stage: lint
+    displayName: Lint 检查
+    failFast: true
+    jobs:
+      - job: lint_check
+        displayName: L3 模板校验
+        pool:
+          type: hosted
+          image: ubuntu-22.04
+          spec: small  # 小型构建资源
+        
+        variables:
+          PYTHON_VERSION: '3.10'
+        
+        steps:
+          - step: checkout
+            name: checkout
+            displayName: 代码检出
+            with:
+              fetchDepth: 1
+              submodules: false
+          
+          - step: shell
+            name: setup
+            displayName: 环境设置
+            commands:
+              - |
+                set -e
+                echo "=== 环境信息 ==="
+                python3 --version
+                pip3 --version
+                
+                echo "=== 安装依赖 ==="
+                pip3 install --quiet pyyaml jsonschema
+                
+                echo "=== 查找 L3 模板文件 ==="
+                find spec-global/departments -name "*l3*.yaml" -o -name "*l3*.yml" | head -20
+          
+          - step: shell
+            name: lint
+            displayName: 执行 Lint 检查
+            commands:
+              - |
+                set -e
+                echo "=== 开始 L3 模板 Lint 检查 ==="
+                python3 scripts/lint_l3_templates.py spec-global/departments
+                echo "=== Lint 检查完成 ==="
+          
+          - step: shell
+            name: report
+            displayName: 生成报告
+            condition: always()
+            commands:
+              - |
+                echo "=== 构建信息 ==="
+                echo "构建 ID: $(Build.BuildId)"
+                echo "提交 SHA: $(Build.SourceVersion)"
+                echo "分支：$(Build.SourceBranchName)"
+
+# 构建产物（可选，用于调试）
+# artifacts:
+#   - name: lint-report
+#     path: lint-errors.txt
+#     condition: failure()

@@ -1,0 +1,96 @@
+# 阿里云 Flow CI/CD 流水线配置
+# 文档：https://help.aliyun.com/product/44895.html
+
+version: '1.0'
+
+name: lint-l3-templates
+displayName: L3 Templates Lint Check
+
+# 触发条件
+triggers:
+  push:
+    branches:
+      include:
+        - main
+        - master
+    paths:
+      include:
+        - 'spec-global/departments/**/workflows/**/*.yaml'
+        - 'spec-global/departments/**/workflows/**/*.yml'
+        - 'scripts/lint_l3_templates.py'
+  pull_request:
+    branches:
+      include:
+        - main
+        - master
+    paths:
+      include:
+        - 'spec-global/departments/**/workflows/**/*.yaml'
+        - 'spec-global/departments/**/workflows/**/*.yml'
+
+# 流水线阶段
+stages:
+  - stage: lint
+    displayName: L3 Template Lint
+    jobs:
+      - job: lint_check
+        displayName: Lint L3 Templates
+        pool:
+          # 使用阿里云 Flow 提供的公共构建资源
+          type: hosted
+          image: ubuntu-20.04
+        
+        steps:
+          # 步骤 1: 检出代码
+          - step: checkout
+            name: checkout_code
+            displayName: 检出代码
+            type: checkout
+            
+          # 步骤 2: 设置 Python 环境
+          - step: shell
+            name: setup_python
+            displayName: 设置 Python 环境
+            commands:
+              - |
+                echo "=== 设置 Python 环境 ==="
+                python3 --version
+                python3 -m pip install --upgrade pip
+            
+          # 步骤 3: 安装依赖
+          - step: shell
+            name: install_deps
+            displayName: 安装依赖
+            commands:
+              - |
+                echo "=== 安装依赖 ==="
+                pip3 install pyyaml jsonschema
+            
+          # 步骤 4: 运行 Lint 检查
+          - step: shell
+            name: run_lint
+            displayName: 运行 L3 模板 Lint 检查
+            commands:
+              - |
+                echo "=== 运行 L3 模板 Lint 检查 ==="
+                python3 scripts/lint_l3_templates.py spec-global/departments
+            
+          # 步骤 5: 生成报告（如果失败）
+          - step: shell
+            name: generate_report
+            displayName: 生成错误报告
+            condition: failure()
+            commands:
+              - |
+                echo "=== 生成错误报告 ==="
+                python3 scripts/lint_l3_templates.py spec-global/departments > lint-errors.txt 2>&1 || true
+                cat lint-errors.txt
+
+# 通知配置（可选）
+# notifications:
+#   success:
+#     - type: dingtalk
+#       webhook: $(DINGTALK_WEBHOOK)
+#   failure:
+#     - type: dingtalk
+#       webhook: $(DINGTALK_WEBHOOK)
