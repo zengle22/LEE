@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Any, TYPE_CHECKING
+from typing import Optional, List, Any, TYPE_CHECKING, Dict
 
 import asyncio
 import logging
@@ -239,6 +240,78 @@ class StepRunnerBase(StepRunnerStrategy):
         except Exception as e:
             print(f"[OutputValidation] Error validating step {step.id}: {e}")
             return None
+
+    @staticmethod
+    def _strip_code_fence(content: str) -> str:
+        """Strip a single top-level markdown code fence if present."""
+        if not isinstance(content, str):
+            return content
+        text = content.strip()
+        fenced = re.match(r"^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n```$", text)
+        if fenced:
+            return fenced.group(1).strip()
+        return text
+
+    @classmethod
+    def _parse_structured_output(cls, output_text: str) -> Any:
+        """
+        Parse JSON/YAML-like structured output from LLM text.
+        """
+        import yaml
+
+        text = cls._strip_code_fence(output_text)
+        if not text:
+            raise ValueError("Structured output is empty")
+
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        try:
+            data = yaml.safe_load(text)
+        except Exception as exc:
+            raise ValueError(f"Failed to parse structured output: {exc}") from exc
+
+        if data is None:
+            raise ValueError("Structured output is empty")
+        return data
+
+    @staticmethod
+    def _resolve_contract_path(
+        schema_ref: str,
+        spec_path: Optional[str],
+        project_root: Optional[str],
+    ) -> str:
+        """
+        Resolve a contract path relative to the agent spec first, then project root.
+        """
+        schema_path = Path(schema_ref)
+        if schema_path.is_absolute():
+            return str(schema_path)
+
+        if spec_path:
+            spec_dir = Path(spec_path).resolve().parent
+            candidate = (spec_dir / schema_path).resolve()
+            if candidate.exists():
+                return str(candidate)
+
+        base = Path(project_root or ".").resolve()
+        return str((base / schema_path).resolve())
+
+    @staticmethod
+    def _load_agent_spec_for_step(ctx: RunnerContext, step) -> Optional[Any]:
+        """
+        Load the concrete agent spec for the current step when available.
+        """
+        try:
+            builder = getattr(ctx, "agent_context_builder", None)
+            loader = getattr(builder, "agent_loader", None)
+            if loader and getattr(step, "agent_id", None):
+                return loader.load(step.agent_id)
+        except Exception:
+            return None
+        return None
 
     def _handle_validation_result(
         self, validation_result: Optional[ValidationResult], step, strict: bool

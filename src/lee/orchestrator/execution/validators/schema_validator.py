@@ -7,6 +7,7 @@ Schema Validator - JSON Schema 验证器
 import json
 from pathlib import Path
 from typing import Any, Dict, Optional, List
+import yaml
 
 try:
     import jsonschema
@@ -83,17 +84,20 @@ class SchemaValidator(Validator):
             try:
                 data = json.loads(data)
             except json.JSONDecodeError as e:
-                return ValidationResult(
-                    passed=False,
-                    validator=self.validator_name,
-                    errors=[
-                        ValidationError(
-                            code="INVALID_JSON",
-                            message=f"Invalid JSON: {e}",
-                            severity=ValidationSeverity.ERROR,
-                        )
-                    ],
-                )
+                try:
+                    data = yaml.safe_load(data)
+                except yaml.YAMLError:
+                    return ValidationResult(
+                        passed=False,
+                        validator=self.validator_name,
+                        errors=[
+                            ValidationError(
+                                code="INVALID_JSON",
+                                message=f"Invalid JSON: {e}",
+                                severity=ValidationSeverity.ERROR,
+                            )
+                        ],
+                    )
 
         # 加载 schema
         schema = self._load_schema(config)
@@ -173,8 +177,10 @@ class SchemaValidator(Validator):
 
         try:
             with open(path, "r", encoding="utf-8") as f:
+                if path.suffix.lower() in {".yaml", ".yml"}:
+                    return yaml.safe_load(f)
                 return json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
+        except (json.JSONDecodeError, yaml.YAMLError, IOError):
             return None
 
     def validate_file(self, file_path: str, config: Dict) -> ValidationResult:
@@ -210,9 +216,12 @@ class SchemaValidator(Validator):
 
         try:
             with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                if path.suffix.lower() in {".yaml", ".yml"}:
+                    data = yaml.safe_load(f)
+                else:
+                    data = json.load(f)
             return self.validate(data, config)
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, yaml.YAMLError) as e:
             return ValidationResult(
                 passed=False,
                 validator=self.validator_name,

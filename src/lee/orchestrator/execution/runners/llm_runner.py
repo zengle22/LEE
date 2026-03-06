@@ -248,8 +248,11 @@ class LLMRunner(StepRunnerBase):
                     output={"verifiers": [r.__dict__ for r in verifier_results]},
                 )
 
+            structured_payload = self._parse_structured_output_if_possible(generated_text)
+
             # v3.4: 输出 Contract Schema 校验
-            validation_result = self._validate_step_output(step, generated_text)
+            business_output = self._extract_business_output_payload(structured_payload, generated_text)
+            validation_result = self._validate_step_output(step, business_output)
             if validation_result and not validation_result.passed:
                 strict = (step.config or {}).get("strict_output_validation", False)
                 if strict:
@@ -263,6 +266,20 @@ class LLMRunner(StepRunnerBase):
                     )
                 else:
                     print(f"[OutputValidation] Warning: Step {step.id} output schema validation failed (soft mode)")
+
+            # SSOT agent output contract 校验与物化
+            ssot_materialized = await self._materialize_ssot_outputs(
+                ctx=ctx,
+                step=step,
+                workflow_id=workflow_id,
+                generated_text=generated_text,
+                structured_payload=structured_payload,
+            )
+            if ssot_materialized:
+                materialized_files = ssot_materialized.get("materialized_files", [])
+                if materialized_files:
+                    await self._collect_evidence(ctx, workflow_id, step.id, materialized_files)
+                written_files = list(dict.fromkeys(written_files + materialized_files))
 
             # 5. 完成步骤
             output_data = {
@@ -279,6 +296,8 @@ class LLMRunner(StepRunnerBase):
                     "stop_reason": llm_output.get("stop_reason"),
                 },
             }
+            if ssot_materialized:
+                output_data["ssot_materialized"] = ssot_materialized["outputs"]
 
             result = await ctx.state_machine.complete_step(
                 workflow_id, step.id, output_data,
@@ -335,6 +354,111 @@ class LLMRunner(StepRunnerBase):
                     ctx.token_manager.revoke_token(step_token.token_id, reason="step_completed")
                 except Exception:
                     pass
+
+    async def _materialize_ssot_outputs(
+        self,
+        ctx: RunnerContext,
+        step,
+        workflow_id: str,
+        generated_text: str,
+        structured_payload: Optional[Any] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        If the agent spec declares ssot_output_schema, validate and materialize it.
+        """
+        agent_spec = self._load_agent_spec_for_step(ctx, step)
+        if not agent_spec:
+            return None
+
+        contracts = getattr(agent_spec, "contracts", {}) or {}
+        schema_ref = contracts.get("ssot_output_schema")
+        if not schema_ref:
+            return None
+
+        if structured_payload is None:
+            structured_payload = self._parse_structured_output_if_possible(generated_text)
+
+        contract_data = self._extract_ssot_contract_payload(structured_payload)
+        if contract_data is None:
+            try:
+                contract_data = self._parse_structured_output(generated_text)
+            except ValueError as exc:
+                strict = (step.config or {}).get("strict_output_validation", False)
+                if strict:
+                    raise
+                print(f"[SSOTContract] Warning: Step {step.id} structured output parse failed: {exc}")
+                return None
+
+        if contract_data is None:
+            strict = (step.config or {}).get("strict_output_validation", False)
+            if strict:
+                raise ValueError("SSOT output schema declared but no ssot_output_contract found")
+            print(f"[SSOTContract] Warning: Step {step.id} missing ssot_output_contract payload")
+            return None
+
+        schema_path = self._resolve_contract_path(
+            schema_ref=schema_ref,
+            spec_path=getattr(agent_spec, "spec_path", None),
+            project_root=ctx.project_root,
+        )
+
+        try:
+            from lee.orchestrator.execution.artifacts import ArtifactManager, SSOTContractMaterializer
+
+            manager = ArtifactManager(
+                project_root=Path(ctx.project_root or ".").resolve(),
+            )
+            materializer = SSOTContractMaterializer(manager, schema_path=Path(schema_path))
+            outputs = materializer.materialize(contract_data)
+        except Exception as exc:
+            strict = (step.config or {}).get("strict_output_validation", False)
+            if strict:
+                raise
+            print(f"[SSOTContract] Warning: Step {step.id} SSOT materialization failed: {exc}")
+            return None
+
+        materialized_summary = {}
+        materialized_files: List[str] = []
+        for key, item in outputs.items():
+            artifact = item.artifact
+            materialized_summary[key] = {
+                "id": artifact.id,
+                "identity_kind": item.identity_kind,
+                "path": artifact.path,
+                "path_root": artifact.path_root,
+                "parent_id": artifact.properties.get("parent_id"),
+            }
+            materialized_files.append(str(artifact.absolute_path))
+
+        return {
+            "schema_path": schema_path,
+            "outputs": materialized_summary,
+            "materialized_files": materialized_files,
+        }
+
+    @staticmethod
+    def _parse_structured_output_if_possible(generated_text: str) -> Optional[Any]:
+        try:
+            return StepRunnerBase._parse_structured_output(generated_text)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _extract_business_output_payload(structured_payload: Optional[Any], fallback_text: str) -> Any:
+        if isinstance(structured_payload, dict) and "business_output" in structured_payload:
+            return structured_payload["business_output"]
+        return fallback_text
+
+    @staticmethod
+    def _extract_ssot_contract_payload(structured_payload: Optional[Any]) -> Optional[Dict[str, Any]]:
+        if not isinstance(structured_payload, dict):
+            return None
+        if "contract_version" in structured_payload and "outputs" in structured_payload:
+            return structured_payload
+        payload = structured_payload.get("ssot_output_contract")
+        if isinstance(payload, dict):
+            return payload
+        return None
 
     async def _register_artifacts(
         self,
