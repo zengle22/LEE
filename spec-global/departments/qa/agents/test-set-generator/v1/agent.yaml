@@ -20,6 +20,7 @@ contracts:
     - risk_areas: "风险区域"
     - test_focus: "测试重点"
   output_schema: ../../contracts/test-set/v1/schema.yaml
+  ssot_output_schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
 
 # 角色定义
 persona:
@@ -83,3 +84,30 @@ outputs:
     type: file
     schema: ../../contracts/test-set/v1/schema.yaml
     description: "Test Set YAML 文件"
+
+ssot_output_contract:
+  description: "当纳入正式 SSOT 链时，Test Set Generator 应输出挂在 FEAT 下的 TESTSET 声明。"
+  schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
+  integration_pattern:
+    mode: envelope
+    business_field: business_output
+    ssot_field: ssot_output_contract
+  example:
+    business_output:
+      test_set_id: TS-REG-001
+      module: 用户注册
+      strategy:
+        type: functional
+      test_focus:
+        core_paths:
+          - 注册成功
+    ssot_output_contract:
+      contract_version: "1.0"
+      run_id: qa-run-001
+      outputs:
+        - key: testset
+          identity_kind: ssot
+          ssot_type: testset
+          title: 用户注册测试集
+          parent: feat
+          verifies: ["feat"]
