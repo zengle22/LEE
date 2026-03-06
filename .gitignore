@@ -84,3 +84,6 @@ nul
 .artifacts
 .workflow
 .VSCodeCounter
+.claude-sandbox
+node_modules
+output
