@@ -16,6 +16,7 @@ from lee.orchestrator.execution.artifacts.types import (
     ArtifactType,
     ArtifactStatus,
     AdoptMode,
+    SSOTType,
 )
 
 
@@ -305,6 +306,86 @@ class TestArtifactManager:
         assert stats["by_type"]["TEST"] == 1
         assert stats["by_department"]["pm"] == 1
         assert stats["by_department"]["qa"] == 1
+
+    def test_create_ssot_uses_project_placement(self, manager):
+        """测试正式 SSOT 文件落在项目目录而不是 .artifacts/ssot"""
+        feat = manager.create_ssot(
+            ssot_type=SSOTType.FEAT,
+            title="用户注册",
+            content="# Feature\n",
+            run_id="run-ssot-feat",
+        )
+
+        testset = manager.create_ssot(
+            ssot_type=SSOTType.TESTSET,
+            title="用户注册测试集",
+            content="# Test Set\n",
+            run_id="run-ssot-testset",
+            parent_id=feat.id,
+        )
+
+        assert feat.path_root == "."
+        assert feat.path.startswith("spec/requirements/features/")
+        assert feat.absolute_path.exists()
+        assert ".artifacts\\ssot" not in str(feat.absolute_path)
+        assert testset.path.startswith("spec/testing/testsets/")
+        assert testset.properties["placement_dir"] == "spec/testing/testsets"
+
+    def test_list_ssot_by_parent_uses_parent_index(self, manager):
+        """测试按父对象查询 SSOT 子对象"""
+        feat = manager.create_ssot(
+            ssot_type=SSOTType.FEAT,
+            title="支付能力",
+            content="# Feature\n",
+            run_id="run-parent-feat",
+        )
+        testset = manager.create_ssot(
+            ssot_type=SSOTType.TESTSET,
+            title="支付测试集",
+            content="# Test Set\n",
+            run_id="run-parent-testset",
+            parent_id=feat.id,
+        )
+
+        children = manager.list_ssot_by_parent(feat.id)
+
+        assert [child.id for child in children] == [testset.id]
+
+    def test_freeze_ssot_keeps_project_path(self, manager):
+        """测试正式 SSOT 冻结时保留项目目录主文件"""
+        feat = manager.create_ssot(
+            ssot_type=SSOTType.FEAT,
+            title="训练计划",
+            content="# Feature\n",
+            run_id="run-freeze-ssot",
+        )
+
+        original_path = feat.path
+        frozen = manager.freeze(feat.id)
+
+        assert frozen.status == ArtifactStatus.FROZEN
+        assert frozen.path == original_path
+        assert frozen.path_root == "."
+        assert frozen.absolute_path.exists()
+
+    def test_create_ssot_with_custom_project_root(self, temp_artifacts_dir):
+        """测试自定义项目根目录时 SSOT 主文件路径正确"""
+        custom_root = temp_artifacts_dir.parent / "custom-project"
+        custom_manager = ArtifactManager(
+            root_path=custom_root / ".artifacts",
+            project_root=custom_root,
+        )
+
+        feat = custom_manager.create_ssot(
+            ssot_type=SSOTType.FEAT,
+            title="自定义项目",
+            content="# Feature\n",
+            run_id="run-custom-project-root",
+        )
+
+        assert feat.path_root in {"custom-project", str(custom_root)}
+        assert feat.absolute_path == custom_root / "spec/requirements/features" / Path(feat.path).name
+        assert feat.absolute_path.exists()
 
 
 class TestArtifactManagerReferences:

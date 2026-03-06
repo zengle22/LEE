@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/spec-global/core/contracts/ssot-agent-output/v1/schema.json",
+  "title": "SSOT Agent Output Contract",
+  "description": "Agent output declaration for SSOT and non-SSOT artifacts.",
+  "type": "object",
+  "required": ["contract_version", "run_id", "outputs"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "workflow_id": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/output"
+      }
+    }
+  },
+  "definitions": {
+    "relation_list": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["key", "identity_kind", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "identity_kind": {
+          "type": "string",
+          "enum": ["ssot", "non_ssot"]
+        },
+        "ssot_type": {
+          "type": "string",
+          "enum": ["src", "epic", "feat", "ui", "tech", "task", "testset", "tc", "bug", "report", "adr", "evi"]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "parent": {
+          "type": "string"
+        },
+        "derived_from": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "source_refs": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "verifies": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "implements": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "depends_on": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "derived_from_one": {
+          "type": "string"
+        },
+        "placement_key": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "artifact_type": {
+          "type": "string",
+          "enum": ["CONTRACT", "DOCUMENT", "CODE_REF", "PATCH", "TEST", "HANDOVER", "LOG", "INTERMEDIATE"]
+        },
+        "category": {
+          "type": "string"
+        },
+        "governance_kind": {
+          "type": "string",
+          "enum": ["evidence", "transfer", "deliverable", "knowledge", "state"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "identity_kind": {
+                "const": "ssot"
+              }
+            }
+          },
+          "then": {
+            "required": ["ssot_type"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity_kind": {
+                "const": "non_ssot"
+              }
+            }
+          },
+          "then": {
+            "required": ["artifact_type", "category"]
+          }
+        }
+      ]
+    }
+  }
+}

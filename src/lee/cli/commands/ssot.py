@@ -201,6 +201,114 @@ def show_chain(artifact_id: str, output_format: str):
                 click.echo(f"{prefix}    └─ {relation}")
 
 
+# ============================================================================
+# SSOT v1.3 新增命令
+# ============================================================================
+
+from lee.orchestrator.execution.artifacts import SSOTType
+from lee.orchestrator.execution.artifacts.ssot_service import SSOTValidator
+
+
+@ssot.command("id-parse")
+@click.argument("artifact_id")
+def parse_id(artifact_id: str):
+    """解析 SSOT ID 结构"""
+    from lee.orchestrator.execution.artifacts.id_parser import parse_id as do_parse_id
+
+    result = do_parse_id(artifact_id)
+
+    if result.is_valid:
+        click.echo(f"✅ Valid SSOT ID: {artifact_id}")
+        click.echo(f"   Prefix: {result.prefix}")
+        if result.parent_scope:
+            click.echo(f"   Parent Scope: {result.parent_scope}")
+        if result.sequence:
+            click.echo(f"   Sequence: {result.sequence}")
+        if result.suffix:
+            click.echo(f"   Suffix: {result.suffix}")
+    else:
+        click.echo(f"❌ Invalid SSOT ID: {artifact_id}")
+        click.echo(f"   Error: {result.error}")
+
+
+@ssot.command("validate-p0")
+@click.argument("artifact_id")
+def validate_p0(artifact_id: str):
+    """执行 P0 Blocking 校验"""
+    manager = ArtifactManager()
+    validator = SSOTValidator(manager.registry)
+
+    result = validator.validate_p0(artifact_id)
+
+    if result.is_valid:
+        click.echo(f"✅ P0 validation passed for {artifact_id}")
+    else:
+        click.echo(f"❌ P0 validation failed for {artifact_id}:")
+        for err in result.errors:
+            click.echo(f"   - {err}")
+        raise click.Abort()
+
+
+@ssot.command("validate-p1")
+@click.argument("artifact_id")
+def validate_p1(artifact_id: str):
+    """执行 P1 Warning 校验"""
+    manager = ArtifactManager()
+    validator = SSOTValidator(manager.registry)
+
+    result = validator.validate_p1(artifact_id)
+
+    if not result.has_warnings:
+        click.echo(f"✅ P1 validation passed for {artifact_id} (no warnings)")
+    else:
+        click.echo(f"⚠️  P1 warnings for {artifact_id}:")
+        for warn in result.warnings:
+            click.echo(f"   - {warn}")
+
+
+@ssot.command("list-ssot")
+@click.option("--type", "ssot_type", help="按类型过滤 (src, epic, feat, ui, tech, task, testset, tc, bug, report, adr, evi)")
+@click.option("--parent", "parent_id", help="按父对象过滤")
+@click.option("--format", "output_format", default="table",
+              type=click.Choice(["table", "json"]),
+              help="输出格式")
+def list_ssot(ssot_type: Optional[str], parent_id: Optional[str], output_format: str):
+    """列出 SSOT 对象"""
+    manager = ArtifactManager()
+
+    artifacts = manager.registry.get_ssot_artifacts()
+
+    # 过滤
+    if ssot_type:
+        artifacts = [a for a in artifacts if a.properties.get("ssot_type") == ssot_type]
+    if parent_id:
+        artifacts = [a for a in artifacts if a.properties.get("parent_id") == parent_id]
+
+    if not artifacts:
+        click.echo("No SSOT objects found.")
+        return
+
+    if output_format == "json":
+        data = [
+            {
+                "id": a.id,
+                "type": a.properties.get("ssot_type"),
+                "title": a.title,
+                "status": a.status.value,
+                "parent_id": a.properties.get("parent_id"),
+            }
+            for a in artifacts
+        ]
+        click.echo(json.dumps(data, indent=2, ensure_ascii=False))
+    else:
+        click.echo(f"SSOT Objects ({len(artifacts)}):")
+        click.echo("")
+        for a in artifacts:
+            ssot_type = a.properties.get("ssot_type", "?")
+            parent = a.properties.get("parent_id", "-")
+            click.echo(f"  [{ssot_type}] {a.id} - {a.title} (parent: {parent})")
+
+
 # 注册命令到主 CLI
 def register_commands(cli_group):
     """将命令注册到 CLI 组"""

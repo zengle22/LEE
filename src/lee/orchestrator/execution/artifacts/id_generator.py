@@ -1,0 +1,343 @@
+"""
+SSOT ID Generator
+
+SSOT ID 生成器 - 提供 ID 生成、Slug 生成功能。
+
+ID 生成规则 (v1.3):
+- 独立顺序型: SRC, EPIC, FEAT, ADR - 全局序号
+- 单父唯一型: TECH, TESTSET - 每个 FEAT 下唯一
+- 单父多实例型: UI, TASK - 每个 FEAT 下多个实例
+- 时态/运行型: REPORT - 带日期
+- 范围归属型: TC, BUG, EVI - ID 体现 FEAT 范围
+"""
+
+import re
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Optional
+
+# pinyin 库，用于中文转拼音
+try:
+    import pinyin
+    HAS_PINYIN = True
+except ImportError:
+    HAS_PINYIN = False
+
+from .types import SSOTType, ObjectCategory
+
+
+class SSOTIDGenerator:
+    """
+    SSOT ID 生成器
+
+    提供 ID 生成、Slug 生成功能，支持 12 种对象类型。
+    """
+
+    # 序号文件名前缀
+    SEQUENCE_FILE_PREFIX = ".ssot_seq_"
+
+    def __init__(self, root_path: Optional[Path] = None):
+        """
+        初始化生成器
+
+        Args:
+            root_path: .artifacts/ 根目录
+        """
+        self.root_path = root_path or (Path.cwd() / ".artifacts")
+
+        # 内存缓存：type -> 当前最大序号
+        self._sequences: Dict[str, int] = {}
+
+        # 加载已有序号
+        self._load_sequences()
+
+    def _get_sequence_file(self, ssot_type: SSOTType) -> Path:
+        """获取类型对应的序号文件"""
+        return self.root_path / f"{self.SEQUENCE_FILE_PREFIX}{ssot_type.value}"
+
+    def _load_sequences(self) -> None:
+        """从文件加载序号"""
+        for ssot_type in SSOTType:
+            seq_file = self._get_sequence_file(ssot_type)
+            if seq_file.exists():
+                try:
+                    seq = int(seq_file.read_text().strip())
+                    self._sequences[ssot_type.value] = seq
+                except (ValueError, IOError):
+                    self._sequences[ssot_type.value] = 0
+            else:
+                self._sequences[ssot_type.value] = 0
+
+    def _save_sequence(self, ssot_type: SSOTType) -> None:
+        """保存序号到文件"""
+        seq_file = self._get_sequence_file(ssot_type)
+        seq_file.parent.mkdir(parents=True, exist_ok=True)
+        seq_file.write_text(str(self._sequences.get(ssot_type.value, 0)))
+
+    def get_next_sequence(self, ssot_type: SSOTType, parent_scope: Optional[str] = None) -> int:
+        """
+        获取下一个序号
+
+        对于独立型，返回全局序号
+        对于其他类型，返回基于 parent_scope 的序号
+
+        Args:
+            ssot_type: 对象类型
+            parent_scope: 父对象范围 (如 FEAT-001)
+
+        Returns:
+            下一个序号
+        """
+        # 构建缓存 key
+        if parent_scope:
+            cache_key = f"{ssot_type.value}_{parent_scope}"
+        else:
+            cache_key = ssot_type.value
+
+        # 获取当前序号
+        current = self._sequences.get(cache_key, 0)
+        current += 1
+
+        # 更新缓存
+        self._sequences[cache_key] = current
+
+        # 保存到文件
+        if parent_scope:
+            # 对于有 parent 的类型，序号文件放在 parent 目录下
+            parent_dir = self.root_path / "sequences" / parent_scope
+            parent_dir.mkdir(parents=True, exist_ok=True)
+            seq_file = parent_dir / f"{ssot_type.value}.seq"
+            seq_file.write_text(str(current))
+        else:
+            self._save_sequence(ssot_type)
+
+        return current
+
+    def generate_id(
+        self,
+        ssot_type: SSOTType,
+        parent_id: Optional[str] = None,
+        suffix: Optional[str] = None
+    ) -> str:
+        """
+        生成 SSOT ID
+
+        Args:
+            ssot_type: 对象类型
+            parent_id: 父对象 ID (可选)
+            suffix: 后缀 (可选，如 FE, 01 等)
+
+        Returns:
+            生成的 ID，如 FEAT-001, TC-FEAT-001-001
+        """
+        category = ObjectCategory.for_type(ssot_type)
+
+        if category == ObjectCategory.INDEPENDENT:
+            # 独立型: TYPE-001
+            seq = self.get_next_sequence(ssot_type)
+            return f"{ssot_type.value.upper()}-{seq:03d}"
+
+        elif category == ObjectCategory.DIRECT_PARENT:
+            # 直接父对象一致型
+            # 两种子类型：
+            # 1. 单父唯一型: TECH-FEAT-001, TESTSET-FEAT-001 (需要 sequence)
+            # 2. 单父多实例型: UI-FEAT-001-01, TASK-FEAT-001-FE-01 (sequence 在 scope 中)
+            if not parent_id:
+                raise ValueError(f"类型 {ssot_type.value} 需要 parent_id")
+
+            # 解析 parent_id 获取范围
+            parent_scope = self._extract_scope(parent_id)
+            if not parent_scope:
+                raise ValueError(f"无法从 parent_id {parent_id} 提取范围")
+
+            # 单父多实例型 (UI, TASK): 如果有 suffix，不生成 sequence
+            # 单父唯一型 (TECH, TESTSET): 始终需要 sequence
+            is_multi_instance = ssot_type in (SSOTType.UI, SSOTType.TASK)
+
+            if is_multi_instance and suffix:
+                # UI-FEAT-001-01 格式: 直接使用 suffix
+                return f"{ssot_type.value.upper()}-{parent_scope}-{suffix}"
+            else:
+                # TECH-FEAT-001 或 UI-FEAT-001 (无 suffix)
+                seq = self.get_next_sequence(ssot_type, parent_scope)
+                return f"{ssot_type.value.upper()}-{parent_scope}-{seq:03d}"
+
+        elif category == ObjectCategory.SCOPE_BOUNDED:
+            # 范围归属型
+            if not parent_id:
+                raise ValueError(f"类型 {ssot_type.value} 需要 parent_id")
+
+            # 解析 parent_id 获取范围
+            parent_scope = self._extract_scope(parent_id)
+            if not parent_scope:
+                raise ValueError(f"无法从 parent_id {parent_id} 提取范围")
+
+            seq = self.get_next_sequence(ssot_type, parent_scope)
+
+            # 范围归属型使用 3 位序号
+            return f"{ssot_type.value.upper()}-{parent_scope}-{seq:03d}"
+
+        else:
+            raise ValueError(f"未知类型分类: {ssot_type}")
+
+    def _extract_scope(self, parent_id: str) -> Optional[str]:
+        """
+        从 parent_id 提取范围 (FEAT-XXX)
+
+        Args:
+            parent_id: 父对象 ID
+
+        Returns:
+            范围，如 FEAT-001
+        """
+        parts = parent_id.split("-")
+
+        if len(parts) < 2:
+            return None
+
+        # 如果 parent_id 已经是 FEAT-XXX 格式
+        if parts[0].upper() == "FEAT":
+            return f"FEAT-{parts[1]}"
+
+        # 如果 parent_id 是其他类型，尝试提取 FEAT 范围
+        if parts[0].upper() in ("TECH", "TESTSET", "UI", "TASK", "REPORT", "TC", "BUG", "EVI"):
+            try:
+                feat_idx = parts.index("FEAT")
+                if feat_idx + 1 < len(parts):
+                    return f"FEAT-{parts[feat_idx + 1]}"
+            except ValueError:
+                pass
+
+        return None
+
+    def generate_report_id(self, parent_id: str, date: Optional[datetime] = None) -> str:
+        """
+        生成 REPORT ID (带日期)
+
+        Args:
+            parent_id: 父对象 ID (FEAT)
+            date: 日期，默认为今天
+
+        Returns:
+            生成的 ID，如 REPORT-FEAT-001-20260306
+        """
+        if date is None:
+            date = datetime.now()
+
+        date_str = date.strftime("%Y%m%d")
+
+        parent_scope = self._extract_scope(parent_id)
+        if not parent_scope:
+            raise ValueError(f"无法从 parent_id {parent_id} 提取范围")
+
+        # REPORT 使用特殊序号：日期
+        return f"REPORT-{parent_scope}-{date_str}"
+
+    def generate_slug(
+        self,
+        title: str,
+        explicit_slug: Optional[str] = None
+    ) -> str:
+        """
+        生成 slug
+
+        算法 (固定 8 步):
+        1. 若显式提供 slug，使用该 slug；否则从 title 生成
+        2. 中文字符转拼音 (使用 pinyin 库)
+        3. 全量转小写
+        4. 非 [a-z0-9] 字符替换为 -
+        5. 合并连续 - 为单个 -
+        6. 去除首尾 -
+        7. 截断至 50 字符
+        8. 若为空，回退为 "untitled"
+
+        Args:
+            title: 标题
+            explicit_slug: 显式 slug (可选)
+
+        Returns:
+            生成的 slug
+        """
+        # 步骤 1
+        slug = explicit_slug if explicit_slug else title
+
+        # 步骤 2: 中文转拼音
+        if not explicit_slug and HAS_PINYIN:
+            # 使用 pinyin 库转换
+            slug = pinyin.get(slug, format="strip")
+
+        # 步骤 3: 转小写
+        slug = slug.lower()
+
+        # 步骤 4: 非字母数字替换为 -
+        slug = re.sub(r"[^a-z0-9]", "-", slug)
+
+        # 步骤 5: 合并连续 -
+        slug = re.sub(r"-+", "-", slug)
+
+        # 步骤 6: 去除首尾 -
+        slug = slug.strip("-")
+
+        # 步骤 7: 截断至 50 字符
+        if len(slug) > 50:
+            slug = slug[:50]
+            # 避免截断到 - 结尾
+            slug = slug.rstrip("-")
+
+        # 步骤 8: 回退
+        if not slug:
+            slug = "untitled"
+
+        return slug
+
+    def generate_filename(
+        self,
+        ssot_type: SSOTType,
+        title: str,
+        parent_id: Optional[str] = None,
+        suffix: Optional[str] = None,
+        ext: str = "md"
+    ) -> str:
+        """
+        生成完整文件名
+
+        格式: [ID]__[slug].[ext]
+
+        Args:
+            ssot_type: 对象类型
+            title: 标题
+            parent_id: 父对象 ID
+            suffix: 后缀
+            ext: 文件扩展名
+
+        Returns:
+            文件名，如 FEAT-001__generate-plan.md
+        """
+        # 生成 ID
+        artifact_id = self.generate_id(ssot_type, parent_id, suffix)
+
+        # 生成 slug
+        slug = self.generate_slug(title)
+
+        return f"{artifact_id}__{slug}.{ext}"
+
+
+# 全局生成器实例
+_default_generator: Optional[SSOTIDGenerator] = None
+
+
+def get_generator(root_path: Optional[Path] = None) -> SSOTIDGenerator:
+    """
+    获取全局 ID 生成器实例
+
+    Args:
+        root_path: .artifacts/ 根目录
+
+    Returns:
+        SSOTIDGenerator 实例
+    """
+    global _default_generator
+    if _default_generator is None:
+        _default_generator = SSOTIDGenerator(root_path)
+    return _default_generator

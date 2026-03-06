@@ -5,7 +5,7 @@ Artifact System Type Definitions
 """
 
 from enum import Enum
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 
 class ArtifactType(str, Enum):
@@ -186,3 +186,103 @@ class Department(str, Enum):
     DEVOPS = "devops"
     DATA = "data"
     DESIGN = "design"
+
+
+# ============================================================================
+# SSOT v1.3 新增：SSOT 对象类型系统
+# ============================================================================
+
+class SSOTType(str, Enum):
+    """
+    SSOT 对象类型 (v1.3 新增)
+
+    12 种对象类型，覆盖完整产品研发周期：
+    - 独立型：SRC, EPIC, FEAT, ADR
+    - 直接父对象一致型：UI, TECH, TASK, TESTSET, REPORT
+    - 范围归属型：TC, BUG, EVI
+    """
+
+    # 独立型 (Independent) - 全局唯一序号
+    SRC = "src"          # 原始需求来源
+    EPIC = "epic"        # 较大的业务目标集合
+    FEAT = "feat"        # 最小可独立验收业务单元
+    ADR = "adr"          # 架构或业务决策
+
+    # 直接父对象一致型 (Direct Parent Consistent) - ID 中体现父对象
+    UI = "ui"            # UI 原型/交互设计
+    TECH = "tech"        # 技术设计
+    TASK = "task"        # 实施任务
+    TESTSET = "testset"  # 测试集
+    REPORT = "report"    # 测试/验收/分析报告
+
+    # 范围归属型 (Scope Bounded) - ID 体现 FEAT 范围
+    TC = "tc"            # 测试用例
+    BUG = "bug"          # 缺陷
+    EVI = "evi"          # 证据包/附件证据
+
+    @classmethod
+    def is_independent(cls, ssot_type: "SSOTType") -> bool:
+        """判断是否为独立型"""
+        return ssot_type in (cls.SRC, cls.EPIC, cls.FEAT, cls.ADR)
+
+    @classmethod
+    def is_direct_parent(cls, ssot_type: "SSOTType") -> bool:
+        """判断是否为直接父对象一致型"""
+        return ssot_type in (cls.UI, cls.TECH, cls.TASK, cls.TESTSET, cls.REPORT)
+
+    @classmethod
+    def is_scope_bounded(cls, ssot_type: "SSOTType") -> bool:
+        """判断是否为范围归属型"""
+        return ssot_type in (cls.TC, cls.BUG, cls.EVI)
+
+    @classmethod
+    def requires_parent(cls, ssot_type: "SSOTType") -> bool:
+        """判断是否需要 parent_id"""
+        return not cls.is_independent(ssot_type)
+
+
+class ObjectCategory(str, Enum):
+    """
+    对象分类 (v1.3 新增)
+
+    用于区分不同的 ID 解析策略：
+    - INDEPENDENT: 独立型，无 parent_id
+    - DIRECT_PARENT: 直接父对象一致型，parse_parent(id) == parent_id
+    - SCOPE_BOUNDED: 范围归属型，parse_scope(id) == resolve_scope(parent_id)
+    """
+
+    INDEPENDENT = "independent"       # 独立型
+    DIRECT_PARENT = "direct_parent"  # 直接父对象一致型
+    SCOPE_BOUNDED = "scope_bounded"  # 范围归属型
+
+    @classmethod
+    def for_type(cls, ssot_type: SSOTType) -> "ObjectCategory":
+        """根据 SSOTType 获取分类"""
+        if SSOTType.is_independent(ssot_type):
+            return cls.INDEPENDENT
+        elif SSOTType.is_direct_parent(ssot_type):
+            return cls.DIRECT_PARENT
+        elif SSOTType.is_scope_bounded(ssot_type):
+            return cls.SCOPE_BOUNDED
+        else:
+            raise ValueError(f"Unknown SSOTType: {ssot_type}")
+
+    @classmethod
+    def get_parent_requirement(cls, ssot_type: SSOTType) -> Optional[str]:
+        """
+        获取 parent_id 的类型要求
+
+        Returns:
+            必需的 parent_id 类型，或 None 表示可选
+        """
+        parent_requirements = {
+            SSOTType.UI: "FEAT",
+            SSOTType.TECH: "FEAT",
+            SSOTType.TASK: "FEAT",
+            SSOTType.TESTSET: "FEAT",
+            SSOTType.TC: "TESTSET",  # 强制：TC.parent_id 必须为 TESTSET
+            SSOTType.BUG: "FEAT",   # 可选：FEAT 或 TC
+            SSOTType.REPORT: "FEAT",
+            SSOTType.EVI: "FEAT",   # 可选：FEAT/TC/BUG/TASK/TECH/REPORT
+        }
+        return parent_requirements.get(ssot_type)

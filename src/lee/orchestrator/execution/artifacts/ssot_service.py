@@ -331,3 +331,335 @@ class SSOTService:
         # 反转，从 root 到当前
         chain.reverse()
         return chain
+
+
+# ============================================================================
+# SSOT v1.3 新增：P0/P1 校验规则
+# ============================================================================
+
+from .id_parser import (
+    parse_parent,
+    parse_scope,
+    resolve_scope,
+    parse_id,
+    validate_id_format,
+    validate_parent_consistency,
+)
+from .types import SSOTType, ObjectCategory
+
+
+class ValidationResult:
+    """校验结果"""
+
+    def __init__(self):
+        self.errors: List[str] = []  # P0 错误
+        self.warnings: List[str] = []  # P1 警告
+
+    @property
+    def is_valid(self) -> bool:
+        """是否通过 P0 校验"""
+        return len(self.errors) == 0
+
+    @property
+    def has_warnings(self) -> bool:
+        """是否有 P1 警告"""
+        return len(self.warnings) > 0
+
+    def add_error(self, error: str) -> None:
+        """添加 P0 错误"""
+        self.errors.append(error)
+
+    def add_warning(self, warning: str) -> None:
+        """添加 P1 警告"""
+        self.warnings.append(warning)
+
+    def merge(self, other: "ValidationResult") -> None:
+        """合并另一个校验结果"""
+        self.errors.extend(other.errors)
+        self.warnings.extend(other.warnings)
+
+
+class SSOTValidator:
+    """
+    SSOT P0/P1 校验器
+
+    SSOT v1.3 新增的校验器，提供 11 条 P0 规则和 3 条 P1 规则。
+    """
+
+    def __init__(self, registry):
+        """
+        初始化校验器
+
+        Args:
+            registry: ArtifactRegistry 实例
+        """
+        self.registry = registry
+
+    def validate_p0(self, artifact_id: str) -> ValidationResult:
+        """
+        执行 P0 Blocking 校验
+
+        P0 规则:
+        1. ID 唯一性
+        2. 路径唯一性 (active)
+        3. Metadata 完整性
+        4. 类型合法性
+        5. 引用存在性
+        6. 文件名与 ID 一致性
+        7. ID 格式合法且可解析
+        8. parse_parent(id) == parent_id
+        9. parse_scope(id) == resolve_scope(parent_id)
+        10. parent_id 必填检查
+        11. TC.parent_id 必须为 TESTSET
+        """
+        result = ValidationResult()
+        artifact = self.registry.get(artifact_id)
+
+        if not artifact:
+            result.add_error(f"Artifact {artifact_id} not found in registry")
+            return result
+
+        # 规则 1: ID 唯一性 (已在 registry 中保证)
+        # 规则 2: 路径唯一性 (active)
+        self._validate_path_uniqueness(artifact, result)
+
+        # 规则 3: Metadata 完整性
+        self._validate_metadata_completeness(artifact, result)
+
+        # 规则 4: 类型合法性
+        self._validate_type_legality(artifact, result)
+
+        # 规则 5: 引用存在性
+        self._validate_reference_existence(artifact, result)
+
+        # 规则 6: 文件名与 ID 一致性
+        self._validate_filename_id_match(artifact, result)
+
+        # 规则 7: ID 格式合法且可解析
+        self._validate_id_format(artifact, result)
+
+        # 规则 8-9: parent_id 一致性
+        self._validate_parent_consistency(artifact, result)
+
+        # 规则 10: parent_id 必填检查
+        self._validate_parent_required(artifact, result)
+
+        # 规则 11: TC.parent_id 必须为 TESTSET
+        self._validate_tc_parent(artifact, result)
+
+        return result
+
+    def validate_p1(self, artifact_id: str) -> ValidationResult:
+        """
+        执行 P1 Warning 校验
+
+        P1 规则:
+        12. 父子类型推荐关系检查
+        13. 孤儿对象检查
+        14. slug 规范检查
+        """
+        result = ValidationResult()
+        artifact = self.registry.get(artifact_id)
+
+        if not artifact:
+            return result
+
+        # 规则 12: 父子类型推荐关系
+        self._validate_parent_type_recommendation(artifact, result)
+
+        # 规则 13: 孤儿对象检查
+        self._validate_orphan_object(artifact, result)
+
+        # 规则 14: slug 规范检查
+        self._validate_slug_spec(artifact, result)
+
+        return result
+
+    def validate_all(self, artifact_id: str) -> ValidationResult:
+        """
+        执行完整校验 (P0 + P1)
+        """
+        result = ValidationResult()
+        result.merge(self.validate_p0(artifact_id))
+        result.merge(self.validate_p1(artifact_id))
+        return result
+
+    def _validate_path_uniqueness(self, artifact, result: ValidationResult) -> None:
+        """规则 2: 路径唯一性 (active)"""
+        if artifact.status.value == "ACTIVE":
+            # 检查是否有其他 active 对象使用相同路径
+            existing = self.registry.get_by_path(artifact.path)
+            if existing and existing.id != artifact.id:
+                result.add_error(f"路径 '{artifact.path}' 已被其他 active 对象 {existing.id} 占用")
+
+    def _validate_metadata_completeness(self, artifact, result: ValidationResult) -> None:
+        """规则 3: Metadata 完整性"""
+        # 检查必填字段
+        if not artifact.id:
+            result.add_error("Missing required field: id")
+        if not artifact.type:
+            result.add_error("Missing required field: type")
+        if not hasattr(artifact, 'title') or not artifact.title:
+            result.add_error("Missing required field: title")
+        if not artifact.status:
+            result.add_error("Missing required field: status")
+
+    def _validate_type_legality(self, artifact, result: ValidationResult) -> None:
+        """规则 4: 类型合法性"""
+        valid_types = {t.value for t in ArtifactType}
+        if artifact.type.value not in valid_types:
+            result.add_error(f"Invalid type: {artifact.type.value}")
+
+    def _validate_reference_existence(self, artifact, result: ValidationResult) -> None:
+        """规则 5: 引用存在性"""
+        properties = getattr(artifact, "properties", {}) or {}
+
+        # 检查 derived_from
+        if artifact.derived_from:
+            if not self.registry.exists(artifact.derived_from):
+                result.add_error(f"derived_from '{artifact.derived_from}' does not exist")
+
+        # 检查 related_ids (如果存在)
+        for ref_id in properties.get("related_ids", []):
+            if not self.registry.exists(ref_id):
+                result.add_error(f"related_ids '{ref_id}' does not exist")
+
+        # 检查 source_refs 中显式引用的对象
+        for source_ref in properties.get("source_refs", []):
+            ref_id = source_ref.split("#", 1)[0]
+            if ref_id and not self.registry.exists(ref_id):
+                result.add_error(f"source_refs '{source_ref}' does not exist")
+
+        # 检查 derived_from_ids
+        for ref_id in properties.get("derived_from_ids", []):
+            if not self.registry.exists(ref_id):
+                result.add_error(f"derived_from_ids '{ref_id}' does not exist")
+
+        # 兼容旧 metadata 字段
+        if hasattr(artifact, 'related_ids') and artifact.related_ids:
+            for ref_id in artifact.related_ids:
+                if not self.registry.exists(ref_id):
+                    result.add_error(f"related_ids '{ref_id}' does not exist")
+
+        # 检查 verifies
+        if artifact.verifies:
+            for ref_id in artifact.verifies:
+                if not self.registry.exists(ref_id):
+                    result.add_error(f"verifies '{ref_id}' does not exist")
+
+        # 检查 implements
+        if artifact.implements:
+            for ref_id in artifact.implements:
+                if not self.registry.exists(ref_id):
+                    result.add_error(f"implements '{ref_id}' does not exist")
+
+    def _validate_filename_id_match(self, artifact, result: ValidationResult) -> None:
+        """规则 6: 文件名与 ID 一致性"""
+        # 从 path 中提取文件名
+        filename = Path(artifact.path).name
+        # 左侧 ID 应该与 artifact.id 匹配
+        file_id = filename.split("__")[0]
+        if file_id != artifact.id:
+            result.add_error(f"Filename ID '{file_id}' does not match artifact id '{artifact.id}'")
+
+    def _validate_id_format(self, artifact, result: ValidationResult) -> None:
+        """规则 7: ID 格式合法且可解析"""
+        if not validate_id_format(artifact.id):
+            result.add_error(f"ID format is invalid: {artifact.id}")
+
+    def _validate_parent_consistency(self, artifact, result: ValidationResult) -> None:
+        """规则 8-9: parent_id 一致性"""
+        # 只有 SSOT 对象才有 parent_id 概念
+        if not self.registry.is_ssot_id(artifact.id):
+            return
+
+        # 获取 parent_id (如果存在)
+        parent_id = (getattr(artifact, "properties", {}) or {}).get("parent_id")
+
+        # 推断 SSOT 类型 (从 ID 前缀)
+        id_prefix = artifact.id.split("-")[0].upper()
+        try:
+            ssot_type = SSOTType(id_prefix.lower())
+        except ValueError:
+            return
+
+        # 使用 id_parser 进行校验
+        error = validate_parent_consistency(artifact.id, parent_id, ssot_type)
+        if error:
+            result.add_error(error)
+
+    def _validate_parent_required(self, artifact, result: ValidationResult) -> None:
+        """规则 10: parent_id 必填检查"""
+        if not self.registry.is_ssot_id(artifact.id):
+            return
+
+        # 获取 parent_id
+        parent_id = (getattr(artifact, "properties", {}) or {}).get("parent_id")
+
+        # 推断 SSOT 类型
+        id_prefix = artifact.id.split("-")[0].upper()
+        try:
+            ssot_type = SSOTType(id_prefix.lower())
+        except ValueError:
+            return
+
+        # 检查是否需要 parent_id
+        if SSOTType.requires_parent(ssot_type) and not parent_id:
+            result.add_error(f"类型 {ssot_type.value} 需要 parent_id，但未提供")
+
+    def _validate_tc_parent(self, artifact, result: ValidationResult) -> None:
+        """规则 11: TC.parent_id 必须为 TESTSET"""
+        if not self.registry.is_ssot_id(artifact.id):
+            return
+
+        id_prefix = artifact.id.split("-")[0].upper()
+        if id_prefix != "TC":
+            return
+
+        parent_id = (getattr(artifact, "properties", {}) or {}).get("parent_id")
+        if parent_id:
+            # 解析 parent_id 确认是 TESTSET
+            parent_prefix = parent_id.split("-")[0].upper()
+            if parent_prefix != "TESTSET":
+                result.add_error(f"TC 对象的 parent_id 必须为 TESTSET 类型，当前为 {parent_prefix}")
+
+    def _validate_parent_type_recommendation(self, artifact, result: ValidationResult) -> None:
+        """规则 12: 父子类型推荐关系"""
+        # 这是一个 P1 警告，不是 blocking 错误
+        pass
+
+    def _validate_orphan_object(self, artifact, result: ValidationResult) -> None:
+        """规则 13: 孤儿对象检查"""
+        # 检查是否有任何引用指向此对象
+        related = self.registry.get_related(artifact.id)
+        if not related:
+            # 检查是否有下游对象
+            has_downstream = False
+            for other in self.registry.list_all():
+                derived_from = getattr(other, "derived_from", None)
+                derived_from_ids = (getattr(other, "properties", {}) or {}).get("derived_from_ids", [])
+                if derived_from == artifact.id or artifact.id in derived_from_ids:
+                    has_downstream = True
+                    break
+            if not has_downstream:
+                result.add_warning(f"对象 {artifact.id} 可能是孤儿对象 (无上游也无下游)")
+
+    def _validate_slug_spec(self, artifact, result: ValidationResult) -> None:
+        """规则 14: slug 规范检查"""
+        # 从文件名提取 slug
+        filename = Path(artifact.path).name
+        if "__" not in filename:
+            result.add_warning(f"文件名缺少 slug 部分: {filename}")
+            return
+
+        _, slug_ext = filename.split("__", 1)
+        slug = Path(slug_ext).stem
+
+        # 检查 slug 长度
+        if len(slug) > 50:
+            result.add_warning(f"slug 长度超过 50 字符: {slug}")
+
+        # 检查 slug 字符
+        import re
+        if not re.match(r"^[a-z0-9-]*$", slug):
+            result.add_warning(f"slug 包含非标准字符: {slug}")

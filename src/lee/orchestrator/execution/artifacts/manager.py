@@ -13,8 +13,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 from .models import ArtifactMetadata, RunManifest
+from .placement import resolve_ssot_relative_dir
 from .registry import ArtifactRegistry
-from .types import ArtifactType, ArtifactStatus, AdoptMode, GovernanceKind, ArtifactCategoryRegistry
+from .types import ArtifactType, ArtifactStatus, AdoptMode, GovernanceKind, ArtifactCategoryRegistry, SSOTType
+from .id_generator import SSOTIDGenerator
 
 # Windows 兼容性：fcntl 不可用
 if sys.platform != "win32":
@@ -32,15 +34,18 @@ class ArtifactManager:
     所有产出物必须通过此类进入系统。
     """
 
-    def __init__(self, root_path: Optional[Path] = None):
+    def __init__(self, root_path: Optional[Path] = None, project_root: Optional[Path] = None):
         """
         初始化管理器
 
         Args:
             root_path: .artifacts/ 根目录
+            project_root: 项目根目录
         """
-        self.root_path = root_path or (Path.cwd() / ".artifacts")
+        self.project_root = (project_root or Path.cwd()).resolve()
+        self.root_path = (root_path or (self.project_root / ".artifacts")).resolve()
         self.sequence_file = self.root_path / ".sequence"
+        self._artifacts_path_root = self._to_metadata_path_root(self.root_path)
         self.registry = ArtifactRegistry(self.root_path)
 
         # 确保目录存在
@@ -51,6 +56,32 @@ class ArtifactManager:
             self.registry.load()
         else:
             self.registry.rebuild()
+
+    def _to_metadata_path_root(self, base_path: Path) -> str:
+        """
+        Convert a concrete base path into the serialized path_root form.
+        """
+        resolved = base_path.resolve()
+        try:
+            relative_to_cwd = resolved.relative_to(Path.cwd())
+            return relative_to_cwd.as_posix()
+        except ValueError:
+            return str(resolved)
+
+    def _resolve_path_root(self, path_root: str) -> Path:
+        """Resolve a metadata path_root against the manager project root."""
+        base_path = Path(path_root or ".artifacts")
+        if not base_path.is_absolute():
+            base_path = Path.cwd() / base_path
+        return base_path.resolve()
+
+    def _resolve_metadata_path(self, metadata: ArtifactMetadata) -> Path:
+        """Resolve a metadata record to an absolute file path."""
+        return self._resolve_path_root(metadata.path_root) / metadata.path
+
+    def _is_artifacts_storage(self, metadata: ArtifactMetadata) -> bool:
+        """Whether the artifact content is stored under the artifacts root."""
+        return self._resolve_path_root(metadata.path_root) == self.root_path.resolve()
 
     def _ensure_directories(self) -> None:
         """确保目录结构存在"""
@@ -252,6 +283,7 @@ class ArtifactManager:
             category=category,
             status=status,
             path=str(relative_path),
+            path_root=self._artifacts_path_root,
             external_path=None,
             adopt_mode=None,
             run_id=run_id,
@@ -436,6 +468,7 @@ class ArtifactManager:
             category=category,
             status=ArtifactStatus.ACTIVE,
             path=str(relative_path),
+            path_root=self._artifacts_path_root,
             external_path=str(external_path),
             adopt_mode=AdoptMode.COPY,
             run_id=run_id,
@@ -507,6 +540,7 @@ class ArtifactManager:
             category=category,
             status=ArtifactStatus.ACTIVE,
             path=virtual_path,
+            path_root=self._artifacts_path_root,
             external_path=str(external_path),
             adopt_mode=AdoptMode.REFERENCE,
             run_id=run_id,
@@ -651,7 +685,7 @@ class ArtifactManager:
             return self._get_git_content(metadata)
         else:
             # copy_mode: 从文件读取
-            path = self.root_path / metadata.path
+            path = self._resolve_metadata_path(metadata)
             if not path.exists():
                 return None
             content = path.read_bytes()
@@ -707,7 +741,7 @@ class ArtifactManager:
 
         # 删除文件
         if metadata.adopt_mode != AdoptMode.REFERENCE:
-            file_path = self.root_path / metadata.path
+            file_path = self._resolve_metadata_path(metadata)
             if file_path.exists():
                 file_path.unlink()
 
@@ -730,7 +764,7 @@ class ArtifactManager:
         if metadata.status == ArtifactStatus.FROZEN:
             return metadata
 
-        if metadata.adopt_mode == AdoptMode.REFERENCE:
+        if metadata.adopt_mode == AdoptMode.REFERENCE or not self._is_artifacts_storage(metadata):
             # reference_mode 只更新状态
             metadata.status = ArtifactStatus.FROZEN
             metadata.frozen_at = datetime.now()
@@ -739,7 +773,7 @@ class ArtifactManager:
             return metadata
 
         # copy_mode: 移动文件到 frozen/
-        old_path = self.root_path / metadata.path
+        old_path = self._resolve_metadata_path(metadata)
         frozen_dir = self.root_path / "frozen"
         frozen_path = frozen_dir / Path(metadata.path).name
 
@@ -755,3 +789,155 @@ class ArtifactManager:
 
         self.registry.update(metadata)
         return metadata
+
+    def create_ssot(
+        self,
+        ssot_type,
+        title: str,
+        content,
+        run_id: str,
+        parent_id: Optional[str] = None,
+        derived_from: Optional[List[str]] = None,
+        source_refs: Optional[List[str]] = None,
+        related_ids: Optional[List[str]] = None,
+        verifies: Optional[List[str]] = None,
+        implements: Optional[List[str]] = None,
+        owner: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        status: ArtifactStatus = ArtifactStatus.ACTIVE,
+        version: str = "v1",
+        properties: Optional[Dict] = None,
+    ) -> ArtifactMetadata:
+        """
+        创建 SSOT 对象 (v1.3 新增)
+
+        使用新的 SSOT ID 格式和文件命名规则。
+
+        Args:
+            ssot_type: SSOT 对象类型
+            title: 标题
+            content: 内容
+            run_id: 所属 run ID
+            parent_id: 父对象 ID
+            derived_from: 派生来源
+            source_refs: 源文档锚点
+            related_ids: 横向关联
+            verifies: 验证哪些对象
+            implements: 实现哪些对象
+            owner: 负责人
+            tags: 标签
+            status: 状态
+            version: 版本
+            properties: 扩展属性
+
+        Returns:
+            创建的 ArtifactMetadata 对象
+        """
+        if not isinstance(ssot_type, SSOTType):
+            ssot_type = SSOTType(ssot_type)
+
+        # 生成 ID
+        generator = SSOTIDGenerator(self.root_path)
+
+        # 生成 slug
+        slug = generator.generate_slug(title)
+
+        # 生成完整 ID
+        artifact_id = generator.generate_id(ssot_type, parent_id)
+
+        # 生成文件名
+        filename = f"{artifact_id}__{slug}.md"
+
+        # 正式 SSOT 主文件落在项目内容目录，而不是 .artifacts/ssot/
+        relative_dir = resolve_ssot_relative_dir(ssot_type)
+        artifact_dir = self.project_root / relative_dir
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        artifact_path = artifact_dir / filename
+
+        # 写入内容
+        if isinstance(content, Path):
+            shutil.copy(content, artifact_path)
+            content_hash = self._compute_hash(content)
+            size_bytes = content.stat().st_size
+        else:
+            if isinstance(content, bytes):
+                artifact_path.write_bytes(content)
+            else:
+                artifact_path.write_text(content, encoding="utf-8")
+            content_hash = self._compute_hash(artifact_path)
+            size_bytes = artifact_path.stat().st_size
+
+        # 创建 metadata
+        metadata = ArtifactMetadata(
+            id=artifact_id,
+            type=ArtifactType.DOCUMENT,  # 暂用 DOCUMENT 类型
+            category="ssot_object",
+            status=status,
+            path=artifact_path.relative_to(self.project_root).as_posix(),
+            path_root=self._to_metadata_path_root(self.project_root),
+            run_id=run_id,
+            title=title,
+            derived_from=derived_from[0] if derived_from else None,
+            verifies=verifies or [],
+            implements=implements or [],
+            tags=tags or [],
+            size_bytes=size_bytes,
+            content_hash=content_hash,
+            properties=properties or {},
+        )
+
+        # 添加 SSOT 扩展字段 (作为 properties 存储)
+        metadata.properties["ssot_type"] = ssot_type.value
+        metadata.properties["parent_id"] = parent_id
+        metadata.properties["source_refs"] = source_refs or []
+        metadata.properties["related_ids"] = related_ids or []
+        metadata.properties["owner"] = owner
+        metadata.properties["version"] = version
+        metadata.properties["placement_dir"] = relative_dir.as_posix()
+        metadata.properties["derived_from_ids"] = derived_from or []
+
+        # 注册
+        self.registry.register(metadata)
+
+        return metadata
+
+    def get_ssot(self, artifact_id: str) -> Optional[ArtifactMetadata]:
+        """
+        获取 SSOT 对象
+
+        Args:
+            artifact_id: SSOT ID
+
+        Returns:
+            ArtifactMetadata 或 None
+        """
+        if not self.registry.is_ssot_id(artifact_id):
+            return None
+        return self.registry.get(artifact_id)
+
+    def list_ssot_by_type(self, ssot_type: SSOTType) -> List[ArtifactMetadata]:
+        """
+        列出指定类型的所有 SSOT 对象
+
+        Args:
+            ssot_type: SSOT 对象类型
+
+        Returns:
+            ArtifactMetadata 列表
+        """
+        return [
+            a for a in self.registry.get_ssot_artifacts()
+            if a.properties.get("ssot_type") == ssot_type.value
+        ]
+
+    def list_ssot_by_parent(self, parent_id: str) -> List[ArtifactMetadata]:
+        """
+        列出指定父对象的所有子对象
+
+        Args:
+            parent_id: 父对象 ID
+
+        Returns:
+            ArtifactMetadata 列表
+        """
+        return self.registry.get_by_parent(parent_id)
