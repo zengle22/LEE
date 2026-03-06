@@ -9,6 +9,9 @@ This directory contains the LEE orchestrator configuration for this project.
 
 ## Directory Structure
 
+`dirs.yaml` is the SSOT for directory topology and placement only.
+Artifact identity, filename, and reference rules are owned by the SSOT identity layer.
+
 LEE 项目采用**分层目录结构**，将工具元数据与业务内容分离：
 
 ### 根目录级（工具配置）
@@ -26,6 +29,7 @@ LEE 项目采用**分层目录结构**，将工具元数据与业务内容分离
 |------|------|
 | `contracts/` | 冻结的分析结果和正式契约 |
 | `docs/` | 生成的文档和报告 |
+| `knowledge/` | Agent 复盘、模式沉淀、能力演进 |
 | `src/` | 生成的源代码 |
 | `outputs/` | 中间产物和制品 |
 | `tests/` | 生成的测试文件 |
@@ -107,6 +111,10 @@ config = get_project_structure(".")
 path = config.get_output_path("doc", category="reports", title="My Report")
 # Returns: docs/reports/2025-01-25-my-report.md
 ```
+
+For governed SSOT artifacts:
+- `dirs.yaml` decides the directory family
+- the SSOT identity layer decides the object ID and filename
 
 ## Re-initializing
 

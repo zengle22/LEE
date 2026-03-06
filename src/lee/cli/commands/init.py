@@ -287,10 +287,15 @@ def _create_directory_structure(project_root: Path) -> dict:
         "spec/ui": "UI 规格（路由/页面/交互/文案）",  # SPEC_SUBDIRS["ui"]
         "spec/adr": "架构决策记录（为什么这么做）",  # SPEC_SUBDIRS["adr"]
 
-        "docs": "解释性文档（生成/沉淀/知识）",
+        "docs": "解释性文档（说明、指南、报告）",
         "docs/guides": "使用指南/开发指南",
         "docs/reports": "阶段性报告/评审报告",
         "docs/archive": "历史文档归档",
+
+        "knowledge": "知识沉淀（Agent 复盘、模式提炼、能力演进）",
+        "knowledge/retrospectives": "任务复盘与执行回放",
+        "knowledge/patterns": "可复用模式、经验与反模式",
+        "knowledge/evolution": "Agent 能力演进记录与策略沉淀",
 
         "src": "源码（前后端分离建议明确边界）",
         "src/backend": "后端代码",
@@ -368,10 +373,18 @@ def _create_dirs_yaml(project_root: Path, force: bool = False) -> None:
         "docs_dir": DirectoryConfig(
             name="docs_dir",
             path="docs",
-            description="Explanatory documentation (generated/precipitated/knowledge)",
+            description="Explanatory documentation and reports",
             subdirs=["guides", "reports", "archive"],
             structure="flat",
             naming="descriptive",
+        ),
+        "knowledge_dir": DirectoryConfig(
+            name="knowledge_dir",
+            path="knowledge",
+            description="Agent retrospectives, distilled patterns, and evolution notes",
+            subdirs=["retrospectives", "patterns", "evolution"],
+            structure="flat",
+            naming="default",
         ),
         "src_dir": DirectoryConfig(
             name="src_dir",
@@ -418,18 +431,12 @@ def _create_dirs_yaml(project_root: Path, force: bool = False) -> None:
 
     config = DirectoryStructureConfig(
         project_dir=project_root,
-        version="1.0",
+        version="1.1",
         initialized_at=datetime.now().isoformat(),
         initialized_by="lee-init",
         project_name=project_root.name,
         directories=directories,
-        naming_conventions={
-            "contracts": "{layer}/{version}/{contract_name}.yaml",
-            "docs": "{category}/{YYYY-MM-DD}-{title}.md",
-            "source": "{module}/{file_name}.{ext}",
-            "tests": "{type}/{test_name}_test.{ext}",
-            "outputs": "{step_id}/{artifact_name}.{ext}",
-        },
+        naming_conventions={},
         constraints={
             "strict_path_validation": True,
             "forbid_creation_outside_defined_dirs": True,

@@ -280,9 +280,12 @@ def create_project_config(
 # ============================================
 
 # Standard directory structure schema
+# Boundary:
+# - dirs.yaml owns directory topology and placement only
+# - SSOT identity layer owns governed artifact IDs, filenames, and references
 DEFAULT_DIRECTORY_SCHEMA = {
-    "version": "1.0",
-    "description": "LEE Standard Project Directory Structure",
+    "version": "1.1",
+    "description": "LEE Standard Project Directory Topology",
     "directories": {
         # Configuration
         "config_dir": {
@@ -309,9 +312,17 @@ DEFAULT_DIRECTORY_SCHEMA = {
         # Documentation outputs
         "docs_dir": {
             "path": "docs",
-            "description": "Generated documentation and reports",
+            "description": "Generated explanatory documentation and reports",
             "subdirs": ["spec", "reports", "guides", "archive"],
             "naming": "descriptive"  # descriptive: {YYYY-MM-DD}-{title}.md
+        },
+
+        # Knowledge distillation
+        "knowledge_dir": {
+            "path": "knowledge",
+            "description": "Agent retrospectives, distilled patterns, and evolution notes",
+            "subdirs": ["retrospectives", "patterns", "evolution"],
+            "structure": "flat"
         },
 
         # Source code outputs
@@ -346,13 +357,6 @@ DEFAULT_DIRECTORY_SCHEMA = {
             "format": "markdown"
         }
     },
-    "file_naming_conventions": {
-        "contracts": "{layer}/{version}/{contract_name}.yaml",
-        "docs": "{category}/{YYYY-MM-DD}-{title}.md",
-        "source": "{module}/{file_name}.{ext}",
-        "tests": "{type}/{test_name}_test.{ext}",
-        "outputs": "{step_id}/{artifact_name}.{ext}"
-    },
     "constraints": {
         "strict_path_validation": True,
         "forbid_creation_outside_defined_dirs": True,
@@ -385,6 +389,7 @@ class DirectoryStructureConfig:
     initialized_by: Optional[str] = None
     project_name: Optional[str] = None
     directories: Dict[str, DirectoryConfig] = field(default_factory=dict)
+    # Legacy compatibility only. Governing filenames belongs to SSOT identity layer.
     naming_conventions: Dict[str, str] = field(default_factory=dict)
     constraints: Dict[str, Any] = field(default_factory=dict)
 
@@ -446,14 +451,17 @@ class DirectoryStructureConfig:
 
         data = {
             "version": self.version,
-            "description": "LEE Standard Project Directory Structure",
+            "description": "LEE Standard Project Directory Topology",
             "initialized_at": self.initialized_at,
             "initialized_by": self.initialized_by,
             "project_name": self.project_name,
             "directories": directories_dict,
-            "file_naming_conventions": self.naming_conventions,
             "constraints": self.constraints
         }
+
+        # Backward compatibility only: keep legacy naming conventions when present.
+        if self.naming_conventions:
+            data["file_naming_conventions"] = self.naming_conventions
 
         config_file = config_dir / "dirs.yaml"
         with open(config_file, 'w', encoding='utf-8') as f:
@@ -531,7 +539,10 @@ class DirectoryStructureConfig:
 
     def get_output_path(self, output_type: str, **kwargs) -> Path:
         """
-        Get the correct output path based on type and naming convention
+        Get a derived path for runtime or legacy outputs.
+
+        For governed SSOT artifacts, the directory comes from dirs.yaml/path config,
+        while the filename must come from the SSOT identity layer.
 
         Args:
             output_type: Type of output (contract, doc, source, test, output)
@@ -789,6 +800,9 @@ This directory contains the LEE orchestrator configuration for this project.
 
 ## Directory Structure
 
+`dirs.yaml` is the SSOT for directory topology only. Governed artifact identity, filename,
+and reference rules belong to the SSOT identity layer rather than this file.
+
 """
 
     for dir_name, dir_config in config.directories.items():
@@ -822,6 +836,13 @@ config = get_project_structure(".")
 path = config.get_output_path("doc", category="reports", title="My Report")
 # Returns: docs/reports/2025-01-25-my-report.md
 ```
+
+For SSOT-governed artifacts:
+- `dirs.yaml` decides which directory family the artifact belongs to
+- the SSOT identity layer decides the artifact ID and final filename
+
+Legacy `file_naming_conventions` may still appear in old configs for compatibility, but
+new projects should not treat it as an active source of truth.
 
 ## Re-initializing
 

@@ -272,7 +272,7 @@ class WorkflowRunner:
                 context["qa_specs_dir"] = "spec/qa"
             
             # 其他目录直接映射
-            for dir_name in ["src_dir", "docs_dir", "tests_dir", "artifacts_dir", 
+            for dir_name in ["src_dir", "docs_dir", "knowledge_dir", "tests_dir", "artifacts_dir",
                             "config_dir", "workflow_dir", "tools_dir", 
                             "deploy_dir", "legacy_dir"]:
                 if dir_name in directories:
@@ -282,6 +282,7 @@ class WorkflowRunner:
                     defaults = {
                         "src_dir": "src",
                         "docs_dir": "docs",
+                        "knowledge_dir": "knowledge",
                         "tests_dir": "tests",
                         "artifacts_dir": ".artifacts",
                         "config_dir": ".project",
@@ -300,6 +301,7 @@ class WorkflowRunner:
                 "qa_specs_dir": "spec/qa",
                 "src_dir": "src",
                 "docs_dir": "docs",
+                "knowledge_dir": "knowledge",
                 "tests_dir": "tests",
                 "artifacts_dir": ".artifacts",
                 "config_dir": ".project",

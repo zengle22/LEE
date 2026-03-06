@@ -1,5 +1,5 @@
-version: '1.0'
-description: LEE Standard Project Directory Structure
+version: '1.1'
+description: LEE Standard Project Directory Topology
 initialized_at: '2026-01-25T01:29:43.175256'
 initialized_by: lee-orchestrator
 project_name: calorie-tracker
@@ -31,7 +31,7 @@ directories:
     naming: default
   docs_dir:
     path: docs
-    description: Generated documentation and reports
+    description: Generated explanatory documentation and reports
     subdirs:
     - spec
     - reports
@@ -39,6 +39,15 @@ directories:
     - archive
     structure: flat
     naming: descriptive
+  knowledge_dir:
+    path: knowledge
+    description: Agent retrospectives, distilled patterns, and evolution notes
+    subdirs:
+    - retrospectives
+    - patterns
+    - evolution
+    structure: flat
+    naming: default
   src_dir:
     path: src
     description: Generated source code
@@ -79,12 +88,6 @@ directories:
     - ui
     structure: flat
     naming: default
-file_naming_conventions:
-  contracts: '{layer}/{version}/{contract_name}.yaml'
-  docs: '{category}/{YYYY-MM-DD}-{title}.md'
-  source: '{module}/{file_name}.{ext}'
-  tests: '{type}/{test_name}_test.{ext}'
-  outputs: '{step_id}/{artifact_name}.{ext}'
 constraints:
   strict_path_validation: true
   forbid_creation_outside_defined_dirs: true

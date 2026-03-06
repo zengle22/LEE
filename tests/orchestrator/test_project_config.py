@@ -552,6 +552,55 @@ class TestDirectoryStructureConfig:
         assert loaded.project_name == "test"
         assert "src_dir" in loaded.directories
 
+    def test_save_omits_naming_conventions_when_empty(self, tmp_path):
+        """New configs should not persist filename ownership in dirs.yaml."""
+        config = DirectoryStructureConfig(
+            project_dir=tmp_path,
+            version="1.1",
+            project_name="test",
+            directories={
+                "src_dir": DirectoryConfig(
+                    name="src_dir",
+                    path="src",
+                    description="Source"
+                )
+            },
+            naming_conventions={}
+        )
+
+        config.save()
+
+        data = yaml.safe_load((tmp_path / ".project" / "dirs.yaml").read_text(encoding="utf-8"))
+        assert "file_naming_conventions" not in data
+
+    def test_load_preserves_legacy_naming_conventions(self, tmp_path):
+        """Legacy dirs.yaml naming field should still load for compatibility."""
+        config_dir = tmp_path / ".project"
+        config_dir.mkdir(parents=True)
+        (config_dir / "dirs.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "version": "1.0",
+                    "project_name": "test",
+                    "directories": {
+                        "src_dir": {
+                            "path": "src",
+                            "description": "Source",
+                        }
+                    },
+                    "file_naming_conventions": {
+                        "docs": "{category}/{YYYY-MM-DD}-{title}.md"
+                    },
+                },
+                allow_unicode=True,
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+        loaded = DirectoryStructureConfig.load(tmp_path)
+        assert loaded.naming_conventions["docs"] == "{category}/{YYYY-MM-DD}-{title}.md"
+
     def test_load_not_found(self, tmp_path):
         """Test load when config doesn't exist."""
         with pytest.raises(FileNotFoundError, match="Directory structure configuration not found"):
@@ -600,10 +649,17 @@ class TestInitProjectStructure:
         assert (tmp_path / "test_project").exists()
         assert (tmp_path / "test_project" / "src").exists()
         assert (tmp_path / "test_project" / "docs").exists()
+        assert (tmp_path / "test_project" / "knowledge").exists()
+        assert (tmp_path / "test_project" / "knowledge" / "retrospectives").exists()
 
         # Check config file
         config_file = tmp_path / ".project" / "dirs.yaml"
         assert config_file.exists()
+
+    def test_default_schema_includes_knowledge_dir(self):
+        """Default directory topology should expose a knowledge distillation directory."""
+        assert "knowledge_dir" in DEFAULT_DIRECTORY_SCHEMA["directories"]
+        assert DEFAULT_DIRECTORY_SCHEMA["directories"]["knowledge_dir"]["path"] == "knowledge"
 
     def test_init_with_custom_schema(self, tmp_path):
         """Test initialization with custom schema."""
