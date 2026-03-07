@@ -694,9 +694,14 @@ class FileOutputHandler:
             project_name = context.get("project_name", context.get("data", {}).get("project_name", "ai-marathon-coach"))
             path = path.replace("${PROJECT_NAME}", project_name)
 
+        # `/reports/...` 这类项目内根路径在 Windows 上会被 Path.join 吃成盘符根目录。
+        # 这里统一当作“相对 project_root 的治理路径”处理。
+        if isinstance(path, str) and path.startswith(("/", "\\")) and not Path(path).drive:
+            path = path.lstrip("/\\")
+
         # 转换为绝对路径
         if not os.path.isabs(path):
-            path = str(self.project_root / path)
+            path = str((self.project_root / path).resolve())
 
         return path
 

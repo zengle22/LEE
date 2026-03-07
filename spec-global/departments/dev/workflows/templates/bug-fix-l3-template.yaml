@@ -183,6 +183,12 @@ stages:
     kind: agent
     description: Analyze bug report, reproduce the issue, and identify root cause
     agent_id: agent.dev.root_cause_analyzer
+    config:
+      implementation_facing: true
+      strict_governance: true
+      acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+      formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
+      governed_module: workflow-runtime
     mandatory: true
     depends_on: []
     gate:
@@ -197,6 +203,12 @@ stages:
     kind: agent
     description: Implement the bug fix based on root cause analysis
     agent_id: agent.dev.fix_implementer
+    config:
+      implementation_facing: true
+      strict_governance: true
+      acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+      formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
+      governed_module: workflow-runtime
     mandatory: true
     depends_on:
     - root_cause_analysis
@@ -209,6 +221,11 @@ stages:
     kind: agent
     description: Verify fix works correctly and doesn't introduce regressions
     agent_id: agent.dev.fix_verifier
+    config:
+      implementation_facing: true
+      strict_governance: true
+      acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+      formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
     mandatory: true
     depends_on:
     - fix_implementation
@@ -224,6 +241,11 @@ stages:
     kind: agent
     description: Review code quality, style, and best practices
     agent_id: agent.dev.code_reviewer
+    config:
+      implementation_facing: true
+      strict_governance: true
+      acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+      formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
     mandatory: true
     depends_on:
     - verification
@@ -236,6 +258,11 @@ stages:
     kind: agent
     description: Make final merge decision based on all review results
     agent_id: agent.dev.merge_decider
+    config:
+      implementation_facing: true
+      strict_governance: true
+      acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+      formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
     mandatory: true
     depends_on:
     - code_review

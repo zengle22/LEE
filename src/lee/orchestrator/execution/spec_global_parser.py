@@ -568,7 +568,8 @@ class SpecGlobalParser:
         elif isinstance(gate_ref, str):
             gate_ref_str = gate_ref
 
-        step_config = {"description": step_data.get("description")}
+        step_config = dict(step_data.get("config") or {})
+        step_config["description"] = step_data.get("description")
         if "run" in step_data:
             step_config["run"] = step_data.get("run")
         if subworkflow_ref:

@@ -77,6 +77,26 @@ def test_spec_global_parser_infers_skill_from_run_prefix():
     assert step.agent_id is None
 
 
+def test_spec_global_parser_preserves_explicit_step_config():
+    parser = SpecGlobalParser()
+    step = parser._parse_step(
+        {
+            "id": "review_gate",
+            "kind": "gate",
+            "config": {
+                "gate": {
+                    "type": "auto_check",
+                    "check": "blocker_count == 0",
+                }
+            },
+        },
+        stage_id="review_gate",
+    )
+
+    assert step.config["gate"]["type"] == "auto_check"
+    assert step.config["gate"]["check"] == "blocker_count == 0"
+
+
 def test_workspace_cleanup_template_parses_push_step_as_skill():
     manager = TemplateManager(template_dir="spec-global")
     template = manager.get_template("workflow.office.workspace_cleanup")

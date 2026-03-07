@@ -36,12 +36,27 @@ def _load_registry() -> Dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def _load_spec_option_as_params(spec_path: str) -> Dict[str, Any]:
+    """Load --spec file as params payload when the workflow opts into it."""
+    path = Path(spec_path).resolve()
+    if not path.exists():
+        raise click.ClickException(f"Spec file not found: {path}")
+
+    try:
+        if path.suffix.lower() == ".json":
+            return json.loads(path.read_text(encoding="utf-8"))
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception as exc:
+        raise click.ClickException(f"Failed to parse spec file '{path}': {exc}") from exc
+
+
 def _render_workflow_template(template_path: Path, params: Dict[str, Any], project_dir: Path) -> Path:
     with open(template_path, encoding="utf-8") as f:
         content = f.read()
 
     now = datetime.now()
     engine = TemplateEngine()
+    dirs_context = _load_directory_context(project_dir)
     rendered = engine.render_string(
         content,
         {
@@ -49,6 +64,7 @@ def _render_workflow_template(template_path: Path, params: Dict[str, Any], proje
             "date": now.strftime("%Y-%m-%d"),
             "timestamp": now.strftime("%Y%m%d%H%M%S"),
             "now": now,
+            **dirs_context,
         },
     )
 
@@ -61,6 +77,58 @@ def _render_workflow_template(template_path: Path, params: Dict[str, Any], proje
     out_path = out_dir / f"{template_path.stem}-{stamp}.yaml"
     out_path.write_text(rendered, encoding="utf-8")
     return out_path
+
+
+def _load_directory_context(project_dir: Path) -> Dict[str, Any]:
+    dirs_yaml_path = project_dir / ".project" / "dirs.yaml"
+    defaults: Dict[str, Any] = {
+        "specs_dir": "spec",
+        "qa_specs_dir": "spec/qa",
+        "src_dir": "src",
+        "docs_dir": "docs",
+        "knowledge_dir": "knowledge",
+        "tests_dir": "tests",
+        "artifacts_dir": ".artifacts",
+        "config_dir": ".project",
+        "workflow_dir": ".workflow",
+        "tools_dir": "tools",
+        "deploy_dir": "deploy",
+        "legacy_dir": "legacy",
+    }
+    if not dirs_yaml_path.exists():
+        return defaults
+
+    try:
+        data = yaml.safe_load(dirs_yaml_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return defaults
+
+    directories = data.get("directories", {}) or {}
+    context = dict(defaults)
+    if "specs_dir" in directories:
+        context["specs_dir"] = directories["specs_dir"].get("path", context["specs_dir"])
+    elif "spec_dir" in directories:
+        context["specs_dir"] = directories["spec_dir"].get("path", context["specs_dir"])
+
+    if "qa_specs_dir" in directories:
+        context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", context["qa_specs_dir"])
+
+    for key in [
+        "src_dir",
+        "docs_dir",
+        "knowledge_dir",
+        "tests_dir",
+        "artifacts_dir",
+        "config_dir",
+        "workflow_dir",
+        "tools_dir",
+        "deploy_dir",
+        "legacy_dir",
+    ]:
+        if key in directories:
+            context[key] = directories[key].get("path", context[key])
+
+    return context
 
 
 def _load_template_param_defaults(template_path: Path) -> Dict[str, Any]:
@@ -555,7 +623,12 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
     params: Dict[str, Any] = {}
-    if spec:
+    if spec and entry.get("load_spec_as_params"):
+        loaded = _load_spec_option_as_params(spec)
+        if not isinstance(loaded, dict):
+            raise click.ClickException("--spec must point to an object-like YAML/JSON document")
+        params.update(loaded)
+    elif spec:
         params["spec"] = spec
     if env:
         params["env"] = env

@@ -870,6 +870,7 @@ class TemplateManager:
                         },
                         outputs=outputs,
                         config={
+                            **(step_data.get("config") or {}),
                             "name": step_data.get("name", ""),
                             "description": step_data.get("description", ""),
                             "mandatory": step_data.get("mandatory", True),
@@ -927,6 +928,7 @@ class TemplateManager:
                     },
                     outputs=outputs,
                     config={
+                        **(step_data.get("config") or {}),
                         "name": step_data.get("name", ""),
                         "description": step_data.get("description", ""),
                         "mandatory": step_data.get("mandatory", True),

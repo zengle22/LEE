@@ -240,6 +240,19 @@ class TestEventLogBasics:
         assert events[1]["event_type"] == "step_started"
         assert events[1]["step_id"] == "step_1"
 
+    def test_log_uses_events_jsonl_when_legacy_events_dir_exists(self):
+        """兼容已存在的 .workflow/events 目录布局。"""
+        from lee.orchestrator.storage.event_log import EventLog, EventType
+
+        legacy_events_dir = Path(self.temp_dir) / ".workflow" / "events"
+        legacy_events_dir.mkdir(parents=True, exist_ok=True)
+
+        el = EventLog(self.temp_dir, run_id="RUN-001")
+        el.log(EventType.RUN_CREATED, data={"compat": True})
+
+        log_path = legacy_events_dir / "events.jsonl"
+        assert log_path.exists()
+
     def test_get_events_filtering(self):
         """验证事件查询过滤"""
         from lee.orchestrator.storage.event_log import EventLog, EventType

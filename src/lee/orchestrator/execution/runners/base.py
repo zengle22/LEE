@@ -7,6 +7,7 @@ RunnerContext 封装了所有 runner 运行所需的依赖（store、state_machi
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import re
@@ -17,6 +18,7 @@ from typing import Optional, List, Any, TYPE_CHECKING, Dict
 
 import asyncio
 import logging
+import yaml
 
 from lee.orchestrator.storage.models import (
     TaskExecution,
@@ -116,6 +118,12 @@ class StepRunnerBase(StepRunnerStrategy):
     - demo 模式检测
     """
 
+    @staticmethod
+    def _normalize_project_relative_path(path: str) -> str:
+        if isinstance(path, str) and path.startswith(("/", "\\")) and not Path(path).drive:
+            return path.lstrip("/\\")
+        return path
+
     # ------------------------------------------------------------------
     # Evidence
     # ------------------------------------------------------------------
@@ -158,6 +166,7 @@ class StepRunnerBase(StepRunnerStrategy):
             path = getattr(out, "path", None)
             if not path:
                 continue
+            path = StepRunnerBase._normalize_project_relative_path(path)
             if os.path.isabs(path):
                 paths.append(path)
             else:
@@ -178,6 +187,7 @@ class StepRunnerBase(StepRunnerStrategy):
             path = getattr(out, "path", None)
             if not path:
                 continue
+            path = StepRunnerBase._normalize_project_relative_path(path)
 
             target = Path(path)
             if not target.is_absolute():
@@ -312,6 +322,209 @@ class StepRunnerBase(StepRunnerStrategy):
         except Exception:
             return None
         return None
+
+    @staticmethod
+    def _get_agent_mapping(agent_spec: Optional[Any], attr_name: str) -> Dict[str, Any]:
+        if not agent_spec:
+            return {}
+        value = getattr(agent_spec, attr_name, {}) or {}
+        return value if isinstance(value, dict) else {}
+
+    @classmethod
+    def _resolve_governance_paths(
+        cls,
+        agent_spec: Optional[Any],
+        project_root: Optional[str],
+    ) -> Dict[str, str]:
+        governance = cls._get_agent_mapping(agent_spec, "governance")
+        spec_path = getattr(agent_spec, "spec_path", None) if agent_spec else None
+        resolved: Dict[str, str] = {}
+        for key, ref in governance.items():
+            if isinstance(ref, str):
+                resolved[key] = cls._resolve_contract_path(ref, spec_path, project_root)
+        return resolved
+
+    @staticmethod
+    def _is_implementation_facing_step(step, agent_spec: Optional[Any]) -> bool:
+        step_config = getattr(step, "config", {}) or {}
+        if "implementation_facing" in step_config:
+            return bool(step_config["implementation_facing"])
+
+        agent_id = (getattr(step, "agent_id", "") or "").lower()
+        if any(token in agent_id for token in ("spec_maintainer", "spec-review", "spec_review")):
+            return False
+
+        tags = set()
+        if agent_spec:
+            raw_tags = getattr(agent_spec, "tags", []) or []
+            tags = {str(tag).lower() for tag in raw_tags}
+
+        governance_tags = {"governance", "spec", "maintainer", "review", "lint", "contract", "workflow", "gate", "skill"}
+        return not bool(tags & governance_tags)
+
+    @staticmethod
+    def _find_acceptance_brief(
+        acceptance_briefs_dir: Optional[str],
+        step,
+    ) -> Optional[str]:
+        if not acceptance_briefs_dir:
+            return None
+
+        step_config = getattr(step, "config", {}) or {}
+        explicit_path = step_config.get("acceptance_brief")
+        if explicit_path and Path(explicit_path).exists():
+            return str(Path(explicit_path).resolve())
+
+        brief_id = step_config.get("acceptance_brief_id") or step_config.get("task_id")
+        if brief_id:
+            matches = StepRunnerBase._scan_acceptance_briefs(acceptance_briefs_dir)
+            for match in matches:
+                metadata = match["metadata"]
+                if metadata.get("brief_id") == brief_id and metadata.get("status", "active") == "active":
+                    return match["path"]
+
+            pattern = str(Path(acceptance_briefs_dir) / f"*{brief_id}*.md")
+            matches = glob.glob(pattern)
+            if matches:
+                return str(Path(matches[0]).resolve())
+        return None
+
+    @staticmethod
+    def _scan_acceptance_briefs(acceptance_briefs_dir: Optional[str]) -> List[Dict[str, Any]]:
+        if not acceptance_briefs_dir:
+            return []
+
+        results: List[Dict[str, Any]] = []
+        for path in Path(acceptance_briefs_dir).glob("*.md"):
+            metadata = StepRunnerBase._parse_markdown_front_matter(path)
+            if metadata:
+                results.append({"path": str(path.resolve()), "metadata": metadata})
+        return results
+
+    @staticmethod
+    def _parse_markdown_front_matter(path: Path) -> Dict[str, Any]:
+        try:
+            text = Path(path).read_text(encoding="utf-8")
+        except OSError:
+            return {}
+
+        if not text.startswith("---\n"):
+            return {}
+
+        end_idx = text.find("\n---", 4)
+        if end_idx == -1:
+            return {}
+
+        raw = text[4:end_idx]
+        try:
+            metadata = yaml.safe_load(raw) or {}
+        except yaml.YAMLError:
+            return {}
+        return metadata if isinstance(metadata, dict) else {}
+
+    @staticmethod
+    def _find_module_contract(
+        module_contracts_dir: Optional[str],
+        step,
+    ) -> Optional[str]:
+        if not module_contracts_dir:
+            return None
+
+        step_config = getattr(step, "config", {}) or {}
+        explicit_path = step_config.get("module_contract")
+        if explicit_path and Path(explicit_path).exists():
+            return str(Path(explicit_path).resolve())
+
+        module_name = step_config.get("module_name") or step_config.get("governed_module")
+        if module_name:
+            candidate = Path(module_contracts_dir) / f"{module_name}.md"
+            if candidate.exists():
+                return str(candidate.resolve())
+        return None
+
+    @classmethod
+    def _evaluate_governance_preflight(
+        cls,
+        step,
+        agent_spec: Optional[Any],
+        project_root: Optional[str],
+        structured_payload: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        implementation_facing = cls._is_implementation_facing_step(step, agent_spec)
+        governance_paths = cls._resolve_governance_paths(agent_spec, project_root)
+        step_config = getattr(step, "config", {}) or {}
+
+        formal_ssot_present = False
+        contracts = cls._get_agent_mapping(agent_spec, "contracts")
+        if contracts.get("ssot_output_schema"):
+            formal_ssot_present = True
+        if isinstance(structured_payload, dict) and (
+            "ssot_output_contract" in structured_payload
+            or ("contract_version" in structured_payload and "outputs" in structured_payload)
+        ):
+            formal_ssot_present = True
+        if step_config.get("formal_ssot_id") or step_config.get("ssot_root_id"):
+            formal_ssot_present = True
+
+        acceptance_brief_path = cls._find_acceptance_brief(governance_paths.get("acceptance_briefs"), step)
+        acceptance_brief_metadata = {}
+        if acceptance_brief_path:
+            acceptance_brief_metadata = cls._parse_markdown_front_matter(Path(acceptance_brief_path))
+        module_contract_path = cls._find_module_contract(governance_paths.get("module_contracts"), step)
+
+        warnings: List[str] = []
+        allow_full_completion = True
+
+        if implementation_facing and not formal_ssot_present:
+            if not acceptance_brief_path and not module_contract_path:
+                allow_full_completion = False
+                warnings.append(
+                    "No formal SSOT truth source or temporary governance anchor found."
+                )
+            else:
+                warnings.append(
+                    "No formal SSOT truth source; running under temporary governance."
+                )
+
+        return {
+            "implementation_facing": implementation_facing,
+            "formal_ssot_present": formal_ssot_present,
+            "acceptance_brief_found": bool(acceptance_brief_path),
+            "acceptance_brief_path": acceptance_brief_path,
+            "acceptance_brief_metadata": acceptance_brief_metadata,
+            "module_contract_found": bool(module_contract_path),
+            "module_contract_path": module_contract_path,
+            "allow_full_completion": allow_full_completion,
+            "governance_paths": governance_paths,
+            "human_gate_required": (not formal_ssot_present) and implementation_facing,
+            "warnings": warnings,
+        }
+
+    @staticmethod
+    def _build_completion_summary(
+        step,
+        written_files: List[str],
+        structured_payload: Optional[Any],
+        governance_preflight: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        structured_payload = structured_payload if isinstance(structured_payload, dict) else {}
+        changed_files = structured_payload.get("changed_files") or written_files
+        tests_executed = structured_payload.get("tests_executed") or "missing"
+        known_limitations = structured_payload.get("known_limitations") or "not declared"
+        evidence = structured_payload.get("evidence") or (written_files if written_files else "missing")
+
+        return {
+            "scope_completed": structured_payload.get("scope_completed") or step.id,
+            "changed_files": changed_files,
+            "evidence": evidence,
+            "tests_executed": tests_executed,
+            "known_limitations": known_limitations,
+            "human_gate_required": (
+                governance_preflight.get("human_gate_required")
+                if governance_preflight
+                else "unknown"
+            ),
+        }
 
     def _handle_validation_result(
         self, validation_result: Optional[ValidationResult], step, strict: bool
