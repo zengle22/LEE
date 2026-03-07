@@ -31,6 +31,15 @@
 |---------|--------|---------|
 | `MISSING_TESTS_SMOKE` | `tests.smoke` 必须存在且至少有 1 条测试 | major |
 
+### A.4 治理锚点要求
+
+| 规则代码 | 检查项 | 严重级别 |
+|---------|--------|---------|
+| `MISSING_TRUTH_SOURCE` | 实现导向 spec 必须有 formal SSOT truth source，或显式声明 temporary governance anchor | major |
+| `MISSING_GOVERNANCE_REFS` | 实现/review/completion 导向 spec 在无 formal SSOT 时，必须引用 `.project/governance/` 规则 | major |
+| `MISSING_COMPLETION_EVIDENCE_RULES` | completion 相关 spec 不得省略 evidence / tests / limitations / human gate 字段要求 | blocker |
+| `WEAKENED_GATE_SEMANTICS` | 不得静默放宽 mandatory gate、approval、completion promotion 语义 | blocker |
+
 ---
 
 ## B. Skill 专属规则

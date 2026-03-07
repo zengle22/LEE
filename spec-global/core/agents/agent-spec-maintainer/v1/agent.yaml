@@ -213,6 +213,12 @@ output_requirements:
   path_pattern: "specs/agents/{agent-name}/v{version}/agent.yaml"
 
 governance_rules:
+  references:
+    temp_governance: .project/governance/TEMP_GOVERNANCE.md
+    review_checklist: .project/governance/REVIEW_CHECKLIST.md
+    completion_template: .project/governance/COMPLETION_TEMPLATE.md
+    acceptance_briefs: .project/governance/ACCEPTANCE_BRIEFS/
+    module_contracts: .project/governance/MODULE_CONTRACTS/
   contract_layering:
     output_schema: "用于约束业务内容结构，如 PRD/UI/Test Set 的领域字段。"
     ssot_output_schema: "用于约束正式 SSOT 对象声明，如 identity_kind、ssot_type、parent、verifies、implements。"
@@ -220,3 +226,6 @@ governance_rules:
   adoption_rule: |
     当 Agent 的输出会被 runner 物化为正式 SSOT 主文件时，必须同时保留业务 output_schema
     并新增 contracts.ssot_output_schema；如果只是普通说明、分析、复盘或中间文档，则只保留 output_schema。
+  temporary_governance_rule: |
+    当 Agent 维护的是实现类、review 类或 completion 类规范，且相关工作尚未进入正式 SSOT 时，
+    应明确引用 .project/governance 中的临时治理规则，不得假设后续生产 Agent 会自行发现这些约束。
