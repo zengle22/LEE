@@ -6,6 +6,8 @@ This directory contains the LEE orchestrator configuration for this project.
 
 - `dirs.yaml`: Directory structure configuration (DO NOT edit manually)
 - `schema/`: Schema definitions for validation
+- `governance/`: Temporary governance shell for tasks not yet promoted into formal SSOT
+  - `governance/SPEC_GOVERNANCE_L3_USAGE.md`: How to run the governed spec-maintenance workflow with writeback, review gate, and revise loop
 
 ## Directory Structure
 

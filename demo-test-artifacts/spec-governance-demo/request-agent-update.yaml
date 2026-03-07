@@ -1,0 +1,9 @@
+request_id: spec-governance-agent-update-demo
+spec_kind: agent
+action: update
+change_request: |
+  Update a governed agent spec and require mandatory spec review before finalization.
+target_path: spec-global/core/agents/spec-review/v1/agent.yaml
+reviewer_mode: full
+strict_review_gate: false
+human_gate_required: true
