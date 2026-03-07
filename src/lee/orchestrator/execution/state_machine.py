@@ -175,7 +175,7 @@ class WorkflowStateMachine(IStateMachine):
     4. 验证状态转换合法性
     """
 
-    def __init__(self, store):
+    def __init__(self, store, template_manager=None, event_log=None):
         """
         初始化状态机
 
@@ -183,6 +183,8 @@ class WorkflowStateMachine(IStateMachine):
             store: SQLite 存储层
         """
         self.store = store
+        self.template_manager = template_manager
+        self.event_log = event_log
 
     async def get_current_state(self, workflow_id: str) -> WorkflowStatus:
         """获取当前状态"""
@@ -281,6 +283,9 @@ class WorkflowStateMachine(IStateMachine):
 
         # 更新 step_outputs 映射
         step_outputs_map = dict(instance.data.get("step_outputs", {}))
+        step_output_entry = dict(step_outputs_map.get(step_id, {}))
+        if isinstance(output, dict):
+            step_output_entry.update(output)
         if step_outputs:
             # 提取输出路径（支持 OutputSpec dataclass, dict, str）
             output_paths = []
@@ -295,9 +300,12 @@ class WorkflowStateMachine(IStateMachine):
 
             if output_paths:
                 # Merge with existing paths (handle retry scenario)
-                existing = step_outputs_map.get(step_id, {}).get("paths", [])
+                existing = step_output_entry.get("paths", [])
                 merged_paths = list(dict.fromkeys(existing + output_paths))  # Preserve order, remove dupes
-                step_outputs_map[step_id] = {"paths": merged_paths}
+                step_output_entry["paths"] = merged_paths
+
+        if step_output_entry:
+            step_outputs_map[step_id] = step_output_entry
 
         # P0-3: 原子性更新 data 和清除 current_step（BUG-2026-0040）
         await self.store.update_workflow_data_and_clear_current_step(
@@ -406,40 +414,33 @@ class WorkflowStateMachine(IStateMachine):
         # 2. 基于 template order 计算受影响的步骤
         affected_steps = template.get_steps_after(target_step_id)
 
-        # 3. 事务化清理所有关联数据
-        async with self.store.transaction():
-            # 3.1 清理 step_outputs
-            await self._clear_step_outputs(workflow_id, affected_steps)
+        # 3. 顺序清理所有关联数据
+        #
+        # 注意：当前 SQLiteStore 的 update_* 方法会自行提交事务，因此这里不能再依赖
+        # 外层 transaction 做统一回滚，否则容易出现 “no transaction is active”。
+        await self._clear_step_outputs(workflow_id, affected_steps)
+        await self._invalidate_task_executions(workflow_id, affected_steps)
+        await self._invalidate_gate_approvals(workflow_id, affected_steps)
+        await self._clear_step_attempts(workflow_id, affected_steps)
+        await self._update_completed_steps(workflow_id, target_step_id, template)
 
-            # 3.2 清理 task_executions
-            await self._invalidate_task_executions(workflow_id, affected_steps)
+        if mode == "retry":
+            # 重试模式: 增加 attempt 次数
+            await self._increment_step_attempt(workflow_id, target_step_id)
+            # 重置步骤状态
+            await self._reset_step_status(workflow_id, target_step_id)
 
-            # 3.3 清理 gate_approvals
-            await self._invalidate_gate_approvals(workflow_id, affected_steps)
+        # 3.6 设置当前步骤指针
+        await self.store.update_workflow_current_step(workflow_id, target_step_id)
 
-            # 3.4 清理 step_attempts
-            await self._clear_step_attempts(workflow_id, affected_steps)
-
-            # 3.5 更新 completed_steps
-            await self._update_completed_steps(workflow_id, target_step_id, template)
-
-            if mode == "retry":
-                # 重试模式: 增加 attempt 次数
-                await self._increment_step_attempt(workflow_id, target_step_id)
-                # 重置步骤状态
-                await self._reset_step_status(workflow_id, target_step_id)
-
-            # 3.6 设置当前步骤指针
-            await self.store.update_workflow_current_step(workflow_id, target_step_id)
-
-            # 3.7 恢复工作流运行状态
-            await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
+        # 3.7 恢复工作流运行状态
+        await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
 
         # 4. 明确 enqueue（由 scheduler 负责）
         # 这里只更新状态，实际 enqueue 由外部 scheduler 处理
 
         # 记录事件
-        if hasattr(self, 'event_log'):
+        if getattr(self, "event_log", None) and hasattr(self.event_log, "log_workflow_rewind"):
             self.event_log.log_workflow_rewind(
                 workflow_id=workflow_id,
                 target_step=target_step_id,
@@ -529,12 +530,14 @@ class WorkflowStateMachine(IStateMachine):
         from datetime import datetime
         # 批量更新 task_executions.status = 'invalidated'
         for step_id in step_ids:
-            await self.store.execute_query("""
+            await self.store.execute("""
                 UPDATE task_executions
                 SET status = 'invalidated',
                     invalidated_at = ?
                 WHERE workflow_id = ? AND step_name = ?
             """, (datetime.utcnow(), workflow_id, step_id))
+        if step_ids:
+            await self.store._conn.commit()
 
     async def _invalidate_gate_approvals(
         self,
@@ -545,12 +548,14 @@ class WorkflowStateMachine(IStateMachine):
         from datetime import datetime
         # 批量更新 gate_approvals.status = 'invalidated'
         for step_id in step_ids:
-            await self.store.execute_query("""
+            await self.store.execute("""
                 UPDATE gate_approvals
                 SET status = 'invalidated',
                     invalidated_at = ?
                 WHERE workflow_id = ? AND step_id = ?
             """, (datetime.utcnow(), workflow_id, step_id))
+        if step_ids:
+            await self.store._conn.commit()
 
     async def _clear_step_attempts(
         self,
@@ -567,6 +572,7 @@ class WorkflowStateMachine(IStateMachine):
             step_attempts.pop(step_id, None)
 
         await self.store.update_workflow_data(workflow_id, {
+            **instance.data,
             "step_attempts": step_attempts,
         })
 
@@ -612,6 +618,7 @@ class WorkflowStateMachine(IStateMachine):
         step_attempts[step_id] = current_attempt + 1
 
         await self.store.update_workflow_data(workflow_id, {
+            **instance.data,
             "step_attempts": step_attempts,
         })
 
@@ -631,6 +638,7 @@ class WorkflowStateMachine(IStateMachine):
         if step_id in completed_steps:
             completed_steps.remove(step_id)
             await self.store.update_workflow_data(workflow_id, {
+                **instance.data,
                 "completed_steps": completed_steps,
             })
 

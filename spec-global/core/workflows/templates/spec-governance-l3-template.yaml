@@ -1,0 +1,365 @@
+# Spec Governance L3 Template
+# 规范维护与评审工作流（L3）
+#
+# 职责: 根据变更需求创建或修改 spec，并强制经过 spec-review 后输出结果。
+# 第一版支持:
+# - agent spec
+# - workflow spec
+# - contract spec
+
+kind: l3_workflow_template
+version: "1.0"
+id: template.core.spec_governance
+name: Spec Governance L3 Template
+description: |
+  L3 template for governed spec authoring and review.
+
+  This template defines a strict maintain -> writeback -> review -> gate -> output flow:
+  - Stage 1: Spec Maintenance - create or update a spec using the selected maintainer agent
+  - Stage 2: Spec Review - mandatory review using Spec Review Agent
+  - Stage 3: Review Gate - auto-check blocker/major findings before finalization
+  - Stage 4: Final Output - emit final summary and review outcome
+
+  v2 scope:
+  - supported spec kinds: agent, workflow, contract
+  - maintainer output is written back to the target spec path when provided
+  - exact unified diff is generated for the target spec
+  - review failure enters a human gate branch instead of immediately failing
+  - human gate can approve to continue or revise back to spec_maintenance
+  - blocker findings always require human gate
+  - major findings require human gate when strict_review_gate=true
+
+owner: governance-ai
+tags: [template, governance, spec, review, l3]
+
+supported_spec_kinds:
+  - agent
+  - workflow
+  - contract
+
+maintainer_route_map:
+  agent: agent.governance.spec_maintainer
+  workflow: agent.governance.workflow_spec_maintainer
+  contract: agent.governance.contracts_spec_maintainer
+
+input_contract:
+  description: Spec governance request input
+  required_fields:
+    - name: request_id
+      type: string
+      description: Unique request identifier for this spec change
+    - name: spec_kind
+      type: enum
+      values: [agent, workflow, contract]
+      description: Which kind of spec should be maintained
+    - name: action
+      type: enum
+      values: [create, update, upgrade]
+      description: Requested maintenance action
+    - name: change_request
+      type: string
+      description: Human-readable description of the requested change
+  optional_fields:
+    - name: target_path
+      type: string
+      description: Existing target spec path for update or upgrade
+    - name: scope
+      type: string
+      description: Logical scope such as core or department
+    - name: acceptance_brief_id
+      type: string
+      description: Temporary governance anchor when no formal SSOT is available
+    - name: ssot_root_id
+      type: string
+      description: Formal SSOT root ID when this spec work belongs to a formal chain
+    - name: reviewer_mode
+      type: enum
+      values: [full, lint_only]
+      description: Review depth mode
+      default: full
+    - name: strict_review_gate
+      type: boolean
+      description: Whether major findings should also block finalization
+      default: false
+    - name: human_gate_reviewers
+      type: array
+      description: Optional human reviewers for failed spec review gates
+    - name: human_gate_required
+      type: boolean
+      description: Whether failed review gates must pause for human review
+      default: true
+
+output_contract:
+  description: Final workflow outputs
+  artifacts:
+    - name: review_report
+      path: "{{ docs_dir }}/reports/governance/spec-review/{{ params.request_id }}-review.json"
+      description: Structured review report for the maintained spec
+    - name: spec_diff
+      path: "{{ docs_dir }}/reports/governance/spec-review/{{ params.request_id }}-spec.diff"
+      description: Exact unified diff between previous target spec and maintained result
+    - name: completion_summary
+      path: "{{ docs_dir }}/reports/governance/spec-review/{{ params.request_id }}-completion.md"
+      description: Final completion summary for the spec governance run
+  status_field:
+    name: review_status
+    type: enum
+    values: [passed, warning, blocked]
+    description: Final review outcome of this spec governance run
+
+stages:
+  - id: spec_maintenance
+    name: "Spec Maintenance"
+    kind: stage
+    description: "Create or update the requested spec using the routed maintainer agent"
+    depends_on: []
+
+    steps:
+      - id: spec_maintenance
+        name: "Spec Maintenance"
+        kind: agent
+        description: "Route to the appropriate spec maintainer based on spec_kind"
+        agent_id: "{{ 'agent.governance.spec_maintainer' if params.spec_kind == 'agent' else ('agent.governance.workflow_spec_maintainer' if params.spec_kind == 'workflow' else 'agent.governance.contracts_spec_maintainer') }}"
+        mandatory: true
+        depends_on: []
+        config:
+          implementation_facing: false
+          strict_governance: false
+          acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+          formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
+          governed_module: agent-spec-maintainer
+          spec_writeback:
+            enabled: true
+            target_path: "{{ params.target_path | default('') }}"
+            diff_report_path: "{{ docs_dir }}/reports/governance/spec-review/{{ params.request_id }}-spec.diff"
+          claude_code:
+            goal: |
+              Maintain a {{ params.spec_kind }} spec.
+              Action: {{ params.action }}.
+              Change request: {{ params.change_request | replace('\n', ' ') }}.
+              Target path: {{ params.target_path | default('not provided') }}.
+              Return the exact maintained spec content in a dedicated `maintained_spec_content` section or field.
+              Also return `maintained_spec_path` and `maintenance_notes`.
+        inputs:
+          target_path: "{{ params.target_path | default('') }}"
+          request_id: "{{ params.request_id }}"
+          spec_kind: "{{ params.spec_kind }}"
+          action: "{{ params.action }}"
+          change_request: "{{ params.change_request }}"
+          delivery_requirements:
+            - "Return the exact maintained target spec content in `maintained_spec_content`."
+            - "Return `maintained_spec_path` matching the target spec path."
+            - "Return `maintenance_notes` summarizing changes and unresolved risks."
+            - "Do not return only a summary when target spec content is required."
+        outputs:
+          - path: "{{ docs_dir }}/reports/governance/spec-review/{{ params.request_id }}-generation.md"
+            type: file
+            format: markdown
+            description: "Spec maintenance generation summary"
+            required: false
+          - path: "{{ params.target_path | default('') }}"
+            type: file
+            format: text
+            description: "Maintained target spec content"
+            required: false
+          - path: "{{ docs_dir }}/reports/governance/spec-review/{{ params.request_id }}-maintenance-notes.md"
+            type: file
+            format: markdown
+            description: "Maintenance notes and unresolved risks"
+            required: false
+
+    step_order:
+      - spec_maintenance
+
+  - id: spec_review
+    name: "Spec Review"
+    kind: stage
+    description: "Mandatory engineering review for the maintained spec"
+    depends_on: [spec_maintenance]
+
+    steps:
+      - id: spec_review
+        name: "Spec Review"
+        kind: agent
+        description: "Review maintained spec for boundary correctness, contracts, governance, and testability"
+        agent_id: agent.review.spec_review
+        mandatory: true
+        depends_on: []
+        config:
+          implementation_facing: false
+          strict_governance: false
+          acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+          formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
+          governed_module: agent-spec-maintainer
+          claude_code:
+            goal: |
+              Review the maintained {{ params.spec_kind }} spec for engineering quality.
+              Focus on contracts, governance references, review semantics, and completeness.
+              Request ID: {{ params.request_id }}.
+              Target path: {{ params.target_path | default('not provided') }}.
+        inputs:
+          request_id: "{{ params.request_id }}"
+          target_path: "{{ params.target_path | default('') }}"
+          strict_review_gate: "{{ params.strict_review_gate | default(false) }}"
+          context_files:
+            - path: "{{ params.target_path | default('') }}"
+              required: false
+            - path: "{{ docs_dir }}/reports/governance/spec-review/{{ params.request_id }}-spec.diff"
+              required: false
+            - path: "{{ docs_dir }}/reports/governance/spec-review/{{ params.request_id }}-generation.md"
+              required: false
+        outputs:
+          - path: "{{ docs_dir }}/reports/governance/spec-review/{{ params.request_id }}-review.json"
+            type: file
+            format: json
+            description: "Structured spec review report"
+            required: true
+          - review_findings
+          - blocker_count
+          - major_count
+
+    step_order:
+      - spec_review
+
+  - id: review_gate
+    name: "Review Gate"
+    kind: stage
+    description: "Auto gate that blocks final output when review findings exceed thresholds"
+    depends_on: [spec_review]
+
+    steps:
+      - id: review_gate
+        name: "Review Gate"
+        kind: gate
+        description: "Auto-check blocker and major counts from spec review"
+        mandatory: true
+        depends_on: []
+        config:
+          gate:
+            type: auto_check
+            check: "{{ 'blocker_count == 0 and major_count == 0' if params.strict_review_gate | default(false) else 'blocker_count == 0' }}"
+            on_fail:
+              action: "{{ 'human_gate' if params.human_gate_required | default(true) else 'fail_step' }}"
+            reviewers: "{{ params.human_gate_reviewers | default([]) }}"
+            approval_criteria:
+              - "Review findings have been acknowledged"
+              - "Blocking issues are resolved or explicitly accepted"
+            on_revise:
+              action: retry
+              target_step: spec_maintenance
+        outputs:
+          - review_gate_status
+
+    step_order:
+      - review_gate
+
+  - id: final_output
+    name: "Final Output"
+    kind: stage
+    description: "Emit final completion summary after mandatory review"
+    depends_on: [review_gate]
+
+    steps:
+      - id: final_output
+        name: "Final Output"
+        kind: agent
+        description: "Produce final completion summary and surfaced review outcome"
+        agent_id: agent.governance.spec_maintainer
+        mandatory: true
+        depends_on: []
+        config:
+          implementation_facing: false
+          strict_governance: false
+          acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+          formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
+          governed_module: workflow-runtime
+          claude_code:
+            goal: |
+              Produce the final completion summary for spec governance request {{ params.request_id }}.
+              Include maintenance outcome, review status, key findings, and final spec path.
+        outputs:
+          - path: "{{ docs_dir }}/reports/governance/spec-review/{{ params.request_id }}-completion.md"
+            type: file
+            format: markdown
+            description: "Final completion summary"
+            required: true
+          - review_status
+          - final_spec_path
+
+    step_order:
+      - final_output
+
+stage_order:
+  - spec_maintenance
+  - spec_review
+  - review_gate
+  - final_output
+
+output_structure: |
+  {{ docs_dir }}/reports/governance/spec-review/
+  ├── {request_id}-generation.md      # 规范生成摘要
+  ├── {request_id}-spec.diff          # 目标 spec 精确 diff
+  ├── {request_id}-review.json        # 强制评审报告
+  ├── review_gate_status              # 自动门禁结果
+  └── {request_id}-completion.md      # 最终输出摘要
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+  context_fields:
+    - request_id
+    - spec_kind
+    - action
+    - change_request
+    - target_path
+    - acceptance_brief_id
+    - ssot_root_id
+  output_fields:
+    - maintained_spec_path
+    - spec_writeback
+    - review_gate_status
+    - review_status
+    - blocker_count
+    - major_count
+
+state_machine:
+  states:
+    - INIT: "初始化"
+    - SPEC_MAINTENANCE: "规范维护"
+    - SPEC_REVIEW: "规范评审"
+    - REVIEW_GATE: "评审门禁"
+    - FINAL_OUTPUT: "结果输出"
+    - COMPLETED: "完成"
+    - FAILED: "失败"
+
+  transitions:
+    INIT:
+      - to: SPEC_MAINTENANCE
+        trigger: workflow_started
+
+    SPEC_MAINTENANCE:
+      - to: SPEC_REVIEW
+        trigger: maintenance_completed
+      - to: FAILED
+        trigger: maintenance_failed
+
+    SPEC_REVIEW:
+      - to: REVIEW_GATE
+        trigger: review_completed
+      - to: FAILED
+        trigger: review_blocked
+
+    REVIEW_GATE:
+      - to: FINAL_OUTPUT
+        trigger: review_gate_passed
+      - to: FAILED
+        trigger: review_gate_failed
+
+    FINAL_OUTPUT:
+      - to: COMPLETED
+        trigger: summary_emitted
+      - to: FAILED
+        trigger: output_failed

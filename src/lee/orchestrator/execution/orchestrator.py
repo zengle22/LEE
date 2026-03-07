@@ -126,12 +126,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         self.store = store
         self.db = store  # 兼容 Runners 的 db 属性
-        self.state_machine = WorkflowStateMachine(store)
         # v3.5: 传递配置到 TemplateManager 以使用正确的 executor.default_type
         self.template_manager = template_manager or TemplateManager(
             project_root=project_root,
             config=self.config
         )
+        self.state_machine = WorkflowStateMachine(store, template_manager=self.template_manager)
         self.executor_factory = ExecutorFactory
 
         # v1.5: 创建 AgentLoader 用于加载 agent spec
@@ -188,6 +188,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         # v3.2: EventLog 事件日志
         self.event_log = EventLog(project_root or ".", run_id=None)
+        self.state_machine.event_log = self.event_log
 
         # v3.4: TraceLog 追踪日志
         self.trace_log = TraceLog(project_root or ".")

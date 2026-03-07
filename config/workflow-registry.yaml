@@ -1,6 +1,27 @@
 version: "1.1"
 
 workflows:
+  # ========== Core Governance 工作流 ==========
+  core.spec-governance:
+    path: spec-global/core/workflows/templates/spec-governance-l3-template.yaml
+    kind: l3_workflow_template
+    description: "Spec 治理工作流 (L3) - 生成/修改 spec 并强制经过 spec-review"
+    load_spec_as_params: true
+    required_params:
+      - request_id
+      - spec_kind
+      - action
+      - change_request
+    optional_params:
+      - target_path
+      - scope
+      - acceptance_brief_id
+      - ssot_root_id
+      - reviewer_mode
+      - strict_review_gate
+      - human_gate_reviewers
+      - human_gate_required
+
   # ========== Dev 工作流 ==========
   dev.feature:
     path: spec-global/departments/dev/workflows/templates/feature-l2-template.yaml

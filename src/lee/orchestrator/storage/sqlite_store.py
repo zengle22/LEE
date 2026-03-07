@@ -398,6 +398,24 @@ class SQLiteStore:
         ))
         await self._conn.commit()
 
+    async def update_workflow_current_step(
+        self,
+        workflow_id: str,
+        current_step: Optional[str],
+    ):
+        """更新工作流 current_step 指针。"""
+        updated_at = datetime.now()
+        await self._conn.execute("""
+            UPDATE workflow_instances
+            SET current_step = ?, updated_at = ?
+            WHERE id = ?
+        """, (
+            current_step,
+            updated_at.isoformat(),
+            workflow_id,
+        ))
+        await self._conn.commit()
+
     async def get_children(
         self,
         parent_id: str

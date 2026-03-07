@@ -9,8 +9,10 @@ auto_check 门禁通过评估 check 表达式自动判断是否通过，无需�
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import datetime
 from typing import Any, Dict
+import yaml
 
 from lee.orchestrator.storage.models import StepResult
 from lee.orchestrator.execution.runners.base import StepRunnerBase, RunnerContext
@@ -25,11 +27,12 @@ class AutoCheckGateRunner(StepRunnerBase):
 
         处理条件：
         - kind == "auto_check"
+        - kind == "auto_check_gate"（兼容旧分发入口）
 
         注意：kind == "gate" 且 type == "auto_check" 的情况由 orchestrator
         直接路由到 _run_auto_check_gate_step 方法，不通过 registry 分发。
         """
-        return step_kind == "auto_check"
+        return step_kind in ("auto_check", "auto_check_gate")
 
     async def execute(
         self,
@@ -127,6 +130,30 @@ class AutoCheckGateRunner(StepRunnerBase):
             # P0-5: 记录门禁失败日志
             logging.warning(f"[AutoCheckGate] Step {step.id} check failed: {error_message}")
 
+            if action in ("human_gate", "human_review"):
+                blocked_result = await self._block_for_human_gate(
+                    workflow_id=workflow_id,
+                    step=step,
+                    ctx=ctx,
+                    gate_config=gate_config,
+                    output_data=output_data,
+                    error_message=error_message,
+                )
+
+                if step_execution:
+                    try:
+                        await ctx.store.update_task_execution(
+                            step_execution.id,
+                            TaskExecutionStatus.FAILED,
+                            error_message=error_message,
+                            output_data=output_data,
+                            completed_at=datetime.now(),
+                        )
+                        logging.info(f"[AutoCheckGate] Updated task_execution {step_execution.id} to FAILED")
+                    except Exception as update_error:
+                        logging.error(f"[AutoCheckGate] Failed to update task_execution {step_execution.id}: {update_error}")
+
+                return blocked_result
             if action == "fail_step":
                 await ctx.state_machine.fail_step(
                     workflow_id,
@@ -214,6 +241,75 @@ class AutoCheckGateRunner(StepRunnerBase):
                     output=output_data,
                 )
 
+    async def _block_for_human_gate(
+        self,
+        *,
+        workflow_id: str,
+        step,
+        ctx: RunnerContext,
+        gate_config: Dict[str, Any],
+        output_data: Dict[str, Any],
+        error_message: str,
+    ) -> StepResult:
+        from lee.orchestrator.storage.models import GateApproval, GateStatus, WorkflowStatus
+
+        await ctx.store.update_workflow_status(workflow_id, WorkflowStatus.PAUSED)
+
+        on_reject = gate_config.get("on_reject", {}) or {}
+        on_revise = gate_config.get("on_revise", {}) or {}
+
+        default_reject_action = on_reject.get("action")
+        default_reject_target = on_reject.get("target_step")
+        default_revise_target = on_revise.get("target_step")
+        reviewers = gate_config.get("reviewers", [])
+        if isinstance(reviewers, str):
+            try:
+                reviewers = yaml.safe_load(reviewers) or []
+            except Exception:
+                reviewers = []
+        approval_criteria = gate_config.get("approval_criteria", [])
+        if isinstance(approval_criteria, str):
+            try:
+                approval_criteria = yaml.safe_load(approval_criteria) or []
+            except Exception:
+                approval_criteria = [approval_criteria]
+
+        gate_id_base = step.gate_id or f"gate_{workflow_id}_{step.id}"
+        gate_id_value = gate_id_base
+        existing_gate = await ctx.store.get_gate_approval(workflow_id, gate_id_base)
+        if existing_gate is not None:
+            gate_id_value = f"{gate_id_base}_{uuid.uuid4().hex[:8]}"
+        gate_approval = GateApproval(
+            workflow_id=workflow_id,
+            gate_id=gate_id_value,
+            step_id=step.id,
+            status=GateStatus.PENDING,
+            approval_criteria=approval_criteria,
+            reviewers=reviewers,
+            version=1,
+            default_reject_action=default_reject_action,
+            default_reject_target=default_reject_target,
+            default_revise_target=default_revise_target,
+            structured_feedback=output_data,
+        )
+        await ctx.store.create_gate_approval(gate_approval)
+
+        ctx.event_log.log_gate_triggered(
+            gate_id=gate_id_value,
+            step_id=step.id,
+            gate_type="human",
+            blocking=True,
+        )
+
+        return StepResult(
+            status="blocked",
+            blocked_reason="human_gate",
+            step_id=step.id,
+            workflow_id=workflow_id,
+            message=f"{error_message}; waiting for human review at gate: {gate_id_value}",
+            output=output_data,
+        )
+
     def _build_eval_context(self, step_outputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         构建评估上下文
@@ -230,7 +326,10 @@ class AutoCheckGateRunner(StepRunnerBase):
                 # 同时以 step_id 为键保存完整输出
                 context[f"_{step_id}"] = output_data
 
-                # 扁平化嵌套字典
+                # 扁平化嵌套字典（顶层可直接访问）
+                self._flatten_dict(output_data, context)
+
+                # 同时保留带 step_id 前缀的路径，便于定向引用
                 self._flatten_dict(output_data, context, prefix=f"{step_id}")
 
         return context
@@ -269,7 +368,7 @@ class AutoCheckGateRunner(StepRunnerBase):
         - "variable or variable" - 或运算
         - "not variable" - 非运算
         """
-        if not expression:
+        if not expression or not expression.strip():
             return True
 
         try:
@@ -297,14 +396,25 @@ class AutoCheckGateRunner(StepRunnerBase):
         例如：expression = "status == 'healthy'", context = {"status": "healthy"}
         结果："healthy' == 'healthy'" -> "'healthy' == 'healthy'"
         """
+        # 先保护字符串字面量，避免替换其中的单词
+        literal_pattern = re.compile(r"""('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")""")
+        literals: Dict[str, str] = {}
+
+        def stash_literal(match):
+            token = f"__LITERAL_{len(literals)}__"
+            literals[token] = match.group(0)
+            return token
+
+        protected = literal_pattern.sub(stash_literal, expression)
+
         # 匹配变量名（支持点路径，如 environment_info.status）
         var_pattern = re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_.]*)\b')
 
         def replace_var(match):
             var_name = match.group(1)
 
-            # 跳过字符串字面量
-            if var_name.startswith("'") or var_name.startswith('"'):
+            # 跳过保护占位符和布尔/空值关键字
+            if var_name in literals or var_name in {"True", "False", "None", "and", "or", "not"}:
                 return match.group(0)
 
             # 从上下文获取值
@@ -324,7 +434,10 @@ class AutoCheckGateRunner(StepRunnerBase):
             else:
                 return str(value)
 
-        return var_pattern.sub(replace_var, expression)
+        substituted = var_pattern.sub(replace_var, protected)
+        for token, literal in literals.items():
+            substituted = substituted.replace(token, literal)
+        return substituted
 
     def _get_context_value(
         self,
@@ -336,6 +449,9 @@ class AutoCheckGateRunner(StepRunnerBase):
 
         支持点路径：environment_info.status -> context["environment_info"]["status"]
         """
+        if path in context:
+            return context[path]
+
         keys = path.split(".")
         value = context
 

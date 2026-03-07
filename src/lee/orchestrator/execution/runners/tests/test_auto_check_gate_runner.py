@@ -30,6 +30,7 @@ class TestAutoCheckGateRunner:
     def test_can_handle_auto_check(self):
         """测试识别 auto_check 类型"""
         assert self.runner.can_handle("auto_check") is True
+        assert self.runner.can_handle("auto_check_gate") is True
 
     def test_can_handle_other_types(self):
         """测试拒绝其他类型"""
@@ -429,6 +430,50 @@ class TestAutoCheckGateRunner:
         assert result.status == "failed"
         assert result.output["auto_check_passed"] is False
         mock_state_machine.fail_step.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_check_failed_blocks_for_human_gate(self):
+        """测试失败后进入人工门禁分支而不是直接失败"""
+        mock_store = AsyncMock()
+        mock_state_machine = AsyncMock()
+        mock_event_log = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.store = mock_store
+        mock_ctx.state_machine = mock_state_machine
+        mock_ctx.event_log = mock_event_log
+
+        mock_instance = MagicMock()
+        mock_instance.data = {
+            "step_outputs": {"spec_review": {"blocker_count": 1, "major_count": 2}}
+        }
+        mock_store.get_workflow.return_value = mock_instance
+        mock_store.get_task_executions.return_value = []
+        mock_store.get_gate_approval.return_value = None
+
+        mock_step = MagicMock()
+        mock_step.id = "review_gate"
+        mock_step.gate_id = "spec_review_gate"
+        mock_step.config = {
+            "gate": {
+                "check": "blocker_count == 0",
+                "reviewers": '[{"name": "owner", "role": "reviewer"}]',
+                "approval_criteria": ["Blocking review findings are resolved"],
+                "on_fail": {"action": "human_gate"},
+                "on_revise": {"target_step": "spec_maintenance"},
+            }
+        }
+
+        result = await self.runner.execute("workflow-123", mock_step, mock_ctx)
+
+        assert result.status == "blocked"
+        assert result.blocked_reason == "human_gate"
+        mock_store.update_workflow_status.assert_called()
+        mock_store.create_gate_approval.assert_called_once()
+        gate_approval = mock_store.create_gate_approval.call_args[0][0]
+        assert gate_approval.gate_id == "spec_review_gate"
+        assert gate_approval.default_revise_target == "spec_maintenance"
+        assert gate_approval.reviewers == [{"name": "owner", "role": "reviewer"}]
+        mock_state_machine.fail_step.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_execute_updates_task_execution(self):
