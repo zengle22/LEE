@@ -8,11 +8,14 @@ Project Config - 项目配置管理
 
 import re
 import yaml
+import json
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Any, List, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
-import json
+import warnings
 
 
 @dataclass
@@ -279,26 +282,49 @@ def create_project_config(
 # Directory Structure Configuration
 # ============================================
 
-# Standard directory structure schema
+# Standard directory structure schema (ADR-0020)
 # Boundary:
 # - dirs.yaml owns directory topology and placement only
 # - SSOT identity layer owns governed artifact IDs, filenames, and references
 DEFAULT_DIRECTORY_SCHEMA = {
-    "version": "1.1",
+    "version": "2.0",
     "description": "LEE Standard Project Directory Topology",
     "directories": {
         # Configuration
         "config_dir": {
             "path": ".project",
-            "description": "Project configuration and metadata",
-            "subdirs": ["schema"]
+            "description": "LEE project configuration and metadata (SSOT of project)",
+            "subdirs": ["registry"],
+            "structure": "flat",
+            "create_readme": True,
+            "is_project_config": True,
         },
 
-        # Workflow state (existing)
+        # Workflow state
         "workflow_dir": {
             "path": ".workflow",
-            "description": "Workflow execution state and temporary files",
-            "subdirs": ["workspace", "gates", "events", "cache"]
+            "description": "Workflow execution state (cleanable/rebuildable)",
+            "subdirs": ["runs", "cache", "traces", "evidence", "tokens", "compliance", "env-check", "instances", "approvals"],
+            "structure": "flat",
+            "cleanup": "auto",
+        },
+
+        # Artifacts
+        "artifacts_dir": {
+            "path": ".artifacts",
+            "description": "Build artifacts (long-term retention/traceable)",
+            "subdirs": ["active", "frozen", "archive"],
+            "structure": "layered",
+        },
+
+        # Specifications
+        "spec_dir": {
+            "path": "spec",
+            "description": "Specification SSOT (gate-able, freezable)",
+            "subdirs": ["requirements", "api", "data", "ui", "adr", "dev", "qa"],
+            "structure": "flat",
+            "create_readme": True,
+            "copy_templates_from": "templates/spec",
         },
 
         # Contracts (frozen analysis outputs)
@@ -306,56 +332,66 @@ DEFAULT_DIRECTORY_SCHEMA = {
             "path": "contracts",
             "description": "Frozen analysis results and formal contracts",
             "subdirs": ["input", "output"],
-            "structure": "layered"  # layered: {layer_name}/{version}/{file}.yaml
+            "structure": "layered",
         },
 
-        # Documentation outputs
+        # Documentation
         "docs_dir": {
             "path": "docs",
-            "description": "Generated explanatory documentation and reports",
-            "subdirs": ["spec", "reports", "guides", "archive"],
-            "naming": "descriptive"  # descriptive: {YYYY-MM-DD}-{title}.md
+            "description": "Explanatory documentation (guides, reports)",
+            "subdirs": ["guides", "reports", "archive"],
+            "structure": "flat",
+            "naming": "descriptive",
         },
 
-        # Knowledge distillation
+        # Knowledge
         "knowledge_dir": {
             "path": "knowledge",
-            "description": "Agent retrospectives, distilled patterns, and evolution notes",
+            "description": "Knowledge distillation (retrospectives, patterns, evolution)",
             "subdirs": ["retrospectives", "patterns", "evolution"],
-            "structure": "flat"
+            "structure": "flat",
         },
 
-        # Source code outputs
+        # Source code
         "src_dir": {
             "path": "src",
-            "description": "Generated source code",
-            "subdirs": ["components", "services", "utils", "types"],
-            "structure": "module"  # module: {module_name}/{file}.ext
+            "description": "Source code (backend/frontend separation recommended)",
+            "subdirs": ["backend", "frontend"],
+            "structure": "module",
         },
 
-        # Intermediate outputs
-        "outputs_dir": {
-            "path": "outputs",
-            "description": "Intermediate outputs and artifacts",
-            "subdirs": ["build", "test", "analysis", "temp"],
-            "cleanup": "auto"  # auto: automatically clean old files
-        },
-
-        # Test outputs
+        # Tests
         "tests_dir": {
             "path": "tests",
-            "description": "Generated test files",
+            "description": "Test files (mirrors src structure)",
             "subdirs": ["unit", "integration", "e2e"],
-            "structure": "hierarchical"
+            "structure": "hierarchical",
         },
 
-        # Specifications
-        "specs_dir": {
-            "path": "specs",
-            "description": "Generated specification documents",
-            "subdirs": ["requirements", "api", "database", "ui"],
-            "format": "markdown"
-        }
+        # Tools
+        "tools_dir": {
+            "path": "tools",
+            "description": "Project tools (code generation, lint, self-check scripts)",
+            "subdirs": [],
+            "structure": "flat",
+        },
+
+        # Deploy
+        "deploy_dir": {
+            "path": "deploy",
+            "description": "Deployment configuration (docker/helm/terraform)",
+            "subdirs": [],
+            "structure": "flat",
+        },
+
+        # Legacy
+        "legacy_dir": {
+            "path": "legacy",
+            "description": "Legacy compatibility (read-only by default)",
+            "subdirs": ["spec", "evidence", "env"],
+            "structure": "flat",
+            "cleanup": None,
+        },
     },
     "constraints": {
         "strict_path_validation": True,
@@ -368,15 +404,21 @@ DEFAULT_DIRECTORY_SCHEMA = {
 
 @dataclass
 class DirectoryConfig:
-    """Directory configuration"""
+    """Directory configuration - 扩展版本（ADR-0020）"""
     name: str
     path: str
     description: str
     subdirs: List[str] = field(default_factory=list)
-    structure: str = "flat"  # flat, layered, module, hierarchical
-    naming: str = "default"  # default, descriptive, timestamped
-    cleanup: Optional[str] = None  # auto, manual, none
-    format: Optional[str] = None  # markdown, yaml, json (for docs/specs)
+    structure: str = "flat"           # flat, layered, module, hierarchical
+    naming: str = "default"           # default, descriptive, timestamped
+    cleanup: Optional[str] = None     # auto, manual, none
+    format: Optional[str] = None      # markdown, yaml, json (for docs/specs)
+    
+    # ADR-0020: 显式字段替代 extras Dict
+    create_readme: bool = True                    # 是否生成 README
+    readme_template: Optional[str] = None         # README 模板名称（None 用默认）
+    copy_templates_from: Optional[str] = None     # 模板源路径（如 "templates/spec"）
+    is_project_config: bool = False               # 是否为项目配置目录（创建 .project/README.md）
 
 
 @dataclass
@@ -446,6 +488,19 @@ class DirectoryStructureConfig:
                 "structure": dir_config.structure,
                 "naming": dir_config.naming,
             }
+            if dir_config.cleanup:
+                directories_dict[name]["cleanup"] = dir_config.cleanup
+            if dir_config.format:
+                directories_dict[name]["format"] = dir_config.format
+            # ADR-0020: 新字段
+            if not dir_config.create_readme:
+                directories_dict[name]["create_readme"] = dir_config.create_readme
+            if dir_config.readme_template:
+                directories_dict[name]["readme_template"] = dir_config.readme_template
+            if dir_config.copy_templates_from:
+                directories_dict[name]["copy_templates_from"] = dir_config.copy_templates_from
+            if dir_config.is_project_config:
+                directories_dict[name]["is_project_config"] = dir_config.is_project_config
             if dir_config.cleanup:
                 directories_dict[name]["cleanup"] = dir_config.cleanup
 
@@ -911,3 +966,475 @@ def get_project_structure(project_dir: Path) -> DirectoryStructureConfig:
         DirectoryStructureConfig
     """
     return require_project_structure(project_dir)
+
+
+# ============================================
+# Unified Project Initialization (ADR-0020)
+# ============================================
+
+
+def _is_git_repo(path: Path) -> bool:
+    """Check if path is a git repository root."""
+    git_path = path / ".git"
+    if not git_path.exists():
+        return False
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=str(path),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            toplevel = Path(result.stdout.strip()).resolve()
+            return toplevel == path.resolve()
+    except Exception:
+        pass
+    return False
+
+
+def _get_git_remote(path: Path) -> Optional[str]:
+    """Get git remote URL if available."""
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=str(path),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _get_git_branch(path: Path) -> str:
+    """Get current git branch."""
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=str(path),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return "main"
+
+
+def _discover_submodules(project_root: Path) -> Dict[str, str]:
+    """Discover submodules from .gitmodules file."""
+    gitmodules_path = project_root / ".gitmodules"
+    if not gitmodules_path.exists():
+        return {}
+
+    submodules = {}
+    try:
+        with open(gitmodules_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        current_path = None
+        current_url = None
+
+        for line in content.split("\n"):
+            line = line.strip()
+            if line.startswith("[submodule"):
+                if current_path and current_url:
+                    submodules[current_path] = current_url
+                current_path = None
+                current_url = None
+            elif line.startswith("path ="):
+                current_path = line.split("=", 1)[1].strip()
+            elif line.startswith("url ="):
+                current_url = line.split("=", 1)[1].strip()
+
+        if current_path and current_url:
+            submodules[current_path] = current_url
+
+    except Exception:
+        pass
+
+    return submodules
+
+
+def _discover_repos(project_root: Path, max_depth: int = 4) -> Dict[str, Dict]:
+    """Discover git repositories in the project directory."""
+    repos = {}
+    root_is_repo = _is_git_repo(project_root)
+
+    # First, try to discover submodules from .gitmodules
+    submodules = _discover_submodules(project_root)
+    for sub_path, sub_url in submodules.items():
+        sub_full_path = project_root / sub_path
+        if sub_full_path.exists():
+            repo_name = sub_full_path.name.lower().replace("-", "_").replace(" ", "_")
+            rel_path = f"./{sub_path}"
+            repos[repo_name] = {
+                "path": rel_path,
+                "type": "git",
+                "default_branch": _get_git_branch(sub_full_path),
+                "url": sub_url,
+                "description": f"Submodule {sub_full_path.name}",
+            }
+
+    # If root is a repo and we found submodules, add root as well
+    if root_is_repo:
+        repo_name = project_root.name.lower().replace("-", "_").replace(" ", "_")
+        repos[repo_name] = {
+            "path": "./.",
+            "type": "git",
+            "default_branch": _get_git_branch(project_root),
+            "url": _get_git_remote(project_root),
+            "description": f"Project {project_root.name}",
+        }
+
+    if repos:
+        return repos
+
+    # Otherwise, search for git repos in subdirectories
+    exclude_dirs = {".git", ".lee", ".workflow", "node_modules", "venv", "__pycache__",
+                    "dist", "build", ".venv", "env", "evidence"}
+
+    def scan_dir(path: Path, depth: int = 0):
+        if depth > max_depth:
+            return
+        try:
+            for item in path.iterdir():
+                if not item.is_dir():
+                    continue
+                if item.name.startswith(".") or item.name in exclude_dirs:
+                    continue
+                if _is_git_repo(item):
+                    repo_name = item.name.lower().replace("-", "_").replace(" ", "_")
+                    rel_path = f"./{item.relative_to(project_root)}"
+                    repos[repo_name] = {
+                        "path": rel_path,
+                        "type": "git",
+                        "default_branch": _get_git_branch(item),
+                        "url": _get_git_remote(item),
+                        "description": f"Repository {item.name}",
+                    }
+                else:
+                    scan_dir(item, depth + 1)
+        except PermissionError:
+            pass
+
+    scan_dir(project_root)
+    return repos
+
+
+def _create_repo_registry(project_root: Path, auto_discover: bool = True, max_depth: int = 4, force: bool = False) -> None:
+    """Create .lee/repos.yaml if not exists."""
+    lee_dir = project_root / ".lee"
+    lee_dir.mkdir(parents=True, exist_ok=True)
+
+    repos_file = lee_dir / "repos.yaml"
+    if repos_file.exists() and not force:
+        return
+
+    repos = {}
+    if auto_discover:
+        repos = _discover_repos(project_root, max_depth=max_depth)
+
+    # If no repos found, create a default entry
+    if not repos:
+        project_name = project_root.name.lower().replace("-", "_").replace(" ", "_")
+        repos[project_name] = {
+            "path": "./.",
+            "type": "git",
+            "default_branch": "main",
+            "description": f"Project {project_root.name}",
+        }
+
+    repo_registry = {
+        "version": "1.0",
+        "repos": repos
+    }
+
+    with open(repos_file, "w", encoding="utf-8") as f:
+        yaml.dump(repo_registry, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+
+def _copy_tree(src: Path, dest: Path) -> None:
+    """Copy directory tree from src to dest, preserving existing files."""
+    if not src.exists():
+        return
+    dest.mkdir(parents=True, exist_ok=True)
+    for item in src.iterdir():
+        target = dest / item.name
+        if item.is_dir():
+            _copy_tree(item, target)
+        else:
+            if not target.exists():
+                shutil.copy2(item, target)
+
+
+def _create_lee_config(project_root: Path, force: bool = False) -> None:
+    """Create .lee/config.yaml if not exists."""
+    lee_dir = project_root / ".lee"
+    lee_dir.mkdir(parents=True, exist_ok=True)
+
+    config_file = lee_dir / "config.yaml"
+    if config_file.exists() and not force:
+        return
+
+    config = {
+        "version": "1.0",
+        "project": {"name": project_root.name},
+        "spec_root": "spec-global",
+        "executor": {"default_type": "claude_code"},
+    }
+
+    with open(config_file, "w", encoding="utf-8") as f:
+        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+
+def _create_projectignore(project_root: Path, force: bool = False) -> None:
+    """Create .projectignore file."""
+    projectignore = project_root / ".projectignore"
+    if projectignore.exists() and not force:
+        return
+
+    content = (
+        "# LEE Project Ignore - Patterns that should not be considered project outputs\n"
+        "# Add patterns here that should be ignored by the orchestrator\n\n"
+        "# Examples:\n"
+        "*.tmp\n"
+        "*.bak\n"
+        "*.swp\n"
+        ".DS_Store\n"
+        "node_modules/\n"
+        "__pycache__/\n"
+        "*.pyc\n"
+    )
+    projectignore.write_text(content, encoding='utf-8')
+
+
+def _generate_readme(dir_config: DirectoryConfig, project_name: Optional[str] = None) -> str:
+    """
+    Generate README content for a directory - 简化版（ADR-0020）.
+    """
+    # Special handling for project config directory
+    if dir_config.is_project_config:
+        return f"""# LEE Project Configuration
+
+**Project**: {project_name or "Unnamed Project"}
+
+This directory contains the LEE orchestrator configuration for this project.
+
+## Files
+
+- `dirs.yaml`: Directory structure configuration (SSOT)
+- `registry/`: Registry definitions
+
+## Directory Structure
+
+See `dirs.yaml` for the complete directory topology.
+"""
+
+    # Default README template
+    content = f"""# {dir_config.description}
+
+**Config Key**: `{dir_config.name}`  
+**Structure**: `{dir_config.structure}`  
+**Naming**: `{dir_config.naming}`
+
+"""
+    if dir_config.subdirs:
+        content += "## Subdirectories\n\n"
+        for subdir in dir_config.subdirs:
+            content += f"- `{subdir}/`\n"
+        content += "\n"
+
+    if dir_config.cleanup == "auto":
+        content += "**Note**: This directory is automatically cleaned up.\n"
+
+    # Special content for spec directory
+    if dir_config.name == "spec_dir":
+        content += """
+## Gate Workflow
+
+Specifications in this directory must go through the gate workflow:
+1. Create draft specification
+2. Submit for gate review
+3. Frozen specifications become read-only
+"""
+
+    return content
+
+
+def initialize_project(
+    project_dir: Path,
+    *,
+    project_name: Optional[str] = None,
+    auto_discover_repos: bool = True,
+    copy_templates: bool = True,
+    generate_readme: bool = True,
+    max_depth: int = 4,
+    force: bool = False,
+) -> DirectoryStructureConfig:
+    """
+    【新】统一项目初始化入口 (ADR-0020)
+    
+    整合了原 init_project_structure() 和 lee init CLI 的所有功能：
+    - 目录结构创建
+    - README 生成
+    - Git 仓库发现
+    - 模板复制
+    - 配置文件创建
+    
+    Args:
+        project_dir: Project root directory
+        project_name: Name of the project
+        auto_discover_repos: Whether to auto-discover git repositories
+        copy_templates: Whether to copy template files
+        generate_readme: Whether to generate README files
+        max_depth: Max depth for git repo discovery
+        force: Re-initialize even if already initialized
+    
+    Returns:
+        DirectoryStructureConfig object
+    """
+    project_dir = Path(project_dir).resolve()
+
+    # Check if already initialized
+    config_file = project_dir / ".project" / "dirs.yaml"
+    if config_file.exists() and not force:
+        try:
+            config = DirectoryStructureConfig.load(project_dir)
+            print(f"[INFO] Project already initialized at: {config.initialized_at}")
+            print(f"[INFO] Use --force to re-initialize")
+            return config
+        except Exception as e:
+            print(f"[WARN] Existing config found but invalid: {e}")
+            print(f"[INFO] Re-initializing project structure...")
+
+    # Use default schema
+    schema = DEFAULT_DIRECTORY_SCHEMA
+    
+    # Create DirectoryStructureConfig
+    config = DirectoryStructureConfig(
+        project_dir=project_dir,
+        project_name=project_name or project_dir.name,
+        version=schema["version"],
+        initialized_at=datetime.now().isoformat(),
+        initialized_by="lee-init",
+        directories={},
+        naming_conventions=schema.get("file_naming_conventions", {}),
+        constraints=schema.get("constraints", {})
+    )
+
+    # Convert schema directories to DirectoryConfig objects
+    for name, dir_config_data in schema.get("directories", {}).items():
+        config.directories[name] = DirectoryConfig(name=name, **dir_config_data)
+
+    # Create all directories
+    print(f"[INFO] Initializing project structure at: {project_dir}")
+    print(f"[INFO] Creating directory structure...")
+
+    for dir_name, dir_config in config.directories.items():
+        # Determine base path
+        if dir_name in ["config_dir", "workflow_dir"]:
+            dir_path = project_dir / dir_config.path
+        else:
+            project_content_dir = project_dir / (project_name or "")
+            if project_name:
+                project_content_dir.mkdir(parents=True, exist_ok=True)
+                dir_path = project_content_dir / dir_config.path
+            else:
+                dir_path = project_dir / dir_config.path
+
+        dir_path.mkdir(parents=True, exist_ok=True)
+
+        # Create subdirectories
+        for subdir in dir_config.subdirs:
+            (dir_path / subdir).mkdir(parents=True, exist_ok=True)
+
+        # Generate README
+        if generate_readme and dir_config.create_readme:
+            readme_path = dir_path / "README.md"
+            if not readme_path.exists() or force:
+                readme_content = _generate_readme(dir_config, config.project_name)
+                readme_path.write_text(readme_content, encoding='utf-8')
+
+        # Copy templates
+        if copy_templates and dir_config.copy_templates_from:
+            template_src = Path(dir_config.copy_templates_from)
+            if not template_src.is_absolute():
+                # Relative to project root or package root
+                template_src = project_dir / template_src
+            _copy_tree(template_src, dir_path)
+
+    # Save configuration
+    config.save()
+
+    # Create .projectignore
+    _create_projectignore(project_dir, force=force)
+
+    # Create .lee/config.yaml
+    _create_lee_config(project_dir, force=force)
+
+    # Git repository discovery
+    if auto_discover_repos:
+        _create_repo_registry(project_dir, auto_discover=True, max_depth=max_depth, force=force)
+
+    print(f"[✓] Project structure initialized successfully")
+    print(f"[INFO] Config file: {config_file}")
+    print(f"[INFO] Total directories created: {len(config.directories)}")
+
+    return config
+
+
+def init_project_structure(
+    project_dir: Path,
+    project_name: Optional[str] = None,
+    config_schema: Optional[Dict] = None,
+    force: bool = False,
+    non_interactive: bool = False
+) -> DirectoryStructureConfig:
+    """
+    【废弃】请使用 initialize_project() 替代
+    
+    此函数保留用于向后兼容，将在 v3.0 移除。
+    
+    向后兼容说明：
+    - config_schema 参数不再支持，如果使用会发出 UserWarning
+    - project_name 仍会被清理（移除特殊字符）
+    - non_interactive 参数保留但不再使用（新实现总是非交互式）
+    """
+    warnings.warn(
+        "init_project_structure() is deprecated, use initialize_project() instead",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
+    # Backward compatibility: warn if config_schema is used
+    if config_schema is not None:
+        warnings.warn(
+            "config_schema parameter is no longer supported in initialize_project(), using DEFAULT_DIRECTORY_SCHEMA",
+            UserWarning,
+            stacklevel=2
+        )
+    
+    # Backward compatibility: sanitize project_name (legacy behavior)
+    if project_name:
+        # Remove invalid characters (legacy sanitization)
+        project_name = re.sub(r'[^\w\-]', '-', project_name)
+        # Remove leading/trailing dashes and dots
+        project_name = project_name.strip('-.')
+    
+    # Call new unified function
+    return initialize_project(
+        project_dir=project_dir,
+        project_name=project_name,
+        auto_discover_repos=True,
+        copy_templates=True,
+        generate_readme=True,
+        force=force,
+    )
