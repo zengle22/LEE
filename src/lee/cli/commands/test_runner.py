@@ -490,6 +490,87 @@ def _transform_result_to_report(result, suite: str, environment: str) -> Dict:
     }
 
 
+def _classify_error(error_message: str, status: str) -> str:
+    """Compatibility helper used by tests to classify Playwright failures."""
+    if status != "failed":
+        return "script_error"
+
+    message = (error_message or "").lower()
+    infra_markers = [
+        "econnrefused",
+        "enotfound",
+        "err_connection_refused",
+        "net::err_",
+        "getaddrinfo",
+    ]
+    if any(marker in message for marker in infra_markers):
+        return "infra_error"
+
+    script_markers = [
+        "timeout",
+        "locator(",
+        "not found",
+        "strict mode violation",
+    ]
+    if not message or any(marker in message for marker in script_markers):
+        return "script_error"
+
+    return "assertion_failed"
+
+
+def _transform_playwright_report(
+    report: Dict[str, Any],
+    suite: str,
+    environment: str,
+    out_dir: Path,
+) -> Dict[str, Any]:
+    """Compatibility helper: normalize Playwright JSON reporter output."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cases: List[Dict[str, Any]] = []
+
+    for suite_item in report.get("suites", []):
+        for spec in suite_item.get("specs", []):
+            case_id = spec.get("title") or "unknown"
+            tests = spec.get("tests", [])
+            results = tests[0].get("results", []) if tests else []
+            result = results[-1] if results else {}
+
+            status = result.get("status", "unknown")
+            case_status = "passed" if status == "passed" else "failed"
+            error_message = None
+            if isinstance(result.get("error"), dict):
+                error_message = result["error"].get("message")
+            elif result.get("error"):
+                error_message = str(result.get("error"))
+
+            attachments = result.get("attachments", []) or []
+            screenshot = next((a.get("path") for a in attachments if a.get("name") == "screenshot"), None)
+            trace = next((a.get("path") for a in attachments if a.get("name") == "trace"), None)
+            logs = next((a.get("path") for a in attachments if a.get("name") == "logs"), None)
+
+            cases.append({
+                "id": case_id,
+                "status": case_status,
+                "duration_ms": result.get("duration", 0),
+                "error_message": error_message,
+                "error_type": None if case_status == "passed" else _classify_error(error_message or "", status),
+                "screenshot": screenshot,
+                "trace": trace,
+                "logs": logs,
+            })
+
+    passed = sum(1 for case in cases if case["status"] == "passed")
+    failed = sum(1 for case in cases if case["status"] == "failed")
+    return {
+        "suite": suite,
+        "env": environment,
+        "total": len(cases),
+        "passed": passed,
+        "failed": failed,
+        "cases": cases,
+    }
+
+
 # ── 原有工具函数 ────────────────────────────────────────────
 
 def _classify_failure(report_path: Path) -> None:

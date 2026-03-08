@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import uuid
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -29,6 +30,18 @@ from lee.cli.commands.test_runner import (
 )
 from lee.cli.commands.check_env import check_env
 from lee.cli.commands.behavior_compliance_checker import behavior_compliance_checker
+
+_WORKSPACE_TMP_ROOT = Path(__file__).resolve().parent.parent / ".test-temp-test-runner"
+_WORKSPACE_TMP_ROOT.mkdir(parents=True, exist_ok=True)
+
+
+def _make_case_dir(prefix: str) -> Path:
+    path = _WORKSPACE_TMP_ROOT / f"{prefix}-{uuid.uuid4().hex}"
+    if path.exists():
+        __import__('shutil').rmtree(path, ignore_errors=True)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
 
 
 # ══════════════════════════════════════════════════════════
@@ -75,7 +88,7 @@ class TestTransformPlaywrightReport:
             }],
         }
 
-    def test_all_passed(self, tmp_path):
+    def test_all_passed(self):
         pw = self._make_pw_report([
             {
                 "title": "TC_001",
@@ -86,14 +99,15 @@ class TestTransformPlaywrightReport:
                 "tests": [{"results": [{"status": "passed", "duration": 300}]}],
             },
         ])
-        result = _transform_playwright_report(pw, "smoke", "test", tmp_path)
+        case_dir = _make_case_dir("empty-report")
+        result = _transform_playwright_report(pw, "smoke", "test", case_dir)
         assert result["total"] == 2
         assert result["passed"] == 2
         assert result["failed"] == 0
         assert len(result["cases"]) == 2
         assert all(c["status"] == "passed" for c in result["cases"])
 
-    def test_some_failed(self, tmp_path):
+    def test_some_failed(self):
         pw = self._make_pw_report([
             {
                 "title": "TC_001",
@@ -111,7 +125,8 @@ class TestTransformPlaywrightReport:
                 }],
             },
         ])
-        result = _transform_playwright_report(pw, "smoke", "test", tmp_path)
+        case_dir = _make_case_dir("empty-report")
+        result = _transform_playwright_report(pw, "smoke", "test", case_dir)
         assert result["total"] == 2
         assert result["passed"] == 1
         assert result["failed"] == 1
@@ -120,17 +135,19 @@ class TestTransformPlaywrightReport:
         assert failed_case["error_type"] == "assertion_failed"
         assert "toHaveURL" in failed_case["error_message"]
 
-    def test_empty_report(self, tmp_path):
+    def test_empty_report(self):
         pw = {"suites": []}
-        result = _transform_playwright_report(pw, "smoke", "test", tmp_path)
+        case_dir = _make_case_dir("empty-report")
+        result = _transform_playwright_report(pw, "smoke", "test", case_dir)
         assert result["total"] == 0
         assert result["passed"] == 0
         assert result["failed"] == 0
         assert result["cases"] == []
 
-    def test_suite_and_env_preserved(self, tmp_path):
+    def test_suite_and_env_preserved(self):
         pw = {"suites": []}
-        result = _transform_playwright_report(pw, "regression", "staging", tmp_path)
+        case_dir = _make_case_dir("suite-env")
+        result = _transform_playwright_report(pw, "regression", "staging", case_dir)
         assert result["suite"] == "regression"
         assert result["env"] == "staging"
 
@@ -221,17 +238,17 @@ class TestBehaviorComplianceChecker:
         assert result.exit_code == 0
         assert "--report-json" in result.output
 
-    def test_report_not_found(self, tmp_path):
+    def test_report_not_found(self):
         runner = CliRunner()
         result = runner.invoke(behavior_compliance_checker, [
             "verify",
-            "--report-json", str(tmp_path / "nonexistent.json"),
+            "--report-json", str(_make_case_dir("report-not-found") / "nonexistent.json"),
         ])
         output = json.loads(result.output)
         assert output["compliant"] is False
         assert any(v["rule"] == "report_exists" for v in output["violations"])
 
-    def test_valid_report(self, tmp_path):
+    def test_valid_report(self):
         report = {
             "suite": "smoke",
             "env": "test",
@@ -261,7 +278,8 @@ class TestBehaviorComplianceChecker:
                 },
             ],
         }
-        report_path = tmp_path / "e2e-report.json"
+        case_dir = _make_case_dir("bad-totals")
+        report_path = case_dir / "e2e-report.json"
         with open(report_path, "w") as f:
             json.dump(report, f)
 
@@ -274,7 +292,7 @@ class TestBehaviorComplianceChecker:
         assert output["compliant"] is True
         assert output["violations"] == []
 
-    def test_missing_case_fields(self, tmp_path):
+    def test_missing_case_fields(self):
         report = {
             "suite": "smoke",
             "env": "test",
@@ -285,7 +303,8 @@ class TestBehaviorComplianceChecker:
                 {"status": "failed"},  # 缺少 id 和 error_type
             ],
         }
-        report_path = tmp_path / "e2e-report.json"
+        case_dir = _make_case_dir("bad-totals")
+        report_path = case_dir / "e2e-report.json"
         with open(report_path, "w") as f:
             json.dump(report, f)
 
@@ -300,7 +319,7 @@ class TestBehaviorComplianceChecker:
         assert "case_required_field" in rules
         assert "failed_case_error_type" in rules
 
-    def test_inconsistent_totals(self, tmp_path):
+    def test_inconsistent_totals(self):
         report = {
             "suite": "smoke",
             "env": "test",
@@ -311,7 +330,8 @@ class TestBehaviorComplianceChecker:
                 {"id": "TC_001", "status": "passed"},
             ],
         }
-        report_path = tmp_path / "e2e-report.json"
+        case_dir = _make_case_dir("bad-totals")
+        report_path = case_dir / "e2e-report.json"
         with open(report_path, "w") as f:
             json.dump(report, f)
 
@@ -325,8 +345,9 @@ class TestBehaviorComplianceChecker:
         rules = [v["rule"] for v in output["violations"]]
         assert "total_consistency" in rules
 
-    def test_invalid_json(self, tmp_path):
-        report_path = tmp_path / "bad.json"
+    def test_invalid_json(self):
+        case_dir = _make_case_dir("invalid-json")
+        report_path = case_dir / "bad.json"
         with open(report_path, "w") as f:
             f.write("{invalid json")
 
