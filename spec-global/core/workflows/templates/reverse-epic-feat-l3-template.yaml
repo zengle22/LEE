@@ -113,6 +113,7 @@ stages:
       - id: repo_evidence_scan
         name: "Repo Evidence Scan"
         kind: skill
+        skill_id: skill.reverse_epic_feat.scan
         mandatory: true
         depends_on: []
         config:
@@ -148,6 +149,7 @@ stages:
       - id: system_map_build
         name: "System Map Build"
         kind: skill
+        skill_id: skill.reverse_epic_feat.system_map
         mandatory: true
         depends_on: []
         config:
@@ -172,6 +174,7 @@ stages:
       - id: capability_extract
         name: "Capability Extract"
         kind: skill
+        skill_id: skill.reverse_epic_feat.capability_map
         mandatory: true
         depends_on: [system_map_build]
         config:
@@ -208,6 +211,7 @@ stages:
       - id: feature_registry_build
         name: "Feature Registry Build"
         kind: skill
+        skill_id: skill.reverse_epic_feat.feature_registry
         mandatory: true
         depends_on: []
         config:
@@ -244,6 +248,7 @@ stages:
       - id: epic_feat_ssot_materialize
         name: "EPIC FEAT SSOT Materialize"
         kind: skill
+        skill_id: skill.reverse_epic_feat.materialize
         mandatory: true
         depends_on: []
         config:
@@ -281,6 +286,7 @@ stages:
       - id: ssot_consistency_review
         name: "SSOT Consistency Review"
         kind: skill
+        skill_id: skill.reverse_epic_feat.review
         mandatory: true
         depends_on: []
         config:
@@ -310,22 +316,25 @@ stages:
     steps:
       - id: reverse_ssot_review_gate
         name: "Reverse SSOT Review Gate"
-        kind: gate
+        kind: skill
+        skill_id: skill.gate.auto_check
         mandatory: true
         depends_on: []
+        gate:
+          type: auto_check
+          on_pass: proceed_to_final_output
+          on_fail: require_review_or_fail
         config:
-          gate:
-            type: auto_check
-            check: "{{ 'blocker_count == 0 and major_count == 0' if params.publish_mode == 'freeze' else 'blocker_count == 0' }}"
-            on_fail:
-              action: "{{ 'human_gate' if params.human_gate_required | default(true) else 'fail_step' }}"
-            approval_criteria:
-              - "No evidence-free FEAT remains"
-              - "No major template-instance boundary confusion remains"
-              - "EPIC and FEAT parent relationships are coherent"
+          check: "{{ 'blocker_count == 0 and major_count == 0' if params.publish_mode == 'freeze' else 'blocker_count == 0' }}"
+          on_fail_action: "{{ 'human_gate' if params.human_gate_required | default(true) else 'fail_step' }}"
+          approval_criteria:
+            - "No evidence-free FEAT remains"
+            - "No major template-instance boundary confusion remains"
+            - "EPIC and FEAT parent relationships are coherent"
       - id: final_output
         name: "Final Output"
         kind: skill
+        skill_id: skill.reverse_epic_feat.complete
         mandatory: true
         depends_on: [reverse_ssot_review_gate]
         config:
