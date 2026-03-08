@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-03-07T10:59:17.216868+00:00",
+  "summary": {
+    "epic_count": 4,
+    "feat_count": 11,
+    "blocker_count": 0,
+    "major_count": 0
+  },
+  "findings": {
+    "blockers": [],
+    "majors": []
+  },
+  "rules_checked": [
+    "Only epic/feat ssot_type outputs are allowed",
+    "Every FEAT must have a valid EPIC parent",
+    "Every output must carry existing source_refs",
+    "Template/runtime boundary stays outside checked-in spec files"
+  ]
+}

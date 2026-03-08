@@ -528,6 +528,25 @@ class SkillRunner(StepRunnerBase):
             return True
         return int(output.get("return_code", 0) or 0) != 0
 
+    @staticmethod
+    def _merge_structured_stdout(output: Dict[str, Any]) -> Dict[str, Any]:
+        """如果 stdout 是 JSON object，则把标量字段并入 step_outputs 顶层。"""
+        stdout = output.get("stdout")
+        if not isinstance(stdout, str):
+            return output
+        text = stdout.strip()
+        if not text or not text.startswith("{") or not text.endswith("}"):
+            return output
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            return output
+        if not isinstance(parsed, dict):
+            return output
+        merged = dict(output)
+        merged.update(parsed)
+        return merged
+
     async def execute(
         self,
         workflow_id: str,
@@ -657,6 +676,8 @@ class SkillRunner(StepRunnerBase):
                     used_fallback_command = True
                 executor = ctx.executor_factory.create(executor_type)
                 output = await executor.execute(input_data)
+
+            output = self._merge_structured_stdout(output)
 
             if self._is_failed_shell_output(output):
                 error_msg = output.get("stderr") or f"Skill step {step.id} command failed"

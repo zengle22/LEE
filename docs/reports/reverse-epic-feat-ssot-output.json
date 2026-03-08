@@ -1,0 +1,298 @@
+{
+  "contract_version": "1.0",
+  "workflow_id": "core.reverse-epic-feat",
+  "run_id": "reverse-epic-feat-20260307185917",
+  "outputs": [
+    {
+      "key": "epic_cap_001",
+      "identity_kind": "ssot",
+      "ssot_type": "epic",
+      "title": "工作流模板与实例生成",
+      "description": "维护 workflow 模板、注册表，并将模板渲染为运行时 instance。",
+      "content": "# EPIC-001 工作流模板与实例生成\n\n## Summary\n维护 workflow 模板、注册表，并将模板渲染为运行时 instance。\n\n## Scope\n覆盖模板文件、registry 与 template 渲染链，不包含具体业务步骤执行。\n\n## Child Features\n- `FEAT-001`\n- `FEAT-002`\n- `FEAT-003`\n\n## Code Refs\n- `config/workflow-registry.yaml`\n- `spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml`\n- `src/lee/cli/commands/run.py`\n- `src/lee/orchestrator/execution/template_manager.py`",
+      "source_refs": [
+        "config/workflow-registry.yaml",
+        "spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml",
+        "src/lee/cli/commands/run.py",
+        "src/lee/orchestrator/execution/template_manager.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "epic"
+      ]
+    },
+    {
+      "key": "feat_register_workflow_templates",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "注册工作流模板",
+      "description": "通过 workflow registry 暴露模板定义与参数约束。",
+      "content": "# FEAT-001 注册工作流模板\n\n## Summary\n通过 workflow registry 暴露模板定义与参数约束。\n\n## Parent EPIC\n- `EPIC-001`\n\n## Capability Linkage\n- `CAP-001 工作流模板与实例生成`\n\n## Scope\n- 在 registry 中声明 workflow key、path、kind 与参数集合。\n- 为 CLI 提供稳定入口。\n\n## Inputs\n- workflow key\n- template path\n- required/optional params\n\n## Outputs\n- 可解析的 workflow registry entry\n\n## Business Rules\n- registry path 必须指向 checked-in template 文件。\n- 模板 spec 只能被描述为模板，不能被视为运行时 instance。\n\n## Acceptance Criteria\n- AC-001 给定 workflow key 时，CLI 可以解析到模板路径。\n- AC-002 registry 中声明了必填参数 request_id、repo_root、objective。\n\n## Code Refs\n- `config/workflow-registry.yaml`\n- `src/lee/cli/commands/run.py`\n\n## Evidence Refs\n- `config/workflow-registry.yaml`\n- `src/lee/cli/commands/run.py`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_001",
+      "derived_from": [
+        "CAP-001"
+      ],
+      "source_refs": [
+        "config/workflow-registry.yaml",
+        "src/lee/cli/commands/run.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    },
+    {
+      "key": "feat_parse_l3_workflow_templates",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "解析 L3 workflow 模板",
+      "description": "将 L3 模板中的 stages/steps 解析为可调度步骤与依赖关系。",
+      "content": "# FEAT-002 解析 L3 workflow 模板\n\n## Summary\n将 L3 模板中的 stages/steps 解析为可调度步骤与依赖关系。\n\n## Parent EPIC\n- `EPIC-001`\n\n## Capability Linkage\n- `CAP-001 工作流模板与实例生成`\n\n## Scope\n- 解析 stage/step 顺序、outputs、depends_on 与 executor_type。\n- 保留模板边界，不生成固定 instance 文件作为规范源。\n\n## Inputs\n- rendered template yaml\n\n## Outputs\n- workflow steps\n- dependency graph\n- output specs\n\n## Business Rules\n- stage.depends_on 在当前引擎中必须映射到前序 step id。\n- kind=skill 的步骤默认走 shell executor。\n\n## Acceptance Criteria\n- AC-001 模板可被解析为 Step 列表且不存在循环依赖。\n- AC-002 skill/gate 步骤拥有正确 executor_type。\n\n## Code Refs\n- `src/lee/orchestrator/execution/template_manager.py`\n- `src/lee/orchestrator/ir/converter.py`\n\n## Evidence Refs\n- `src/lee/orchestrator/execution/template_manager.py`\n- `src/lee/orchestrator/ir/converter.py`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_001",
+      "derived_from": [
+        "CAP-001"
+      ],
+      "source_refs": [
+        "src/lee/orchestrator/execution/template_manager.py",
+        "src/lee/orchestrator/ir/converter.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    },
+    {
+      "key": "feat_render_runtime_instances",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "渲染运行时 workflow instance",
+      "description": "通过 CLI 将模板与参数渲染为运行时 workflow instance 文件并创建实例。",
+      "content": "# FEAT-003 渲染运行时 workflow instance\n\n## Summary\n通过 CLI 将模板与参数渲染为运行时 workflow instance 文件并创建实例。\n\n## Parent EPIC\n- `EPIC-001`\n\n## Capability Linkage\n- `CAP-001 工作流模板与实例生成`\n\n## Scope\n- 渲染模板变量、写入 .workflow/rendered。\n- 调用 pm_workflow 创建运行时 workflow instance。\n\n## Inputs\n- template path\n- params\n- project_dir\n\n## Outputs\n- .workflow/rendered/*.yaml\n- workflow instance id\n\n## Business Rules\n- rendered workflow 是运行时产物，不应被视为 checked-in spec。\n- load_spec_as_params 的 workflow 需把 --spec 载入 params。\n\n## Acceptance Criteria\n- AC-001 运行 lee run 后会生成 rendered yaml。\n- AC-002 runtime instance 的 data.params 与 spec 文件内容一致。\n\n## Code Refs\n- `src/lee/cli/commands/run.py`\n\n## Evidence Refs\n- `src/lee/cli/commands/run.py`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_001",
+      "derived_from": [
+        "CAP-001"
+      ],
+      "source_refs": [
+        "src/lee/cli/commands/run.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    },
+    {
+      "key": "epic_cap_002",
+      "identity_kind": "ssot",
+      "ssot_type": "epic",
+      "title": "工作流执行与门禁控制",
+      "description": "调度 workflow 步骤、持久化执行状态，并执行自动/人工 gate。",
+      "content": "# EPIC-002 工作流执行与门禁控制\n\n## Summary\n调度 workflow 步骤、持久化执行状态，并执行自动/人工 gate。\n\n## Scope\n覆盖执行、状态机与 gate，不包含业务文档生成策略本身。\n\n## Child Features\n- `FEAT-004`\n- `FEAT-005`\n- `FEAT-006`\n\n## Code Refs\n- `src/lee/orchestrator/execution/orchestrator.py`\n- `src/lee/orchestrator/execution/state_machine.py`\n- `src/lee/orchestrator/execution/runners/auto_check_gate_runner.py`\n- `src/lee/orchestrator/execution/runners/shell_runner.py`",
+      "source_refs": [
+        "src/lee/orchestrator/execution/orchestrator.py",
+        "src/lee/orchestrator/execution/state_machine.py",
+        "src/lee/orchestrator/execution/runners/auto_check_gate_runner.py",
+        "src/lee/orchestrator/execution/runners/shell_runner.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "epic"
+      ]
+    },
+    {
+      "key": "feat_execute_step_dag",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "执行工作流步骤 DAG",
+      "description": "根据 depends_on 选择 ready step 并顺序推进 workflow。",
+      "content": "# FEAT-004 执行工作流步骤 DAG\n\n## Summary\n根据 depends_on 选择 ready step 并顺序推进 workflow。\n\n## Parent EPIC\n- `EPIC-002`\n\n## Capability Linkage\n- `CAP-002 工作流执行与门禁控制`\n\n## Scope\n- 处理 step 调度、继续执行与完成汇总。\n- 支持 skill、agent、gate 等步骤类型。\n\n## Inputs\n- workflow instance\n- current step state\n\n## Outputs\n- completed_steps\n- next ready step\n- workflow summary\n\n## Business Rules\n- 只有所有依赖满足后步骤才可执行。\n- 失败步骤必须显式标记 workflow 状态。\n\n## Acceptance Criteria\n- AC-001 多步 workflow 可按 depends_on 连续推进。\n- AC-002 失败时 workflow 状态变为 failed。\n\n## Code Refs\n- `src/lee/orchestrator/execution/orchestrator.py`\n- `src/lee/orchestrator/execution/state_machine.py`\n\n## Evidence Refs\n- `src/lee/orchestrator/execution/orchestrator.py`\n- `src/lee/orchestrator/execution/state_machine.py`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_002",
+      "derived_from": [
+        "CAP-002"
+      ],
+      "source_refs": [
+        "src/lee/orchestrator/execution/orchestrator.py",
+        "src/lee/orchestrator/execution/state_machine.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    },
+    {
+      "key": "feat_evaluate_auto_check_gates",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "执行自动检查门禁",
+      "description": "把 step_outputs 扁平化并执行 blocker/major 表达式。",
+      "content": "# FEAT-005 执行自动检查门禁\n\n## Summary\n把 step_outputs 扁平化并执行 blocker/major 表达式。\n\n## Parent EPIC\n- `EPIC-002`\n\n## Capability Linkage\n- `CAP-002 工作流执行与门禁控制`\n\n## Scope\n- 构建 gate evaluation context。\n- 在 gate fail 时阻塞或失败 workflow。\n\n## Inputs\n- gate expression\n- step_outputs\n\n## Outputs\n- gate pass/fail result\n\n## Business Rules\n- freeze 模式要求 blocker 与 major 均为 0。\n- gate 上下文允许直接访问 review 输出中的标量字段。\n\n## Acceptance Criteria\n- AC-001 review 输出 blocker_count=0 时 draft/publish gate 可通过。\n- AC-002 freeze 模式下 major_count>0 会触发 gate fail。\n\n## Code Refs\n- `src/lee/orchestrator/execution/runners/auto_check_gate_runner.py`\n- `spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml`\n\n## Evidence Refs\n- `src/lee/orchestrator/execution/runners/auto_check_gate_runner.py`\n- `spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_002",
+      "derived_from": [
+        "CAP-002"
+      ],
+      "source_refs": [
+        "src/lee/orchestrator/execution/runners/auto_check_gate_runner.py",
+        "spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    },
+    {
+      "key": "feat_persist_step_outputs",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "持久化步骤输出与证据路径",
+      "description": "完成步骤时把 output dict 与 output paths 写入 workflow data。",
+      "content": "# FEAT-006 持久化步骤输出与证据路径\n\n## Summary\n完成步骤时把 output dict 与 output paths 写入 workflow data。\n\n## Parent EPIC\n- `EPIC-002`\n\n## Capability Linkage\n- `CAP-002 工作流执行与门禁控制`\n\n## Scope\n- 保存 paths、stdout 元数据与结构化字段。\n- 为后续 gate 和 $outputs 引用提供输入。\n\n## Inputs\n- step output\n- output specs\n\n## Outputs\n- workflow.data.step_outputs\n\n## Business Rules\n- 同一步骤重复执行时路径列表需要去重合并。\n- 结构化 stdout 应合并到 step_outputs 顶层。\n\n## Acceptance Criteria\n- AC-001 完成步骤后 step_outputs 中可读取 paths。\n- AC-002 gate 表达式可以直接使用 review 产生的 blocker_count。\n\n## Code Refs\n- `src/lee/orchestrator/execution/state_machine.py`\n- `src/lee/orchestrator/execution/runners/shell_runner.py`\n\n## Evidence Refs\n- `src/lee/orchestrator/execution/state_machine.py`\n- `src/lee/orchestrator/execution/runners/shell_runner.py`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_002",
+      "derived_from": [
+        "CAP-002"
+      ],
+      "source_refs": [
+        "src/lee/orchestrator/execution/state_machine.py",
+        "src/lee/orchestrator/execution/runners/shell_runner.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    },
+    {
+      "key": "epic_cap_003",
+      "identity_kind": "ssot",
+      "ssot_type": "epic",
+      "title": "CLI 工作流操作",
+      "description": "通过 CLI 触发运行、查询状态与审批 gate。",
+      "content": "# EPIC-003 CLI 工作流操作\n\n## Summary\n通过 CLI 触发运行、查询状态与审批 gate。\n\n## Scope\n覆盖命令入口与用户交互，不包含 orchestrator 内部执行细节。\n\n## Child Features\n- `FEAT-007`\n- `FEAT-008`\n- `FEAT-009`\n\n## Code Refs\n- `src/lee/cli/main.py`\n- `src/lee/cli/commands/run.py`\n- `src/lee/cli/commands/status.py`\n- `src/lee/cli/commands/approve.py`",
+      "source_refs": [
+        "src/lee/cli/main.py",
+        "src/lee/cli/commands/run.py",
+        "src/lee/cli/commands/status.py",
+        "src/lee/cli/commands/approve.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "epic"
+      ]
+    },
+    {
+      "key": "feat_run_workflow_from_cli",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "通过 CLI 运行 workflow",
+      "description": "支持 `lee run` 加载 registry、渲染模板并执行 workflow。",
+      "content": "# FEAT-007 通过 CLI 运行 workflow\n\n## Summary\n支持 `lee run` 加载 registry、渲染模板并执行 workflow。\n\n## Parent EPIC\n- `EPIC-003`\n\n## Capability Linkage\n- `CAP-003 CLI 工作流操作`\n\n## Scope\n- 解析 workflow key 与 spec 文件。\n- 触发 create、run_until_blocked 与 summary 输出。\n\n## Inputs\n- workflow key\n- --spec\n- --project-dir\n\n## Outputs\n- workflow instance\n- rendered template\n- execution summary\n\n## Business Rules\n- load_spec_as_params 的 workflow 必须把 spec 内容注入 params。\n- 遇到同 key 运行中 workflow 时要优先恢复或显式重跑。\n\n## Acceptance Criteria\n- AC-001 执行 `lee run core.reverse-epic-feat --spec ...` 可创建并运行实例。\n- AC-002 CLI summary 会输出最终状态与完成步数。\n\n## Code Refs\n- `src/lee/cli/commands/run.py`\n- `src/lee/cli/main.py`\n\n## Evidence Refs\n- `src/lee/cli/commands/run.py`\n- `src/lee/cli/main.py`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_003",
+      "derived_from": [
+        "CAP-003"
+      ],
+      "source_refs": [
+        "src/lee/cli/commands/run.py",
+        "src/lee/cli/main.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    },
+    {
+      "key": "feat_query_workflow_status",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "查询 workflow 状态",
+      "description": "查看 workflow 当前状态、完成步骤与 gate 信息。",
+      "content": "# FEAT-008 查询 workflow 状态\n\n## Summary\n查看 workflow 当前状态、完成步骤与 gate 信息。\n\n## Parent EPIC\n- `EPIC-003`\n\n## Capability Linkage\n- `CAP-003 CLI 工作流操作`\n\n## Scope\n- 读取 workflow instance 数据。\n- 向终端输出状态摘要。\n\n## Inputs\n- workflow_id\n\n## Outputs\n- status summary\n\n## Business Rules\n- 状态查询不修改 workflow 数据。\n- 需要兼容 blocked、paused、failed、completed 等状态。\n\n## Acceptance Criteria\n- AC-001 给定 workflow_id 可以输出当前状态与当前步骤。\n- AC-002 blocked workflow 会显示 gate 指引。\n\n## Code Refs\n- `src/lee/cli/commands/status.py`\n- `src/lee/cli/main.py`\n\n## Evidence Refs\n- `src/lee/cli/commands/status.py`\n- `src/lee/cli/main.py`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_003",
+      "derived_from": [
+        "CAP-003"
+      ],
+      "source_refs": [
+        "src/lee/cli/commands/status.py",
+        "src/lee/cli/main.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    },
+    {
+      "key": "feat_approve_human_gates",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "审批人工门禁",
+      "description": "通过 CLI 审批 gate 并推动 workflow 继续执行。",
+      "content": "# FEAT-009 审批人工门禁\n\n## Summary\n通过 CLI 审批 gate 并推动 workflow 继续执行。\n\n## Parent EPIC\n- `EPIC-003`\n\n## Capability Linkage\n- `CAP-003 CLI 工作流操作`\n\n## Scope\n- 读取 gate id、approver 与审批动作。\n- 调用 gate API 更新 gate 状态。\n\n## Inputs\n- workflow_id\n- gate_id\n- approver\n\n## Outputs\n- approved gate state\n\n## Business Rules\n- 只有 human gate 允许人工审批。\n- 审批后 workflow 需可继续推进。\n\n## Acceptance Criteria\n- AC-001 approve 命令能更新 gate 记录。\n- AC-002 审批成功后 workflow 不再停留在原 gate。\n\n## Code Refs\n- `src/lee/cli/commands/approve.py`\n- `src/lee/orchestrator/execution/gate_api.py`\n\n## Evidence Refs\n- `src/lee/cli/commands/approve.py`\n- `src/lee/orchestrator/execution/gate_api.py`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_003",
+      "derived_from": [
+        "CAP-003"
+      ],
+      "source_refs": [
+        "src/lee/cli/commands/approve.py",
+        "src/lee/orchestrator/execution/gate_api.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    },
+    {
+      "key": "epic_cap_004",
+      "identity_kind": "ssot",
+      "ssot_type": "epic",
+      "title": "SSOT 与治理规则维护",
+      "description": "维护 SSOT contract、spec review 规则与 workflow 模板治理边界。",
+      "content": "# EPIC-004 SSOT 与治理规则维护\n\n## Summary\n维护 SSOT contract、spec review 规则与 workflow 模板治理边界。\n\n## Scope\n覆盖 SSOT artifact 约束和 review 规则，不包含下游 TECH/TESTSET 派生。\n\n## Child Features\n- `FEAT-010`\n- `FEAT-011`\n\n## Code Refs\n- `spec-global/core/contracts/ssot-agent-output/v1/schema.json`\n- `spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml`\n- `spec-global/core/agents/spec-review/v1/agent.yaml`\n- `src/lee/cli/commands/ssot.py`",
+      "source_refs": [
+        "spec-global/core/contracts/ssot-agent-output/v1/schema.json",
+        "spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml",
+        "spec-global/core/agents/spec-review/v1/agent.yaml",
+        "src/lee/cli/commands/ssot.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "epic"
+      ]
+    },
+    {
+      "key": "feat_define_ssot_output_contract",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "定义 SSOT 输出契约",
+      "description": "使用统一 schema 描述 EPIC/FEAT 等 SSOT 输出对象。",
+      "content": "# FEAT-010 定义 SSOT 输出契约\n\n## Summary\n使用统一 schema 描述 EPIC/FEAT 等 SSOT 输出对象。\n\n## Parent EPIC\n- `EPIC-004`\n\n## Capability Linkage\n- `CAP-004 SSOT 与治理规则维护`\n\n## Scope\n- 约束 key、identity_kind、ssot_type 与关系字段。\n- 让 materialization 与下游工具共享相同 contract。\n\n## Inputs\n- ssot artifact metadata\n- content\n\n## Outputs\n- contract-compliant ssot-agent-output bundle\n\n## Business Rules\n- ssot output 必须声明 ssot_type。\n- 本 workflow 只允许 epic 与 feat 两种 ssot_type。\n\n## Acceptance Criteria\n- AC-001 生成的 bundle 满足 contract_version=1.0。\n- AC-002 outputs 中只出现 epic/feat 两类 SSOT。\n\n## Code Refs\n- `spec-global/core/contracts/ssot-agent-output/v1/schema.json`\n- `src/lee/cli/commands/ssot.py`\n\n## Evidence Refs\n- `spec-global/core/contracts/ssot-agent-output/v1/schema.json`\n- `src/lee/cli/commands/ssot.py`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_004",
+      "derived_from": [
+        "CAP-004"
+      ],
+      "source_refs": [
+        "spec-global/core/contracts/ssot-agent-output/v1/schema.json",
+        "src/lee/cli/commands/ssot.py"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    },
+    {
+      "key": "feat_enforce_template_instance_boundary",
+      "identity_kind": "ssot",
+      "ssot_type": "feat",
+      "title": "维护模板与实例边界",
+      "description": "在 workflow spec 维护与评审中强制区分 checked-in 模板和 runtime instance。",
+      "content": "# FEAT-011 维护模板与实例边界\n\n## Summary\n在 workflow spec 维护与评审中强制区分 checked-in 模板和 runtime instance。\n\n## Parent EPIC\n- `EPIC-004`\n\n## Capability Linkage\n- `CAP-004 SSOT 与治理规则维护`\n\n## Scope\n- 在维护 agent 与 review agent 中加入规则。\n- 防止 spec 被误描述为运行时实例。\n\n## Inputs\n- workflow spec change request\n- review context\n\n## Outputs\n- template-boundary compliant spec review result\n\n## Business Rules\n- checked-in workflow spec 只能描述模板语义。\n- 运行时 instance 只能在执行阶段动态生成。\n\n## Acceptance Criteria\n- AC-001 workflow spec maintainer 会纠正模板/实例混淆描述。\n- AC-002 spec-review 会将该混淆识别为 review finding。\n\n## Code Refs\n- `spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml`\n- `spec-global/core/agents/spec-review/v1/agent.yaml`\n\n## Evidence Refs\n- `spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml`\n- `spec-global/core/agents/spec-review/v1/agent.yaml`\n\n## Inference\n- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。",
+      "parent": "epic_cap_004",
+      "derived_from": [
+        "CAP-004"
+      ],
+      "source_refs": [
+        "spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml",
+        "spec-global/core/agents/spec-review/v1/agent.yaml"
+      ],
+      "tags": [
+        "reverse-ssot",
+        "feat"
+      ]
+    }
+  ]
+}

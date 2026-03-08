@@ -22,6 +22,26 @@ workflows:
       - human_gate_reviewers
       - human_gate_required
 
+  core.reverse-epic-feat:
+    path: spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml
+    kind: l3_workflow_template
+    description: "反向生成 EPIC/FEAT SSOT 工作流 (L3) - 从现有 repo 与证据中提取 system/capability/feature，并物化 EPIC/FEAT"
+    load_spec_as_params: true
+    required_params:
+      - request_id
+      - repo_root
+      - objective
+    optional_params:
+      - include_paths
+      - exclude_paths
+      - existing_prd_paths
+      - runtime_evidence_paths
+      - strict_evidence
+      - max_capabilities
+      - max_features_per_capability
+      - publish_mode
+      - human_gate_required
+
   # ========== Dev 工作流 ==========
   dev.feature:
     path: spec-global/departments/dev/workflows/templates/feature-l2-template.yaml
