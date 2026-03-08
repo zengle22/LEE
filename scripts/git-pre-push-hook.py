@@ -26,6 +26,12 @@ except ImportError as e:
     print("   请确保在仓库根目录运行，或脚本所在目录可访问")
     sys.exit(0)  # 不阻止 push
 
+try:
+    from git_ssot_hook_checks import is_ssot_related_path, collect_release_ids, run_ssot_lint, run_release_checks
+except ImportError as e:
+    print(f"⚠️  无法导入 SSOT hook 模块：{e}")
+    sys.exit(0)
+
 
 def get_changed_files() -> list[str]:
     """获取所有已修改但未推送的文件列表"""
@@ -132,7 +138,33 @@ def run_lint_check() -> bool:
 def main():
     """主函数"""
     success = run_lint_check()
-    sys.exit(0 if success else 1)
+    if not success:
+        sys.exit(1)
+
+    changed_files = get_changed_files()
+    ssot_related = [file_path for file_path in changed_files if is_ssot_related_path(file_path)]
+    if ssot_related:
+        print("🔍 运行 SSOT lint (Pre-push Hook)...")
+        lint_ok, lint_errors = run_ssot_lint()
+        if not lint_ok:
+            print("❌ SSOT lint 失败")
+            for err in lint_errors:
+                print(f"   - {err}")
+            sys.exit(1)
+        print("✅ SSOT lint 通过")
+
+        release_ids = collect_release_ids(ssot_related)
+        if release_ids:
+            print("🔍 运行 RELEASE gate 检查 (Pre-push Hook)...")
+            release_ok, release_errors = run_release_checks(release_ids)
+            if not release_ok:
+                print("❌ RELEASE gate 检查失败")
+                for err in release_errors:
+                    print(f"   - {err}")
+                sys.exit(1)
+            print("✅ RELEASE gate 检查通过")
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":

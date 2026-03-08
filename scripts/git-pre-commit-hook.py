@@ -13,18 +13,38 @@ Git Pre-commit Hook - Hardcoded Path Detector
 
 import sys
 import subprocess
+import importlib.util
 from pathlib import Path
 
 # 导入硬编码路径检测器
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
+LEGACY_DETECT_SCRIPT = SCRIPT_DIR / "detect-hardcoded-paths.py"
+HardcodedPathDetector = None
 
 try:
-    from detect_hardcoded_paths import HardcodedPathDetector, DetectionResult
+    from detect_hardcoded_paths import HardcodedPathDetector
+except ImportError:
+    if LEGACY_DETECT_SCRIPT.exists():
+        spec = importlib.util.spec_from_file_location("detect_hardcoded_paths", LEGACY_DETECT_SCRIPT)
+        if spec and spec.loader:
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            HardcodedPathDetector = getattr(module, "HardcodedPathDetector", None)
+        else:
+            print("⚠️  无法加载硬编码路径检测模块")
+            print("   请确保 scripts/detect-hardcoded-paths.py 可访问")
+            sys.exit(0)
+    elif not LEGACY_DETECT_SCRIPT.exists():
+        print("⚠️  无法导入检测模块：detect_hardcoded_paths")
+        print("   请确保在仓库根目录运行，或脚本所在目录可访问")
+        sys.exit(0)  # 不阻止 commit
+
+try:
+    from git_ssot_hook_checks import is_ssot_related_path, run_ssot_lint
 except ImportError as e:
-    print(f"⚠️  无法导入检测模块：{e}")
-    print("   请确保在仓库根目录运行，或脚本所在目录可访问")
-    sys.exit(0)  # 不阻止 commit
+    print(f"⚠️  无法导入 SSOT hook 模块：{e}")
+    sys.exit(0)
 
 
 def get_staged_files() -> list[str]:
@@ -87,6 +107,13 @@ def check_staged_files() -> bool:
     print(f"🔍 将检查 {len(target_files)} 个文件 (.py, .yaml, .yml, .json, .md)")
     print()
     
+    if HardcodedPathDetector is None:
+        result = subprocess.run(
+            [sys.executable, str(LEGACY_DETECT_SCRIPT), "--fail", *target_files],
+            check=False,
+        )
+        return result.returncode == 0
+
     # 创建检测器
     detector = HardcodedPathDetector()
     
@@ -137,6 +164,21 @@ def check_staged_files() -> bool:
 def main():
     """主函数"""
     success = check_staged_files()
+    if not success:
+        sys.exit(1)
+
+    staged_files = get_staged_files()
+    ssot_related = [file_path for file_path in staged_files if is_ssot_related_path(file_path)]
+    if ssot_related:
+        print("🔍 运行 SSOT lint (Pre-commit Hook)...")
+        passed, errors = run_ssot_lint()
+        if not passed:
+            print("❌ SSOT lint 失败")
+            for err in errors:
+                print(f"   - {err}")
+            sys.exit(1)
+        print("✅ SSOT lint 通过")
+
     sys.exit(0 if success else 1)
 
 

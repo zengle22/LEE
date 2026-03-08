@@ -2,29 +2,16 @@
 # pre-push hook - 本地 CI 门禁
 # 安装方法: cp .githooks/pre-push .git/hooks/pre-push
 
-echo "🔍 运行 Path Guard 检测..."
-
 cd "$(git rev-parse --show-toplevel)"
 
-# 检测硬编码路径
-output=$(python scripts/detect-hardcoded-paths.py src 2>&1)
-result=$?
+python scripts/git-pre-push-hook.py
+exit_code=$?
 
-if [ $result -ne 0 ]; then
-    echo "❌ Path Guard 检测失败"
-    echo "$output"
-    exit 1
-fi
-
-if echo "$output" | grep -q "未检测到硬编码路径"; then
-    echo "✅ Path Guard: 未检测到硬编码路径"
-    exit 0
-else
-    echo "⚠️  Path Guard: 发现硬编码路径"
-    echo "$output"
+if [ $exit_code -ne 0 ]; then
     echo ""
-    echo "你可以选择:"
-    echo "  1. 修复硬编码后再次 push"
-    echo "  2. 强制 push (不推荐): git push --no-verify"
-    exit 1
+    echo "💡 提示：可以使用 --no-verify 跳过 hooks（不推荐）"
+    echo "   git push --no-verify"
+    exit $exit_code
 fi
+
+exit 0
