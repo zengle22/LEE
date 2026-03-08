@@ -8,6 +8,7 @@ This test module covers:
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 from pathlib import Path
 from unittest.mock import Mock, AsyncMock, patch
@@ -113,8 +114,8 @@ steps:
         # With project_root
         project_root = Path("/Users/test/project")
         runtime_dir = Path(project_root) / ".workflow"
-        assert str(runtime_dir) == "/Users/test/project/.workflow"
         assert runtime_dir.name == ".workflow"
+        assert runtime_dir.parts[-2:] == ("project", ".workflow")
 
         # Without project_root (fallback)
         runtime_dir_fallback = Path(".workflow")
@@ -139,7 +140,7 @@ steps:
 
         # Verify path is in runtime dir
         assert ".workflow" in str(l3_path)
-        assert "instances/l3" in str(l3_path)
+        assert l3_path.parts[-3:-1] == ("instances", "l3")
 
         # Verify path is NOT in framework dir
         if framework_instances_dir.exists():
@@ -157,7 +158,7 @@ class TestSpawnL3ForPoint:
     Tests the complete flow of spawning an L3 workflow from a Point.
     """
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def setup_orchestrator(self, tmp_path):
         """Setup orchestrator with L2 parent and templates."""
         # Setup database

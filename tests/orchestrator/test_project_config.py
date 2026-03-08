@@ -237,7 +237,8 @@ class TestProjectConfigResolvePath:
     def test_resolve_relative_path_without_alias(self, sample_config, tmp_path):
         """Test resolving relative path without alias."""
         resolved = sample_config.resolve_path("relative/path/file.txt")
-        assert "relative/path/file.txt" in resolved
+        resolved_path = Path(resolved)
+        assert resolved_path.parts[-3:] == ("relative", "path", "file.txt")
 
 
 class TestProjectConfigMethods:

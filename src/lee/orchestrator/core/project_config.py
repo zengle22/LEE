@@ -157,7 +157,8 @@ class ProjectConfig:
             base = context_dir if context_dir else self.base_path
 
         # 4. 转为绝对路径 (如果还不是绝对路径)
-        if not Path(resolved).is_absolute():
+        is_posix_absolute = resolved.startswith("/")
+        if not is_posix_absolute and not Path(resolved).is_absolute():
             resolved = str((base / resolved).resolve())
 
         return resolved
@@ -481,13 +482,19 @@ class DirectoryStructureConfig:
             (is_valid, error_message)
         """
         path = Path(output_path)
+        project_root = self.project_dir.resolve()
+        is_posix_absolute = output_path.startswith("/")
 
-        # If absolute path, make it relative to project dir
+        if is_posix_absolute and not path.is_absolute():
+            return False, f"Path is outside project directory: {output_path}"
         if path.is_absolute():
+            full_path = path.resolve()
             try:
-                path = path.relative_to(self.project_dir)
+                full_path.relative_to(project_root)
             except ValueError:
                 return False, f"Path is outside project directory: {output_path}"
+        else:
+            full_path = (project_root / path).resolve()
 
         # Check if strict validation is enabled
         if not self.constraints.get("strict_path_validation", True):
@@ -511,9 +518,9 @@ class DirectoryStructureConfig:
             dir_config = self.directories.get(dir_name)
             if dir_config:
                 # Use get_directory_path to get full path (respects project_content_dir)
-                dir_path = self.get_directory_path(dir_name)
+                dir_path = self.get_directory_path(dir_name).resolve()
                 try:
-                    path.relative_to(dir_path)
+                    full_path.relative_to(dir_path)
                     return True, None
                 except ValueError:
                     continue
@@ -646,10 +653,8 @@ def init_project_structure(
             print("This will create a subdirectory with all project outputs.")
             print()
             project_name = input("Project name (e.g., nutrition-app, calorie-tracker): ").strip()
-
-            while not project_name:
-                print("[ERROR] Project name cannot be empty")
-                project_name = input("Project name: ").strip()
+            if not project_name:
+                raise ValueError("Project name cannot be empty")
 
     # Validate project name
     if project_name:

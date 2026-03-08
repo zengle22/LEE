@@ -299,16 +299,25 @@ class WorkflowStateMachine(IStateMachine):
                 merged_paths = list(dict.fromkeys(existing + output_paths))  # Preserve order, remove dupes
                 step_outputs_map[step_id] = {"paths": merged_paths}
 
-        # P0-3: 原子性更新 data 和清除 current_step（BUG-2026-0040）
-        await self.store.update_workflow_data_and_clear_current_step(
-            workflow_id,
-            {
-                **instance.data,
-                "completed_steps": completed_steps,
-                "step_outputs": step_outputs_map,
-            },
-            instance.status,
-        )
+        # P0-3: 优先使用原子性更新；旧 store 接口回退为两步更新。
+        updated_data = {
+            **instance.data,
+            "completed_steps": completed_steps,
+            "step_outputs": step_outputs_map,
+        }
+        if hasattr(self.store, "update_workflow_data_and_clear_current_step"):
+            await self.store.update_workflow_data_and_clear_current_step(
+                workflow_id,
+                updated_data,
+                instance.status,
+            )
+        else:
+            await self.store.update_workflow_data(workflow_id, updated_data)
+            await self.store.update_workflow_status(
+                workflow_id,
+                instance.status,
+                clear_current_step=True,
+            )
 
         # P0-5: 记录原子性更新完成日志
         logging.info(f"[StateMachine] Atomically updated data and cleared current_step for workflow {workflow_id}")

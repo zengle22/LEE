@@ -2194,13 +2194,35 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             prd_path=context.get("prd_path", "")
         )
 
-        # Find L3 v3 template path (template remains in framework directory)
-        template_base = Path(self.project_root) / "spec-global" / "departments" / "dev" / "workflows" / "templates" if self.project_root else Path("spec-global/departments/dev/workflows/templates")
-        # Try L3 v3 template first
-        l3_template_path = template_base / "l3" / "task-l3-v3-template.yaml"
-        if not l3_template_path.exists():
-            # Fallback to old path
-            l3_template_path = template_base / "task-l3-template.yaml"
+        # Find L3 template path across supported framework layouts
+        template_roots = []
+        if self.project_root:
+            project_root_path = Path(self.project_root)
+            template_roots.extend([
+                project_root_path / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+                project_root_path / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+            ])
+        else:
+            template_roots.extend([
+                Path("lee/spec-global/departments/dev/workflows/templates"),
+                Path("spec-global/departments/dev/workflows/templates"),
+            ])
+
+        l3_template_path = None
+        for template_base in template_roots:
+            v3_candidate = template_base / "l3" / "task-l3-v3-template.yaml"
+            if v3_candidate.exists():
+                l3_template_path = v3_candidate
+                break
+
+            legacy_candidate = template_base / "task-l3-template.yaml"
+            if legacy_candidate.exists():
+                l3_template_path = legacy_candidate
+                break
+
+        if l3_template_path is None:
+            search_roots = ", ".join(str(root) for root in template_roots)
+            raise FileNotFoundError(f"L3 template not found under: {search_roots}")
 
         generator = WorkflowGenerator(template_path=str(l3_template_path))
 
