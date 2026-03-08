@@ -13,6 +13,46 @@ from .models import ArtifactMetadata
 from .types import ArtifactType
 
 
+def _normalize_versioned_refs(values) -> List[Dict[str, Optional[str]]]:
+    refs: List[Dict[str, Optional[str]]] = []
+    for value in values or []:
+        if isinstance(value, dict):
+            ref_id = value.get("id")
+            version = value.get("version")
+            if ref_id and version:
+                refs.append(value)
+        elif isinstance(value, str):
+            refs.append({"id": value, "version": None})
+    return refs
+
+
+def _extract_upstream_refs(artifact: ArtifactMetadata) -> List[Tuple[str, str]]:
+    properties = getattr(artifact, "properties", {}) or {}
+    refs: List[Tuple[str, str]] = []
+    if artifact.derived_from:
+        refs.append(("derived_from", artifact.derived_from))
+    for ref in _normalize_versioned_refs(properties.get("derived_from_ids", [])):
+        ref_id = ref.get("id")
+        if ref_id:
+            refs.append((f"derived_from_ids@{ref.get('version')}", ref_id))
+    for source_ref in properties.get("source_refs", []):
+        ref_id = str(source_ref).split("#", 1)[0]
+        if ref_id:
+            refs.append(("source_ref", ref_id))
+    for ref_id in artifact.implements or []:
+        refs.append(("implements", ref_id))
+    for ref_id in artifact.verifies or []:
+        refs.append(("verifies", ref_id))
+
+    seen: Set[Tuple[str, str]] = set()
+    ordered: List[Tuple[str, str]] = []
+    for item in refs:
+        if item not in seen:
+            seen.add(item)
+            ordered.append(item)
+    return ordered
+
+
 class SSOTService:
     """
     SSOT 真理链服务层
@@ -310,27 +350,272 @@ class SSOTService:
             }
 
             # 确定关系
-            if current.derived_from:
-                chain_entry["relation"] = f"derived_from -> {current.derived_from}"
-            elif current.implements:
-                chain_entry["relation"] = f"implements -> {', '.join(current.implements)}"
-            elif current.verifies:
-                chain_entry["relation"] = f"verifies -> {', '.join(current.verifies)}"
+            upstream_refs = _extract_upstream_refs(current)
+            if upstream_refs:
+                rel_kind, rel_target = upstream_refs[0]
+                chain_entry["relation"] = f"{rel_kind} -> {rel_target}"
 
             chain.append(chain_entry)
 
             # 移动到上游
-            if current.derived_from:
-                current = self.manager.get(current.derived_from)
-            elif current.implements:
-                # 取第一个 implements
-                current = self.manager.get(current.implements[0])
-            else:
-                current = None
+            current = self.manager.get(upstream_refs[0][1]) if upstream_refs else None
 
         # 反转，从 root 到当前
         chain.reverse()
         return chain
+
+    def release_check(self, release_id: str) -> Dict[str, object]:
+        """
+        执行 release 级聚合校验。
+        """
+        release = self.manager.get(release_id)
+        errors: List[str] = []
+        warnings: List[str] = []
+
+        if not release:
+            return {"passed": False, "errors": [f"Release {release_id} not found"], "warnings": []}
+
+        props = getattr(release, "properties", {}) or {}
+        versioned_refs = _normalize_versioned_refs(props.get("derived_from_ids", []))
+        if not versioned_refs:
+            errors.append(f"{release_id} missing derived_from_ids")
+
+        children = self.manager.registry.get_by_parent(release_id)
+        devplans = [a for a in children if a.properties.get("ssot_type") == "devplan"]
+        testplans = [a for a in children if a.properties.get("ssot_type") == "testplan"]
+        reports = [a for a in children if a.properties.get("ssot_type") == "report"]
+
+        feat_ids = {ref["id"] for ref in versioned_refs if str(ref.get("id", "")).startswith("FEAT-")}
+        devplan_feat_ids = {
+            ref.get("id")
+            for plan in devplans
+            for ref in _normalize_versioned_refs((plan.properties or {}).get("derived_from_ids", []))
+            if ref.get("id")
+        }
+        testplan_feat_ids = {
+            ref.get("id")
+            for plan in testplans
+            for ref in _normalize_versioned_refs((plan.properties or {}).get("derived_from_ids", []))
+            if ref.get("id")
+        }
+
+        for feat_id in sorted(feat_ids - devplan_feat_ids):
+            errors.append(f"{release_id} feat {feat_id} not covered by any DEVPLAN")
+        for feat_id in sorted(feat_ids - testplan_feat_ids):
+            errors.append(f"{release_id} feat {feat_id} not covered by any TESTPLAN")
+
+        report_kinds = {
+            (report.properties or {}).get("report_kind")
+            for report in reports
+        }
+        required_report_kinds = {"release", "test_execution", "go_no_go"}
+        for kind in sorted(required_report_kinds - report_kinds):
+            errors.append(f"{release_id} missing report_kind={kind}")
+
+        all_artifacts = self.manager.registry.list_all()
+        for artifact in all_artifacts:
+            if artifact.properties.get("ssot_type") != "bug":
+                continue
+            bug_props = artifact.properties or {}
+            if bug_props.get("found_in_release") != release_id:
+                continue
+            if bug_props.get("severity") == "blocker" and bug_props.get("bug_state") not in ("closed", "waived"):
+                errors.append(f"{release_id} has blocker bug {artifact.id} not closed")
+            if bug_props.get("bug_state") == "waived":
+                if not bug_props.get("waiver_reason") or not bug_props.get("waiver_approved_by"):
+                    errors.append(f"{artifact.id} waived bug missing waiver metadata")
+
+        if not props.get("rollback_plan"):
+            warnings.append(f"{release_id} missing rollback_plan")
+
+        return {
+            "passed": len(errors) == 0,
+            "errors": errors,
+            "warnings": warnings,
+            "release_id": release_id,
+            "devplans": [item.id for item in devplans],
+            "testplans": [item.id for item in testplans],
+        }
+
+    def derive_plans(self, release_id: str) -> Dict[str, str]:
+        """
+        Derive DEVPLAN/TESTPLAN skeletons from a RELEASE scope.
+        """
+        release = self.manager.get(release_id)
+        if not release:
+            raise ValueError(f"Release {release_id} not found")
+
+        release_props = getattr(release, "properties", {}) or {}
+        release_refs = _normalize_versioned_refs(release_props.get("derived_from_ids", []))
+        if not release_refs:
+            raise ValueError(f"Release {release_id} has no derived_from_ids")
+
+        existing_children = self.manager.registry.get_by_parent(release_id)
+        existing_devplan = next((a for a in existing_children if a.properties.get("ssot_type") == "devplan"), None)
+        existing_testplan = next((a for a in existing_children if a.properties.get("ssot_type") == "testplan"), None)
+
+        feat_refs = [ref for ref in release_refs if str(ref.get("id", "")).startswith("FEAT-")]
+        slices = []
+        testplan_refs: List[Dict[str, object]] = list(feat_refs)
+
+        for ref in feat_refs:
+            feat_id = ref["id"]
+            feat_version = ref["version"]
+            slice_key = ref.get("slice_key") or f"{feat_id.lower().replace('-', '_')}_{feat_version.lower()}"
+            slices.append(
+                {
+                    "slice_key": slice_key,
+                    "feat_id": feat_id,
+                    "feat_version": feat_version,
+                    "required": bool(ref.get("required", True)),
+                    "dependencies": [],
+                }
+            )
+
+            testsets = [
+                artifact for artifact in self.manager.registry.get_by_parent(feat_id)
+                if artifact.properties.get("ssot_type") == "testset"
+            ]
+            for testset in testsets:
+                testplan_refs.append(
+                    {
+                        "id": testset.id,
+                        "version": testset.properties.get("version", "v1"),
+                        "required": bool(ref.get("required", True)),
+                        "slice_key": slice_key,
+                    }
+                )
+
+        result: Dict[str, str] = {}
+
+        if existing_devplan:
+            result["devplan_id"] = existing_devplan.id
+        else:
+            devplan = self.manager.create_ssot(
+                ssot_type=SSOTType.DEVPLAN,
+                title=f"Dev plan for {release_id}",
+                content=f"# Dev plan for {release_id}\n",
+                run_id=release.run_id or "plan-derive",
+                parent_id=release_id,
+                derived_from=feat_refs,
+                owner=release_props.get("owner", "delivery"),
+                tags=release.tags,
+                properties={
+                    "coverage_summary": f"Derived from {release_id}",
+                    "slices": slices,
+                },
+            )
+            result["devplan_id"] = devplan.id
+
+        if existing_testplan:
+            result["testplan_id"] = existing_testplan.id
+        else:
+            testplan = self.manager.create_ssot(
+                ssot_type=SSOTType.TESTPLAN,
+                title=f"Test plan for {release_id}",
+                content=f"# Test plan for {release_id}\n",
+                run_id=release.run_id or "plan-derive",
+                parent_id=release_id,
+                derived_from=testplan_refs,
+                owner="qa",
+                tags=release.tags,
+                properties={
+                    "coverage_summary": f"Derived from {release_id}",
+                    "environment_matrix": [release_props.get("target_env", "staging")],
+                    "slices": slices,
+                },
+            )
+            result["testplan_id"] = testplan.id
+
+        return result
+
+    def render_view(self, view_name: str, release_id: Optional[str] = None) -> Dict[str, object]:
+        """
+        Render human-facing derived SSOT views.
+        """
+        if view_name not in {"release-dashboard", "feat-delivery-matrix", "test-coverage-summary"}:
+            raise ValueError(f"Unsupported view: {view_name}")
+
+        if not release_id:
+            raise ValueError("render_view requires release_id")
+
+        release = self.manager.get(release_id)
+        if not release:
+            raise ValueError(f"Release {release_id} not found")
+
+        release_props = getattr(release, "properties", {}) or {}
+        release_refs = _normalize_versioned_refs(release_props.get("derived_from_ids", []))
+        children = self.manager.registry.get_by_parent(release_id)
+        devplans = [a for a in children if a.properties.get("ssot_type") == "devplan"]
+        testplans = [a for a in children if a.properties.get("ssot_type") == "testplan"]
+        reports = [a for a in children if a.properties.get("ssot_type") == "report"]
+
+        feature_rows = []
+        for ref in release_refs:
+            feat_id = ref.get("id")
+            if not feat_id or not str(feat_id).startswith("FEAT-"):
+                continue
+            slice_key = ref.get("slice_key")
+            feature_rows.append(
+                {
+                    "feat_id": feat_id,
+                    "version": ref.get("version"),
+                    "slice_key": slice_key,
+                    "covered_by_devplan": any(
+                        feat_id in {item.get("id") for item in _normalize_versioned_refs((plan.properties or {}).get("derived_from_ids", []))}
+                        for plan in devplans
+                    ),
+                    "covered_by_testplan": any(
+                        feat_id in {item.get("id") for item in _normalize_versioned_refs((plan.properties or {}).get("derived_from_ids", []))}
+                        for plan in testplans
+                    ),
+                    "test_reports": [
+                        report.id
+                        for report in reports
+                        if (report.properties or {}).get("report_kind") == "test_execution"
+                        and (
+                            not slice_key
+                            or (report.properties or {}).get("slice_key") in (None, slice_key)
+                        )
+                    ],
+                }
+            )
+
+        if view_name == "release-dashboard":
+            release_check = self.release_check(release_id)
+            return {
+                "view": view_name,
+                "release_id": release_id,
+                "status": release.status.value,
+                "release_scope_size": len(feature_rows),
+                "devplan_ids": [item.id for item in devplans],
+                "testplan_ids": [item.id for item in testplans],
+                "report_ids": [item.id for item in reports],
+                "gate_passed": release_check["passed"],
+                "gate_errors": release_check["errors"],
+                "gate_warnings": release_check["warnings"],
+            }
+
+        if view_name == "feat-delivery-matrix":
+            return {
+                "view": view_name,
+                "release_id": release_id,
+                "features": feature_rows,
+            }
+
+        return {
+            "view": view_name,
+            "release_id": release_id,
+            "coverage": [
+                {
+                    "feat_id": row["feat_id"],
+                    "slice_key": row["slice_key"],
+                    "test_report_count": len(row["test_reports"]),
+                    "covered_by_testplan": row["covered_by_testplan"],
+                }
+                for row in feature_rows
+            ],
+        }
 
 
 # ============================================================================
@@ -447,6 +732,9 @@ class SSOTValidator:
         # 规则 11: TC.parent_id 必须为 TESTSET
         self._validate_tc_parent(artifact, result)
 
+        # 规则 12+: 交付链专用规则
+        self._validate_delivery_rules(artifact, result)
+
         return result
 
     def validate_p1(self, artifact_id: str) -> ValidationResult:
@@ -531,9 +819,20 @@ class SSOTValidator:
                 result.add_error(f"source_refs '{source_ref}' does not exist")
 
         # 检查 derived_from_ids
-        for ref_id in properties.get("derived_from_ids", []):
-            if not self.registry.exists(ref_id):
-                result.add_error(f"derived_from_ids '{ref_id}' does not exist")
+        for ref in properties.get("derived_from_ids", []):
+            if isinstance(ref, dict):
+                ref_id = ref.get("id")
+                version = ref.get("version")
+                if not ref_id or not version:
+                    result.add_error("derived_from_ids entry must include id and version")
+                    continue
+                if not self.registry.exists(ref_id):
+                    result.add_error(f"derived_from_ids '{ref_id}' does not exist")
+            elif isinstance(ref, str):
+                if not self.registry.exists(ref):
+                    result.add_error(f"derived_from_ids '{ref}' does not exist")
+            else:
+                result.add_error(f"derived_from_ids entry has unsupported type: {type(ref).__name__}")
 
         # 兼容旧 metadata 字段
         if hasattr(artifact, 'related_ids') and artifact.related_ids:
@@ -607,6 +906,18 @@ class SSOTValidator:
         if SSOTType.requires_parent(ssot_type) and not parent_id:
             result.add_error(f"类型 {ssot_type.value} 需要 parent_id，但未提供")
 
+        expected = ObjectCategory.get_parent_requirement(ssot_type)
+        if expected and parent_id:
+            parent_prefix = parent_id.split("-", 1)[0].upper()
+            if expected == "RELEASE" and parent_prefix != "REL":
+                result.add_error(f"类型 {ssot_type.value} 的 parent_id 必须是 RELEASE，当前为 {parent_prefix}")
+            elif expected == "DEVPLAN|TESTPLAN" and parent_prefix not in ("DEVPLAN", "TESTPLAN"):
+                result.add_error(f"TASK 对象的 parent_id 必须是 DEVPLAN 或 TESTPLAN，当前为 {parent_prefix}")
+            elif expected == "RELEASE|DEVPLAN|TESTPLAN|TASK|FEAT" and parent_prefix not in ("REL", "DEVPLAN", "TESTPLAN", "TASK", "FEAT"):
+                result.add_error(f"REPORT 对象的 parent_id 类型不合法，当前为 {parent_prefix}")
+            elif expected not in ("RELEASE", "DEVPLAN|TESTPLAN", "RELEASE|DEVPLAN|TESTPLAN|TASK|FEAT") and parent_prefix != expected:
+                result.add_error(f"类型 {ssot_type.value} 的 parent_id 必须是 {expected}，当前为 {parent_prefix}")
+
     def _validate_tc_parent(self, artifact, result: ValidationResult) -> None:
         """规则 11: TC.parent_id 必须为 TESTSET"""
         if not self.registry.is_ssot_id(artifact.id):
@@ -623,6 +934,76 @@ class SSOTValidator:
             if parent_prefix != "TESTSET":
                 result.add_error(f"TC 对象的 parent_id 必须为 TESTSET 类型，当前为 {parent_prefix}")
 
+    def _validate_delivery_rules(self, artifact, result: ValidationResult) -> None:
+        """新增 release/devplan/testplan/task/report/bug 规则。"""
+        if not self.registry.is_ssot_id(artifact.id):
+            return
+
+        properties = getattr(artifact, "properties", {}) or {}
+        try:
+            ssot_type = SSOTType(artifact.properties.get("ssot_type", artifact.id.split("-", 1)[0].lower()))
+        except ValueError:
+            return
+
+        refs = _normalize_versioned_refs(properties.get("derived_from_ids", []))
+
+        if ssot_type == SSOTType.RELEASE:
+            if not refs:
+                result.add_error("RELEASE 必须声明 derived_from_ids")
+            if artifact.status.value in ("ACTIVE", "FROZEN") and not properties.get("scope_frozen_at"):
+                result.add_warning("RELEASE 缺少 scope_frozen_at")
+            for ref in refs:
+                if not str(ref.get("id", "")).startswith("FEAT-"):
+                    result.add_error(f"RELEASE derived_from_ids 只能 pin FEAT，当前为 {ref.get('id')}")
+            for recut in properties.get("recuts", []):
+                if not isinstance(recut, dict):
+                    result.add_error("RELEASE.properties.recuts[] 必须是对象")
+                    continue
+                required_recut_fields = {"recut_id", "reason", "old_refs", "new_refs", "approved_by", "changed_at"}
+                missing = required_recut_fields - set(recut.keys())
+                if missing:
+                    result.add_error(f"RELEASE recut 缺少字段: {', '.join(sorted(missing))}")
+
+        if ssot_type == SSOTType.DEVPLAN:
+            if not any(str(ref.get("id", "")).startswith("FEAT-") for ref in refs):
+                result.add_error("DEVPLAN.derived_from_ids 至少包含一个 FEAT")
+            slices = properties.get("slices")
+            if "slices" not in properties:
+                result.add_warning("DEVPLAN 缺少 properties.slices")
+            elif not isinstance(slices, list):
+                result.add_error("DEVPLAN.properties.slices 必须是列表")
+
+        if ssot_type == SSOTType.TESTPLAN:
+            has_feat = any(str(ref.get("id", "")).startswith("FEAT-") for ref in refs)
+            has_testset = any(str(ref.get("id", "")).startswith("TESTSET-") for ref in refs)
+            if not has_feat or not has_testset:
+                result.add_error("TESTPLAN.derived_from_ids 必须同时包含 FEAT 和 TESTSET")
+            if not properties.get("environment_matrix"):
+                result.add_warning("TESTPLAN 缺少 environment_matrix")
+            if "slices" in properties and not isinstance(properties.get("slices"), list):
+                result.add_error("TESTPLAN.properties.slices 必须是列表")
+
+        if ssot_type == SSOTType.TASK:
+            if not properties.get("slice_key"):
+                result.add_warning("TASK 缺少 slice_key")
+
+        if ssot_type == SSOTType.BUG:
+            if not properties.get("severity"):
+                result.add_error("BUG 缺少 severity")
+            if not properties.get("source_report_id"):
+                result.add_error("BUG 缺少 source_report_id")
+            if properties.get("bug_state") == "waived":
+                if not properties.get("waiver_reason") or not properties.get("waiver_approved_by"):
+                    result.add_error("BUG waived 时必须包含 waiver_reason 和 waiver_approved_by")
+
+        if ssot_type == SSOTType.REPORT:
+            required_fields = ("report_kind", "subject_id", "result")
+            for field in required_fields:
+                if not properties.get(field):
+                    result.add_error(f"REPORT 缺少 properties.{field}")
+            if "evidence_refs" not in properties:
+                result.add_error("REPORT 缺少 properties.evidence_refs")
+
     def _validate_parent_type_recommendation(self, artifact, result: ValidationResult) -> None:
         """规则 12: 父子类型推荐关系"""
         # 这是一个 P1 警告，不是 blocking 错误
@@ -638,7 +1019,11 @@ class SSOTValidator:
             for other in self.registry.list_all():
                 derived_from = getattr(other, "derived_from", None)
                 derived_from_ids = (getattr(other, "properties", {}) or {}).get("derived_from_ids", [])
-                if derived_from == artifact.id or artifact.id in derived_from_ids:
+                normalized_ids = {
+                    ref.get("id") if isinstance(ref, dict) else ref
+                    for ref in derived_from_ids
+                }
+                if derived_from == artifact.id or artifact.id in normalized_ids:
                     has_downstream = True
                     break
             if not has_downstream:

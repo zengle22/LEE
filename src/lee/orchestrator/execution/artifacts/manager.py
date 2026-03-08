@@ -11,6 +11,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Union
+import yaml
 
 from .models import ArtifactMetadata, RunManifest
 from .placement import resolve_ssot_relative_dir
@@ -42,11 +43,13 @@ class ArtifactManager:
             root_path: .artifacts/ 根目录
             project_root: 项目根目录
         """
-        self.project_root = (project_root or Path.cwd()).resolve()
-        self.root_path = (root_path or (self.project_root / ".artifacts")).resolve()
+        inferred_root = Path(root_path).resolve() if root_path else None
+        default_project_root = inferred_root.parent if inferred_root and inferred_root.name == ".artifacts" else Path.cwd()
+        self.project_root = Path(project_root or default_project_root).resolve()
+        self.root_path = Path(root_path or (self.project_root / ".artifacts")).resolve()
         self.sequence_file = self.root_path / ".sequence"
         self._artifacts_path_root = self._to_metadata_path_root(self.root_path)
-        self.registry = ArtifactRegistry(self.root_path)
+        self.registry = ArtifactRegistry(self.root_path, self.project_root)
 
         # 确保目录存在
         self._ensure_directories()
@@ -797,7 +800,7 @@ class ArtifactManager:
         content,
         run_id: str,
         parent_id: Optional[str] = None,
-        derived_from: Optional[List[str]] = None,
+        derived_from: Optional[List[Union[str, Dict]]] = None,
         source_refs: Optional[List[str]] = None,
         related_ids: Optional[List[str]] = None,
         verifies: Optional[List[str]] = None,
@@ -843,7 +846,15 @@ class ArtifactManager:
         slug = generator.generate_slug(title)
 
         # 生成完整 ID
-        artifact_id = generator.generate_id(ssot_type, parent_id)
+        generation_suffix = None
+        if ssot_type == SSOTType.RELEASE:
+            generation_suffix = (properties or {}).get("release_version")
+            if not generation_suffix:
+                raise ValueError("RELEASE create_ssot 需要 properties.release_version 作为 semver")
+        elif ssot_type == SSOTType.REPORT and parent_id and str(parent_id).startswith("REL-"):
+            generation_suffix = (properties or {}).get("report_kind")
+
+        artifact_id = generator.generate_id(ssot_type, parent_id, generation_suffix)
 
         # 生成文件名
         filename = f"{artifact_id}__{slug}.md"
@@ -854,18 +865,36 @@ class ArtifactManager:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         artifact_path = artifact_dir / filename
 
+        derived_from_ids = derived_from or []
+        front_matter = {
+            "id": artifact_id,
+            "ssot_type": ssot_type.value,
+            "title": title,
+            "status": status.value.lower(),
+            "version": version,
+            "parent_id": parent_id,
+            "derived_from_ids": derived_from_ids,
+            "source_refs": source_refs or [],
+            "owner": owner,
+            "tags": tags or [],
+            "properties": properties or {},
+        }
+
         # 写入内容
         if isinstance(content, Path):
-            shutil.copy(content, artifact_path)
-            content_hash = self._compute_hash(content)
-            size_bytes = content.stat().st_size
+            raw_body = content.read_text(encoding="utf-8")
         else:
-            if isinstance(content, bytes):
-                artifact_path.write_bytes(content)
-            else:
-                artifact_path.write_text(content, encoding="utf-8")
-            content_hash = self._compute_hash(artifact_path)
-            size_bytes = artifact_path.stat().st_size
+            raw_body = content.decode("utf-8") if isinstance(content, bytes) else str(content)
+
+        if raw_body.startswith("---"):
+            file_text = raw_body
+        else:
+            front_matter_yaml = yaml.safe_dump(front_matter, allow_unicode=True, sort_keys=False).strip()
+            file_text = f"---\n{front_matter_yaml}\n---\n\n{raw_body}"
+
+        artifact_path.write_text(file_text, encoding="utf-8")
+        content_hash = self._compute_hash(artifact_path)
+        size_bytes = artifact_path.stat().st_size
 
         # 创建 metadata
         metadata = ArtifactMetadata(
@@ -877,7 +906,14 @@ class ArtifactManager:
             path_root=self._to_metadata_path_root(self.project_root),
             run_id=run_id,
             title=title,
-            derived_from=derived_from[0] if derived_from else None,
+            derived_from=next(
+                (
+                    item.get("id")
+                    for item in derived_from_ids
+                    if isinstance(item, dict) and item.get("id")
+                ),
+                next((item for item in derived_from_ids if isinstance(item, str)), None),
+            ),
             verifies=verifies or [],
             implements=implements or [],
             tags=tags or [],
@@ -894,7 +930,7 @@ class ArtifactManager:
         metadata.properties["owner"] = owner
         metadata.properties["version"] = version
         metadata.properties["placement_dir"] = relative_dir.as_posix()
-        metadata.properties["derived_from_ids"] = derived_from or []
+        metadata.properties["derived_from_ids"] = derived_from_ids
 
         # 注册
         self.registry.register(metadata)
@@ -941,3 +977,12 @@ class ArtifactManager:
             ArtifactMetadata 列表
         """
         return self.registry.get_by_parent(parent_id)
+
+    def rebuild_ssot_registry(self) -> int:
+        """从正式 SSOT 文件全量重建 registry。"""
+        self.registry.rebuild()
+        return len(self.registry.list_all())
+
+    def sync_ssot_registry(self) -> int:
+        """增量同步入口，当前先复用全量重建。"""
+        return self.rebuild_ssot_registry()

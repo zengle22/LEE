@@ -96,6 +96,7 @@ class SSOTContractMaterializer:
         if output.get("parent"):
             refs.append(output["parent"])
         refs.extend(output.get("derived_from", []))
+        refs.extend(ref["id"] for ref in output.get("derived_from_ids", []) if isinstance(ref, dict) and ref.get("id"))
         refs.extend(self._extract_local_keys(output.get("source_refs", [])))
         refs.extend(output.get("verifies", []))
         refs.extend(output.get("implements", []))
@@ -136,7 +137,10 @@ class SSOTContractMaterializer:
                 content=content,
                 run_id=run_id,
                 parent_id=self._resolve_optional_id(output.get("parent"), materialized),
-                derived_from=self._resolve_ids(output.get("derived_from", []), materialized),
+                derived_from=self._resolve_versioned_refs(
+                    output.get("derived_from_ids"),
+                    materialized,
+                ) or self._resolve_ids(output.get("derived_from", []), materialized),
                 source_refs=self._resolve_source_refs(output.get("source_refs", []), materialized),
                 verifies=self._resolve_ids(output.get("verifies", []), materialized),
                 implements=self._resolve_ids(output.get("implements", []), materialized),
@@ -183,6 +187,21 @@ class SSOTContractMaterializer:
         materialized: Dict[str, MaterializedOutput],
     ) -> List[str]:
         return [self._resolve_single_ref(value, materialized) for value in values]
+
+    def _resolve_versioned_refs(
+        self,
+        values: Optional[List[Dict[str, Any]]],
+        materialized: Dict[str, MaterializedOutput],
+    ) -> List[Dict[str, Any]]:
+        resolved: List[Dict[str, Any]] = []
+        for value in values or []:
+            if not isinstance(value, dict):
+                continue
+            item = dict(value)
+            if item.get("id"):
+                item["id"] = self._resolve_single_ref(item["id"], materialized)
+            resolved.append(item)
+        return resolved
 
     def _resolve_source_refs(
         self,

@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from .models import ArtifactMetadata, RunManifest
+from .ssot_files import parse_front_matter
+from .types import ArtifactStatus, ArtifactType, GovernanceKind
 
 # Windows 兼容性：fcntl 不可用
 if sys.platform != "win32":
@@ -28,7 +30,23 @@ if sys.platform != "win32":
 
 
 # SSOT ID 前缀 (新系统)
-SSOT_PREFIXES = {"SRC", "EPIC", "FEAT", "UI", "TECH", "TASK", "TESTSET", "TC", "BUG", "REPORT", "ADR", "EVI"}
+SSOT_PREFIXES = {
+    "SRC",
+    "EPIC",
+    "FEAT",
+    "REL",
+    "UI",
+    "TECH",
+    "DEVPLAN",
+    "TESTPLAN",
+    "TASK",
+    "TESTSET",
+    "TC",
+    "BUG",
+    "REPORT",
+    "ADR",
+    "EVI",
+}
 
 # Legacy ART 前缀 (旧系统)
 LEGACY_PREFIX = "ART"
@@ -46,7 +64,7 @@ class ArtifactRegistry:
     - 新增 parent_index, path_index, relation_index
     """
 
-    def __init__(self, root_path: Optional[Path] = None):
+    def __init__(self, root_path: Optional[Path] = None, project_root: Optional[Path] = None):
         """
         初始化注册表
 
@@ -54,6 +72,7 @@ class ArtifactRegistry:
             root_path: .artifacts/ 根目录，默认为当前工作目录下的 .artifacts/
         """
         self.root_path = root_path or (Path.cwd() / ".artifacts")
+        self.project_root = (project_root or Path.cwd()).resolve()
         self.registry_file = self.root_path / ".registry.json"
         self.lock_file = self.root_path / ".registry.lock"
 
@@ -154,6 +173,8 @@ class ArtifactRegistry:
             if archive_dir.exists():
                 self._scan_manifests(archive_dir)
 
+            self._scan_ssot_files()
+
             self._last_rebuilt = datetime.now()
             self._save()
         finally:
@@ -168,6 +189,72 @@ class ArtifactRegistry:
             except Exception as e:
                 # 记录错误但继续扫描
                 print(f"Warning: Failed to load manifest {manifest_file}: {e}")
+
+    def _scan_ssot_files(self) -> None:
+        """Scan checked-in SSOT files with front matter and project-root paths."""
+        candidate_dirs = []
+        for relative in ("spec", "tests", str(Path("docs") / "reports")):
+            candidate = self.project_root / relative
+            if candidate.exists():
+                candidate_dirs.append(candidate)
+
+        for base_dir in candidate_dirs:
+            for path in base_dir.rglob("*.md"):
+                try:
+                    front_matter, _ = parse_front_matter(path)
+                except Exception:
+                    continue
+
+                artifact_id = front_matter.get("id")
+                ssot_type = front_matter.get("ssot_type")
+                if not artifact_id or not ssot_type:
+                    continue
+
+                properties = dict(front_matter.get("properties") or {})
+                properties["ssot_type"] = ssot_type
+                properties["parent_id"] = front_matter.get("parent_id")
+                properties["source_refs"] = front_matter.get("source_refs", [])
+                properties["version"] = front_matter.get("version", "v1")
+                properties["derived_from_ids"] = front_matter.get("derived_from_ids", [])
+                properties = self._normalize_front_matter_value(properties)
+
+                metadata = ArtifactMetadata(
+                    id=artifact_id,
+                    type=ArtifactType.DOCUMENT,
+                    category="ssot_object",
+                    status=ArtifactStatus(front_matter.get("status", "ACTIVE").upper()),
+                    path=path.relative_to(self.project_root).as_posix(),
+                    path_root=".",
+                    run_id=properties.get("run_id", ""),
+                    title=front_matter.get("title", artifact_id),
+                    derived_from=next(
+                        (
+                            item.get("id")
+                            for item in properties.get("derived_from_ids", [])
+                            if isinstance(item, dict) and item.get("id")
+                        ),
+                        None,
+                    ),
+                    verifies=front_matter.get("verifies", []),
+                    implements=front_matter.get("implements", []),
+                    tags=front_matter.get("tags", []),
+                    governance_kind=GovernanceKind.KNOWLEDGE,
+                    updated_at=datetime.fromtimestamp(path.stat().st_mtime),
+                    created_at=datetime.fromtimestamp(path.stat().st_ctime),
+                    properties=properties,
+                )
+
+                self._add_to_index(metadata)
+
+    def _normalize_front_matter_value(self, value):
+        """Make YAML-loaded values JSON-safe for registry storage."""
+        if isinstance(value, dict):
+            return {k: self._normalize_front_matter_value(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self._normalize_front_matter_value(v) for v in value]
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
 
     def _index_manifest(self, manifest: RunManifest) -> None:
         """将 manifest 中的产出物加入索引"""
@@ -232,7 +319,13 @@ class ArtifactRegistry:
         related_ids = set()
         if artifact.derived_from:
             related_ids.add(artifact.derived_from)
-        related_ids.update(artifact.properties.get("derived_from_ids", []))
+        for derived_ref in artifact.properties.get("derived_from_ids", []):
+            if isinstance(derived_ref, dict):
+                ref_id = derived_ref.get("id")
+                if ref_id:
+                    related_ids.add(ref_id)
+            elif isinstance(derived_ref, str):
+                related_ids.add(derived_ref)
         related_ids.update(artifact.properties.get("related_ids", []))
         if artifact.verifies:
             related_ids.update(artifact.verifies)

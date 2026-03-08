@@ -196,9 +196,9 @@ class SSOTType(str, Enum):
     """
     SSOT 对象类型 (v1.3 新增)
 
-    12 种对象类型，覆盖完整产品研发周期：
-    - 独立型：SRC, EPIC, FEAT, ADR
-    - 直接父对象一致型：UI, TECH, TASK, TESTSET, REPORT
+    15 种对象类型，覆盖完整产品研发周期：
+    - 独立型：SRC, EPIC, FEAT, ADR, RELEASE
+    - 直接父对象一致型：UI, TECH, DEVPLAN, TESTPLAN, TASK, TESTSET, REPORT
     - 范围归属型：TC, BUG, EVI
     """
 
@@ -207,10 +207,13 @@ class SSOTType(str, Enum):
     EPIC = "epic"        # 较大的业务目标集合
     FEAT = "feat"        # 最小可独立验收业务单元
     ADR = "adr"          # 架构或业务决策
+    RELEASE = "release"  # 版本范围与发布基线
 
     # 直接父对象一致型 (Direct Parent Consistent) - ID 中体现父对象
     UI = "ui"            # UI 原型/交互设计
     TECH = "tech"        # 技术设计
+    DEVPLAN = "devplan"  # 开发计划
+    TESTPLAN = "testplan"  # 测试计划
     TASK = "task"        # 实施任务
     TESTSET = "testset"  # 测试集
     REPORT = "report"    # 测试/验收/分析报告
@@ -223,12 +226,20 @@ class SSOTType(str, Enum):
     @classmethod
     def is_independent(cls, ssot_type: "SSOTType") -> bool:
         """判断是否为独立型"""
-        return ssot_type in (cls.SRC, cls.EPIC, cls.FEAT, cls.ADR)
+        return ssot_type in (cls.SRC, cls.EPIC, cls.FEAT, cls.ADR, cls.RELEASE)
 
     @classmethod
     def is_direct_parent(cls, ssot_type: "SSOTType") -> bool:
         """判断是否为直接父对象一致型"""
-        return ssot_type in (cls.UI, cls.TECH, cls.TASK, cls.TESTSET, cls.REPORT)
+        return ssot_type in (
+            cls.UI,
+            cls.TECH,
+            cls.DEVPLAN,
+            cls.TESTPLAN,
+            cls.TASK,
+            cls.TESTSET,
+            cls.REPORT,
+        )
 
     @classmethod
     def is_scope_bounded(cls, ssot_type: "SSOTType") -> bool:
@@ -278,11 +289,13 @@ class ObjectCategory(str, Enum):
         parent_requirements = {
             SSOTType.UI: "FEAT",
             SSOTType.TECH: "FEAT",
-            SSOTType.TASK: "FEAT",
+            SSOTType.DEVPLAN: "RELEASE",
+            SSOTType.TESTPLAN: "RELEASE",
+            SSOTType.TASK: "DEVPLAN|TESTPLAN",
             SSOTType.TESTSET: "FEAT",
             SSOTType.TC: "TESTSET",  # 强制：TC.parent_id 必须为 TESTSET
             SSOTType.BUG: "FEAT",   # 可选：FEAT 或 TC
-            SSOTType.REPORT: "FEAT",
+            SSOTType.REPORT: "RELEASE|DEVPLAN|TESTPLAN|TASK|FEAT",
             SSOTType.EVI: "FEAT",   # 可选：FEAT/TC/BUG/TASK/TECH/REPORT
         }
         return parent_requirements.get(ssot_type)

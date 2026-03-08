@@ -1,20 +1,40 @@
 """
-SSOT ID Parser
+SSOT ID Parser.
 
-SSOT ID 解析器 - 提供 ID 结构解析、格式校验功能。
-
-ID 格式规范 (v1.3):
+ID 格式规范 (v1.4):
 - 独立顺序型: SRC-001, EPIC-001, FEAT-001, ADR-001
-- 单父唯一型: TECH-FEAT-001, TESTSET-FEAT-001
-- 单父多实例型: UI-FEAT-001-01, TASK-FEAT-001-FE-01
-- 时态/运行型: REPORT-FEAT-001-20260306
+- Release 型: REL-1.4.0
+- 单父唯一型: TECH-FEAT-001, TESTSET-FEAT-001, DEVPLAN-REL-1.4.0
+- 单父多实例型:
+  - UI-FEAT-001-01
+  - TASK-FEAT-001-FE-01
+  - TASK-DEVPLAN-REL-1.4.0-001
+  - TASK-TESTPLAN-REL-1.4.0-001
+- 运行/报告型:
+  - REPORT-FEAT-001-20260306
+  - REPORT-REL-1.4.0-TEST-001
 - 范围归属型: TC-FEAT-001-001, BUG-FEAT-001-001, EVI-FEAT-001-001
 """
 
-from dataclasses import dataclass
-from typing import Dict, List, Optional
+from __future__ import annotations
 
-from .types import SSOTType, ObjectCategory
+import re
+from dataclasses import dataclass
+from typing import Optional
+
+from .types import ObjectCategory, SSOTType
+
+
+REL_VERSION_PATTERN = r"(\d+\.\d+\.\d+)"
+INDEPENDENT_PATTERN = re.compile(r"^(SRC|EPIC|FEAT|ADR)-(\d{3})$")
+RELEASE_PATTERN = re.compile(rf"^(REL-{REL_VERSION_PATTERN})$")
+DEVPLAN_PATTERN = re.compile(rf"^(DEVPLAN)-(REL-{REL_VERSION_PATTERN})$")
+TESTPLAN_PATTERN = re.compile(rf"^(TESTPLAN)-(REL-{REL_VERSION_PATTERN})$")
+TASK_PLAN_PATTERN = re.compile(rf"^(TASK)-((DEVPLAN|TESTPLAN)-(REL-{REL_VERSION_PATTERN}))-(.+)$")
+TASK_FEAT_PATTERN = re.compile(r"^(TASK)-(FEAT-\d{3})-(.+)$")
+DIRECT_FEAT_PATTERN = re.compile(r"^(UI|TECH|TESTSET|REPORT)-(FEAT-\d{3})(?:-(.+))?$")
+REPORT_REL_PATTERN = re.compile(rf"^(REPORT)-(REL-{REL_VERSION_PATTERN})-([A-Z0-9_]+)-(.+)$")
+SCOPE_PATTERN = re.compile(r"^(TC|BUG|EVI)-(FEAT-\d{3})-(.+)$")
 
 
 @dataclass
@@ -22,281 +42,135 @@ class IDParseResult:
     """ID 解析结果"""
 
     id: str
-    prefix: str  # 类型前缀 (如 FEAT, TC)
-    parent_scope: Optional[str]  # 父对象范围 (如 FEAT-001)
-    sequence: Optional[str]  # 序号部分
-    suffix: Optional[str]  # 后缀 (如 FE, 01, 日期)
+    prefix: str
+    parent_scope: Optional[str]
+    sequence: Optional[str]
+    suffix: Optional[str]
     is_valid: bool
     error: Optional[str] = None
 
 
+def _release_id_from_match(match: re.Match, group: int = 1) -> str:
+    return match.group(group)
+
+
 def parse_parent(id: str) -> Optional[str]:
-    """
-    从 ID 中解析直接父对象
-
-    适用于：直接父对象一致型 (TECH, TESTSET, UI, TASK, REPORT)
-
-    规则:
-    - TECH-FEAT-001 → FEAT-001
-    - TESTSET-FEAT-001 → FEAT-001
-    - UI-FEAT-001-01 → FEAT-001
-    - TASK-FEAT-001-FE-01 → FEAT-001
-    - REPORT-FEAT-001-20260306 → FEAT-001
-
-    Args:
-        id: SSOT ID
-
-    Returns:
-        父对象 ID，如 FEAT-001，或 None (独立型)
-    """
-    parts = id.split("-")
-
-    if len(parts) < 2:
+    """从 ID 中解析直接父对象。"""
+    if not id:
         return None
 
-    prefix = parts[0].upper()
-
-    # 独立型：无 parent
-    if prefix in ("SRC", "EPIC", "FEAT", "ADR"):
+    if RELEASE_PATTERN.match(id) or INDEPENDENT_PATTERN.match(id):
         return None
 
-    # 范围归属型：不应使用此函数
-    if prefix in ("TC", "BUG", "EVI"):
-        # 使用 parse_scope 代替
-        return None
+    match = DEVPLAN_PATTERN.match(id)
+    if match:
+        return match.group(2)
 
-    # 直接父对象一致型: TYPE-FEAT-XXX 或 TYPE-FEAT-XXX-SUFFIX
-    if prefix in ("TECH", "TESTSET", "UI", "TASK", "REPORT"):
-        # 查找 FEAT- 前缀的位置
-        try:
-            feat_idx = parts.index("FEAT")
-            if feat_idx + 1 < len(parts):
-                return f"FEAT-{parts[feat_idx + 1]}"
-        except ValueError:
-            pass
+    match = TESTPLAN_PATTERN.match(id)
+    if match:
+        return match.group(2)
+
+    match = TASK_PLAN_PATTERN.match(id)
+    if match:
+        return match.group(2)
+
+    match = TASK_FEAT_PATTERN.match(id)
+    if match:
+        return match.group(2)
+
+    match = REPORT_REL_PATTERN.match(id)
+    if match:
+        return match.group(2)
+
+    match = DIRECT_FEAT_PATTERN.match(id)
+    if match:
+        return match.group(2)
 
     return None
 
 
 def parse_scope(id: str) -> Optional[str]:
-    """
-    从 ID 中解析归属范围 (FEAT)
-
-    适用于：范围归属型 (TC, BUG, EVI)
-
-    规则:
-    - TC-FEAT-001-001 → FEAT-001
-    - BUG-FEAT-001-001 → FEAT-001
-    - EVI-FEAT-001-001 → FEAT-001
-
-    Args:
-        id: SSOT ID
-
-    Returns:
-        归属范围 FEAT ID，如 FEAT-001，或 None
-    """
-    parts = id.split("-")
-
-    if len(parts) < 3:
+    """从 ID 中解析范围归属对象。"""
+    if not id:
         return None
 
-    prefix = parts[0].upper()
-
-    # 范围归属型: TYPE-FEAT-XXX-SEQ
-    if prefix in ("TC", "BUG", "EVI"):
-        try:
-            feat_idx = parts.index("FEAT")
-            if feat_idx + 1 < len(parts):
-                return f"FEAT-{parts[feat_idx + 1]}"
-        except ValueError:
-            pass
+    match = SCOPE_PATTERN.match(id)
+    if match:
+        return match.group(2)
 
     return None
 
 
 def resolve_scope(parent_id: str) -> Optional[str]:
     """
-    从 parent_id 解析归属范围
+    从 parent_id 解析归属范围。
 
-    P0 阶段规则:
-    - 只支持已知类型的单跳解析，不支持无限递归链
-    - 若 parent_id 是 FEAT，直接返回
-    - 若 parent_id 是 TC/BUG/TECH/TASK/TESTSET/UI/REPORT，按已知规则解析到 FEAT
-
-    Args:
-        parent_id: 父对象 ID
-
-    Returns:
-        归属范围 FEAT ID，或 None
+    P0 阶段仍只要求范围归属型对象落在 FEAT scope 上。
     """
     if not parent_id:
         return None
 
-    parts = parent_id.split("-")
-    prefix = parts[0].upper()
-
-    # 直接是 FEAT
-    if prefix == "FEAT":
-        if len(parts) >= 3:
-            return f"FEAT-{parts[1]}"
+    if re.match(r"^FEAT-\d{3}$", parent_id):
         return parent_id
 
-    # 已知类型：单跳解析到 FEAT
-    if prefix in ("TC", "BUG", "EVI"):
-        # TC-FEAT-001-001 → FEAT-001
-        try:
-            feat_idx = parts.index("FEAT")
-            if feat_idx + 1 < len(parts):
-                return f"FEAT-{parts[feat_idx + 1]}"
-        except ValueError:
-            pass
+    if re.match(r"^(TC|BUG|EVI)-(FEAT-\d{3})-", parent_id):
+        return parse_scope(parent_id)
 
-    if prefix in ("TECH", "TESTSET", "UI", "TASK", "REPORT"):
-        # TECH-FEAT-001 → FEAT-001
-        try:
-            feat_idx = parts.index("FEAT")
-            if feat_idx + 1 < len(parts):
-                return f"FEAT-{parts[feat_idx + 1]}"
-        except ValueError:
-            pass
+    parent = parse_parent(parent_id)
+    if parent and re.match(r"^FEAT-\d{3}$", parent):
+        return parent
 
-    # P0 阶段：未知类型不支持，返回 None
     return None
 
 
 def parse_id(id: str) -> IDParseResult:
-    """
-    解析 ID 结构
-
-    Args:
-        id: SSOT ID
-
-    Returns:
-        IDParseResult 包含解析后的各个部分
-    """
+    """解析 ID 结构。"""
     if not id:
-        return IDParseResult(
-            id=id,
-            prefix="",
-            parent_scope=None,
-            sequence=None,
-            suffix=None,
-            is_valid=False,
-            error="ID cannot be empty"
-        )
+        return IDParseResult("", "", None, None, None, False, "ID cannot be empty")
 
-    parts = id.split("-")
+    independent_match = INDEPENDENT_PATTERN.match(id)
+    if independent_match:
+        prefix, sequence = independent_match.groups()
+        return IDParseResult(id, prefix, None, sequence, None, True)
 
-    if len(parts) < 2:
-        return IDParseResult(
-            id=id,
-            prefix=parts[0] if parts else "",
-            parent_scope=None,
-            sequence=None,
-            suffix=None,
-            is_valid=False,
-            error="ID must have at least prefix and sequence"
-        )
+    release_match = RELEASE_PATTERN.match(id)
+    if release_match:
+        release_id = _release_id_from_match(release_match)
+        return IDParseResult(id, "REL", None, release_id.split("-", 1)[1], None, True)
 
-    prefix = parts[0].upper()
+    match = DEVPLAN_PATTERN.match(id)
+    if match:
+        return IDParseResult(id, "DEVPLAN", match.group(2), match.group(3), None, True)
 
-    # 验证前缀是否合法
-    valid_prefixes = [t.value.upper() for t in SSOTType]
-    if prefix not in valid_prefixes:
-        return IDParseResult(
-            id=id,
-            prefix=prefix,
-            parent_scope=None,
-            sequence=None,
-            suffix=None,
-            is_valid=False,
-            error=f"Invalid prefix: {prefix}. Must be one of {valid_prefixes}"
-        )
+    match = TESTPLAN_PATTERN.match(id)
+    if match:
+        return IDParseResult(id, "TESTPLAN", match.group(2), match.group(3), None, True)
 
-    # 根据类型解析
-    try:
-        ssot_type = SSOTType(prefix.lower())
-    except ValueError:
-        return IDParseResult(
-            id=id,
-            prefix=prefix,
-            parent_scope=None,
-            sequence=None,
-            suffix=None,
-            is_valid=False,
-            error=f"Unknown SSOTType: {prefix}"
-        )
+    match = TASK_PLAN_PATTERN.match(id)
+    if match:
+        return IDParseResult(id, "TASK", match.group(2), match.group(4), match.group(5), True)
 
-    category = ObjectCategory.for_type(ssot_type)
+    match = TASK_FEAT_PATTERN.match(id)
+    if match:
+        return IDParseResult(id, "TASK", match.group(2), match.group(2).split("-")[1], match.group(3), True)
 
-    if category == ObjectCategory.INDEPENDENT:
-        # 独立型: TYPE-001
-        sequence = parts[1] if len(parts) > 1 else None
-        suffix = parts[2] if len(parts) > 2 else None
-        return IDParseResult(
-            id=id,
-            prefix=prefix,
-            parent_scope=None,
-            sequence=sequence,
-            suffix=suffix,
-            is_valid=True
-        )
+    match = REPORT_REL_PATTERN.match(id)
+    if match:
+        return IDParseResult(id, "REPORT", match.group(2), match.group(3), f"{match.group(4)}-{match.group(5)}", True)
 
-    elif category == ObjectCategory.DIRECT_PARENT:
-        # 直接父对象一致型: TYPE-FEAT-001 或 TYPE-FEAT-001-SUFFIX
-        try:
-            feat_idx = parts.index("FEAT")
-            parent_scope = f"FEAT-{parts[feat_idx + 1]}"
-            # TYPE-FEAT-001: sequence 在 feat_idx+1 位置，suffix 为 None
-            # TYPE-FEAT-001-SUFFIX: sequence 在 feat_idx+1 位置，suffix 在 feat_idx+2
-            sequence = parts[feat_idx + 1] if feat_idx + 1 < len(parts) else None
-            suffix = "-".join(parts[feat_idx + 2:]) if feat_idx + 2 < len(parts) else None
-            return IDParseResult(
-                id=id,
-                prefix=prefix,
-                parent_scope=parent_scope,
-                sequence=sequence,
-                suffix=suffix,
-                is_valid=True
-            )
-        except (ValueError, IndexError):
-            return IDParseResult(
-                id=id,
-                prefix=prefix,
-                parent_scope=None,
-                sequence=None,
-                suffix=None,
-                is_valid=False,
-                error=f"Direct parent type ID must contain FEAT-XXX: {id}"
-            )
+    match = DIRECT_FEAT_PATTERN.match(id)
+    if match:
+        prefix, parent_scope, suffix = match.groups()
+        sequence = parent_scope.split("-")[1]
+        return IDParseResult(id, prefix, parent_scope, sequence, suffix, True)
 
-    elif category == ObjectCategory.SCOPE_BOUNDED:
-        # 范围归属型: TYPE-FEAT-001-SEQ
-        try:
-            feat_idx = parts.index("FEAT")
-            parent_scope = f"FEAT-{parts[feat_idx + 1]}"
-            # TYPE-FEAT-001-SEQ: sequence 在 feat_idx+1 位置，suffix 在 feat_idx+2
-            sequence = parts[feat_idx + 1] if feat_idx + 1 < len(parts) else None
-            suffix = "-".join(parts[feat_idx + 2:]) if feat_idx + 2 < len(parts) else None
-            return IDParseResult(
-                id=id,
-                prefix=prefix,
-                parent_scope=parent_scope,
-                sequence=sequence,
-                suffix=suffix,
-                is_valid=True
-            )
-        except (ValueError, IndexError):
-            return IDParseResult(
-                id=id,
-                prefix=prefix,
-                parent_scope=None,
-                sequence=None,
-                suffix=None,
-                is_valid=False,
-                error=f"Scope bounded type ID must contain FEAT-XXX-SEQ: {id}"
-            )
+    match = SCOPE_PATTERN.match(id)
+    if match:
+        prefix, parent_scope, suffix = match.groups()
+        sequence = parent_scope.split("-")[1]
+        return IDParseResult(id, prefix, parent_scope, sequence, suffix, True)
 
+    prefix = id.split("-", 1)[0].upper()
     return IDParseResult(
         id=id,
         prefix=prefix,
@@ -304,89 +178,51 @@ def parse_id(id: str) -> IDParseResult:
         sequence=None,
         suffix=None,
         is_valid=False,
-        error=f"Unknown category for type: {ssot_type}"
+        error=f"Unsupported SSOT ID format: {id}",
     )
 
 
 def validate_id_format(id: str, ssot_type: Optional[SSOTType] = None) -> bool:
-    """
-    验证 ID 格式是否符合类型规范
-
-    Args:
-        id: SSOT ID
-        ssot_type: 预期的类型，如果为 None 则只验证格式不验证类型匹配
-
-    Returns:
-        是否合法
-    """
+    """验证 ID 格式是否符合类型规范。"""
     result = parse_id(id)
-
     if not result.is_valid:
         return False
 
-    if ssot_type is not None:
-        # 验证类型匹配
-        try:
-            expected_prefix = ssot_type.value.upper()
-            if result.prefix != expected_prefix:
-                return False
-        except ValueError:
-            return False
+    if ssot_type is None:
+        return True
 
-    return True
+    expected = "REL" if ssot_type == SSOTType.RELEASE else ssot_type.value.upper()
+    return result.prefix == expected
 
 
 def validate_parent_consistency(
     id: str,
     parent_id: Optional[str],
-    ssot_type: SSOTType
+    ssot_type: SSOTType,
 ) -> Optional[str]:
-    """
-    校验 parent_id 一致性
-
-    根据对象类型使用不同规则：
-    - 直接父对象一致型：parse_parent(id) == parent_id
-    - 范围归属型：parse_scope(id) == resolve_scope(parent_id)
-
-    Args:
-        id: 对象 ID
-        parent_id: metadata 中的 parent_id
-        ssot_type: 对象类型
-
-    Returns:
-        错误信息，如果合法返回 None
-    """
+    """根据对象类型校验 parent_id 一致性。"""
     category = ObjectCategory.for_type(ssot_type)
 
     if category == ObjectCategory.INDEPENDENT:
-        # 独立型：无需校验
+        if parent_id:
+            return f"类型 {ssot_type.value} 不应设置 parent_id，当前为 {parent_id}"
         return None
 
-    # 检查是否需要 parent_id
     needs_parent = SSOTType.requires_parent(ssot_type)
 
+    if needs_parent and not parent_id:
+        return f"类型 {ssot_type.value} 需要 parent_id"
+
     if category == ObjectCategory.DIRECT_PARENT:
-        # 直接父对象一致型
         parsed_parent = parse_parent(id)
-
-        # 如果 parent_id 为空但类型需要 parent
-        if needs_parent and not parent_id:
-            return f"类型 {ssot_type.value} 需要 parent_id"
-
         if parsed_parent != parent_id:
             return f"ID {id} 解析出 parent {parsed_parent}，但 parent_id 设置为 {parent_id}"
+        return None
 
-    elif category == ObjectCategory.SCOPE_BOUNDED:
-        # 范围归属型
-        parsed_scope = parse_scope(id)
-
-        # 如果 parent_id 为空但类型需要 parent
-        if needs_parent and not parent_id:
-            return f"类型 {ssot_type.value} 需要 parent_id"
-
-        if parent_id:
-            resolved_scope = resolve_scope(parent_id)
-            if parsed_scope != resolved_scope:
-                return f"ID {id} 归属范围 {parsed_scope}，但 parent_id {parent_id} 归属范围 {resolved_scope}"
+    parsed_scope = parse_scope(id)
+    if parent_id:
+        resolved_scope = resolve_scope(parent_id)
+        if parsed_scope != resolved_scope:
+            return f"ID {id} 归属范围 {parsed_scope}，但 parent_id {parent_id} 归属范围 {resolved_scope}"
 
     return None

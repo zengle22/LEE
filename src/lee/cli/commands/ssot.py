@@ -8,14 +8,140 @@ import click
 from pathlib import Path
 from typing import Optional
 
-from lee.orchestrator.execution.artifacts import ArtifactManager
-from lee.orchestrator.execution.artifacts.ssot_service import SSOTService
+from lee.orchestrator.execution.artifacts import ArtifactManager, SSOTType
+from lee.orchestrator.execution.artifacts.ssot_service import SSOTService, SSOTValidator
+from lee.orchestrator.execution.artifacts.ssot_files import (
+    lint_ssot_front_matter,
+)
 
 
 @click.group()
 def ssot():
     """SSOT 真理链管理命令"""
     pass
+
+
+def _parse_status(status: str):
+    from lee.orchestrator.execution.artifacts.types import ArtifactStatus
+
+    return ArtifactStatus[status.upper()]
+
+
+def _parse_derived_from_items(items: tuple[str, ...]) -> list[dict]:
+    refs = []
+    for item in items:
+        parts = item.split(":")
+        if len(parts) < 2:
+            raise click.ClickException(f"Invalid --derived-from value: {item}. Expected ID:VERSION[:SLICE_KEY]")
+        ref = {
+            "id": parts[0],
+            "version": parts[1],
+        }
+        if len(parts) >= 3 and parts[2]:
+            ref["slice_key"] = parts[2]
+        refs.append(ref)
+    return refs
+
+
+def _parse_property_items(items: tuple[str, ...]) -> dict:
+    properties = {}
+    for item in items:
+        if "=" not in item:
+            raise click.ClickException(f"Invalid --property value: {item}. Expected KEY=VALUE")
+        key, raw_value = item.split("=", 1)
+        key = key.strip()
+        raw_value = raw_value.strip()
+        if not key:
+            raise click.ClickException(f"Invalid --property key in: {item}")
+        try:
+            value = json.loads(raw_value)
+        except json.JSONDecodeError:
+            value = raw_value
+        properties[key] = value
+    return properties
+
+
+@ssot.command("create")
+@click.option(
+    "--type",
+    "ssot_type",
+    required=True,
+    type=click.Choice([member.value for member in SSOTType]),
+    help="SSOT 对象类型",
+)
+@click.option("--title", required=True, help="对象标题")
+@click.option("--body", default="", help="正文内容")
+@click.option("--content-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), help="正文文件路径")
+@click.option("--run-id", default="manual-ssot-create", show_default=True, help="创建来源 run ID")
+@click.option("--status", "status_name", default="draft", type=click.Choice(["draft", "active", "frozen", "archived", "deprecated"]), show_default=True, help="对象状态")
+@click.option("--version", default="v1", show_default=True, help="对象版本")
+@click.option("--parent-id", help="父对象 ID")
+@click.option("--owner", help="负责人")
+@click.option("--tag", "tags", multiple=True, help="标签，可重复")
+@click.option("--source-ref", "source_refs", multiple=True, help="源引用，可重复")
+@click.option("--related-id", "related_ids", multiple=True, help="横向关联 ID，可重复")
+@click.option("--implements", "implements_ids", multiple=True, help="实现对象 ID，可重复")
+@click.option("--verifies", "verifies_ids", multiple=True, help="验证对象 ID，可重复")
+@click.option("--derived-from", "derived_from_items", multiple=True, help="格式 ID:VERSION[:SLICE_KEY]，可重复")
+@click.option("--property", "property_items", multiple=True, help="扩展属性，格式 KEY=VALUE，可重复；VALUE 支持 JSON")
+@click.option("--release-version", help="RELEASE 类型必填，格式如 1.4.0")
+@click.option("--report-kind", help="REPORT 类型可选，用于 release 级报告 ID")
+def create_ssot_object(
+    ssot_type: str,
+    title: str,
+    body: str,
+    content_file: Optional[Path],
+    run_id: str,
+    status_name: str,
+    version: str,
+    parent_id: Optional[str],
+    owner: Optional[str],
+    tags: tuple[str, ...],
+    source_refs: tuple[str, ...],
+    related_ids: tuple[str, ...],
+    implements_ids: tuple[str, ...],
+    verifies_ids: tuple[str, ...],
+    derived_from_items: tuple[str, ...],
+    property_items: tuple[str, ...],
+    release_version: Optional[str],
+    report_kind: Optional[str],
+):
+    """创建正式 SSOT 对象。"""
+    manager = ArtifactManager()
+    content = content_file.read_text(encoding="utf-8") if content_file else body
+    properties = _parse_property_items(property_items)
+    if release_version:
+        properties["release_version"] = release_version
+    if report_kind:
+        properties["report_kind"] = report_kind
+    object_type = SSOTType(ssot_type)
+    if object_type == SSOTType.RELEASE and not properties.get("release_version"):
+        raise click.ClickException("--release-version is required when --type release")
+    if object_type == SSOTType.REPORT and parent_id and parent_id.startswith("REL-") and not properties.get("report_kind"):
+        raise click.ClickException("--report-kind is required for release-level report objects")
+    derived_from = _parse_derived_from_items(derived_from_items)
+    try:
+        artifact = manager.create_ssot(
+            ssot_type=object_type,
+            title=title,
+            content=content,
+            run_id=run_id,
+            parent_id=parent_id,
+            derived_from=derived_from,
+            source_refs=list(source_refs),
+            related_ids=list(related_ids),
+            verifies=list(verifies_ids),
+            implements=list(implements_ids),
+            owner=owner,
+            tags=list(tags),
+            status=_parse_status(status_name),
+            version=version,
+            properties=properties,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"✅ created {artifact.id}")
+    click.echo(f"   path: {artifact.path}")
 
 
 @ssot.command("build-index")
@@ -44,11 +170,15 @@ def build_index(output: Optional[str], release: Optional[str]):
     # 构建节点
     nodes = []
     for a in all_artifacts:
+        properties = a.properties or {}
         nodes.append({
             "id": a.id,
             "type": a.type.value,
             "category": a.category,
             "governance_kind": a.governance_kind.value if a.governance_kind else None,
+            "ssot_type": properties.get("ssot_type"),
+            "parent_id": properties.get("parent_id"),
+            "slice_keys": [item.get("slice_key") for item in properties.get("slices", []) if isinstance(item, dict)],
         })
 
     # 构建边
@@ -63,6 +193,22 @@ def build_index(output: Optional[str], release: Optional[str]):
                 "to": a.derived_from,
                 "type": "derived_from",
             })
+
+        for ref in (a.properties or {}).get("derived_from_ids", []):
+            if isinstance(ref, dict) and ref.get("id"):
+                edges.append({
+                    "from": a.id,
+                    "to": ref["id"],
+                    "type": "derived_from_ids",
+                    "version": ref.get("version"),
+                    "slice_key": ref.get("slice_key"),
+                })
+            elif isinstance(ref, str):
+                edges.append({
+                    "from": a.id,
+                    "to": ref,
+                    "type": "derived_from_ids",
+                })
 
         # implements 边
         for impl_id in a.implements or []:
@@ -129,6 +275,46 @@ def validate_ssot(run_id: Optional[str], release: Optional[str], enforce: bool):
             raise click.Abort()
 
 
+@ssot.command("rebuild-registry")
+def rebuild_registry():
+    """从正式 SSOT 文件全量重建 registry。"""
+    manager = ArtifactManager()
+    count = manager.rebuild_ssot_registry()
+    click.echo(f"✅ registry rebuilt from SSOT files: {count} artifacts")
+
+
+@ssot.command("sync")
+def sync_registry():
+    """同步正式 SSOT 文件到 registry。"""
+    manager = ArtifactManager()
+    count = manager.sync_ssot_registry()
+    click.echo(f"✅ registry synced from SSOT files: {count} artifacts")
+
+
+@ssot.command("lint")
+@click.option("--changed-only", is_flag=True, help="保留接口，当前仍执行全量扫描")
+def lint_ssot(changed_only: bool):
+    """扫描正式 SSOT 文件并做基础 front matter/lint 校验。"""
+    del changed_only
+    manager = ArtifactManager()
+    manager.rebuild_ssot_registry()
+
+    errors = lint_ssot_front_matter(manager.project_root)
+
+    validator = SSOTValidator(manager.registry)
+    for artifact in manager.registry.get_ssot_artifacts():
+        result = validator.validate_p0(artifact.id)
+        errors.extend(f"{artifact.id}: {err}" for err in result.errors)
+
+    if errors:
+        click.echo("❌ SSOT lint failed:")
+        for err in errors:
+            click.echo(f"  - {err}")
+        raise click.Abort()
+
+    click.echo("✅ SSOT lint passed")
+
+
 @ssot.command("impact")
 @click.argument("artifact_id")
 @click.option("--format", "output_format", default="table",
@@ -171,6 +357,161 @@ def show_impact(artifact_id: str, output_format: str):
                 click.echo(f"  - {ver_id}")
 
 
+@ssot.command("release-check")
+@click.argument("release_id")
+@click.option("--format", "output_format", default="table",
+              type=click.Choice(["table", "json"]),
+              help="输出格式")
+@click.option("--enforce", is_flag=True, help="强制模式 (不通过则失败)")
+def release_check(release_id: str, output_format: str, enforce: bool):
+    """执行 release 聚合校验。"""
+    manager = ArtifactManager()
+    service = SSOTService(manager)
+    result = service.release_check(release_id)
+
+    if output_format == "json":
+        click.echo(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        marker = "✅" if result["passed"] else "❌"
+        click.echo(f"{marker} Release check for {release_id}")
+        for err in result.get("errors", []):
+            click.echo(f"  - ERROR: {err}")
+        for warn in result.get("warnings", []):
+            click.echo(f"  - WARN: {warn}")
+        if result.get("devplans"):
+            click.echo(f"  Devplans: {', '.join(result['devplans'])}")
+        if result.get("testplans"):
+            click.echo(f"  Testplans: {', '.join(result['testplans'])}")
+
+    if enforce and not result["passed"]:
+        raise click.Abort()
+
+
+@ssot.command("plan-check")
+@click.argument("plan_id")
+@click.option("--commit", "commit_plan", is_flag=True, help="通过校验后将计划视为 committed")
+def plan_check(plan_id: str, commit_plan: bool):
+    """校验 DEVPLAN/TESTPLAN 的基础结构。"""
+    manager = ArtifactManager()
+    artifact = manager.get(plan_id)
+    if not artifact:
+        raise click.ClickException(f"Plan not found: {plan_id}")
+
+    validator = SSOTValidator(manager.registry)
+    result = validator.validate_p0(plan_id)
+    if result.errors:
+        for err in result.errors:
+            click.echo(f"  - {err}")
+        raise click.Abort()
+
+    if commit_plan:
+        click.echo(f"✅ {plan_id} passed and is ready for committed transition")
+    else:
+        click.echo(f"✅ {plan_id} passed")
+
+
+@ssot.command("plan-derive")
+@click.argument("release_id")
+@click.option("--format", "output_format", default="table",
+              type=click.Choice(["table", "json"]),
+              help="输出格式")
+def plan_derive(release_id: str, output_format: str):
+    """从 RELEASE scope 派生 DEVPLAN/TESTPLAN 骨架。"""
+    manager = ArtifactManager()
+    service = SSOTService(manager)
+    result = service.derive_plans(release_id)
+
+    if output_format == "json":
+        click.echo(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        click.echo(f"✅ plans derived for {release_id}")
+        for key, value in result.items():
+            click.echo(f"  - {key}: {value}")
+
+
+@ssot.command("render-view")
+@click.argument("view_name")
+@click.option("--release-id", required=True, help="关联的 RELEASE ID")
+@click.option("--format", "output_format", default="table",
+              type=click.Choice(["table", "json"]),
+              help="输出格式")
+def render_view(view_name: str, release_id: str, output_format: str):
+    """渲染派生视图。"""
+    manager = ArtifactManager()
+    service = SSOTService(manager)
+    result = service.render_view(view_name, release_id=release_id)
+
+    if output_format == "json":
+        click.echo(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+
+    click.echo(f"View: {result['view']}")
+    click.echo(f"Release: {result['release_id']}")
+
+    if view_name == "release-dashboard":
+        click.echo(f"Status: {result['status']}")
+        click.echo(f"Scope size: {result['release_scope_size']}")
+        click.echo(f"Gate passed: {result['gate_passed']}")
+        for err in result.get("gate_errors", []):
+            click.echo(f"  - ERROR: {err}")
+        for warn in result.get("gate_warnings", []):
+            click.echo(f"  - WARN: {warn}")
+        return
+
+    if view_name == "feat-delivery-matrix":
+        for row in result.get("features", []):
+            click.echo(
+                f"{row['feat_id']}@{row['version']} "
+                f"dev={row['covered_by_devplan']} test={row['covered_by_testplan']} "
+                f"reports={len(row['test_reports'])}"
+            )
+        return
+
+    for row in result.get("coverage", []):
+        click.echo(
+            f"{row['feat_id']} slice={row['slice_key']} "
+            f"covered={row['covered_by_testplan']} "
+            f"reports={row['test_report_count']}"
+        )
+
+
+@ssot.command("release-close")
+@click.argument("release_id")
+def release_close(release_id: str):
+    """对 release 执行关闭前检查。"""
+    manager = ArtifactManager()
+    service = SSOTService(manager)
+    result = service.release_check(release_id)
+    if not result["passed"]:
+        for err in result["errors"]:
+            click.echo(f"  - {err}")
+        raise click.Abort()
+    click.echo(f"✅ {release_id} passed close gate")
+
+
+@ssot.command("release-cut")
+@click.argument("release_version")
+@click.option("--title", required=True, help="Release 标题")
+@click.option("--feat", "feat_refs", multiple=True, help="格式 FEAT-001:v1")
+def release_cut(release_version: str, title: str, feat_refs: tuple[str, ...]):
+    """创建 release scope 骨架。"""
+    manager = ArtifactManager()
+    derived_from_ids = []
+    for item in feat_refs:
+        feat_id, version = item.split(":", 1)
+        derived_from_ids.append({"id": feat_id, "version": version, "required": True})
+
+    artifact = manager.create_ssot(
+        ssot_type=SSOTType.RELEASE,
+        title=title,
+        content=f"# {title}\n",
+        run_id="manual-release-cut",
+        derived_from=derived_from_ids,
+        properties={"release_version": release_version},
+    )
+    click.echo(f"✅ created {artifact.id}")
+
+
 @ssot.command("show-chain")
 @click.argument("artifact_id")
 @click.option("--format", "output_format", default="table",
@@ -199,14 +540,6 @@ def show_chain(artifact_id: str, output_format: str):
             click.echo(f"{prefix}[{i}] {entry['id']} ({entry['category']})")
             if relation:
                 click.echo(f"{prefix}    └─ {relation}")
-
-
-# ============================================================================
-# SSOT v1.3 新增命令
-# ============================================================================
-
-from lee.orchestrator.execution.artifacts import SSOTType
-from lee.orchestrator.execution.artifacts.ssot_service import SSOTValidator
 
 
 @ssot.command("id-parse")
