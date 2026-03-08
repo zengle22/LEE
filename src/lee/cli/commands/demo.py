@@ -10,18 +10,15 @@ from typing import Dict, Any, Tuple
 import click
 import yaml
 
+from lee.cli.commands.workflow_registry import (
+    load_workflow_registry,
+    resolve_workflow_template_path,
+)
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
 
-
-REGISTRY_PATH = Path("config/workflow-registry.yaml")
-
-
 def _load_registry() -> Dict[str, Any]:
-    if not REGISTRY_PATH.exists():
-        raise FileNotFoundError(f"Workflow registry not found: {REGISTRY_PATH}")
-    with open(REGISTRY_PATH, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    return load_workflow_registry()
 
 
 def _render_workflow_template(template_path: Path, params: Dict[str, Any], project_root: Path) -> Path:
@@ -94,9 +91,7 @@ def _create_and_run(
     if missing:
         raise click.ClickException(f"Missing required params for {workflow_key}: {', '.join(missing)}")
 
-    template_path = Path(entry.get("path", ""))
-    if not template_path.is_absolute():
-        template_path = (project_root / template_path).resolve()
+    template_path = resolve_workflow_template_path(entry.get("path", ""))
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 

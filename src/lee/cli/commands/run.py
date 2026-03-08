@@ -14,6 +14,7 @@ from typing import Dict, Any, List, Optional
 import click
 import yaml
 
+from lee.cli.commands.workflow_registry import load_workflow_registry, resolve_workflow_template_path
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
 from lee.orchestrator.execution.artifacts import ArtifactManager, ManifestManager
@@ -24,16 +25,11 @@ try:
 except ImportError:  # pragma: no cover
     fcntl = None
 
-
-REGISTRY_PATH = Path("config/workflow-registry.yaml")
 TERMINAL_WORKFLOW_STATUSES = {"completed", "failed", "superseded"}
 
 
 def _load_registry() -> Dict[str, Any]:
-    if not REGISTRY_PATH.exists():
-        raise FileNotFoundError(f"Workflow registry not found: {REGISTRY_PATH}")
-    with open(REGISTRY_PATH, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    return load_workflow_registry()
 
 
 def _load_spec_option_as_params(spec_path: str) -> Dict[str, Any]:
@@ -616,9 +612,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         raise click.ClickException(f"Unknown workflow: {workflow_key}")
 
     entry = workflows[workflow_key]
-    template_path = Path(entry.get("path", ""))
-    if not template_path.is_absolute():
-        template_path = (REGISTRY_PATH.parent.parent / template_path).resolve()
+    template_path = resolve_workflow_template_path(entry.get("path", ""))
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 

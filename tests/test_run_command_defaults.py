@@ -83,7 +83,7 @@ params:
     runner = CliRunner()
     result = runner.invoke(
         run_module.run,
-        ["office.workspace-cleanup", "--project-dir", str(tmp_path)],
+        ["office.workspace-cleanup", "--project-dir", str(tmp_path), "--skip-plan"],
     )
     assert result.exit_code == 0, result.output
     assert len(captured_create_payload) == 1

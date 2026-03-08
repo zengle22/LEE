@@ -9,30 +9,22 @@ from typing import Any, Dict
 import click
 import yaml
 
+from lee.cli.commands.workflow_registry import (
+    get_workflow_registry_path,
+    load_workflow_registry,
+    resolve_workflow_template_path,
+)
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
 
 
 def _get_registry_path(project_dir: str = ".") -> Path:
     """获取 workflow registry 路径"""
-    project_path = Path(project_dir).resolve()
-    registry_path = project_path / "config" / "workflow-registry.yaml"
-    if registry_path.exists():
-        return registry_path
-
-    # 回退到 LEE 框架的配置
-    lee_root = Path(__file__).parent.parent.parent.parent.parent
-    registry_path = lee_root / "config" / "workflow-registry.yaml"
-    if registry_path.exists():
-        return registry_path
-
-    raise FileNotFoundError(f"Workflow registry not found in {project_dir} or {lee_root}")
+    return get_workflow_registry_path()
 
 
 def _load_registry(project_dir: str = ".") -> Dict[str, Any]:
-    registry_path = _get_registry_path(project_dir)
-    with open(registry_path, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    return load_workflow_registry()
 
 
 def _load_dirs_config(project_dir: Path) -> Dict[str, Any]:
@@ -139,10 +131,7 @@ def create(module: str, requirement: str, tech_design: str | None,
         raise click.ClickException(f"Workflow not found: {workflow_key}")
 
     entry = workflows[workflow_key]
-    template_path = Path(entry.get("path", ""))
-    if not template_path.is_absolute():
-        registry_path = _get_registry_path(project_dir)
-        template_path = (registry_path.parent.parent / template_path).resolve()
+    template_path = resolve_workflow_template_path(entry.get("path", ""))
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 

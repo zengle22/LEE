@@ -3,6 +3,10 @@ from pathlib import Path
 import pytest
 import yaml
 
+from lee.cli.commands.workflow_registry import (
+    get_workflow_registry_path,
+    resolve_workflow_template_path,
+)
 from lee.cli.commands.run import (
     _load_directory_context,
     _load_registry,
@@ -22,6 +26,30 @@ def test_workflow_registry_contains_spec_governance() -> None:
     assert "strict_review_gate" in entry["optional_params"]
     assert "human_gate_reviewers" in entry["optional_params"]
     assert "human_gate_required" in entry["optional_params"]
+
+
+def test_workflow_registry_is_resolved_from_framework_root(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    registry_path = get_workflow_registry_path()
+    registry = _load_registry()
+
+    assert registry_path == Path(__file__).resolve().parents[1] / "config" / "workflow-registry.yaml"
+    assert "core.spec-governance" in registry["workflows"]
+
+
+def test_workflow_template_path_is_resolved_relative_to_framework_registry(tmp_path: Path) -> None:
+    template_path = resolve_workflow_template_path("spec-global/core/workflows/templates/spec-governance-l3-template.yaml")
+
+    assert template_path == (
+        Path(__file__).resolve().parents[1]
+        / "spec-global"
+        / "core"
+        / "workflows"
+        / "templates"
+        / "spec-governance-l3-template.yaml"
+    ).resolve()
+    assert template_path.exists()
 
 
 def test_load_spec_option_as_params_reads_yaml(tmp_path: Path) -> None:
