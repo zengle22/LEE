@@ -217,6 +217,9 @@
         "source_refs": {
           "$ref": "#/definitions/relation_list"
         },
+        "primary_refs": {
+          "$ref": "#/definitions/relation_list"
+        },
         "verifies": {
           "$ref": "#/definitions/relation_list"
         },
@@ -251,6 +254,43 @@
         },
         "properties": {
           "type": "object"
+        },
+        "evidence_layers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["impl_refs", "api_refs", "test_refs", "doc_refs"],
+          "properties": {
+            "impl_refs": {
+              "$ref": "#/definitions/relation_list"
+            },
+            "api_refs": {
+              "$ref": "#/definitions/relation_list"
+            },
+            "test_refs": {
+              "$ref": "#/definitions/relation_list"
+            },
+            "doc_refs": {
+              "$ref": "#/definitions/relation_list"
+            }
+          }
+        },
+        "evidence_strategy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["primary_selection", "ranking_signals"],
+          "properties": {
+            "primary_selection": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ranking_signals": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
         }
       },
       "allOf": [

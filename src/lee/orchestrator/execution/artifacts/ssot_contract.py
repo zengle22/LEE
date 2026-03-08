@@ -18,8 +18,9 @@ from .models import ArtifactMetadata
 from .types import ArtifactType, GovernanceKind, SSOTType
 
 
+FRAMEWORK_ROOT = Path(__file__).resolve().parents[5]
 DEFAULT_SSOT_CONTRACT_SCHEMA = (
-    Path.cwd()
+    FRAMEWORK_ROOT
     / "spec-global"
     / "core"
     / "contracts"
@@ -48,7 +49,7 @@ class SSOTContractMaterializer:
     ) -> None:
         self.manager = manager
         self.schema_path = Path(schema_path or DEFAULT_SSOT_CONTRACT_SCHEMA)
-        self._validator = SchemaValidator(project_dir=str(Path.cwd()))
+        self._validator = SchemaValidator(project_dir=str(FRAMEWORK_ROOT))
 
     def validate_contract(self, contract_data: Dict[str, Any]) -> None:
         """Validate a contract payload against the SSOT output schema."""

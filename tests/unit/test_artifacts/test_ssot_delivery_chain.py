@@ -463,3 +463,61 @@ def test_ssot_contract_schema_accepts_strict_release_report_bug_shapes(tmp_path:
     }
 
     materializer.validate_contract(valid_contract)
+
+
+def test_ssot_contract_schema_accepts_reverse_epic_feat_evidence_fields(tmp_path: Path):
+    manager = ArtifactManager(root_path=tmp_path / ".artifacts", project_root=tmp_path)
+    materializer = SSOTContractMaterializer(manager)
+
+    valid_contract = {
+        "contract_version": "1.0",
+        "run_id": "RUN-REVERSE-001",
+        "outputs": [
+            {
+                "key": "epic_growth_infra",
+                "identity_kind": "ssot",
+                "ssot_type": "epic",
+                "title": "增长基础设施",
+                "source_refs": ["src/lee/cli/commands/run.py"],
+                "primary_refs": ["src/lee/cli/commands/run.py"],
+                "evidence_layers": {
+                    "impl_refs": ["src/lee/cli/commands/run.py"],
+                    "api_refs": [],
+                    "test_refs": ["tests/test_run_spec_governance.py"],
+                    "doc_refs": ["spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml"],
+                },
+                "evidence_strategy": {
+                    "primary_selection": "ordered_impl_api_first",
+                    "ranking_signals": [
+                        "path_quality",
+                        "semantic_path_match",
+                        "page_content_match",
+                        "onboarding_local_rerank",
+                    ],
+                },
+                "tags": ["reverse-ssot", "epic"],
+            }
+        ],
+    }
+
+    materializer.validate_contract(valid_contract)
+
+
+def test_ssot_contract_materializer_uses_framework_schema_outside_repo_root(tmp_path: Path, monkeypatch):
+    outside_cwd = tmp_path / "external-project"
+    outside_cwd.mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(outside_cwd)
+
+    manager = ArtifactManager(root_path=tmp_path / ".artifacts", project_root=tmp_path)
+    materializer = SSOTContractMaterializer(manager)
+
+    assert materializer.schema_path.exists()
+    assert materializer.schema_path == (
+        Path(__file__).resolve().parents[3]
+        / "spec-global"
+        / "core"
+        / "contracts"
+        / "ssot-agent-output"
+        / "v1"
+        / "schema.json"
+    ).resolve()
