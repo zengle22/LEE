@@ -537,7 +537,7 @@ agent_registry:
       - FEAT 可实施性评审
       - 验收结构校验
       - 下游可派生性检查
-    input_contract: departments/product/contracts/feat-contract/v2/schema.json
+    input_contract: departments/product/contracts/feat-bundle-contract/v1/schema.json
     output_contract: departments/product/contracts/product-review-contract/v1/schema.json
 
   - id: agent.dev.code_self_reviewer
@@ -833,7 +833,7 @@ agent_registry:
       - PRD 视图派生
     input_contracts:
       - departments/product/contracts/feat-breakdown-contract/v1/schema.json
-    output_contract: departments/product/contracts/feat-contract/v2/schema.json
+    output_contract: departments/product/contracts/feat-bundle-contract/v1/schema.json
 
   - id: agent.product.pm_planner
     path: departments/product/agents/pm-planner/v1/agent.yaml
@@ -962,6 +962,11 @@ contract_registry:
     path: departments/product/contracts/feat-contract/v2/schema.json
     v3_1_validator: SchemaValidator
     description: "产品 FEAT Contract - 正式 FEAT 对象，包含兼容 AC 列表与结构化 acceptance checks"
+
+  - id: contract.product.feat_bundle
+    path: departments/product/contracts/feat-bundle-contract/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "产品 FEAT Bundle Contract - 同一 EPIC 下的 FEAT 正式对象集合"
 
   - id: contract.product.feat_breakdown
     path: departments/product/contracts/feat-breakdown-contract/v1/schema.json

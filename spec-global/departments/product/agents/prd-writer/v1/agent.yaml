@@ -13,7 +13,7 @@ tags: [product, feat, specification]
 
 contracts:
   input_schema: ../../../../departments/product/contracts/feat-breakdown-contract/v1/schema.json
-  output_schema: ../../../../departments/product/contracts/feat-contract/v2/schema.json
+  output_schema: ../../../../departments/product/contracts/feat-bundle-contract/v1/schema.json
   ssot_output_schema: ../../../../../core/contracts/ssot-agent-output/v1/schema.json
 
 persona:
@@ -51,23 +51,29 @@ prompting:
   system: |
     You are a Product FEAT Spec Writer.
     Return a single JSON or YAML object only.
-    The response must conform to feat-contract v2 and ssot_output_contract.
+    The response must conform to feat-bundle-contract v1 and ssot_output_contract.
     Use exact enum values only; do not invent lifecycle states or trace hint labels.
+    Every FEAT in feat_specs must include at least 2 acceptance_checks.
+    A FEAT with fewer than 2 acceptance_checks is invalid and must be rewritten before you answer.
 
   instructions:
     - "输出必须是单个 machine-readable JSON 或 YAML 对象，不要附加解释性 prose"
     - "顶层必须只包含 business_output 和 ssot_output_contract"
-    - "business_output 必须直接符合 feat-contract schema，不能再包一层 feat_spec/result/data"
-    - "business_output 必填字段不得缺失：feat_id、title、goal、user_value、inputs、processing、outputs、acceptance_criteria、acceptance_checks、dependencies、non_goals、priority、delivery_slice、lifecycle_status、ssot"
+    - "business_output 必须直接符合 feat-bundle-contract schema，不能再包一层 feat_spec/result/data"
+    - "business_output 必须包含 epic_ref 和 feat_specs"
+    - "feat_specs 必须是数组；每个元素都必须直接符合 feat-contract v2，不允许输出裸数组作为顶层 business_output"
+    - "每个 FEAT 必填字段不得缺失：feat_id、title、goal、user_value、inputs、processing、outputs、acceptance_criteria、acceptance_checks、dependencies、non_goals、priority、delivery_slice、lifecycle_status、ssot"
     - "User Story 仅在用户行为型 FEAT 时可选提供，且不超过 3 条"
-    - "acceptance_criteria 必须保留字符串数组作为兼容视图"
-    - "同时必须输出 acceptance_checks，包含 id/scenario/given/when/then/trace_hints"
+    - "每个 FEAT 的 acceptance_criteria 必须保留字符串数组作为兼容视图"
+    - "每个 FEAT 同时必须输出 acceptance_checks，包含 id/scenario/given/when/then/trace_hints"
+    - "每个 FEAT 的 acceptance_checks 至少 2 条；少于 2 条视为无效输出"
+    - "acceptance_checks 不能只是 acceptance_criteria 的机械改写；至少覆盖主成功路径和一个关键边界或校验路径"
     - "trace_hints 只允许使用 UI、TECH、TASK、TESTSET"
     - "lifecycle_status 只允许使用 draft、active、frozen、archived"
     - "priority 只允许使用 P0、P1、P2"
-    - "derived_object_expectations.qa_seed_required 必须为 true"
-    - "ssot.ssot_type 必须为 FEAT；ssot_output_contract.outputs[*].ssot_type 必须为 feat"
-    - "ssot_output_contract 必须声明一个 feat 输出，并挂接到父级 epic"
+    - "每个 FEAT 的 derived_object_expectations.qa_seed_required 必须为 true"
+    - "每个 FEAT 的 ssot.ssot_type 必须为 FEAT；ssot_output_contract.outputs[*].ssot_type 必须为 feat"
+    - "ssot_output_contract 必须为 feat_specs 中的每个 FEAT 声明一个 feat 输出，并挂接到同一个父级 epic"
 
 ssot_output_contract:
   integration_pattern:
@@ -76,57 +82,59 @@ ssot_output_contract:
     ssot_field: ssot_output_contract
   example:
     business_output:
-      feat_id: FEAT-023
-      title: 生成首版周训练计划
-      goal: 系统能够根据用户目标生成首版训练计划
-      user_value: 用户可以快速开始训练
-      inputs:
-        - 目标距离
-        - 目标时间
-      processing:
-        - 校验输入完整性
-        - 生成 12 周训练安排
-      outputs:
-        - 12 周训练计划
-      user_stories:
-        - as_a: 跑者
-          i_want: 生成训练计划
-          so_that: 我可以立即开始训练
-      acceptance_criteria:
-        - 输入目标距离和目标时间后系统生成计划
-        - 计划包含每周训练安排
-      acceptance_checks:
-        - id: AC-001
-          scenario: 输入目标距离和目标时间后系统生成计划
-          given: 用户已完成目标录入
-          when: 提交训练计划生成请求
-          then: 系统生成一份可执行训练计划
-          trace_hints: [TASK, TESTSET, UI, TECH]
-        - id: AC-002
-          scenario: 计划包含每周训练安排
-          given: 系统已完成训练周期计算
-          when: 返回训练计划详情
-          then: 响应中包含按周拆分的训练安排
-          trace_hints: [TASK, TESTSET, TECH]
-      dependencies:
-        - EPIC-001
-      non_goals:
-        - PDF 导出
-      priority: P1
-      delivery_slice: mvp
-      lifecycle_status: draft
-      derived_object_expectations:
-        task_required: true
-        testset_required: true
-        testset_owner: qa
-        qa_seed_required: true
-      source_refs:
-        - EPIC-001#scope
-      ssot:
-        identity_kind: ssot
-        ssot_type: FEAT
-        parent: EPIC-001
-        derived_from: EPIC-001
+      epic_ref: EPIC-001
+      feat_specs:
+        - feat_id: FEAT-023
+          title: 生成首版周训练计划
+          goal: 系统能够根据用户目标生成首版训练计划
+          user_value: 用户可以快速开始训练
+          inputs:
+            - 目标距离
+            - 目标时间
+          processing:
+            - 校验输入完整性
+            - 生成 12 周训练安排
+          outputs:
+            - 12 周训练计划
+          user_stories:
+            - as_a: 跑者
+              i_want: 生成训练计划
+              so_that: 我可以立即开始训练
+          acceptance_criteria:
+            - 输入目标距离和目标时间后系统生成计划
+            - 计划包含每周训练安排
+          acceptance_checks:
+            - id: AC-001
+              scenario: 输入目标距离和目标时间后系统生成计划
+              given: 用户已完成目标录入
+              when: 提交训练计划生成请求
+              then: 系统生成一份可执行训练计划
+              trace_hints: [TASK, TESTSET, UI, TECH]
+            - id: AC-002
+              scenario: 计划包含每周训练安排
+              given: 系统已完成训练周期计算
+              when: 返回训练计划详情
+              then: 响应中包含按周拆分的训练安排
+              trace_hints: [TASK, TESTSET, TECH]
+          dependencies:
+            - EPIC-001
+          non_goals:
+            - PDF 导出
+          priority: P1
+          delivery_slice: mvp
+          lifecycle_status: draft
+          derived_object_expectations:
+            task_required: true
+            testset_required: true
+            testset_owner: qa
+            qa_seed_required: true
+          source_refs:
+            - EPIC-001#scope
+          ssot:
+            identity_kind: ssot
+            ssot_type: FEAT
+            parent: EPIC-001
+            derived_from: EPIC-001
     ssot_output_contract:
       contract_version: "1.0"
       run_id: product-run-001

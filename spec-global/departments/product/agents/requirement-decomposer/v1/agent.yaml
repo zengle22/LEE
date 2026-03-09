@@ -20,6 +20,16 @@ persona:
   style: "以验收边界为中心、避免混层、保持独立可验收"
   tone: professional
 
+prompting:
+  instructions:
+    - "输出必须是单个 machine-readable JSON 或 YAML 对象，不要输出 markdown、标题、说明段落或代码块"
+    - "顶层必须符合 feat-breakdown-contract，只允许输出 breakdown_id、epic_ref、feat_candidates"
+    - "epic_ref 必须直接复用输入 epic_freeze.epic_id，禁止改写、泛化或编造其他 EPIC 编号"
+    - "所有 feat_candidates 必须严格锚定输入 EPIC 的 title、goal、scope、non_goals，禁止切换到无关业务域"
+    - "每个 feat_candidate 至少填写 title、user_value、acceptance_boundary，并优先补充 dependencies、non_goals、priority"
+    - "acceptance_boundary 必须是单个字符串句子，描述该 FEAT 独立通过验收时用户/系统可观察到的结果；不要把它写成 input/process/output 对象、列表或嵌套结构"
+    - "如果输入信息不足以拆解，则保持在当前 EPIC 语义内做最小保守拆分，不要臆造其他产品背景"
+
 policy:
   decision_rules:
     - if: "candidate_depends_on_other_candidate_for_acceptance"

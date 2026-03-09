@@ -45,6 +45,8 @@ stages:
         agent_id: agent.product.requirement_decomposer
         config:
           implementation_facing: false
+          output_contract: departments/product/contracts/feat-breakdown-contract/v1/schema.json
+          strict_output_validation: true
         mandatory: true
         depends_on: []
         description: >
@@ -64,7 +66,7 @@ stages:
         mandatory: true
         depends_on: [feat_boundary_design]
         config:
-          output_contract: departments/product/contracts/feat-contract/v2/schema.json
+          output_contract: departments/product/contracts/feat-bundle-contract/v1/schema.json
           strict_output_validation: true
         description: >
           为每个 FEAT 生成详细规格视图。
@@ -77,7 +79,7 @@ stages:
             required: true
         outputs:
           - symbol: feat_specs
-            contract: departments/product/contracts/feat-contract/v2/schema.json
+            contract: departments/product/contracts/feat-bundle-contract/v1/schema.json
             freeze: false
             ssot:
               identity_kind: ssot
@@ -97,6 +99,7 @@ stages:
           校验 FEAT 是否满足独立验收、边界明确、依赖透明、可派生 TASK / TESTSET 和优先级清晰。
           验收项不仅要保留兼容 AC 列表，还必须提供结构化 acceptance_checks 供下游追溯。
           若 acceptance_checks 缺失，或不能映射到 UI / TECH / TASK / TESTSET，则不得通过评审。
+          输入为同一 EPIC 下的 FEAT bundle，评审必须覆盖 bundle 中全部 FEAT。
         inputs:
           - source: feat_specs
             required: true
