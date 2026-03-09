@@ -512,11 +512,16 @@ class LLMRunner(StepRunnerBase):
             )
             # 3. 处理输出文件
             written_files = []
-            if step.outputs:
+            file_outputs = [
+                output
+                for output in (step.outputs or [])
+                if getattr(output, "type", None) in {"file", "dir"} and getattr(output, "path", None)
+            ]
+            if file_outputs:
                 try:
                     written_files = await ctx.file_output_handler.handle(
                         generated_text,
-                        step.outputs,
+                        file_outputs,
                         workflow_context
                     )
                 except Exception as e:
@@ -546,7 +551,12 @@ class LLMRunner(StepRunnerBase):
                 )
 
             # v3.4: 输出 Contract Schema 校验
-            business_output = self._extract_business_output_payload(structured_payload, generated_text)
+            business_output = self._extract_business_output_payload(
+                structured_payload,
+                generated_text,
+                step=step,
+                written_files=written_files,
+            )
             validation_result = self._validate_step_output(step, business_output)
             if validation_result and not validation_result.passed:
                 strict = (step.config or {}).get("strict_output_validation", False)
@@ -710,7 +720,10 @@ class LLMRunner(StepRunnerBase):
         if structured_payload is None:
             structured_payload = self._parse_structured_output_if_possible(generated_text)
 
-        contract_data = self._extract_ssot_contract_payload(structured_payload)
+        contract_data = self._extract_ssot_contract_payload(
+            structured_payload,
+            generated_text=generated_text,
+        )
         if contract_data is None:
             try:
                 contract_data = self._parse_structured_output(generated_text)
@@ -733,6 +746,7 @@ class LLMRunner(StepRunnerBase):
             spec_path=getattr(agent_spec, "spec_path", None),
             project_root=ctx.project_root,
         )
+        contract_data = self._normalize_ssot_contract_payload(contract_data)
 
         try:
             from lee.orchestrator.execution.artifacts import ArtifactManager, SSOTContractMaterializer
@@ -769,27 +783,214 @@ class LLMRunner(StepRunnerBase):
         }
 
     @staticmethod
+    def _normalize_ssot_contract_payload(contract_data: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = dict(contract_data)
+        if "contract_version" in normalized:
+            normalized["contract_version"] = "1.0"
+        if "run_id" in normalized and normalized["run_id"] is not None:
+            normalized["run_id"] = str(normalized["run_id"])
+        allowed_output_keys = {
+            "key",
+            "identity_kind",
+            "ssot_type",
+            "title",
+            "description",
+            "content",
+            "owner",
+            "version",
+            "parent",
+            "derived_from",
+            "derived_from_ids",
+            "source_refs",
+            "primary_refs",
+            "verifies",
+            "implements",
+            "depends_on",
+            "derived_from_one",
+            "placement_key",
+            "tags",
+            "artifact_type",
+            "category",
+            "governance_kind",
+            "properties",
+            "evidence_layers",
+        }
+        outputs = []
+        for raw_output in normalized.get("outputs", []) or []:
+            if not isinstance(raw_output, dict):
+                outputs.append(raw_output)
+                continue
+            output = {
+                key: value for key, value in dict(raw_output).items() if key in allowed_output_keys
+            }
+            parent = output.get("parent")
+            if isinstance(parent, str) and parent.lower() == "feat":
+                candidates: List[str] = []
+                for value in output.get("verifies", []) or []:
+                    if isinstance(value, str) and value.upper().startswith("FEAT-"):
+                        candidates.append(value)
+                properties = output.get("properties") or {}
+                for key in ("feature_id", "feat_id", "parent_feat_id"):
+                    value = properties.get(key)
+                    if isinstance(value, str) and value.upper().startswith("FEAT-"):
+                        candidates.append(value)
+                if candidates:
+                    output["parent"] = candidates[0]
+            if isinstance(output.get("parent"), str) and output["parent"].upper().startswith("FEAT-"):
+                verifies = []
+                for value in output.get("verifies", []) or []:
+                    if isinstance(value, str) and value.lower() == "feat":
+                        verifies.append(output["parent"])
+                    else:
+                        verifies.append(value)
+                if verifies:
+                    output["verifies"] = verifies
+            outputs.append(output)
+        normalized["outputs"] = outputs
+        return normalized
+
+    @staticmethod
     def _parse_structured_output_if_possible(generated_text: str) -> Optional[Any]:
         try:
             return StepRunnerBase._parse_structured_output(generated_text)
         except ValueError:
             return None
 
-    @staticmethod
-    def _extract_business_output_payload(structured_payload: Optional[Any], fallback_text: str) -> Any:
+    def _extract_business_output_payload(
+        self,
+        structured_payload: Optional[Any],
+        fallback_text: str,
+        *,
+        step=None,
+        written_files: Optional[List[str]] = None,
+    ) -> Any:
         if isinstance(structured_payload, dict) and "business_output" in structured_payload:
             return structured_payload["business_output"]
+        if isinstance(structured_payload, dict):
+            return structured_payload
+        segment_payload = self._extract_structured_segment_payload(fallback_text, "business_output")
+        if segment_payload is not None:
+            return segment_payload
+        if step and written_files:
+            file_output = self._extract_primary_file_output(step, written_files)
+            if file_output is not None:
+                return file_output
         return fallback_text
 
     @staticmethod
-    def _extract_ssot_contract_payload(structured_payload: Optional[Any]) -> Optional[Dict[str, Any]]:
-        if not isinstance(structured_payload, dict):
+    def _extract_primary_file_output(step, written_files: List[str]) -> Optional[Any]:
+        file_specs = [
+            output
+            for output in (getattr(step, "outputs", None) or [])
+            if getattr(output, "type", None) == "file"
+        ]
+        if len(file_specs) != 1 or not written_files:
             return None
+        spec_filename = Path(getattr(file_specs[0], "path", "")).name
+        for file_path in written_files:
+            if Path(file_path).name != spec_filename:
+                continue
+            try:
+                return StepRunnerBase._parse_structured_output(
+                    Path(file_path).read_text(encoding="utf-8")
+                )
+            except Exception:
+                return None
+        return None
+
+    def _extract_structured_segment_payload(
+        self,
+        generated_text: str,
+        segment_name: str,
+    ) -> Optional[Any]:
+        segment = self._extract_named_output_segment(generated_text, segment_name)
+        if not segment or segment.strip() == (generated_text or "").strip():
+            heading_pattern = (
+                rf"(?ms)^(?:#+|\d+\.)\s*`?{re.escape(segment_name)}`?\s*\n"
+                rf"(?:```[a-zA-Z0-9_-]*\n)?(.*?)(?:```|\n(?:#+|\d+\.)\s+|\Z)"
+            )
+            match = re.search(heading_pattern, generated_text or "")
+            if match:
+                segment = match.group(1).strip()
+        if not segment or segment.strip() == (generated_text or "").strip():
+            plain_label_pattern = (
+                rf"(?ms)^\s*{re.escape(segment_name)}\s*\n"
+                rf"```[a-zA-Z0-9_-]*\n(.*?)```"
+            )
+            match = re.search(plain_label_pattern, generated_text or "")
+            if match:
+                segment = match.group(1).strip()
+        if not segment or segment.strip() == (generated_text or "").strip():
+            return None
+        try:
+            return self._parse_structured_output(segment)
+        except ValueError:
+            return None
+
+    def _extract_structured_payload_from_code_blocks(
+        self,
+        generated_text: str,
+        segment_name: str,
+    ) -> Optional[Any]:
+        pattern = r"```(?:yaml|yml|json)?\n(.*?)```"
+        for match in re.finditer(pattern, generated_text or "", re.DOTALL):
+            candidate = match.group(1).strip()
+            if segment_name not in candidate:
+                continue
+            parsed = self._parse_structured_output_if_possible(candidate)
+            if not isinstance(parsed, dict):
+                continue
+            if segment_name in parsed:
+                return parsed[segment_name]
+            if "contract_version" in parsed and "outputs" in parsed:
+                return parsed
+        return None
+
+    def _extract_ssot_contract_payload(
+        self,
+        structured_payload: Optional[Any],
+        generated_text: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(structured_payload, dict):
+            payload = self._extract_structured_segment_payload(generated_text, "ssot_output_contract")
+            payload = self._coerce_ssot_contract_dict(payload)
+            if isinstance(payload, dict):
+                return payload
+            block_payload = self._extract_structured_payload_from_code_blocks(
+                generated_text,
+                "ssot_output_contract",
+            )
+            block_payload = self._coerce_ssot_contract_dict(block_payload)
+            return block_payload if isinstance(block_payload, dict) else None
         if "contract_version" in structured_payload and "outputs" in structured_payload:
             return structured_payload
-        payload = structured_payload.get("ssot_output_contract")
+        payload = self._coerce_ssot_contract_dict(structured_payload.get("ssot_output_contract"))
         if isinstance(payload, dict):
             return payload
+        segment_payload = self._coerce_ssot_contract_dict(
+            self._extract_structured_segment_payload(generated_text, "ssot_output_contract")
+        )
+        if isinstance(segment_payload, dict):
+            return segment_payload
+        block_payload = self._coerce_ssot_contract_dict(
+            self._extract_structured_payload_from_code_blocks(
+                generated_text,
+                "ssot_output_contract",
+            )
+        )
+        if isinstance(block_payload, dict):
+            return block_payload
+        return None
+
+    @staticmethod
+    def _coerce_ssot_contract_dict(payload: Optional[Any]) -> Optional[Dict[str, Any]]:
+        if not isinstance(payload, dict):
+            return None
+        if "contract_version" in payload and "outputs" in payload:
+            return payload
+        nested = payload.get("ssot_output_contract")
+        if isinstance(nested, dict):
+            return nested
         return None
 
     async def _register_artifacts(

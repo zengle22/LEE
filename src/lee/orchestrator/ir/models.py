@@ -35,6 +35,7 @@ class StepKind(Enum):
     """步骤类型枚举"""
     AGENT = "agent"
     SKILL = "skill"
+    GATE = "gate"
     HUMAN_GATE = "human_gate"
     CONDITIONAL = "conditional"
     WORKFLOW_SPAWN = "workflow_spawn"

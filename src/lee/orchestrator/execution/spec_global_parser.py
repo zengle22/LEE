@@ -474,6 +474,8 @@ class SpecGlobalParser:
             kind = StepKind.AGENT
         elif step_type == "skill":
             kind = StepKind.SKILL
+        elif step_type == "gate":
+            kind = StepKind.GATE
         elif step_type == "human_gate" or step_type == "human_decision":
             kind = StepKind.HUMAN_GATE
         elif step_type == "conditional":

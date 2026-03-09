@@ -6,7 +6,7 @@ Schema Validator - JSON Schema 验证器
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Tuple
 import yaml
 
 try:
@@ -50,6 +50,13 @@ class SchemaValidator(Validator):
 
     validator_type = "schema"
     validator_name = "schema_validator"
+
+    _SUPPORTED_RULES = {
+        "must_have_test_focus",
+        "p0_must_have_positive",
+        "single_feat_trace_required",
+        "ac_coverage_required",
+    }
 
     def validate(self, data: Any, config: Dict) -> ValidationResult:
         """
@@ -100,7 +107,7 @@ class SchemaValidator(Validator):
                     )
 
         # 加载 schema
-        schema = self._load_schema(config)
+        schema, validation_rules = self._load_schema_with_rules(config)
         if schema is None:
             return ValidationResult(
                 passed=False,
@@ -141,32 +148,42 @@ class SchemaValidator(Validator):
                 )
             )
 
+        if not errors and validation_rules:
+            errors.extend(self._evaluate_validation_rules(data, validation_rules))
+
         return ValidationResult(
             passed=len(errors) == 0,
             validator=self.validator_name,
             errors=errors,
             warnings=warnings,
-            metadata={"schema_type": type(schema).__name__},
+            metadata={
+                "schema_type": type(schema).__name__,
+                "validation_rule_count": len(validation_rules),
+            },
         )
 
     def _load_schema(self, config: Dict) -> Optional[Dict]:
+        schema, _ = self._load_schema_with_rules(config)
+        return schema
+
+    def _load_schema_with_rules(self, config: Dict) -> Tuple[Optional[Dict], List[Dict[str, Any]]]:
         """
-        加载 schema
+        加载 schema 和附加 validation_rules
 
         Args:
             config: 验证配置
 
         Returns:
-            Schema 字典，如果加载失败返回 None
+            (schema, validation_rules) 元组
         """
         # 优先使用内联 schema
         if "schema" in config:
-            return config["schema"]
+            return config["schema"], config.get("validation_rules", [])
 
         # 从文件加载
         schema_path = config.get("schema_path")
         if not schema_path:
-            return None
+            return None, []
 
         # 解析路径
         resolved_path = self._resolve_path(schema_path)
@@ -178,10 +195,71 @@ class SchemaValidator(Validator):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 if path.suffix.lower() in {".yaml", ".yml"}:
-                    return yaml.safe_load(f)
-                return json.load(f)
+                    loaded = yaml.safe_load(f)
+                else:
+                    loaded = json.load(f)
         except (json.JSONDecodeError, yaml.YAMLError, IOError):
-            return None
+            return None, []
+
+        if isinstance(loaded, dict) and isinstance(loaded.get("schema"), dict):
+            return loaded["schema"], loaded.get("validation_rules", [])
+
+        if isinstance(loaded, dict):
+            return loaded, []
+
+        return None, []
+
+    def _evaluate_validation_rules(
+        self,
+        data: Any,
+        validation_rules: List[Dict[str, Any]],
+    ) -> List[ValidationError]:
+        errors: List[ValidationError] = []
+        if not isinstance(data, dict):
+            return errors
+
+        for rule in validation_rules:
+            rule_id = rule.get("rule")
+            if rule_id not in self._SUPPORTED_RULES:
+                continue
+
+            passed = True
+            details: Dict[str, Any] = {}
+
+            if rule_id == "must_have_test_focus":
+                test_focus = data.get("test_focus") or {}
+                focus_keys = ("positive", "negative", "boundary", "exception")
+                passed = any(bool(test_focus.get(key)) for key in focus_keys)
+                details["checked_keys"] = list(focus_keys)
+
+            elif rule_id == "p0_must_have_positive":
+                priority = ((data.get("strategy") or {}).get("priority"))
+                if priority == "P0":
+                    positive = ((data.get("test_focus") or {}).get("positive")) or []
+                    passed = len(positive) > 0
+                    details["priority"] = priority
+
+            elif rule_id == "single_feat_trace_required":
+                feature_ids = ((data.get("traceability") or {}).get("feature_ids")) or []
+                passed = len(feature_ids) == 1
+                details["feature_ids"] = feature_ids
+
+            elif rule_id == "ac_coverage_required":
+                ac_refs = ((data.get("traceability") or {}).get("acceptance_criteria_refs")) or []
+                passed = len(ac_refs) > 0
+                details["acceptance_criteria_refs"] = ac_refs
+
+            if not passed:
+                errors.append(
+                    ValidationError(
+                        code=f"RULE_{rule_id.upper()}",
+                        message=rule.get("error_message", f"Validation rule failed: {rule_id}"),
+                        severity=ValidationSeverity.ERROR,
+                        details=details,
+                    )
+                )
+
+        return errors
 
     def validate_file(self, file_path: str, config: Dict) -> ValidationResult:
         """

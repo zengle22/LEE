@@ -23,6 +23,7 @@ sys.path.insert(0, src_dir)
 from lee.orchestrator.storage.models import (
     WorkflowLevel,
     WorkflowStatus,
+    StepResult,
 )
 from lee.orchestrator.storage.sqlite_store import SQLiteStore
 from lee.orchestrator.execution.orchestrator import Orchestrator
@@ -214,6 +215,68 @@ async def test_workflow_lifecycle():
             await store.close()
             print("\n✅ 生命周期测试通过!")
 
+        finally:
+            try:
+                if os.path.exists(db_path):
+                    os.unlink(db_path)
+            except PermissionError:
+                pass
+
+
+@pytest.mark.asyncio
+async def test_run_until_blocked_returns_running_when_more_steps_remain():
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
+        db_path = tmp.name
+
+        try:
+            store = SQLiteStore(db_path)
+            await store.connect()
+
+            tm = TemplateManager()
+            tm._cache["two_step_workflow"] = tm._parse_template_doc(
+                {
+                    "id": "two_step_workflow",
+                    "level": "task",
+                    "name": "Two Step Workflow",
+                    "steps": [
+                        {"id": "step1", "kind": "marker"},
+                        {"id": "step2", "kind": "marker", "depends_on": ["step1"]},
+                    ],
+                },
+                "two_step_workflow",
+            )
+
+            orchestrator = Orchestrator(store, tm)
+            workflow = await orchestrator.create_workflow(
+                level=WorkflowLevel.TASK,
+                template_id="two_step_workflow",
+            )
+            await store.update_workflow_status(workflow.id, WorkflowStatus.RUNNING)
+
+            async def fake_run_step(_workflow_id: str, _step_id=None):
+                instance = await store.get_workflow(workflow.id)
+                data = dict(instance.data)
+                data["completed_steps"] = ["step1"]
+                await store.update_workflow_data(workflow.id, data)
+                return StepResult(
+                    status="success",
+                    step_id="step1",
+                    workflow_id=workflow.id,
+                    message="step1 completed",
+                )
+
+            orchestrator.run_step = fake_run_step  # type: ignore[method-assign]
+
+            summary = await orchestrator.run_until_blocked(workflow.id, max_steps=1)
+            state = await orchestrator.get_state(workflow.id)
+            ready_steps = await orchestrator.get_ready_steps(workflow.id)
+
+            assert summary.status == "running"
+            assert summary.completed_steps == 1
+            assert state.status == WorkflowStatus.RUNNING
+            assert [step.id for step in ready_steps] == ["step2"]
+
+            await store.close()
         finally:
             try:
                 if os.path.exists(db_path):

@@ -28,7 +28,7 @@ v3.1 重构：
 import uuid
 import json
 import hashlib
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -680,7 +680,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 "kind": step_to_execute.kind
             },
             source_workflow=workflow_id,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             event_id=uuid.uuid4().hex
         ))
 
@@ -803,7 +803,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                                 inputs_hash=inputs_hash,
                                 patch_hash=patch_bundle.patch_hash if patch_bundle else "",
                                 exit_code=0,
-                                timestamp=datetime.utcnow().isoformat(),
+                                timestamp=datetime.now(UTC).isoformat(),
                                 executor_type=step_to_execute.executor_type or "llm",
                             )
                             self.receipt_store.save(receipt)
@@ -836,7 +836,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                             "result": asdict(r) if hasattr(r, 'to_dict') else r.__dict__
                         },
                         source_workflow=workflow_id,
-                        timestamp=datetime.utcnow().isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                         event_id=uuid.uuid4().hex
                     ))
 
@@ -914,7 +914,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "error": str(e)
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
             return StepResult(
@@ -1205,10 +1205,20 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             final_status = "completed"
         elif instance.status == WorkflowStatus.FAILED:
             final_status = "failed"
+        elif instance.status == WorkflowStatus.RUNNING:
+            final_status = "running"
+        elif instance.status == WorkflowStatus.PAUSED:
+            final_status = "paused"
 
         # v3.2: 记录 RUN 完成/失败事件
-        run_event_type = EventType.RUN_COMPLETED if final_status == "completed" else (
-            EventType.RUN_FAILED if final_status == "failed" else EventType.RUN_PAUSED
+        run_event_type = (
+            EventType.RUN_COMPLETED
+            if final_status == "completed"
+            else (
+                EventType.RUN_FAILED
+                if final_status == "failed"
+                else EventType.RUN_PAUSED
+            )
         )
         self.event_log.log(
             event_type=run_event_type,
@@ -1958,7 +1968,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "complexity": complexity,
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
@@ -1975,7 +1985,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "l3_count": l3_count,
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
@@ -1993,7 +2003,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "point_id": point_id,
                 },
                 source_workflow=parent_l2_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
@@ -2074,7 +2084,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "confidence": confidence,
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:

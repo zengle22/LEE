@@ -18,7 +18,7 @@ from lee.cli.commands.workflow_registry import load_workflow_registry, resolve_w
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
 from lee.orchestrator.execution.artifacts import ArtifactManager, ManifestManager
-from lee.orchestrator.execution.artifacts.types import ArtifactType
+from lee.orchestrator.execution.artifacts.types import ArtifactType, GovernanceKind
 
 try:
     import fcntl
@@ -46,6 +46,27 @@ def _load_spec_option_as_params(spec_path: str) -> Dict[str, Any]:
         raise click.ClickException(f"Failed to parse spec file '{path}': {exc}") from exc
 
 
+def _load_spec_option(spec_path: str) -> Dict[str, Any]:
+    """
+    Resolve --spec into workflow params.
+
+    Default behavior:
+    - object-like YAML/JSON -> merge as params
+    - everything else -> keep as {"spec": "<absolute-path>"}
+    """
+    path = Path(spec_path).resolve()
+    if not path.exists():
+        raise click.ClickException(f"Spec file not found: {path}")
+
+    if path.suffix.lower() not in {".json", ".yaml", ".yml"}:
+        return {"spec": str(path)}
+
+    loaded = _load_spec_option_as_params(str(path))
+    if isinstance(loaded, dict):
+        return loaded
+    return {"spec": str(path)}
+
+
 def _render_workflow_template(template_path: Path, params: Dict[str, Any], project_dir: Path) -> Path:
     with open(template_path, encoding="utf-8") as f:
         content = f.read()
@@ -57,6 +78,7 @@ def _render_workflow_template(template_path: Path, params: Dict[str, Any], proje
         content,
         {
             "params": params,
+            **params,
             "date": now.strftime("%Y-%m-%d"),
             "timestamp": now.strftime("%Y%m%d%H%M%S"),
             "now": now,
@@ -258,6 +280,44 @@ def _print_summary(project_root: Path, workflow_id: str, summary: Dict[str, Any]
                 conn.close()
             except Exception:
                 pass
+
+
+def _refresh_summary_from_store(
+    project_root: Path,
+    workflow_id: str,
+    summary: Dict[str, Any],
+    *,
+    poll_attempts: int = 5,
+    poll_interval_seconds: float = 0.2,
+) -> Dict[str, Any]:
+    """Refresh summary status from persisted workflow state before printing."""
+    refreshed = dict(summary)
+    if str(refreshed.get("status") or "").lower() != "running":
+        return refreshed
+
+    latest_snapshot = None
+    for _ in range(max(poll_attempts, 1)):
+        snapshot = _get_progress_snapshot(project_root, workflow_id)
+        if not snapshot:
+            break
+        latest_snapshot = snapshot
+        snapshot_status = str(snapshot.get("status") or "").lower()
+        if snapshot_status in TERMINAL_WORKFLOW_STATUSES:
+            refreshed["status"] = snapshot_status
+            refreshed["blocked_at"] = None
+            refreshed["completed_steps"] = max(
+                int(refreshed.get("completed_steps") or 0),
+                int(snapshot.get("completed") or 0),
+            )
+            return refreshed
+        time.sleep(max(poll_interval_seconds, 0.05))
+
+    if latest_snapshot:
+        refreshed["completed_steps"] = max(
+            int(refreshed.get("completed_steps") or 0),
+            int(latest_snapshot.get("completed") or 0),
+        )
+    return refreshed
 
 
 def _select_existing_workflow_action(existing: List[Dict[str, Any]]) -> tuple[str, str]:
@@ -617,13 +677,8 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
     params: Dict[str, Any] = {}
-    if spec and entry.get("load_spec_as_params"):
-        loaded = _load_spec_option_as_params(spec)
-        if not isinstance(loaded, dict):
-            raise click.ClickException("--spec must point to an object-like YAML/JSON document")
-        params.update(loaded)
-    elif spec:
-        params["spec"] = spec
+    if spec:
+        params.update(_load_spec_option(spec))
     if env:
         params["env"] = env
     if version:
@@ -655,7 +710,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             content=f"# Task Card\n\n{new_task}",
             run_id=f"task-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
             title=new_task[:50],
-            governance_kind="transfer",  # type: ignore
+            governance_kind=GovernanceKind.TRANSFER,
         )
         ssot_root_id = task_card.id
         click.echo(f"✅ Created Task Card: {ssot_root_id}")
@@ -671,6 +726,20 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
 
     lock_fp = _acquire_project_run_lock(project_root)
     try:
+        if instance:
+            workflow_id = instance
+            click.echo(f"Using existing workflow instance: {workflow_id}")
+            click.echo(f"\n执行中... (使用 'lee status {workflow_id}' 查看详细状态)")
+            stop_event, monitor = _start_progress_monitor(project_root, workflow_id)
+            try:
+                summary = _run_until_settled_with_gates(project_root, workflow_id, max_steps)
+            finally:
+                stop_event.set()
+                monitor.join(timeout=1)
+            summary = _refresh_summary_from_store(project_root, workflow_id, summary)
+            _print_summary(project_root, workflow_id, summary)
+            return
+
         existing = _list_existing_same_workflows(project_root, workflow_key)
         if existing:
             action, existing_workflow_id = _select_existing_workflow_action(existing)
@@ -693,6 +762,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
                 finally:
                     stop_event.set()
                     monitor.join(timeout=1)
+                summary = _refresh_summary_from_store(project_root, selected["id"], summary)
                 _print_summary(project_root, selected["id"], summary)
                 return
 
@@ -751,6 +821,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             finally:
                 stop_event.set()
                 monitor.join(timeout=1)
+            summary = _refresh_summary_from_store(project_root, workflow_id, summary)
             _print_summary(project_root, workflow_id, summary)
             _release_project_run_lock(lock_fp)
             return
@@ -791,6 +862,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         finally:
             stop_event.set()
             monitor.join(timeout=1)
+        summary = _refresh_summary_from_store(project_root, workflow_id, summary)
         _print_summary(project_root, workflow_id, summary)
     finally:
         _release_project_run_lock(lock_fp)

@@ -220,6 +220,7 @@ class WorkflowRunner:
         from datetime import datetime
         render_context = {
             "params": self.config.params,
+            **self.config.params,
             "date": datetime.now().strftime("%Y-%m-%d"),
             "timestamp": datetime.now().strftime("%Y%m%d%H%M%S"),
             "now": datetime.now(),

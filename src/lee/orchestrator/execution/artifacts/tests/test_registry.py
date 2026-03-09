@@ -6,6 +6,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -69,6 +70,32 @@ class TestArtifactRegistry:
         retrieved = registry.get("ART-00001")
         assert retrieved is not None
         assert retrieved.id == "ART-00001"
+
+    def test_register_retries_replace_on_windows_file_lock(self, registry):
+        """测试 registry 保存时遇到短暂文件锁会重试成功"""
+        artifact = ArtifactMetadata(
+            id="ART-00009",
+            type=ArtifactType.DOCUMENT,
+            category="readme",
+            status=ArtifactStatus.ACTIVE,
+            path="active/retry.md",
+            run_id="retry-run",
+        )
+
+        original_replace = Path.replace
+        attempts = {"count": 0}
+
+        def flaky_replace(path_obj, target):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise PermissionError("file is locked")
+            return original_replace(path_obj, target)
+
+        with patch.object(Path, "replace", autospec=True, side_effect=flaky_replace):
+            registry.register(artifact)
+
+        assert attempts["count"] == 2
+        assert registry.get("ART-00009") is not None
 
     def test_get_artifact(self, registry):
         """测试获取产出物"""

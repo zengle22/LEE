@@ -2,12 +2,13 @@ import shutil
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from lee.orchestrator.execution.runners.base import RunnerContext
 from lee.orchestrator.execution.runners.llm_runner import LLMRunner
+from lee.orchestrator.storage.models import StepResult
 
 
 @pytest.fixture
@@ -593,3 +594,318 @@ def test_completion_summary_marks_missing_fields_explicitly(runner):
     assert summary["tests_executed"] == "missing"
     assert summary["known_limitations"] == "not declared"
     assert summary["human_gate_required"] is True
+
+
+def test_extract_ssot_contract_payload_from_named_section(runner):
+    generated_text = """
+## spec/qa/test-sets/ts-demo-module.yaml
+```yaml
+test_set_id: TS-DEMO-MODULE
+module: demo-module
+strategy:
+  focus:
+    - happy path
+test_focus:
+  positive:
+    - happy path
+traceability:
+  feature_ids:
+    - FEAT-023
+  acceptance_criteria_refs:
+    - AC1
+```
+
+## ssot_output_contract
+```json
+{
+  "contract_version": "1.0",
+  "run_id": "qa-run-001",
+  "outputs": [
+    {
+      "key": "testset",
+      "identity_kind": "ssot",
+      "ssot_type": "testset",
+      "title": "Demo Module Test Set",
+      "parent": "FEAT-023",
+      "verifies": ["FEAT-023"]
+    }
+  ]
+}
+```
+""".strip()
+
+    payload = runner._extract_ssot_contract_payload(
+        structured_payload=None,
+        generated_text=generated_text,
+    )
+
+    assert payload is not None
+    assert payload["run_id"] == "qa-run-001"
+    assert payload["outputs"][0]["key"] == "testset"
+
+
+def test_extract_ssot_contract_payload_from_plain_label_section(runner):
+    generated_text = """
+spec/qa/test-sets/ts-demo-module.yaml
+```yaml
+test_set_id: TS-DEMO-MODULE
+module: demo-module
+strategy:
+  focus:
+    - happy path
+test_focus:
+  positive:
+    - happy path
+traceability:
+  feature_ids:
+    - FEAT-023
+  acceptance_criteria_refs:
+    - AC1
+```
+
+ssot_output_contract
+```yaml
+contract_version: "1.0"
+run_id: "qa-run-002"
+outputs:
+  - key: testset
+    identity_kind: ssot
+    ssot_type: testset
+    title: Demo Module Test Set
+```
+""".strip()
+
+    payload = runner._extract_ssot_contract_payload(
+        structured_payload=None,
+        generated_text=generated_text,
+    )
+
+    assert payload is not None
+    assert payload["run_id"] == "qa-run-002"
+
+
+def test_extract_ssot_contract_payload_from_code_block_mapping(runner):
+    generated_text = """
+```yaml
+# spec/qa/test-sets/ts-demo-module.yaml
+test_set_id: TS-DEMO-MODULE
+module: demo-module
+strategy:
+  focus:
+    - happy path
+test_focus:
+  positive:
+    - happy path
+traceability:
+  feature_ids:
+    - FEAT-023
+  acceptance_criteria_refs:
+    - AC1
+```
+
+```yaml
+ssot_output_contract:
+  contract_version: "1.0"
+  run_id: "qa-run-003"
+  outputs:
+    - key: testset
+      identity_kind: ssot
+      ssot_type: testset
+      title: Demo Module Test Set
+```
+""".strip()
+
+    payload = runner._extract_ssot_contract_payload(
+        structured_payload=None,
+        generated_text=generated_text,
+    )
+
+    assert payload is not None
+    assert payload["run_id"] == "qa-run-003"
+
+
+def test_normalize_ssot_contract_payload_promotes_feat_parent_from_verifies(runner):
+    payload = {
+        "contract_version": "1.0",
+        "run_id": "qa-run-004",
+        "outputs": [
+            {
+                "key": "testset",
+                "identity_kind": "ssot",
+                "ssot_type": "testset",
+                "title": "Demo Module Test Set",
+                "parent": "feat",
+                "verifies": ["FEAT-123"],
+                "properties": {"feature_id": "FEAT-123"},
+            }
+        ],
+    }
+
+    normalized = runner._normalize_ssot_contract_payload(payload)
+
+    assert normalized["outputs"][0]["parent"] == "FEAT-123"
+
+
+def test_normalize_ssot_contract_payload_drops_extra_keys_and_repairs_verifies(runner):
+    payload = {
+        "contract_version": "1.0",
+        "run_id": "qa-run-005",
+        "outputs": [
+            {
+                "key": "testset",
+                "identity_kind": "ssot",
+                "ssot_type": "testset",
+                "title": "Demo Module Test Set",
+                "parent": "FEAT-123",
+                "verifies": ["feat"],
+                "artifact_ref": "spec/qa/test-sets/ts-demo-module.yaml",
+            }
+        ],
+    }
+
+    normalized = runner._normalize_ssot_contract_payload(payload)
+
+    assert "artifact_ref" not in normalized["outputs"][0]
+    assert normalized["outputs"][0]["verifies"] == ["FEAT-123"]
+
+
+def test_normalize_ssot_contract_payload_coerces_contract_version_to_string(runner):
+    payload = {
+        "contract_version": 1.0,
+        "run_id": 20240325,
+        "outputs": [],
+    }
+
+    normalized = runner._normalize_ssot_contract_payload(payload)
+
+    assert normalized["contract_version"] == "1.0"
+    assert normalized["run_id"] == "20240325"
+
+
+@pytest.mark.asyncio
+async def test_llm_runner_only_sends_file_outputs_to_file_handler(temp_project_root):
+    runner = LLMRunner()
+    step = SimpleNamespace(
+        id="feat_boundary_design",
+        agent_id="agent.product.requirement_decomposer",
+        executor_type="llm",
+        config={},
+        input={},
+        outputs=[
+            SimpleNamespace(path="", type="symbol", required=False),
+            SimpleNamespace(path="spec/out.yaml", type="file", required=True),
+        ],
+    )
+    llm_payload = {
+        "status": "success",
+        "provider": "test",
+        "model": "test-model",
+        "tokens_used": 1,
+        "input_tokens": 1,
+        "output_tokens": 1,
+        "duration_seconds": 0.1,
+        "stop_reason": "stop",
+        "generated_text": "{}",
+    }
+    executor = MagicMock()
+    executor.execute = AsyncMock(return_value=llm_payload)
+    file_handler = MagicMock()
+    file_handler.handle = AsyncMock(return_value=[str(temp_project_root / "spec" / "out.yaml")])
+    store = MagicMock()
+    store.get_workflow = AsyncMock(
+        return_value=SimpleNamespace(
+            data={"run_id": "run-001"},
+            level="task",
+            template_id="template.product.epic_to_feat",
+        )
+    )
+    store.create_task_execution = AsyncMock()
+    store.update_task_execution = AsyncMock()
+    state_machine = MagicMock()
+    state_machine.complete_step = AsyncMock(
+        return_value=StepResult(
+            status="completed",
+            step_id=step.id,
+            workflow_id="wf-001",
+            message="ok",
+        )
+    )
+    event_log = MagicMock()
+    event_log.emit = AsyncMock()
+    evidence_collector = MagicMock()
+    evidence_collector.collect_task_execution = AsyncMock()
+    verifier_engine = MagicMock()
+    agent_loader = MagicMock()
+    agent_loader.load.return_value = None
+    agent_context_builder = MagicMock()
+    agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="system",
+            user_prompt="user",
+            temperature=0.1,
+            max_tokens=100,
+        )
+    )
+    agent_context_builder.agent_loader = agent_loader
+    token_manager = MagicMock()
+    token_manager.issue_token = MagicMock(return_value=None)
+    ctx = RunnerContext(
+        store=store,
+        state_machine=state_machine,
+        event_log=event_log,
+        evidence_collector=evidence_collector,
+        verifier_engine=verifier_engine,
+        executor_factory=MagicMock(create=MagicMock(return_value=executor)),
+        agent_context_builder=agent_context_builder,
+        contract_discovery=MagicMock(get_workflow_inputs=MagicMock(return_value={})),
+        file_output_handler=file_handler,
+        token_manager=token_manager,
+        project_root=str(temp_project_root),
+    )
+
+    await runner.execute("wf-001", step, ctx)
+
+    passed_outputs = file_handler.handle.call_args.args[1]
+    assert len(passed_outputs) == 1
+    assert passed_outputs[0].path == "spec/out.yaml"
+
+
+def test_extract_business_output_payload_uses_written_file_when_mixed_output(temp_project_root, runner):
+    output_path = temp_project_root / "spec" / "qa" / "test-sets" / "ts-demo-module.yaml"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        """
+test_set_id: TS-DEMO-MODULE
+module: demo-module
+strategy:
+  focus:
+    - happy path
+test_focus:
+  positive:
+    - happy path
+traceability:
+  feature_ids:
+    - FEAT-023
+  acceptance_criteria_refs:
+    - AC1
+""".strip(),
+        encoding="utf-8",
+    )
+    step = SimpleNamespace(
+        outputs=[
+            SimpleNamespace(
+                path="spec/qa/test-sets/ts-demo-module.yaml",
+                type="file",
+            )
+        ]
+    )
+
+    payload = runner._extract_business_output_payload(
+        structured_payload=None,
+        fallback_text="## spec/qa/test-sets/ts-demo-module.yaml\n```yaml\nplaceholder: true\n```",
+        step=step,
+        written_files=[str(output_path)],
+    )
+
+    assert isinstance(payload, dict)
+    assert payload["test_set_id"] == "TS-DEMO-MODULE"

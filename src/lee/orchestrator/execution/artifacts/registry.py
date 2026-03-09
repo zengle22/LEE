@@ -16,6 +16,10 @@ SSOT v1.3 扩展:
 import hashlib
 import json
 import sys
+import contextlib
+import threading
+import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -50,6 +54,7 @@ SSOT_PREFIXES = {
 
 # Legacy ART 前缀 (旧系统)
 LEGACY_PREFIX = "ART"
+_REGISTRY_THREAD_LOCK = threading.RLock()
 
 
 class ArtifactRegistry:
@@ -114,6 +119,7 @@ class ArtifactRegistry:
     def acquire_lock(self) -> bool:
         """获取文件锁"""
         try:
+            _REGISTRY_THREAD_LOCK.acquire()
             # 确保父目录存在
             self.lock_file.parent.mkdir(parents=True, exist_ok=True)
             self.lock_fd = open(self.lock_file, "w")
@@ -122,6 +128,8 @@ class ArtifactRegistry:
                 fcntl.flock(self.lock_fd.fileno(), fcntl.LOCK_EX)
             return True
         except Exception:
+            with contextlib.suppress(Exception):
+                _REGISTRY_THREAD_LOCK.release()
             return False
 
     def release_lock(self) -> None:
@@ -134,6 +142,9 @@ class ArtifactRegistry:
                 self.lock_fd.close()
         except Exception:
             pass
+        finally:
+            with contextlib.suppress(Exception):
+                _REGISTRY_THREAD_LOCK.release()
 
     def rebuild(self) -> None:
         """
@@ -561,9 +572,20 @@ class ArtifactRegistry:
         }
 
         # 原子写入
-        temp_file = self.registry_file.with_suffix(".tmp")
+        temp_file = self.registry_file.with_name(f"{self.registry_file.stem}.{uuid.uuid4().hex}.tmp")
         temp_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        temp_file.replace(self.registry_file)
+        last_error = None
+        for attempt in range(5):
+            try:
+                temp_file.replace(self.registry_file)
+                return
+            except PermissionError as exc:
+                last_error = exc
+                time.sleep(0.1 * (attempt + 1))
+        with contextlib.suppress(FileNotFoundError):
+            temp_file.unlink()
+        if last_error:
+            raise last_error
 
     def load(self) -> None:
         """从磁盘加载注册表"""

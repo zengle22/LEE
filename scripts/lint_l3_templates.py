@@ -71,7 +71,12 @@ L3_SCHEMA = {
                 },
                 "gate_id": {"type": "string"},
                 "on_pass": {"type": "string"},
-                "on_fail": {"type": "string"}
+                "on_fail": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "object"}
+                    ]
+                }
             },
             "additionalProperties": True
         },
@@ -105,7 +110,7 @@ L3_SCHEMA = {
             "properties": {
                 "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
                 "name": {"type": "string"},
-                "kind": {"type": "string", "enum": ["agent", "skill"]},
+                "kind": {"type": "string", "enum": ["agent", "skill", "gate"]},
                 "description": {"type": "string"},
                 "mandatory": {"type": "boolean"},
                 "depends_on": {
@@ -141,8 +146,39 @@ L3_SCHEMA = {
                 },
                 {
                     "description": "skill step must have skill_id",
-                    "if": {"properties": {"kind": {"const": "skill"}}},
+                    "if": {
+                        "properties": {"kind": {"const": "skill"}},
+                        "not": {
+                            "properties": {
+                                "config": {
+                                    "type": "object",
+                                    "properties": {
+                                        "execution": {
+                                            "type": "object",
+                                            "required": ["command"],
+                                        }
+                                    },
+                                }
+                            }
+                        }
+                    },
                     "then": {"required": ["skill_id"]}
+                },
+                {
+                    "description": "gate step must provide gate config",
+                    "if": {"properties": {"kind": {"const": "gate"}}},
+                    "then": {
+                        "properties": {
+                            "config": {
+                                "type": "object",
+                                "required": ["gate"],
+                                "properties": {
+                                    "gate": {"$ref": "#/$defs/gate"}
+                                }
+                            }
+                        },
+                        "required": ["config"]
+                    }
                 }
             ],
             "additionalProperties": True

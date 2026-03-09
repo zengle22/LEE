@@ -28,6 +28,37 @@ def test_workflow_registry_contains_spec_governance() -> None:
     assert "human_gate_required" in entry["optional_params"]
 
 
+def test_workflow_registry_contains_product_templates() -> None:
+    registry = _load_registry()
+    workflows = registry["workflows"]
+
+    assert "product.main" in workflows
+    assert "product.src-to-epic" in workflows
+    assert "product.epic-to-feat" in workflows
+    assert "product.feat-to-delivery-prep" in workflows
+
+    assert workflows["product.main"]["path"] == (
+        "spec-global/departments/product/workflows/templates/product-main-pipeline/v1/workflow.yaml"
+    )
+    assert workflows["product.main"]["kind"] == "l2_workflow_template"
+    assert workflows["product.main"]["load_spec_as_params"] is True
+    assert workflows["product.epic-to-feat"]["load_spec_as_params"] is True
+    assert workflows["product.feat-to-delivery-prep"]["load_spec_as_params"] is True
+    assert workflows["product.epic-to-feat"]["required_params"] == ["epic_freeze"]
+    assert workflows["product.feat-to-delivery-prep"]["required_params"] == ["feat_freeze"]
+
+
+def test_workflow_registry_updates_qa_test_set_production_inputs() -> None:
+    registry = _load_registry()
+    entry = registry["workflows"]["qa.test-set-production"]
+
+    assert entry["path"] == "spec-global/departments/qa/workflows/templates/test-set-production-l3-template.yaml"
+    assert entry["load_spec_as_params"] is True
+    assert "feat_freeze" in entry["required_params"]
+    assert "requirement_doc" in entry["optional_params"]
+    assert "delivery_prep_bundle" in entry["optional_params"]
+
+
 def test_workflow_registry_is_resolved_from_framework_root(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
 
@@ -119,3 +150,20 @@ def test_render_workflow_template_injects_directory_context(tmp_path: Path) -> N
     rendered = rendered_path.read_text(encoding="utf-8")
 
     assert "docs/reports/demo.md" in rendered
+
+
+def test_render_workflow_template_injects_params_at_top_level(tmp_path: Path) -> None:
+    template_path = tmp_path / "demo-template.yaml"
+    template_path.write_text(
+        'outputs:\n  - path: "{{ module }}/{{ params.module }}/report.md"\n',
+        encoding="utf-8",
+    )
+
+    rendered_path = _render_workflow_template(
+        template_path,
+        {"module": "demo-module"},
+        tmp_path,
+    )
+    rendered = rendered_path.read_text(encoding="utf-8")
+
+    assert "demo-module/demo-module/report.md" in rendered

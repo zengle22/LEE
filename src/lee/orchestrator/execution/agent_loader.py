@@ -168,7 +168,12 @@ class AgentLoader:
             spec_root: spec 根目录 (默认为 project_root/ai-spec)
         """
         self.project_root = Path(project_root)
-        self.spec_root = Path(spec_root) if spec_root else self.project_root / "ai-spec"
+        if spec_root:
+            self.spec_root = Path(spec_root)
+        elif (self.project_root / "spec-global").exists():
+            self.spec_root = self.project_root / "spec-global"
+        else:
+            self.spec_root = self.project_root / "ai-spec"
         self.resolver = AgentResolver(project_root, spec_root)
         self._debug = os.environ.get("ORCHESTRATOR_DEBUG_AGENT") == "1"
         self._strict = os.environ.get("ORCHESTRATOR_STRICT_AGENT") == "1"
@@ -300,20 +305,24 @@ class AgentLoader:
             return None
 
         name_kebab = name.replace("_", "-")
-        department_agents_dir = self.spec_root / "departments" / domain / "agents"
+        candidate_roots = [self.spec_root]
+        spec_global_root = self.project_root / "spec-global"
+        if spec_global_root not in candidate_roots and spec_global_root.exists():
+            candidate_roots.append(spec_global_root)
 
-        candidates = [
-            # spec-global: .../agents/file-value-analyzer/v1/agent.yaml
-            department_agents_dir / name_kebab / "v1" / "agent.yaml",
-            # 兼容无版本目录
-            department_agents_dir / name_kebab / "agent.yaml",
-            # 兼容少量历史命名
-            department_agents_dir / name / "v1" / "agent.yaml",
-            department_agents_dir / name / "agent.yaml",
-            # 历史扁平命名
-            department_agents_dir / f"{domain}-{name}.agent.yaml",
-            department_agents_dir / f"{domain}-{name_kebab}.agent.yaml",
-        ]
+        candidates = []
+        for root in candidate_roots:
+            department_agents_dir = root / "departments" / domain / "agents"
+            candidates.extend(
+                [
+                    department_agents_dir / name_kebab / "v1" / "agent.yaml",
+                    department_agents_dir / name_kebab / "agent.yaml",
+                    department_agents_dir / name / "v1" / "agent.yaml",
+                    department_agents_dir / name / "agent.yaml",
+                    department_agents_dir / f"{domain}-{name}.agent.yaml",
+                    department_agents_dir / f"{domain}-{name_kebab}.agent.yaml",
+                ]
+            )
 
         if self._debug:
             for candidate in candidates:
