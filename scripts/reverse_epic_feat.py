@@ -363,14 +363,9 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _load_schema(schema_path: Path) -> Dict[str, Any]:
+def _load_local_schema(repo_root: Path, relative_path: str) -> Dict[str, Any]:
+    schema_path = repo_root / relative_path
     return json.loads(schema_path.read_text(encoding="utf-8"))
-
-
-def _resolve_framework_root(args: argparse.Namespace) -> Path:
-    if getattr(args, "framework_root", ""):
-        return Path(args.framework_root).resolve()
-    return Path(__file__).resolve().parent.parent
 
 
 def _ensure_parent(path: Path) -> None:
@@ -1514,14 +1509,12 @@ def run_materialize(args: argparse.Namespace) -> int:
 
 def run_review(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
-    framework_root = _resolve_framework_root(args)
     paths = _project_paths(repo_root, args.specs_dir, args.docs_dir, args.artifacts_dir)
     bundle = json.loads((paths["artifacts_active_root"] / "reverse-epic-feat-ssot-output.json").read_text(encoding="utf-8"))
     blockers: List[Dict[str, Any]] = []
     majors: List[Dict[str, Any]] = []
-    schema_path = Path(args.ssot_schema_path).resolve() if getattr(args, "ssot_schema_path", "") else framework_root / "spec-global/core/contracts/ssot-agent-output/v1/schema.json"
     try:
-        ssot_agent_output_schema = _load_schema(schema_path)
+        ssot_agent_output_schema = _load_local_schema(repo_root, "spec-global/core/contracts/ssot-agent-output/v1/schema.json")
         validate(instance=bundle, schema=ssot_agent_output_schema)
     except ValidationError as exc:
         blockers.append({"rule": "ssot_agent_output_schema", "message": f"Bundle failed ssot-agent-output validation: {exc.message}"})
@@ -1672,7 +1665,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     def add_common(sub: argparse.ArgumentParser) -> None:
         sub.add_argument("--repo-root", required=True)
-        sub.add_argument("--framework-root", default="")
         sub.add_argument("--specs-dir", default="spec")
         sub.add_argument("--docs-dir", default="docs")
         sub.add_argument("--artifacts-dir", default=".artifacts")
@@ -1710,7 +1702,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     review = subparsers.add_parser("review")
     add_common(review)
-    review.add_argument("--ssot-schema-path", default="")
     review.add_argument("--strict-evidence", action="store_true")
     review.set_defaults(func=run_review)
 
@@ -1730,4 +1721,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
