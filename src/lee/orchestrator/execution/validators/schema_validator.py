@@ -5,6 +5,8 @@ Schema Validator - JSON Schema 验证器
 """
 
 import json
+import re
+import copy
 from pathlib import Path
 from typing import Any, Dict, Optional, List, Tuple
 import yaml
@@ -13,11 +15,33 @@ try:
     import jsonschema
     from jsonschema import validate as jsonschema_validate
     from jsonschema.exceptions import ValidationError as JSONSchemaValidationError
+    from jsonschema.validators import (
+        Draft4Validator,
+        Draft6Validator,
+        Draft7Validator,
+        Draft201909Validator,
+        Draft202012Validator,
+        validator_for,
+    )
+    from referencing import Registry, Resource
+    from referencing.jsonschema import DRAFT4, DRAFT6, DRAFT7, DRAFT201909, DRAFT202012
     JSONSCHEMA_AVAILABLE = True
 except ImportError:
     JSONSCHEMA_AVAILABLE = False
     JSONSchemaValidationError = Exception
     jsonschema_validate = None
+    Registry = None
+    Resource = None
+    Draft4Validator = None
+    Draft6Validator = None
+    Draft7Validator = None
+    Draft201909Validator = None
+    Draft202012Validator = None
+    DRAFT4 = None
+    DRAFT6 = None
+    DRAFT7 = None
+    DRAFT201909 = None
+    DRAFT202012 = None
 
 from .base import (
     Validator,
@@ -107,7 +131,7 @@ class SchemaValidator(Validator):
                     )
 
         # 加载 schema
-        schema, validation_rules = self._load_schema_with_rules(config)
+        schema, validation_rules, schema_base_uri, schema_store = self._load_schema_with_rules(config)
         if schema is None:
             return ValidationResult(
                 passed=False,
@@ -123,7 +147,19 @@ class SchemaValidator(Validator):
 
         # 执行验证
         try:
-            jsonschema_validate(instance=data, schema=schema)
+            if schema_base_uri:
+                schema_for_validation = schema
+                if isinstance(schema, dict) and "$id" not in schema:
+                    schema_for_validation = copy.deepcopy(schema)
+                    schema_for_validation["$id"] = schema_base_uri
+                validator_cls = validator_for(schema_for_validation)
+                validator_kwargs = {}
+                if Registry is not None and Resource is not None:
+                    validator_kwargs["registry"] = self._build_schema_registry(schema_store)
+                validator = validator_cls(schema_for_validation, **validator_kwargs)
+                validator.validate(data)
+            else:
+                jsonschema_validate(instance=data, schema=schema)
         except JSONSchemaValidationError as e:
             # 转换为 ValidationError
             path = "$." + ".".join(str(p) for p in e.path) if e.path else "$"
@@ -163,10 +199,13 @@ class SchemaValidator(Validator):
         )
 
     def _load_schema(self, config: Dict) -> Optional[Dict]:
-        schema, _ = self._load_schema_with_rules(config)
+        schema, _, _, _ = self._load_schema_with_rules(config)
         return schema
 
-    def _load_schema_with_rules(self, config: Dict) -> Tuple[Optional[Dict], List[Dict[str, Any]]]:
+    def _load_schema_with_rules(
+        self,
+        config: Dict,
+    ) -> Tuple[Optional[Dict], List[Dict[str, Any]], Optional[str], Dict[str, Dict[str, Any]]]:
         """
         加载 schema 和附加 validation_rules
 
@@ -178,12 +217,12 @@ class SchemaValidator(Validator):
         """
         # 优先使用内联 schema
         if "schema" in config:
-            return config["schema"], config.get("validation_rules", [])
+            return config["schema"], config.get("validation_rules", []), None, {}
 
         # 从文件加载
         schema_path = config.get("schema_path")
         if not schema_path:
-            return None, []
+            return None, [], None, {}
 
         # 解析路径
         resolved_path = self._resolve_path(schema_path)
@@ -196,7 +235,7 @@ class SchemaValidator(Validator):
                 path = spec_global_candidate
 
         if not path.exists():
-            return None, []
+            return None, [], None, {}
 
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -205,15 +244,96 @@ class SchemaValidator(Validator):
                 else:
                     loaded = json.load(f)
         except (json.JSONDecodeError, yaml.YAMLError, IOError):
-            return None, []
+            return None, [], None, {}
+
+        schema_base_uri = path.resolve().as_uri()
+        schema_store = self._build_schema_store(path, loaded)
 
         if isinstance(loaded, dict) and isinstance(loaded.get("schema"), dict):
-            return loaded["schema"], loaded.get("validation_rules", [])
+            wrapped_schema = loaded["schema"]
+            wrapped_store = self._build_schema_store(path, wrapped_schema)
+            return wrapped_schema, loaded.get("validation_rules", []), schema_base_uri, wrapped_store
 
         if isinstance(loaded, dict):
-            return loaded, []
+            return loaded, [], schema_base_uri, schema_store
 
-        return None, []
+        return None, [], None, {}
+
+    def _build_schema_store(self, path: Path, schema: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        store: Dict[str, Dict[str, Any]] = {}
+        visited: set[Path] = set()
+
+        def load_into_store(schema_path: Path, schema_obj: Dict[str, Any]) -> None:
+            resolved_path = schema_path.resolve()
+            if resolved_path in visited:
+                return
+            visited.add(resolved_path)
+
+            file_uri = resolved_path.as_uri()
+            store[file_uri] = schema_obj
+            schema_id = schema_obj.get("$id") if isinstance(schema_obj, dict) else None
+            if isinstance(schema_id, str) and schema_id.strip():
+                store[schema_id] = schema_obj
+
+            for ref in self._collect_schema_refs(schema_obj):
+                if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", ref):
+                    continue
+                target_path = (resolved_path.parent / ref).resolve()
+                if not target_path.exists():
+                    continue
+                try:
+                    with open(target_path, "r", encoding="utf-8") as f:
+                        target_schema = yaml.safe_load(f) if target_path.suffix.lower() in {".yaml", ".yml"} else json.load(f)
+                except (json.JSONDecodeError, yaml.YAMLError, IOError):
+                    continue
+                if isinstance(target_schema, dict) and isinstance(target_schema.get("schema"), dict):
+                    target_schema = target_schema["schema"]
+                if isinstance(target_schema, dict):
+                    load_into_store(target_path, target_schema)
+
+        load_into_store(path, schema)
+        return store
+
+    @staticmethod
+    def _build_schema_registry(schema_store: Dict[str, Dict[str, Any]]) -> "Registry":
+        registry = Registry()
+        for uri, schema_obj in schema_store.items():
+            if not isinstance(uri, str) or not uri.strip():
+                continue
+            if not isinstance(schema_obj, dict):
+                continue
+            validator_cls = validator_for(schema_obj)
+            specification = SchemaValidator._specification_for_validator(validator_cls)
+            if specification is None:
+                registry = registry.with_resource(uri, Resource.from_contents(schema_obj))
+            else:
+                registry = registry.with_resource(uri, Resource(contents=schema_obj, specification=specification))
+        return registry
+
+    @staticmethod
+    def _specification_for_validator(validator_cls: Any) -> Any:
+        mapping = {
+            Draft202012Validator: DRAFT202012,
+            Draft201909Validator: DRAFT201909,
+            Draft7Validator: DRAFT7,
+            Draft6Validator: DRAFT6,
+            Draft4Validator: DRAFT4,
+        }
+        return mapping.get(validator_cls)
+
+    @staticmethod
+    def _collect_schema_refs(schema: Any) -> List[str]:
+        refs: List[str] = []
+        if isinstance(schema, dict):
+            for key, value in schema.items():
+                if key == "$ref" and isinstance(value, str):
+                    refs.append(value)
+                else:
+                    refs.extend(SchemaValidator._collect_schema_refs(value))
+        elif isinstance(schema, list):
+            for item in schema:
+                refs.extend(SchemaValidator._collect_schema_refs(item))
+        return refs
 
     def _evaluate_validation_rules(
         self,

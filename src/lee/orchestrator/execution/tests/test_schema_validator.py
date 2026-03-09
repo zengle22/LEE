@@ -44,6 +44,96 @@ def test_schema_validator_supports_yaml_payload_string(tmp_path: Path):
     assert result.passed
 
 
+def test_schema_validator_resolves_relative_json_refs(tmp_path: Path):
+    item_schema_dir = tmp_path / "contracts" / "item" / "v1"
+    bundle_schema_dir = tmp_path / "contracts" / "bundle" / "v1"
+    item_schema_dir.mkdir(parents=True, exist_ok=True)
+    bundle_schema_dir.mkdir(parents=True, exist_ok=True)
+
+    (item_schema_dir / "schema.json").write_text(
+        '{"type":"object","required":["id"],"properties":{"id":{"type":"string"}}}',
+        encoding="utf-8",
+    )
+    (bundle_schema_dir / "schema.json").write_text(
+        "\n".join(
+            [
+                "{",
+                '  "type": "object",',
+                '  "required": ["items"],',
+                '  "properties": {',
+                '    "items": {',
+                '      "type": "array",',
+                '      "items": {',
+                '        "$ref": "../../item/v1/schema.json"',
+                "      }",
+                "    }",
+                "  }",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    validator = SchemaValidator(project_dir=str(tmp_path))
+    result = validator.validate(
+        {"items": [{"id": "ITEM-001"}]},
+        {"schema_path": str(bundle_schema_dir / "schema.json")},
+    )
+
+    assert result.passed
+
+
+def test_schema_validator_resolves_relative_refs_with_remote_schema_id(tmp_path: Path):
+    item_schema_dir = tmp_path / "contracts" / "item" / "v1"
+    bundle_schema_dir = tmp_path / "contracts" / "bundle" / "v1"
+    item_schema_dir.mkdir(parents=True, exist_ok=True)
+    bundle_schema_dir.mkdir(parents=True, exist_ok=True)
+
+    (item_schema_dir / "schema.json").write_text(
+        "\n".join(
+            [
+                "{",
+                '  "$id": "https://ai-spec.example.com/contracts/item/v1/schema.json",',
+                '  "type": "object",',
+                '  "required": ["id"],',
+                '  "properties": {',
+                '    "id": {"type": "string"}',
+                "  }",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (bundle_schema_dir / "schema.json").write_text(
+        "\n".join(
+            [
+                "{",
+                '  "$id": "https://ai-spec.example.com/contracts/bundle/v1/schema.json",',
+                '  "type": "object",',
+                '  "required": ["items"],',
+                '  "properties": {',
+                '    "items": {',
+                '      "type": "array",',
+                '      "items": {',
+                '        "$ref": "../../item/v1/schema.json"',
+                "      }",
+                "    }",
+                "  }",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    validator = SchemaValidator(project_dir=str(tmp_path))
+    result = validator.validate(
+        {"items": [{"id": "ITEM-001"}]},
+        {"schema_path": str(bundle_schema_dir / "schema.json")},
+    )
+
+    assert result.passed
+
+
 def test_schema_validator_supports_contract_wrapper_with_validation_rules(tmp_path: Path):
     schema_path = tmp_path / "test-set-contract.yaml"
     schema_path.write_text(

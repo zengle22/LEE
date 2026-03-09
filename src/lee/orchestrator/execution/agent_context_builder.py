@@ -577,18 +577,40 @@ Verification items:
         if not step:
             return {}
 
-        raw_inputs = self._get_step_input_definition(step)
+        resolved: Dict[str, Any] = {}
+        raw_input_metadata = getattr(step, "input", None)
+        if isinstance(raw_input_metadata, dict):
+            for key, value in raw_input_metadata.items():
+                if key in ["run_id", "workflow_key", "context_files"]:
+                    continue
+                resolved_key, resolved_value = self._resolve_step_input_entry(
+                    key,
+                    value,
+                    workflow_context,
+                    step,
+                )
+                resolved[resolved_key] = resolved_value
+        elif raw_input_metadata not in (None, "", [], {}):
+            resolved["input"] = raw_input_metadata
+
+        raw_inputs = getattr(step, "inputs", None)
+        if raw_inputs is None:
+            raw_inputs = self._get_step_input_definition(step)
         if isinstance(raw_inputs, dict):
-            return {
-                key: value
-                for key, value in raw_inputs.items()
-                if key not in ["run_id", "workflow_key", "context_files"]
-            }
+            for key, value in raw_inputs.items():
+                if key not in ["run_id", "workflow_key", "context_files"]:
+                    resolved_key, resolved_value = self._resolve_step_input_entry(
+                        key,
+                        value,
+                        workflow_context,
+                        step,
+                    )
+                    resolved.setdefault(resolved_key, resolved_value)
+            return resolved
 
         if not isinstance(raw_inputs, list):
-            return {"input": raw_inputs}
+            return resolved
 
-        resolved: Dict[str, Any] = {}
         data = workflow_context.get("data", {}) if isinstance(workflow_context, dict) else {}
         params = data.get("params", {}) if isinstance(data.get("params", {}), dict) else {}
         step_outputs = data.get("step_outputs", {}) if isinstance(data.get("step_outputs", {}), dict) else {}
@@ -609,26 +631,110 @@ Verification items:
             elif source in step_outputs:
                 value = step_outputs[source]
 
-            if value is None and isinstance(source, str) and source.endswith("_specs"):
-                base_name = source[:-1] if source.endswith("s") else source
-                for step_id, output in step_outputs.items():
+            if value is None and isinstance(source, str) and getattr(step, "depends_on", None):
+                for step_id in getattr(step, "depends_on", []):
+                    output = step_outputs.get(step_id)
                     if not isinstance(output, dict):
                         continue
-                    if "business_output" in output:
-                        value = output["business_output"]
-                        if step and step_id in getattr(step, "depends_on", []):
-                            break
+                    if source in output:
+                        value = output[source]
+                        break
 
             resolved[source] = value if value is not None else {"source": source, "required": item.get("required", True)}
 
         return resolved
+
+    def _resolve_step_input_entry(
+        self,
+        key: str,
+        value: Any,
+        workflow_context: Dict[str, Any],
+        step,
+    ) -> tuple[str, Any]:
+        if self._is_variable_reference(value):
+            source_name = self._variable_reference_name(value) or key
+            resolved_value = self._resolve_variable_reference(value, workflow_context, step)
+            if resolved_value is not None:
+                return source_name, resolved_value
+            return source_name, {"source": source_name, "required": True}
+        return key, value
+
+    @staticmethod
+    def _is_variable_reference(value: Any) -> bool:
+        return (
+            hasattr(value, "source_type")
+            and hasattr(value, "path")
+            and isinstance(getattr(value, "path"), list)
+        )
+
+    @staticmethod
+    def _variable_reference_name(value: Any) -> Optional[str]:
+        path = getattr(value, "path", None)
+        if isinstance(path, list) and path:
+            leaf = path[-1]
+            if isinstance(leaf, str) and leaf:
+                return leaf
+        return None
+
+    def _resolve_variable_reference(
+        self,
+        value: Any,
+        workflow_context: Dict[str, Any],
+        step,
+    ) -> Any:
+        source_type = getattr(value, "source_type", None)
+        path = getattr(value, "path", None)
+        if not isinstance(path, list) or not path:
+            return None
+
+        data = workflow_context.get("data", {}) if isinstance(workflow_context, dict) else {}
+        params = data.get("params", {}) if isinstance(data.get("params", {}), dict) else {}
+        step_outputs = data.get("step_outputs", {}) if isinstance(data.get("step_outputs", {}), dict) else {}
+
+        if source_type == "inputs":
+            return self._walk_mapping_path(params, path)
+        if source_type == "context":
+            return self._walk_mapping_path(data, path)
+        if source_type == "step":
+            step_id = getattr(value, "step_id", None)
+            if isinstance(step_id, str) and step_id in step_outputs:
+                return self._walk_mapping_path(step_outputs[step_id], path)
+
+        if path[0] in params:
+            return self._walk_mapping_path(params, path)
+        if path[0] in data:
+            return self._walk_mapping_path(data, path)
+        if path[0] in step_outputs:
+            return self._walk_mapping_path(step_outputs, path)
+
+        return None
+
+    @staticmethod
+    def _walk_mapping_path(root: Any, path: List[str]) -> Any:
+        current = root
+        for part in path:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return None
+        return current
 
     @staticmethod
     def _get_step_input_definition(step) -> Any:
         if not step:
             return {}
 
+        config = getattr(step, "config", None)
+        if isinstance(config, dict):
+            workflow_inputs = config.get("workflow_inputs")
+            if isinstance(workflow_inputs, list):
+                return workflow_inputs
+
         raw_inputs = getattr(step, "input", None)
+        if isinstance(raw_inputs, dict):
+            nested_inputs = raw_inputs.get("inputs")
+            if isinstance(nested_inputs, list):
+                return nested_inputs
         if raw_inputs not in (None, {}, []):
             return raw_inputs
 

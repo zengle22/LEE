@@ -108,6 +108,30 @@ _BUILTIN_PROFILES: Dict[str, Dict[str, Any]] = {
 _CONFIG_PROFILES: Optional[Dict[str, Dict[str, Any]]] = None
 
 
+def _expand_env_vars(value: Any) -> Any:
+    """展开环境变量占位符
+    
+    支持格式:
+    - ${VAR} -> 环境变量值或空字符串
+    - ${VAR:-default} -> 环境变量值或默认值
+    """
+    if not isinstance(value, str):
+        return value
+    
+    import re
+    
+    def replace_var(match):
+        var_expr = match.group(1)
+        if ':-' in var_expr:
+            var_name, default = var_expr.split(':-', 1)
+            return os.environ.get(var_name, default)
+        else:
+            return os.environ.get(var_expr, '')
+    
+    # 匹配 ${VAR} 或 ${VAR:-default}
+    return re.sub(r'\$\{([^}]+)\}', replace_var, value)
+
+
 def _load_config_profiles() -> Dict[str, Dict[str, Any]]:
     """从配置文件加载 Profile"""
     global _CONFIG_PROFILES
@@ -137,11 +161,11 @@ def _load_config_profiles() -> Dict[str, Dict[str, Any]]:
 
                         _CONFIG_PROFILES[name] = {
                             "provider": provider,
-                            "model": profile_config.get("model", ""),
+                            "model": _expand_env_vars(profile_config.get("model", "")),
                             "temperature": profile_config.get("temperature", 0.7),
                             "max_tokens": profile_config.get("max_tokens", 4096),
-                            "base_url": profile_config.get("base_url"),
-                            "api_key": profile_config.get("api_key"),  # 直接存储 API Key
+                            "base_url": _expand_env_vars(profile_config.get("base_url")),
+                            "api_key": _expand_env_vars(profile_config.get("api_key")),
                         }
 
                 logger.debug(f"Loaded {len(_CONFIG_PROFILES)} profiles from {config_path}")

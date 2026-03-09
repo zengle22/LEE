@@ -156,6 +156,181 @@ async def test_materialize_ssot_outputs_from_envelope_payload(runner, ctx, temp_
     assert (temp_project_root / "spec" / "requirements" / "features").exists()
 
 
+@pytest.mark.asyncio
+async def test_materialize_ssot_outputs_ignores_self_referential_bundle_dependencies(
+    runner, ctx, temp_project_root
+):
+    step = SimpleNamespace(
+        id="write_prd",
+        agent_id="agent.product.prd_writer",
+        config={},
+    )
+
+    generated_text = """
+{
+  "business_output": {
+    "epic_ref": "EPIC-DEMO-001",
+    "feat_specs": [
+      {
+        "feat_id": "FEAT-900",
+        "title": "训练计划智能调整",
+        "goal": "根据用户参数生成训练计划",
+        "user_value": "快速开始训练",
+        "inputs": ["比赛目标"],
+        "processing": ["生成周期化计划"],
+        "outputs": ["训练计划"],
+        "acceptance_criteria": ["系统生成训练计划"],
+        "acceptance_checks": [
+          {
+            "id": "AC-001",
+            "scenario": "系统生成训练计划",
+            "given": "用户已填写参数",
+            "when": "提交生成请求",
+            "then": "系统返回训练计划",
+            "trace_hints": ["TASK", "TESTSET"]
+          },
+          {
+            "id": "AC-002",
+            "scenario": "返回结构化计划",
+            "given": "系统已完成计算",
+            "when": "查看计划详情",
+            "then": "结果包含按周拆分内容",
+            "trace_hints": ["TECH", "TESTSET"]
+          }
+        ],
+        "dependencies": [],
+        "non_goals": [],
+        "priority": "P1",
+        "delivery_slice": "mvp",
+        "lifecycle_status": "draft",
+        "ssot": {
+          "identity_kind": "ssot",
+          "ssot_type": "FEAT",
+          "parent": "EPIC-DEMO-001"
+        }
+      }
+    ]
+  },
+  "ssot_output_contract": {
+    "contract_version": "1.0",
+    "run_id": "run-ssot-003",
+    "outputs": [
+      {
+        "key": "feat_900",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "训练计划智能调整",
+        "parent": "feat_900",
+        "derived_from": ["feat_900"],
+        "source_refs": ["feat_900#scope"]
+      }
+    ]
+  }
+}
+""".strip()
+
+    structured_payload = runner._parse_structured_output_if_possible(generated_text)
+
+    result = await runner._materialize_ssot_outputs(
+        ctx=ctx,
+        step=step,
+        workflow_id="wf-001",
+        generated_text=generated_text,
+        structured_payload=structured_payload,
+    )
+
+    assert result is not None
+    assert result["outputs"]["feat_900"]["id"] == "FEAT-001"
+    assert len(result["materialized_files"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_materialize_ssot_outputs_does_not_treat_source_file_refs_as_contract_dependencies(
+    runner, ctx, temp_project_root
+):
+    step = SimpleNamespace(
+        id="write_prd",
+        agent_id="agent.product.prd_writer",
+        config={},
+    )
+
+    generated_text = """
+{
+  "business_output": {
+    "epic_ref": "EPIC-DEMO-001",
+    "feat_specs": [
+      {
+        "feat_id": "FEAT-EPIC-DEMO-001-001",
+        "title": "比赛目标与约束条件配置",
+        "goal": "采集用户训练参数作为计划生成输入",
+        "user_value": "用户可设定个性化训练基准参数",
+        "inputs": ["比赛类型"],
+        "processing": ["校验输入"],
+        "outputs": ["结构化配置数据"],
+        "acceptance_criteria": ["可保存配置"],
+        "acceptance_checks": [
+          {
+            "id": "AC-001",
+            "scenario": "保存配置",
+            "given": "用户已填写参数",
+            "when": "提交保存",
+            "then": "系统保存成功",
+            "trace_hints": ["UI", "TESTSET"]
+          },
+          {
+            "id": "AC-002",
+            "scenario": "日期校验",
+            "given": "用户输入无效日期",
+            "when": "提交保存",
+            "then": "系统提示错误",
+            "trace_hints": ["UI", "TECH"]
+          }
+        ],
+        "dependencies": [],
+        "non_goals": [],
+        "priority": "P0",
+        "delivery_slice": "core-config",
+        "lifecycle_status": "draft",
+        "ssot": {
+          "identity_kind": "ssot",
+          "ssot_type": "FEAT",
+          "parent": "EPIC-DEMO-001"
+        }
+      }
+    ]
+  },
+  "ssot_output_contract": {
+    "contract_version": "1.0",
+    "run_id": "run-ssot-004",
+    "outputs": [
+      {
+        "key": "feat_epic_demo_001_001",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "比赛目标与约束条件配置",
+        "parent": "EPIC-DEMO-001",
+        "source_refs": ["spec/requirements/requirements-frozen.md#R15"]
+      }
+    ]
+  }
+}
+""".strip()
+
+    structured_payload = runner._parse_structured_output_if_possible(generated_text)
+
+    result = await runner._materialize_ssot_outputs(
+        ctx=ctx,
+        step=step,
+        workflow_id="wf-001",
+        generated_text=generated_text,
+        structured_payload=structured_payload,
+    )
+
+    assert result is not None
+    assert result["outputs"]["feat_epic_demo_001_001"]["id"] == "FEAT-001"
+    assert len(result["materialized_files"]) == 1
+
+
 def test_governance_preflight_requires_anchor_when_no_formal_ssot(temp_project_root, runner):
     agent_spec = SimpleNamespace(
         contracts={},
@@ -934,6 +1109,177 @@ def test_expected_feat_review_subject_refs_reads_generated_feat_id(runner):
     assert refs == ["FEAT-900"]
 
 
+def test_expected_feat_review_subject_refs_reads_generated_feat_bundle_ids(runner):
+    instance_data = {
+        "step_outputs": {
+            "feat_spec_generation": {
+                "generated_text": json.dumps(
+                    {
+                        "business_output": {
+                            "epic_ref": "EPIC-001",
+                            "feat_specs": [
+                                {"feat_id": "FEAT-900", "title": "训练计划智能调整"},
+                                {"feat_id": "FEAT-901", "title": "训练日程可视化"},
+                            ],
+                        }
+                    },
+                    ensure_ascii=False,
+                )
+            }
+        }
+    }
+
+    refs = runner._expected_feat_review_subject_refs(instance_data)
+
+    assert refs == ["FEAT-900", "FEAT-901"]
+
+
+def test_normalize_feat_review_subject_refs_maps_generated_ids_to_materialized_ids(runner):
+    instance_data = {
+        "step_outputs": {
+            "feat_spec_generation": {
+                "generated_text": json.dumps(
+                    {
+                        "business_output": {
+                            "epic_ref": "EPIC-001",
+                            "feat_specs": [
+                                {"feat_id": "FEAT-DEMO-001-1", "title": "训练计划智能调整"},
+                                {"feat_id": "FEAT-DEMO-001-2", "title": "训练日程可视化"},
+                            ],
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                "ssot_materialized": {
+                    "feat_demo_001_1": {"id": "FEAT-027", "title": "训练计划智能调整"},
+                    "feat_demo_001_2": {"id": "FEAT-028", "title": "训练日程可视化"},
+                },
+            }
+        }
+    }
+    review_payload = {
+        "review_id": "RVW-001",
+        "review_type": "feat_review",
+        "subject_refs": ["FEAT-DEMO-001-1", "FEAT-DEMO-001-2"],
+        "summary": "ok",
+        "decision": "pass",
+        "findings": [],
+        "risks": [],
+        "recommendations": [],
+    }
+
+    normalized = runner._normalize_feat_review_subject_refs(
+        review_payload,
+        instance_data,
+        ["FEAT-027", "FEAT-028"],
+    )
+
+    assert normalized["subject_refs"] == ["FEAT-027", "FEAT-028"]
+
+
+def test_normalize_feat_review_subject_refs_maps_generated_ids_via_materialized_keys(runner):
+    instance_data = {
+        "step_outputs": {
+            "feat_spec_generation": {
+                "generated_text": json.dumps(
+                    {
+                        "business_output": {
+                            "epic_ref": "EPIC-001",
+                            "feat_specs": [
+                                {"feat_id": "FEAT-DEMO-001-1", "title": "训练计划智能调整"},
+                                {"feat_id": "FEAT-DEMO-001-2", "title": "训练日程可视化"},
+                            ],
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                "ssot_materialized": {
+                    "feat_demo_001_1": {"id": "FEAT-031"},
+                    "feat_demo_001_2": {"id": "FEAT-032"},
+                },
+            }
+        }
+    }
+    review_payload = {
+        "review_id": "RVW-001",
+        "review_type": "feat_review",
+        "subject_refs": ["FEAT-DEMO-001-1", "FEAT-DEMO-001-2"],
+        "summary": "ok",
+        "decision": "pass",
+        "findings": [],
+        "risks": [],
+        "recommendations": [],
+    }
+
+    normalized = runner._normalize_feat_review_subject_refs(
+        review_payload,
+        instance_data,
+        ["FEAT-031", "FEAT-032"],
+    )
+
+    assert normalized["subject_refs"] == ["FEAT-031", "FEAT-032"]
+
+
+def test_expected_feat_breakdown_epic_ref_reads_input_epic_id(runner):
+    instance_data = {
+        "params": {
+            "epic_freeze": {
+                "epic_id": "EPIC-DEMO-001",
+                "title": "智能备赛计划生成",
+            }
+        }
+    }
+
+    epic_ref = runner._expected_feat_breakdown_epic_ref(instance_data)
+
+    assert epic_ref == "EPIC-DEMO-001"
+
+
+def test_validate_feat_breakdown_semantics_requires_exact_epic_ref(runner):
+    payload = {
+        "breakdown_id": "BKD-001",
+        "epic_ref": "EPIC-OTHER-001",
+        "feat_candidates": [
+            {
+                "title": "训练计划生成",
+                "user_value": "快速生成训练计划",
+                "acceptance_boundary": "用户可完成一次计划生成并查看结果",
+            }
+        ],
+    }
+
+    error = runner._validate_feat_breakdown_semantics(payload, "EPIC-DEMO-001")
+
+    assert error == "FEAT breakdown epic_ref must exactly match the input EPIC ID: EPIC-DEMO-001"
+
+
+def test_normalize_feat_breakdown_payload_flattens_object_acceptance_boundary(runner):
+    payload = {
+        "breakdown_id": "BKD-001",
+        "epic_ref": "EPIC-DEMO-001",
+        "feat_candidates": [
+            {
+                "title": "训练计划可视化",
+                "user_value": "查看训练进度",
+                "acceptance_boundary": {
+                    "input": "已生成的训练计划框架",
+                    "process": [
+                        "展示12周训练强度曲线可视化",
+                        "支持按周展开查看每日训练类型",
+                    ],
+                    "output": "可交互的图形化训练日历",
+                },
+            }
+        ],
+    }
+
+    normalized = runner._normalize_feat_breakdown_payload(payload)
+
+    assert normalized["feat_candidates"][0]["acceptance_boundary"] == (
+        "已生成的训练计划框架；展示12周训练强度曲线可视化，支持按周展开查看每日训练类型；可交互的图形化训练日历"
+    )
+
+
 def test_expected_feat_review_subject_refs_prefers_materialized_feat_id(runner):
     instance_data = {
         "step_outputs": {
@@ -959,6 +1305,35 @@ def test_expected_feat_review_subject_refs_prefers_materialized_feat_id(runner):
     refs = runner._expected_feat_review_subject_refs(instance_data)
 
     assert refs == ["FEAT-900"]
+
+
+def test_expected_feat_review_subject_refs_prefers_materialized_feat_ids_for_bundle(runner):
+    instance_data = {
+        "step_outputs": {
+            "feat_spec_generation": {
+                "generated_text": json.dumps(
+                    {
+                        "business_output": {
+                            "epic_ref": "EPIC-001",
+                            "feat_specs": [
+                                {"feat_id": "FEAT-1", "title": "训练计划智能调整"},
+                                {"feat_id": "FEAT-2", "title": "训练日程可视化"},
+                            ],
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                "ssot_materialized": {
+                    "feat_feat_900": {"id": "FEAT-900"},
+                    "feat_feat_901": {"id": "FEAT-901"},
+                },
+            }
+        }
+    }
+
+    refs = runner._expected_feat_review_subject_refs(instance_data)
+
+    assert refs == ["FEAT-900", "FEAT-901"]
 
 
 def test_validate_feat_review_semantics_requires_exact_subject_refs(runner):
@@ -1069,3 +1444,176 @@ def test_normalize_prd_writer_feat_payload_repairs_fixed_contract_fields(runner)
     assert normalized_structured["ssot_output_contract"]["outputs"][0]["identity_kind"] == "ssot"
     assert normalized_structured["ssot_output_contract"]["outputs"][0]["ssot_type"] == "feat"
     assert normalized_structured["ssot_output_contract"]["outputs"][0]["parent"] == "EPIC-001"
+
+
+def test_normalize_prd_writer_feat_payload_preserves_existing_acceptance_checks_only(runner):
+    step = SimpleNamespace(agent_id="agent.product.prd_writer")
+    business_output = {
+        "feat_id": "FEAT-900",
+        "title": "训练计划智能调整",
+        "acceptance_criteria": [
+            "支持输入所有核心训练约束参数",
+            "输出参数对象包含完整元数据",
+        ],
+        "acceptance_checks": [
+            {
+                "id": "AC-001",
+                "scenario": "用户提交完整训练约束",
+                "given": "用户访问训练计划生成器",
+                "when": "完成表单填写并提交",
+                "then": "系统生成结构化参数对象",
+                "trace_hints": ["UI", "TECH", "TASK", "TESTSET"],
+            }
+        ],
+    }
+
+    normalized_business, _ = runner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-task-001",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+    )
+
+    assert len(normalized_business["acceptance_checks"]) == 1
+    assert normalized_business["acceptance_checks"][0]["trace_hints"] == ["UI", "TECH", "TASK", "TESTSET"]
+
+
+def test_normalize_prd_writer_feat_payload_drops_self_referential_feat_dependencies(runner):
+    step = SimpleNamespace(agent_id="agent.product.prd_writer")
+    business_output = {
+        "feat_id": "FEAT-900",
+        "title": "训练计划智能调整",
+        "source_refs": ["spec/requirements/requirements-frozen.md#R15"],
+        "ssot": {
+            "parent": "EPIC-001",
+            "derived_from": "EPIC-001",
+        },
+    }
+    structured_payload = {
+        "business_output": business_output,
+        "ssot_output_contract": {
+            "outputs": [
+                {
+                    "key": "feat",
+                    "parent": "feat",
+                    "source_refs": ["feat#scope", "EPIC-001#scope"],
+                    "derived_from": ["feat", "EPIC-001"],
+                    "verifies": ["feat"],
+                    "implements": ["feat"],
+                    "derived_from_ids": [{"id": "feat"}, {"id": "EPIC-001"}],
+                }
+            ]
+        },
+    }
+
+    _, normalized_structured = runner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-task-001",
+        business_output=business_output,
+        structured_payload=structured_payload,
+    )
+
+    normalized_output = normalized_structured["ssot_output_contract"]["outputs"][0]
+    assert normalized_output["parent"] == "EPIC-001"
+    assert normalized_output["source_refs"] == ["EPIC-001#scope"]
+    assert normalized_output["derived_from"] == ["EPIC-001"]
+    assert normalized_output["verifies"] == []
+    assert normalized_output["implements"] == []
+    assert normalized_output["derived_from_ids"] == [{"id": "EPIC-001"}]
+
+
+def test_normalize_prd_writer_feat_payload_normalizes_feat_bundle_items(runner):
+    step = SimpleNamespace(agent_id="agent.product.prd_writer")
+    business_output = {
+        "epic_ref": "EPIC-001",
+        "feat_specs": [
+            {
+                "feat_id": "FEAT-900",
+                "title": "训练计划智能调整",
+                "source_refs": ["EPIC-001#scope"],
+                "ssot": {
+                    "parent": "EPIC-001",
+                },
+            },
+            {
+                "feat_id": "FEAT-901",
+                "title": "训练日程可视化",
+                "source_refs": ["EPIC-001#scope"],
+                "ssot": {
+                    "parent": "EPIC-001",
+                },
+            },
+        ],
+    }
+    structured_payload = {
+        "business_output": business_output,
+        "ssot_output_contract": {
+            "outputs": [
+                {"key": "feat", "title": "训练计划智能调整"},
+                {"key": "feat", "title": "训练日程可视化"},
+            ]
+        },
+    }
+
+    normalized_business, normalized_structured = runner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-task-001",
+        business_output=business_output,
+        structured_payload=structured_payload,
+    )
+
+    first_feat = normalized_business["feat_specs"][0]
+    second_feat = normalized_business["feat_specs"][1]
+    outputs = normalized_structured["ssot_output_contract"]["outputs"]
+
+    assert first_feat["derived_object_expectations"]["qa_seed_required"] is True
+    assert second_feat["derived_object_expectations"]["testset_owner"] == "qa"
+    assert outputs[0]["key"] == "feat_900"
+    assert outputs[1]["key"] == "feat_901"
+    assert outputs[0]["parent"] == "EPIC-001"
+    assert outputs[1]["parent"] == "EPIC-001"
+
+
+def test_normalize_prd_writer_feat_payload_drops_bundle_self_refs_using_real_key(runner):
+    step = SimpleNamespace(agent_id="agent.product.prd_writer")
+    business_output = {
+        "epic_ref": "EPIC-DEMO-001",
+        "feat_specs": [
+            {
+                "feat_id": "FEAT-900",
+                "title": "训练计划智能调整",
+                "source_refs": ["EPIC-DEMO-001#scope"],
+                "ssot": {
+                    "parent": "EPIC-DEMO-001",
+                },
+            }
+        ],
+    }
+    structured_payload = {
+        "business_output": business_output,
+        "ssot_output_contract": {
+            "outputs": [
+                {
+                    "key": "feat",
+                    "title": "训练计划智能调整",
+                    "parent": "feat_900",
+                    "derived_from": ["feat_900"],
+                    "source_refs": ["feat_900#scope", "EPIC-DEMO-001#scope"],
+                }
+            ]
+        },
+    }
+
+    _, normalized_structured = runner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-task-001",
+        business_output=business_output,
+        structured_payload=structured_payload,
+    )
+
+    output = normalized_structured["ssot_output_contract"]["outputs"][0]
+
+    assert output["key"] == "feat_900"
+    assert output["parent"] == "EPIC-DEMO-001"
+    assert output["derived_from"] == []
+    assert output["source_refs"] == ["EPIC-DEMO-001#scope"]

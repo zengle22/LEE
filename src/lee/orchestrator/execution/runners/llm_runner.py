@@ -557,13 +557,13 @@ class LLMRunner(StepRunnerBase):
                 step=step,
                 written_files=written_files,
             )
-            business_output, structured_payload = self._normalize_prd_writer_feat_payload(
+            business_output, structured_payload = self._normalize_product_step_payload(
                 step=step,
                 workflow_id=workflow_id,
                 business_output=business_output,
                 structured_payload=structured_payload,
             )
-            validation_result = self._validate_step_output(step, business_output)
+            validation_result = self._validate_step_output(step, business_output, ctx.project_root)
             if validation_result and not validation_result.passed:
                 strict = (step.config or {}).get("strict_output_validation", False)
                 if strict:
@@ -593,6 +593,11 @@ class LLMRunner(StepRunnerBase):
             expected_subject_refs: List[str] = []
             if getattr(step, "agent_id", "") == "agent.product.feat_reviewer":
                 expected_subject_refs = self._expected_feat_review_subject_refs(instance.data)
+                business_output = self._normalize_feat_review_subject_refs(
+                    business_output,
+                    instance.data,
+                    expected_subject_refs,
+                )
                 feat_review_subject_error = self._validate_feat_review_subject_refs(
                     business_output,
                     expected_subject_refs,
@@ -601,7 +606,7 @@ class LLMRunner(StepRunnerBase):
                     feat_review_subject_error = self._validate_feat_review_semantics(
                         business_output,
                         expected_subject_refs,
-                    )
+                )
             if feat_review_subject_error:
                 await ctx.state_machine.fail_step(workflow_id, step.id, feat_review_subject_error)
                 await ctx.store.update_task_execution(
@@ -620,6 +625,34 @@ class LLMRunner(StepRunnerBase):
                     step_id=step.id,
                     workflow_id=workflow_id,
                     message=feat_review_subject_error,
+                )
+
+            feat_breakdown_error = None
+            expected_epic_ref = None
+            if getattr(step, "agent_id", "") == "agent.product.requirement_decomposer":
+                expected_epic_ref = self._expected_feat_breakdown_epic_ref(instance.data)
+                feat_breakdown_error = self._validate_feat_breakdown_semantics(
+                    business_output,
+                    expected_epic_ref,
+                )
+            if feat_breakdown_error:
+                await ctx.state_machine.fail_step(workflow_id, step.id, feat_breakdown_error)
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    output_data={
+                        "generated_text": generated_text,
+                        "business_output": business_output,
+                        "expected_epic_ref": expected_epic_ref,
+                    },
+                    error_message=feat_breakdown_error,
+                    completed_at=datetime.now(),
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=feat_breakdown_error,
                 )
 
             if governance_preflight["warnings"]:
@@ -728,9 +761,17 @@ class LLMRunner(StepRunnerBase):
 
         except Exception as e:
             await ctx.state_machine.fail_step(workflow_id, step.id, str(e))
+            failure_output = {}
+            if "generated_text" in locals() and generated_text:
+                failure_output["generated_text"] = generated_text
+            if "structured_payload" in locals() and structured_payload is not None:
+                failure_output["structured_payload"] = structured_payload
+            if "business_output" in locals() and business_output is not None:
+                failure_output["business_output"] = business_output
             await ctx.store.update_task_execution(
                 execution_id,
                 TaskExecutionStatus.FAILED,
+                output_data=failure_output or None,
                 error_message=str(e),
                 completed_at=datetime.now()
             )
@@ -938,11 +979,15 @@ class LLMRunner(StepRunnerBase):
 
         ssot_materialized = feat_spec_output.get("ssot_materialized")
         if isinstance(ssot_materialized, dict):
-            feat_entry = ssot_materialized.get("feat")
-            if isinstance(feat_entry, dict):
-                feat_id = feat_entry.get("id")
-                if isinstance(feat_id, str) and feat_id.strip():
-                    return [feat_id]
+            materialized_refs: List[str] = []
+            for value in ssot_materialized.values():
+                if not isinstance(value, dict):
+                    continue
+                feat_id = value.get("id")
+                if isinstance(feat_id, str) and feat_id.strip() and feat_id.startswith("FEAT-"):
+                    materialized_refs.append(feat_id)
+            if materialized_refs:
+                return materialized_refs
 
         generated_text = feat_spec_output.get("generated_text", "")
         feat_payload: Any = None
@@ -962,8 +1007,171 @@ class LLMRunner(StepRunnerBase):
         if not isinstance(feat_payload, dict):
             return []
 
+        return self._collect_feat_ids_from_payload(feat_payload)
+
+    @staticmethod
+    def _normalize_feat_review_subject_refs(
+        review_payload: Any,
+        instance_data: Dict[str, Any],
+        expected_subject_refs: List[str],
+    ) -> Any:
+        if not isinstance(review_payload, dict):
+            return review_payload
+
+        subject_refs = review_payload.get("subject_refs")
+        if not isinstance(subject_refs, list) or not expected_subject_refs:
+            return review_payload
+
+        feat_id_map = LLMRunner._build_generated_to_materialized_feat_id_map(instance_data)
+        if not feat_id_map:
+            return review_payload
+
+        normalized_subject_refs: List[str] = []
+        changed = False
+        for ref in subject_refs:
+            if not isinstance(ref, str):
+                normalized_subject_refs.append(ref)
+                continue
+            mapped_ref = feat_id_map.get(ref, ref)
+            if mapped_ref != ref:
+                changed = True
+            normalized_subject_refs.append(mapped_ref)
+
+        if not changed:
+            return review_payload
+
+        normalized_payload = dict(review_payload)
+        normalized_payload["subject_refs"] = normalized_subject_refs
+        return normalized_payload
+
+    @staticmethod
+    def _build_generated_to_materialized_feat_id_map(
+        instance_data: Dict[str, Any],
+    ) -> Dict[str, str]:
+        if not isinstance(instance_data, dict):
+            return {}
+
+        step_outputs = instance_data.get("step_outputs", {})
+        if not isinstance(step_outputs, dict):
+            return {}
+
+        feat_spec_output = step_outputs.get("feat_spec_generation")
+        if not isinstance(feat_spec_output, dict):
+            return {}
+
+        generated_text = feat_spec_output.get("generated_text", "")
+        feat_payload: Any = None
+        try:
+            parsed_output = StepRunnerBase._parse_structured_output(generated_text)
+        except Exception:
+            parsed_output = None
+
+        if isinstance(parsed_output, dict):
+            candidate_business = parsed_output.get("business_output")
+            feat_payload = candidate_business if isinstance(candidate_business, dict) else parsed_output
+
+        if not isinstance(feat_payload, dict):
+            return {}
+
+        feat_specs = feat_payload.get("feat_specs")
+        if not isinstance(feat_specs, list):
+            return {}
+
+        title_to_generated_id: Dict[str, str] = {}
+        for item in feat_specs:
+            if not isinstance(item, dict):
+                continue
+            feat_id = item.get("feat_id")
+            title = item.get("title")
+            if isinstance(feat_id, str) and feat_id.strip() and isinstance(title, str) and title.strip():
+                title_to_generated_id[title] = feat_id
+
+        if not title_to_generated_id:
+            return {}
+
+        ssot_materialized = feat_spec_output.get("ssot_materialized")
+        if not isinstance(ssot_materialized, dict):
+            return {}
+
+        mapping: Dict[str, str] = {}
+        for value in ssot_materialized.values():
+            if not isinstance(value, dict):
+                continue
+            title = value.get("title")
+            materialized_id = value.get("id")
+            generated_id = title_to_generated_id.get(title) if isinstance(title, str) else None
+            if generated_id and isinstance(materialized_id, str) and materialized_id.strip():
+                mapping[generated_id] = materialized_id
+
+        for generated_id in title_to_generated_id.values():
+            normalized_key = generated_id.lower().replace("-", "_")
+            materialized = ssot_materialized.get(normalized_key)
+            if not isinstance(materialized, dict):
+                continue
+            materialized_id = materialized.get("id")
+            if isinstance(materialized_id, str) and materialized_id.strip():
+                mapping.setdefault(generated_id, materialized_id)
+        return mapping
+
+    @staticmethod
+    def _collect_feat_ids_from_payload(feat_payload: Dict[str, Any]) -> List[str]:
+        feat_ids: List[str] = []
+
         feat_id = feat_payload.get("feat_id")
-        return [feat_id] if isinstance(feat_id, str) and feat_id.strip() else []
+        if isinstance(feat_id, str) and feat_id.strip():
+            feat_ids.append(feat_id)
+
+        feat_specs = feat_payload.get("feat_specs")
+        if isinstance(feat_specs, list):
+            for item in feat_specs:
+                if not isinstance(item, dict):
+                    continue
+                item_feat_id = item.get("feat_id")
+                if isinstance(item_feat_id, str) and item_feat_id.strip():
+                    feat_ids.append(item_feat_id)
+
+        return list(dict.fromkeys(feat_ids))
+
+    @staticmethod
+    def _expected_feat_breakdown_epic_ref(instance_data: Dict[str, Any]) -> Optional[str]:
+        if not isinstance(instance_data, dict):
+            return None
+
+        epic_freeze = instance_data.get("epic_freeze")
+        if not isinstance(epic_freeze, dict):
+            params = instance_data.get("params")
+            if isinstance(params, dict):
+                epic_freeze = params.get("epic_freeze")
+
+        if not isinstance(epic_freeze, dict):
+            return None
+
+        epic_id = epic_freeze.get("epic_id")
+        if isinstance(epic_id, str) and epic_id.strip():
+            return epic_id
+        return None
+
+    @staticmethod
+    def _validate_feat_breakdown_semantics(
+        breakdown_payload: Any,
+        expected_epic_ref: Optional[str],
+    ) -> Optional[str]:
+        if not expected_epic_ref:
+            return None
+        if not isinstance(breakdown_payload, dict):
+            return "FEAT breakdown output is not a structured object"
+
+        epic_ref = breakdown_payload.get("epic_ref")
+        if not isinstance(epic_ref, str) or not epic_ref.strip():
+            return "FEAT breakdown output must include epic_ref"
+        if epic_ref != expected_epic_ref:
+            return f"FEAT breakdown epic_ref must exactly match the input EPIC ID: {expected_epic_ref}"
+
+        feat_candidates = breakdown_payload.get("feat_candidates")
+        if not isinstance(feat_candidates, list) or not feat_candidates:
+            return "FEAT breakdown output must include at least one feat_candidate"
+
+        return None
 
     @staticmethod
     def _normalize_prd_writer_feat_payload(
@@ -978,27 +1186,19 @@ class LLMRunner(StepRunnerBase):
             return business_output, structured_payload
 
         normalized_business = dict(business_output)
-        ssot = normalized_business.get("ssot")
-        if isinstance(ssot, dict):
-            normalized_ssot = dict(ssot)
+        feat_specs = normalized_business.get("feat_specs")
+        if isinstance(feat_specs, list):
+            normalized_feat_specs = []
+            for item in feat_specs:
+                if not isinstance(item, dict):
+                    normalized_feat_specs.append(item)
+                    continue
+                normalized_feat_specs.append(
+                    LLMRunner._normalize_single_feat_payload(dict(item))
+                )
+            normalized_business["feat_specs"] = normalized_feat_specs
         else:
-            normalized_ssot = {}
-        if normalized_business.get("feat_id"):
-            normalized_ssot.setdefault("identity_kind", "ssot")
-            normalized_ssot.setdefault("ssot_type", "FEAT")
-        if normalized_ssot:
-            normalized_business["ssot"] = normalized_ssot
-
-        derived = normalized_business.get("derived_object_expectations")
-        if isinstance(derived, dict):
-            normalized_derived = dict(derived)
-        else:
-            normalized_derived = {}
-        normalized_derived.setdefault("task_required", True)
-        normalized_derived.setdefault("testset_required", True)
-        normalized_derived.setdefault("testset_owner", "qa")
-        normalized_derived.setdefault("qa_seed_required", True)
-        normalized_business["derived_object_expectations"] = normalized_derived
+            normalized_business = LLMRunner._normalize_single_feat_payload(normalized_business)
 
         normalized_structured = structured_payload
         if isinstance(structured_payload, dict):
@@ -1024,19 +1224,182 @@ class LLMRunner(StepRunnerBase):
                     normalized_item.setdefault("identity_kind", "ssot")
                     if normalized_item.get("key") == "feat":
                         normalized_item.setdefault("ssot_type", "feat")
-                        if normalized_business.get("title"):
-                            normalized_item.setdefault("title", normalized_business["title"])
-                        parent = normalized_business.get("ssot", {}).get("parent")
-                        if parent:
+                        feat_contracts = normalized_business.get("feat_specs")
+                        feat_context = None
+                        if isinstance(feat_contracts, list):
+                            feat_context = next(
+                                (feat for feat in feat_contracts if isinstance(feat, dict) and feat.get("title") == normalized_item.get("title")),
+                                None,
+                            )
+                            if feat_context is None and feat_contracts:
+                                first_feat = feat_contracts[0]
+                                feat_context = first_feat if isinstance(first_feat, dict) else None
+                            if feat_context and feat_context.get("feat_id") and normalized_item.get("key") == "feat":
+                                normalized_item["key"] = str(feat_context["feat_id"]).lower().replace("-", "_")
+                        else:
+                            feat_context = normalized_business
+
+                        if feat_context and feat_context.get("title"):
+                            normalized_item.setdefault("title", feat_context["title"])
+                        parent = (feat_context or {}).get("ssot", {}).get("parent")
+                        if normalized_item.get("parent") == "feat" and parent:
+                            normalized_item["parent"] = parent
+                        elif parent:
                             normalized_item.setdefault("parent", parent)
-                        source_refs = normalized_business.get("source_refs")
+                        source_refs = (feat_context or {}).get("source_refs")
                         if isinstance(source_refs, list) and source_refs:
                             normalized_item.setdefault("source_refs", source_refs)
+                        local_key = str(normalized_item.get("key") or "feat")
+                        normalized_item = LLMRunner._drop_self_referential_ssot_dependencies(
+                            normalized_item,
+                            local_key=local_key,
+                        )
+                        if parent and not normalized_item.get("parent"):
+                            normalized_item["parent"] = parent
                     normalized_outputs.append(normalized_item)
                 normalized_contract["outputs"] = normalized_outputs
             normalized_structured["ssot_output_contract"] = normalized_contract
 
         return normalized_business, normalized_structured
+
+    @staticmethod
+    def _normalize_product_step_payload(
+        step,
+        workflow_id: str,
+        business_output: Any,
+        structured_payload: Any,
+    ) -> tuple[Any, Any]:
+        normalized_business = business_output
+        normalized_structured = structured_payload
+
+        if getattr(step, "agent_id", "") == "agent.product.requirement_decomposer":
+            normalized_business = LLMRunner._normalize_feat_breakdown_payload(business_output)
+            if isinstance(normalized_structured, dict):
+                normalized_structured = dict(normalized_structured)
+                normalized_structured["business_output"] = normalized_business
+
+        normalized_business, normalized_structured = LLMRunner._normalize_prd_writer_feat_payload(
+            step=step,
+            workflow_id=workflow_id,
+            business_output=normalized_business,
+            structured_payload=normalized_structured,
+        )
+        return normalized_business, normalized_structured
+
+    @staticmethod
+    def _normalize_feat_breakdown_payload(business_output: Any) -> Any:
+        if not isinstance(business_output, dict):
+            return business_output
+
+        normalized = dict(business_output)
+        feat_candidates = normalized.get("feat_candidates")
+        if not isinstance(feat_candidates, list):
+            return normalized
+
+        normalized_candidates = []
+        for item in feat_candidates:
+            if not isinstance(item, dict):
+                normalized_candidates.append(item)
+                continue
+
+            candidate = dict(item)
+            boundary = candidate.get("acceptance_boundary")
+            normalized_boundary = LLMRunner._stringify_acceptance_boundary(boundary)
+            if normalized_boundary is not None:
+                candidate["acceptance_boundary"] = normalized_boundary
+            normalized_candidates.append(candidate)
+
+        normalized["feat_candidates"] = normalized_candidates
+        return normalized
+
+    @staticmethod
+    def _stringify_acceptance_boundary(boundary: Any) -> Optional[str]:
+        if isinstance(boundary, str):
+            trimmed = boundary.strip()
+            return trimmed or None
+
+        if isinstance(boundary, list):
+            parts = [str(item).strip() for item in boundary if isinstance(item, str) and item.strip()]
+            return "；".join(parts) if parts else None
+
+        if isinstance(boundary, dict):
+            segments: List[str] = []
+            for key in ("input", "process", "output"):
+                value = boundary.get(key)
+                if isinstance(value, str) and value.strip():
+                    segments.append(value.strip())
+                elif isinstance(value, list):
+                    list_parts = [str(item).strip() for item in value if isinstance(item, str) and item.strip()]
+                    if list_parts:
+                        segments.append("，".join(list_parts))
+            return "；".join(segments) if segments else None
+
+        return None
+
+    @staticmethod
+    def _normalize_single_feat_payload(feat_payload: Dict[str, Any]) -> Dict[str, Any]:
+        normalized_feat = dict(feat_payload)
+
+        ssot = normalized_feat.get("ssot")
+        if isinstance(ssot, dict):
+            normalized_ssot = dict(ssot)
+        else:
+            normalized_ssot = {}
+        if normalized_feat.get("feat_id"):
+            normalized_ssot.setdefault("identity_kind", "ssot")
+            normalized_ssot.setdefault("ssot_type", "FEAT")
+        if normalized_ssot:
+            normalized_feat["ssot"] = normalized_ssot
+
+        derived = normalized_feat.get("derived_object_expectations")
+        if isinstance(derived, dict):
+            normalized_derived = dict(derived)
+        else:
+            normalized_derived = {}
+        normalized_derived.setdefault("task_required", True)
+        normalized_derived.setdefault("testset_required", True)
+        normalized_derived.setdefault("testset_owner", "qa")
+        normalized_derived.setdefault("qa_seed_required", True)
+        normalized_feat["derived_object_expectations"] = normalized_derived
+
+        return normalized_feat
+
+    @staticmethod
+    def _drop_self_referential_ssot_dependencies(
+        output_item: Dict[str, Any],
+        local_key: str,
+    ) -> Dict[str, Any]:
+        normalized_item = dict(output_item)
+
+        if normalized_item.get("parent") == local_key:
+            normalized_item.pop("parent", None)
+
+        for field_name in ("derived_from", "verifies", "implements"):
+            values = normalized_item.get(field_name)
+            if isinstance(values, list):
+                normalized_item[field_name] = [value for value in values if value != local_key]
+
+        source_refs = normalized_item.get("source_refs")
+        if isinstance(source_refs, list):
+            normalized_item["source_refs"] = [
+                value for value in source_refs
+                if not (
+                    isinstance(value, str)
+                    and (value == local_key or value.startswith(f"{local_key}#"))
+                )
+            ]
+
+        derived_from_ids = normalized_item.get("derived_from_ids")
+        if isinstance(derived_from_ids, list):
+            normalized_item["derived_from_ids"] = [
+                value for value in derived_from_ids
+                if not (
+                    isinstance(value, dict)
+                    and value.get("id") == local_key
+                )
+            ]
+
+        return normalized_item
 
     @staticmethod
     def _validate_feat_review_subject_refs(

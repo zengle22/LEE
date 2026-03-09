@@ -232,7 +232,7 @@ class StepRunnerBase(StepRunnerStrategy):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _validate_step_output(step, output_data) -> Optional[ValidationResult]:
+    def _validate_step_output(step, output_data, project_dir: Optional[str] = None) -> Optional[ValidationResult]:
         """v3.4: 验证步骤输出是否符合 Contract Schema"""
         config = step.config or {}
 
@@ -244,7 +244,7 @@ class StepRunnerBase(StepRunnerStrategy):
             return None
 
         try:
-            validator = SchemaValidator()
+            validator = SchemaValidator(project_dir=project_dir)
             result = validator.validate(output_data, {"schema_path": schema_path})
             return result
         except Exception as e:

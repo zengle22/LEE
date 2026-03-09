@@ -67,16 +67,22 @@ class SSOTContractMaterializer:
         """
         self.validate_contract(contract_data)
 
-        outputs = contract_data.get("outputs", [])
+        outputs = [
+            self._drop_self_referential_dependencies(output)
+            if isinstance(output, dict)
+            else output
+            for output in contract_data.get("outputs", [])
+        ]
         run_id = contract_data["run_id"]
         pending = {output["key"]: output for output in outputs}
         materialized: Dict[str, MaterializedOutput] = {}
+        contract_keys = set(pending.keys())
 
         while pending:
             progress = False
             for key in list(pending.keys()):
                 output = pending[key]
-                if not self._can_materialize(output, materialized):
+                if not self._can_materialize(output, materialized, contract_keys):
                     continue
                 materialized[key] = self._materialize_one(output, run_id, materialized)
                 del pending[key]
@@ -92,6 +98,7 @@ class SSOTContractMaterializer:
         self,
         output: Dict[str, Any],
         materialized: Dict[str, MaterializedOutput],
+        contract_keys: set[str],
     ) -> bool:
         refs = []
         if output.get("parent"):
@@ -101,7 +108,7 @@ class SSOTContractMaterializer:
         refs.extend(self._extract_local_keys(output.get("source_refs", [])))
         refs.extend(output.get("verifies", []))
         refs.extend(output.get("implements", []))
-        local_refs = [ref for ref in refs if ref in self._output_keys_hint(output, refs) or ref.isidentifier()]
+        local_refs = [ref for ref in refs if ref in contract_keys]
 
         for ref in local_refs:
             if ref in materialized:
@@ -112,9 +119,41 @@ class SSOTContractMaterializer:
                 return False
         return True
 
-    def _output_keys_hint(self, output: Dict[str, Any], refs: List[str]) -> set[str]:
-        del output
-        return {ref for ref in refs if not self._is_literal_id(ref)}
+    def _drop_self_referential_dependencies(self, output: Dict[str, Any]) -> Dict[str, Any]:
+        key = output.get("key")
+        if not isinstance(key, str) or not key:
+            return dict(output)
+
+        normalized = dict(output)
+        if normalized.get("parent") == key:
+            normalized.pop("parent", None)
+
+        for field_name in ("derived_from", "verifies", "implements", "depends_on"):
+            values = normalized.get(field_name)
+            if isinstance(values, list):
+                normalized[field_name] = [value for value in values if value != key]
+
+        source_refs = normalized.get("source_refs")
+        if isinstance(source_refs, list):
+            normalized["source_refs"] = [
+                value for value in source_refs
+                if not (
+                    isinstance(value, str)
+                    and (value == key or value.startswith(f"{key}#"))
+                )
+            ]
+
+        derived_from_ids = normalized.get("derived_from_ids")
+        if isinstance(derived_from_ids, list):
+            normalized["derived_from_ids"] = [
+                value for value in derived_from_ids
+                if not (
+                    isinstance(value, dict)
+                    and value.get("id") == key
+                )
+            ]
+
+        return normalized
 
     def _materialize_one(
         self,

@@ -847,8 +847,10 @@ class TemplateManager:
                                 description="",
                             ))
                         elif isinstance(output_item, dict):
-                            path = output_item.get("path", "")
-                            output_type = output_item.get("type") or ("dir" if path.endswith("/") else "file")
+                            path = output_item.get("path") or output_item.get("symbol", "")
+                            output_type = output_item.get("type")
+                            if not output_type:
+                                output_type = "symbol" if output_item.get("symbol") else ("dir" if path.endswith("/") else "file")
                             outputs.append(OutputSpec(
                                 type=output_type,
                                 path=path,
@@ -875,6 +877,7 @@ class TemplateManager:
                             "description": step_data.get("description", ""),
                             "mandatory": step_data.get("mandatory", True),
                             "stage_id": stage_id,
+                            "workflow_inputs": step_data.get("inputs", []),
                         },
                     ))
 
@@ -905,8 +908,10 @@ class TemplateManager:
                             description="",
                         ))
                     elif isinstance(output_item, dict):
-                        path = output_item.get("path", "")
-                        output_type = output_item.get("type") or ("dir" if path.endswith("/") else "file")
+                        path = output_item.get("path") or output_item.get("symbol", "")
+                        output_type = output_item.get("type")
+                        if not output_type:
+                            output_type = "symbol" if output_item.get("symbol") else ("dir" if path.endswith("/") else "file")
                         outputs.append(OutputSpec(
                             type=output_type,
                             path=path,
@@ -932,6 +937,7 @@ class TemplateManager:
                         "name": step_data.get("name", ""),
                         "description": step_data.get("description", ""),
                         "mandatory": step_data.get("mandatory", True),
+                        "workflow_inputs": step_data.get("inputs", []),
                     },
                 ))
 
