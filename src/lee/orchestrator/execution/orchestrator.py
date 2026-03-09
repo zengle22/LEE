@@ -28,7 +28,7 @@ v3.1 重构：
 import uuid
 import json
 import hashlib
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -682,7 +682,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "kind": step_to_execute.kind
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
 
@@ -821,7 +821,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                                 inputs_hash=inputs_hash,
                                 patch_hash=patch_bundle.patch_hash if patch_bundle else "",
                                 exit_code=0,
-                                timestamp=datetime.now(UTC).isoformat(),
+                                timestamp=datetime.now(timezone.utc).isoformat(),
                                 executor_type=step_to_execute.executor_type or "llm",
                             )
                             self.receipt_store.save(receipt)
@@ -854,7 +854,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                             "result": asdict(r) if hasattr(r, 'to_dict') else r.__dict__
                         },
                         source_workflow=workflow_id,
-                        timestamp=datetime.now(UTC).isoformat(),
+                        timestamp=datetime.now(timezone.utc).isoformat(),
                         event_id=uuid.uuid4().hex
                     ))
 
@@ -933,7 +933,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "error": str(e)
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
             return StepResult(
@@ -1987,7 +1987,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "complexity": complexity,
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
@@ -2004,7 +2004,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "l3_count": l3_count,
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
@@ -2022,7 +2022,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "point_id": point_id,
                 },
                 source_workflow=parent_l2_id,
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
@@ -2103,7 +2103,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "confidence": confidence,
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
