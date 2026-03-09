@@ -1,0 +1,473 @@
+# Feature Registry
+
+- Generated At: `2026-03-09T03:45:30.754941+00:00`
+
+## FEAT-001 注册工作流模板
+- Capability: `CAP-001`
+- Key: `feat_register_workflow_templates`
+- Summary: 通过 workflow registry 暴露模板定义与参数约束。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：workflow key、template path、required/optional params。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 注册工作流模板 后，系统读取并校验所需输入，进入 通过 workflow registry 暴露模板定义与参数约束。 对应处理流程。
+  - 处理过程中应用核心业务规则：registry path 必须指向 checked-in template 文件。
+  - 完成后输出并落库/回传：可解析的 workflow registry entry。
+- Edge Cases:
+  - 当 workflow key 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 注册工作流模板 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：可解析的 workflow registry entry。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` 给定 workflow key 时，CLI 可以解析到模板路径。
+    - Given: 已满足前置条件，且提供 workflow key。
+    - When: 触发 注册工作流模板 主流程。
+    - Then: 给定 workflow key 时，CLI 可以解析到模板路径。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` registry 中声明了必填参数 request_id、repo_root、objective。
+    - Given: 系统处于 注册工作流模板 处理中，且相关规则已生效。
+    - When: 执行与 registry 中声明了必填参数 request_id、repo_root、objective。 对应的业务步骤。
+    - Then: 系统应输出/更新：可解析的 workflow registry entry
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `config/workflow-registry.yaml`
+  - `src/lee/cli/commands/run.py`
+- Evidence Layers:
+  - Impl Refs:
+    - `config/workflow-registry.yaml`
+    - `src/lee/cli/commands/run.py`
+  - API Refs:
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `config/workflow-registry.yaml`
+  - `src/lee/cli/commands/run.py`
+
+## FEAT-002 解析 L3 workflow 模板
+- Capability: `CAP-001`
+- Key: `feat_parse_l3_workflow_templates`
+- Summary: 将 L3 模板中的 stages/steps 解析为可调度步骤与依赖关系。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：rendered template yaml。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 解析 L3 workflow 模板 后，系统读取并校验所需输入，进入 将 L3 模板中的 stages/steps 解析为可调度步骤与依赖关系。 对应处理流程。
+  - 处理过程中应用核心业务规则：stage.depends_on 在当前引擎中必须映射到前序 step id。
+  - 完成后输出并落库/回传：workflow steps、dependency graph、output specs。
+- Edge Cases:
+  - 当 rendered template yaml 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 解析 L3 workflow 模板 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：workflow steps、dependency graph、output specs。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` 模板可被解析为 Step 列表且不存在循环依赖。
+    - Given: 已满足前置条件，且提供 rendered template yaml。
+    - When: 触发 解析 L3 workflow 模板 主流程。
+    - Then: 模板可被解析为 Step 列表且不存在循环依赖。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` skill/gate 步骤拥有正确 executor_type。
+    - Given: 系统处于 解析 L3 workflow 模板 处理中，且相关规则已生效。
+    - When: 执行与 skill/gate 步骤拥有正确 executor_type。 对应的业务步骤。
+    - Then: 系统应输出/更新：dependency graph
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `src/lee/orchestrator/execution/template_manager.py`
+  - `src/lee/orchestrator/ir/converter.py`
+- Evidence Layers:
+  - Impl Refs:
+    - `src/lee/orchestrator/execution/template_manager.py`
+    - `src/lee/orchestrator/ir/converter.py`
+  - API Refs:
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `src/lee/orchestrator/execution/template_manager.py`
+  - `src/lee/orchestrator/ir/converter.py`
+
+## FEAT-003 渲染运行时 workflow instance
+- Capability: `CAP-001`
+- Key: `feat_render_runtime_instances`
+- Summary: 通过 CLI 将模板与参数渲染为运行时 workflow instance 文件并创建实例。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：template path、params、project_dir。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 渲染运行时 workflow instance 后，系统读取并校验所需输入，进入 通过 CLI 将模板与参数渲染为运行时 workflow instance 文件并创建实例。 对应处理流程。
+  - 处理过程中应用核心业务规则：rendered workflow 是运行时产物，不应被视为 checked-in spec。
+  - 完成后输出并落库/回传：.workflow/rendered/*.yaml、workflow instance id。
+- Edge Cases:
+  - 当 template path 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 渲染运行时 workflow instance 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：.workflow/rendered/*.yaml、workflow instance id。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` 运行 lee run 后会生成 rendered yaml。
+    - Given: 已满足前置条件，且提供 template path。
+    - When: 触发 渲染运行时 workflow instance 主流程。
+    - Then: 运行 lee run 后会生成 rendered yaml。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` runtime instance 的 data.params 与 spec 文件内容一致。
+    - Given: 系统处于 渲染运行时 workflow instance 处理中，且相关规则已生效。
+    - When: 执行与 runtime instance 的 data.params 与 spec 文件内容一致。 对应的业务步骤。
+    - Then: 系统应输出/更新：workflow instance id
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `src/lee/cli/commands/run.py`
+- Evidence Layers:
+  - Impl Refs:
+    - `src/lee/cli/commands/run.py`
+  - API Refs:
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `src/lee/cli/commands/run.py`
+
+## FEAT-004 执行工作流步骤 DAG
+- Capability: `CAP-002`
+- Key: `feat_execute_step_dag`
+- Summary: 根据 depends_on 选择 ready step 并顺序推进 workflow。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：workflow instance、current step state。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 执行工作流步骤 DAG 后，系统读取并校验所需输入，进入 根据 depends_on 选择 ready step 并顺序推进 workflow。 对应处理流程。
+  - 处理过程中应用核心业务规则：只有所有依赖满足后步骤才可执行。
+  - 完成后输出并落库/回传：completed_steps、next ready step、workflow summary。
+- Edge Cases:
+  - 当 workflow instance 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 执行工作流步骤 DAG 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：completed_steps、next ready step、workflow summary。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` 多步 workflow 可按 depends_on 连续推进。
+    - Given: 已满足前置条件，且提供 workflow instance。
+    - When: 触发 执行工作流步骤 DAG 主流程。
+    - Then: 多步 workflow 可按 depends_on 连续推进。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` 失败时 workflow 状态变为 failed。
+    - Given: 系统处于 执行工作流步骤 DAG 处理中，且相关规则已生效。
+    - When: 执行与 失败时 workflow 状态变为 failed。 对应的业务步骤。
+    - Then: 系统应输出/更新：next ready step
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `src/lee/orchestrator/execution/orchestrator.py`
+  - `src/lee/orchestrator/execution/state_machine.py`
+- Evidence Layers:
+  - Impl Refs:
+    - `src/lee/orchestrator/execution/orchestrator.py`
+    - `src/lee/orchestrator/execution/state_machine.py`
+  - API Refs:
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `src/lee/orchestrator/execution/orchestrator.py`
+  - `src/lee/orchestrator/execution/state_machine.py`
+
+## FEAT-005 执行自动检查门禁
+- Capability: `CAP-002`
+- Key: `feat_evaluate_auto_check_gates`
+- Summary: 把 step_outputs 扁平化并执行 blocker/major 表达式。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：gate expression、step_outputs。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 执行自动检查门禁 后，系统读取并校验所需输入，进入 把 step_outputs 扁平化并执行 blocker/major 表达式。 对应处理流程。
+  - 处理过程中应用核心业务规则：freeze 模式要求 blocker 与 major 均为 0。
+  - 完成后输出并落库/回传：gate pass/fail result。
+- Edge Cases:
+  - 当 gate expression 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 执行自动检查门禁 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：gate pass/fail result。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` review 输出 blocker_count=0 时 draft/publish gate 可通过。
+    - Given: 已满足前置条件，且提供 gate expression。
+    - When: 触发 执行自动检查门禁 主流程。
+    - Then: review 输出 blocker_count=0 时 draft/publish gate 可通过。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` freeze 模式下 major_count>0 会触发 gate fail。
+    - Given: 系统处于 执行自动检查门禁 处理中，且相关规则已生效。
+    - When: 执行与 freeze 模式下 major_count>0 会触发 gate fail。 对应的业务步骤。
+    - Then: 系统应输出/更新：gate pass/fail result
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `src/lee/orchestrator/execution/runners/auto_check_gate_runner.py`
+  - `spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml`
+- Evidence Layers:
+  - Impl Refs:
+    - `src/lee/orchestrator/execution/runners/auto_check_gate_runner.py`
+    - `spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml`
+  - API Refs:
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `src/lee/orchestrator/execution/runners/auto_check_gate_runner.py`
+  - `spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml`
+
+## FEAT-006 持久化步骤输出与证据路径
+- Capability: `CAP-002`
+- Key: `feat_persist_step_outputs`
+- Summary: 完成步骤时把 output dict 与 output paths 写入 workflow data。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：step output、output specs。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 持久化步骤输出与证据路径 后，系统读取并校验所需输入，进入 完成步骤时把 output dict 与 output paths 写入 workflow data。 对应处理流程。
+  - 处理过程中应用核心业务规则：同一步骤重复执行时路径列表需要去重合并。
+  - 完成后输出并落库/回传：workflow.data.step_outputs。
+- Edge Cases:
+  - 当 step output 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 持久化步骤输出与证据路径 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：workflow.data.step_outputs。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` 完成步骤后 step_outputs 中可读取 paths。
+    - Given: 已满足前置条件，且提供 step output。
+    - When: 触发 持久化步骤输出与证据路径 主流程。
+    - Then: 完成步骤后 step_outputs 中可读取 paths。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` gate 表达式可以直接使用 review 产生的 blocker_count。
+    - Given: 系统处于 持久化步骤输出与证据路径 处理中，且相关规则已生效。
+    - When: 执行与 gate 表达式可以直接使用 review 产生的 blocker_count。 对应的业务步骤。
+    - Then: 系统应输出/更新：workflow.data.step_outputs
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `src/lee/orchestrator/execution/state_machine.py`
+  - `src/lee/orchestrator/execution/runners/shell_runner.py`
+- Evidence Layers:
+  - Impl Refs:
+    - `src/lee/orchestrator/execution/state_machine.py`
+    - `src/lee/orchestrator/execution/runners/shell_runner.py`
+  - API Refs:
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `src/lee/orchestrator/execution/state_machine.py`
+  - `src/lee/orchestrator/execution/runners/shell_runner.py`
+
+## FEAT-007 通过 CLI 运行 workflow
+- Capability: `CAP-003`
+- Key: `feat_run_workflow_from_cli`
+- Summary: 支持 `lee run` 加载 registry、渲染模板并执行 workflow。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：workflow key、--spec、--project-dir。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 通过 CLI 运行 workflow 后，系统读取并校验所需输入，进入 支持 `lee run` 加载 registry、渲染模板并执行 workflow。 对应处理流程。
+  - 处理过程中应用核心业务规则：load_spec_as_params 的 workflow 必须把 spec 内容注入 params。
+  - 完成后输出并落库/回传：workflow instance、rendered template、execution summary。
+- Edge Cases:
+  - 当 workflow key 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 通过 CLI 运行 workflow 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：workflow instance、rendered template、execution summary。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` 执行 `lee run core.reverse-epic-feat --spec ...` 可创建并运行实例。
+    - Given: 已满足前置条件，且提供 workflow key。
+    - When: 触发 通过 CLI 运行 workflow 主流程。
+    - Then: 执行 `lee run core.reverse-epic-feat --spec ...` 可创建并运行实例。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` CLI summary 会输出最终状态与完成步数。
+    - Given: 系统处于 通过 CLI 运行 workflow 处理中，且相关规则已生效。
+    - When: 执行与 CLI summary 会输出最终状态与完成步数。 对应的业务步骤。
+    - Then: 系统应输出/更新：rendered template
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `src/lee/cli/commands/run.py`
+  - `src/lee/cli/main.py`
+- Evidence Layers:
+  - Impl Refs:
+    - `src/lee/cli/commands/run.py`
+    - `src/lee/cli/main.py`
+  - API Refs:
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `src/lee/cli/commands/run.py`
+  - `src/lee/cli/main.py`
+
+## FEAT-008 查询 workflow 状态
+- Capability: `CAP-003`
+- Key: `feat_query_workflow_status`
+- Summary: 查看 workflow 当前状态、完成步骤与 gate 信息。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：workflow_id。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 查询 workflow 状态 后，系统读取并校验所需输入，进入 查看 workflow 当前状态、完成步骤与 gate 信息。 对应处理流程。
+  - 处理过程中应用核心业务规则：状态查询不修改 workflow 数据。
+  - 完成后输出并落库/回传：status summary。
+- Edge Cases:
+  - 当 workflow_id 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 查询 workflow 状态 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：status summary。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` 给定 workflow_id 可以输出当前状态与当前步骤。
+    - Given: 已满足前置条件，且提供 workflow_id。
+    - When: 触发 查询 workflow 状态 主流程。
+    - Then: 给定 workflow_id 可以输出当前状态与当前步骤。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` blocked workflow 会显示 gate 指引。
+    - Given: 系统处于 查询 workflow 状态 处理中，且相关规则已生效。
+    - When: 执行与 blocked workflow 会显示 gate 指引。 对应的业务步骤。
+    - Then: 系统应输出/更新：status summary
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `src/lee/cli/commands/status.py`
+  - `src/lee/cli/main.py`
+- Evidence Layers:
+  - Impl Refs:
+    - `src/lee/cli/commands/status.py`
+    - `src/lee/cli/main.py`
+  - API Refs:
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `src/lee/cli/commands/status.py`
+  - `src/lee/cli/main.py`
+
+## FEAT-009 审批人工门禁
+- Capability: `CAP-003`
+- Key: `feat_approve_human_gates`
+- Summary: 通过 CLI 审批 gate 并推动 workflow 继续执行。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：workflow_id、gate_id、approver。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 审批人工门禁 后，系统读取并校验所需输入，进入 通过 CLI 审批 gate 并推动 workflow 继续执行。 对应处理流程。
+  - 处理过程中应用核心业务规则：只有 human gate 允许人工审批。
+  - 完成后输出并落库/回传：approved gate state。
+- Edge Cases:
+  - 当 workflow_id 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 审批人工门禁 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：approved gate state。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` approve 命令能更新 gate 记录。
+    - Given: 已满足前置条件，且提供 workflow_id。
+    - When: 触发 审批人工门禁 主流程。
+    - Then: approve 命令能更新 gate 记录。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` 审批成功后 workflow 不再停留在原 gate。
+    - Given: 系统处于 审批人工门禁 处理中，且相关规则已生效。
+    - When: 执行与 审批成功后 workflow 不再停留在原 gate。 对应的业务步骤。
+    - Then: 系统应输出/更新：approved gate state
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `src/lee/cli/commands/approve.py`
+  - `src/lee/orchestrator/execution/gate_api.py`
+- Evidence Layers:
+  - Impl Refs:
+    - `src/lee/cli/commands/approve.py`
+  - API Refs:
+    - `src/lee/orchestrator/execution/gate_api.py`
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `src/lee/cli/commands/approve.py`
+  - `src/lee/orchestrator/execution/gate_api.py`
+
+## FEAT-010 定义 SSOT 输出契约
+- Capability: `CAP-004`
+- Key: `feat_define_ssot_output_contract`
+- Summary: 使用统一 schema 描述 EPIC/FEAT 等 SSOT 输出对象。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：ssot artifact metadata、content。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 定义 SSOT 输出契约 后，系统读取并校验所需输入，进入 使用统一 schema 描述 EPIC/FEAT 等 SSOT 输出对象。 对应处理流程。
+  - 处理过程中应用核心业务规则：ssot output 必须声明 ssot_type。
+  - 完成后输出并落库/回传：contract-compliant ssot-agent-output bundle。
+- Edge Cases:
+  - 当 ssot artifact metadata 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 定义 SSOT 输出契约 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：contract-compliant ssot-agent-output bundle。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` 生成的 bundle 满足 contract_version=1.0。
+    - Given: 已满足前置条件，且提供 ssot artifact metadata。
+    - When: 触发 定义 SSOT 输出契约 主流程。
+    - Then: 生成的 bundle 满足 contract_version=1.0。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` outputs 中只出现 epic/feat 两类 SSOT。
+    - Given: 系统处于 定义 SSOT 输出契约 处理中，且相关规则已生效。
+    - When: 执行与 outputs 中只出现 epic/feat 两类 SSOT。 对应的业务步骤。
+    - Then: 系统应输出/更新：contract-compliant ssot-agent-output bundle
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `spec-global/core/contracts/ssot-agent-output/v1/schema.json`
+  - `src/lee/cli/commands/ssot.py`
+- Evidence Layers:
+  - Impl Refs:
+    - `spec-global/core/contracts/ssot-agent-output/v1/schema.json`
+    - `src/lee/cli/commands/ssot.py`
+  - API Refs:
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `spec-global/core/contracts/ssot-agent-output/v1/schema.json`
+  - `src/lee/cli/commands/ssot.py`
+
+## FEAT-011 维护模板与实例边界
+- Capability: `CAP-004`
+- Key: `feat_enforce_template_instance_boundary`
+- Summary: 在 workflow spec 维护与评审中强制区分 checked-in 模板和 runtime instance。
+- Acceptance Boundary: 独立可验收的业务能力单元
+- Preconditions:
+  - 上游已提供完成该能力所需输入：workflow spec change request、review context。
+  - 相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。
+- Main Flow:
+  - 触发 维护模板与实例边界 后，系统读取并校验所需输入，进入 在 workflow spec 维护与评审中强制区分 checked-in 模板和 runtime instance。 对应处理流程。
+  - 处理过程中应用核心业务规则：checked-in workflow spec 只能描述模板语义。
+  - 完成后输出并落库/回传：template-boundary compliant spec review result。
+- Edge Cases:
+  - 当 workflow spec change request 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。
+  - 当 维护模板与实例边界 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。
+- State Updates:
+  - 成功执行后更新相关业务状态：template-boundary compliant spec review result。
+  - 若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。
+- Acceptance Checks:
+  - `AC-001` workflow spec maintainer 会纠正模板/实例混淆描述。
+    - Given: 已满足前置条件，且提供 workflow spec change request。
+    - When: 触发 维护模板与实例边界 主流程。
+    - Then: workflow spec maintainer 会纠正模板/实例混淆描述。
+    - Trace Hints: TASK, TESTSET, UI, TECH
+  - `AC-002` spec-review 会将该混淆识别为 review finding。
+    - Given: 系统处于 维护模板与实例边界 处理中，且相关规则已生效。
+    - When: 执行与 spec-review 会将该混淆识别为 review finding。 对应的业务步骤。
+    - Then: 系统应输出/更新：template-boundary compliant spec review result
+    - Trace Hints: TASK, TESTSET, TECH
+- Primary Refs:
+  - `spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml`
+  - `spec-global/core/agents/spec-review/v1/agent.yaml`
+- Evidence Layers:
+  - Impl Refs:
+    - `spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml`
+    - `spec-global/core/agents/spec-review/v1/agent.yaml`
+  - API Refs:
+  - Test Refs:
+  - Doc Refs:
+- Evidence Refs:
+  - `spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml`
+  - `spec-global/core/agents/spec-review/v1/agent.yaml`
