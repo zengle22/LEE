@@ -1,0 +1,124 @@
+# Product Main Pipeline Template v1.0
+# 产品部门 L2 主编排模板 - SSOT canonical path
+
+kind: l2_workflow_template
+version: "1.0"
+id: workflow.product.product_main_pipeline
+name: Product Main Pipeline
+description: >
+  产品部门新的 L2 主编排模板。
+  负责将上游 SRC 输入串联为 EPIC、FEAT，以及研发准备包。
+  该文件定义的是 checked-in workflow template，不是运行时 workflow instance。
+  实际执行实例由 Python runtime 根据模板动态生成。
+  该模板本身不承载全部细节，而是调度 3 条 L3 子模板。
+owner: product-ai
+tags: [product, workflow, l2, ssot, canonical]
+
+roles:
+  agents: []
+  skills: []
+  gates: []
+
+overview:
+  input_types:
+    - type: raw_requirement
+      description: 原始需求描述
+    - type: business_opportunity_freeze
+      description: 上游策略部门冻结后的商业机会
+      contract: departments/stg/contracts/business_opportunity/v1/schema.yaml
+
+  output_types:
+    - type: epic_freeze_bundle
+      description: 冻结后的 EPIC 集合
+    - type: feat_freeze_bundle
+      description: 冻结后的 FEAT 集合
+    - type: delivery_prep_bundle
+      description: 面向研发和 QA 的准备包，包含 UI / TECH / TASK 以及 TESTSET seed
+
+phases:
+  - id: src_to_epic
+    name: SRC to EPIC
+    level: task
+    workflow: workflow.product.task.src_to_epic
+    depends_on: []
+
+  - id: epic_to_feat
+    name: EPIC to FEAT
+    level: task
+    workflow: workflow.product.task.epic_to_feat
+    depends_on: [src_to_epic]
+
+  - id: feat_to_delivery_prep
+    name: FEAT to Delivery Prep
+    level: task
+    workflow: workflow.product.task.feat_to_delivery_prep
+    depends_on: [epic_to_feat]
+
+handoff:
+  to:
+    - workflow.dev.development_pipeline
+    - workflow.ui.ui_design_pipeline
+    - workflow.qa.testing_pipeline
+  with:
+    - feat_freeze_bundle
+    - delivery_prep_bundle
+  description: >
+    产品部门完成 FEAT 冻结与研发准备后，
+    Dev 按 FEAT 粒度消费 UI / TECH / TASK，
+    QA 按同一 FEAT 粒度派生 TESTSET。
+
+constraints:
+  canonical_path: |
+    本流程是产品部门新的 canonical 主路径。
+    新业务不得再接入 departments/prd 下的旧 workflow。
+
+  ssot_chain_binding: |
+    主链必须遵循：
+    SRC -> EPIC -> FEAT -> UI / TECH / TASK
+    并确保 TESTSET 可由 QA 基于 FEAT 派生。
+
+  no_direct_prd_centric_design: |
+    不再以 PRD 文档作为唯一中心对象。
+    PRD 说明文档若存在，只能作为 FEAT 的视图或派生产物。
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+  context_fields:
+    - raw_requirement
+    - business_opportunity_freeze
+  output_fields:
+    - epic_freeze_bundle
+    - feat_freeze_bundle
+    - delivery_prep_bundle
+
+state_machine:
+  states:
+    - INIT: "初始化"
+    - SRC_TO_EPIC: "SRC 到 EPIC"
+    - EPIC_TO_FEAT: "EPIC 到 FEAT"
+    - FEAT_TO_DELIVERY_PREP: "FEAT 到研发准备"
+    - COMPLETED: "完成"
+    - FAILED: "失败"
+  transitions:
+    INIT:
+      - to: SRC_TO_EPIC
+        trigger: workflow_started
+    SRC_TO_EPIC:
+      - to: EPIC_TO_FEAT
+        trigger: src_to_epic_completed
+      - to: FAILED
+        trigger: src_to_epic_failed
+    EPIC_TO_FEAT:
+      - to: FEAT_TO_DELIVERY_PREP
+        trigger: epic_to_feat_completed
+      - to: FAILED
+        trigger: epic_to_feat_failed
+    FEAT_TO_DELIVERY_PREP:
+      - to: COMPLETED
+        trigger: delivery_prep_completed
+      - to: FAILED
+        trigger: delivery_prep_failed

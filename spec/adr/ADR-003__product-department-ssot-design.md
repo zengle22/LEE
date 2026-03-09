@@ -8,7 +8,7 @@ parent_id:
 derived_from_ids:
   - ADR-001
 source_refs:
-  - spec-global/SSOT_CONTRACT_CHAIN.md
+  []
 owner: product
 tags: [ssot, product, governance, workflow]
 properties:

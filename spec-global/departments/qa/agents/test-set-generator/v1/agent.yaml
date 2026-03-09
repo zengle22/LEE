@@ -19,8 +19,8 @@ contracts:
     - test_strategy: "测试策略"
     - risk_areas: "风险区域"
     - test_focus: "测试重点"
-  output_schema: ../../contracts/test-set/v1/schema.yaml
-  ssot_output_schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
+  output_schema: ../../../contracts/test-set/v1/schema.yaml
+  ssot_output_schema: ../../../../../core/contracts/ssot-agent-output/v1/schema.json
 
 # 角色定义
 persona:
@@ -64,6 +64,16 @@ capabilities:
   - skill.qa.yaml_generation
   - skill.qa.schema_validation
 
+prompting:
+  instructions:
+    - "如果步骤要求文件输出，先输出对应文件 section，再输出 ssot_output_contract section"
+    - "文件 section 只能包含符合 test-set contract schema 的原始 YAML，不要输出 legacy metadata/test_cases 结构"
+    - "不要在文件内容前后添加解释性 prose"
+    - "ssot_output_contract section 必须是 machine-readable JSON 或 YAML"
+    - "Test Set 必须 trace 到单一 FEAT，并声明 acceptance_criteria_refs"
+    - "ssot_output_contract.outputs[0].parent 必须直接填写真实 FEAT ID，不能写 feat 这类占位词"
+    - "优先使用 feat_freeze 和 delivery_prep_bundle 中的 AC、风险、依赖和任务泳道"
+
 # 输入输出
 inputs:
   - name: module
@@ -82,12 +92,12 @@ inputs:
 outputs:
   - name: test_set_yaml
     type: file
-    schema: ../../contracts/test-set/v1/schema.yaml
+    schema: ../../../contracts/test-set/v1/schema.yaml
     description: "Test Set YAML 文件"
 
 ssot_output_contract:
   description: "当纳入正式 SSOT 链时，Test Set Generator 应输出挂在 FEAT 下的 TESTSET 声明。"
-  schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
+  schema: ../../../../../core/contracts/ssot-agent-output/v1/schema.json
   integration_pattern:
     mode: envelope
     business_field: business_output
@@ -96,11 +106,27 @@ ssot_output_contract:
     business_output:
       test_set_id: TS-REG-001
       module: 用户注册
+      description: 用户注册能力测试集
+      owner: qa-team
       strategy:
-        type: functional
+        focus:
+          - 注册成功路径
+          - 输入校验
+        test_types:
+          - api
+          - integration
+        priority: P0
       test_focus:
-        core_paths:
+        positive:
           - 注册成功
+        negative:
+          - 邮箱格式非法
+      traceability:
+        feature_ids:
+          - FEAT-023
+        acceptance_criteria_refs:
+          - AC1
+          - AC2
     ssot_output_contract:
       contract_version: "1.0"
       run_id: qa-run-001

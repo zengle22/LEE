@@ -51,6 +51,17 @@
 - 阈值标准（可豁免）
 - 风险可接受标准（需签字）
 
+### 门禁边界更新
+
+新 QA template 流程不再依赖 `_metadata.yaml` 中旧的
+`design_input_gate`、`regression_gate`、`test_case_review_gate` 注册项。
+
+当前推荐做法是：
+
+- 在 workflow template 内声明 gate
+- 由运行时根据 template 动态生成 gate instance
+- 不再为旧 QA workflow id 维护平行 metadata gate 注册
+
 ### v2.0 新特性
 
 | 特性 | v1.0 | v2.0 |

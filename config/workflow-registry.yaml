@@ -81,12 +81,16 @@ workflows:
   qa.test-set-production:
     path: spec-global/departments/qa/workflows/templates/test-set-production-l3-template.yaml
     kind: l3_workflow_template
-    description: "生产 Test Set 设计资产 (L3) - 从需求文档生成 Test Set"
+    description: "生产 Test Set 设计资产 (L3) - 优先从 FEAT freeze 与 delivery prep seed 生成 Test Set"
+    load_spec_as_params: true
     required_params:
       - module
-      - requirement_doc
+      - feat_freeze
     optional_params:
+      - requirement_doc
       - tech_design
+      - delivery_prep_bundle
+      - ui_specs
 
   qa.test-plan-execution:
     path: spec-global/departments/qa/workflows/templates/test-plan-l2-template.yaml
@@ -110,6 +114,45 @@ workflows:
     optional_params:
       - build_version
       - environment
+
+  # ========== Product 工作流 ==========
+  product.main:
+    path: spec-global/departments/product/workflows/templates/product-main-pipeline/v1/workflow.yaml
+    kind: l2_workflow_template
+    description: "Product 主编排模板 (L2) - raw input -> SRC -> EPIC -> FEAT -> delivery prep"
+    load_spec_as_params: true
+    required_params: []
+    optional_params:
+      - raw_requirement
+      - business_opportunity_freeze
+
+  product.src-to-epic:
+    path: spec-global/departments/product/workflows/templates/src-to-epic/v1/workflow.yaml
+    kind: l3_workflow_template
+    description: "Product L3 - raw input / SRC to EPIC"
+    load_spec_as_params: true
+    required_params: []
+    optional_params:
+      - raw_requirement
+      - business_opportunity
+
+  product.epic-to-feat:
+    path: spec-global/departments/product/workflows/templates/epic-to-feat/v1/workflow.yaml
+    kind: l3_workflow_template
+    description: "Product L3 - EPIC to FEAT"
+    load_spec_as_params: true
+    required_params:
+      - epic_freeze
+    optional_params: []
+
+  product.feat-to-delivery-prep:
+    path: spec-global/departments/product/workflows/templates/feat-to-delivery-prep/v1/workflow.yaml
+    kind: l3_workflow_template
+    description: "Product L3 - FEAT to delivery prep"
+    load_spec_as_params: true
+    required_params:
+      - feat_freeze
+    optional_params: []
 
   # ========== Office 工作流 ==========
   office.workspace-cleanup:

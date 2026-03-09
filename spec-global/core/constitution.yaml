@@ -198,7 +198,7 @@ execution_taxonomy:
         - 审计跟踪
       examples:
         - "gate.dev.h1_plan_review"
-        - "gate.qa.regression_gate"
+        - "gate.qa.result_judgment_review"
         - "gate.devops.deploy_gate"
       step_type: "kind: human_gate 或 type: human_gate"
 
@@ -234,7 +234,7 @@ execution_taxonomy:
       spec_skills:
         - skill.media.style_validation  # 规范型：风格校验规则
       gates:
-        - gate.qa.test_case_review_gate # 人类：用例评审
+        - gate.qa.result_judgment_review # 人类：结果判定评审
 
 # ============================================
 # 系统角色
