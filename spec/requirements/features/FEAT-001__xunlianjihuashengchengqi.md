@@ -4,7 +4,6 @@ ssot_type: feat
 title: 训练计划生成器
 status: active
 version: v1
-parent_id:
 derived_from_ids: []
 source_refs: []
 owner: null

@@ -4,9 +4,8 @@ ssot_type: feat
 title: 多因素认证系统集成
 status: active
 version: v1
-parent_id: EPIC-SEC-001
 derived_from_ids: []
-source_refs:
+source_refs: []
 - EPIC-SEC-001#auth_enhancement
 owner: null
 tags: []

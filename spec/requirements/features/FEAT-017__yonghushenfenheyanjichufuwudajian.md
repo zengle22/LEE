@@ -4,9 +4,8 @@ ssot_type: feat
 title: 用户身份核验基础服务搭建
 status: active
 version: v1
-parent_id: EPIC-001
 derived_from_ids: []
-source_refs:
+source_refs: []
 - EPIC-001#auth_scope
 owner: null
 tags: []

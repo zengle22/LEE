@@ -4,9 +4,8 @@ ssot_type: feat
 title: 生成首版周训练计划
 status: active
 version: v1
-parent_id: EPIC-001
 derived_from_ids: []
-source_refs:
+source_refs: []
 - EPIC-001#scope
 owner: null
 tags: []
