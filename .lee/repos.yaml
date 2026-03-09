@@ -5,3 +5,4 @@ repos:
     type: git
     default_branch: main
     url: git@codeup.aliyun.com:5edca319d1d1abe63b55f290/LEE/framework.git
+    description: Project LEE

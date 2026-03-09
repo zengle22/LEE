@@ -1,8 +1,12 @@
-# Knowledge
+# 知识沉淀（Agent 复盘、模式提炼、能力演进）
 
-Agent retrospectives, distilled patterns, and capability evolution notes live here.
+**Config Key**: `knowledge_dir`  
+**Structure**: `flat`  
+**Naming**: `default`
 
-Boundary:
-- `knowledge/` stores accumulated lessons and reusable knowledge
-- governed SSOT object IDs and filenames are not defined here
-- formal object identity and naming remain owned by the SSOT identity layer
+## Subdirectories
+
+- `retrospectives/`
+- `patterns/`
+- `evolution/`
+
