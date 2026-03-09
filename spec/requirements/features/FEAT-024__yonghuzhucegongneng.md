@@ -6,7 +6,6 @@ status: active
 version: v1
 derived_from_ids: []
 source_refs: []
-- EPIC-001#scope
 owner: null
 tags: []
 properties:

@@ -6,7 +6,6 @@ status: active
 version: v1
 derived_from_ids: []
 source_refs: []
-- EPIC-SEC-001#auth_enhancement
 owner: null
 tags: []
 properties:

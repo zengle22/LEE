@@ -6,7 +6,6 @@ status: active
 version: v1
 derived_from_ids: []
 source_refs: []
-- EPIC-123#spec_generation
 owner: null
 tags: []
 properties:

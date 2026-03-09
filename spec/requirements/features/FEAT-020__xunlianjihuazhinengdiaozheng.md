@@ -6,7 +6,6 @@ status: active
 version: v1
 derived_from_ids: []
 source_refs: []
-- EPIC-TEST-001
 owner: null
 tags: []
 properties:
