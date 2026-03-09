@@ -7,8 +7,8 @@ This repository uses `main` as the only release trunk.
 - Feature work happens on `feature/*`, `fix/*`, `hotfix/*`, or `refactor/*`.
 - Pull requests into `main` run validation and test gates.
 - Every push to `main` builds a candidate package and uploads it as a workflow artifact.
-- Every tag matching `v*` publishes a release package to a Python package registry and creates a GitHub Release.
-- Marathon consumes published LEE versions separately by updating its dependency version.
+- Every tag matching `v*` publishes release assets to a GitHub Release.
+- Marathon consumes published LEE versions by downloading the wheel from a GitHub Release URL.
 
 ## Workflows
 
@@ -17,14 +17,7 @@ This repository uses `main` as the only release trunk.
 - `.github/workflows/main-release.yml`
   Builds candidate packages from `main` and uploads them as workflow artifacts.
 - `.github/workflows/tag-release.yml`
-  Builds and publishes release packages from version tags.
-
-## Required Secrets
-
-- `PYPI_API_TOKEN`
-- `PACKAGE_REPOSITORY_URL` (optional; omit for PyPI, set to `https://test.pypi.org/legacy/` for TestPyPI, or point to your private Python index)
-
-If you publish to PyPI, you can leave `PACKAGE_REPOSITORY_URL` unset and the publish action will use PyPI defaults.
+  Builds release packages from version tags and uploads them to GitHub Releases.
 
 ## Branch Protection
 
@@ -37,17 +30,32 @@ Protect `main` with these settings:
 - Restrict direct pushes to `main`.
 - Prefer squash merge.
 
-## Registry Choice
+## Release Assets
 
-Use a standard Python package registry.
+- Public repository:
+  Marathon can install directly from the release URL.
+- Private repository:
+  Marathon should download the wheel with a GitHub token and then install the local file.
 
-- PyPI for public releases
-- TestPyPI for dry runs
-- A private Python index such as Artifactory, Nexus, Cloudsmith, Azure Artifacts, or a self-hosted devpi server for internal use
+Expected wheel asset naming:
 
-GitHub Packages does not provide a Python package registry. This workflow is therefore designed around standard Python indexes instead.
+```text
+lee_framework-<version>-py3-none-any.whl
+```
 
-Marathon should update `lee-framework==<version>` in its own repository and then run its own test and deployment flow.
+Example public install:
+
+```bash
+pip install "https://github.com/shadowyang-42/LEE-ff82194b/releases/download/v0.2.1/lee_framework-0.2.1-py3-none-any.whl"
+```
+
+Example download then install:
+
+```bash
+python scripts/ci/install_from_github_release.py --repo shadowyang-42/LEE-ff82194b --version 0.2.1
+```
+
+For private repositories, use a GitHub token with `curl` or the GitHub CLI to download the asset before calling `pip install`.
 
 ## Versioning
 
