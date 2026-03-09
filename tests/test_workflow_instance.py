@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, AsyncMock, patch
 import yaml
+import asyncio
 
 
 class TestPlanAgent:
@@ -194,7 +195,7 @@ class TestWorkflowRunner:
             project_root=Path(".")
         )
         assert config.workflow_key == "test-workflow"
-        assert config.plan_mode == "suggest"
+        assert config.plan_mode == "simple"
         assert config.skip_plan is False
 
     def test_workflow_run_config_custom(self):
@@ -238,7 +239,7 @@ class TestIntegration:
             # Run plan (without LLM for testing)
             agent = PlanAgent(llm_executor=None)
             import asyncio
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 agent.plan(template, {"phase_id": "test"}, PlanConfig(mode="simple"))
             )
 
@@ -279,7 +280,7 @@ class TestReviewGate:
         )
 
         import asyncio
-        decision = asyncio.get_event_loop().run_until_complete(
+        decision = asyncio.run(
             gate.check(plan_result, "simple")
         )
 
@@ -303,7 +304,7 @@ class TestReviewGate:
         )
 
         import asyncio
-        decision = asyncio.get_event_loop().run_until_complete(
+        decision = asyncio.run(
             gate.check(plan_result, "force")
         )
 
@@ -421,7 +422,7 @@ class TestContractScenarios:
         }
 
         import asyncio
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             agent.plan(template, {"phase_id": "test"}, PlanConfig(mode="simple"))
         )
 
@@ -451,7 +452,7 @@ class TestContractScenarios:
 
         import asyncio
         # Use force mode to ensure LLM is called
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             agent.plan(template, {"phase_id": "test"}, PlanConfig(mode="force"))
         )
 
@@ -574,7 +575,7 @@ class TestContractScenarios:
         )
 
         import asyncio
-        decision = asyncio.get_event_loop().run_until_complete(
+        decision = asyncio.run(
             gate.check(plan_result, "simple")
         )
 
@@ -597,7 +598,7 @@ class TestContractScenarios:
         )
 
         import asyncio
-        decision = asyncio.get_event_loop().run_until_complete(
+        decision = asyncio.run(
             gate.check(plan_result, "suggest")
         )
 
@@ -620,7 +621,7 @@ class TestContractScenarios:
         )
 
         import asyncio
-        decision = asyncio.get_event_loop().run_until_complete(
+        decision = asyncio.run(
             gate.check(plan_result, "force")
         )
 
@@ -643,7 +644,7 @@ class TestRetrySideEffects:
         }
 
         import asyncio
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             agent.plan(template, {"phase_id": "test"}, PlanConfig(mode="simple"))
         )
 

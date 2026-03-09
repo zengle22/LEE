@@ -5,6 +5,7 @@ Gate Improvement v1.1 - Phase 1
 """
 
 import pytest
+import pytest_asyncio
 import tempfile
 from pathlib import Path
 from datetime import datetime
@@ -16,7 +17,7 @@ from lee.orchestrator.storage.models import (
 )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_store():
     """创建临时数据库存储"""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:

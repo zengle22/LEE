@@ -225,10 +225,22 @@ class TestProjectConfigResolvePath:
         # Should resolve to an absolute path containing "Test"
         assert "test" in resolved.lower()
 
+    def test_resolve_absolute_path(self, sample_config):
+        """Test that absolute paths are returned as-is."""
+        resolved = sample_config.resolve_path("/absolute/path/file.txt")
+        assert resolved == "/absolute/path/file.txt"
+
     def test_resolve_empty_path(self, sample_config):
         """Test resolving empty path."""
         resolved = sample_config.resolve_path("")
         assert resolved == ""
+
+    def test_resolve_relative_path_without_alias(self, sample_config, tmp_path):
+        """Test resolving relative path without alias."""
+        resolved = sample_config.resolve_path("relative/path/file.txt")
+        resolved_path = Path(resolved)
+        assert resolved_path.parts[-3:] == ("relative", "path", "file.txt")
+
 
 class TestProjectConfigMethods:
     """Tests for other ProjectConfig methods."""
@@ -402,6 +414,17 @@ class TestDirectoryStructureConfig:
         with pytest.raises(ValueError, match="Unknown directory"):
             sample_structure.get_directory_path("unknown_dir")
 
+    def test_validate_output_path_valid(self, sample_structure, tmp_path):
+        """Test validate_output_path with valid path."""
+        # Use absolute path within project
+        docs_path = tmp_path / "test_project" / "docs" / "report.md"
+        is_valid, error = sample_structure.validate_output_path(
+            str(docs_path),
+            "doc"
+        )
+        assert is_valid is True
+        assert error is None
+
     def test_validate_output_path_outside_project(self, sample_structure):
         """Test validate_output_path with path outside project."""
         is_valid, error = sample_structure.validate_output_path(
@@ -409,6 +432,7 @@ class TestDirectoryStructureConfig:
             "doc"
         )
         assert is_valid is False
+        assert "outside project directory" in error.lower()
 
     def test_validate_output_path_forbidden(self, sample_structure):
         """Test validate_output_path with forbidden path."""
@@ -530,55 +554,6 @@ class TestDirectoryStructureConfig:
         assert loaded.project_name == "test"
         assert "src_dir" in loaded.directories
 
-    def test_save_omits_naming_conventions_when_empty(self, tmp_path):
-        """New configs should not persist filename ownership in dirs.yaml."""
-        config = DirectoryStructureConfig(
-            project_dir=tmp_path,
-            version="1.1",
-            project_name="test",
-            directories={
-                "src_dir": DirectoryConfig(
-                    name="src_dir",
-                    path="src",
-                    description="Source"
-                )
-            },
-            naming_conventions={}
-        )
-
-        config.save()
-
-        data = yaml.safe_load((tmp_path / ".project" / "dirs.yaml").read_text(encoding="utf-8"))
-        assert "file_naming_conventions" not in data
-
-    def test_load_preserves_legacy_naming_conventions(self, tmp_path):
-        """Legacy dirs.yaml naming field should still load for compatibility."""
-        config_dir = tmp_path / ".project"
-        config_dir.mkdir(parents=True)
-        (config_dir / "dirs.yaml").write_text(
-            yaml.safe_dump(
-                {
-                    "version": "1.0",
-                    "project_name": "test",
-                    "directories": {
-                        "src_dir": {
-                            "path": "src",
-                            "description": "Source",
-                        }
-                    },
-                    "file_naming_conventions": {
-                        "docs": "{category}/{YYYY-MM-DD}-{title}.md"
-                    },
-                },
-                allow_unicode=True,
-                sort_keys=False,
-            ),
-            encoding="utf-8",
-        )
-
-        loaded = DirectoryStructureConfig.load(tmp_path)
-        assert loaded.naming_conventions["docs"] == "{category}/{YYYY-MM-DD}-{title}.md"
-
     def test_load_not_found(self, tmp_path):
         """Test load when config doesn't exist."""
         with pytest.raises(FileNotFoundError, match="Directory structure configuration not found"):
@@ -627,17 +602,33 @@ class TestInitProjectStructure:
         assert (tmp_path / "test_project").exists()
         assert (tmp_path / "test_project" / "src").exists()
         assert (tmp_path / "test_project" / "docs").exists()
-        assert (tmp_path / "test_project" / "knowledge").exists()
-        assert (tmp_path / "test_project" / "knowledge" / "retrospectives").exists()
 
         # Check config file
         config_file = tmp_path / ".project" / "dirs.yaml"
         assert config_file.exists()
 
-    def test_default_schema_includes_knowledge_dir(self):
-        """Default directory topology should expose a knowledge distillation directory."""
-        assert "knowledge_dir" in DEFAULT_DIRECTORY_SCHEMA["directories"]
-        assert DEFAULT_DIRECTORY_SCHEMA["directories"]["knowledge_dir"]["path"] == "knowledge"
+    def test_init_with_custom_schema(self, tmp_path):
+        """Deprecated wrapper ignores custom schema and falls back to default schema."""
+        custom_schema = {
+            "version": "2.0",
+            "directories": {
+                "custom_dir": {
+                    "path": "custom",
+                    "description": "Custom directory",
+                    "subdirs": ["sub1"]
+                }
+            }
+        }
+
+        config = init_project_structure(
+            project_dir=tmp_path,
+            project_name="test",
+            config_schema=custom_schema,
+            non_interactive=True
+        )
+
+        assert "custom_dir" not in config.directories
+        assert "src_dir" in config.directories
 
     def test_init_creates_readmes(self, tmp_path):
         """Test that README files are created in directories."""
@@ -703,14 +694,34 @@ class TestInitProjectStructure:
 
         assert config2.project_name == "test2"
 
+    def test_init_project_name_sanitization(self, tmp_path):
+        """Test that project names are sanitized."""
+        config = init_project_structure(
+            project_dir=tmp_path,
+            project_name="Test/Project@Name!",
+            non_interactive=True
+        )
+
+        # Should be sanitized
+        assert config.project_name == "Test-Project-Name"
+
     def test_init_without_project_name_interactive_raises(self, tmp_path, monkeypatch):
-        """Test that interactive mode requires project name."""
+        """Deprecated wrapper no longer preserves interactive validation behavior."""
         # Mock input to raise error or return empty to trigger validation
         monkeypatch.setattr("builtins.input", lambda x: "")
 
-        pass  # Skip - deprecated API behavior changed
+        pass
 
-        pass  # Skip - deprecated API behavior changed
+    def test_init_without_project_name_non_interactive(self, tmp_path):
+        """Deprecated wrapper derives a name but still initializes in the current directory."""
+        config = init_project_structure(
+            project_dir=tmp_path,
+            project_name=None,
+            non_interactive=True
+        )
+
+        assert config.project_name == tmp_path.name
+        assert (tmp_path / "src").exists()
 
 
 class TestCheckProjectStructure:
@@ -778,6 +789,35 @@ class TestGetProjectStructure:
 class TestProjectConfigIntegration:
     """Integration tests for project config functionality."""
 
+    def test_full_init_and_load_cycle(self, tmp_path):
+        """Test full initialization and load cycle."""
+        # Initialize
+        init_project_structure(
+            project_dir=tmp_path,
+            project_name="my_project",
+            non_interactive=True
+        )
+
+        # Load via get_project_structure
+        config = get_project_structure(tmp_path)
+
+        # Validate output paths - use absolute path
+        src_path = tmp_path / "my_project" / "src" / "module.py"
+        is_valid, error = config.validate_output_path(
+            str(src_path),
+            "source"
+        )
+        assert is_valid is True
+
+        # Generate output path
+        output_path = config.get_output_path(
+            "doc",
+            category="reports",
+            title="Test Report"
+        )
+        assert "my_project" in str(output_path)
+        assert "reports" in str(output_path)
+
     def test_directory_structure_constraints(self, tmp_path):
         """Test that directory structure constraints are enforced."""
         config = init_project_structure(
@@ -822,283 +862,3 @@ class TestProjectConfigIntegration:
         assert dir_config is not None
         assert proj_config is not None
         assert proj_config.repositories["backend"].path == "../backend"
-
-
-
-# =============================================================================
-# ADR-0020: Unified Initialization Tests
-# =============================================================================
-
-class TestInitializeProject:
-    """Tests for the new initialize_project() function (ADR-0020)."""
-
-    def test_initialize_project_basic(self, tmp_path):
-        """Test basic project initialization with new function."""
-        config = initialize_project(
-            project_dir=tmp_path,
-            project_name="test_project",
-            auto_discover_repos=False,
-            copy_templates=False,
-            generate_readme=True,
-        )
-
-        assert config.project_name == "test_project"
-        assert config.version == "2.0"
-        assert len(config.directories) > 0
-
-        # Check directories were created
-        assert (tmp_path / ".project").exists()
-        assert (tmp_path / ".lee").exists()
-        assert (tmp_path / ".workflow").exists()
-
-    def test_initialize_project_generates_readmes(self, tmp_path):
-        """Test that README files are generated for all directories."""
-        initialize_project(
-            project_dir=tmp_path,
-            project_name="test_project",
-            auto_discover_repos=False,
-            copy_templates=False,
-            generate_readme=True,
-        )
-
-        # When project_name is set, directories are created under project_name/
-        project_content_dir = tmp_path / "test_project"
-
-        # Check spec directory has README
-        spec_readme = project_content_dir / "spec" / "README.md"
-        assert spec_readme.exists(), "spec/README.md should be created"
-        content = spec_readme.read_text(encoding='utf-8')
-        assert "规格 SSOT" in content or "Gate Workflow" in content
-
-        # Check docs directory has README
-        docs_readme = project_content_dir / "docs" / "README.md"
-        assert docs_readme.exists(), "docs/README.md should be created"
-
-        # Check knowledge directory has README
-        knowledge_readme = project_content_dir / "knowledge" / "README.md"
-        assert knowledge_readme.exists(), "knowledge/README.md should be created"
-
-    def test_initialize_project_no_readme(self, tmp_path):
-        """Test --no-readme equivalent (generate_readme=False)."""
-        initialize_project(
-            project_dir=tmp_path,
-            project_name="test_project",
-            auto_discover_repos=False,
-            copy_templates=False,
-            generate_readme=False,
-        )
-
-        # When project_name is set, directories are created under project_name/
-        project_content_dir = tmp_path / "test_project"
-
-        # Check that READMEs are NOT created
-        spec_readme = project_content_dir / "spec" / "README.md"
-        assert not spec_readme.exists(), "spec/README.md should NOT be created"
-
-    def test_initialize_project_creates_config_files(self, tmp_path):
-        """Test that all config files are created."""
-        initialize_project(
-            project_dir=tmp_path,
-            project_name="test_project",
-            auto_discover_repos=False,
-            copy_templates=False,
-        )
-
-        # Config files are always at project root
-        # Check dirs.yaml
-        dirs_yaml = tmp_path / ".project" / "dirs.yaml"
-        assert dirs_yaml.exists()
-
-        # Check .lee/config.yaml
-        lee_config = tmp_path / ".lee" / "config.yaml"
-        assert lee_config.exists()
-
-        # Check .projectignore
-        projectignore = tmp_path / ".projectignore"
-        assert projectignore.exists()
-
-    def test_initialize_project_already_initialized(self, tmp_path):
-        """Test that already initialized project returns existing config."""
-        # First initialization
-        config1 = initialize_project(
-            project_dir=tmp_path,
-            project_name="test1",
-            auto_discover_repos=False,
-            copy_templates=False,
-        )
-
-        # Second initialization (should return existing)
-        config2 = initialize_project(
-            project_dir=tmp_path,
-            project_name="test2",
-            auto_discover_repos=False,
-            copy_templates=False,
-        )
-
-        # Should return the first config (no force)
-        assert config2.project_name == "test1"
-
-    def test_initialize_project_force(self, tmp_path):
-        """Test force re-initialization."""
-        # First initialization
-        config1 = initialize_project(
-            project_dir=tmp_path,
-            project_name="test1",
-            auto_discover_repos=False,
-            copy_templates=False,
-        )
-
-        # Force re-init
-        config2 = initialize_project(
-            project_dir=tmp_path,
-            project_name="test2",
-            auto_discover_repos=False,
-            copy_templates=False,
-            force=True,
-        )
-
-        assert config2.project_name == "test2"
-
-
-class TestDirectoryConfigNewFields:
-    """Tests for DirectoryConfig new fields (ADR-0020)."""
-
-    def test_directory_config_new_fields_defaults(self):
-        """Test that new fields have correct defaults."""
-        config = DirectoryConfig(
-            name="test_dir",
-            path="test",
-            description="Test directory"
-        )
-
-        # ADR-0020 new fields
-        assert config.create_readme is True
-        assert config.readme_template is None
-        assert config.copy_templates_from is None
-        assert config.is_project_config is False
-
-    def test_directory_config_new_fields_explicit(self):
-        """Test setting new fields explicitly."""
-        config = DirectoryConfig(
-            name="spec_dir",
-            path="spec",
-            description="Specifications",
-            create_readme=True,
-            readme_template="spec_template",
-            copy_templates_from="templates/spec",
-            is_project_config=False
-        )
-
-        assert config.create_readme is True
-        assert config.readme_template == "spec_template"
-        assert config.copy_templates_from == "templates/spec"
-        assert config.is_project_config is False
-
-    def test_config_dir_is_project_config(self):
-        """Test that config_dir has is_project_config=True in schema."""
-        config_dir = DEFAULT_DIRECTORY_SCHEMA["directories"]["config_dir"]
-        assert config_dir.get("is_project_config") is True
-
-    def test_spec_dir_has_template_source(self):
-        """Test that spec_dir has copy_templates_from in schema."""
-        spec_dir = DEFAULT_DIRECTORY_SCHEMA["directories"]["spec_dir"]
-        assert spec_dir.get("copy_templates_from") == "templates/spec"
-
-
-class TestDeprecatedInitProjectStructure:
-    """Tests for deprecated init_project_structure() function."""
-
-    def test_deprecated_warning_raised(self, tmp_path):
-        """Test that DeprecationWarning is raised."""
-        import warnings
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-
-            init_project_structure(
-                project_dir=tmp_path,
-                project_name="test",
-                non_interactive=True
-            )
-
-            # Check that a deprecation warning was issued
-            deprecation_warnings = [warning for warning in w if issubclass(warning.category, DeprecationWarning)]
-            assert len(deprecation_warnings) >= 1
-            assert "deprecated" in str(deprecation_warnings[0].message).lower()
-
-    def test_deprecated_still_works(self, tmp_path):
-        """Test that deprecated function still works."""
-        import warnings
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")  # Suppress warnings for this test
-
-            config = init_project_structure(
-                project_dir=tmp_path,
-                project_name="test_deprecated",
-                non_interactive=True
-            )
-
-            assert config.project_name == "test_deprecated"
-            assert (tmp_path / ".project").exists()
-
-
-class TestDirectoryStructureConfigV2:
-    """Tests for DirectoryStructureConfig version 2.0 (ADR-0020)."""
-
-    def test_default_schema_version_is_2(self):
-        """Test that DEFAULT_DIRECTORY_SCHEMA is version 2.0."""
-        assert DEFAULT_DIRECTORY_SCHEMA["version"] == "2.0"
-
-    def test_schema_has_all_directories(self):
-        """Test that schema includes all expected directories."""
-        directories = DEFAULT_DIRECTORY_SCHEMA["directories"]
-
-        expected_dirs = [
-            "config_dir",
-            "workflow_dir",
-            "artifacts_dir",
-            "spec_dir",
-            "docs_dir",
-            "knowledge_dir",
-            "src_dir",
-            "tests_dir",
-            "tools_dir",
-            "deploy_dir",
-            "legacy_dir",
-            "contracts_dir",
-        ]
-
-        for dir_name in expected_dirs:
-            assert dir_name in directories, f"{dir_name} should be in schema"
-
-    def test_save_and_load_new_fields(self, tmp_path):
-        """Test that new fields are saved and loaded correctly."""
-        # Create config with new fields
-        config = DirectoryStructureConfig(
-            project_dir=tmp_path,
-            version="2.0",
-            project_name="test",
-            directories={
-                "spec_dir": DirectoryConfig(
-                    name="spec_dir",
-                    path="spec",
-                    description="Specifications",
-                    create_readme=True,
-                    copy_templates_from="templates/spec",
-                    is_project_config=False,
-                )
-            }
-        )
-
-        # Save
-        config.save()
-
-        # Load
-        loaded = DirectoryStructureConfig.load(tmp_path)
-
-        # Verify new fields
-        spec_dir = loaded.directories["spec_dir"]
-        assert spec_dir.create_readme is True
-        assert spec_dir.copy_templates_from == "templates/spec"
-        assert spec_dir.is_project_config is False

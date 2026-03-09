@@ -109,33 +109,30 @@ class ShellExecutor(BaseExecutor):
             raise ValueError("Input data must contain 'command' field")
 
         try:
-            # 执行命令
-            # 设置环境变量标记工作流内部调用，豁免 CLI 进程锁 (BUG-2026-0060)
             env = os.environ.copy()
             env["CLAUDE_CODE_ENTRYPOINT"] = "lee-executor"
 
-            process = await asyncio.create_subprocess_shell(
+            completed = await asyncio.to_thread(
+                subprocess.run,
                 command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                shell=True,
                 cwd=working_dir,
                 env=env,
-            )
-
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
+                capture_output=True,
+                text=True,
                 timeout=timeout,
+                encoding="utf-8",
+                errors="replace",
             )
 
             return {
-                "stdout": stdout.decode('utf-8', errors='replace'),
-                "stderr": stderr.decode('utf-8', errors='replace'),
-                "return_code": process.returncode,
-                "status": "completed" if process.returncode == 0 else "failed",
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
+                "return_code": completed.returncode,
+                "status": "completed" if completed.returncode == 0 else "failed",
             }
 
-        except asyncio.TimeoutError:
-            process.kill()
+        except subprocess.TimeoutExpired:
             return {
                 "stdout": "",
                 "stderr": f"Command timed out after {timeout}s",

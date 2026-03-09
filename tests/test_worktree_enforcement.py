@@ -38,7 +38,8 @@ def test_allocate_symlink(temp_workspace):
     assert info.mode == "symlink"
     assert os.path.islink(info.workdir)
     # Fix: use os.readlink
-    assert os.readlink(info.workdir) == str(repo_dir)
+    target = os.readlink(info.workdir).removeprefix('\\\\?\\')
+    assert Path(target) == repo_dir
     assert mgr.validate_workdir("run-1", "repo-1")
 
 def test_auto_upgrade_logic(temp_workspace):

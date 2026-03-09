@@ -11,11 +11,22 @@ import asyncio
 import os
 import json
 import tempfile
+import uuid
 import shutil
 import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 from datetime import datetime
+
+
+_WORKSPACE_TMP_ROOT = Path(__file__).resolve().parent.parent / "test-temp-p1"
+_WORKSPACE_TMP_ROOT.mkdir(parents=True, exist_ok=True)
+
+
+def _make_local_temp_dir(prefix: str) -> str:
+    path = _WORKSPACE_TMP_ROOT / f"{prefix}{uuid.uuid4().hex}"
+    path.mkdir(parents=True, exist_ok=False)
+    return str(path)
 
 
 # ========================================================================
@@ -26,7 +37,7 @@ class TestContractDiscovery:
     """ContractDiscovery 模块单元测试"""
 
     def setup_method(self):
-        self.temp_dir = tempfile.mkdtemp()
+        self.temp_dir = _make_local_temp_dir("p1-contract-")
         # 创建 spec-global 目录结构
         spec_dir = Path(self.temp_dir) / "spec-global" / "departments" / "dev" / "contracts"
         spec_dir.mkdir(parents=True)
@@ -136,7 +147,7 @@ class TestContractDiscovery:
         """验证空目录不报错"""
         from lee.orchestrator.core.contract_discovery import ContractDiscovery
 
-        empty_dir = tempfile.mkdtemp()
+        empty_dir = _make_local_temp_dir("p1-empty-")
         try:
             discovery = ContractDiscovery(empty_dir)
             index = discovery.discover_all()
@@ -153,7 +164,7 @@ class TestTokenManagerAndToolGuard:
     """TokenManager + ToolGuard 单元测试"""
 
     def setup_method(self):
-        self.temp_dir = tempfile.mkdtemp()
+        self.temp_dir = _make_local_temp_dir("p1-token-")
 
     def teardown_method(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
@@ -654,9 +665,8 @@ class TestOrchestratorArtifactRecording:
 
     def setup_method(self):
         """创建临时目录和测试文件"""
-        import tempfile
         import os
-        self.temp_dir = tempfile.mkdtemp()
+        self.temp_dir = _make_local_temp_dir("p1-artifact-")
         self.test_files = []
 
         # 创建测试文件

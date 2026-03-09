@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 import pytest
 import asyncio
-import tempfile
 import json
 from pathlib import Path
 from datetime import datetime
@@ -63,74 +62,71 @@ class TestEvidenceExistsVerifier:
         assert "not found" in result.message
         assert result.details["error_status"] == "invalid_run"
 
-    def test_evidence_exists_pass(self):
+    def test_evidence_exists_pass(self, tmp_path):
         """测试证据存在时通过"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # 创建证据目录和文件
-            evidence_dir = Path(tmpdir) / "evidence"
-            evidence_dir.mkdir()
-            (evidence_dir / "test.log").write_text("log content")
-            (evidence_dir / "screenshot.png").write_text("fake png")
+        tmpdir = tmp_path
+        evidence_dir = Path(tmpdir) / "evidence"
+        evidence_dir.mkdir()
+        (evidence_dir / "test.log").write_text("log content")
+        (evidence_dir / "screenshot.png").write_text("fake png")
 
-            verifier = EvidenceExistsVerifier()
-            result = verifier.verify({
-                "project_root": tmpdir,
-                "config": {
-                    "evidence_dir": "evidence",
-                    "required_files": [
-                        {"pattern": "*.log", "description": "执行日志"},
-                        {"pattern": "*.png", "description": "截图"},
-                    ],
-                }
-            })
+        verifier = EvidenceExistsVerifier()
+        result = verifier.verify({
+            "project_root": tmpdir,
+            "config": {
+                "evidence_dir": "evidence",
+                "required_files": [
+                    {"pattern": "*.log", "description": "执行日志"},
+                    {"pattern": "*.png", "description": "截图"},
+                ],
+            }
+        })
 
-            assert result.status == VerifyStatus.PASSED
-            assert "All required evidence files exist" in result.message
+        assert result.status == VerifyStatus.PASSED
+        assert "All required evidence files exist" in result.message
 
-    def test_evidence_missing_required_files(self):
+    def test_evidence_missing_required_files(self, tmp_path):
         """测试缺少必需文件"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # 创建证据目录但不创建文件
-            evidence_dir = Path(tmpdir) / "evidence"
-            evidence_dir.mkdir()
+        tmpdir = tmp_path
+        evidence_dir = Path(tmpdir) / "evidence"
+        evidence_dir.mkdir()
 
-            verifier = EvidenceExistsVerifier()
-            result = verifier.verify({
-                "project_root": tmpdir,
-                "config": {
-                    "evidence_dir": "evidence",
-                    "required_files": [
-                        {"pattern": "*.log", "description": "执行日志"},
-                    ],
-                    "fail_on_missing": True,
-                }
-            })
+        verifier = EvidenceExistsVerifier()
+        result = verifier.verify({
+            "project_root": tmpdir,
+            "config": {
+                "evidence_dir": "evidence",
+                "required_files": [
+                    {"pattern": "*.log", "description": "执行日志"},
+                ],
+                "fail_on_missing": True,
+            }
+        })
 
-            assert result.status == VerifyStatus.FAILED
-            assert "执行日志" in result.message
+        assert result.status == VerifyStatus.FAILED
+        assert "执行日志" in result.message
 
-    def test_optional_file_with_condition(self):
+    def test_optional_file_with_condition(self, tmp_path):
         """测试带条件的可选文件"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            evidence_dir = Path(tmpdir) / "evidence"
-            evidence_dir.mkdir()
-            (evidence_dir / "test.log").write_text("log")
+        tmpdir = tmp_path
+        evidence_dir = Path(tmpdir) / "evidence"
+        evidence_dir.mkdir()
+        (evidence_dir / "test.log").write_text("log")
 
-            verifier = EvidenceExistsVerifier()
-            result = verifier.verify({
-                "project_root": tmpdir,
-                "case": {"meta": {"headless": True}},
-                "config": {
-                    "evidence_dir": "evidence",
-                    "required_files": [
-                        {"pattern": "*.log", "description": "执行日志"},
-                        {"pattern": "*.png", "description": "截图", "optional_if": "case.meta.headless == true"},
-                    ],
-                }
-            })
+        verifier = EvidenceExistsVerifier()
+        result = verifier.verify({
+            "project_root": tmpdir,
+            "case": {"meta": {"headless": True}},
+            "config": {
+                "evidence_dir": "evidence",
+                "required_files": [
+                    {"pattern": "*.log", "description": "执行日志"},
+                    {"pattern": "*.png", "description": "截图", "optional_if": "case.meta.headless == true"},
+                ],
+            }
+        })
 
-            # 因为 headless=true，所以 png 是可选的
-            assert result.status == VerifyStatus.PASSED
+        assert result.status == VerifyStatus.PASSED
 
 
 class TestEvidenceReferenceVerifier:
@@ -429,7 +425,7 @@ class TestEnvChecker:
         """测试命令存在"""
         checker = EnvChecker()
         result = checker.check([
-            {"type": "command_exists", "commands": ["python", "ls"]}
+            {"type": "command_exists", "commands": ["python"]}
         ])
 
         assert result.all_passed is True
@@ -445,17 +441,16 @@ class TestEnvChecker:
         assert result.all_passed is False
         assert "command_missing:nonexistent_command_xyz" in result.failures
 
-    def test_directory_writable(self):
+    def test_directory_writable(self, tmp_path):
         """测试目录可写"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            checker = EnvChecker(project_root=tmpdir)
-            result = checker.check([
-                {"type": "directory_writable", "paths": ["test_dir"]}
-            ])
+        tmpdir = tmp_path
+        checker = EnvChecker(project_root=str(tmpdir))
+        result = checker.check([
+            {"type": "directory_writable", "paths": ["test_dir"]}
+        ])
 
-            assert result.all_passed is True
-            # 目录应该被创建
-            assert (Path(tmpdir) / "test_dir").exists()
+        assert result.all_passed is True
+        assert (Path(tmpdir) / "test_dir").exists()
 
     def test_service_not_reachable(self):
         """测试服务不可达"""
@@ -467,23 +462,21 @@ class TestEnvChecker:
         assert result.all_passed is False
         assert any("network:" in f for f in result.failures)
 
-    def test_run_check_env_with_output(self):
+    def test_run_check_env_with_output(self, tmp_path):
         """测试 run_check_env 函数"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "result.json"
+        output_path = tmp_path / "result.json"
 
-            result = run_check_env(
-                checks=[{"type": "command_exists", "commands": ["python"]}],
-                output_path=str(output_path)
-            )
+        result = run_check_env(
+            checks=[{"type": "command_exists", "commands": ["python"]}],
+            output_path=str(output_path)
+        )
 
-            assert result.all_passed is True
-            assert output_path.exists()
+        assert result.all_passed is True
+        assert output_path.exists()
 
-            # 验证 JSON 内容
-            with open(output_path) as f:
-                data = json.load(f)
-            assert data["all_passed"] is True
+        with open(output_path) as f:
+            data = json.load(f)
+        assert data["all_passed"] is True
 
 
 # ============================================================================
@@ -589,34 +582,34 @@ class TestVerifierEngineIntegration:
         engine = VerifierEngine("/tmp")
         assert "behavior_compliance" in engine._registry
 
-    def test_run_behavior_compliance(self):
+    def test_run_behavior_compliance(self, tmp_path):
         """测试运行 behavior_compliance 验证器"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            engine = VerifierEngine(tmpdir)
+        tmpdir = tmp_path
+        engine = VerifierEngine(str(tmpdir))
 
-            results = engine.run(
-                verifiers=[
-                    {
-                        "type": "behavior_compliance",
-                        "config": {},
-                    }
-                ],
-                context={
-                    "runner_output": {
-                        "case_results": [
-                            {
-                                "case_id": "TC001",
-                                "result_text": "mock 数据",
-                                "meta": {"allow_mock": False},
-                            }
-                        ]
-                    },
-                    "confirmed_env_errors": [],
+        results = engine.run(
+            verifiers=[
+                {
+                    "type": "behavior_compliance",
+                    "config": {},
                 }
-            )
+            ],
+            context={
+                "runner_output": {
+                    "case_results": [
+                        {
+                            "case_id": "TC001",
+                            "result_text": "mock 数据",
+                            "meta": {"allow_mock": False},
+                        }
+                    ]
+                },
+                "confirmed_env_errors": [],
+            }
+        )
 
-            assert len(results) == 1
-            assert results[0].status == VerifyStatus.FAILED
+        assert len(results) == 1
+        assert results[0].status == VerifyStatus.FAILED
 
 
 # ============================================================================

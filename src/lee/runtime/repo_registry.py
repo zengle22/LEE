@@ -203,6 +203,8 @@ class RepoRegistry:
         """
         repo = self.get_repo_or_raise(repo_id)
         repo_path = Path(repo.path)
+        if repo.path.startswith("/") and not repo_path.is_absolute():
+            return repo.path
 
         if repo_path.is_absolute():
             return str(repo_path.resolve())
