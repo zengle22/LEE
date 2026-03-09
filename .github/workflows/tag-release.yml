@@ -1,0 +1,89 @@
+name: Tag Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: tag-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build And Publish Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag ancestry
+        run: |
+          python scripts/ci/verify_tag_on_main.py --tag-ref "${GITHUB_REF}" --base-ref origin/main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+          pip install build twine pyyaml jsonschema
+
+      - name: Run release checks
+        shell: pwsh
+        run: |
+          ./scripts/validate-yaml.ps1 -Dir spec-global
+          python scripts/detect-hardcoded-paths.py src
+          python scripts/lint_l3_templates.py spec-global/departments
+          pytest tests/unit tests/integration tests/orchestrator tests/runtime tests/qa tests/pm_agent -q
+
+      - name: Compute release version
+        id: version
+        run: |
+          python scripts/ci/compute_version.py --mode release --ref-name "${GITHUB_REF_NAME}" --write-pyproject
+
+      - name: Build package
+        run: |
+          python -m build
+
+      - name: Write build metadata
+        run: |
+          python scripts/ci/write_build_metadata.py --version "${{ steps.version.outputs.lee_version }}" --release-kind release --output dist/build-metadata.json
+
+      - name: Publish package
+        env:
+          TWINE_USERNAME: ${{ secrets.PACKAGE_REPOSITORY_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+          TWINE_REPOSITORY_URL: ${{ secrets.PACKAGE_REPOSITORY_URL }}
+        run: |
+          python -m twine upload --repository-url "$TWINE_REPOSITORY_URL" dist/*.whl dist/*.tar.gz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*
+
+      - name: Dispatch Marathon prod
+        env:
+          MARATHON_REPO: ${{ secrets.MARATHON_REPO }}
+          MARATHON_DISPATCH_TOKEN: ${{ secrets.MARATHON_DISPATCH_TOKEN }}
+        run: |
+          python scripts/ci/dispatch_marathon.py \
+            --repo "$MARATHON_REPO" \
+            --token "$MARATHON_DISPATCH_TOKEN" \
+            --lee-version "${{ steps.version.outputs.lee_version }}" \
+            --environment prod \
+            --release-kind release \
+            --source-sha "${GITHUB_SHA}"
