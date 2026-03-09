@@ -146,7 +146,11 @@ class GateAPI:
 
         # 标记步骤完成
         from lee.orchestrator.execution.state_machine import WorkflowStateMachine
-        sm = WorkflowStateMachine(self.store)
+        sm = WorkflowStateMachine(
+            self.store,
+            template_manager=getattr(self.orchestrator, "template_manager", None),
+            event_log=getattr(self.orchestrator, "event_log", None),
+        )
         await sm.complete_step(gate.workflow_id, gate.step_id, {
             "approved": True,
             "comment": comment,
@@ -198,7 +202,11 @@ class GateAPI:
 
         # 标记步骤完成
         from lee.orchestrator.execution.state_machine import WorkflowStateMachine
-        sm = WorkflowStateMachine(self.store)
+        sm = WorkflowStateMachine(
+            self.store,
+            template_manager=getattr(self.orchestrator, "template_manager", None),
+            event_log=getattr(self.orchestrator, "event_log", None),
+        )
         await sm.complete_step(gate.workflow_id, gate.step_id, {
             "skipped": True,
         })

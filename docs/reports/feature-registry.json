@@ -1,0 +1,179 @@
+{
+  "generated_at": "2026-03-07T10:59:16.866069+00:00",
+  "features": [
+    {
+      "capability_id": "CAP-001",
+      "feature_id": "FEAT-001",
+      "feature_key": "feat_register_workflow_templates",
+      "title": "注册工作流模板",
+      "summary": "通过 workflow registry 暴露模板定义与参数约束。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "config/workflow-registry.yaml",
+        "src/lee/cli/commands/run.py"
+      ],
+      "evidence_refs": [
+        "config/workflow-registry.yaml",
+        "src/lee/cli/commands/run.py"
+      ]
+    },
+    {
+      "capability_id": "CAP-001",
+      "feature_id": "FEAT-002",
+      "feature_key": "feat_parse_l3_workflow_templates",
+      "title": "解析 L3 workflow 模板",
+      "summary": "将 L3 模板中的 stages/steps 解析为可调度步骤与依赖关系。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "src/lee/orchestrator/execution/template_manager.py",
+        "src/lee/orchestrator/ir/converter.py"
+      ],
+      "evidence_refs": [
+        "src/lee/orchestrator/execution/template_manager.py",
+        "src/lee/orchestrator/ir/converter.py"
+      ]
+    },
+    {
+      "capability_id": "CAP-001",
+      "feature_id": "FEAT-003",
+      "feature_key": "feat_render_runtime_instances",
+      "title": "渲染运行时 workflow instance",
+      "summary": "通过 CLI 将模板与参数渲染为运行时 workflow instance 文件并创建实例。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "src/lee/cli/commands/run.py"
+      ],
+      "evidence_refs": [
+        "src/lee/cli/commands/run.py"
+      ]
+    },
+    {
+      "capability_id": "CAP-002",
+      "feature_id": "FEAT-004",
+      "feature_key": "feat_execute_step_dag",
+      "title": "执行工作流步骤 DAG",
+      "summary": "根据 depends_on 选择 ready step 并顺序推进 workflow。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "src/lee/orchestrator/execution/orchestrator.py",
+        "src/lee/orchestrator/execution/state_machine.py"
+      ],
+      "evidence_refs": [
+        "src/lee/orchestrator/execution/orchestrator.py",
+        "src/lee/orchestrator/execution/state_machine.py"
+      ]
+    },
+    {
+      "capability_id": "CAP-002",
+      "feature_id": "FEAT-005",
+      "feature_key": "feat_evaluate_auto_check_gates",
+      "title": "执行自动检查门禁",
+      "summary": "把 step_outputs 扁平化并执行 blocker/major 表达式。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "src/lee/orchestrator/execution/runners/auto_check_gate_runner.py",
+        "spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml"
+      ],
+      "evidence_refs": [
+        "src/lee/orchestrator/execution/runners/auto_check_gate_runner.py",
+        "spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml"
+      ]
+    },
+    {
+      "capability_id": "CAP-002",
+      "feature_id": "FEAT-006",
+      "feature_key": "feat_persist_step_outputs",
+      "title": "持久化步骤输出与证据路径",
+      "summary": "完成步骤时把 output dict 与 output paths 写入 workflow data。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "src/lee/orchestrator/execution/state_machine.py",
+        "src/lee/orchestrator/execution/runners/shell_runner.py"
+      ],
+      "evidence_refs": [
+        "src/lee/orchestrator/execution/state_machine.py",
+        "src/lee/orchestrator/execution/runners/shell_runner.py"
+      ]
+    },
+    {
+      "capability_id": "CAP-003",
+      "feature_id": "FEAT-007",
+      "feature_key": "feat_run_workflow_from_cli",
+      "title": "通过 CLI 运行 workflow",
+      "summary": "支持 `lee run` 加载 registry、渲染模板并执行 workflow。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "src/lee/cli/commands/run.py",
+        "src/lee/cli/main.py"
+      ],
+      "evidence_refs": [
+        "src/lee/cli/commands/run.py",
+        "src/lee/cli/main.py"
+      ]
+    },
+    {
+      "capability_id": "CAP-003",
+      "feature_id": "FEAT-008",
+      "feature_key": "feat_query_workflow_status",
+      "title": "查询 workflow 状态",
+      "summary": "查看 workflow 当前状态、完成步骤与 gate 信息。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "src/lee/cli/commands/status.py",
+        "src/lee/cli/main.py"
+      ],
+      "evidence_refs": [
+        "src/lee/cli/commands/status.py",
+        "src/lee/cli/main.py"
+      ]
+    },
+    {
+      "capability_id": "CAP-003",
+      "feature_id": "FEAT-009",
+      "feature_key": "feat_approve_human_gates",
+      "title": "审批人工门禁",
+      "summary": "通过 CLI 审批 gate 并推动 workflow 继续执行。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "src/lee/cli/commands/approve.py",
+        "src/lee/orchestrator/execution/gate_api.py"
+      ],
+      "evidence_refs": [
+        "src/lee/cli/commands/approve.py",
+        "src/lee/orchestrator/execution/gate_api.py"
+      ]
+    },
+    {
+      "capability_id": "CAP-004",
+      "feature_id": "FEAT-010",
+      "feature_key": "feat_define_ssot_output_contract",
+      "title": "定义 SSOT 输出契约",
+      "summary": "使用统一 schema 描述 EPIC/FEAT 等 SSOT 输出对象。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "spec-global/core/contracts/ssot-agent-output/v1/schema.json",
+        "src/lee/cli/commands/ssot.py"
+      ],
+      "evidence_refs": [
+        "spec-global/core/contracts/ssot-agent-output/v1/schema.json",
+        "src/lee/cli/commands/ssot.py"
+      ]
+    },
+    {
+      "capability_id": "CAP-004",
+      "feature_id": "FEAT-011",
+      "feature_key": "feat_enforce_template_instance_boundary",
+      "title": "维护模板与实例边界",
+      "summary": "在 workflow spec 维护与评审中强制区分 checked-in 模板和 runtime instance。",
+      "acceptance_boundary": "独立可验收的业务能力单元",
+      "code_refs": [
+        "spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml",
+        "spec-global/core/agents/spec-review/v1/agent.yaml"
+      ],
+      "evidence_refs": [
+        "spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml",
+        "spec-global/core/agents/spec-review/v1/agent.yaml"
+      ]
+    }
+  ]
+}

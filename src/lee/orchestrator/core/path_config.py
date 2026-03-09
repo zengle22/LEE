@@ -112,6 +112,11 @@ class PathConfig:
         return self._project_root / "docs"
 
     @property
+    def knowledge_dir(self) -> Path:
+        """获取 knowledge 目录（Agent 复盘与知识沉淀）"""
+        return self._project_root / "knowledge"
+
+    @property
     def src_dir(self) -> Path:
         """获取 src 目录（源码）"""
         return self._project_root / "src"
@@ -157,7 +162,7 @@ class PathConfig:
         # 新标准目录
         standard_dirs = {
             ".project", ".workflow", ".artifacts",
-            "spec", "docs", "src", "tests", "tools", "deploy", "legacy"
+            "spec", "docs", "knowledge", "src", "tests", "tools", "deploy", "legacy"
         }
 
         if name in standard_dirs:

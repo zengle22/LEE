@@ -7,6 +7,7 @@
 - `dirs.yaml` 定义了目录结构，但未被实际使用
 - `.artifacts` 和 `.workflow` 在代码中硬编码 (共 43 处)
 - 统一入口存在，但团队没有被强制走入口
+- `dirs.yaml` 与 SSOT identity 都在碰文件命名，边界不清，容易形成双重事实源
 
 ### 1.2 根因分析
 
@@ -20,6 +21,20 @@
 ---
 
 ## 2. 方案架构
+
+### 2.0 边界原则
+
+目录体系与 SSOT identity 必须明确分层：
+
+- `dirs.yaml` / `PathConfig` 只回答 `where`：对象应该落到哪个目录族、哪个目录槽位
+- SSOT identity 只回答 `what`：对象的 `id`、`type`、`slug`、最终文件名、引用关系
+- 目录层不得再定义正式对象文件名规则；旧的 `file_naming_conventions` 只保留兼容读取价值
+- 运行时路径拼装应拆成两段：`resolve_dir(...)` + `generate_filename(...)`
+
+新增内容目录：
+
+- `knowledge/`：Agent 复盘、模式沉淀、能力演进
+- 推荐子目录：`knowledge/retrospectives/`、`knowledge/patterns/`、`knowledge/evolution/`
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -595,6 +610,25 @@ PathGuard 启用约束:
 src/lee/orchestrator/core/path_policy.py
     ↓
 PathConfig + PathGuard 共用
+```
+
+### 8.3 目录层职责边界
+
+```
+Directory Layer (dirs.yaml / PathConfig)
+    - project_name
+    - directory topology
+    - placement policy
+    - writable / frozen constraints
+
+SSOT Identity Layer
+    - id / type / parent_id
+    - filename = [ID]__[slug].[ext]
+    - references / validation
+
+Formal SSOT main files
+    - live in spec/ tests/ docs/ knowledge content directories
+    - do not live in .artifacts/ssot/{type}/
 ```
 
 ### 8.3 清理策略

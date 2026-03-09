@@ -405,42 +405,13 @@ class SubworkflowMixin:
         condition: str,
         all_phase_outputs: dict,
     ) -> bool:
-        """
-        评估 phase 条件表达式
-
-        支持简单条件："qa_test.exit_decision == 'fail'"
-
-        Args:
-            condition: 条件表达式
-            all_phase_outputs: 所有 phase 的输出
-
-        Returns:
-            条件是否成立
-        """
-        # 简单实现：解析 "phase_id.field == 'value'" 模式
+        """评估 phase 条件表达式。"""
         try:
-            parts = condition.split(" ")
-            if len(parts) >= 3:
-                lhs = parts[0]        # "qa_test.exit_decision"
-                op = parts[1]         # "=="
-                rhs = parts[2].strip("'\"")
+            from lee.orchestrator.ir.expression_adapter import get_expression_adapter
 
-                lhs_parts = lhs.split(".", 1)
-                if len(lhs_parts) == 2:
-                    phase_id, field = lhs_parts
-                    phase_output = all_phase_outputs.get(phase_id, {})
-                    actual_value = phase_output.get(field)
-
-                    if op == "==":
-                        return str(actual_value) == rhs
-                    elif op == "!=":
-                        return str(actual_value) != rhs
-
+            return get_expression_adapter().evaluate_condition(condition, all_phase_outputs)
         except Exception:
-            pass
-
-        # 默认：条件不可解析时视为满足
-        return True
+            return False
 
     # ============ 辅助方法 ============
 

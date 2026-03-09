@@ -10,6 +10,7 @@ Tests the new async job functionality:
 
 import asyncio
 import pytest
+import pytest_asyncio
 from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime
 
@@ -20,7 +21,7 @@ from lee.orchestrator.execution.pm_agent_runtime import (
 )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mock_runtime():
     """Create a mock PMAgentRuntime for testing."""
     # Mock orchestrator
@@ -281,7 +282,7 @@ async def test_default_timeout_value():
     """Test that DEFAULT_TIMEOUT is set correctly."""
     from lee.orchestrator.execution.pm_agent_runtime import PMAgentRuntime
 
-    assert PMAgentRuntime.DEFAULT_TIMEOUT == 600  # 10 minutes
+    assert PMAgentRuntime.DEFAULT_TIMEOUT == 7200  # 2 hours safety net
 
 
 @pytest.mark.asyncio

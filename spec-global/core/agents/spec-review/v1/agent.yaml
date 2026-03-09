@@ -15,6 +15,8 @@ description: >
   Lints and reviews AI-spec files (skill/agent/workflow/contract). 
   Produces actionable fixes. Focus on boundary correctness, schema completeness,
   testability, and maintainability.
+  对 workflow spec 额外要求: 明确区分模板规范与运行时动态生成的 instance，
+  禁止把仓库中的 workflow 文件评审为固定执行实例。
 owner: platform-ai
 tags: [review, lint, governance]
 
@@ -38,6 +40,8 @@ persona:
 # ============================================
 policy:
   decision_rules:
+    - if: "spec.kind == 'workflow' and workflow_spec_treated_as_runtime_instance"
+      then: "raise_major"
     - if: "inputs.mode == 'lint_only'"
       then: "skip_semantic_checks"
     - if: "spec.kind == 'skill'"
@@ -50,12 +54,18 @@ policy:
       then: "raise_blocker"
     - if: "missing_tests_smoke"
       then: "raise_major"
+    - if: "implementation_facing_spec_missing_governance_refs_and_no_formal_ssot"
+      then: "raise_major"
+    - if: "completion_or_review_spec_missing_evidence_requirements"
+      then: "raise_blocker"
   
   quality_bar:
     must_have:
       - "每条发现都有: 位置(path/line)、严重级别、原因、修复建议"
       - "能输出可直接应用的 patch（可选）"
       - "不讨论业务对错，只讨论 spec 工程质量"
+      - "能识别 formal SSOT 与 temporary governance 的边界缺失"
+      - "能识别 workflow template 与 runtime instance 的边界混淆"
   
   severities:
     - blocker   # 阻塞: 必须修复才能合并
@@ -73,9 +83,11 @@ prompting:
   system: |
     You are a strict spec reviewer. Focus on:
     1. Boundary correctness (Skill vs Agent vs Workflow separation)
+    1a. Workflow template vs runtime instance separation
     2. Schema completeness (contracts, interface definitions)
     3. Testability (smoke tests, replay data)
     4. Maintainability (naming, structure, documentation)
+    5. Governance layering (formal SSOT vs temporary governance shell)
     
     Provide actionable fixes. Never invent external context.
   
@@ -84,6 +96,8 @@ prompting:
     - "Prefer minimal changes."
     - "Every finding must have: severity, code, message, location, fix."
     - "Do not discuss whether the business logic is correct."
+    - "For workflow specs, flag any text that treats checked-in workflow files as runtime instances instead of templates."
+    - "If a spec governs implementation/review/completion behavior, check whether it references governance constraints or formal SSOT truth sources."
   
   output_format: json
   
@@ -94,6 +108,21 @@ prompting:
 # 评审规则引用
 # ============================================
 rules_ref: agents/spec-review/v1/review_rules.md
+
+governance:
+  temp_governance: .project/governance/TEMP_GOVERNANCE.md
+  review_checklist: .project/governance/REVIEW_CHECKLIST.md
+  completion_template: .project/governance/COMPLETION_TEMPLATE.md
+  acceptance_briefs: .project/governance/ACCEPTANCE_BRIEFS/
+  module_contracts: .project/governance/MODULE_CONTRACTS/
+
+governance_rules:
+  review_focus:
+    - "formal SSOT truth source present or explicitly absent"
+    - "temporary governance references present when formal SSOT is absent"
+    - "completion evidence requirements not silently omitted"
+    - "review and gate semantics not weakened"
+    - "workflow specs explicitly preserve template vs runtime-instance boundary"
 
 # ============================================
 # 可观测性
@@ -110,6 +139,20 @@ observability:
 # ============================================
 tests:
   smoke:
+    - name: workflow_template_instance_confusion
+      input:
+        filename: "workflow.yaml"
+        spec_text: |
+          kind: workflow
+          id: workflow.test.example
+          name: Test Workflow
+          description: 这个文件就是最终执行的固定 workflow instance。
+        mode: "full"
+      assert:
+        - path: "$.summary.majors"
+          op: ">="
+          value: 1
+
     - name: missing_contracts_agent
       input:
         filename: "test_agent.yaml"

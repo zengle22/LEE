@@ -2,120 +2,301 @@
 # 生产 Test Set 设计资产工作流（L3）
 #
 # 职责: 将模块需求转化为 Test Set 设计资产
-#
 # 这是一个 L3 蓝本，用于从需求文档生成 Test Set
 
 kind: l3_workflow_template
-version: "1.1"
+version: "1.2"
 id: template.qa.test_set_production
 name: Test Set Production L3 Template
 description: |
-  L3 template for generating Test Set design assets from requirement documents.
+  L3 template for generating Test Set design assets from FEAT-centered SSOT inputs.
 
   This template defines the 4-stage workflow for creating Test Sets:
-  - Stage 1: Requirement Analysis - Analyze requirements and extract testable features
+  - Stage 1: Requirement Analysis - Analyze FEAT inputs and extract testable features
   - Stage 2: Test Strategy Design - Design test strategy and risk areas
   - Stage 3: Test Set Generation - Generate standardized Test Set YAML
   - Stage 4: Test Set Review - Review completeness and executability
 
+  NOTE (v1.2): migrated to stage+steps.
+  - Root uses `stages` only (governance layer).
+  - Work is performed by `stages[].steps` (execution layer).
+  - Preferred SSOT input is `feat_freeze`; `requirement_doc` is retained only for legacy compatibility.
+  - `governing_adrs` may be provided as governance context and must be treated as hard constraints.
+
 owner: qa-governance
 tags: [template, qa, test-set, design-asset, l3]
 
-# Standard 4-stage L3 process
 stages:
   - id: requirement_analysis
     name: "Requirement Analysis"
-    kind: agent
+    kind: stage
     description: "Analyze requirement document and extract testable features"
-    agent_id: agent.qa.requirement_analyzer
-    mandatory: true
     depends_on: []
     gate:
       type: human_review
       gate_id: gate.qa.analysis_review
-    outputs:
-      - module_boundary
-      - testable_features
-      - analysis_report
+
+    steps:
+      - id: requirement_analysis
+        name: "Requirement Analysis"
+        kind: agent
+        description: "Analyze FEAT freeze, delivery prep seed, and legacy requirement inputs to extract testable features"
+        agent_id: agent.qa.requirement_analyzer
+        config:
+          implementation_facing: false
+        mandatory: true
+        depends_on: []
+        outputs:
+          - path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}.yaml"
+            type: file
+            format: yaml
+            description: "Test Set 设计资产（冻结，验证单一 FEAT）"
+            required: true
+          - path: "{{ tests_dir }}/qa/analysis/ts-{{ module }}/analysis.md"
+            type: file
+            format: markdown
+            description: "需求分析报告（中间产物）"
+            required: false
+
+    step_order:
+      - requirement_analysis
 
   - id: strategy_design
     name: "Test Strategy Design"
-    kind: agent
-    description: "Design test strategy, focus areas, and risk areas"
-    agent_id: agent.qa.test_strategist
-    mandatory: true
+    kind: stage
+    description: "Design test strategy, focus areas, and risk areas from FEAT AC and delivery prep seed"
     depends_on: [requirement_analysis]
     gate:
       type: human_review
       gate_id: gate.qa.strategy_review
-    outputs:
-      - test_strategy
-      - risk_areas
-      - test_focus
-      - strategy_draft
+
+    steps:
+      - id: strategy_design
+        name: "Test Strategy Design"
+        kind: agent
+        description: "Design test strategy, focus areas, and risk areas"
+        agent_id: agent.qa.test_strategist
+        config:
+          implementation_facing: false
+        mandatory: true
+        depends_on: []
+        outputs:
+          - path: "{{ tests_dir }}/qa/strategy/ts-{{ module }}/strategy-draft.yaml"
+            type: file
+            format: yaml
+            description: "测试策略草稿（中间产物）"
+            required: false
+
+    step_order:
+      - strategy_design
 
   - id: test_set_generation
     name: "Test Set Generation"
-    kind: agent
-    description: "Generate standardized Test Set YAML from strategy"
-    agent_id: agent.qa.test_set_generator
-    mandatory: true
+    kind: stage
+    description: "Generate standardized Test Set YAML from FEAT-centered strategy"
     depends_on: [strategy_design]
-    outputs:
-      - test_set_yaml  # Path to generated Test Set YAML
+
+    steps:
+      - id: test_set_generation
+        name: "Test Set Generation"
+        kind: agent
+        description: "Generate standardized Test Set YAML from strategy"
+        agent_id: agent.qa.test_set_generator
+        mandatory: true
+        depends_on: []
+        outputs:
+          - path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}.yaml"
+            type: file
+            format: yaml
+            description: "Test Set 设计资产（符合 test-set schema 的标准化 YAML，trace 到 FEAT）"
+            required: true
+
+    step_order:
+      - test_set_generation
 
   - id: test_set_review
     name: "Test Set Review"
-    kind: agent
-    description: "Review Test Set completeness and executability"
-    agent_id: agent.qa.test_set_reviewer
-    mandatory: true
+    kind: stage
+    description: "Review Test Set completeness, executability, and FEAT traceability"
     depends_on: [test_set_generation]
     gate:
       type: human_approval
       gate_id: gate.qa.test_set_approval
-    outputs:
-      - review_result
-      - approval_status
 
-# Default execution order
-execution_order:
+    steps:
+      - id: test_set_review
+        name: "Test Set Review"
+        kind: agent
+        description: "Review Test Set completeness and executability"
+        agent_id: agent.qa.test_set_reviewer
+        config:
+          implementation_facing: false
+        mandatory: true
+        depends_on: []
+        outputs:
+          - path: "{{ tests_dir }}/qa/review/ts-{{ module }}/review-report.md"
+            type: file
+            format: markdown
+            description: "Test Set 审评报告（中间产物）"
+            required: false
+
+    step_order:
+      - test_set_review
+
+  - id: output_validation
+    name: "Output Validation"
+    kind: stage
+    description: "Validate Test Set design asset conforms to schema and all required files exist"
+    depends_on: [test_set_review]
+    gate:
+      type: auto_check
+      gate_id: gate.qa.output_validation
+      on_pass: stage_completed
+      on_fail: mark_failed_and_abort
+
+    steps:
+      - id: output_validation
+        name: "Output Validation"
+        kind: agent
+        description: |
+          Validate Test Set design asset conforms to schema and all required files exist.
+          This is the final quality gate before workflow completion.
+          It must also verify FEAT traceability and AC coverage.
+        agent_id: agent.qa.output_validator
+        config:
+          implementation_facing: false
+        mandatory: true
+        depends_on: []
+        checks:
+          - id: verify_test_set_exists
+            category: file_existence
+            description: "Test Set design asset must exist in qa_specs_dir"
+            severity: error
+            file_path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}.yaml"
+          - id: verify_test_set_schema
+            category: schema_validation
+            description: "Test Set must conform to test-set schema v1"
+            severity: error
+            schema_path: "../../contracts/test-set/v1/schema.yaml"
+            file_path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}.yaml"
+          - id: verify_analysis_report
+            category: file_existence
+            description: "Analysis report should exist (optional)"
+            severity: warning
+            file_path: "{{ tests_dir }}/qa/analysis/ts-{{ module }}/analysis.md"
+          - id: verify_strategy_draft
+            category: file_existence
+            description: "Strategy draft should exist (optional)"
+            severity: warning
+            file_path: "{{ tests_dir }}/qa/strategy/ts-{{ module }}/strategy-draft.yaml"
+        outputs:
+          - path: "{{ tests_dir }}/qa/validation/ts-{{ module }}/validation-report.json"
+            type: file
+            format: json
+            description: "Output validation report"
+            required: true
+          - path: validation_status
+            type: symbol
+            format: text
+            description: "Validation status"
+            required: true
+          - path: validation_errors
+            type: symbol
+            format: json
+            description: "Validation errors"
+            required: false
+
+    step_order:
+      - output_validation
+
+# Default governance order (recommended)
+stage_order:
   - requirement_analysis
   - strategy_design
   - test_set_generation
   - test_set_review
+  - output_validation
 
 # Input parameters
 input_params:
   module:
     type: string
-    required: true
-    description: "Module name"
+    required: false
+    description: "Module name (legacy compatibility; prefer deriving from FEAT)"
+
+  feat_freeze:
+    type: string
+    required: false
+    description: "Path to FEAT freeze input (preferred SSOT source)"
 
   requirement_doc:
     type: string
-    required: true
-    description: "Path to requirement document (PRD/User Story)"
+    required: false
+    description: "Path to requirement document (legacy compatibility only)"
 
   tech_design:
     type: string
     required: false
     description: "Path to technical design document (optional)"
 
+  delivery_prep_bundle:
+    type: string
+    required: false
+    description: "Path to delivery prep bundle for AC traceability, risks, integration points, and task lanes"
+
+  ui_specs:
+    type: string
+    required: false
+    description: "Optional UI spec input for UI-derived test focus"
+
+  governing_adrs:
+    type: array
+    required: false
+    description: "ADR refs used as governance context for TESTSET derivation and review"
+
+  decision_refs:
+    type: array
+    required: false
+    description: "Trace refs recording which ADR decisions govern this TESTSET run"
+
+  decision_constraints:
+    type: array
+    required: false
+    description: "Flattened decision rules extracted from ADRs for TESTSET generation and review"
+
+  architecture_constraints:
+    type: array
+    required: false
+    description: "Architecture-level constraints such as FEAT parentage, API ownership, and dependency boundaries"
+
+  process_constraints:
+    type: array
+    required: false
+    description: "Process constraints such as freeze prerequisites, review expectations, and evidence requirements"
+
 # Output contract
 output_contract:
   test_set:
-    path: "qa/test-sets/ts-{module}.yaml"
+    path: "{{ qa_specs_dir }}/test-sets/ts-{module}.yaml"
     schema: ../../contracts/test-set/v1/schema.yaml
-    description: "Generated Test Set design asset"
+    description: "Generated Test Set design asset (frozen, derived from FEAT)"
 
-  analysis_report:
-    path: "qa/test-sets/ts-{module}/analysis.md"
-    description: "Requirement analysis report"
-
-  strategy_draft:
-    path: "qa/test-sets/ts-{module}/strategy-draft.yaml"
-    description: "Test strategy draft"
+# Output structure
+output_structure: |
+  {{ qa_specs_dir }}/
+  └── test-sets/
+      └── ts-{module}.yaml              # Test Set 设计资产（冻结）
+  
+  {{ tests_dir }}/qa/
+  ├── analysis/
+  │   └── ts-{module}/
+  │       └── analysis.md               # 需求分析报告（中间产物）
+  ├── strategy/
+  │   └── ts-{module}/
+  │       └── strategy-draft.yaml       # 测试策略草稿（中间产物）
+  └── review/
+      └── ts-{module}/
+          └── review-report.md          # Test Set 审评报告（中间产物）
 
 # Human gates configuration
 human_gates:
@@ -139,7 +320,7 @@ human_gates:
     required_approvers:
       - role: qa_lead
       - role: pm
-    prompt: "请最终确认 Test Set，批准后将正式生效"
+    prompt: "请最终确认 Test Set，验证其对 FEAT 和 Acceptance Criteria 的覆盖后批准生效"
 
 # Instance schema
 instance_schema:
@@ -150,12 +331,18 @@ instance_schema:
     - status
   context_fields:
     - module
+    - feat_freeze
     - requirement_doc
     - tech_design
+    - delivery_prep_bundle
+    - ui_specs
+    - governing_adrs
+    - decision_refs
+    - decision_constraints
+    - architecture_constraints
+    - process_constraints
   output_fields:
     - test_set_path
-    - analysis_report_path
-    - strategy_draft_path
     - review_status
 
 # State machine
@@ -200,11 +387,23 @@ state_machine:
       - to: TEST_SET_GENERATION
         trigger: test_set_rejected
 
-# Output structure
-output_structure: |
-  qa/
-  └── test-sets/
-      ├── ts-{module}.yaml              # Test Set 设计资产
-      └── ts-{module}/
-          ├── analysis.md               # 需求分析报告
-          └── strategy-draft.yaml       # 测试策略草稿
+constraints:
+  preferred_ssot_input: |
+    优先使用 feat_freeze 作为 TESTSET 派生输入。
+    requirement_doc 仅保留兼容旧链路，不应作为新流程的主输入。
+
+  feat_traceability_required: |
+    每个生成的 Test Set 都必须显式 trace 到单一 FEAT，
+    并覆盖该 FEAT 的 Acceptance Criteria。
+
+  delivery_prep_seed_usage: |
+    若提供 delivery_prep_bundle，应优先使用其中的 risk notes、
+    integration points、task lanes 和 entry conditions 补强测试策略。
+
+  adr_context_policy: |
+    governing_adrs 是治理上下文输入，不是业务需求源。
+    当提供 ADR 时，QA agent 必须把其中的正式决策视为 TESTSET 生成和审评的硬约束。
+
+  decision_trace_required: |
+    生成的 TESTSET 应在 traceability 中保留 governing_adrs 或 decision_refs，
+    以便审计其所遵循的正式治理决策。

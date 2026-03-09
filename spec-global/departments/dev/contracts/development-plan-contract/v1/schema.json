@@ -9,8 +9,12 @@
     "version",
     "metadata",
     "inputs",
+    "traceability",
+    "role_assignments",
+    "executable_tasks",
     "phases",
     "schedule",
+    "entry_conditions",
     "delivery_standards"
   ],
   "properties": {
@@ -163,6 +167,96 @@
         }
       }
     },
+    "traceability": {
+      "type": "object",
+      "description": "计划与上游 FEAT / AC 的追溯关系",
+      "required": ["feat_ids", "acceptance_criteria_refs"],
+      "properties": {
+        "feat_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "acceptance_criteria_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "governing_adrs": {
+          "type": "array",
+          "description": "约束当前 TASK 计划的 ADR refs",
+          "items": { "type": "string" }
+        },
+        "decision_refs": {
+          "type": "array",
+          "description": "本计划实际采用的 ADR / decision refs",
+          "items": { "type": "string" }
+        },
+        "decision_constraints": {
+          "type": "array",
+          "description": "从 ADR 提炼出的硬约束摘要",
+          "items": { "type": "string" }
+        },
+        "architecture_constraints": {
+          "type": "array",
+          "description": "对象归属、依赖边界、拆分规则等架构约束",
+          "items": { "type": "string" }
+        },
+        "process_constraints": {
+          "type": "array",
+          "description": "freeze、review、handoff、evidence 等流程约束",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "role_assignments": {
+      "type": "array",
+      "description": "实施计划中的责任分工",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["role", "owner"],
+        "properties": {
+          "role": { "type": "string" },
+          "owner": { "type": "string" },
+          "scope": { "type": "string" }
+        }
+      }
+    },
+    "executable_tasks": {
+      "type": "array",
+      "description": "按 FEAT 派生的可执行任务清单",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["task_id", "feat_id", "lane", "owner_role", "acceptance_criteria_refs"],
+        "properties": {
+          "task_id": { "type": "string" },
+          "feat_id": { "type": "string" },
+          "lane": {
+            "type": "string",
+            "enum": ["frontend", "backend", "integration", "qa"]
+          },
+          "owner_role": { "type": "string" },
+          "depends_on": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "acceptance_criteria_refs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          },
+          "definition_of_done": { "type": "string" },
+          "decision_refs": {
+            "type": "array",
+            "description": "该任务直接引用的治理决策",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
     "phases": {
       "type": "array",
       "minItems": 1,
@@ -264,6 +358,14 @@
             }
           }
         }
+      }
+    },
+    "entry_conditions": {
+      "type": "array",
+      "description": "开工前置条件",
+      "minItems": 1,
+      "items": {
+        "type": "string"
       }
     },
     "delivery_standards": {

@@ -15,6 +15,8 @@ from typing import Dict, List, Optional, Any, Union
 from enum import Enum
 from pathlib import Path
 
+from .expression_adapter import ExpressionAdapterError, get_expression_adapter
+
 
 # ========================================================================
 # 枚举定义
@@ -35,6 +37,7 @@ class StepKind(Enum):
     """步骤类型枚举"""
     AGENT = "agent"
     SKILL = "skill"
+    GATE = "gate"
     HUMAN_GATE = "human_gate"
     CONDITIONAL = "conditional"
     WORKFLOW_SPAWN = "workflow_spawn"
@@ -128,9 +131,24 @@ class GateRuleIR:
         Returns:
             (passed, error_message): 通过标志和错误信息
         """
-        # TODO: 实现完整的表达式求值
-        # 当前简化版本：总是返回 True
-        return True, None
+        adapter = get_expression_adapter()
+
+        try:
+            result = adapter.evaluate_gate_rule(
+                expression=self.rule_expression,
+                context=context,
+                validation_method=self.validation_method,
+            )
+        except ExpressionAdapterError as exc:
+            return False, f"规则 '{self.rule_id}' 表达式求值失败: {exc}"
+
+        if result.passed:
+            return True, None
+
+        error_message = self.error_message or result.error_message
+        if not error_message:
+            error_message = f"规则 '{self.rule_id}' 未通过: {self.name}"
+        return False, error_message
 
 
 @dataclass
@@ -195,8 +213,7 @@ class GateIR:
                 issues.append(f"{level} {rule.name}: {error or rule.error_message}")
 
         # 如果有强制标准失败，直接返回不通过
-        mandatory_failures = [i for i in issues if "[BLOCKER]" in i]
-        if mandatory_failures:
+        if len(issues) > 0:
             return False, issues
 
         # 评估阈值标准（警告但不阻塞）
@@ -417,9 +434,14 @@ class StepIR:
         TODO: P1 阶段实现完整的表达式求值
         当前简化版本：返回 True
         """
-        # TODO: 实现完整的表达式求值
-        # 支持操作符：>、<、==、!=、AND、OR
-        return True
+        if not self.condition:
+            return True
+
+        adapter = get_expression_adapter()
+        try:
+            return adapter.evaluate_condition(self.condition, context)
+        except ExpressionAdapterError:
+            return False
 
     def get_agent_ref(self) -> Optional[str]:
         """获取 Agent 引用"""

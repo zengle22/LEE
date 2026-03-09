@@ -197,11 +197,47 @@ schema:
           type: array
           items:
             type: string
-          description: "关联的功能ID"
+          description: "关联的 FEAT ID；新 SSOT 链要求恰好关联一个 FEAT"
+
+        acceptance_criteria_refs:
+          type: array
+          items:
+            type: string
+          description: "关联 FEAT 的 Acceptance Criteria 引用"
 
         tech_design_ref:
           type: string
           description: "技术设计文档引用"
+
+        governing_adrs:
+          type: array
+          items:
+            type: string
+          description: "约束当前 TESTSET 的 ADR refs"
+
+        decision_refs:
+          type: array
+          items:
+            type: string
+          description: "本 TESTSET 实际采用的 ADR / decision refs"
+
+        decision_constraints:
+          type: array
+          items:
+            type: string
+          description: "从 ADR 提炼出的测试与审评硬约束"
+
+        architecture_constraints:
+          type: array
+          items:
+            type: string
+          description: "与 FEAT 派生、依赖边界、对象归属相关的架构约束"
+
+        process_constraints:
+          type: array
+          items:
+            type: string
+          description: "与 freeze、review、evidence、handoff 相关的流程约束"
 
     # ========== 元数据 ==========
     created_at:
@@ -236,6 +272,21 @@ validation_rules:
     description: "P0 级别必须有正向测试"
     check: "IF strategy.priority == 'P0' THEN test_focus.positive IS NOT EMPTY"
     error_message: "P0 级别 Test Set 必须包含正向测试点"
+
+  - rule: "single_feat_trace_required"
+    description: "每个 Test Set 必须 trace 到单一 FEAT"
+    check: "traceability.feature_ids LENGTH == 1"
+    error_message: "Test Set 必须且只能关联一个 FEAT ID"
+
+  - rule: "ac_coverage_required"
+    description: "每个 Test Set 必须声明覆盖的 Acceptance Criteria"
+    check: "traceability.acceptance_criteria_refs IS NOT EMPTY"
+    error_message: "Test Set 必须包含 Acceptance Criteria 引用"
+
+  - rule: "adr_trace_consistency"
+    description: "若声明 governing_adrs，则应保留 decision_refs 或明确约束摘要"
+    check: "IF traceability.governing_adrs IS NOT EMPTY THEN traceability.decision_refs IS NOT EMPTY OR traceability.decision_constraints IS NOT EMPTY"
+    error_message: "Test Set 若受 ADR 约束，必须保留 decision_refs 或 decision_constraints 作为审计 trace"
 
 # ========== 示例 ==========
 examples:
@@ -289,8 +340,18 @@ examples:
           - "REQ-2026-010"
           - "REQ-2026-011"
         feature_ids:
-          - "daily-plan"
-          - "intensity-adjustment"
+          - "FEAT-023"
+        acceptance_criteria_refs:
+          - "AC1"
+          - "AC2"
+        governing_adrs:
+          - "ADR-003"
+        decision_refs:
+          - "ADR-003"
+        architecture_constraints:
+          - "TESTSET derives from FEAT, not EPIC"
+        process_constraints:
+          - "Delivery prep seed required for risk and integration coverage"
 
       status: active
 
@@ -324,5 +385,15 @@ examples:
           - api
           - database
         automation_ready: true
+
+      traceability:
+        feature_ids:
+          - "FEAT-SMOKE-001"
+        acceptance_criteria_refs:
+          - "AC1"
+        governing_adrs:
+          - "ADR-003"
+        decision_refs:
+          - "ADR-003"
 
       status: active

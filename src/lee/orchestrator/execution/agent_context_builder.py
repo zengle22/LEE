@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
+import yaml
 
 
 @dataclass
@@ -265,6 +266,7 @@ class AgentContextBuilder:
             "temperature": 0.7,
             "max_tokens": 4000,
             "_raw_data": raw_data,  # v3.5: 保存原始数据用于构建更完整的上下文
+            "_spec_path": getattr(spec, "spec_path", None),
         }
 
     def _get_default_agent_spec(self, agent_id: str) -> Dict[str, Any]:
@@ -552,6 +554,11 @@ Verification items:
                     if hasattr(output, 'path'):
                         parts.append(f"- {output.path} ({output.type}): {output.description}")
 
+            contract_guidance = self._build_output_contract_guidance(agent_spec, step)
+            if contract_guidance:
+                parts.append("\n## Output Contract")
+                parts.extend(contract_guidance)
+
             # 添加具体任务指令
             parts.append("\n## Instructions")
             parts.append("Please complete the above task following the role requirements and generate all required outputs.")
@@ -569,3 +576,88 @@ Verification items:
                 user_prompt += f"Please analyze the failure and generate a fix.\n"
 
         return user_prompt
+
+    def _build_output_contract_guidance(
+        self,
+        agent_spec: Dict[str, Any],
+        step=None,
+    ) -> List[str]:
+        raw_data = agent_spec.get("_raw_data", {}) or {}
+        contracts = raw_data.get("contracts", {}) or {}
+        output_schema = contracts.get("output_schema")
+        ssot_output_schema = contracts.get("ssot_output_schema")
+        has_file_outputs = bool(
+            step
+            and hasattr(step, "outputs")
+            and any(getattr(output, "type", "") == "file" for output in step.outputs or [])
+        )
+
+        lines: List[str] = []
+
+        output_schema_text = self._load_contract_excerpt(agent_spec, output_schema)
+        if output_schema_text:
+            lines.append("Business output must conform to this schema excerpt:")
+            lines.append("```yaml")
+            lines.append(output_schema_text)
+            lines.append("```")
+
+        ssot_example = ((raw_data.get("ssot_output_contract") or {}).get("example"))
+        if ssot_output_schema:
+            if has_file_outputs:
+                lines.append(
+                    "When file outputs are required, write the business artifact in the file section(s), "
+                    "then include one additional section named `ssot_output_contract` as raw JSON or YAML."
+                )
+                lines.append(
+                    "Do not wrap the full response in prose. File sections may use markdown headings plus fenced code blocks. "
+                    "The `ssot_output_contract` section must be machine-readable."
+                )
+            else:
+                lines.append(
+                    "Return one machine-readable JSON or YAML object only, with top-level keys "
+                    "`business_output` and `ssot_output_contract`."
+                )
+                lines.append(
+                    "Do not invent wrapper keys like `feat_spec` or `result`. "
+                    "The business object must itself conform to the output schema."
+                )
+
+        if ssot_example:
+            try:
+                rendered = json.dumps(ssot_example, ensure_ascii=False, indent=2)
+            except (TypeError, ValueError):
+                rendered = yaml.safe_dump(ssot_example, allow_unicode=True, sort_keys=False).strip()
+            lines.append("SSOT envelope example:")
+            lines.append("```json")
+            lines.append(rendered)
+            lines.append("```")
+
+        if lines:
+            lines.append("Never add explanatory prose before or after the structured payload.")
+            lines.append("Never use Markdown code fences unless the step explicitly requires file sections.")
+
+        return lines
+
+    def _load_contract_excerpt(
+        self,
+        agent_spec: Dict[str, Any],
+        schema_ref: Optional[str],
+    ) -> Optional[str]:
+        if not schema_ref:
+            return None
+        if not isinstance(schema_ref, (str, os.PathLike)):
+            return None
+        spec_path = agent_spec.get("_spec_path")
+        base_dir = Path(spec_path).parent if spec_path else self.project_root
+        schema_path = Path(schema_ref)
+        if not schema_path.is_absolute():
+            schema_path = (base_dir / schema_path).resolve()
+        try:
+            raw = schema_path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+
+        excerpt = raw.strip()
+        if len(excerpt) > 2800:
+            excerpt = excerpt[:2800].rstrip() + "\n..."
+        return excerpt

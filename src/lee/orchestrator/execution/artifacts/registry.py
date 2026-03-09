@@ -7,20 +7,54 @@ Artifact Registry
 - Manifest 是权威数据源 (每个 run 一个 manifest.yaml)
 - Registry 是从 Manifest 重建的缓存索引
 - Registry 损坏可以重建，但 Manifest 损坏则数据丢失
+
+SSOT v1.3 扩展:
+- 支持 SSOT 对象 (新 ID 格式) 和 Legacy ART 对象分开索引
+- 新增 parent_index, path_index, relation_index
 """
 
 import hashlib
 import json
 import sys
+import contextlib
+import threading
+import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from .models import ArtifactMetadata, RunManifest
+from .ssot_files import parse_front_matter
+from .types import ArtifactStatus, ArtifactType, GovernanceKind
 
 # Windows 兼容性：fcntl 不可用
 if sys.platform != "win32":
     import fcntl
+
+
+# SSOT ID 前缀 (新系统)
+SSOT_PREFIXES = {
+    "SRC",
+    "EPIC",
+    "FEAT",
+    "REL",
+    "UI",
+    "TECH",
+    "DEVPLAN",
+    "TESTPLAN",
+    "TASK",
+    "TESTSET",
+    "TC",
+    "BUG",
+    "REPORT",
+    "ADR",
+    "EVI",
+}
+
+# Legacy ART 前缀 (旧系统)
+LEGACY_PREFIX = "ART"
+_REGISTRY_THREAD_LOCK = threading.RLock()
 
 
 class ArtifactRegistry:
@@ -29,9 +63,13 @@ class ArtifactRegistry:
 
     维护所有产出物的索引，提供快速查询功能。
     Registry 可以从所有 manifest.yaml 重建。
+
+    SSOT v1.3 扩展:
+    - 支持 SSOT 对象和 Legacy ART 对象分开索引
+    - 新增 parent_index, path_index, relation_index
     """
 
-    def __init__(self, root_path: Optional[Path] = None):
+    def __init__(self, root_path: Optional[Path] = None, project_root: Optional[Path] = None):
         """
         初始化注册表
 
@@ -39,6 +77,7 @@ class ArtifactRegistry:
             root_path: .artifacts/ 根目录，默认为当前工作目录下的 .artifacts/
         """
         self.root_path = root_path or (Path.cwd() / ".artifacts")
+        self.project_root = (project_root or Path.cwd()).resolve()
         self.registry_file = self.root_path / ".registry.json"
         self.lock_file = self.root_path / ".registry.lock"
 
@@ -50,13 +89,37 @@ class ArtifactRegistry:
         self._by_status: Dict[str, Set[str]] = {}  # status -> artifact ids
         self._by_department: Dict[str, Set[str]] = {}  # department -> artifact ids
 
+        # SSOT v1.3 新增索引
+        # 分开索引：SSOT vs Legacy
+        self._ssot_artifacts: Dict[str, ArtifactMetadata] = {}  # SSOT 对象
+        self._legacy_artifacts: Dict[str, ArtifactMetadata] = {}  # Legacy ART 对象
+
+        # parent_id 索引
+        self._by_parent: Dict[str, Set[str]] = {}  # parent_id -> artifact ids
+
+        # path 索引
+        self._by_path: Dict[str, str] = {}  # path -> artifact_id
+
+        # 关系索引 (简化版：合并 derived_from, related_ids, verifies, implements)
+        self._relations: Dict[str, Set[str]] = {}  # artifact_id -> related_ids
+
         # 元数据
         self._last_rebuilt: Optional[datetime] = None
         self._manifest_version: Optional[str] = None
 
+    def _is_ssot_id(self, artifact_id: str) -> bool:
+        """判断是否为 SSOT ID"""
+        prefix = artifact_id.split("-")[0].upper()
+        return prefix in SSOT_PREFIXES
+
+    def _is_legacy_id(self, artifact_id: str) -> bool:
+        """判断是否为 Legacy ART ID"""
+        return artifact_id.startswith(LEGACY_PREFIX + "-")
+
     def acquire_lock(self) -> bool:
         """获取文件锁"""
         try:
+            _REGISTRY_THREAD_LOCK.acquire()
             # 确保父目录存在
             self.lock_file.parent.mkdir(parents=True, exist_ok=True)
             self.lock_fd = open(self.lock_file, "w")
@@ -65,6 +128,8 @@ class ArtifactRegistry:
                 fcntl.flock(self.lock_fd.fileno(), fcntl.LOCK_EX)
             return True
         except Exception:
+            with contextlib.suppress(Exception):
+                _REGISTRY_THREAD_LOCK.release()
             return False
 
     def release_lock(self) -> None:
@@ -77,6 +142,9 @@ class ArtifactRegistry:
                 self.lock_fd.close()
         except Exception:
             pass
+        finally:
+            with contextlib.suppress(Exception):
+                _REGISTRY_THREAD_LOCK.release()
 
     def rebuild(self) -> None:
         """
@@ -96,6 +164,13 @@ class ArtifactRegistry:
             self._by_status.clear()
             self._by_department.clear()
 
+            # 清空 SSOT v1.3 新增索引
+            self._ssot_artifacts.clear()
+            self._legacy_artifacts.clear()
+            self._by_parent.clear()
+            self._by_path.clear()
+            self._relations.clear()
+
             # 扫描所有 manifest 文件
             active_dir = self.root_path / "active"
             if active_dir.exists():
@@ -108,6 +183,8 @@ class ArtifactRegistry:
             archive_dir = self.root_path / "archive"
             if archive_dir.exists():
                 self._scan_manifests(archive_dir)
+
+            self._scan_ssot_files()
 
             self._last_rebuilt = datetime.now()
             self._save()
@@ -124,6 +201,72 @@ class ArtifactRegistry:
                 # 记录错误但继续扫描
                 print(f"Warning: Failed to load manifest {manifest_file}: {e}")
 
+    def _scan_ssot_files(self) -> None:
+        """Scan checked-in SSOT files with front matter and project-root paths."""
+        candidate_dirs = []
+        for relative in ("spec", "tests", str(Path("docs") / "reports")):
+            candidate = self.project_root / relative
+            if candidate.exists():
+                candidate_dirs.append(candidate)
+
+        for base_dir in candidate_dirs:
+            for path in base_dir.rglob("*.md"):
+                try:
+                    front_matter, _ = parse_front_matter(path)
+                except Exception:
+                    continue
+
+                artifact_id = front_matter.get("id")
+                ssot_type = front_matter.get("ssot_type")
+                if not artifact_id or not ssot_type:
+                    continue
+
+                properties = dict(front_matter.get("properties") or {})
+                properties["ssot_type"] = ssot_type
+                properties["parent_id"] = front_matter.get("parent_id")
+                properties["source_refs"] = front_matter.get("source_refs", [])
+                properties["version"] = front_matter.get("version", "v1")
+                properties["derived_from_ids"] = front_matter.get("derived_from_ids", [])
+                properties = self._normalize_front_matter_value(properties)
+
+                metadata = ArtifactMetadata(
+                    id=artifact_id,
+                    type=ArtifactType.DOCUMENT,
+                    category="ssot_object",
+                    status=ArtifactStatus(front_matter.get("status", "ACTIVE").upper()),
+                    path=path.relative_to(self.project_root).as_posix(),
+                    path_root=".",
+                    run_id=properties.get("run_id", ""),
+                    title=front_matter.get("title", artifact_id),
+                    derived_from=next(
+                        (
+                            item.get("id")
+                            for item in properties.get("derived_from_ids", [])
+                            if isinstance(item, dict) and item.get("id")
+                        ),
+                        None,
+                    ),
+                    verifies=front_matter.get("verifies", []),
+                    implements=front_matter.get("implements", []),
+                    tags=front_matter.get("tags", []),
+                    governance_kind=GovernanceKind.KNOWLEDGE,
+                    updated_at=datetime.fromtimestamp(path.stat().st_mtime),
+                    created_at=datetime.fromtimestamp(path.stat().st_ctime),
+                    properties=properties,
+                )
+
+                self._add_to_index(metadata)
+
+    def _normalize_front_matter_value(self, value):
+        """Make YAML-loaded values JSON-safe for registry storage."""
+        if isinstance(value, dict):
+            return {k: self._normalize_front_matter_value(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self._normalize_front_matter_value(v) for v in value]
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
     def _index_manifest(self, manifest: RunManifest) -> None:
         """将 manifest 中的产出物加入索引"""
         for artifact in manifest.artifacts:
@@ -133,6 +276,15 @@ class ArtifactRegistry:
         """添加产出物到索引"""
         # 主索引
         self._artifacts[artifact.id] = artifact
+
+        # SSOT v1.3: 分开索引 SSOT/Legacy
+        if self._is_ssot_id(artifact.id):
+            self._ssot_artifacts[artifact.id] = artifact
+        elif self._is_legacy_id(artifact.id):
+            self._legacy_artifacts[artifact.id] = artifact
+        else:
+            # 未知类型，也放入主索引
+            pass
 
         # 按run索引
         if artifact.run_id not in self._by_run:
@@ -161,6 +313,38 @@ class ArtifactRegistry:
             if artifact.department not in self._by_department:
                 self._by_department[artifact.department] = set()
             self._by_department[artifact.department].add(artifact.id)
+
+        # SSOT v1.3 新增索引
+        # parent_id 索引 (SSOT 记录存储在 properties 中)
+        parent_id = artifact.properties.get("parent_id")
+        if parent_id:
+            if parent_id not in self._by_parent:
+                self._by_parent[parent_id] = set()
+            self._by_parent[parent_id].add(artifact.id)
+
+        # path 索引
+        if artifact.path:
+            self._by_path[artifact.path] = artifact.id
+
+        # 关系索引 (简化版：合并 derived_from, related_ids, verifies, implements)
+        related_ids = set()
+        if artifact.derived_from:
+            related_ids.add(artifact.derived_from)
+        for derived_ref in artifact.properties.get("derived_from_ids", []):
+            if isinstance(derived_ref, dict):
+                ref_id = derived_ref.get("id")
+                if ref_id:
+                    related_ids.add(ref_id)
+            elif isinstance(derived_ref, str):
+                related_ids.add(derived_ref)
+        related_ids.update(artifact.properties.get("related_ids", []))
+        if artifact.verifies:
+            related_ids.update(artifact.verifies)
+        if artifact.implements:
+            related_ids.update(artifact.implements)
+
+        if related_ids:
+            self._relations[artifact.id] = related_ids
 
     def register(self, artifact: ArtifactMetadata) -> None:
         """
@@ -201,6 +385,11 @@ class ArtifactRegistry:
 
         artifact = self._artifacts[artifact_id]
 
+        if artifact_id in self._ssot_artifacts:
+            del self._ssot_artifacts[artifact_id]
+        if artifact_id in self._legacy_artifacts:
+            del self._legacy_artifacts[artifact_id]
+
         # 从各索引中移除
         if artifact.run_id in self._by_run:
             self._by_run[artifact.run_id].discard(artifact_id)
@@ -218,6 +407,17 @@ class ArtifactRegistry:
 
         if artifact.department and artifact.department in self._by_department:
             self._by_department[artifact.department].discard(artifact_id)
+
+        parent_id = artifact.properties.get("parent_id")
+        if parent_id in self._by_parent:
+            self._by_parent[parent_id].discard(artifact_id)
+            if not self._by_parent[parent_id]:
+                del self._by_parent[parent_id]
+
+        if artifact.path and self._by_path.get(artifact.path) == artifact_id:
+            del self._by_path[artifact.path]
+
+        self._relations.pop(artifact_id, None)
 
         del self._artifacts[artifact_id]
 
@@ -317,6 +517,52 @@ class ArtifactRegistry:
                 references.append(artifact)
         return references
 
+    # =========================================================================
+    # SSOT v1.3 新增查询方法
+    # =========================================================================
+
+    def get_ssot_artifacts(self) -> List[ArtifactMetadata]:
+        """获取所有 SSOT 对象"""
+        return list(self._ssot_artifacts.values())
+
+    def get_legacy_artifacts(self) -> List[ArtifactMetadata]:
+        """获取所有 Legacy ART 对象"""
+        return list(self._legacy_artifacts.values())
+
+    def is_ssot_id(self, artifact_id: str) -> bool:
+        """判断 ID 是否为 SSOT 对象"""
+        return artifact_id in self._ssot_artifacts
+
+    def is_legacy_id(self, artifact_id: str) -> bool:
+        """判断 ID 是否为 Legacy ART 对象"""
+        return artifact_id in self._legacy_artifacts
+
+    def get_by_parent(self, parent_id: str) -> List[ArtifactMetadata]:
+        """获取指定 parent_id 的所有子对象"""
+        ids = self._by_parent.get(parent_id, set())
+        return [self._artifacts[id] for id in ids if id in self._artifacts]
+
+    def get_by_path(self, path: str) -> Optional[ArtifactMetadata]:
+        """根据路径获取产出物"""
+        artifact_id = self._by_path.get(path)
+        if artifact_id:
+            return self._artifacts.get(artifact_id)
+        return None
+
+    def get_related(self, artifact_id: str) -> List[ArtifactMetadata]:
+        """获取与指定对象相关的所有对象"""
+        related_ids = self._relations.get(artifact_id, set())
+        result = []
+        for rid in related_ids:
+            artifact = self._artifacts.get(rid)
+            if artifact:
+                result.append(artifact)
+        return result
+
+    def exists(self, artifact_id: str) -> bool:
+        """检查 artifact 是否存在"""
+        return artifact_id in self._artifacts
+
     def _save(self) -> None:
         """保存注册表到磁盘"""
         data = {
@@ -326,9 +572,20 @@ class ArtifactRegistry:
         }
 
         # 原子写入
-        temp_file = self.registry_file.with_suffix(".tmp")
+        temp_file = self.registry_file.with_name(f"{self.registry_file.stem}.{uuid.uuid4().hex}.tmp")
         temp_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        temp_file.replace(self.registry_file)
+        last_error = None
+        for attempt in range(5):
+            try:
+                temp_file.replace(self.registry_file)
+                return
+            except PermissionError as exc:
+                last_error = exc
+                time.sleep(0.1 * (attempt + 1))
+        with contextlib.suppress(FileNotFoundError):
+            temp_file.unlink()
+        if last_error:
+            raise last_error
 
     def load(self) -> None:
         """从磁盘加载注册表"""

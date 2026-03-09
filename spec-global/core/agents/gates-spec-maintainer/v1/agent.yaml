@@ -44,6 +44,10 @@ policy:
       then: "add_remediation_rules"
     - if: "gate_type_invalid"
       then: "halt_and_explain"
+    - if: "gate_changes_completion_semantics"
+      then: "require_governance_reference_and_human_gate_note"
+    - if: "gate_tries_to_bypass_required_review"
+      then: "raise_blocker"
 
   quality_bar:
     must_have:
@@ -52,6 +56,7 @@ policy:
       - "审批动作定义完整"
       - "整改机制配置（如适用）"
       - "超时处理策略"
+      - "关键门禁语义与临时治理红线一致"
 
   refusal:
     conditions:
@@ -77,6 +82,7 @@ prompting:
     - Never create gates without clear trigger conditions
     - Never bypass approval requirements
     - Always define timeout and escalation
+    - Never silently weaken completion or review semantics
 
     GATE TYPES:
     1. human_approval: Requires explicit human decision
@@ -96,6 +102,7 @@ prompting:
     - "每个门禁必须定义可用动作（approve/reject/remediate）"
     - "人类门禁必须有超时策略"
     - "整改门禁必须定义最大尝试次数"
+    - "如门禁涉及完成态、验收态或 truth interpretation，补充治理说明"
 
   output_format: yaml
 
@@ -213,3 +220,17 @@ responsibility:
 output_requirements:
   path_pattern: "ai-spec/specs/{scope}/gates/{gate-name}/v{version}/gate.yaml"
   scope_options: ["common", "org/development", "org/product"]
+
+governance:
+  temp_governance: .project/governance/TEMP_GOVERNANCE.md
+  review_checklist: .project/governance/REVIEW_CHECKLIST.md
+  completion_template: .project/governance/COMPLETION_TEMPLATE.md
+  module_contracts: .project/governance/MODULE_CONTRACTS/
+
+governance_rules:
+  no_silent_gate_relaxation: "不得静默放宽 mandatory gate、evidence requirement、approval requirement。"
+  gate_flow_alignment: "门禁规范必须与 gate-flow module contract 保持一致。"
+  human_gate_required_for:
+    - "mandatory gate removal"
+    - "approval semantics changes"
+    - "completion-state promotion logic changes"

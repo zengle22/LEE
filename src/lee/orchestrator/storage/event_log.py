@@ -101,12 +101,22 @@ class EventLog:
     """事件日志管理器"""
 
     LOG_FILE = WORKFLOW_SUBDIRS["events"]
+    DEFAULT_LOG_FILENAME = "events.jsonl"
 
     def __init__(self, project_dir: str, run_id: str = None):
         self.project_dir = Path(project_dir)
-        self.log_path = self.project_dir / self.LOG_FILE
+        self.log_path = self._resolve_log_path()
         self.run_id = run_id
         self._event_counter = 0
+
+    def _resolve_log_path(self) -> Path:
+        """兼容旧文件路径和当前目录布局，统一落到 events.jsonl。"""
+        configured_path = self.project_dir / self.LOG_FILE
+        if configured_path.exists() and configured_path.is_dir():
+            return configured_path / self.DEFAULT_LOG_FILENAME
+        if configured_path.suffix:
+            return configured_path
+        return configured_path.with_suffix(".jsonl")
 
     def _generate_event_id(self) -> str:
         """生成事件 ID"""

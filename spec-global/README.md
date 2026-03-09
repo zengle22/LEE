@@ -7,6 +7,13 @@
 
 ---
 
+## SSOT 链路补充
+
+- `spec-global` 当前仍是 workflow/contract-first 组织
+- 正式 SSOT 主链与 contract 映射见 [SSOT_CONTRACT_CHAIN.md](SSOT_CONTRACT_CHAIN.md)
+
+---
+
 ## 迁移统计
 
 ### 总体统计

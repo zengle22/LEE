@@ -643,6 +643,10 @@ class FileOutputHandler:
         """
         解析路径变量并转换为绝对路径
 
+        支持两种变量格式：
+        1. ${VARIABLE} - 环境变量风格
+        2. {{ variable }} - Jinja2 模板风格
+
         Args:
             path: 原始路径
             context: 工作流上下文
@@ -650,14 +654,54 @@ class FileOutputHandler:
         Returns:
             解析后的绝对路径
         """
-        # 变量替换
+        # 构建模板渲染上下文
+        template_context = {}
+
+        # 从 context 中提取常用变量
+        # 优先使用顶层的 data，如果没有则使用 context 本身
+        if "data" in context:
+            data = context.get("data", {})
+            template_context.update(data)
+
+            # 从 data 中提取 params（模板渲染需要这些变量）
+            if "params" in data:
+                template_context.update(data.get("params", {}))
+        else:
+            # 如果没有 data，直接使用 context
+            template_context.update(context)
+
+        # 添加其他顶层变量（覆盖 data 中的同名变量）
+        for key in ["project_name", "qa_specs_dir", "module"]:
+            if key in context:
+                template_context[key] = context[key]
+
+        # 渲染 Jinja2 模板变量
+        if "{{" in path and "}}" in path:
+            from lee.orchestrator.core.template_engine import TemplateEngine
+            import logging
+            logger = logging.getLogger(__name__)
+            engine = TemplateEngine()
+            logger.info(f"Rendering path: {path}, context keys: {list(template_context.keys())}")
+            try:
+                path = engine.render_string(path, template_context)
+                logger.info(f"Rendered path: {path}")
+            except Exception as e:
+                logger.warning(f"Path rendering failed: {e}")
+                pass  # 渲染失败时保留原样
+
+        # 变量替换 - ${PROJECT_NAME} 风格
         if "${PROJECT_NAME}" in path:
             project_name = context.get("project_name", context.get("data", {}).get("project_name", "ai-marathon-coach"))
             path = path.replace("${PROJECT_NAME}", project_name)
 
+        # `/reports/...` 这类项目内根路径在 Windows 上会被 Path.join 吃成盘符根目录。
+        # 这里统一当作“相对 project_root 的治理路径”处理。
+        if isinstance(path, str) and path.startswith(("/", "\\")) and not Path(path).drive:
+            path = path.lstrip("/\\")
+
         # 转换为绝对路径
         if not os.path.isabs(path):
-            path = str(self.project_root / path)
+            path = str((self.project_root / path).resolve())
 
         return path
 
@@ -669,12 +713,100 @@ class FileOutputHandler:
             path: 文件路径
             content: 文件内容
         """
+        import logging
+        import re
+        logger = logging.getLogger(__name__)
+        
+        # 清理 Markdown 格式（如果内容是 YAML/JSON）
+        if path.endswith(('.yaml', '.yml', '.json')):
+            cleaned_content = self._clean_markdown_format(content)
+            if cleaned_content != content:
+                logger.info(f"Cleaned Markdown format from: {path}")
+                content = cleaned_content
+        
         # 创建目录
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         # 写入文件
         with open(path, 'w', encoding='utf-8') as f:
             f.write(content)
+    
+    def _clean_markdown_format(self, content: str) -> str:
+        """
+        清理 Markdown 格式，提取纯 YAML/JSON 内容
+        
+        Args:
+            content: 可能包含 Markdown 格式的内容
+        
+        Returns:
+            清理后的纯内容
+        """
+        import re
+        
+        original_content = content
+        
+        # 移除文件路径标记（如 **spec/qa/test-sets/ts-xxx.yaml**）
+        content = re.sub(r'^\*\*[^*]+\*\*\s*\n?', '', content, flags=re.MULTILINE)
+        
+        # 移除 Markdown 代码块开始标记（```yaml, ```json, ```）
+        content = re.sub(r'^```(?:yaml|json)?\s*\n?', '', content, flags=re.MULTILINE)
+        
+        # 移除 Markdown 代码块结束标记
+        content = re.sub(r'\n?\s*```\s*$', '', content, flags=re.MULTILINE)
+        
+        # 移除 Markdown 标题标记（###, ##, #）
+        content = re.sub(r'^#+\s+.*$', '', content, flags=re.MULTILINE)
+        
+        # 查找第一个 YAML 键的位置
+        lines = content.split('\n')
+        yaml_start = 0
+        yaml_end = len(lines)
+        
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            # 检查是否是 YAML 键的开始（排除注释和空行）
+            if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*\s*:', stripped):
+                yaml_start = i
+                break
+        
+        # 从后往前找，找到最后一个有效的 YAML 行
+        for i in range(len(lines) - 1, yaml_start, -1):
+            stripped = lines[i].strip()
+            # 如果是空行或注释，继续
+            if not stripped or stripped.startswith('#'):
+                continue
+            # 如果看起来像说明文字（包含数字列表、冒号解释、中文说明等）
+            if re.match(r'^\d+\.', stripped) or \
+               re.match(r'^To\s+complete:', stripped, re.IGNORECASE) or \
+               re.match(r'^This\s+(template|file|YAML)', stripped, re.IGNORECASE) or \
+               re.match(r'^该\s*(YAML|文件|此)', stripped) or \
+               re.match(r'^\d+\.?\s*$', stripped):  # 单独的数字行
+                yaml_end = i
+                break
+        
+        # 提取 YAML 内容
+        yaml_lines = lines[yaml_start:yaml_end]
+        
+        # 移除末尾的说明文字行
+        final_lines = []
+        for line in yaml_lines:
+            stripped = line.strip()
+            # 如果是说明文字的开始，停止
+            if re.match(r'^\d+\.\s+', stripped) or \
+               re.match(r'^To\s+complete:', stripped, re.IGNORECASE) or \
+               re.match(r'^This\s+(template|file|YAML)', stripped, re.IGNORECASE) or \
+               re.match(r'^该\s*(YAML|文件|此)', stripped) or \
+               re.match(r'^\d+\.?\s*$', stripped):
+                break
+            final_lines.append(line)
+        
+        result = '\n'.join(final_lines)
+        
+        # 如果清理后内容为空，返回原始内容
+        if not result.strip():
+            return original_content
+        
+        return result
 
     async def write_directory(
         self,

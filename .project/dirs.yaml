@@ -1,90 +1,110 @@
-version: '1.0'
-description: LEE Standard Project Directory Structure
-initialized_at: '2026-01-25T01:29:43.175256'
-initialized_by: lee-orchestrator
-project_name: calorie-tracker
+version: '2.0'
+description: LEE Standard Project Directory Topology
+initialized_at: '2026-03-08T16:21:41.896693'
+initialized_by: lee-init
+project_name: LEE
 directories:
   config_dir:
     path: .project
-    description: Project configuration and metadata
+    description: LEE 项目配置，元数据（SSOT of project）
     subdirs:
-    - schema
+    - registry
     structure: flat
     naming: default
+    is_project_config: true
   workflow_dir:
     path: .workflow
-    description: Workflow execution state and temporary files
+    description: 工作流运行态（可清理/可重建）
     subdirs:
-    - workspace
-    - gates
-    - events
+    - runs
     - cache
-    structure: flat
-    naming: default
-  contracts_dir:
-    path: contracts
-    description: Frozen analysis results and formal contracts
-    subdirs:
-    - input
-    - output
-    structure: layered
-    naming: default
-  docs_dir:
-    path: docs
-    description: Generated documentation and reports
-    subdirs:
-    - spec
-    - reports
-    - guides
-    - archive
-    structure: flat
-    naming: descriptive
-  src_dir:
-    path: src
-    description: Generated source code
-    subdirs:
-    - components
-    - services
-    - utils
-    - types
-    structure: module
-    naming: default
-  outputs_dir:
-    path: outputs
-    description: Intermediate outputs and artifacts
-    subdirs:
-    - build
-    - test
-    - analysis
-    - temp
+    - traces
+    - evidence
+    - tokens
+    - compliance
+    - env-check
+    - instances
+    - approvals
     structure: flat
     naming: default
     cleanup: auto
+  artifacts_dir:
+    path: .artifacts
+    description: 产出物（需要长期保留/可追溯）
+    subdirs:
+    - active
+    - frozen
+    - archive
+    structure: layered
+    naming: default
+  spec_dir:
+    path: spec
+    description: 规格 SSOT（可 gate、可冻结）
+    subdirs:
+    - requirements
+    - api
+    - data
+    - ui
+    - adr
+    structure: flat
+    naming: default
+    copy_templates_from: templates/spec
+  docs_dir:
+    path: docs
+    description: 解释性文档（说明、指南、报告）
+    subdirs:
+    - guides
+    - reports
+    - archive
+    structure: flat
+    naming: descriptive
+  knowledge_dir:
+    path: knowledge
+    description: 知识沉淀（Agent 复盘、模式提炼、能力演进）
+    subdirs:
+    - retrospectives
+    - patterns
+    - evolution
+    structure: flat
+    naming: default
+  src_dir:
+    path: src
+    description: 源码（前后端分离建议明确边界）
+    subdirs:
+    - backend
+    - frontend
+    structure: module
+    naming: default
   tests_dir:
     path: tests
-    description: Generated test files
+    description: 测试（镜像 src 结构）
     subdirs:
     - unit
     - integration
     - e2e
     structure: hierarchical
     naming: default
-  specs_dir:
-    path: specs
-    description: Generated specification documents
-    subdirs:
-    - requirements
-    - api
-    - database
-    - ui
+  tools_dir:
+    path: tools
+    description: 项目工具（代码生成、lint、自检脚本）
+    subdirs: []
     structure: flat
     naming: default
-file_naming_conventions:
-  contracts: '{layer}/{version}/{contract_name}.yaml'
-  docs: '{category}/{YYYY-MM-DD}-{title}.md'
-  source: '{module}/{file_name}.{ext}'
-  tests: '{type}/{test_name}_test.{ext}'
-  outputs: '{step_id}/{artifact_name}.{ext}'
+  deploy_dir:
+    path: deploy
+    description: 部署（docker/helm/terraform）
+    subdirs: []
+    structure: flat
+    naming: default
+  legacy_dir:
+    path: legacy
+    description: 兼容旧版（默认只读）
+    subdirs:
+    - spec
+    - evidence
+    - env
+    structure: flat
+    naming: default
 constraints:
   strict_path_validation: true
   forbid_creation_outside_defined_dirs: true

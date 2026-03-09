@@ -84,3 +84,8 @@ nul
 .artifacts
 .workflow
 .VSCodeCounter
+.claude-sandbox
+node_modules
+output
+demo-test-artifacts
+docs/reports/governance

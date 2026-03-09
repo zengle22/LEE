@@ -1,0 +1,181 @@
+# Product EPIC to FEAT Template v1.0
+# 产品部门 L3 模板 - 从 EPIC 生成 FEAT 并冻结
+
+kind: l3_workflow_template
+version: "1.0"
+id: workflow.product.task.epic_to_feat
+name: Product EPIC to FEAT
+description: >
+  将冻结后的 EPIC 拆解为多个可独立验收的 FEAT。
+  FEAT 是最小可独立验收能力单元，也是 UI / TECH / TASK / TESTSET 的直接父节点。
+  该文件是 checked-in workflow template，运行时实例由 Python runtime 动态生成。
+owner: product-ai
+tags: [product, workflow, l3, ssot, feat]
+
+roles:
+  agents:
+    - agent.product.requirement_decomposer
+    - agent.product.prd_writer
+    - agent.review.requirement_reviewer
+    - agent.governance.approval_reviewer
+  skills: []
+  gates:
+    - gate.product.feat_freeze
+
+overview:
+  input:
+    type: epic_freeze
+    ssot_type: EPIC
+
+  output:
+    type: feat_freeze_bundle
+    ssot_type: FEAT
+    description: 冻结后的 FEAT 集合
+
+stages:
+  - id: epic_to_feat_flow
+    name: "EPIC to FEAT Flow"
+    kind: stage
+    description: "将冻结后的 EPIC 拆解并冻结为 FEAT"
+    depends_on: []
+    steps:
+      - id: feat_boundary_design
+        name: FEAT 边界拆解
+        kind: agent
+        agent_id: agent.product.requirement_decomposer
+        config:
+          implementation_facing: false
+        mandatory: true
+        depends_on: []
+        description: >
+          将 EPIC 拆为可独立验收的 FEAT，
+          明确每个 FEAT 的目标、范围、输入、处理、输出、依赖、非目标和验收边界。
+        inputs:
+          - source: epic_freeze
+            required: true
+        outputs:
+          - symbol: feat_breakdown
+            contract: departments/product/contracts/feat-breakdown-contract/v1/schema.json
+            freeze: false
+      - id: feat_spec_generation
+        name: FEAT 规格生成
+        kind: agent
+        agent_id: agent.product.prd_writer
+        mandatory: true
+        depends_on: [feat_boundary_design]
+        description: >
+          为每个 FEAT 生成详细规格视图。
+          用户行为型 FEAT 可以包含 User Story，但 User Story 仅为可选补充视角。
+          该视图可以保留 PRD 文档形态，但其本质是 FEAT 的派生说明。
+        inputs:
+          - source: epic_freeze
+            required: true
+          - source: feat_breakdown
+            required: true
+        outputs:
+          - symbol: feat_specs
+            contract: departments/product/contracts/feat-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: FEAT
+              parent: EPIC
+      - id: feat_review
+        name: FEAT 可实施性评审
+        kind: agent
+        agent_id: agent.review.requirement_reviewer
+        config:
+          implementation_facing: false
+        mandatory: true
+        depends_on: [feat_spec_generation]
+        description: >
+          校验 FEAT 是否满足独立验收、边界明确、依赖透明、可派生 TASK / TESTSET 和优先级清晰。
+        inputs:
+          - source: feat_specs
+            required: true
+        outputs:
+          - symbol: feat_review_report
+            contract: departments/product/contracts/product-review-contract/v1/schema.json
+            freeze: false
+      - id: feat_freeze
+        name: FEAT 冻结
+        kind: gate
+        mandatory: true
+        depends_on: [feat_review]
+        description: >
+          由产品负责人冻结 FEAT 集合，形成后续 UI / TECH / TASK 的唯一输入基线。
+        inputs:
+          - source: feat_specs
+            required: true
+          - source: feat_review_report
+            required: true
+        outputs:
+          - path: output/design-frozen/{project}-feat-freeze.yaml
+            required: true
+            freeze: true
+            ssot:
+              identity_kind: ssot
+              ssot_type: FEAT
+              derived_from: feat_specs
+        gate_rules:
+          reviewers:
+            - role: product_owner
+          approval_criteria:
+            - label: "独立验收"
+              criteria: "每个 FEAT 都有独立可验证的验收边界"
+              required: true
+            - label: "能力而非任务"
+              criteria: "每个 FEAT 描述系统能力，而不是实现任务或页面动作"
+              required: true
+            - label: "边界完整"
+              criteria: "每个 FEAT 都说明输入、处理、输出"
+              required: true
+            - label: "父子关系正确"
+              criteria: "所有 FEAT 都显式挂接到对应 EPIC"
+              required: true
+            - label: "可派生测试"
+              criteria: "每个 FEAT 都可以派生 TASK 和 TESTSET"
+              required: true
+            - label: "可供下游设计"
+              criteria: "信息足以驱动 UI / TECH / TASK 设计"
+              required: true
+        config:
+          gate:
+            type: human_approval
+            gate_id: gate.product.feat_freeze
+    step_order:
+      - feat_boundary_design
+      - feat_spec_generation
+      - feat_review
+      - feat_freeze
+
+stage_order:
+  - epic_to_feat_flow
+
+constraints:
+  feat_parent_rule: |
+    UI / TECH / TASK 不允许直接挂在 EPIC 下。
+    必须先有 FEAT freeze。
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+  context_fields:
+    - epic_freeze
+  output_fields:
+    - feat_breakdown
+    - feat_specs
+    - feat_freeze
+
+state_machine:
+  states:
+    - INIT: "初始化"
+    - FEAT_BOUNDARY_DESIGN: "FEAT 边界拆解"
+    - FEAT_SPEC_GENERATION: "FEAT 规格生成"
+    - FEAT_REVIEW: "FEAT 评审"
+    - FEAT_FREEZE: "FEAT 冻结"
+    - COMPLETED: "完成"
+    - FAILED: "失败"

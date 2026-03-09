@@ -12,6 +12,7 @@ import click
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Optional
+from types import SimpleNamespace
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import HTML
@@ -137,11 +138,7 @@ class LeeChatREPL:
         lee_dir.mkdir(exist_ok=True)
         history_file = lee_dir / "chat_history.txt"
 
-        # Create PromptSession with history
-        self.session = PromptSession(
-            history=FileHistory(str(history_file)),
-            auto_suggest=AutoSuggestFromHistory(),
-        )
+        self.session = self._create_prompt_session(history_file)
         self._ensure_prompt_auto_suggest()
 
         self.style = Style.from_dict({
@@ -155,6 +152,18 @@ class LeeChatREPL:
 
         # Statistics
         self.turn_count = 0
+
+    def _create_prompt_session(self, history_file: Path):
+        """Create prompt session with a no-console fallback for tests/headless runs."""
+        history = FileHistory(str(history_file))
+        auto_suggest = AutoSuggestFromHistory()
+        try:
+            return PromptSession(
+                history=history,
+                auto_suggest=auto_suggest,
+            )
+        except Exception:
+            return _FallbackPromptSession(history, auto_suggest)
 
     async def run_loop(self):
         """Main REPL loop"""
@@ -848,6 +857,7 @@ class LeeChatREPL:
             # Never let prompt guard break chat startup.
             pass
 
+
     def _display_result_data(self, data: dict):
         """Display result data in user-friendly format"""
         if not data:
@@ -1091,6 +1101,17 @@ Examples:
     def _print_info(self, message: str):
         """Print info message"""
         click.echo(click.style(message, fg='blue'))
+
+class _FallbackPromptSession:
+    """Minimal prompt session used when prompt_toolkit cannot bind to a console."""
+
+    def __init__(self, history, auto_suggest):
+        self.history = history
+        self.default_buffer = SimpleNamespace(auto_suggest=auto_suggest)
+
+    async def prompt_async(self, *args, **kwargs):
+        raise EOFError()
+
 
 
 @click.command()

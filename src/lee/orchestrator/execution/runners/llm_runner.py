@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import uuid
+import difflib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -46,6 +48,280 @@ class LLMRunner(StepRunnerBase):
             config_path=config_path,
             fallback_providers=fallback_providers
         )
+
+    def _build_executor_input(
+        self,
+        *,
+        executor_type: str,
+        step,
+        ctx: RunnerContext,
+        instance,
+        workflow_id: str,
+        agent_ctx,
+        step_token: Optional[str],
+    ) -> Dict[str, Any]:
+        if executor_type in ("codex", "claude_code"):
+            code_config = step.config.get("claude_code", {}) if step.config else {}
+            workspace = ctx.resolve_workdir(step, instance.data.get("run_id", workflow_id))
+            input_data: Dict[str, Any] = {
+                "goal": agent_ctx.user_prompt or code_config.get("goal", ""),
+                "workspace": workspace,
+                "context_files": code_config.get("context_files", []),
+                "write_scope": code_config.get("write_scope", []),
+                "max_iterations": code_config.get("max_iterations", 5),
+                "timeout_seconds": code_config.get("timeout_seconds", 3600),
+                "timeout_retries": code_config.get("timeout_retries", 1),
+                "retry_backoff_seconds": code_config.get("retry_backoff_seconds", 5),
+                "stop_conditions": code_config.get("stop_conditions", {}),
+                "system_prompt_extra": agent_ctx.system_prompt or "",
+            }
+            if code_config.get("allowed_commands"):
+                input_data["allowed_commands"] = code_config.get("allowed_commands")
+            if code_config.get("model"):
+                input_data["model"] = code_config.get("model")
+            if "silence_timeout_seconds" in code_config:
+                input_data["silence_timeout_seconds"] = code_config.get("silence_timeout_seconds")
+            if "silence_grace_seconds" in code_config:
+                input_data["silence_grace_seconds"] = code_config.get("silence_grace_seconds")
+            if "max_bash_calls" in code_config:
+                input_data["max_bash_calls"] = code_config.get("max_bash_calls")
+            if "resume_on_retry" in code_config:
+                input_data["resume_on_retry"] = bool(code_config.get("resume_on_retry"))
+        else:
+            input_data = {
+                "system_message": agent_ctx.system_prompt,
+                "prompt": agent_ctx.user_prompt,
+                "temperature": agent_ctx.temperature,
+                "max_tokens": agent_ctx.max_tokens,
+            }
+
+        if step_token:
+            input_data["token_context"] = ctx.token_manager.encode_token_for_context(step_token)
+        return input_data
+
+    @staticmethod
+    def _coerce_output_file_value(raw_text: str) -> Any:
+        text = (raw_text or "").strip()
+        stripped = StepRunnerBase._strip_code_fence(text)
+        if not stripped:
+            return ""
+        lowered = stripped.lower()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
+        if re.fullmatch(r"-?\d+", stripped):
+            try:
+                return int(stripped)
+            except ValueError:
+                pass
+        if re.fullmatch(r"-?\d+\.\d+", stripped):
+            try:
+                return float(stripped)
+            except ValueError:
+                pass
+        return stripped
+
+    @staticmethod
+    def _extract_named_output_segment(raw_text: str, output_name: str) -> str:
+        text = (raw_text or "").strip()
+        if not text or not output_name:
+            return text
+
+        lines = text.splitlines()
+        start_index: Optional[int] = None
+        token = f"`{output_name}`"
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            is_output_heading = stripped.startswith("#") or bool(re.match(r"^\d+\.\s+", stripped))
+            if is_output_heading and token in stripped:
+                start_index = index + 1
+                break
+
+        if start_index is None:
+            return text
+
+        body_lines: List[str] = []
+        for line in lines[start_index:]:
+            stripped = line.strip()
+            if stripped == "---":
+                break
+            is_output_heading = stripped.startswith("#") or bool(re.match(r"^\d+\.\s+", stripped))
+            if is_output_heading and "`" in stripped:
+                break
+            body_lines.append(line)
+
+        body = "\n".join(body_lines).strip()
+        if body:
+            return body
+        return text
+
+    def _extract_declared_output_values(
+        self,
+        step,
+        written_files: List[str],
+        project_root: Optional[str],
+        generated_text: str = "",
+    ) -> Dict[str, Any]:
+        extracted: Dict[str, Any] = {}
+        if not step.outputs:
+            return extracted
+
+        written_index = {Path(path).name: Path(path) for path in written_files}
+        for output_spec in step.outputs:
+            raw_path = getattr(output_spec, "path", None)
+            if not raw_path:
+                continue
+            normalized_path = self._normalize_project_relative_path(str(raw_path))
+            path_obj = Path(normalized_path)
+            file_name = path_obj.name
+            key_name = path_obj.stem if path_obj.suffix else file_name
+            if "/" in normalized_path or "\\" in normalized_path:
+                continue
+            try:
+                matched_path = written_index.get(file_name)
+                raw_text = ""
+                if matched_path and matched_path.exists() and not matched_path.is_dir():
+                    raw_text = matched_path.read_text(encoding="utf-8")
+                elif generated_text:
+                    raw_text = generated_text
+                else:
+                    continue
+                if key_name:
+                    raw_text = self._extract_named_output_segment(raw_text, key_name)
+                extracted[key_name] = self._coerce_output_file_value(raw_text)
+            except Exception:
+                continue
+        return extracted
+
+    def _resolve_spec_writeback_payload(
+        self,
+        *,
+        step,
+        structured_payload: Optional[Any],
+        generated_text: str,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        if isinstance(structured_payload, dict):
+            payload.update(structured_payload)
+            business_output = structured_payload.get("business_output")
+            if isinstance(business_output, dict):
+                payload.update({k: v for k, v in business_output.items() if k not in payload})
+
+        for key in ("maintained_spec_path", "target_spec_path", "spec_path"):
+            if key in payload and payload[key]:
+                payload["maintained_spec_path"] = payload[key]
+                break
+
+        for key in ("maintained_spec_content", "target_spec_content", "spec_content"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                payload["maintained_spec_content"] = self._strip_code_fence(value).strip()
+                break
+        else:
+            for key in ("maintained_spec_content", "target_spec_content", "spec_content"):
+                segment = self._extract_named_output_segment(generated_text, key)
+                if segment and segment.strip() and segment.strip() != generated_text.strip():
+                    payload["maintained_spec_content"] = self._strip_code_fence(segment).strip()
+                    break
+
+        if not payload.get("maintained_spec_content"):
+            target_ref = ((step.config or {}).get("spec_writeback") or {}).get("target_path")
+            if target_ref:
+                segment = self._extract_named_output_segment(generated_text, str(target_ref))
+                if segment and segment.strip() and segment.strip() != generated_text.strip():
+                    payload["maintained_spec_content"] = self._strip_code_fence(segment).strip()
+
+        if not payload.get("maintained_spec_path"):
+            for key in ("maintained_spec_path", "target_spec_path", "spec_path"):
+                segment = self._extract_named_output_segment(generated_text, key)
+                if segment and segment.strip() and segment.strip() != generated_text.strip():
+                    payload["maintained_spec_path"] = self._strip_code_fence(segment).strip()
+                    break
+
+        return payload
+
+    def _apply_spec_writeback(
+        self,
+        *,
+        step,
+        project_root: Optional[str],
+        structured_payload: Optional[Any],
+        generated_text: str,
+    ) -> Optional[Dict[str, Any]]:
+        writeback_config = ((step.config or {}).get("spec_writeback") or {})
+        if not writeback_config.get("enabled"):
+            return None
+
+        payload = self._resolve_spec_writeback_payload(
+            step=step,
+            structured_payload=structured_payload,
+            generated_text=generated_text,
+        )
+
+        target_ref = (
+            writeback_config.get("target_path")
+            or payload.get("maintained_spec_path")
+            or payload.get("target_spec_path")
+        )
+        content = payload.get("maintained_spec_content")
+        if not target_ref or not isinstance(content, str) or not content.strip():
+            return {
+                "enabled": True,
+                "applied": False,
+                "reason": "missing_target_path_or_spec_content",
+            }
+
+        normalized_target = self._normalize_project_relative_path(str(target_ref))
+        target_path = Path(normalized_target)
+        if not target_path.is_absolute():
+            target_path = (Path(project_root or ".").resolve() / target_path).resolve()
+
+        existing_content = ""
+        if target_path.exists():
+            existing_content = target_path.read_text(encoding="utf-8")
+
+        new_content = content.strip()
+        changed = existing_content != new_content
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(new_content, encoding="utf-8")
+
+        diff_report_path = writeback_config.get("diff_report_path")
+        diff_report: Optional[Path] = None
+        diff_text = ""
+        if diff_report_path:
+            normalized_diff = self._normalize_project_relative_path(str(diff_report_path))
+            diff_report = Path(normalized_diff)
+            if not diff_report.is_absolute():
+                diff_report = (Path(project_root or ".").resolve() / diff_report).resolve()
+            diff_report.parent.mkdir(parents=True, exist_ok=True)
+            diff_lines = list(
+                difflib.unified_diff(
+                    existing_content.splitlines(keepends=True),
+                    new_content.splitlines(keepends=True),
+                    fromfile=str(target_path),
+                    tofile=str(target_path),
+                    lineterm="",
+                )
+            )
+            diff_text = "\n".join(diff_lines).strip()
+            if not diff_text:
+                diff_text = f"No content changes for {target_path}\n"
+            diff_report.write_text(diff_text, encoding="utf-8")
+
+        written_files = [str(target_path)]
+        if diff_report:
+            written_files.append(str(diff_report))
+
+        return {
+            "enabled": True,
+            "applied": True,
+            "changed": changed,
+            "target_path": str(target_path),
+            "diff_report_path": str(diff_report) if diff_report else None,
+            "diff_preview": diff_text[:2000] if diff_text else "",
+            "written_files": written_files,
+        }
 
     async def execute(
         self,
@@ -111,14 +387,15 @@ class LLMRunner(StepRunnerBase):
             agent_id=step.agent_id or ""
         )
 
-        input_data = {
-            "system_message": agent_ctx.system_prompt,
-            "prompt": agent_ctx.user_prompt,
-            "temperature": agent_ctx.temperature,
-            "max_tokens": agent_ctx.max_tokens,
-        }
-        if step_token:
-            input_data["token_context"] = ctx.token_manager.encode_token_for_context(step_token)
+        input_data = self._build_executor_input(
+            executor_type=executor_type,
+            step=step,
+            ctx=ctx,
+            instance=instance,
+            workflow_id=workflow_id,
+            agent_ctx=agent_ctx,
+            step_token=step_token,
+        )
 
         # 创建 task_execution 记录
         execution_id = uuid.uuid4().hex
@@ -219,17 +496,42 @@ class LLMRunner(StepRunnerBase):
                     message="LLM returned empty response",
                 )
 
+            structured_payload = self._parse_structured_output_if_possible(generated_text)
+            agent_spec = self._load_agent_spec_for_step(ctx, step)
+            governance_preflight = self._evaluate_governance_preflight(
+                step=step,
+                agent_spec=agent_spec,
+                project_root=ctx.project_root,
+                structured_payload=structured_payload,
+            )
+            spec_writeback = self._apply_spec_writeback(
+                step=step,
+                project_root=ctx.project_root,
+                structured_payload=structured_payload,
+                generated_text=generated_text,
+            )
             # 3. 处理输出文件
             written_files = []
-            if step.outputs:
+            file_outputs = [
+                output
+                for output in (step.outputs or [])
+                if getattr(output, "type", None) in {"file", "dir"} and getattr(output, "path", None)
+            ]
+            if file_outputs:
                 try:
                     written_files = await ctx.file_output_handler.handle(
                         generated_text,
-                        step.outputs,
+                        file_outputs,
                         workflow_context
                     )
                 except Exception as e:
                     print(f"[FileOutputHandler] Warning: {e}")
+
+            if spec_writeback and spec_writeback.get("applied"):
+                writeback_files = spec_writeback.get("written_files", [])
+                written_files = list(
+                    dict.fromkeys(written_files + writeback_files)
+                )
 
             # v1.0: SSOT 集成 - 注册写入的文件为产出物
             if written_files:
@@ -249,7 +551,13 @@ class LLMRunner(StepRunnerBase):
                 )
 
             # v3.4: 输出 Contract Schema 校验
-            validation_result = self._validate_step_output(step, generated_text)
+            business_output = self._extract_business_output_payload(
+                structured_payload,
+                generated_text,
+                step=step,
+                written_files=written_files,
+            )
+            validation_result = self._validate_step_output(step, business_output)
             if validation_result and not validation_result.passed:
                 strict = (step.config or {}).get("strict_output_validation", False)
                 if strict:
@@ -263,6 +571,38 @@ class LLMRunner(StepRunnerBase):
                     )
                 else:
                     print(f"[OutputValidation] Warning: Step {step.id} output schema validation failed (soft mode)")
+
+            if governance_preflight["warnings"]:
+                for warning in governance_preflight["warnings"]:
+                    print(f"[Governance] Warning: Step {step.id}: {warning}")
+
+            governance_strict = bool((step.config or {}).get("strict_governance"))
+            if governance_preflight["implementation_facing"] and not governance_preflight["allow_full_completion"]:
+                if governance_strict:
+                    error_msg = (
+                        "Governance preflight failed: no formal SSOT truth source and no Acceptance Brief or Module Contract found"
+                    )
+                    await ctx.state_machine.fail_step(workflow_id, step.id, error_msg)
+                    return StepResult(
+                        status="failed",
+                        step_id=step.id,
+                        workflow_id=workflow_id,
+                        message=error_msg,
+                    )
+
+            # SSOT agent output contract 校验与物化
+            ssot_materialized = await self._materialize_ssot_outputs(
+                ctx=ctx,
+                step=step,
+                workflow_id=workflow_id,
+                generated_text=generated_text,
+                structured_payload=structured_payload,
+            )
+            if ssot_materialized:
+                materialized_files = ssot_materialized.get("materialized_files", [])
+                if materialized_files:
+                    await self._collect_evidence(ctx, workflow_id, step.id, materialized_files)
+                written_files = list(dict.fromkeys(written_files + materialized_files))
 
             # 5. 完成步骤
             output_data = {
@@ -279,6 +619,27 @@ class LLMRunner(StepRunnerBase):
                     "stop_reason": llm_output.get("stop_reason"),
                 },
             }
+            output_data.update(
+                self._extract_declared_output_values(
+                    step=step,
+                    written_files=written_files,
+                    project_root=ctx.project_root,
+                    generated_text=generated_text,
+                )
+            )
+            if ssot_materialized:
+                output_data["ssot_materialized"] = ssot_materialized["outputs"]
+            if spec_writeback:
+                output_data["spec_writeback"] = spec_writeback
+                if spec_writeback.get("target_path"):
+                    output_data["maintained_spec_path"] = spec_writeback["target_path"]
+            output_data["governance_preflight"] = governance_preflight
+            output_data["completion_summary"] = self._build_completion_summary(
+                step=step,
+                written_files=written_files,
+                structured_payload=structured_payload,
+                governance_preflight=governance_preflight,
+            )
 
             result = await ctx.state_machine.complete_step(
                 workflow_id, step.id, output_data,
@@ -335,6 +696,302 @@ class LLMRunner(StepRunnerBase):
                     ctx.token_manager.revoke_token(step_token.token_id, reason="step_completed")
                 except Exception:
                     pass
+
+    async def _materialize_ssot_outputs(
+        self,
+        ctx: RunnerContext,
+        step,
+        workflow_id: str,
+        generated_text: str,
+        structured_payload: Optional[Any] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        If the agent spec declares ssot_output_schema, validate and materialize it.
+        """
+        agent_spec = self._load_agent_spec_for_step(ctx, step)
+        if not agent_spec:
+            return None
+
+        contracts = getattr(agent_spec, "contracts", {}) or {}
+        schema_ref = contracts.get("ssot_output_schema")
+        if not schema_ref:
+            return None
+
+        if structured_payload is None:
+            structured_payload = self._parse_structured_output_if_possible(generated_text)
+
+        contract_data = self._extract_ssot_contract_payload(
+            structured_payload,
+            generated_text=generated_text,
+        )
+        if contract_data is None:
+            try:
+                contract_data = self._parse_structured_output(generated_text)
+            except ValueError as exc:
+                strict = (step.config or {}).get("strict_output_validation", False)
+                if strict:
+                    raise
+                print(f"[SSOTContract] Warning: Step {step.id} structured output parse failed: {exc}")
+                return None
+
+        if contract_data is None:
+            strict = (step.config or {}).get("strict_output_validation", False)
+            if strict:
+                raise ValueError("SSOT output schema declared but no ssot_output_contract found")
+            print(f"[SSOTContract] Warning: Step {step.id} missing ssot_output_contract payload")
+            return None
+
+        schema_path = self._resolve_contract_path(
+            schema_ref=schema_ref,
+            spec_path=getattr(agent_spec, "spec_path", None),
+            project_root=ctx.project_root,
+        )
+        contract_data = self._normalize_ssot_contract_payload(contract_data)
+
+        try:
+            from lee.orchestrator.execution.artifacts import ArtifactManager, SSOTContractMaterializer
+
+            manager = ArtifactManager(
+                project_root=Path(ctx.project_root or ".").resolve(),
+            )
+            materializer = SSOTContractMaterializer(manager, schema_path=Path(schema_path))
+            outputs = materializer.materialize(contract_data)
+        except Exception as exc:
+            strict = (step.config or {}).get("strict_output_validation", False)
+            if strict:
+                raise
+            print(f"[SSOTContract] Warning: Step {step.id} SSOT materialization failed: {exc}")
+            return None
+
+        materialized_summary = {}
+        materialized_files: List[str] = []
+        for key, item in outputs.items():
+            artifact = item.artifact
+            materialized_summary[key] = {
+                "id": artifact.id,
+                "identity_kind": item.identity_kind,
+                "path": artifact.path,
+                "path_root": artifact.path_root,
+                "parent_id": artifact.properties.get("parent_id"),
+            }
+            materialized_files.append(str(artifact.absolute_path))
+
+        return {
+            "schema_path": schema_path,
+            "outputs": materialized_summary,
+            "materialized_files": materialized_files,
+        }
+
+    @staticmethod
+    def _normalize_ssot_contract_payload(contract_data: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = dict(contract_data)
+        if "contract_version" in normalized:
+            normalized["contract_version"] = "1.0"
+        if "run_id" in normalized and normalized["run_id"] is not None:
+            normalized["run_id"] = str(normalized["run_id"])
+        allowed_output_keys = {
+            "key",
+            "identity_kind",
+            "ssot_type",
+            "title",
+            "description",
+            "content",
+            "owner",
+            "version",
+            "parent",
+            "derived_from",
+            "derived_from_ids",
+            "source_refs",
+            "primary_refs",
+            "verifies",
+            "implements",
+            "depends_on",
+            "derived_from_one",
+            "placement_key",
+            "tags",
+            "artifact_type",
+            "category",
+            "governance_kind",
+            "properties",
+            "evidence_layers",
+        }
+        outputs = []
+        for raw_output in normalized.get("outputs", []) or []:
+            if not isinstance(raw_output, dict):
+                outputs.append(raw_output)
+                continue
+            output = {
+                key: value for key, value in dict(raw_output).items() if key in allowed_output_keys
+            }
+            parent = output.get("parent")
+            if isinstance(parent, str) and parent.lower() == "feat":
+                candidates: List[str] = []
+                for value in output.get("verifies", []) or []:
+                    if isinstance(value, str) and value.upper().startswith("FEAT-"):
+                        candidates.append(value)
+                properties = output.get("properties") or {}
+                for key in ("feature_id", "feat_id", "parent_feat_id"):
+                    value = properties.get(key)
+                    if isinstance(value, str) and value.upper().startswith("FEAT-"):
+                        candidates.append(value)
+                if candidates:
+                    output["parent"] = candidates[0]
+            if isinstance(output.get("parent"), str) and output["parent"].upper().startswith("FEAT-"):
+                verifies = []
+                for value in output.get("verifies", []) or []:
+                    if isinstance(value, str) and value.lower() == "feat":
+                        verifies.append(output["parent"])
+                    else:
+                        verifies.append(value)
+                if verifies:
+                    output["verifies"] = verifies
+            outputs.append(output)
+        normalized["outputs"] = outputs
+        return normalized
+
+    @staticmethod
+    def _parse_structured_output_if_possible(generated_text: str) -> Optional[Any]:
+        try:
+            return StepRunnerBase._parse_structured_output(generated_text)
+        except ValueError:
+            return None
+
+    def _extract_business_output_payload(
+        self,
+        structured_payload: Optional[Any],
+        fallback_text: str,
+        *,
+        step=None,
+        written_files: Optional[List[str]] = None,
+    ) -> Any:
+        if isinstance(structured_payload, dict) and "business_output" in structured_payload:
+            return structured_payload["business_output"]
+        if isinstance(structured_payload, dict):
+            return structured_payload
+        segment_payload = self._extract_structured_segment_payload(fallback_text, "business_output")
+        if segment_payload is not None:
+            return segment_payload
+        if step and written_files:
+            file_output = self._extract_primary_file_output(step, written_files)
+            if file_output is not None:
+                return file_output
+        return fallback_text
+
+    @staticmethod
+    def _extract_primary_file_output(step, written_files: List[str]) -> Optional[Any]:
+        file_specs = [
+            output
+            for output in (getattr(step, "outputs", None) or [])
+            if getattr(output, "type", None) == "file"
+        ]
+        if len(file_specs) != 1 or not written_files:
+            return None
+        spec_filename = Path(getattr(file_specs[0], "path", "")).name
+        for file_path in written_files:
+            if Path(file_path).name != spec_filename:
+                continue
+            try:
+                return StepRunnerBase._parse_structured_output(
+                    Path(file_path).read_text(encoding="utf-8")
+                )
+            except Exception:
+                return None
+        return None
+
+    def _extract_structured_segment_payload(
+        self,
+        generated_text: str,
+        segment_name: str,
+    ) -> Optional[Any]:
+        segment = self._extract_named_output_segment(generated_text, segment_name)
+        if not segment or segment.strip() == (generated_text or "").strip():
+            heading_pattern = (
+                rf"(?ms)^(?:#+|\d+\.)\s*`?{re.escape(segment_name)}`?\s*\n"
+                rf"(?:```[a-zA-Z0-9_-]*\n)?(.*?)(?:```|\n(?:#+|\d+\.)\s+|\Z)"
+            )
+            match = re.search(heading_pattern, generated_text or "")
+            if match:
+                segment = match.group(1).strip()
+        if not segment or segment.strip() == (generated_text or "").strip():
+            plain_label_pattern = (
+                rf"(?ms)^\s*{re.escape(segment_name)}\s*\n"
+                rf"```[a-zA-Z0-9_-]*\n(.*?)```"
+            )
+            match = re.search(plain_label_pattern, generated_text or "")
+            if match:
+                segment = match.group(1).strip()
+        if not segment or segment.strip() == (generated_text or "").strip():
+            return None
+        try:
+            return self._parse_structured_output(segment)
+        except ValueError:
+            return None
+
+    def _extract_structured_payload_from_code_blocks(
+        self,
+        generated_text: str,
+        segment_name: str,
+    ) -> Optional[Any]:
+        pattern = r"```(?:yaml|yml|json)?\n(.*?)```"
+        for match in re.finditer(pattern, generated_text or "", re.DOTALL):
+            candidate = match.group(1).strip()
+            if segment_name not in candidate:
+                continue
+            parsed = self._parse_structured_output_if_possible(candidate)
+            if not isinstance(parsed, dict):
+                continue
+            if segment_name in parsed:
+                return parsed[segment_name]
+            if "contract_version" in parsed and "outputs" in parsed:
+                return parsed
+        return None
+
+    def _extract_ssot_contract_payload(
+        self,
+        structured_payload: Optional[Any],
+        generated_text: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(structured_payload, dict):
+            payload = self._extract_structured_segment_payload(generated_text, "ssot_output_contract")
+            payload = self._coerce_ssot_contract_dict(payload)
+            if isinstance(payload, dict):
+                return payload
+            block_payload = self._extract_structured_payload_from_code_blocks(
+                generated_text,
+                "ssot_output_contract",
+            )
+            block_payload = self._coerce_ssot_contract_dict(block_payload)
+            return block_payload if isinstance(block_payload, dict) else None
+        if "contract_version" in structured_payload and "outputs" in structured_payload:
+            return structured_payload
+        payload = self._coerce_ssot_contract_dict(structured_payload.get("ssot_output_contract"))
+        if isinstance(payload, dict):
+            return payload
+        segment_payload = self._coerce_ssot_contract_dict(
+            self._extract_structured_segment_payload(generated_text, "ssot_output_contract")
+        )
+        if isinstance(segment_payload, dict):
+            return segment_payload
+        block_payload = self._coerce_ssot_contract_dict(
+            self._extract_structured_payload_from_code_blocks(
+                generated_text,
+                "ssot_output_contract",
+            )
+        )
+        if isinstance(block_payload, dict):
+            return block_payload
+        return None
+
+    @staticmethod
+    def _coerce_ssot_contract_dict(payload: Optional[Any]) -> Optional[Dict[str, Any]]:
+        if not isinstance(payload, dict):
+            return None
+        if "contract_version" in payload and "outputs" in payload:
+            return payload
+        nested = payload.get("ssot_output_contract")
+        if isinstance(nested, dict):
+            return nested
+        return None
 
     async def _register_artifacts(
         self,

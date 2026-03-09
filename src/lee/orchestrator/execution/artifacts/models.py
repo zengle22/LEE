@@ -9,8 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .types import ArtifactType, ArtifactStatus, AdoptMode, GovernanceKind
-from lee.orchestrator.core.path_policy import ARTIFACTS_SUBDIRS, TOOL_DIRECTORIES
+from .types import ArtifactType, ArtifactStatus, AdoptMode, GovernanceKind, SSOTType
+from lee.orchestrator.core.path_policy import ARTIFACTS_SUBDIRS
 
 
 @dataclass
@@ -18,8 +18,9 @@ class ArtifactMetadata:
     """
     产出物元数据
 
-    路径规范 (v2.1):
-    - path: 相对于 .artifacts/ 根目录的路径
+    路径规范 (v2.2):
+    - path_root: path 的基准目录；默认是 .artifacts，也可以是项目根 "."
+    - path: 相对于 path_root 的路径
     - external_path: 外部文件系统的原始路径 (adopt 时记录)
     - absolute_path: 运行时计算的绝对路径
     """
@@ -31,7 +32,8 @@ class ArtifactMetadata:
     status: ArtifactStatus
 
     # 路径信息
-    path: str  # 相对路径 (相对于 .artifacts/)
+    path: str  # 相对路径 (相对于 path_root)
+    path_root: str = ".artifacts"  # path 的基准目录；"." 表示项目根
     external_path: Optional[str] = None  # 原始外部路径
     adopt_mode: Optional[AdoptMode] = None  # adopt 模式
 
@@ -76,12 +78,10 @@ class ArtifactMetadata:
     @property
     def absolute_path(self) -> Path:
         """计算绝对路径"""
-        from pathlib import Path
-
-        # 获取 .artifacts/ 根目录 (从 path_policy 获取)
-        artifacts_dir = next(d for d in TOOL_DIRECTORIES if d == ".artifacts")
-        artifacts_root = Path.cwd() / artifacts_dir
-        return artifacts_root / self.path
+        base_path = Path(self.path_root or ".artifacts")
+        if not base_path.is_absolute():
+            base_path = Path.cwd() / base_path
+        return base_path / self.path
 
     @property
     def exists(self) -> bool:
@@ -116,6 +116,7 @@ class ArtifactMetadata:
             "category": self.category,
             "status": self.status.value,
             "path": self.path,
+            "path_root": self.path_root,
             "external_path": self.external_path,
             "adopt_mode": self.adopt_mode.value if self.adopt_mode else None,
             "run_id": self.run_id,
@@ -155,6 +156,7 @@ class ArtifactMetadata:
             category=data["category"],
             status=ArtifactStatus(data["status"]),
             path=data["path"],
+            path_root=data.get("path_root", ".artifacts"),
             external_path=data.get("external_path"),
             adopt_mode=AdoptMode(data["adopt_mode"]) if data.get("adopt_mode") else None,
             run_id=data.get("run_id", ""),
@@ -194,6 +196,128 @@ class ArtifactReference:
     ref_type: str  # "depends_on", "derived_from", "consumed_by", etc.
     title: Optional[str] = None
     category: Optional[str] = None
+
+
+# ============================================================================
+# SSOT v1.3 新增：SSOT 元数据模型
+# ============================================================================
+
+@dataclass
+class SSOTMetadata:
+    """
+    SSOT 元数据 (v1.3 新增)
+
+    新系统对象的主元数据，替代旧的 ArtifactMetadata 用于 SSOT 对象。
+    文件命名: [ID]__[slug].[ext]
+    """
+
+    # 基础标识
+    id: str  # SSOT ID，如 FEAT-001, TC-FEAT-001-001
+    type: SSOTType  # 对象类型
+    title: str  # 标题
+    status: ArtifactStatus  # 状态
+
+    # 版本信息
+    version: str = "v1"  # 版本号
+
+    # 结构归属关系
+    parent_id: Optional[str] = None  # 结构父对象 ID (部分类型必填)
+
+    # 派生与关联关系
+    derived_from: List[str] = field(default_factory=list)  # 派生来源 (多值)
+    source_refs: List[str] = field(default_factory=list)  # 源文档锚点，如 SRC-001#3.2
+    related_ids: List[str] = field(default_factory=list)  # 横向关联对象
+
+    # 验证与实现关系
+    verifies: List[str] = field(default_factory=list)  # 验证哪些对象
+    implements: List[str] = field(default_factory=list)  # 实现哪些对象
+
+    # 治理信息
+    owner: Optional[str] = None  # 负责人
+    tags: List[str] = field(default_factory=list)  # 标签
+
+    # 时间戳
+    last_updated: Optional[datetime] = None
+
+    # 路径信息 (运行时计算)
+    _path: Optional[str] = None  # 相对路径
+
+    # 扩展属性
+    properties: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def path(self) -> str:
+        """获取相对路径"""
+        if self._path:
+            return self._path
+        # 默认路径：ssot/{type}/{id}.md
+        return f"ssot/{self.type.value}/{self.id}.md"
+
+    @path.setter
+    def path(self, value: str) -> None:
+        """设置路径"""
+        self._path = value
+
+    @property
+    def slug(self) -> str:
+        """从标题提取 slug"""
+        # 简单实现：去除非字母数字，转小写，空格替换为 -
+        import re
+        slug = re.sub(r"[^a-zA-Z0-9\s]", "", self.title)
+        slug = slug.lower().strip()
+        slug = re.sub(r"\s+", "-", slug)
+        return slug[:50] if slug else "untitled"
+
+    @property
+    def filename(self) -> str:
+        """获取文件名"""
+        return f"{self.id}__{self.slug}.md"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """序列化为字典"""
+        return {
+            "id": self.id,
+            "type": self.type.value,
+            "title": self.title,
+            "status": self.status.value,
+            "version": self.version,
+            "parent_id": self.parent_id,
+            "derived_from": self.derived_from,
+            "source_refs": self.source_refs,
+            "related_ids": self.related_ids,
+            "verifies": self.verifies,
+            "implements": self.implements,
+            "owner": self.owner,
+            "tags": self.tags,
+            "last_updated": self.last_updated.isoformat() if self.last_updated else None,
+            "path": self.path,
+            "properties": self.properties,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SSOTMetadata":
+        """从字典反序列化"""
+        def parse_dt(s: Optional[str]) -> Optional[datetime]:
+            return datetime.fromisoformat(s) if s else None
+
+        return cls(
+            id=data["id"],
+            type=SSOTType(data["type"]),
+            title=data["title"],
+            status=ArtifactStatus(data.get("status", "ACTIVE")),
+            version=data.get("version", "v1"),
+            parent_id=data.get("parent_id"),
+            derived_from=data.get("derived_from", []),
+            source_refs=data.get("source_refs", []),
+            related_ids=data.get("related_ids", []),
+            verifies=data.get("verifies", []),
+            implements=data.get("implements", []),
+            owner=data.get("owner"),
+            tags=data.get("tags", []),
+            last_updated=parse_dt(data.get("last_updated")),
+            _path=data.get("path"),
+            properties=data.get("properties", {}),
+        )
 
 
 @dataclass

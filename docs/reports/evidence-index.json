@@ -1,0 +1,82 @@
+{
+  "evidence_index": [
+    {
+      "id": "EVID-001",
+      "type": "documentation",
+      "file_path": "README.md",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453651+00:00"
+    },
+    {
+      "id": "EVID-002",
+      "type": "code",
+      "file_path": "config/workflow-registry.yaml",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453673+00:00"
+    },
+    {
+      "id": "EVID-003",
+      "type": "code",
+      "file_path": "src/lee/cli/commands/run.py",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453691+00:00"
+    },
+    {
+      "id": "EVID-004",
+      "type": "code",
+      "file_path": "src/lee/orchestrator/execution/template_manager.py",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453707+00:00"
+    },
+    {
+      "id": "EVID-005",
+      "type": "code",
+      "file_path": "src/lee/orchestrator/execution/orchestrator.py",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453721+00:00"
+    },
+    {
+      "id": "EVID-006",
+      "type": "code",
+      "file_path": "src/lee/orchestrator/execution/state_machine.py",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453734+00:00"
+    },
+    {
+      "id": "EVID-007",
+      "type": "code",
+      "file_path": "src/lee/orchestrator/execution/runners/auto_check_gate_runner.py",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453750+00:00"
+    },
+    {
+      "id": "EVID-008",
+      "type": "code",
+      "file_path": "src/lee/orchestrator/execution/runners/shell_runner.py",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453764+00:00"
+    },
+    {
+      "id": "EVID-009",
+      "type": "code",
+      "file_path": "spec-global/core/contracts/ssot-agent-output/v1/schema.json",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453780+00:00"
+    },
+    {
+      "id": "EVID-010",
+      "type": "code",
+      "file_path": "spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453795+00:00"
+    },
+    {
+      "id": "EVID-011",
+      "type": "code",
+      "file_path": "spec-global/core/agents/spec-review/v1/agent.yaml",
+      "status": "verified",
+      "captured_at": "2026-03-07T10:59:16.453808+00:00"
+    }
+  ],
+  "generated_at": "2026-03-07T10:59:16.454567+00:00"
+}

@@ -52,13 +52,15 @@ def runner(artifact_manager, monkeypatch):
     os.chdir(str(artifacts_parent))
 
     # Monkeypatch ArtifactManager.__init__
-    def mocked_init(self, root_path=None):
+    def mocked_init(self, root_path=None, project_root=None):
         if root_path is None or root_path == artifact_manager.root_path:
             self.root_path = artifact_manager.root_path
+            self.project_root = artifact_manager.project_root
             self.sequence_file = artifact_manager.sequence_file
+            self._artifacts_path_root = artifact_manager._artifacts_path_root
             self.registry = artifact_manager.registry
         else:
-            original_init(self, root_path=root_path)
+            original_init(self, root_path=root_path, project_root=project_root)
 
     monkeypatch.setattr(ArtifactManager, "__init__", mocked_init)
 

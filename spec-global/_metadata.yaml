@@ -161,50 +161,50 @@ workflow_registry:
   # QA 部门工作流 (L2 - Department 级)
   # ============================================
   - id: workflow.qa.testing_pipeline
-    path: departments/qa/workflows/testing-pipeline/v1/workflow.yaml
+    path: departments/qa/workflows/templates/test-plan-l2-template.yaml
     level: department
-    description: "QA 部门 - 测试流水线"
+    description: "QA 部门 - 测试流水线模板"
     v3_1_compatible: true
+    notes: |
+      Canonical QA L2 template path.
+      Checked-in file is a workflow template; runtime instance is generated dynamically.
 
   - id: workflow.qa.test_main_pipeline
-    path: departments/qa/workflows/test-main-pipeline/v2/workflow.yaml
+    path: departments/qa/workflows/templates/test-plan-l2-template.yaml
     level: department
-    description: "QA 部门 - 主测试流程"
+    description: "QA 部门 - 主测试流程（legacy alias -> test plan L2 template）"
     version: "2.0"
     v3_1_compatible: true
+    deprecated: true
+    notes: |
+      Legacy alias retained for compatibility.
+      Canonical template is departments/qa/workflows/templates/test-plan-l2-template.yaml.
 
   - id: workflow.qa.test_case_design_pipeline
-    path: departments/qa/workflows/test-case-design-pipeline/v1/workflow.yaml
-    level: department
-    description: "QA 部门 - 测试用例设计流水线（从需求到E2E脚本）"
+    path: departments/qa/workflows/templates/test-set-production-l3-template.yaml
+    level: task
+    description: "QA 部门 - Test Set 生产流程（legacy id, canonical template-backed）"
     version: "1.0"
     stages_count: 7
     steps_count: ~25
     human_gates_count: 2
     v3_1_compatible: true
+    deprecated: true
     notes: |
-      L2 级工作流，完整的测试用例设计流程：
-      - s1: 输入验证（PRD/架构/UI契约）
-      - s2: 需求对齐（三方一致性验证）
-      - s3: 功能点校准（PRD↔架构↔UI映射）
-      - s4: 分支覆盖设计（决策点分析）
-      - s5: 专项测试设计（性能/安全/可访问性）
-      - s6: 用例评审（人类门禁）
-      - s7: Playwright脚本生成（E2E自动化）
-
-      相关 Agents:
-      - agent.qa.requirement_alignment_agent
-      - agent.qa.feature_calibration_agent
+      Legacy workflow id retained for compatibility with existing gate references.
+      Canonical checked-in template is departments/qa/workflows/templates/test-set-production-l3-template.yaml.
+      Preferred SSOT input is feat_freeze plus delivery_prep_bundle.
 
   - id: workflow.qa.regression
-    path: departments/qa/workflows/regression/v1/workflow.yaml
+    path: departments/qa/workflows/templates/test-set-execute-l3-template.yaml
     level: task
-    description: "QA 部门 - 回归测试工作流"
+    description: "QA 部门 - Test Set 执行流程（legacy alias）"
     version: "1.0"
     v3_1_compatible: true
-      - agent.qa.branch_coverage_agent
-      - agent.qa.specialized_test_agent
-      - agent.qa.playwright_script_generator
+    deprecated: true
+    notes: |
+      Legacy alias retained for compatibility.
+      Canonical checked-in template is departments/qa/workflows/templates/test-set-execute-l3-template.yaml.
 
   # ============================================
   # UI 部门工作流 (L2 - Department 级)
@@ -223,17 +223,59 @@ workflow_registry:
     level: department
     description: "PRD 部门 - 产品流水线"
     v3_1_compatible: true
+    deprecated: true
+    notes: |
+      Deprecated in favor of workflow.product.product_main_pipeline.
+      保留兼容窗口，但不再作为新规范演进位置。
 
   - id: workflow.prd.product_to_dev_pipeline
     path: departments/prd/workflows/product-to-dev-pipeline/v1/workflow.yaml
     level: department
     description: "PRD 部门 - 产品交付流水线（产出研发冻结包，作为 Dev 部门流水线输入）"
     v3_1_compatible: true
+    deprecated: true
     notes: |
       L2 级工作流 - PRD 部门的专业流程：
       - 输出：研发冻结包 (Development Freeze Package)
       - 该输出可作为 L2 Dev 部门流水线的输入
       - 两个 L2 流水线的串联由独立的 L1 流水线负责编排
+      - 已被 departments/product 下的新 SSOT canonical 流程替代
+
+  # ============================================
+  # Product 部门工作流 (L2 / L3 - Department 级)
+  # ============================================
+  - id: workflow.product.product_main_pipeline
+    path: departments/product/workflows/templates/product-main-pipeline/v1/workflow.yaml
+    level: department
+    description: "Product 部门 - SSOT 主编排流程"
+    version: "1.0"
+    v3_1_compatible: true
+    notes: |
+      Product 部门新的 canonical L2 流程：
+      - 串联 SRC -> EPIC -> FEAT -> Delivery Prep
+      - 以 SSOT 主链为中心，而不是以 PRD 文档为中心
+      - 作为 departments/prd 的替代路径
+
+  - id: workflow.product.task.src_to_epic
+    path: departments/product/workflows/templates/src-to-epic/v1/workflow.yaml
+    level: task
+    description: "Product 部门 - L3 子流程：SRC 到 EPIC"
+    version: "1.0"
+    v3_1_compatible: true
+
+  - id: workflow.product.task.epic_to_feat
+    path: departments/product/workflows/templates/epic-to-feat/v1/workflow.yaml
+    level: task
+    description: "Product 部门 - L3 子流程：EPIC 到 FEAT"
+    version: "1.0"
+    v3_1_compatible: true
+
+  - id: workflow.product.task.feat_to_delivery_prep
+    path: departments/product/workflows/templates/feat-to-delivery-prep/v1/workflow.yaml
+    level: task
+    description: "Product 部门 - L3 子流程：FEAT 到研发准备"
+    version: "1.0"
+    v3_1_compatible: true
 
   # ============================================
   # DevOps 部门工作流 (L2 - Department 级)
@@ -722,6 +764,93 @@ agent_registry:
       - contracts/frozen-ui-prototype-contract/v1/schema.json
     output_contract: contracts/ui-page-contract/v1/schema.json
 
+  # ============================================
+  # Product 部门 Agents
+  # ============================================
+  - id: agent.product.epic_designer
+    path: departments/product/agents/epic-designer/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - 从 SRC / 问题空间生成 EPIC
+      - EPIC 边界设计
+      - EPIC 非目标定义
+      - EPIC 到 FEAT 的拆分依据生成
+    input_contracts:
+      - departments/product/contracts/problem-definition/v1/schema.json
+    output_contract: departments/product/contracts/epic-contract/v1/schema.json
+
+  - id: agent.product.requirement_alignment
+    path: departments/product/agents/requirement-alignment/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - SRC 到问题空间翻译
+      - 问题边界定义
+      - 非目标识别
+      - 目标用户与场景提炼
+    input_contracts:
+      - departments/product/contracts/source-freeze-contract/v1/schema.json
+    output_contract: departments/product/contracts/problem-definition/v1/schema.json
+
+  - id: agent.product.requirement_decomposer
+    path: departments/product/agents/requirement-decomposer/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - EPIC 到 FEAT 拆解
+      - FEAT 边界定义
+      - 依赖显式化
+      - 非目标拆分
+    input_contracts:
+      - departments/product/contracts/epic-contract/v1/schema.json
+    output_contract: departments/product/contracts/feat-breakdown-contract/v1/schema.json
+
+  - id: agent.product.prd_writer
+    path: departments/product/agents/prd-writer/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - FEAT 规格细化
+      - 验收标准生成
+      - 依赖与边界补全
+      - PRD 视图派生
+    input_contracts:
+      - departments/product/contracts/feat-breakdown-contract/v1/schema.json
+    output_contract: departments/product/contracts/feat-contract/v1/schema.json
+
+  - id: agent.product.pm_planner
+    path: departments/product/agents/pm-planner/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - 可执行实施计划生成
+      - 角色分工规划
+      - 依赖图与关键路径分析
+      - 里程碑与 entry conditions 规划
+    input_contracts:
+      - departments/dev/contracts/development-plan-contract/v1/schema.json
+    output_contract: departments/dev/contracts/development-plan-contract/v1/schema.json
+
+  - id: agent.analysis.product_goal
+    path: departments/product/agents/product-goal-analyzer/v1/agent.yaml
+    level: task
+    execution_model: llm
+    v3_1_executor: LLMExecutor
+    capabilities:
+      - 原始输入目标分析
+      - 业务动因提炼
+      - 目标用户识别
+      - 约束与不确定性归纳
+    input_contracts:
+      - departments/product/contracts/raw-source-input-contract/v1/schema.json
+    output_contract: departments/stg/contracts/product-goal-contract/v1/schema.json
+
 # ============================================
 # Contract 注册表
 # ============================================
@@ -795,6 +924,44 @@ contract_registry:
     description: "Change Summary Contract - 变更说明"
 
   # ============================================
+  # Product 部门 Contracts
+  # ============================================
+  - id: contract.product.raw_source_input
+    path: departments/product/contracts/raw-source-input-contract/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "原始来源输入 Contract - 接收非结构化需求输入"
+
+  - id: contract.product.source_freeze
+    path: departments/product/contracts/source-freeze-contract/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "需求源冻结 Contract - 正式 SRC 对象或冻结视图"
+
+  - id: contract.product.problem_definition
+    path: departments/product/contracts/problem-definition/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "产品问题定义 Contract - SRC 到问题空间的翻译结果"
+
+  - id: contract.product.epic
+    path: departments/product/contracts/epic-contract/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "产品 EPIC Contract - 正式 EPIC 对象"
+
+  - id: contract.product.feat
+    path: departments/product/contracts/feat-contract/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "产品 FEAT Contract - 正式 FEAT 对象"
+
+  - id: contract.product.feat_breakdown
+    path: departments/product/contracts/feat-breakdown-contract/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "产品 FEAT 拆解 Contract - EPIC 到 FEAT 的边界拆解结果"
+
+  - id: contract.product.review
+    path: departments/product/contracts/product-review-contract/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "产品评审 Contract - 对齐评审与实施计划评审结果"
+
+  # ============================================
   # QA 部门 Contracts
   # ============================================
   - id: contract.qa.test_plan
@@ -847,6 +1014,41 @@ contract_registry:
 # Gate 注册表
 # ============================================
 gate_registry:
+  # ============================================
+  # Product 部门 Gates
+  # ============================================
+  - id: gate.product.epic_freeze
+    workflow: workflow.product.task.src_to_epic
+    step: epic_freeze
+    type: approval
+    blocking: true
+    required_roles: [product_owner]
+    min_approvals: 1
+
+  - id: gate.product.src_freeze
+    workflow: workflow.product.task.src_to_epic
+    step: source_freeze
+    type: approval
+    blocking: true
+    required_roles: [product_owner]
+    min_approvals: 1
+
+  - id: gate.product.feat_freeze
+    workflow: workflow.product.task.epic_to_feat
+    step: feat_freeze
+    type: approval
+    blocking: true
+    required_roles: [product_owner]
+    min_approvals: 1
+
+  - id: gate.product.delivery_prep_freeze
+    workflow: workflow.product.task.feat_to_delivery_prep
+    step: delivery_prep_freeze
+    type: team_approval
+    blocking: true
+    required_roles: [product_owner, tech_lead, design_lead]
+    min_approvals: 2
+
   # ============================================
   # Dev 部门 Gates
   # ============================================
@@ -933,46 +1135,6 @@ gate_registry:
     timeout:
       duration: 72h
       action: escalate
-
-  # ============================================
-  # QA 部门 Gates
-  # ============================================
-  - id: gate.qa.design_input_gate
-    workflow: workflow.qa.test_case_design_pipeline
-    step: s1_1_validate_inputs
-    type: validation
-    blocking: true
-    path: departments/qa/gates/design-input-gate/v1/gate.yaml
-    timeout:
-      duration: 48h
-      action: escalate
-    required_roles: [qa_lead]
-    description: "验证测试用例设计输入是否满足最低标准"
-
-  - id: gate.qa.regression_gate
-    workflow: workflow.qa.regression
-    step: s5_1_qa_gate
-    type: approval
-    blocking: true
-    path: departments/qa/gates/qa-regression-gate/v1/gate.yaml
-    timeout:
-      duration: 48h
-      action: escalate
-    required_roles: [qa_lead]
-    min_approvals: 1
-
-  - id: gate.qa.test_case_review_gate
-    workflow: workflow.qa.test_case_design_pipeline
-    step: s6_2_human_review
-    type: approval
-    blocking: true
-    path: departments/qa/gates/test-case-review-gate/v1/gate.yaml
-    timeout:
-      duration: 72h
-      action: escalate
-    required_roles: [qa_lead]
-    optional_roles: [tech_lead, pm]
-    description: "人类评审测试用例设计质量"
 
   - id: gate.devops.deploy_gate
     workflow: workflow.devops.deploy
@@ -1401,7 +1563,7 @@ migration_phases:
   - phase: "跨部门集成"
     workflows:
       - workflow.cross.product_pipeline
-      - workflow.prd.product_pipeline
+      - workflow.product.product_main_pipeline
       - workflow.qa.testing_pipeline
     priority: P1
 

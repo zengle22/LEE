@@ -1,0 +1,13 @@
+request_id: spec-governance-human-gate-demo
+spec_kind: agent
+action: create
+change_request: |
+  Create a demo agent spec used to verify spec-governance writeback, review gate,
+  human gate fallback, and revise loop behavior.
+target_path: demo-test-artifacts/spec-governance-demo/generated/demo-agent/v1/agent.yaml
+reviewer_mode: full
+strict_review_gate: true
+human_gate_required: true
+human_gate_reviewers:
+  - name: governance-owner
+    role: reviewer

@@ -43,6 +43,7 @@ class TaskExecutionStatus(str, Enum):
     RUNNING = "running"      # 执行中
     COMPLETED = "completed"  # 已完成
     FAILED = "failed"        # 已失败
+    INVALIDATED = "invalidated"  # 已作废（rewind/retry 后的旧执行记录）
 
 
 # ========================================================================

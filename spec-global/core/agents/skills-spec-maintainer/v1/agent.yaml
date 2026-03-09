@@ -44,6 +44,8 @@ policy:
       then: "reject_and_remove_role"
     - if: "missing_io_definition"
       then: "prompt_for_io"
+    - if: "skill_tries_to_take_over_workflow_or_truth_governance"
+      then: "reject_and_redirect_to_agent_or_governance_layer"
 
   quality_bar:
     must_have:
@@ -52,6 +54,7 @@ policy:
       - "无角色：不含'你是...'定义"
       - "无决策：不含'如果...则应该...'逻辑"
       - "输入输出明确定义"
+      - "不得承担 temporary governance 或 formal SSOT truth ownership"
 
   refusal:
     conditions:
@@ -79,6 +82,7 @@ prompting:
     - Skills MUST NOT contain decision logic
     - Skills MUST NOT depend on conversation context
     - Skills MUST have clear I/O definitions
+    - Skills MUST NOT become hidden governance controllers
 
     SKILL VS AGENT:
     ✅ Skill: extract_keywords(text) → keywords[]
@@ -100,6 +104,7 @@ prompting:
     - "输入输出必须有明确类型"
     - "必须提供测试用例"
     - "禁止包含 '你是'、'作为...专家' 等角色描述"
+    - "如果需求包含 scope/gate/review/completion 语义，拒绝作为 skill 承载"
 
   output_format: yaml
 
@@ -221,3 +226,11 @@ responsibility:
 output_requirements:
   path_pattern: "ai-spec/specs/{scope}/skills/{skill-name}/v{version}/skill.yaml"
   scope_options: ["common", "org/development", "org/product"]
+
+governance:
+  temp_governance: .project/governance/TEMP_GOVERNANCE.md
+  module_contracts: .project/governance/MODULE_CONTRACTS/
+
+governance_rules:
+  no_truth_ownership: "Skill 不得拥有 truth source、gate 决策或 completion authority。"
+  boundary_escalation: "凡涉及治理边界的需求，必须升级为 agent / workflow / governance rule 处理。"

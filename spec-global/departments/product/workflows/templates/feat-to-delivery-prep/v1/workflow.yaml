@@ -1,0 +1,319 @@
+# Product FEAT to Delivery Prep Template v1.0
+# 产品部门 L3 模板 - 从 FEAT 生成研发准备包
+
+kind: l3_workflow_template
+version: "1.0"
+id: workflow.product.task.feat_to_delivery_prep
+name: Product FEAT to Delivery Prep
+description: >
+  基于冻结后的 FEAT 生成研发准备包。
+  输出 UI、TECH(API included)、TASK(frontend/backend/integration) 的冻结视图，
+  并形成可执行的实施计划与依赖关系图。
+  该准备包同时作为 QA 派生 TESTSET 的 seed 输入。
+  该文件是 checked-in workflow template，运行时实例由 Python runtime 动态生成。
+owner: product-ai
+tags: [product, workflow, l3, ssot, delivery-prep]
+
+roles:
+  agents:
+    - agent.design.ui_designer
+    - agent.dev.tech_architect
+    - agent.product.pm_planner
+    - agent.governance.approval_reviewer
+  skills: []
+  gates:
+    - gate.product.delivery_prep_freeze
+
+overview:
+  input:
+    type: feat_freeze
+    ssot_type: FEAT
+    decision_context:
+      - governing_adrs
+      - decision_refs
+      - decision_constraints
+      - architecture_constraints
+      - process_constraints
+
+  output:
+    type: delivery_prep_bundle
+    description: >
+      面向研发的准备包。
+      包含 UI、TECH、TASK 三类冻结产物，
+      以及可执行的实施计划、责任分工和依赖图。
+
+stages:
+  - id: feat_to_delivery_prep_flow
+    name: "FEAT to Delivery Prep Flow"
+    kind: stage
+    description: "基于冻结后的 FEAT 生成 UI / TECH / TASK 和 delivery prep"
+    depends_on: []
+    steps:
+      - id: ui_design
+        name: UI 设计
+        kind: agent
+        agent_id: agent.design.ui_designer
+        mandatory: true
+        depends_on: []
+        description: >
+          基于 FEAT 生成页面、交互流程和组件视图。
+          UI 是前端实现的直接设计依赖。
+        inputs:
+          - source: feat_freeze
+            required: true
+          - source: governing_adrs
+            required: false
+          - source: decision_constraints
+            required: false
+          - source: architecture_constraints
+            required: false
+        outputs:
+          - symbol: ui_specs
+            contract: departments/ui/contracts/frozen-ui-prototype-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: UI
+              parent: FEAT
+      - id: tech_design
+        name: TECH 设计
+        kind: agent
+        agent_id: agent.dev.tech_architect
+        mandatory: true
+        depends_on: []
+        description: >
+          基于 FEAT 生成技术设计。
+          API contract 属于 TECH 范畴，是前后端共享依赖。
+        inputs:
+          - source: feat_freeze
+            required: true
+          - source: governing_adrs
+            required: false
+          - source: decision_constraints
+            required: false
+          - source: architecture_constraints
+            required: false
+        outputs:
+          - symbol: tech_specs
+            contract: departments/dev/contracts/frozen-technical-architecture-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: TECH
+              parent: FEAT
+      - id: task_planning
+        name: TASK 规划
+        kind: agent
+        agent_id: agent.product.pm_planner
+        mandatory: true
+        depends_on: [ui_design, tech_design]
+        description: >
+          生成实施任务规划。
+          任务以 frontend / backend / integration 为主，不把 API 或 UI 当作 task 平级对象。
+          规划结果必须可执行，包含责任人角色、任务顺序、依赖关系、里程碑和关键路径。
+          每个任务都应可追溯回对应 FEAT 的 Acceptance Criteria。
+        inputs:
+          - source: feat_freeze
+            required: true
+          - source: ui_specs
+            required: true
+          - source: tech_specs
+            required: true
+          - source: governing_adrs
+            required: false
+          - source: decision_refs
+            required: false
+          - source: decision_constraints
+            required: false
+          - source: architecture_constraints
+            required: false
+          - source: process_constraints
+            required: false
+        outputs:
+          - symbol: task_plan
+            contract: departments/dev/contracts/development-plan-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: TASK
+              parent: FEAT
+      - id: delivery_plan_validation
+        name: 实施计划校验
+        kind: agent
+        agent_id: agent.governance.approval_reviewer
+        mandatory: true
+        depends_on: [task_planning]
+        description: >
+          校验 Delivery Prep 是否已经形成可执行实施计划。
+          重点检查任务分工、依赖图、关键路径、里程碑、风险与开工前置条件，
+          同时确认输出足以支持 QA 派生 TESTSET。
+        inputs:
+          - source: feat_freeze
+            required: true
+          - source: ui_specs
+            required: true
+          - source: tech_specs
+            required: true
+          - source: task_plan
+            required: true
+          - source: governing_adrs
+            required: false
+          - source: decision_refs
+            required: false
+          - source: decision_constraints
+            required: false
+          - source: architecture_constraints
+            required: false
+          - source: process_constraints
+            required: false
+        outputs:
+          - symbol: delivery_plan_review
+            contract: departments/product/contracts/product-review-contract/v1/schema.json
+            freeze: false
+      - id: delivery_prep_freeze
+        name: 研发准备冻结
+        kind: gate
+        mandatory: true
+        depends_on: [delivery_plan_validation]
+        description: >
+          由产品、技术、设计共同确认研发准备完成。
+          冻结结果可作为下游开发计划和实施的基线。
+          该冻结不只是设计准备完成，还要求形成可执行实施计划。
+        inputs:
+          - source: ui_specs
+            required: true
+          - source: tech_specs
+            required: true
+          - source: task_plan
+            required: true
+          - source: delivery_plan_review
+            required: true
+        outputs:
+          - path: output/frozen-packages/{project}-delivery-prep-freeze.yaml
+            required: true
+            freeze: true
+        gate_rules:
+          reviewers:
+            - role: product_owner
+            - role: tech_lead
+            - role: design_lead
+          approval_criteria:
+            - label: "UI 依赖完备"
+              criteria: "前端实施所需 UI 信息完整"
+              required: true
+            - label: "TECH 依赖完备"
+              criteria: "API 与技术边界足以支撑前后端实现"
+              required: true
+            - label: "TASK 可执行"
+              criteria: "frontend / backend / integration 任务边界与顺序清晰"
+              required: true
+            - label: "TASK 可追溯"
+              criteria: "任务与 FEAT 的 Acceptance Criteria 存在明确映射"
+              required: true
+            - label: "实施计划完整"
+              criteria: "具备责任分工、依赖图、关键路径、里程碑与开工前置条件"
+              required: true
+            - label: "QA seed 完备"
+              criteria: "风险、依赖、集成点和验收边界足以支持 QA 生成 TESTSET"
+              required: true
+        config:
+          gate:
+            type: human_approval
+            gate_id: gate.product.delivery_prep_freeze
+    step_order:
+      - ui_design
+      - tech_design
+      - task_planning
+      - delivery_plan_validation
+      - delivery_prep_freeze
+
+stage_order:
+  - feat_to_delivery_prep_flow
+
+handoff:
+  to:
+    - workflow.dev.development_pipeline
+    - workflow.qa.testing_pipeline
+  with:
+    - feat_freeze
+    - ui_specs
+    - tech_specs
+    - task_plan
+    - delivery_plan_review
+    - governing_adrs
+    - decision_refs
+    - decision_constraints
+    - architecture_constraints
+    - process_constraints
+  description: >
+    Dev 消费 delivery prep 进行实施。
+    QA 基于 feat_freeze、tech_specs 和 task_plan 派生 TESTSET，
+    不在 product 目录下复制 TESTSET 主对象定义。
+
+constraints:
+  dependency_policy: |
+    UI 是 frontend task 的设计依赖。
+    API 属于 TECH，是 frontend 与 backend 的共享依赖。
+
+  no_flat_four_way_split: |
+    不采用 UI / API / frontend / backend 四平级建模。
+    正式主链只保留 UI / TECH / TASK 三类 FEAT 子对象。
+
+  executable_plan_required: |
+    Delivery Prep Freeze 必须产出可执行实施计划，而不是抽象的准备说明。
+    计划至少包含：
+    - task ownership / role assignment
+    - dependency graph
+    - critical path
+    - milestones
+    - entry conditions
+    - main risks and fallback order
+
+  qa_seed_required: |
+    Delivery Prep Freeze 必须同时提供 QA 派生 TESTSET 的最小输入：
+    - acceptance criteria traceability
+    - integration points
+    - risk notes
+    - task lanes
+
+  adr_context_policy: |
+    governing_adrs / decision_constraints / architecture_constraints / process_constraints
+    用于注入正式决策约束。
+    它们约束 UI / TECH / TASK 的生成方式，但不替代 FEAT 业务定义。
+
+  trace_policy: |
+    Delivery Prep 输出应在 UI / TECH / TASK 或其 bundle trace 中保留：
+    - governing_adrs
+    - decision_refs
+    以支持后续 dev / qa 审计和约束追溯。
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+  context_fields:
+    - feat_freeze
+    - governing_adrs
+    - decision_refs
+    - decision_constraints
+    - architecture_constraints
+    - process_constraints
+  output_fields:
+    - ui_specs
+    - tech_specs
+    - task_plan
+    - delivery_plan_review
+    - delivery_prep_freeze
+
+state_machine:
+  states:
+    - INIT: "初始化"
+    - UI_DESIGN: "UI 设计"
+    - TECH_DESIGN: "TECH 设计"
+    - TASK_PLANNING: "TASK 规划"
+    - DELIVERY_PLAN_VALIDATION: "实施计划校验"
+    - DELIVERY_PREP_FREEZE: "研发准备冻结"
+    - COMPLETED: "完成"
+    - FAILED: "失败"

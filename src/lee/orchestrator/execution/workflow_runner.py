@@ -204,25 +204,116 @@ class WorkflowRunner:
 
     async def _load_template(self) -> Dict[str, Any]:
         """加载和渲染模板"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         # 读取模板文件
         with open(self.config.template_path, encoding="utf-8") as f:
             template_content = f.read()
 
+        # 构建目录上下文
+        dir_context = self._build_dir_context()
+        logger.info(f"Directory context: {dir_context}")
+
         # 渲染模板
         engine = TemplateEngine()
         from datetime import datetime
-        rendered = engine.render_string(
-            template_content,
-            {
-                "params": self.config.params,
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "timestamp": datetime.now().strftime("%Y%m%d%H%M%S"),
-                "now": datetime.now(),
-            }
-        )
-
+        render_context = {
+            "params": self.config.params,
+            **self.config.params,
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "timestamp": datetime.now().strftime("%Y%m%d%H%M%S"),
+            "now": datetime.now(),
+            **dir_context,  # 注入目录变量
+        }
+        logger.info(f"Render context keys: {list(render_context.keys())}")
+        
+        rendered = engine.render_string(template_content, render_context)
+        
+        # 检查渲染后的路径变量
+        if "{{ tests_dir }}" in rendered:
+            logger.warning("WARNING: {{ tests_dir }} was NOT rendered!")
+        if "{{ qa_specs_dir }}" in rendered:
+            logger.warning("WARNING: {{ qa_specs_dir }} was NOT rendered!")
+        
         # 解析为 Dict
         return yaml.safe_load(rendered)
+
+    def _build_dir_context(self) -> Dict[str, str]:
+        """Build directory context for template rendering.
+
+        Returns a dict mapping variable names to directory paths.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # 尝试从 .project/dirs.yaml 加载
+        dirs_yaml_path = self.config.project_root / ".project" / "dirs.yaml"
+        context = {}
+        
+        if dirs_yaml_path.exists():
+            with open(dirs_yaml_path, 'r', encoding='utf-8') as f:
+                dirs_config = yaml.safe_load(f) or {}
+
+            directories = dirs_config.get("directories", {})
+            logger.info(f"Loaded directories: {list(directories.keys())}")
+
+            # 直接映射目录配置到模板变量
+            # 注意：spec_dir 和 specs_dir 是同一个东西的不同命名
+            if "specs_dir" in directories:
+                context["specs_dir"] = directories["specs_dir"].get("path", "spec")
+            elif "spec_dir" in directories:
+                context["specs_dir"] = directories["spec_dir"].get("path", "spec")
+            else:
+                context["specs_dir"] = "spec"
+            
+            if "qa_specs_dir" in directories:
+                context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", "spec/qa")
+            else:
+                context["qa_specs_dir"] = "spec/qa"
+            
+            # 其他目录直接映射
+            for dir_name in ["src_dir", "docs_dir", "knowledge_dir", "tests_dir", "artifacts_dir",
+                            "config_dir", "workflow_dir", "tools_dir", 
+                            "deploy_dir", "legacy_dir"]:
+                if dir_name in directories:
+                    context[dir_name] = directories[dir_name].get("path", dir_name.replace("_dir", ""))
+                else:
+                    # 默认值
+                    defaults = {
+                        "src_dir": "src",
+                        "docs_dir": "docs",
+                        "knowledge_dir": "knowledge",
+                        "tests_dir": "tests",
+                        "artifacts_dir": ".artifacts",
+                        "config_dir": ".project",
+                        "workflow_dir": ".workflow",
+                        "tools_dir": "tools",
+                        "deploy_dir": "deploy",
+                        "legacy_dir": "legacy",
+                    }
+                    context[dir_name] = defaults.get(dir_name, dir_name.replace("_dir", ""))
+            
+            logger.info(f"Built context: {context}")
+        else:
+            # 使用默认值
+            context = {
+                "specs_dir": "spec",
+                "qa_specs_dir": "spec/qa",
+                "src_dir": "src",
+                "docs_dir": "docs",
+                "knowledge_dir": "knowledge",
+                "tests_dir": "tests",
+                "artifacts_dir": ".artifacts",
+                "config_dir": ".project",
+                "workflow_dir": ".workflow",
+                "tools_dir": "tools",
+                "deploy_dir": "deploy",
+                "legacy_dir": "legacy",
+            }
+            logger.warning(f"dirs.yaml not found, using defaults: {context}")
+        
+        return context
 
     async def _create_workflow(self, instance_path: Path) -> str:
         """创建工作流实例"""

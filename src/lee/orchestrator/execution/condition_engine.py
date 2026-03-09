@@ -143,9 +143,12 @@ class ConditionNode:
         for part in parts:
             if isinstance(value, dict):
                 value = value.get(part)
-                if value is None:
-                    return None
+            elif hasattr(value, part):
+                value = getattr(value, part)
             else:
+                return None
+
+            if value is None:
                 return None
 
         return value
@@ -242,7 +245,11 @@ class ConditionEngine:
         else:
             node = condition
 
-        return node.evaluate(context)
+        if isinstance(node, ConditionNode):
+            return node.evaluate(context)
+        if isinstance(node, str) and node.startswith("$"):
+            return bool(self._resolve_variable(node, context))
+        return bool(node)
 
     def _parse_python_ast(self, condition: str) -> ConditionNode:
         """使用 Python AST 解析条件"""
@@ -296,6 +303,10 @@ class ConditionEngine:
                     operators.append(ConditionOperator.GT)
                 elif isinstance(op, ast.GtE):
                     operators.append(ConditionOperator.GE)
+                elif isinstance(op, ast.In):
+                    operators.append(ConditionOperator.IN)
+                elif isinstance(op, ast.NotIn):
+                    operators.append(ConditionOperator.NOT_IN)
                 else:
                     raise ValueError(f"Unsupported comparison operator: {op}")
 
@@ -341,6 +352,8 @@ class ConditionEngine:
         for op_str, op in [
             ("&&", ConditionOperator.AND),
             ("||", ConditionOperator.OR),
+            (" and ", ConditionOperator.AND),
+            (" or ", ConditionOperator.OR),
         ]:
             if op_str in condition:
                 parts = condition.split(op_str)
@@ -350,8 +363,17 @@ class ConditionEngine:
                     raw=condition,
                 )
 
+        if condition.startswith("not "):
+            return ConditionNode(
+                operator=ConditionOperator.NOT,
+                operands=[self.parse(condition[4:].strip())],
+                raw=condition,
+            )
+
         # 尝试解析比较操作
         for op_str, op in [
+            (" not in ", ConditionOperator.NOT_IN),
+            (" in ", ConditionOperator.IN),
             ("==", ConditionOperator.EQ),
             ("!=", ConditionOperator.NE),
             ("<=", ConditionOperator.LE),
@@ -392,13 +414,13 @@ class ConditionEngine:
             return value
 
         # 布尔值
-        if value == "True":
+        if value in ("True", "true"):
             return True
-        if value == "False":
+        if value in ("False", "false"):
             return False
 
         # None/null
-        if value in ("None", "null"):
+        if value in ("None", "none", "null"):
             return None
 
         # 数字
@@ -442,3 +464,4 @@ class ConditionEngine:
             return any(results)
         else:
             raise ValueError(f"Invalid logic: {logic}")
+

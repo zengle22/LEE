@@ -15,17 +15,34 @@ LangGraph Executor Adapter
 """
 
 import asyncio
+import warnings
 from typing import Dict, Any, Optional
 
 from .executors import BaseExecutor
 
-from lee.runtime.executor import (
-    run_task,
-    ExecutorTaskSpec,
-    ExecutionResult,
-    TaskStatus,
-    list_registered_types,
-)
+
+def _load_runtime_executor():
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"lee\.runtime\.executor is EXPERIMENTAL.*",
+            category=DeprecationWarning,
+        )
+        from lee.runtime.executor import (
+            run_task,
+            ExecutorTaskSpec,
+            ExecutionResult,
+            TaskStatus,
+            list_registered_types,
+        )
+
+    return {
+        "run_task": run_task,
+        "ExecutorTaskSpec": ExecutorTaskSpec,
+        "ExecutionResult": ExecutionResult,
+        "TaskStatus": TaskStatus,
+        "list_registered_types": list_registered_types,
+    }
 
 
 class LangGraphExecutor(BaseExecutor):
@@ -86,25 +103,26 @@ class LangGraphExecutor(BaseExecutor):
         Returns:
             执行结果字典
         """
+        runtime = _load_runtime_executor()
         # 验证 task_type
         task_type = input_data.get("task_type")
         if not task_type:
             return {
                 "status": "failed",
                 "error": "Missing required field: task_type",
-                "available_types": list_registered_types(),
+                "available_types": runtime["list_registered_types"](),
             }
 
-        if task_type not in list_registered_types():
+        if task_type not in runtime["list_registered_types"]():
             return {
                 "status": "failed",
                 "error": f"Unknown task_type: {task_type}",
-                "available_types": list_registered_types(),
+                "available_types": runtime["list_registered_types"](),
             }
 
         # 构建 ExecutorTaskSpec
         try:
-            task_spec = self._build_task_spec(input_data)
+            task_spec = self._build_task_spec(input_data, runtime)
         except ValueError as e:
             return {
                 "status": "failed",
@@ -113,12 +131,12 @@ class LangGraphExecutor(BaseExecutor):
 
         # 执行任务（同步调用，在线程池中执行以避免阻塞）
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, run_task, task_spec)
+        result = await loop.run_in_executor(None, runtime["run_task"], task_spec)
 
         # 转换结果
         return self._convert_result(result)
 
-    def _build_task_spec(self, input_data: Dict[str, Any]) -> ExecutorTaskSpec:
+    def _build_task_spec(self, input_data: Dict[str, Any], runtime: Optional[Dict[str, Any]] = None):
         """
         从 input_data 构建 ExecutorTaskSpec
 
@@ -128,13 +146,14 @@ class LangGraphExecutor(BaseExecutor):
         Returns:
             ExecutorTaskSpec 实例
         """
+        runtime = runtime or _load_runtime_executor()
         # 必需字段
         task_type = input_data["task_type"]
 
         # 可选字段，带默认值
         task_id = input_data.get("task_id", f"task-{task_type}-auto")
 
-        return ExecutorTaskSpec(
+        return runtime["ExecutorTaskSpec"](
             task_id=task_id,
             task_type=task_type,
             inputs=input_data.get("inputs", {}),
@@ -152,7 +171,7 @@ class LangGraphExecutor(BaseExecutor):
             max_retries=input_data.get("max_retries", 0),
         )
 
-    def _convert_result(self, result: ExecutionResult) -> Dict[str, Any]:
+    def _convert_result(self, result) -> Dict[str, Any]:
         """
         将 ExecutionResult 转换为字典
 

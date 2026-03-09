@@ -9,38 +9,95 @@ from typing import Any, Dict
 import click
 import yaml
 
+from lee.cli.commands.workflow_registry import (
+    get_workflow_registry_path,
+    load_workflow_registry,
+    resolve_workflow_template_path,
+)
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
 
 
 def _get_registry_path(project_dir: str = ".") -> Path:
     """获取 workflow registry 路径"""
-    project_path = Path(project_dir).resolve()
-    registry_path = project_path / "config" / "workflow-registry.yaml"
-    if registry_path.exists():
-        return registry_path
-
-    # 回退到 LEE 框架的配置
-    lee_root = Path(__file__).parent.parent.parent.parent.parent
-    registry_path = lee_root / "config" / "workflow-registry.yaml"
-    if registry_path.exists():
-        return registry_path
-
-    raise FileNotFoundError(f"Workflow registry not found in {project_dir} or {lee_root}")
+    return get_workflow_registry_path()
 
 
 def _load_registry(project_dir: str = ".") -> Dict[str, Any]:
-    registry_path = _get_registry_path(project_dir)
-    with open(registry_path, encoding="utf-8") as f:
+    return load_workflow_registry()
+
+
+def _load_dirs_config(project_dir: Path) -> Dict[str, Any]:
+    """Load directory structure configuration from .project/dirs.yaml"""
+    config_file = project_dir / ".project" / "dirs.yaml"
+    if not config_file.exists():
+        # Fallback to default
+        return {
+            "directories": {
+                "specs_dir": {"path": "spec"},
+                "spec_dir": {"path": "spec"},  # 别名支持
+                "qa_specs_dir": {"path": "spec/qa"},
+                "src_dir": {"path": "src"},
+                "docs_dir": {"path": "docs"},
+                "tests_dir": {"path": "tests"},
+                "artifacts_dir": {"path": ".artifacts"},
+            }
+        }
+    
+    with open(config_file, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f) or {}
+
+
+def _build_dir_context(project_dir: Path) -> Dict[str, str]:
+    """Build directory context for template rendering."""
+    dirs_config = _load_dirs_config(project_dir)
+    directories = dirs_config.get("directories", {})
+    context = {}
+    
+    # 直接映射目录配置到模板变量
+    if "specs_dir" in directories:
+        context["specs_dir"] = directories["specs_dir"].get("path", "spec")
+    elif "spec_dir" in directories:
+        context["specs_dir"] = directories["spec_dir"].get("path", "spec")
+    else:
+        context["specs_dir"] = "spec"
+    
+    if "qa_specs_dir" in directories:
+        context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", "spec/qa")
+    else:
+        context["qa_specs_dir"] = "spec/qa"
+    
+    # 其他目录直接映射
+    for dir_name in ["src_dir", "docs_dir", "tests_dir", "artifacts_dir"]:
+        if dir_name in directories:
+            context[dir_name] = directories[dir_name].get("path", dir_name.replace("_dir", ""))
+        else:
+            defaults = {
+                "src_dir": "src",
+                "docs_dir": "docs",
+                "tests_dir": "tests",
+                "artifacts_dir": ".artifacts",
+            }
+            context[dir_name] = defaults.get(dir_name, dir_name.replace("_dir", ""))
+    
+    return context
 
 
 def _render_workflow_template(template_path: Path, params: Dict[str, Any], project_dir: Path) -> Path:
     with open(template_path, encoding="utf-8") as f:
         content = f.read()
 
+    # 构建目录上下文
+    dir_context = _build_dir_context(project_dir)
+    
     engine = TemplateEngine()
-    rendered = engine.render_string(content, {"params": params})
+    # 将 params 展开到 context 中，使模板中的 {{ module }} 等变量可以直接访问
+    # 同时保留 params 键以兼容某些使用 {{ params.xxx }} 的模板
+    context = dict(params)  # 复制 params 到顶层
+    context["params"] = params  # 同时保留 params 嵌套结构
+    context.update(dir_context)  # 注入目录变量
+    
+    rendered = engine.render_string(content, context)
     yaml.safe_load(rendered)
 
     out_dir = project_dir / ".workflow" / "rendered"
@@ -74,12 +131,11 @@ def create(module: str, requirement: str, tech_design: str | None,
         raise click.ClickException(f"Workflow not found: {workflow_key}")
 
     entry = workflows[workflow_key]
-    template_path = Path(entry.get("path", ""))
-    if not template_path.is_absolute():
-        template_path = (REGISTRY_PATH.parent.parent / template_path).resolve()
+    template_path = resolve_workflow_template_path(entry.get("path", ""))
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
+    # 设置默认参数
     params: Dict[str, Any] = {
         "module": module,
         "requirement_doc": requirement,
@@ -123,7 +179,7 @@ def create(module: str, requirement: str, tech_design: str | None,
 def list_test_sets(project_dir: str) -> None:
     """列出所有 Test Set"""
     project_root = Path(project_dir).resolve()
-    test_sets_dir = project_root / "qa" / "test-sets"
+    test_sets_dir = project_root / "spec" / "qa" / "test-sets"
 
     if not test_sets_dir.exists():
         click.echo("暂无 Test Set")
@@ -153,9 +209,9 @@ def show_test_set(test_set_id: str, project_dir: str) -> None:
 
     # 尝试多种命名格式
     possible_paths = [
-        project_root / "qa" / "test-sets" / f"{test_set_id}.yaml",
-        project_root / "qa" / "test-sets" / f"ts-{test_set_id}.yaml",
-        project_root / "qa" / "test-sets" / f"ts-{test_set_id.lower().replace('_', '-')}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"{test_set_id}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"ts-{test_set_id}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"ts-{test_set_id.lower().replace('_', '-')}.yaml",
     ]
 
     test_set_path = None
@@ -191,9 +247,9 @@ def run_test_set(test_set_id: str, test_run_id: str, build_version: str,
 
     # 查找 Test Set 文件
     possible_paths = [
-        project_root / "qa" / "test-sets" / f"{test_set_id}.yaml",
-        project_root / "qa" / "test-sets" / f"ts-{test_set_id}.yaml",
-        project_root / "qa" / "test-sets" / f"ts-{test_set_id.lower().replace('_', '-')}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"{test_set_id}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"ts-{test_set_id}.yaml",
+        project_root / "spec" / "qa" / "test-sets" / f"ts-{test_set_id.lower().replace('_', '-')}.yaml",
     ]
 
     test_set_path = None
@@ -222,7 +278,7 @@ def run_test_set(test_set_id: str, test_run_id: str, build_version: str,
     click.echo()
 
     # 创建 L3 工作流 - 使用完整路径
-    template_path = "spec-global/departments/qa/workflows/templates/test-set-l3-template.yaml"
+    template_path = "spec-global/departments/qa/workflows/templates/test-set-execute-l3-template.yaml"
     create_result = pm_workflow(
         "create",
         project_dir=str(project_root),

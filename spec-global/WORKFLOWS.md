@@ -80,19 +80,23 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 #### 2. Testing Pipeline（测试流水线）
 
 **ID**: `workflow.qa.testing_pipeline`
-**路径**: `departments/qa/workflows/testing-pipeline/v1/workflow.yaml`
+**路径**: `departments/qa/workflows/templates/test-plan-l2-template.yaml`
 
-**用途**: QA 部门的测试流程
+**用途**: QA 部门的测试流程模板
+
+**备注**: checked-in 文件为 template，运行时 instance 动态生成。
 
 ---
 
 #### 3. Test Main Pipeline（主测试流程）
 
 **ID**: `workflow.qa.test_main_pipeline`
-**路径**: `departments/qa/workflows/test-main-pipeline/v2/workflow.yaml`
+**路径**: `departments/qa/workflows/templates/test-plan-l2-template.yaml`
 **版本**: 2.0
 
-**用途**: QA 部门的主测试流程
+**用途**: QA 部门的主测试流程（legacy alias）
+
+**状态**: Deprecated compatibility alias
 
 ---
 
@@ -107,29 +111,56 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ---
 
-### PRD 部门
+### Product 部门
 
-#### 5. Product Pipeline（产品流水线）
+#### 5. Product Main Pipeline（产品主编排流程）
 
-**ID**: `workflow.prd.product_pipeline`
-**路径**: `departments/prd/workflows/product-pipeline/v1/workflow.yaml`
+**ID**: `workflow.product.product_main_pipeline`
+**路径**: `departments/product/workflows/templates/product-main-pipeline/v1/workflow.yaml`
 
-**用途**: PRD 部门的产品流程
+**用途**: Product 部门新的 SSOT 主编排流程，串联 `SRC -> EPIC -> FEAT -> Delivery Prep`
 
 ---
 
-#### 6. Product to Dev Pipeline（产品交付流水线）
+#### 6. SRC to EPIC（源需求到 EPIC）
 
-**ID**: `workflow.prd.product_to_dev_pipeline`
-**路径**: `departments/prd/workflows/product-to-dev-pipeline/v1/workflow.yaml`
+**ID**: `workflow.product.task.src_to_epic`
+**路径**: `departments/product/workflows/templates/src-to-epic/v1/workflow.yaml`
 
-**用途**: PRD 部门产出研发冻结包，作为 Dev 部门流水线输入
+**用途**: 将市场机会/原始需求收敛为 EPIC 并进行人类冻结
+
+---
+
+#### 7. EPIC to FEAT（EPIC 到 FEAT）
+
+**ID**: `workflow.product.task.epic_to_feat`
+**路径**: `departments/product/workflows/templates/epic-to-feat/v1/workflow.yaml`
+
+**用途**: 将冻结后的 EPIC 拆解为可独立验收的 FEAT 并进行人类冻结
+
+---
+
+#### 8. FEAT to Delivery Prep（FEAT 到研发准备）
+
+**ID**: `workflow.product.task.feat_to_delivery_prep`
+**路径**: `departments/product/workflows/templates/feat-to-delivery-prep/v1/workflow.yaml`
+
+**用途**: 基于冻结后的 FEAT 生成 UI / TECH / TASK 准备包
+
+---
+
+#### Deprecated: PRD Workflows
+
+- `workflow.prd.product_pipeline`
+- `workflow.prd.product_to_dev_pipeline`
+
+以上旧流程保留兼容窗口，但不再作为推荐入口。
 
 ---
 
 ### STG 部门
 
-#### 7. Opportunity Discovery（商业机会发现）
+#### 9. Opportunity Discovery（商业机会发现）
 
 **ID**: `workflow.stg.opportunity_discovery`
 **路径**: `departments/stg/workflows/opportunity_discovery/v1/workflow.yaml`

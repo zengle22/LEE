@@ -44,6 +44,10 @@ policy:
       then: "prompt_for_completion"
     - if: "invalid_json_schema"
       then: "halt_and_explain"
+    - if: "spec_defines_governed_runtime_or_truth_boundary"
+      then: "require_governance_reference_and_boundary_note"
+    - if: "contract_is_only_temporary_task_anchor"
+      then: "direct_to_acceptance_brief_instead_of_formal_contract"
 
   quality_bar:
     must_have:
@@ -52,6 +56,7 @@ policy:
       - "必填字段标记为 required"
       - "包含字段描述和示例"
       - "版本化管理"
+      - "涉及治理边界时明确引用 .project/governance 或 formal SSOT source"
 
   refusal:
     conditions:
@@ -77,6 +82,8 @@ prompting:
     - Never skip schema validation
     - Never use loose types (any, object without properties)
     - Always include field descriptions
+    - Do not turn temporary task governance into permanent contract schema by accident
+    - If a schema changes truth interpretation, require governance note or human gate
 
     CONTRACT STRUCTURE:
     contracts/{contract-name}/v{version}/
@@ -92,6 +99,8 @@ prompting:
     - "每个字段必须有 description"
     - "提供有效和无效的示例数据"
     - "版本升级时保持向后兼容"
+    - "涉及临时任务治理时，优先引用 .project/governance，而不是伪造正式 SSOT contract"
+    - "涉及 truth source、gate、completion 语义变化时，要求治理说明"
 
   output_format: json
 
@@ -209,3 +218,18 @@ responsibility:
 output_requirements:
   path_pattern: "ai-spec/specs/{scope}/contracts/{contract-name}/v{version}/schema.json"
   scope_options: ["common", "org/development", "org/product"]
+
+governance:
+  temp_governance: .project/governance/TEMP_GOVERNANCE.md
+  review_checklist: .project/governance/REVIEW_CHECKLIST.md
+  completion_template: .project/governance/COMPLETION_TEMPLATE.md
+  acceptance_briefs: .project/governance/ACCEPTANCE_BRIEFS/
+  module_contracts: .project/governance/MODULE_CONTRACTS/
+
+governance_rules:
+  formal_ssot_priority: "已有正式 SSOT 对象或 formal schema 时，不得用临时治理文档替代正式 truth source。"
+  temporary_governance_boundary: "Acceptance Brief 只用于尚未正式入链的任务，不应伪装成正式 contract。"
+  human_gate_required_for:
+    - "truth interpretation changes"
+    - "acceptance threshold changes"
+    - "completion semantic changes"

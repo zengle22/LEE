@@ -1,281 +1,281 @@
-# Bug Fix L3 Template
-# Bug 修复工作流（L3 任务级）
-#
-# 职责: 修复单个 Bug 的完整流程
-#
-# 这是一个 L3 蓝本，用于单个 Bug 的修复工作流
-
+# Migrated by lint_l3_templates.py on 2026-03-05T16:41:22.369772
 kind: l3_workflow_template
-version: "1.0"
+version: '1.0'
 id: template.dev.bug_fix
 name: Bug Fix L3 Template
-description: |
-  L3 template for single bug fix workflow.
+description: 'L3 template for single bug fix workflow.
+
 
   This template defines the 5-step workflow for fixing a single bug:
+
   - Step 1: Root Cause Analysis - Analyze bug and identify root cause
+
   - Step 2: Fix Implementation - Implement the bug fix
+
   - Step 3: Verification - Verify fix and prevent regression
+
   - Step 4: Code Review - Review code quality and correctness
+
   - Step 5: Merge Decision - Decide whether to merge the fix
 
+  '
 owner: development
-tags: [template, dev, bug-fix, l3]
-
-# Input contract - 明确输入契约
+tags:
+- template
+- dev
+- bug-fix
+- l3
 input_contract:
-  description: "Single bug fix task input parameters"
-
+  description: Single bug fix task input parameters
   required_fields:
-    - name: bug_id
-      type: string
-      description: "Bug identifier (e.g., BUG-1234)"
-
-    - name: bug_description
-      type: string
-      description: "Detailed description of the bug"
-
-    - name: project
-      type: string
-      description: "Project name or identifier"
-
-    - name: repo
-      type: string
-      description: "Repository name"
-
+  - name: bug_id
+    type: string
+    description: Bug identifier (e.g., BUG-1234)
+  - name: bug_description
+    type: string
+    description: Detailed description of the bug
+  - name: project
+    type: string
+    description: Project name or identifier
+  - name: repo
+    type: string
+    description: Repository name
   optional_fields:
-    - name: reproduction_steps
-      type: string
-      description: "Steps to reproduce the bug"
-
-    - name: severity
-      type: string
-      description: "Bug severity (critical/high/medium/low)"
-      default: "medium"
-
-    - name: related_tests
-      type: array
-      items: string
-      description: "List of related test files or test IDs"
-
-    - name: assignee
-      type: string
-      description: "Developer assigned to fix the bug"
-
-# Standard 5-step L3 process
-steps:
+  - name: reproduction_steps
+    type: string
+    description: Steps to reproduce the bug
+  - name: severity
+    type: string
+    description: Bug severity (critical/high/medium/low)
+    default: medium
+  - name: related_tests
+    type: array
+    items: string
+    description: List of related test files or test IDs
+  - name: assignee
+    type: string
+    description: Developer assigned to fix the bug
+output_contract:
+  description: Single bug fix task output artifacts
+  artifacts:
+  - name: root_cause_report
+    path: dev/bug-fixes/{bug_id}/root-cause.md
+    description: Root cause analysis report
+  - name: fix_diff
+    path: dev/bug-fixes/{bug_id}/fix.patch
+    description: Git diff of the fix
+  - name: test_results
+    path: dev/bug-fixes/{bug_id}/test-results.yaml
+    description: Test execution results
+  - name: review_report
+    path: dev/bug-fixes/{bug_id}/review.md
+    description: Code review summary
+  - name: merge_report
+    path: dev/bug-fixes/{bug_id}/merge.md
+    description: Merge decision and status
+  status_field:
+    name: fix_status
+    type: enum
+    values:
+    - init
+    - analyzing
+    - fixing
+    - verifying
+    - reviewing
+    - merging
+    - completed
+    - failed
+    description: Current status of the bug fix
+human_gates:
+  rca_review:
+    type: human_review
+    timeout: 4h
+    required_approvers:
+    - role: tech_lead
+    prompt: 请审核根因分析结果，确认问题定位是否准确
+  verification_review:
+    type: human_review
+    timeout: 4h
+    required_approvers:
+    - role: qa_lead
+    prompt: 请审核验证结果，确认修复有效且无回归
+  merge_approval:
+    type: human_approval
+    timeout: 24h
+    required_approvers:
+    - role: tech_lead
+    - role: repo_owner
+    prompt: 请最终确认是否合并此 Bug 修复
+instance_schema:
+  required_fields:
+  - id
+  - template_id
+  - name
+  - status
+  context_fields:
+  - bug_id
+  - bug_description
+  - project
+  - repo
+  - severity
+  - assignee
+  output_fields:
+  - root_cause_report_path
+  - fix_diff_path
+  - test_results_path
+  - review_report_path
+  - merge_report_path
+  - fix_status
+state_machine:
+  states:
+  - INIT: 初始化
+  - RCA: 根因分析
+  - FIXING: 修复实现
+  - VERIFYING: 验证测试
+  - REVIEWING: 代码评审
+  - MERGING: 合并决策
+  - COMPLETED: 完成
+  - FAILED: 失败
+  transitions:
+    INIT:
+    - to: RCA
+      trigger: workflow_started
+    RCA:
+    - to: FIXING
+      trigger: rca_approved
+    - to: RCA
+      trigger: rca_rejected
+    - to: FAILED
+      trigger: reproduction_failed
+    FIXING:
+    - to: VERIFYING
+      trigger: fix_completed
+    - to: FAILED
+      trigger: fix_failed
+    VERIFYING:
+    - to: REVIEWING
+      trigger: verification_passed
+    - to: VERIFYING
+      trigger: verification_failed
+    - to: FIXING
+      trigger: regression_found
+    REVIEWING:
+    - to: MERGING
+      trigger: review_approved
+    - to: FIXING
+      trigger: review_changes_requested
+    MERGING:
+    - to: COMPLETED
+      trigger: merge_approved
+    - to: REVIEWING
+      trigger: merge_rejected
+output_structure: "dev/\n└── bug-fixes/\n    └── {bug_id}/\n        ├── root-cause.md          # 根因分析报告\n\
+  \        ├── fix.patch              # 修复补丁\n        ├── test-results.yaml      # 测试结果\n        ├── review.md\
+  \              # 代码评审\n        └── merge.md               # 合并决策\n"
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
   - id: root_cause_analysis
-    name: "Root Cause Analysis"
+    name: Root Cause Analysis
     kind: agent
-    description: "Analyze bug report, reproduce the issue, and identify root cause"
+    description: Analyze bug report, reproduce the issue, and identify root cause
     agent_id: agent.dev.root_cause_analyzer
+    config:
+      implementation_facing: true
+      strict_governance: true
+      acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+      formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
+      governed_module: workflow-runtime
     mandatory: true
     depends_on: []
     gate:
       type: human_review
       gate_id: gate.dev.rca_review
     outputs:
-      - root_cause
-      - affected_files
-      - reproduction_confirmed
-
+    - root_cause
+    - affected_files
+    - reproduction_confirmed
   - id: fix_implementation
-    name: "Fix Implementation"
+    name: Fix Implementation
     kind: agent
-    description: "Implement the bug fix based on root cause analysis"
+    description: Implement the bug fix based on root cause analysis
     agent_id: agent.dev.fix_implementer
+    config:
+      implementation_facing: true
+      strict_governance: true
+      acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+      formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
+      governed_module: workflow-runtime
     mandatory: true
-    depends_on: [root_cause_analysis]
+    depends_on:
+    - root_cause_analysis
     outputs:
-      - fix_diff
-      - modified_files
-      - unit_tests_added
-
+    - fix_diff
+    - modified_files
+    - unit_tests_added
   - id: verification
-    name: "Verification"
+    name: Verification
     kind: agent
-    description: "Verify fix works correctly and doesn't introduce regressions"
+    description: Verify fix works correctly and doesn't introduce regressions
     agent_id: agent.dev.fix_verifier
+    config:
+      implementation_facing: true
+      strict_governance: true
+      acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+      formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
     mandatory: true
-    depends_on: [fix_implementation]
+    depends_on:
+    - fix_implementation
     gate:
       type: human_review
       gate_id: gate.dev.verification_review
     outputs:
-      - test_results
-      - regression_check
-      - verification_status
-
+    - test_results
+    - regression_check
+    - verification_status
   - id: code_review
-    name: "Code Review"
+    name: Code Review
     kind: agent
-    description: "Review code quality, style, and best practices"
+    description: Review code quality, style, and best practices
     agent_id: agent.dev.code_reviewer
+    config:
+      implementation_facing: true
+      strict_governance: true
+      acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+      formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
     mandatory: true
-    depends_on: [verification]
+    depends_on:
+    - verification
     outputs:
-      - review_comments
-      - style_check
-      - security_check
-
+    - review_comments
+    - style_check
+    - security_check
   - id: merge_decision
-    name: "Merge Decision"
+    name: Merge Decision
     kind: agent
-    description: "Make final merge decision based on all review results"
+    description: Make final merge decision based on all review results
     agent_id: agent.dev.merge_decider
+    config:
+      implementation_facing: true
+      strict_governance: true
+      acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
+      formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
     mandatory: true
-    depends_on: [code_review]
+    depends_on:
+    - code_review
     gate:
       type: human_approval
       gate_id: gate.dev.merge_approval
     outputs:
-      - merge_status
-      - merge_commit
-      - rollback_plan
-
-# Default execution order
-execution_order:
+    - merge_status
+    - merge_commit
+    - rollback_plan
+  step_order:
   - root_cause_analysis
   - fix_implementation
   - verification
   - code_review
   - merge_decision
-
-# Output contract - 明确输出契约
-output_contract:
-  description: "Single bug fix task output artifacts"
-
-  artifacts:
-    - name: root_cause_report
-      path: "dev/bug-fixes/{bug_id}/root-cause.md"
-      description: "Root cause analysis report"
-
-    - name: fix_diff
-      path: "dev/bug-fixes/{bug_id}/fix.patch"
-      description: "Git diff of the fix"
-
-    - name: test_results
-      path: "dev/bug-fixes/{bug_id}/test-results.yaml"
-      description: "Test execution results"
-
-    - name: review_report
-      path: "dev/bug-fixes/{bug_id}/review.md"
-      description: "Code review summary"
-
-    - name: merge_report
-      path: "dev/bug-fixes/{bug_id}/merge.md"
-      description: "Merge decision and status"
-
-  status_field:
-    name: fix_status
-    type: enum
-    values: [init, analyzing, fixing, verifying, reviewing, merging, completed, failed]
-    description: "Current status of the bug fix"
-
-# Human gates configuration
-human_gates:
-  rca_review:
-    type: human_review
-    timeout: 4h
-    required_approvers:
-      - role: tech_lead
-    prompt: "请审核根因分析结果，确认问题定位是否准确"
-
-  verification_review:
-    type: human_review
-    timeout: 4h
-    required_approvers:
-      - role: qa_lead
-    prompt: "请审核验证结果，确认修复有效且无回归"
-
-  merge_approval:
-    type: human_approval
-    timeout: 24h
-    required_approvers:
-      - role: tech_lead
-      - role: repo_owner
-    prompt: "请最终确认是否合并此 Bug 修复"
-
-# Instance schema
-instance_schema:
-  required_fields:
-    - id
-    - template_id
-    - name
-    - status
-  context_fields:
-    - bug_id
-    - bug_description
-    - project
-    - repo
-    - severity
-    - assignee
-  output_fields:
-    - root_cause_report_path
-    - fix_diff_path
-    - test_results_path
-    - review_report_path
-    - merge_report_path
-    - fix_status
-
-# State machine
-state_machine:
-  states:
-    - INIT: "初始化"
-    - RCA: "根因分析"
-    - FIXING: "修复实现"
-    - VERIFYING: "验证测试"
-    - REVIEWING: "代码评审"
-    - MERGING: "合并决策"
-    - COMPLETED: "完成"
-    - FAILED: "失败"
-
-  transitions:
-    INIT:
-      - to: RCA
-        trigger: workflow_started
-
-    RCA:
-      - to: FIXING
-        trigger: rca_approved
-      - to: RCA
-        trigger: rca_rejected
-      - to: FAILED
-        trigger: reproduction_failed
-
-    FIXING:
-      - to: VERIFYING
-        trigger: fix_completed
-      - to: FAILED
-        trigger: fix_failed
-
-    VERIFYING:
-      - to: REVIEWING
-        trigger: verification_passed
-      - to: VERIFYING
-        trigger: verification_failed
-      - to: FIXING
-        trigger: regression_found
-
-    REVIEWING:
-      - to: MERGING
-        trigger: review_approved
-      - to: FIXING
-        trigger: review_changes_requested
-
-    MERGING:
-      - to: COMPLETED
-        trigger: merge_approved
-      - to: REVIEWING
-        trigger: merge_rejected
-
-# Output structure
-output_structure: |
-  dev/
-  └── bug-fixes/
-      └── {bug_id}/
-          ├── root-cause.md          # 根因分析报告
-          ├── fix.patch              # 修复补丁
-          ├── test-results.yaml      # 测试结果
-          ├── review.md              # 代码评审
-          └── merge.md               # 合并决策

@@ -94,7 +94,7 @@ class TestDockerRunner:
         """Test successful execution"""
         # Create report file
         report_dir = tmp_path / "output"
-        report_dir.mkdir(parents=True)
+        report_dir.mkdir(parents=True, exist_ok=True)
         report_file = report_dir / "results.json"
         report_file.write_text('{"summary": {"total": 5, "passed": 5, "failed": 0}}')
 
@@ -125,7 +125,7 @@ class TestDockerRunner:
         result = runner.execute()
 
         assert result.exit_code == 2
-        assert "timeout" in result.error.lower()
+        assert "timed out" in result.error.lower()
 
     def test_build_docker_command(self, runner):
         """Test Docker command building"""
@@ -134,15 +134,16 @@ class TestDockerRunner:
         assert "docker" in cmd
         assert "run" in cmd
         assert "--rm" in cmd
-        assert f"--name=lee-e2e-" in cmd[2]  # check part of the name
+        assert "--name" in cmd
+        assert any(str(part).startswith("lee-e2e-") for part in cmd)
         assert "-e" in cmd
-        assert "BASE_URL=" in cmd[cmd.index("BASE_URL="):]  # find BASE_URL
+        assert any(str(part).startswith("BASE_URL=") for part in cmd)
 
     def test_parse_result_with_report(self, runner, tmp_path):
         """Test parsing result with report file"""
         # Create report
-        report_dir = tmp_path / "output"
-        report_dir.mkdir(parents=True)
+        report_dir = runner.config.output_dir
+        report_dir.mkdir(parents=True, exist_ok=True)
         report_file = report_dir / "results.json"
         report_file.write_text('{"summary": {"total": 3, "passed": 2, "failed": 1}}')
 

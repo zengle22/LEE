@@ -2,8 +2,6 @@
 HandoverManager Tests
 """
 
-import tempfile
-import shutil
 from pathlib import Path
 import pytest
 
@@ -17,13 +15,11 @@ from lee.orchestrator.execution.artifacts import (
 
 
 @pytest.fixture
-def temp_artifacts_dir():
+def temp_artifacts_dir(tmp_path):
     """Create temporary artifacts directory"""
-    temp_dir = tempfile.mkdtemp()
-    artifacts_dir = Path(temp_dir) / ".artifacts"
+    artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    yield artifacts_dir
-    shutil.rmtree(temp_dir)
+    return artifacts_dir
 
 
 @pytest.fixture
@@ -84,7 +80,7 @@ class TestHandoverManager:
 
     def test_init(self, handover_manager):
         """Test initialization"""
-        assert handover_manager.artifacts_root.name == ".artifacts"
+        assert handover_manager.artifacts_root.name == "artifacts"
         assert handover_manager.manager is not None
         assert handover_manager.manifest_manager is not None
 

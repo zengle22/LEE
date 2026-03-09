@@ -474,6 +474,8 @@ class SpecGlobalParser:
             kind = StepKind.AGENT
         elif step_type == "skill":
             kind = StepKind.SKILL
+        elif step_type == "gate":
+            kind = StepKind.GATE
         elif step_type == "human_gate" or step_type == "human_decision":
             kind = StepKind.HUMAN_GATE
         elif step_type == "conditional":
@@ -568,7 +570,8 @@ class SpecGlobalParser:
         elif isinstance(gate_ref, str):
             gate_ref_str = gate_ref
 
-        step_config = {"description": step_data.get("description")}
+        step_config = dict(step_data.get("config") or {})
+        step_config["description"] = step_data.get("description")
         if "run" in step_data:
             step_config["run"] = step_data.get("run")
         if subworkflow_ref:

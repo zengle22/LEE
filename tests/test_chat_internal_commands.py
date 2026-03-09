@@ -103,7 +103,7 @@ class TestRuntimeConstants:
         """Test DEFAULT_TIMEOUT constant."""
         from lee.orchestrator.execution.pm_agent_runtime import PMAgentRuntime
 
-        assert PMAgentRuntime.DEFAULT_TIMEOUT == 600
+        assert PMAgentRuntime.DEFAULT_TIMEOUT == 7200
 
     def test_max_concurrent_jobs(self):
         """Test MAX_CONCURRENT_JOBS constant."""

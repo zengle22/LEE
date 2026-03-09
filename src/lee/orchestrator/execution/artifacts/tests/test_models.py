@@ -32,6 +32,7 @@ class TestArtifactMetadata:
         assert metadata.category == "readme"
         assert metadata.status == ArtifactStatus.ACTIVE
         assert metadata.path == "active/pm/test-run/ART-00001.md"
+        assert metadata.path_root == ".artifacts"
         assert metadata.external_path is None
         assert metadata.adopt_mode is None
         assert metadata.run_id == ""
@@ -95,6 +96,7 @@ class TestArtifactMetadata:
         assert data["category"] == "readme"
         assert data["status"] == "ACTIVE"
         assert data["path"] == "active/test.md"
+        assert data["path_root"] == ".artifacts"
         assert data["title"] == "Test"
         assert "created_at" in data
         assert "updated_at" in data
@@ -152,6 +154,20 @@ class TestArtifactMetadata:
         assert restored.department == original.department
         assert restored.title == original.title
         assert restored.tags == original.tags
+        assert restored.path_root == ".artifacts"
+
+    def test_absolute_path_uses_project_root_for_project_scoped_file(self):
+        """测试项目根作用域路径解析"""
+        metadata = ArtifactMetadata(
+            id="FEAT-001",
+            type=ArtifactType.DOCUMENT,
+            category="ssot_object",
+            status=ArtifactStatus.ACTIVE,
+            path="spec/requirements/features/FEAT-001__demo.md",
+            path_root=".",
+        )
+
+        assert metadata.absolute_path == Path.cwd() / "spec/requirements/features/FEAT-001__demo.md"
 
 
 class TestRunManifest:

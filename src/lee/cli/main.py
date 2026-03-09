@@ -47,6 +47,7 @@ from lee.cli.commands.ssot import ssot
 from lee.cli.commands.context import context
 from lee.cli.commands.task_brief import task_brief
 from lee.cli.commands.doctor import doctor
+from lee.cli.commands.governance import governance
 from lee.orchestrator.core.io_guard import init_path_guard
 
 try:
@@ -231,6 +232,7 @@ cli.add_command(ssot)
 cli.add_command(context)
 cli.add_command(task_brief)
 cli.add_command(doctor)
+cli.add_command(governance)
 
 
 def main():

@@ -20,6 +20,7 @@ tags: [product, prd, requirement]
 contracts:
   input_schema: contracts/frozen-module-requirement-contract/v1/schema.json
   output_schema: contracts/frozen-detailed-prd-contract/v1/schema.json
+  ssot_output_schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
 
 # ============================================
 # 角色定义
@@ -135,3 +136,36 @@ output_requirements:
         - "每个功能点包含业务规则和验收标准"
         - "包含用户流程图（mermaid）"
         - "包含评审确认签字栏"
+
+ssot_output_contract:
+  description: "当进入正式 SSOT 建链时，PRD Writer 应输出 FEAT 级对象声明，而不是只给文件。"
+  schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
+  integration_pattern:
+    mode: envelope
+    business_field: business_output
+    ssot_field: ssot_output_contract
+  example:
+    business_output:
+      metadata:
+        is_frozen: true
+      functional_details:
+        features:
+          - feature_name: 用户注册
+            acceptance_criteria:
+              - 用户可以通过邮箱完成注册
+    ssot_output_contract:
+      contract_version: "1.0"
+      run_id: prd-run-001
+      outputs:
+        - key: feat
+          identity_kind: ssot
+          ssot_type: feat
+          title: 用户注册
+          parent: epic
+          source_refs: ["epic#scope"]
+        - key: requirement_note
+          identity_kind: non_ssot
+          artifact_type: DOCUMENT
+          category: readme
+          governance_kind: knowledge
+          title: 用户注册需求补充说明

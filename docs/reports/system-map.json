@@ -1,0 +1,90 @@
+{
+  "generated_at": "2026-03-07T10:59:16.599722+00:00",
+  "system_name": "LEE",
+  "modules": [
+    {
+      "name": "cli",
+      "path_prefix": "src/lee/cli/",
+      "responsibility": "命令行入口与用户操作命令"
+    },
+    {
+      "name": "orchestrator",
+      "path_prefix": "src/lee/orchestrator/",
+      "responsibility": "工作流编排、执行、状态机与 gate"
+    },
+    {
+      "name": "spec_global",
+      "path_prefix": "spec-global/",
+      "responsibility": "全局 workflow/agent/contract 模板"
+    }
+  ],
+  "entry_points": {
+    "cli_commands": [
+      "approve",
+      "artifacts",
+      "behavior_compliance_checker",
+      "chat",
+      "check_env",
+      "context",
+      "demo",
+      "diagram_gen",
+      "diagram_insert",
+      "gates_cmd",
+      "governance",
+      "init",
+      "md_to_wechat",
+      "orchestrator_cmds",
+      "repo",
+      "run",
+      "ssot",
+      "status",
+      "sut",
+      "task_brief"
+    ],
+    "workflow_registry": "config/workflow-registry.yaml",
+    "workflow_templates": [
+      "spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml",
+      "spec-global/core/workflows/templates/spec-governance-l3-template.yaml",
+      "spec-global/cross/workflows/product-pipeline/v1/workflow.yaml",
+      "spec-global/cross/workflows/project/product-mvp/v1/workflow.yaml",
+      "spec-global/departments/dev/workflows/phase-openspec-flow/v1/workflow.yaml",
+      "spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml",
+      "spec-global/departments/dev/workflows/templates/feature-be-l3-template.yaml",
+      "spec-global/departments/dev/workflows/templates/feature-contract-l3-template.yaml",
+      "spec-global/departments/dev/workflows/templates/feature-fe-l3-template.yaml",
+      "spec-global/departments/dev/workflows/templates/feature-integration-l3-template.yaml"
+    ]
+  },
+  "core_flows": [
+    {
+      "name": "Workflow Run Flow",
+      "steps": [
+        "CLI loads workflow registry",
+        "run.py renders workflow template",
+        "template_manager parses rendered workflow",
+        "orchestrator schedules steps and gates"
+      ]
+    },
+    {
+      "name": "Spec Governance Flow",
+      "steps": [
+        "workflow spec maintainer updates spec templates",
+        "spec-review validates governance rules",
+        "SSOT contracts constrain generated artifacts"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "README.md",
+    "config/workflow-registry.yaml",
+    "src/lee/cli/commands/run.py",
+    "src/lee/orchestrator/execution/template_manager.py",
+    "src/lee/orchestrator/execution/orchestrator.py",
+    "src/lee/orchestrator/execution/state_machine.py",
+    "src/lee/orchestrator/execution/runners/auto_check_gate_runner.py",
+    "src/lee/orchestrator/execution/runners/shell_runner.py",
+    "spec-global/core/contracts/ssot-agent-output/v1/schema.json",
+    "spec-global/core/agents/workflow-spec-maintainer/v1/agent.yaml",
+    "spec-global/core/agents/spec-review/v1/agent.yaml"
+  ]
+}

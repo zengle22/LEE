@@ -11,11 +11,14 @@ import shutil
 from pathlib import Path
 
 from lee.orchestrator.execution.artifacts import (
-    ArtifactManager, ArtifactType, GovernanceKind,
+    ArtifactManager, ArtifactType, ArtifactStatus, GovernanceKind,
     ContextBuilder, PromptSnapshot,
     TaskBriefGenerator,
     GateArtifactHandler,
     SSOTService,
+    SSOTType,
+    SSOTIDGenerator,
+    SSOTValidator,
 )
 
 
@@ -172,6 +175,90 @@ def run_demo():
 
         print("\n" + "="*60)
         print("✅ Demo 完成！所有测试通过！")
+        print("="*60)
+
+        # ========== Demo 5: SSOT v1.3 新功能 ==========
+        print("\n" + "="*60)
+        print("Demo 5: SSOT v1.3 新 ID 系统")
+        print("="*60)
+
+        # 5.1 ID 生成器演示
+        print("\n5.1 ID 生成器:")
+        generator = SSOTIDGenerator(temp_dir)
+
+        # 生成独立型 ID
+        feat_id = generator.generate_id(SSOTType.FEAT)
+        print(f"  生成 FEAT: {feat_id}")
+
+        epic_id = generator.generate_id(SSOTType.EPIC)
+        print(f"  生成 EPIC: {epic_id}")
+
+        # 生成直接父对象一致型 ID
+        tech_id = generator.generate_id(SSOTType.TECH, parent_id=feat_id)
+        print(f"  生成 TECH (parent: {feat_id}): {tech_id}")
+
+        testset_id = generator.generate_id(SSOTType.TESTSET, parent_id=feat_id)
+        print(f"  生成 TESTSET (parent: {feat_id}): {testset_id}")
+
+        # 生成带后缀的 ID
+        ui_id = generator.generate_id(SSOTType.UI, parent_id=feat_id, suffix="01")
+        print(f"  生成 UI (parent: {feat_id}, suffix: 01): {ui_id}")
+
+        # 生成范围归属型 ID
+        tc_id = generator.generate_id(SSOTType.TC, parent_id=testset_id)
+        print(f"  生成 TC (parent: {testset_id}): {tc_id}")
+
+        # 生成 slug
+        slug = generator.generate_slug("用户管理模块设计")
+        print(f"  生成 slug: {slug}")
+
+        # 5.2 使用 ArtifactManager 创建 SSOT 对象
+        print("\n5.2 创建 SSOT 对象:")
+        ssot_feat = manager.create_ssot(
+            ssot_type=SSOTType.FEAT,
+            title="用户登录功能",
+            content="# 用户登录功能\n\n这是用户登录功能的描述。",
+            run_id="demo-002",
+        )
+        print(f"  创建 FEAT: {ssot_feat.id}")
+
+        ssot_tech = manager.create_ssot(
+            ssot_type=SSOTType.TECH,
+            title="登录技术设计",
+            content="# 登录技术设计\n\n使用 JWT 实现。",
+            run_id="demo-002",
+            parent_id=ssot_feat.id,
+        )
+        print(f"  创建 TECH: {ssot_tech.id}")
+
+        # 5.3 Registry SSOT 索引
+        print("\n5.3 Registry SSOT 索引:")
+        ssot_artifacts = manager.registry.get_ssot_artifacts()
+        print(f"  SSOT 对象数量: {len(ssot_artifacts)}")
+
+        # 5.4 P0 校验
+        print("\n5.4 P0 校验:")
+        validator = SSOTValidator(manager.registry)
+        p0_result = validator.validate_p0(ssot_feat.id)
+        if p0_result.is_valid:
+            print(f"  ✅ P0 校验通过: {ssot_feat.id}")
+        else:
+            print(f"  ❌ P0 校验失败:")
+            for err in p0_result.errors:
+                print(f"     - {err}")
+
+        # 5.5 P1 校验
+        print("\n5.5 P1 校验:")
+        p1_result = validator.validate_p1(ssot_feat.id)
+        if p1_result.has_warnings:
+            print(f"  ⚠️  P1 警告:")
+            for warn in p1_result.warnings:
+                print(f"     - {warn}")
+        else:
+            print(f"  ✅ P1 无警告")
+
+        print("\n" + "="*60)
+        print("SSOT v1.3 演示完成!")
         print("="*60)
 
         return True

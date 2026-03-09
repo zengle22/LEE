@@ -1,0 +1,394 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/spec-global/core/contracts/ssot-agent-output/v1/schema.json",
+  "title": "SSOT Agent Output Contract",
+  "description": "Agent output declaration for SSOT and non-SSOT artifacts.",
+  "type": "object",
+  "required": ["contract_version", "run_id", "outputs"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "workflow_id": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/output"
+      }
+    }
+  },
+  "definitions": {
+    "relation_list": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "versioned_ref": {
+      "type": "object",
+      "required": ["id", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "slice_key": {
+          "type": "string"
+        }
+      }
+    },
+    "versioned_ref_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/versioned_ref"
+      }
+    },
+    "slice_item": {
+      "type": "object",
+      "required": ["slice_key", "feat_id", "feat_version", "required", "dependencies"],
+      "additionalProperties": false,
+      "properties": {
+        "slice_key": { "type": "string", "minLength": 1 },
+        "feat_id": { "type": "string", "minLength": 1 },
+        "feat_version": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "slice_list": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/slice_item" }
+    },
+    "recut_item": {
+      "type": "object",
+      "required": ["recut_id", "reason", "old_refs", "new_refs", "approved_by", "changed_at"],
+      "additionalProperties": false,
+      "properties": {
+        "recut_id": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "old_refs": { "$ref": "#/definitions/versioned_ref_list" },
+        "new_refs": { "$ref": "#/definitions/versioned_ref_list" },
+        "approved_by": { "type": "string", "minLength": 1 },
+        "changed_at": { "type": "string", "minLength": 1 }
+      }
+    },
+    "release_properties": {
+      "type": "object",
+      "required": ["release_version"],
+      "additionalProperties": true,
+      "properties": {
+        "release_version": { "type": "string", "minLength": 1 },
+        "scope_frozen_at": { "type": "string" },
+        "target_env": { "type": "string" },
+        "rollback_plan": { "type": "string" },
+        "recuts": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/recut_item" }
+        }
+      }
+    },
+    "plan_properties": {
+      "type": "object",
+      "required": ["slices"],
+      "additionalProperties": true,
+      "properties": {
+        "coverage_summary": { "type": "string" },
+        "slices": { "$ref": "#/definitions/slice_list" },
+        "environment_matrix": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "task_properties": {
+      "type": "object",
+      "required": ["slice_key"],
+      "additionalProperties": true,
+      "properties": {
+        "slice_key": { "type": "string", "minLength": 1 },
+        "acceptance": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "estimate": {}
+      }
+    },
+    "bug_properties": {
+      "type": "object",
+      "required": ["bug_state", "severity", "found_in_release", "source_report_id"],
+      "additionalProperties": true,
+      "properties": {
+        "bug_state": {
+          "type": "string",
+          "enum": ["open", "triaged", "in_fix", "fixed", "verified", "closed", "waived"]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["blocker", "critical", "major", "minor"]
+        },
+        "found_in_release": { "type": "string", "minLength": 1 },
+        "source_report_id": { "type": "string", "minLength": 1 },
+        "waiver_reason": { "type": "string" },
+        "waiver_approved_by": { "type": "string" }
+      }
+    },
+    "report_properties": {
+      "type": "object",
+      "required": ["report_kind", "subject_id", "result", "evidence_refs"],
+      "additionalProperties": true,
+      "properties": {
+        "report_kind": {
+          "type": "string",
+          "enum": ["release", "test_execution", "go_no_go", "recut_audit", "delivery", "regression"]
+        },
+        "subject_id": { "type": "string", "minLength": 1 },
+        "result": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string" },
+        "slice_key": { "type": "string" },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["key", "identity_kind", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "identity_kind": {
+          "type": "string",
+          "enum": ["ssot", "non_ssot"]
+        },
+        "ssot_type": {
+          "type": "string",
+          "enum": ["src", "epic", "feat", "release", "ui", "tech", "devplan", "testplan", "task", "testset", "tc", "bug", "report", "adr", "evi"]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "parent": {
+          "type": "string"
+        },
+        "derived_from": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "derived_from_ids": {
+          "$ref": "#/definitions/versioned_ref_list"
+        },
+        "source_refs": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "primary_refs": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "verifies": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "implements": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "depends_on": {
+          "$ref": "#/definitions/relation_list"
+        },
+        "derived_from_one": {
+          "type": "string"
+        },
+        "placement_key": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "artifact_type": {
+          "type": "string",
+          "enum": ["CONTRACT", "DOCUMENT", "CODE_REF", "PATCH", "TEST", "HANDOVER", "LOG", "INTERMEDIATE"]
+        },
+        "category": {
+          "type": "string"
+        },
+        "governance_kind": {
+          "type": "string",
+          "enum": ["evidence", "transfer", "deliverable", "knowledge", "state"]
+        },
+        "properties": {
+          "type": "object"
+        },
+        "evidence_layers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["impl_refs", "api_refs", "test_refs", "doc_refs"],
+          "properties": {
+            "impl_refs": {
+              "$ref": "#/definitions/relation_list"
+            },
+            "api_refs": {
+              "$ref": "#/definitions/relation_list"
+            },
+            "test_refs": {
+              "$ref": "#/definitions/relation_list"
+            },
+            "doc_refs": {
+              "$ref": "#/definitions/relation_list"
+            }
+          }
+        },
+        "evidence_strategy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["primary_selection", "ranking_signals"],
+          "properties": {
+            "primary_selection": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ranking_signals": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "identity_kind": {
+                "const": "ssot"
+              }
+            }
+          },
+          "then": {
+            "required": ["ssot_type"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity_kind": {
+                "const": "non_ssot"
+              }
+            }
+          },
+          "then": {
+            "required": ["artifact_type", "category"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity_kind": { "const": "ssot" },
+              "ssot_type": { "const": "release" }
+            }
+          },
+          "then": {
+            "required": ["derived_from_ids", "properties"],
+            "properties": {
+              "properties": { "$ref": "#/definitions/release_properties" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity_kind": { "const": "ssot" },
+              "ssot_type": { "enum": ["devplan", "testplan"] }
+            }
+          },
+          "then": {
+            "required": ["derived_from_ids", "properties", "parent"],
+            "properties": {
+              "properties": { "$ref": "#/definitions/plan_properties" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity_kind": { "const": "ssot" },
+              "ssot_type": { "const": "task" }
+            }
+          },
+          "then": {
+            "required": ["properties", "parent"],
+            "properties": {
+              "properties": { "$ref": "#/definitions/task_properties" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity_kind": { "const": "ssot" },
+              "ssot_type": { "const": "bug" }
+            }
+          },
+          "then": {
+            "required": ["properties"],
+            "properties": {
+              "properties": { "$ref": "#/definitions/bug_properties" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity_kind": { "const": "ssot" },
+              "ssot_type": { "const": "report" }
+            }
+          },
+          "then": {
+            "required": ["properties", "parent"],
+            "properties": {
+              "properties": { "$ref": "#/definitions/report_properties" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

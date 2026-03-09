@@ -1,35 +1,6 @@
-# LEE Framework Configuration
-# 项目级别配置文件
-
-# Spec 根目录（相对于项目根目录）
-spec_root: spec-global
-
-# Demo 模式
-demo_mode: false
-
-# 重试配置
-retry:
-  max_retries: 3
-  retry_delay_seconds: 2.0
-
-# 失败处理
-on_failure:
-  default_retry: 2
-  default_fallback: human_review
-
-# 执行器配置
 executor:
-  default_type: claude_code  # 使用 claude_code 作为默认执行器
-  coding_executor: claude_code
-  coding_fallback: llm_patch
-  llm_model: claude-sonnet-4-5-20250929
-  timeout_seconds: 300
-
-# 追踪
-tracing:
-  enabled: true
-  output_dir: .workflow/traces
-
-# 证据
-evidence:
-  output_dir: .workflow/evidence
+  default_type: claude_code
+project:
+  name: LEE
+spec_root: spec-global
+version: '1.0'

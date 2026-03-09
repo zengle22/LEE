@@ -108,6 +108,7 @@ class IRConverter:
             elif step_ir.kind == StepKind.SKILL:
                 executor_type = "shell"
             elif step_ir.kind in (
+                StepKind.GATE,
                 StepKind.HUMAN_GATE,
                 StepKind.WORKFLOW_SPAWN,
                 StepKind.ORCHESTRATOR_CLI,
@@ -168,6 +169,7 @@ class IRConverter:
             elif step_ir.kind == StepKind.SKILL:
                 executor_type = "shell"
             elif step_ir.kind in (
+                StepKind.GATE,
                 StepKind.HUMAN_GATE,
                 StepKind.WORKFLOW_SPAWN,
                 StepKind.ORCHESTRATOR_CLI,
@@ -343,6 +345,8 @@ class TemplateToIRConverter:
             kind = StepKind.AGENT
         elif step.kind == "skill":
             kind = StepKind.SKILL
+        elif step.kind == "gate":
+            kind = StepKind.GATE
         elif step.kind == "human_gate":
             kind = StepKind.HUMAN_GATE
         elif step.kind in ("workflow_spawn", "subworkflow"):
@@ -451,6 +455,8 @@ class TemplateToIRConverter:
             subworkflow_level = step_ir.config.get("subworkflow_level") if step_ir.config else None
             if subworkflow_level:
                 doc["level"] = subworkflow_level
+        elif step_ir.kind == StepKind.GATE:
+            doc["kind"] = "gate"
         elif step_ir.kind == StepKind.HUMAN_GATE:
             doc["type"] = "human_gate"
         elif step_ir.kind == StepKind.ORCHESTRATOR_CLI:

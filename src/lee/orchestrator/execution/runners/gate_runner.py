@@ -11,8 +11,10 @@ LEE Orchestrator — Gate Step Runners
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 from typing import List
+import yaml
 
 from lee.orchestrator.storage.models import StepResult
 from lee.orchestrator.execution.runners.base import StepRunnerBase, RunnerContext
@@ -69,14 +71,24 @@ class HumanGateRunner(StepRunnerBase):
 
         # 创建门禁审批记录（包含默认动作）
         # Include workflow_id in gate_id to make it unique across multiple workflows
-        gate_id_value = step.gate_id or f"gate_{workflow_id}_{step.id}"
+        gate_id_base = step.gate_id or f"gate_{workflow_id}_{step.id}"
+        gate_id_value = gate_id_base
+        existing_gate = await ctx.store.get_gate_approval(workflow_id, gate_id_base)
+        if existing_gate is not None:
+            gate_id_value = f"{gate_id_base}_{uuid.uuid4().hex[:8]}"
+        reviewers = gate_config.get("reviewers", [])
+        if isinstance(reviewers, str):
+            try:
+                reviewers = yaml.safe_load(reviewers) or []
+            except Exception:
+                reviewers = []
         gate_approval = GateApproval(
             workflow_id=workflow_id,
             gate_id=gate_id_value,
             step_id=step.id,
             status=GateStatus.PENDING,
             approval_criteria=gate_config.get("approval_criteria", []),
-            reviewers=gate_config.get("reviewers", []),
+            reviewers=reviewers,
             version=1,  # v1.1: 初始版本号
             default_reject_action=default_reject_action,
             default_reject_target=default_reject_target,

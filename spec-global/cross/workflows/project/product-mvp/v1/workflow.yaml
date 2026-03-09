@@ -81,32 +81,32 @@ steps:
         - "freeze.approved_by contains ['stg_lead', 'product_lead']"
 
   # ============================================
-  # Step 2: PRD - 产品需求编写（L2）
+  # Step 2: Product - 产品需求编排（L2）
   # ============================================
-  - id: prd_requirement_freeze
-    name: 产品需求冻结
+  - id: product_requirement_orchestration
+    name: 产品需求主编排
     kind: workflow_spawn
-    workflow: workflow.prd.product_to_dev_pipeline
+    workflow: workflow.product.product_main_pipeline
     level: department
     depends_on:
       - stg_opportunity_discovery
     description: |
-      PRD 部门接收"商业机会冻结包"，产出"研发冻结包"。
+      Product 部门接收"商业机会冻结包"，产出 EPIC、FEAT 与研发准备包。
 
       核心职责：
-      - 将商业机会转化为产品需求
-      - 定义验收标准
-      - 编写技术规格
-      - 冻结后不可变更
+      - 将商业机会转化为 EPIC
+      - 将 EPIC 拆解为 FEAT
+      - 为研发准备 UI / TECH / TASK 基线
+      - 冻结后作为下游唯一输入基线
 
     inputs:
       - from_step: stg_opportunity_discovery
         contract: contracts/business_opportunity_freeze/v1/freeze.yaml
 
     outputs:
-      - path: contracts/dev_freeze_package/v1/freeze.yaml
+      - path: contracts/product_delivery_prep/v1/freeze.yaml
         required: true
-        description: 研发冻结包
+        description: 产品研发准备包
 
     completion_gate:
       type: automated

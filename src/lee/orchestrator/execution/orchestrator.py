@@ -28,7 +28,7 @@ v3.1 重构：
 import uuid
 import json
 import hashlib
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -126,12 +126,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         self.store = store
         self.db = store  # 兼容 Runners 的 db 属性
-        self.state_machine = WorkflowStateMachine(store)
         # v3.5: 传递配置到 TemplateManager 以使用正确的 executor.default_type
         self.template_manager = template_manager or TemplateManager(
             project_root=project_root,
             config=self.config
         )
+        self.state_machine = WorkflowStateMachine(store, template_manager=self.template_manager)
         self.executor_factory = ExecutorFactory
 
         # v1.5: 创建 AgentLoader 用于加载 agent spec
@@ -188,6 +188,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         # v3.2: EventLog 事件日志
         self.event_log = EventLog(project_root or ".", run_id=None)
+        self.state_machine.event_log = self.event_log
 
         # v3.4: TraceLog 追踪日志
         self.trace_log = TraceLog(project_root or ".")
@@ -679,7 +680,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 "kind": step_to_execute.kind
             },
             source_workflow=workflow_id,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             event_id=uuid.uuid4().hex
         ))
 
@@ -802,7 +803,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                                 inputs_hash=inputs_hash,
                                 patch_hash=patch_bundle.patch_hash if patch_bundle else "",
                                 exit_code=0,
-                                timestamp=datetime.utcnow().isoformat(),
+                                timestamp=datetime.now(UTC).isoformat(),
                                 executor_type=step_to_execute.executor_type or "llm",
                             )
                             self.receipt_store.save(receipt)
@@ -835,7 +836,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                             "result": asdict(r) if hasattr(r, 'to_dict') else r.__dict__
                         },
                         source_workflow=workflow_id,
-                        timestamp=datetime.utcnow().isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                         event_id=uuid.uuid4().hex
                     ))
 
@@ -913,7 +914,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "error": str(e)
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
             return StepResult(
@@ -1204,10 +1205,20 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             final_status = "completed"
         elif instance.status == WorkflowStatus.FAILED:
             final_status = "failed"
+        elif instance.status == WorkflowStatus.RUNNING:
+            final_status = "running"
+        elif instance.status == WorkflowStatus.PAUSED:
+            final_status = "paused"
 
         # v3.2: 记录 RUN 完成/失败事件
-        run_event_type = EventType.RUN_COMPLETED if final_status == "completed" else (
-            EventType.RUN_FAILED if final_status == "failed" else EventType.RUN_PAUSED
+        run_event_type = (
+            EventType.RUN_COMPLETED
+            if final_status == "completed"
+            else (
+                EventType.RUN_FAILED
+                if final_status == "failed"
+                else EventType.RUN_PAUSED
+            )
         )
         self.event_log.log(
             event_type=run_event_type,
@@ -1957,7 +1968,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "complexity": complexity,
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
@@ -1974,7 +1985,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "l3_count": l3_count,
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
@@ -1992,7 +2003,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "point_id": point_id,
                 },
                 source_workflow=parent_l2_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
@@ -2073,7 +2084,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     "confidence": confidence,
                 },
                 source_workflow=workflow_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 event_id=uuid.uuid4().hex
             ))
         except Exception:
@@ -2194,13 +2205,35 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             prd_path=context.get("prd_path", "")
         )
 
-        # Find L3 v3 template path (template remains in framework directory)
-        template_base = Path(self.project_root) / "spec-global" / "departments" / "dev" / "workflows" / "templates" if self.project_root else Path("spec-global/departments/dev/workflows/templates")
-        # Try L3 v3 template first
-        l3_template_path = template_base / "l3" / "task-l3-v3-template.yaml"
-        if not l3_template_path.exists():
-            # Fallback to old path
-            l3_template_path = template_base / "task-l3-template.yaml"
+        # Find L3 template path across supported framework layouts
+        template_roots = []
+        if self.project_root:
+            project_root_path = Path(self.project_root)
+            template_roots.extend([
+                project_root_path / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+                project_root_path / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+            ])
+        else:
+            template_roots.extend([
+                Path("lee/spec-global/departments/dev/workflows/templates"),
+                Path("spec-global/departments/dev/workflows/templates"),
+            ])
+
+        l3_template_path = None
+        for template_base in template_roots:
+            v3_candidate = template_base / "l3" / "task-l3-v3-template.yaml"
+            if v3_candidate.exists():
+                l3_template_path = v3_candidate
+                break
+
+            legacy_candidate = template_base / "task-l3-template.yaml"
+            if legacy_candidate.exists():
+                l3_template_path = legacy_candidate
+                break
+
+        if l3_template_path is None:
+            search_roots = ", ".join(str(root) for root in template_roots)
+            raise FileNotFoundError(f"L3 template not found under: {search_roots}")
 
         generator = WorkflowGenerator(template_path=str(l3_template_path))
 

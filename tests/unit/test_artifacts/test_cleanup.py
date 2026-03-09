@@ -2,8 +2,6 @@
 Cleanup Tests
 """
 
-import tempfile
-import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 import pytest
@@ -21,13 +19,11 @@ from lee.orchestrator.execution.artifacts.models import ArtifactMetadata
 
 
 @pytest.fixture
-def temp_artifacts_dir():
+def temp_artifacts_dir(tmp_path):
     """Create temporary artifacts directory"""
-    temp_dir = tempfile.mkdtemp()
-    artifacts_dir = Path(temp_dir) / ".artifacts"
+    artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    yield artifacts_dir
-    shutil.rmtree(temp_dir)
+    return artifacts_dir
 
 
 @pytest.fixture

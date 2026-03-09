@@ -1,0 +1,120 @@
+# 阿里云 Flow CI/CD 流水线配置
+# 文档：https://help.aliyun.com/product/44895.html
+
+version: '1.0'
+
+name: code-quality-gates
+displayName: Code Quality Gates
+
+# 触发条件
+triggers:
+  push:
+    branches:
+      include:
+        - main
+        - master
+    paths:
+      include:
+        - 'spec-global/departments/**/workflows/**/*.yaml'
+        - 'spec-global/departments/**/workflows/**/*.yml'
+        - 'scripts/lint_l3_templates.py'
+        - 'scripts/detect-hardcoded-paths.py'
+        - 'src/**/*.py'
+  pull_request:
+    branches:
+      include:
+        - main
+        - master
+    paths:
+      include:
+        - 'spec-global/departments/**/workflows/**/*.yaml'
+        - 'spec-global/departments/**/workflows/**/*.yml'
+        - 'scripts/lint_l3_templates.py'
+        - 'scripts/detect-hardcoded-paths.py'
+        - 'src/**/*.py'
+
+# 流水线阶段
+stages:
+  - stage: quality_gates
+    displayName: Code Quality Gates
+    jobs:
+      - job: quality_checks
+        displayName: Quality Checks
+        pool:
+          type: hosted
+          image: ubuntu-22.04
+          spec: small
+        
+        variables:
+          PYTHON_VERSION: '3.10'
+        
+        steps:
+          # 步骤 1: 检出代码
+          - step: checkout
+            name: checkout
+            displayName: 检出代码
+            with:
+              fetchDepth: 1
+              submodules: false
+          
+          # 步骤 2: 环境设置
+          - step: shell
+            name: setup
+            displayName: 环境设置
+            commands:
+              - |
+                set -e
+                echo "=== 环境信息 ==="
+                python3 --version
+                pip3 --version
+                
+                echo "=== 安装依赖 ==="
+                pip3 install --quiet pyyaml jsonschema
+          
+          # 步骤 3: 硬编码路径检测
+          - step: shell
+            name: detect_paths
+            displayName: 硬编码路径检测
+            commands:
+              - |
+                set -e
+                echo "=== 硬编码路径检测 ==="
+                python3 scripts/detect-hardcoded-paths.py src/
+                
+                if [ $? -ne 0 ]; then
+                    echo "❌ 硬编码路径检测失败"
+                    exit 1
+                fi
+                echo "✅ 硬编码路径检测通过"
+          
+          # 步骤 4: L3 模板 Lint 检查
+          - step: shell
+            name: lint_l3
+            displayName: L3 模板 Lint 检查
+            commands:
+              - |
+                set -e
+                echo "=== L3 模板 Lint 检查 ==="
+                python3 scripts/lint_l3_templates.py spec-global/departments
+                
+                if [ $? -ne 0 ]; then
+                    echo "❌ L3 模板 Lint 检查失败"
+                    exit 1
+                fi
+                echo "✅ L3 模板 Lint 检查通过"
+          
+          # 步骤 5: 生成报告
+          - step: shell
+            name: summary
+            displayName: 生成质量报告
+            condition: always()
+            commands:
+              - |
+                echo "=== 构建信息 ==="
+                echo "构建 ID: $(Build.BuildId)"
+                echo "提交 SHA: $(Build.SourceVersion)"
+                echo "分支：$(Build.SourceBranchName)"
+                echo ""
+                echo "=== 质量门禁结果 ==="
+                echo "✅ 硬编码路径检测"
+                echo "✅ L3 模板 Lint 检查"

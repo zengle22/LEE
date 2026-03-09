@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import os
-import subprocess
 from pathlib import Path
-import shutil
 
 import click
-import yaml
-from datetime import datetime
 
-from lee.orchestrator.core.project_config import DirectoryStructureConfig, DirectoryConfig
+from lee.orchestrator.core.project_config import DirectoryStructureConfig, DirectoryConfig, initialize_project
 
 
 def _copy_tree(src: Path, dest: Path) -> None:
@@ -532,7 +528,9 @@ def _create_requirements_lee(project_root: Path, version: str) -> None:
 @click.option("--no-discover", is_flag=True, help="禁用自动发现 git 仓库")
 @click.option("--depth", default=4, help="搜索 git 仓库的最大深度 (默认: 4)")
 @click.option("--force", is_flag=True, help="强制重新生成配置文件")
-def init(project_dir: str, no_discover: bool, depth: int, force: bool) -> None:
+@click.option("--no-readme", is_flag=True, help="不生成 README 文件")
+@click.option("--no-templates", is_flag=True, help="不复制模板文件")
+def init(project_dir: str, no_discover: bool, depth: int, force: bool, no_readme: bool, no_templates: bool) -> None:
     """初始化项目目录结构"""
     project_root = Path(project_dir).resolve()
 
@@ -542,8 +540,16 @@ def init(project_dir: str, no_discover: bool, depth: int, force: bool) -> None:
         click.echo(f"Initializing LEE project at: {project_root}")
     click.echo()
 
-    # Create complete directory structure
-    dirs = _create_directory_structure(project_root)
+    # Call unified initialization function
+    config = initialize_project(
+        project_dir=project_root,
+        project_name=None,  # Will use project_root.name
+        auto_discover_repos=not no_discover,
+        copy_templates=not no_templates,
+        generate_readme=not no_readme,
+        max_depth=depth,
+        force=force,
+    )
 
     # 分类显示
     tool_dirs = [d for d in dirs if d.startswith(".")]
@@ -571,6 +577,11 @@ def init(project_dir: str, no_discover: bool, depth: int, force: bool) -> None:
         _copy_tree(templates_root / "spec", project_root / "spec")
         _copy_tree(templates_root / "env", project_root / "env")
         click.echo("  ✓ Copied template files")
+
+    if not no_discover:
+        repos_file = project_root / ".lee" / "repos.yaml"
+        if repos_file.exists():
+            click.echo("  ✓ Created .lee/repos.yaml")
 
     click.echo()
     click.echo(click.style("✅ Project initialized successfully!", fg="green", bold=True))

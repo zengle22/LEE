@@ -43,6 +43,10 @@ policy:
       then: "prompt_for_completion"
     - if: "validation_failed"
       then: "halt_and_explain"
+    - if: "agent_outputs_formal_ssot_objects"
+      then: "require_ssot_output_schema_and_example"
+    - if: "agent_only_outputs_business_content_or_notes"
+      then: "keep_output_schema_only"
   
   quality_bar:
     must_have:
@@ -50,6 +54,8 @@ policy:
       - "所有必填字段完整"
       - "命名规范一致"
       - "契约引用有效"
+      - "明确区分业务内容 contract 与 SSOT 治理 contract"
+      - "若 Agent 输出进入正式 SSOT 主链，必须声明 contracts.ssot_output_schema"
   
   refusal:
     conditions:
@@ -69,18 +75,23 @@ prompting:
     - Update existing Agent specifications
     - Handle version upgrades
     - Ensure all specs follow unified standards
+    - Distinguish business content contracts from SSOT governance contracts
     
     STRICT RULES:
     - Never skip validation steps
     - Never create duplicate responsibilities
     - Never modify template files
     - Always follow naming conventions
+    - If an agent produces formal SSOT objects, add contracts.ssot_output_schema
+    - Keep contracts.output_schema for domain/business content validation
   
   instructions:
     - "遵循 v1.0 模板格式"
     - "目录名使用 kebab-case，ID 使用 agent.{domain}.{name} 格式"
     - "必须执行验证清单"
     - "生成 agent.yaml 和 README.md"
+    - "区分 contracts.output_schema 与 contracts.ssot_output_schema 的职责"
+    - "若 Agent 输出 FEAT/UI/TECH/TASK/TESTSET/TC/BUG/REPORT/ADR/EVI 等正式对象，补充 ssot_output_contract 示例"
   
   output_format: yaml
   
@@ -110,6 +121,8 @@ workflow_steps:
       - 确定 ID 和命名
       - 定义职责边界和 out_of_scope
       - 确定输入输出契约
+      - 判断输出是否进入正式 SSOT 主链
+      - 若进入主链，增加 contracts.ssot_output_schema 和 ssot_output_contract.example
       - 设计工作流程步骤
   
   - step: 4
@@ -126,6 +139,7 @@ workflow_steps:
       - 检查 YAML 格式
       - 确认命名规范
       - 验证契约引用
+      - 检查 output_schema 与 ssot_output_schema 是否按职责分层
 
 # ============================================
 # 禁止行为
@@ -197,3 +211,21 @@ responsibility:
 # ============================================
 output_requirements:
   path_pattern: "specs/agents/{agent-name}/v{version}/agent.yaml"
+
+governance_rules:
+  references:
+    temp_governance: .project/governance/TEMP_GOVERNANCE.md
+    review_checklist: .project/governance/REVIEW_CHECKLIST.md
+    completion_template: .project/governance/COMPLETION_TEMPLATE.md
+    acceptance_briefs: .project/governance/ACCEPTANCE_BRIEFS/
+    module_contracts: .project/governance/MODULE_CONTRACTS/
+  contract_layering:
+    output_schema: "用于约束业务内容结构，如 PRD/UI/Test Set 的领域字段。"
+    ssot_output_schema: "用于约束正式 SSOT 对象声明，如 identity_kind、ssot_type、parent、verifies、implements。"
+    preferred_envelope: "当两者并存时，Agent 应输出 { business_output, ssot_output_contract } 单一结构化包。"
+  adoption_rule: |
+    当 Agent 的输出会被 runner 物化为正式 SSOT 主文件时，必须同时保留业务 output_schema
+    并新增 contracts.ssot_output_schema；如果只是普通说明、分析、复盘或中间文档，则只保留 output_schema。
+  temporary_governance_rule: |
+    当 Agent 维护的是实现类、review 类或 completion 类规范，且相关工作尚未进入正式 SSOT 时，
+    应明确引用 .project/governance 中的临时治理规则，不得假设后续生产 Agent 会自行发现这些约束。

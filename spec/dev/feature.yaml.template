@@ -1,0 +1,26 @@
+id: FEAT-0001
+title: "Feature Title"
+description: |
+  Feature description and scope.
+acceptance_criteria:
+  - "AC1: ..."
+  - "AC2: ..."
+interfaces:
+  - name: "example_api"
+    type: "rest_api"
+    spec_path: "spec/dev/api/example.yaml"
+risks:
+  - "Potential impact on ..."
+assumptions:
+  - "Assumption ..."
+governance_context:
+  governing_adrs:
+    - "<ADR-ID-if-applicable>"
+  decision_refs:
+    - "<decision-ref-if-applicable>"
+  decision_constraints:
+    - "<decision-constraint-if-applicable>"
+  architecture_constraints:
+    - "<architecture-constraint-if-applicable>"
+  process_constraints:
+    - "<process-constraint-if-applicable>"

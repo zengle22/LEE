@@ -133,25 +133,31 @@ class RuleBasedLayoutProcessorV2:
         if stripped.startswith('# '):
             content = self._clean_markdown(stripped[2:].strip())
             numbered_content, has_number = self._convert_chapter_number(content, 1)
-            return f'<h1 style="color:#cf1322;font-size:22px;font-weight:700;margin:24px 0 16px 0;">{numbered_content}</h1><hr>', 1
+            # 如果已有编号，只返回原始内容（不重复添加编号）
+            if not has_number:
+                return f'<h1 style="color:#cf1322;font-size:22px;font-weight:700;margin:24px 0 16px 0;">{numbered_content}</h1><hr>', 1
+            else:
+                return f'<h1 style="color:#cf1322;font-size:22px;font-weight:700;margin:24px 0 16px 0;">{content}</h1><hr>', 1
 
         # H2 标题
         if stripped.startswith('## '):
             content = self._clean_markdown(stripped[3:].strip())
             numbered_content, has_number = self._convert_chapter_number(content, 2)
+            # H2 标题总是用红色，不管有没有编号
             if has_number:
                 return f'<h2 style="color:#cf1322;font-size:18px;font-weight:600;margin:20px 0 12px 0;">{numbered_content}</h2><hr>', 1
             else:
-                return f'<h2 style="color:#555555;font-size:17px;font-weight:600;margin:20px 0 12px 0;">{numbered_content}</h2><hr>', 1
+                return f'<h2 style="color:#cf1322;font-size:17px;font-weight:600;margin:20px 0 12px 0;">{numbered_content}</h2><hr>', 1
 
         # H3 标题
         if stripped.startswith('### '):
             content = self._clean_markdown(stripped[4:].strip())
             numbered_content, has_number = self._convert_chapter_number(content, 3)
+            # H3 标题总是用红色，不管有没有编号
             if has_number:
                 return f'<h3 style="color:#cf1322;font-size:16px;font-weight:600;margin:16px 0 8px 0;">{numbered_content}</h3><hr>', 1
             else:
-                return f'<h3 style="color:#555555;font-size:15px;font-weight:600;margin:16px 0 8px 0;">{numbered_content}</h3><hr>', 1
+                return f'<h3 style="color:#cf1322;font-size:15px;font-weight:600;margin:16px 0 8px 0;">{numbered_content}</h3><hr>', 1
 
         # 引用块
         if stripped.startswith('>'):
@@ -331,25 +337,30 @@ class RuleBasedLayoutProcessorV2:
         return text
 
     def _is_real_chapter(self, text: str, level: int) -> bool:
-        """判断是否为真正的"章节"（需要编号）"""
+        """判断是否为真正的"章节"（需要重新编号）"""
         circle_nums = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮'
         emoji_nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
 
+        # 如果已有编号（中文、圆圈、emoji、阿拉伯数字），不需要重新编号
         for char in circle_nums:
             if char in text:
-                return True
+                return False  # 已有编号，不重复添加
         for emoji in emoji_nums:
             if emoji in text:
-                return True
+                return False
 
         chinese_nums = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
         for ch in chinese_nums:
             if re.match(rf'^{ch}[、.．]\s*', text):
-                return True
+                return False  # 已有中文编号，不重复添加
 
-        if re.match(r'^\d+[.、．]\s*', text):
-            return True
+        if re.match(r'^\d+[.、．)\s]', text):
+            return False  # 已有阿拉伯数字编号，不重复添加
 
+        if re.match(r'^[\d]+\）', text):
+            return False  # 已有 "1）" 格式编号，不重复添加
+
+        # 没有编号的章节，根据关键词判断是否需要添加编号
         if level in (1, 2):
             chapter_keywords = ['真实', '事故', '为什么', '怎么', '解决', '治理', '启示',
                               '错误', '修复', '效果', '定义', '标准', '机制', '规则']
@@ -368,6 +379,45 @@ class RuleBasedLayoutProcessorV2:
 
         needs_number = self._is_real_chapter(text, level)
 
+        # 如果不需要编号，检查原文是否有已有编号，有则保留
+        if not needs_number:
+            # 检查原文是否已有编号
+            has_existing_number = False
+            for char in circle_nums:
+                if char in text:
+                    has_existing_number = True
+                    break
+            if not has_existing_number:
+                for emoji in emoji_nums:
+                    if emoji in text:
+                        has_existing_number = True
+                        break
+            if not has_existing_number:
+                chinese_nums = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+                for ch in chinese_nums:
+                    if re.match(rf'^{ch}[、.．]\s*', text):
+                        has_existing_number = True
+                        break
+            if not has_existing_number:
+                if re.match(r'^\d+[.、．)\s]', text):
+                    has_existing_number = True
+
+            # 如果有已有编号，返回原文（保留编号）
+            if has_existing_number:
+                return text, True
+            # 如果没有已有编号，返回清理后的文本
+            cleaned_text = text
+            for char in circle_nums:
+                cleaned_text = cleaned_text.replace(char, '')
+            for emoji in emoji_nums:
+                cleaned_text = cleaned_text.replace(emoji, '')
+            chinese_nums = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+            for ch in chinese_nums:
+                cleaned_text = re.sub(rf'^{ch}[、.．]\s*', '', cleaned_text)
+            cleaned_text = re.sub(r'^\d+[.、．)\s]', '', cleaned_text)
+            cleaned_text = cleaned_text.strip()
+            return cleaned_text, False
+
         cleaned_text = text
         for char in circle_nums:
             cleaned_text = cleaned_text.replace(char, '')
@@ -380,9 +430,6 @@ class RuleBasedLayoutProcessorV2:
 
         cleaned_text = re.sub(r'^\d+[.、．]\s*', '', cleaned_text)
         cleaned_text = cleaned_text.strip()
-
-        if not needs_number:
-            return cleaned_text, False
 
         if level == 1:
             self.chapter_counter += 1

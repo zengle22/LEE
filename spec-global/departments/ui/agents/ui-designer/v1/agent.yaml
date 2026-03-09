@@ -20,6 +20,7 @@ tags: [design, interaction, ui]
 contracts:
   input_schema: contracts/frozen-module-requirement-contract/v1/schema.json
   output_schema: contracts/frozen-ui-prototype-contract/v1/schema.json
+  ssot_output_schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
 
 # ============================================
 # 角色定义
@@ -129,3 +130,28 @@ output_requirements:
         - "设计系统规范（色彩/字体/间距）"
         - "UI优先级划分（必须现在定/可以后补）"
         - "包含评审确认签字栏"
+
+ssot_output_contract:
+  description: "当纳入正式 SSOT 链时，UI Designer 应输出挂在 FEAT 下的 UI 对象声明。"
+  schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
+  integration_pattern:
+    mode: envelope
+    business_field: business_output
+    ssot_field: ssot_output_contract
+  example:
+    business_output:
+      design_specs:
+        core_paths:
+          - 注册主路径
+      metadata:
+        is_frozen: true
+    ssot_output_contract:
+      contract_version: "1.0"
+      run_id: ui-run-001
+      outputs:
+        - key: ui
+          identity_kind: ssot
+          ssot_type: ui
+          title: 注册页原型
+          parent: feat
+          implements: ["feat"]

@@ -50,7 +50,9 @@ def runner(artifact_manager, monkeypatch):
         # 如果 root_path 相同，使用测试的 manager
         if root_path is None or root_path == artifact_manager.root_path:
             self.root_path = artifact_manager.root_path
+            self.project_root = artifact_manager.project_root
             self.sequence_file = artifact_manager.sequence_file
+            self._artifacts_path_root = artifact_manager._artifacts_path_root
             self.registry = artifact_manager.registry
         else:
             original_init(self, root_path=root_path)

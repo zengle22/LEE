@@ -139,7 +139,7 @@ prompting:
             severity: "critical"
             priority: "P0"
             title: "支付回调丢失"
-    output:
+      output:
       test_report:
         execution_summary:
           total_test_sets: 2

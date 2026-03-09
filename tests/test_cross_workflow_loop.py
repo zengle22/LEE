@@ -433,9 +433,16 @@ class TestPhaseConditionEvaluation:
         # None != "fail" → False
         assert result is False
 
-    def test_unparseable_defaults_true(self):
+    def test_unparseable_defaults_false(self):
         result = SubworkflowMixin._evaluate_phase_condition(
             "some random condition string",
             {},
+        )
+        assert result is False
+
+    def test_uppercase_logic_supported(self):
+        result = SubworkflowMixin._evaluate_phase_condition(
+            "qa_test.exit_decision == 'fail' AND qa_test.retry_count > 1",
+            {"qa_test": {"exit_decision": "fail", "retry_count": 2}},
         )
         assert result is True
