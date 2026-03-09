@@ -900,6 +900,168 @@ def _clean_list_items(items: Iterable[str], fallback: Optional[str] = None) -> L
     return []
 
 
+def _derive_preconditions(feature: Dict[str, Any]) -> List[str]:
+    defaults: List[str] = []
+    if feature.get("inputs"):
+        defaults.append(f"上游已提供完成该能力所需输入：{'、'.join(feature['inputs'][:3])}。")
+    defaults.append("相关代码路径和基础配置已存在且可访问；若依赖数据缺失，则必须进入显式降级路径。")
+    return _clean_list_items(feature.get("preconditions") or defaults, defaults[0])
+
+
+def _derive_main_flow(feature: Dict[str, Any]) -> List[str]:
+    title = feature.get("title", "该功能")
+    summary = feature.get("summary", title)
+    business_rules = feature.get("business_rules") or []
+    outputs = feature.get("outputs") or ["业务结果"]
+    defaults = [
+        f"触发 {title} 后，系统读取并校验所需输入，进入 {summary} 对应处理流程。",
+        f"处理过程中应用核心业务规则：{business_rules[0] if business_rules else '按冻结需求与现有实现约束执行。'}",
+        f"完成后输出并落库/回传：{'、'.join(outputs[:3])}。",
+    ]
+    return _clean_list_items(feature.get("main_flow") or defaults, defaults[0])
+
+
+def _derive_edge_cases(feature: Dict[str, Any]) -> List[str]:
+    title = feature.get("title", "该功能")
+    inputs = feature.get("inputs") or ["关键输入"]
+    defaults = [
+        f"当 {inputs[0]} 缺失、非法或超出合理范围时，系统必须阻止错误结果落地并给出明确反馈。",
+        f"当 {title} 所依赖的实时数据、外部同步或历史记录不足时，系统必须走降级策略而不是静默生成默认结果。",
+    ]
+    return _clean_list_items(feature.get("edge_cases") or defaults, defaults[0])
+
+
+def _derive_state_updates(feature: Dict[str, Any]) -> List[str]:
+    outputs = feature.get("outputs") or ["状态更新"]
+    defaults = [
+        f"成功执行后更新相关业务状态：{'、'.join(outputs[:3])}。",
+        "若进入降级、失败或待人工处理路径，必须保留可追踪的状态标记与原因。",
+    ]
+    return _clean_list_items(feature.get("state_updates") or defaults, defaults[0])
+
+
+def _derive_goal(feature: Dict[str, Any]) -> str:
+    return _clean_summary_text(feature.get("goal", "") or feature.get("summary", "") or feature.get("title", ""), feature.get("title", "未命名功能"))
+
+
+def _derive_user_value(feature: Dict[str, Any]) -> str:
+    title = feature.get("title", "该功能")
+    outputs = feature.get("outputs") or ["业务结果"]
+    fallback = f"用户可以获得 {outputs[0]}，并完成 {title} 对应业务目标。"
+    return _clean_summary_text(feature.get("user_value", "") or fallback, fallback)
+
+
+def _derive_processing(feature: Dict[str, Any]) -> List[str]:
+    defaults = list(feature.get("main_flow") or [])
+    if not defaults:
+        defaults = [f"根据输入和业务规则执行 {feature.get('title', '该功能')}。"]
+    return _clean_list_items(feature.get("processing") or defaults, defaults[0])
+
+
+def _derive_dependencies(feature: Dict[str, Any], capability: Optional[Dict[str, Any]] = None) -> List[str]:
+    defaults: List[str] = []
+    if capability:
+        defaults.append(capability["id"])
+    inputs = feature.get("inputs") or []
+    if inputs:
+        defaults.append(f"依赖上游提供：{'、'.join(inputs[:2])}")
+    return _clean_list_items(feature.get("dependencies") or defaults)
+
+
+def _derive_non_goals(feature: Dict[str, Any]) -> List[str]:
+    defaults = list(feature.get("scope", [])[1:2]) or ["不包含下游 UI、TECH、TASK、TESTSET 派生设计本身。"]
+    return _clean_list_items(feature.get("non_goals") or defaults, defaults[0])
+
+
+def _derive_acceptance_checks(feature: Dict[str, Any]) -> List[Dict[str, Any]]:
+    existing = feature.get("acceptance_checks") or []
+    if existing:
+        return existing
+    checks: List[Dict[str, Any]] = []
+    title = feature.get("title", "该功能")
+    inputs = feature.get("inputs") or ["必要输入"]
+    outputs = feature.get("outputs") or ["业务结果"]
+    edge_cases = feature.get("edge_cases") or ["依赖数据不足时进入降级处理。"]
+    for index, item in enumerate(feature.get("acceptance_criteria") or [], start=1):
+        check_id = f"AC-{index:03d}"
+        if index == 1:
+            given = f"已满足前置条件，且提供 {inputs[0]}。"
+            when = f"触发 {title} 主流程。"
+            then = item
+            trace_hints = ["TASK", "TESTSET", "UI", "TECH"]
+        else:
+            given = f"系统处于 {title} 处理中，且相关规则已生效。"
+            when = f"执行与 {item} 对应的业务步骤。"
+            then = f"系统应输出/更新：{outputs[min(index - 1, len(outputs) - 1)] if outputs else item}"
+            trace_hints = ["TASK", "TESTSET", "TECH"]
+        checks.append(
+            {
+                "id": check_id,
+                "scenario": item,
+                "given": given,
+                "when": when,
+                "then": then,
+                "trace_hints": trace_hints,
+            }
+        )
+    if len(checks) < 2:
+        fallback_checks = [
+            {
+                "id": "AC-001",
+                "scenario": f"{title} 正常主流程可完成",
+                "given": f"已提供 {inputs[0]}。",
+                "when": f"执行 {title} 主流程。",
+                "then": f"系统应输出 {outputs[0]}。",
+                "trace_hints": ["TASK", "TESTSET", "UI", "TECH"],
+            },
+            {
+                "id": "AC-002",
+                "scenario": f"{title} 异常/边界场景可被正确处理",
+                "given": edge_cases[0],
+                "when": f"执行 {title} 时命中异常或边界条件。",
+                "then": "系统应给出明确反馈，并保留正确状态标记。",
+                "trace_hints": ["TASK", "TESTSET", "TECH"],
+            },
+        ]
+        checks = fallback_checks
+    return checks
+
+
+def _enrich_feature_detail(feature: Dict[str, Any]) -> Dict[str, Any]:
+    enriched = dict(feature)
+    enriched["preconditions"] = _derive_preconditions(enriched)
+    enriched["main_flow"] = _derive_main_flow(enriched)
+    enriched["edge_cases"] = _derive_edge_cases(enriched)
+    enriched["state_updates"] = _derive_state_updates(enriched)
+    enriched["goal"] = _derive_goal(enriched)
+    enriched["user_value"] = _derive_user_value(enriched)
+    enriched["processing"] = _derive_processing(enriched)
+    enriched["dependencies"] = _derive_dependencies(enriched)
+    enriched["non_goals"] = _derive_non_goals(enriched)
+    enriched["priority"] = enriched.get("priority", "P1")
+    enriched["delivery_slice"] = enriched.get("delivery_slice", "reverse-draft")
+    enriched["lifecycle_status"] = enriched.get("lifecycle_status", "draft")
+    enriched["derived_object_expectations"] = enriched.get(
+        "derived_object_expectations",
+        {
+            "task_required": True,
+            "testset_required": True,
+            "testset_owner": "qa",
+            "qa_seed_required": True,
+        },
+    )
+    enriched["business_rules"] = _clean_list_items(enriched.get("business_rules") or [], "以冻结需求与现有实现约束为准。")
+    enriched["acceptance_criteria"] = _clean_list_items(enriched.get("acceptance_criteria") or [], "具备独立验收条件。")
+    enriched["acceptance_checks"] = _derive_acceptance_checks(enriched)
+    return enriched
+
+
+def _enrich_feature_with_context(feature: Dict[str, Any], capability: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    enriched = _enrich_feature_detail(feature)
+    enriched["dependencies"] = _derive_dependencies(enriched, capability=capability)
+    return enriched
+
+
 def _extract_labeled_value(line: str, label: str) -> Optional[str]:
     pattern = rf"^\*\*{re.escape(label)}\*\*[:：]?\s*(.+)$"
     match = re.match(pattern, line.strip())
@@ -907,6 +1069,42 @@ def _extract_labeled_value(line: str, label: str) -> Optional[str]:
         return None
     value = _normalize_spaces(match.group(1))
     return value or None
+
+
+def _has_markdown_section(content: str, heading: str) -> bool:
+    target = f"## {heading}".lower()
+    return any(line.strip().lower() == target for line in (content or "").splitlines())
+
+
+def _count_section_bullets(content: str, heading: str) -> int:
+    lines = (content or "").splitlines()
+    capture = False
+    count = 0
+    for line in lines:
+        if line.strip().lower() == f"## {heading}".lower():
+            capture = True
+            continue
+        if capture and line.strip().startswith("## "):
+            break
+        if capture and line.strip().startswith("- "):
+            count += 1
+    return count
+
+
+def _count_acceptance_check_blocks(content: str) -> int:
+    lines = (content or "").splitlines()
+    capture = False
+    count = 0
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower() == "## acceptance checks":
+            capture = True
+            continue
+        if capture and stripped.startswith("## "):
+            break
+        if capture and stripped.startswith("### "):
+            count += 1
+    return count
 
 
 def _extract_markdown_feature_sections(path: Path) -> List[Dict[str, Any]]:
@@ -1267,6 +1465,8 @@ def run_system_map(args: argparse.Namespace) -> int:
 def _selected_capabilities(repo_root: Path, max_capabilities: int, max_features: int) -> List[Dict[str, Any]]:
     selected: List[Dict[str, Any]] = _build_doc_derived_capabilities(repo_root, max_capabilities, max_features)
     if selected:
+        for capability in selected:
+            capability["features"] = [_enrich_feature_with_context(feature, capability=capability) for feature in capability.get("features", [])[:max_features]]
         return selected[:max_capabilities]
 
     selected = []
@@ -1278,7 +1478,7 @@ def _selected_capabilities(repo_root: Path, max_capabilities: int, max_features:
         for feature in capability["features"][:max_features]:
             feature_code_refs = _existing_paths(repo_root, feature["code_refs"])
             if feature_code_refs:
-                cloned["features"].append({**feature, "code_refs": feature_code_refs})
+                cloned["features"].append(_enrich_feature_with_context({**feature, "code_refs": feature_code_refs}, capability=cloned))
         if cloned["features"]:
             selected.append(cloned)
         if len(selected) >= max_capabilities:
@@ -1347,6 +1547,11 @@ def run_feature_registry(args: argparse.Namespace) -> int:
                     "title": feature["title"],
                     "summary": feature["summary"],
                     "acceptance_boundary": "独立可验收的业务能力单元",
+                    "acceptance_checks": feature["acceptance_checks"],
+                    "preconditions": feature["preconditions"],
+                    "main_flow": feature["main_flow"],
+                    "edge_cases": feature["edge_cases"],
+                    "state_updates": feature["state_updates"],
                     "code_refs": feature["code_refs"],
                     "primary_refs": feature["code_refs"],
                     "evidence_refs": feature.get("all_refs", feature["code_refs"]),
@@ -1355,9 +1560,33 @@ def run_feature_registry(args: argparse.Namespace) -> int:
                 }
             )
     payload = {"generated_at": _utc_now(), "features": features}
+    try:
+        registry_schema = _load_local_schema(repo_root, "spec-global/core/contracts/reverse-feature-registry/v2/schema.json")
+        validate(instance=payload, schema=registry_schema)
+    except ValidationError as exc:
+        raise SystemExit(f"reverse-feature-registry v2 validation failed: {exc.message}")
     md_lines = ["# Feature Registry", "", f"- Generated At: `{payload['generated_at']}`", ""]
     for feature in payload["features"]:
-        md_lines.extend([f"## {feature['feature_id']} {feature['title']}", f"- Capability: `{feature['capability_id']}`", f"- Key: `{feature['feature_key']}`", f"- Summary: {feature['summary']}", f"- Acceptance Boundary: {feature['acceptance_boundary']}", "- Primary Refs:"])
+        md_lines.extend([f"## {feature['feature_id']} {feature['title']}", f"- Capability: `{feature['capability_id']}`", f"- Key: `{feature['feature_key']}`", f"- Summary: {feature['summary']}", f"- Acceptance Boundary: {feature['acceptance_boundary']}", "- Preconditions:"])
+        for item in feature["preconditions"]:
+            md_lines.append(f"  - {item}")
+        md_lines.append("- Main Flow:")
+        for item in feature["main_flow"]:
+            md_lines.append(f"  - {item}")
+        md_lines.append("- Edge Cases:")
+        for item in feature["edge_cases"]:
+            md_lines.append(f"  - {item}")
+        md_lines.append("- State Updates:")
+        for item in feature["state_updates"]:
+            md_lines.append(f"  - {item}")
+        md_lines.append("- Acceptance Checks:")
+        for check in feature["acceptance_checks"]:
+            md_lines.append(f"  - `{check['id']}` {check['scenario']}")
+            md_lines.append(f"    - Given: {check['given']}")
+            md_lines.append(f"    - When: {check['when']}")
+            md_lines.append(f"    - Then: {check['then']}")
+            md_lines.append(f"    - Trace Hints: {', '.join(check['trace_hints'])}")
+        md_lines.append("- Primary Refs:")
         for ref in feature["primary_refs"]:
             md_lines.append(f"  - `{ref}`")
         md_lines.extend(["- Evidence Layers:", "  - Impl Refs:"])
@@ -1397,8 +1626,17 @@ def _render_epic_markdown(epic_id: str, capability: Dict[str, Any], feature_ids:
 
 
 def _render_feat_markdown(feat_id: str, epic_id: str, capability: Dict[str, Any], feature: Dict[str, Any]) -> str:
-    lines = [f"# {feat_id} {feature['title']}", "", "## Summary", feature["summary"], "", "## Parent EPIC", f"- `{epic_id}`", "", "## Capability Linkage", f"- `{capability['id']} {capability['name']}`", "", "## Scope"]
+    lines = [f"# {feat_id} {feature['title']}", "", "## Summary", feature["summary"], "", "## Goal", feature["goal"], "", "## User Value", feature["user_value"], "", "## Parent EPIC", f"- `{epic_id}`", "", "## Capability Linkage", f"- `{capability['id']} {capability['name']}`", "", "## Scope"]
     for item in feature["scope"]:
+        lines.append(f"- {item}")
+    lines.extend(["", "## Preconditions"])
+    for item in feature["preconditions"]:
+        lines.append(f"- {item}")
+    lines.extend(["", "## Main Flow"])
+    for item in feature["main_flow"]:
+        lines.append(f"- {item}")
+    lines.extend(["", "## Processing"])
+    for item in feature["processing"]:
         lines.append(f"- {item}")
     lines.extend(["", "## Inputs"])
     for item in feature["inputs"]:
@@ -1409,9 +1647,32 @@ def _render_feat_markdown(feat_id: str, epic_id: str, capability: Dict[str, Any]
     lines.extend(["", "## Business Rules"])
     for item in feature["business_rules"]:
         lines.append(f"- {item}")
+    lines.extend(["", "## Dependencies"])
+    for item in feature["dependencies"]:
+        lines.append(f"- {item}")
+    lines.extend(["", "## Non-goals"])
+    for item in feature["non_goals"]:
+        lines.append(f"- {item}")
+    lines.extend(["", "## Edge Cases"])
+    for item in feature["edge_cases"]:
+        lines.append(f"- {item}")
+    lines.extend(["", "## State Updates"])
+    for item in feature["state_updates"]:
+        lines.append(f"- {item}")
     lines.extend(["", "## Acceptance Criteria"])
     for index, item in enumerate(feature["acceptance_criteria"], start=1):
         lines.append(f"- AC-{index:03d} {item}")
+    lines.extend(["", "## Acceptance Checks"])
+    for check in feature["acceptance_checks"]:
+        lines.append(f"### {check['id']} {check['scenario']}")
+        lines.append(f"- Given: {check['given']}")
+        lines.append(f"- When: {check['when']}")
+        lines.append(f"- Then: {check['then']}")
+        lines.append(f"- Trace Hints: {', '.join(check['trace_hints'])}")
+    lines.extend(["", "## Delivery Metadata", f"- Priority: `{feature['priority']}`", f"- Delivery Slice: `{feature['delivery_slice']}`", f"- Lifecycle Status: `{feature['lifecycle_status']}`"])
+    lines.extend(["", "## Derived Object Expectations"])
+    for key, value in feature["derived_object_expectations"].items():
+        lines.append(f"- {key}: `{value}`")
     lines.extend(["", "## Code Refs"])
     for ref in feature["code_refs"]:
         lines.append(f"- `{ref}`")
@@ -1429,6 +1690,9 @@ def _render_feat_markdown(feat_id: str, epic_id: str, capability: Dict[str, Any]
     for ref in layers.get("doc_refs", []):
         lines.append(f"- `{ref}`")
     lines.extend(["", "## Evidence Refs"])
+    for ref in feature.get("all_refs", feature["code_refs"]):
+        lines.append(f"- `{ref}`")
+    lines.extend(["", "## Source Refs"])
     for ref in feature.get("all_refs", feature["code_refs"]):
         lines.append(f"- `{ref}`")
     lines.extend(["", "## Inference", "- 基于现有代码结构和 CLI/Orchestrator 路径归纳 capability 与 feature 边界。"])
@@ -1555,6 +1819,37 @@ def run_review(args: argparse.Namespace) -> int:
                 blockers.append({"rule": "primary_refs", "message": f"FEAT {item.get('key')} lacks primary_refs"})
             if not item.get("content"):
                 blockers.append({"rule": "feat_content", "message": f"FEAT {item.get('key')} lacks content"})
+            else:
+                content = item["content"]
+                required_sections = (
+                    "Goal",
+                    "User Value",
+                    "Preconditions",
+                    "Main Flow",
+                    "Processing",
+                    "Business Rules",
+                    "Dependencies",
+                    "Non-goals",
+                    "Edge Cases",
+                    "State Updates",
+                    "Acceptance Criteria",
+                    "Acceptance Checks",
+                    "Delivery Metadata",
+                    "Derived Object Expectations",
+                )
+                missing_sections = [section for section in required_sections if not _has_markdown_section(content, section)]
+                if missing_sections:
+                    blockers.append({"rule": "feat_required_sections", "message": f"FEAT {item.get('key')} missing sections: {', '.join(missing_sections)}"})
+                if _count_section_bullets(content, "Acceptance Criteria") < 2:
+                    majors.append({"rule": "feat_acceptance_depth", "message": f"FEAT {item.get('key')} has fewer than 2 acceptance criteria"})
+                if _count_acceptance_check_blocks(content) < 2:
+                    blockers.append({"rule": "feat_acceptance_checks", "message": f"FEAT {item.get('key')} lacks at least 2 structured acceptance checks"})
+                if _count_section_bullets(content, "Business Rules") < 2:
+                    majors.append({"rule": "feat_business_rule_depth", "message": f"FEAT {item.get('key')} has fewer than 2 business rules"})
+                if _count_section_bullets(content, "Main Flow") < 2:
+                    majors.append({"rule": "feat_outline_only", "message": f"FEAT {item.get('key')} main flow is too brief and still reads like an outline"})
+                if _count_section_bullets(content, "Dependencies") < 1:
+                    majors.append({"rule": "feat_dependency_depth", "message": f"FEAT {item.get('key')} lacks explicit dependencies"})
             for ref in primary_refs:
                 ref_class = _classify_ref(ref)
                 if evidence_layers.get("impl_refs") or evidence_layers.get("api_refs"):
@@ -1590,6 +1885,7 @@ def run_review(args: argparse.Namespace) -> int:
             "Every FEAT must have a valid EPIC parent",
             "Every output must carry existing source_refs",
             "FEAT outputs must carry structured evidence_layers, primary_refs, and evidence_strategy",
+            "Every FEAT must include goal, user value, preconditions, main flow, processing, dependencies, non-goals, edge cases, state updates, testable acceptance criteria, and structured acceptance checks",
             "Primary refs must prefer impl/api evidence when available",
             "Template/runtime boundary stays outside checked-in spec files",
         ],
