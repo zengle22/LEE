@@ -137,37 +137,37 @@ prompting:
         env_issues:
           - issue: "网络抖动"
             affected: ["ts_payment"]
-    output:
-      retrospective:
-        summary:
-          overall_assessment: "good"
-          exit_decision: "conditional_pass"
-          highlights:
-            - "L3 自动化执行稳定"
-          lowlights:
-            - "支付模块发现 P0 Bug"
-        issues:
-          - category: "quality"
-            severity: "high"
-            title: "支付模块 Bug"
-            description: "支付回调丢失，影响核心功能"
-            root_cause: "后端代码逻辑错误"
-            resolution: "提交 Bug 给开发团队"
-            prevention: "增加单元测试"
-            status: "resolved"
-        successes:
-          - category: "automation"
-            description: "L3 自动化流程稳定"
-            impact: "节省人工时间"
-            reusable: true
-        action_items:
-          - id: "AI-2026-001"
-            title: "修复支付回调 Bug"
-            priority: "P0"
-            owner: "backend"
-            due_date: "2026-03-01"
-            status: "open"
-        lessons_learned:
-          - category: "process"
-            lesson: "L3 串行执行确保依赖关系正确"
-            application: "保持串行执行"
+      output:
+        retrospective:
+          summary:
+            overall_assessment: "good"
+            exit_decision: "conditional_pass"
+            highlights:
+              - "L3 自动化执行稳定"
+            lowlights:
+              - "支付模块发现 P0 Bug"
+          issues:
+            - category: "quality"
+              severity: "high"
+              title: "支付模块 Bug"
+              description: "支付回调丢失，影响核心功能"
+              root_cause: "后端代码逻辑错误"
+              resolution: "提交 Bug 给开发团队"
+              prevention: "增加单元测试"
+              status: "resolved"
+          successes:
+            - category: "automation"
+              description: "L3 自动化流程稳定"
+              impact: "节省人工时间"
+              reusable: true
+          action_items:
+            - id: "AI-2026-001"
+              title: "修复支付回调 Bug"
+              priority: "P0"
+              owner: "backend"
+              due_date: "2026-03-01"
+              status: "open"
+          lessons_learned:
+            - category: "process"
+              lesson: "L3 串行执行确保依赖关系正确"
+              application: "保持串行执行"
