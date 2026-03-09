@@ -12,8 +12,8 @@ owner: product-ai
 tags: [product, reverse-ssot, epic, feat]
 
 contracts:
-  input_schema: contracts/reverse-feature-registry/v1/schema.json
-  output_schema: contracts/reverse-epic-feat-drafts/v1/schema.json
+  input_schema: contracts/reverse-feature-registry/v2/schema.json
+  output_schema: contracts/reverse-epic-feat-drafts/v2/schema.json
   ssot_output_schema: contracts/ssot-agent-output/v1/schema.json
 
 persona:
@@ -35,6 +35,8 @@ policy:
     must_have:
       - "只输出 EPIC 与 FEAT"
       - "每个 FEAT 有 code_refs、primary_refs、evidence_refs、evidence_layers、acceptance_criteria"
+      - "每个 FEAT 必须补齐 preconditions、main_flow、edge_cases、state_updates，不能只是提纲"
+      - "每个 FEAT 必须同时提供 acceptance_criteria 和结构化 acceptance_checks"
       - "primary_refs 采用 ordered_impl_api_first 规则"
       - "当页面族存在高歧义时，允许 onboarding_local_rerank 与 page_content_match 参与排序"
       - "ssot-agent-output 只包含 epic 和 feat"
@@ -54,11 +56,16 @@ prompting:
     - Every FEAT must be grounded in code_refs
     - Every FEAT must expose primary_refs and evidence_layers
     - primary_refs must preserve ranked implementation/api evidence order
+    - Every FEAT must be implementation-driving: include preconditions, main flow,
+      edge cases, state updates, and testable acceptance criteria
+    - Every FEAT must include structured acceptance checks with scenario, given,
+      when, then, and trace hints for downstream TASK/TESTSET derivation
     - Mark inference explicitly and keep it minimal
   instructions:
     - "将 capability 聚合为 EPIC"
     - "将 feature candidate 物化为 FEAT"
     - "输出 evidence_layers、primary_refs 与 evidence_strategy"
+    - "不要产出只有 Summary/Scope/AC 的提纲式 FEAT"
     - "business output 与 ssot output 同时提供"
   output_format: json
 

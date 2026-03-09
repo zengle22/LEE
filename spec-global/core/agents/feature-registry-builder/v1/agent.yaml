@@ -13,7 +13,7 @@ tags: [product, reverse-ssot, feature, registry]
 
 contracts:
   input_schema: contracts/reverse-capability-map/v1/schema.json
-  output_schema: contracts/reverse-feature-registry/v1/schema.json
+  output_schema: contracts/reverse-feature-registry/v2/schema.json
 
 persona:
   role: "Feature Registry 构建者"
@@ -33,6 +33,8 @@ policy:
       - "Feature 必须独立可验收"
       - "Feature 必须对应真实逻辑"
       - "Feature 必须具备 code_refs 和 evidence_refs"
+      - "Feature 不能只停留在标题/摘要层，必须补齐 preconditions、main_flow、edge_cases、state_updates"
+      - "Feature 必须提供结构化 acceptance_checks，至少包含 scenario/given/when/then 和 trace_hints"
   refusal:
     conditions:
       - "asks_to_add_future_scope_without_evidence"
@@ -46,6 +48,9 @@ prompting:
     - "Feature 不按页面拆"
     - "Feature 数量控制在每个 Capability 3-8 个"
     - "证据不足时宁缺勿滥"
+    - "每个 Feature 至少写清前置条件、主流程、关键边界情况和状态变化"
+    - "不要输出只有标题、summary、acceptance_boundary 的提纲式 Feature"
+    - "acceptance_checks 必须可被 QA 和 TASK 直接追溯，不能只写笼统 AC 标题"
   output_format: json
 
 tests:

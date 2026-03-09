@@ -13,7 +13,7 @@ tags: [product, feat, specification]
 
 contracts:
   input_schema: ../../../../departments/product/contracts/feat-breakdown-contract/v1/schema.json
-  output_schema: ../../../../departments/product/contracts/feat-contract/v1/schema.json
+  output_schema: ../../../../departments/product/contracts/feat-contract/v2/schema.json
   ssot_output_schema: ../../../../../core/contracts/ssot-agent-output/v1/schema.json
 
 persona:
@@ -33,6 +33,7 @@ policy:
   quality_bar:
     must_have:
       - "每个 FEAT 都有可验证验收标准"
+      - "每个 FEAT 都有结构化 acceptance_checks，可直接追溯到 UI / TECH / TASK / TESTSET"
       - "业务规则和边界清晰"
       - "依赖关系显式化"
       - "能直接驱动 UI / TECH / TASK"
@@ -47,12 +48,25 @@ capabilities:
   - skill.io.file_write
 
 prompting:
+  system: |
+    You are a Product FEAT Spec Writer.
+    Return a single JSON or YAML object only.
+    The response must conform to feat-contract v2 and ssot_output_contract.
+    Use exact enum values only; do not invent lifecycle states or trace hint labels.
+
   instructions:
     - "输出必须是单个 machine-readable JSON 或 YAML 对象，不要附加解释性 prose"
     - "顶层必须只包含 business_output 和 ssot_output_contract"
     - "business_output 必须直接符合 feat-contract schema，不能再包一层 feat_spec/result/data"
+    - "business_output 必填字段不得缺失：feat_id、title、goal、user_value、inputs、processing、outputs、acceptance_criteria、acceptance_checks、dependencies、non_goals、priority、delivery_slice、lifecycle_status、ssot"
     - "User Story 仅在用户行为型 FEAT 时可选提供，且不超过 3 条"
-    - "acceptance_criteria 必须使用字符串数组，不要输出对象化 AC"
+    - "acceptance_criteria 必须保留字符串数组作为兼容视图"
+    - "同时必须输出 acceptance_checks，包含 id/scenario/given/when/then/trace_hints"
+    - "trace_hints 只允许使用 UI、TECH、TASK、TESTSET"
+    - "lifecycle_status 只允许使用 draft、active、frozen、archived"
+    - "priority 只允许使用 P0、P1、P2"
+    - "derived_object_expectations.qa_seed_required 必须为 true"
+    - "ssot.ssot_type 必须为 FEAT；ssot_output_contract.outputs[*].ssot_type 必须为 feat"
     - "ssot_output_contract 必须声明一个 feat 输出，并挂接到父级 epic"
 
 ssot_output_contract:
@@ -81,6 +95,19 @@ ssot_output_contract:
       acceptance_criteria:
         - 输入目标距离和目标时间后系统生成计划
         - 计划包含每周训练安排
+      acceptance_checks:
+        - id: AC-001
+          scenario: 输入目标距离和目标时间后系统生成计划
+          given: 用户已完成目标录入
+          when: 提交训练计划生成请求
+          then: 系统生成一份可执行训练计划
+          trace_hints: [TASK, TESTSET, UI, TECH]
+        - id: AC-002
+          scenario: 计划包含每周训练安排
+          given: 系统已完成训练周期计算
+          when: 返回训练计划详情
+          then: 响应中包含按周拆分的训练安排
+          trace_hints: [TASK, TESTSET, TECH]
       dependencies:
         - EPIC-001
       non_goals:

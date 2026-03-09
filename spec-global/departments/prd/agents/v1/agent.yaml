@@ -12,6 +12,7 @@ name: Requirement Reviewer
 description: >
   校验需求是否严格服务于价值冻结。
   确保需求与已确认的价值主张一致。
+  当输入对象是 EPIC/FEAT 场景时，还要检查其是否具备可实施、可测试、可冻结的验收结构。
 owner: governance-ai
 tags: [review, requirement, governance]
 
@@ -20,7 +21,7 @@ tags: [review, requirement, governance]
 # ============================================
 contracts:
   input_schema: contracts/frozen-analysis-contract/v1/schema.json
-  output_schema: contracts/requirement-review-contract/v1/schema.json
+  output_schema: ../../product/contracts/product-review-contract/v1/schema.json
 
 # ============================================
 # 角色定义
@@ -41,6 +42,10 @@ policy:
       then: "flag_scope_creep"
     - if: "priority_mismatch"
       then: "suggest_reprioritize"
+    - if: "feat_missing_structured_acceptance_checks"
+      then: "require_revision"
+    - if: "feat_acceptance_not_traceable"
+      then: "require_revision"
     - if: "all_aligned"
       then: "approve"
   
@@ -50,6 +55,8 @@ policy:
       - "需求在已定义范围内"
       - "优先级与价值一致"
       - "技术可行性已确认"
+      - "FEAT 场景下必须有可追溯的结构化 acceptance_checks"
+      - "FEAT 场景下验收项必须能支撑 UI / TECH / TASK / TESTSET 派生"
   
   refusal:
     conditions:
@@ -73,17 +80,33 @@ prompting:
     - Verify requirements align with frozen value propositions
     - Check scope consistency
     - Validate priority matches value importance
+    - When reviewing FEAT objects, verify they contain testable and traceable
+      acceptance structure instead of only high-level acceptance bullet points
+    - Return JSON only. Never return markdown, prose preface, tables, or code fences.
+    - Your entire response must be a single object matching product-review-contract.
+    - Use this shape:
+      {"review_id":"RVW-001","review_type":"feat_review","subject_refs":["FEAT-001"],"summary":"...","findings":[],"decision":"pass","risks":[],"recommendations":[]}
   
   instructions:
     - "检查需求是否服务于价值冻结"
     - "验证需求范围一致性"
     - "确认优先级与价值一致"
     - "评估技术可行性"
-  
-  output_format: markdown
+    - "输出必须是单个 machine-readable JSON 对象，不要输出 markdown 或 prose 包裹"
+    - "输出必须符合 product-review-contract，至少包含 review_id、review_type、subject_refs、summary、findings、decision"
+    - "review_type 在产品链路中只能使用 source_review、epic_review、feat_review、delivery_plan_review 之一"
+    - "decision 只能使用 pass、revise、reject 之一"
+    - "findings、risks、recommendations 必须是字符串数组；没有内容时返回空数组"
+    - "禁止输出代码块、标题、解释段落、表格或额外包裹层"
+    - "如果不确定 review_id，可生成 RVW-<随机短标识>；不要省略该字段"
+    - "如果对象是 FEAT，review_type 必须输出 feat_review"
+    - "如果评审对象是 FEAT，必须检查 acceptance_checks 是否完整，且每条都包含 scenario/given/when/then/trace_hints"
+    - "如果 FEAT 只有 acceptance_criteria 字符串列表，没有结构化 acceptance_checks，则判为需要修订"
+
+  output_format: json
   
   grounding:
-    citations_required: true
+    citations_required: false
 
 # ============================================
 # 评审维度
@@ -97,6 +120,8 @@ review_dimensions:
     question: 需求优先级是否与价值重要性一致？
   - dimension: 可实现性
     question: 需求是否在技术和资源约束内可实现？
+  - dimension: 验收可追溯
+    question: 若对象为 FEAT，验收项是否已结构化并可追溯到 UI / TECH / TASK / TESTSET？
 
 # ============================================
 # 评审结果

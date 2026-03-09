@@ -12,7 +12,7 @@ owner: platform-ai
 tags: [review, reverse-ssot, epic, feat]
 
 contracts:
-  input_schema: contracts/reverse-epic-feat-drafts/v1/schema.json
+  input_schema: contracts/reverse-epic-feat-drafts/v2/schema.json
   output_schema: contracts/spec-review-contract/v1/output.schema.json
 
 persona:
@@ -26,6 +26,12 @@ policy:
       then: "raise_blocker"
     - if: "feat_missing_primary_refs_or_evidence_layers"
       then: "raise_blocker"
+    - if: "feat_missing_requirement_detail_sections"
+      then: "raise_blocker"
+    - if: "feat_missing_structured_acceptance_checks"
+      then: "raise_blocker"
+    - if: "feat_is_outline_only"
+      then: "raise_major"
     - if: "primary_refs_not_ranked_from_impl_or_api_when_available"
       then: "raise_major"
     - if: "high_ambiguity_page_feature_lacks_page_content_or_local_rerank_signal"
@@ -43,6 +49,8 @@ policy:
       - "检查 EPIC/FEAT 边界与父子关系"
       - "检查 evidence_layers、primary_refs 与 evidence_strategy 是否完整"
       - "检查页面族高歧义场景下是否使用局部重排或页面内容信号"
+      - "检查 FEAT 是否具备 preconditions、main_flow、edge_cases、state_updates，而不是提纲"
+      - "检查 FEAT 是否提供结构化 acceptance_checks，并可追溯到 UI/TECH/TASK/TESTSET"
   refusal:
     conditions:
       - "asks_to_review_business_strategy"
@@ -57,6 +65,9 @@ prompting:
     - "不讨论业务战略优劣"
     - "如果 feature 没有 code_refs，直接视为阻塞"
     - "如果 feature 缺少 primary_refs 或 evidence_layers，直接视为阻塞"
+    - "如果 FEAT 缺少 preconditions、main_flow、edge_cases、state_updates，直接视为阻塞"
+    - "如果 FEAT 缺少结构化 acceptance_checks，直接视为阻塞"
+    - "如果 FEAT 只有一句 summary 加几个 AC，没有可实施的规则与边界细节，至少记为 major"
     - "如果 impl/api 证据存在但 primary_refs 仍由 doc/test 主导，视为 major"
   output_format: json
 

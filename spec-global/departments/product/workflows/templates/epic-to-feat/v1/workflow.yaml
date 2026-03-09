@@ -16,7 +16,7 @@ roles:
   agents:
     - agent.product.requirement_decomposer
     - agent.product.prd_writer
-    - agent.review.requirement_reviewer
+    - agent.product.feat_reviewer
     - agent.governance.approval_reviewer
   skills: []
   gates:
@@ -63,6 +63,9 @@ stages:
         agent_id: agent.product.prd_writer
         mandatory: true
         depends_on: [feat_boundary_design]
+        config:
+          output_contract: departments/product/contracts/feat-contract/v2/schema.json
+          strict_output_validation: true
         description: >
           为每个 FEAT 生成详细规格视图。
           用户行为型 FEAT 可以包含 User Story，但 User Story 仅为可选补充视角。
@@ -74,7 +77,7 @@ stages:
             required: true
         outputs:
           - symbol: feat_specs
-            contract: departments/product/contracts/feat-contract/v1/schema.json
+            contract: departments/product/contracts/feat-contract/v2/schema.json
             freeze: false
             ssot:
               identity_kind: ssot
@@ -83,13 +86,17 @@ stages:
       - id: feat_review
         name: FEAT 可实施性评审
         kind: agent
-        agent_id: agent.review.requirement_reviewer
+        agent_id: agent.product.feat_reviewer
         config:
           implementation_facing: false
+          output_contract: departments/product/contracts/product-review-contract/v1/schema.json
+          strict_output_validation: true
         mandatory: true
         depends_on: [feat_spec_generation]
         description: >
           校验 FEAT 是否满足独立验收、边界明确、依赖透明、可派生 TASK / TESTSET 和优先级清晰。
+          验收项不仅要保留兼容 AC 列表，还必须提供结构化 acceptance_checks 供下游追溯。
+          若 acceptance_checks 缺失，或不能映射到 UI / TECH / TASK / TESTSET，则不得通过评审。
         inputs:
           - source: feat_specs
             required: true
@@ -123,6 +130,9 @@ stages:
           approval_criteria:
             - label: "独立验收"
               criteria: "每个 FEAT 都有独立可验证的验收边界"
+              required: true
+            - label: "结构化验收"
+              criteria: "每个 FEAT 都提供 acceptance_checks，且每条都包含 scenario/given/when/then/trace_hints"
               required: true
             - label: "能力而非任务"
               criteria: "每个 FEAT 描述系统能力，而不是实现任务或页面动作"
