@@ -62,7 +62,12 @@ def _prepare_repo(repo_root: Path) -> None:
     )
 
 
-def _args(repo_root: Path, framework_root: Path, ssot_schema_path: str = "") -> Namespace:
+def _args(
+    repo_root: Path,
+    framework_root: Path,
+    ssot_schema_path: str = "",
+    feature_registry_schema_path: str = "",
+) -> Namespace:
     return Namespace(
         repo_root=str(repo_root),
         framework_root=str(framework_root),
@@ -72,6 +77,9 @@ def _args(repo_root: Path, framework_root: Path, ssot_schema_path: str = "") -> 
         request_id="",
         strict_evidence=False,
         ssot_schema_path=ssot_schema_path,
+        feature_registry_schema_path=feature_registry_schema_path,
+        max_capabilities=12,
+        max_features_per_capability=8,
     )
 
 
@@ -119,3 +127,91 @@ def test_run_review_respects_ssot_schema_override(tmp_path: Path, monkeypatch) -
 
     assert rc == 0
     assert captured["schema_id"] == "override"
+
+
+def _sample_capabilities() -> list[dict]:
+    return [
+        {
+            "id": "CAP-001",
+            "features": [
+                {
+                    "id": "FEAT-001",
+                    "key": "feat_key",
+                    "title": "Feat",
+                    "summary": "summary",
+                    "acceptance_checks": [
+                        {
+                            "id": "AC-1",
+                            "scenario": "ok",
+                            "given": "given",
+                            "when": "when",
+                            "then": "then",
+                            "trace_hints": ["src/ok.py"],
+                        }
+                    ],
+                    "preconditions": ["pre"],
+                    "main_flow": ["flow"],
+                    "edge_cases": ["edge"],
+                    "state_updates": ["state"],
+                    "code_refs": ["src/ok.py"],
+                    "all_refs": ["src/ok.py"],
+                    "evidence_layers": {
+                        "impl_refs": ["src/ok.py"],
+                        "api_refs": [],
+                        "test_refs": [],
+                        "doc_refs": [],
+                    },
+                }
+            ],
+        }
+    ]
+
+
+def test_run_feature_registry_uses_framework_schema_by_default(tmp_path: Path, monkeypatch) -> None:
+    repo_root = tmp_path / "repo"
+    framework_root = tmp_path / "framework"
+    _prepare_repo(repo_root)
+    _write(
+        framework_root / "spec-global" / "core" / "contracts" / "reverse-feature-registry" / "v2" / "schema.json",
+        '{"$id":"framework-registry"}',
+    )
+
+    monkeypatch.setattr(reverse_epic_feat_script, "_selected_capabilities", lambda *_: _sample_capabilities())
+    captured = {}
+
+    def fake_validate(*, instance, schema):
+        captured["schema_id"] = schema.get("$id")
+
+    monkeypatch.setattr(reverse_epic_feat_script, "validate", fake_validate)
+
+    rc = reverse_epic_feat_script.run_feature_registry(_args(repo_root, framework_root))
+
+    assert rc == 0
+    assert captured["schema_id"] == "framework-registry"
+
+
+def test_run_feature_registry_respects_schema_override(tmp_path: Path, monkeypatch) -> None:
+    repo_root = tmp_path / "repo"
+    framework_root = tmp_path / "framework"
+    _prepare_repo(repo_root)
+    _write(
+        framework_root / "spec-global" / "core" / "contracts" / "reverse-feature-registry" / "v2" / "schema.json",
+        '{"$id":"framework-registry"}',
+    )
+    override_schema = tmp_path / "feature-override-schema.json"
+    _write(override_schema, '{"$id":"override-registry"}')
+
+    monkeypatch.setattr(reverse_epic_feat_script, "_selected_capabilities", lambda *_: _sample_capabilities())
+    captured = {}
+
+    def fake_validate(*, instance, schema):
+        captured["schema_id"] = schema.get("$id")
+
+    monkeypatch.setattr(reverse_epic_feat_script, "validate", fake_validate)
+
+    rc = reverse_epic_feat_script.run_feature_registry(
+        _args(repo_root, framework_root, feature_registry_schema_path=str(override_schema))
+    )
+
+    assert rc == 0
+    assert captured["schema_id"] == "override-registry"
