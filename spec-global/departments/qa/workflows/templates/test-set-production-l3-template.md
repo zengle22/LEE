@@ -8,7 +8,7 @@
 
 **ID**: `template.qa.test_set_production`
 
-**职责**: 将模块需求转化为 Test Set 设计资产
+**职责**: 将 FEAT 中心的需求输入转化为 Test Set 设计资产
 
 **所有者**: `qa-governance`
 
@@ -18,6 +18,7 @@
 1. **治理层与执行层分离** - 根节点使用 `stages`（治理层），工作由 `stages[].steps` 执行（执行层）
 2. **4 阶段流程** - 需求分析 → 测试策略设计 → Test Set 生成 → Test Set 审评
 3. **人类门禁** - 关键节点设置人工审核/批准门禁，确保质量
+4. **SSOT 优先** - 优先使用 `feat_freeze` 和 `delivery_prep_bundle`，`requirement_doc` 仅作兼容输入
 
 ---
 
@@ -29,7 +30,7 @@
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌──────────────────┐                                               │
-│  │ Stage 1          │  分析需求文档，提取可测试特性                 │
+│  │ Stage 1          │  分析 FEAT 输入，提取可测试特性               │
 │  │ Requirement      │  人类门禁：analysis_review（QA Lead 审核）    │
 │  │ Analysis         │                                               │
 │  └────────┬─────────┘                                               │
@@ -85,12 +86,12 @@
 | **Agent** | `agent.qa.requirement_analyzer` |
 | **强制性** | 是 |
 
-**职责**: 分析需求文档，提取可测试特性
+**职责**: 分析 FEAT 冻结输入，提取可测试特性
 
 **输出**:
 | 路径 | 类型 | 格式 | 描述 |
 |------|------|------|------|
-| `{{ qa_specs_dir }}/test-sets/ts-{{ module }}/analysis.md` | 文件 | Markdown | 需求分析报告（包含模块边界和可测试特性） |
+| `{{ qa_specs_dir }}/test-sets/ts-{{ module }}/analysis.md` | 文件 | Markdown | 需求分析报告（包含 FEAT 边界、AC 和可测试特性） |
 
 **人类门禁配置**:
 - **类型**: `human_review`（人工审核）
@@ -118,7 +119,7 @@
 | **Agent** | `agent.qa.test_strategist` |
 | **强制性** | 是 |
 
-**职责**: 设计测试策略，识别风险区域和测试重点
+**职责**: 基于 FEAT AC、风险和交付 seed 设计测试策略
 
 **输出**:
 | 路径 | 类型 | 格式 | 描述 |
@@ -151,12 +152,12 @@
 | **Agent** | `agent.qa.test_set_generator` |
 | **强制性** | 是 |
 
-**职责**: 从测试策略生成标准化的 Test Set YAML
+**职责**: 从 FEAT 中心的测试策略生成标准化的 Test Set YAML
 
 **输出**:
 | 路径 | 类型 | 格式 | 描述 |
 |------|------|------|------|
-| `{{ qa_specs_dir }}/test-sets/ts-{{ module }}.yaml` | 文件 | YAML | Test Set 设计资产（符合 test-set schema 的标准化 YAML） |
+| `{{ qa_specs_dir }}/test-sets/ts-{{ module }}.yaml` | 文件 | YAML | Test Set 设计资产（符合 test-set schema 的标准化 YAML，并 trace 到 FEAT） |
 
 ---
 
@@ -178,7 +179,7 @@
 | **Agent** | `agent.qa.test_set_reviewer` |
 | **强制性** | 是 |
 
-**职责**: 审评 Test Set 的完整性和可执行性
+**职责**: 审评 Test Set 的完整性、可执行性和 FEAT 追溯关系
 
 **输出**:
 | 路径 | 类型 | 格式 | 描述 |
@@ -197,9 +198,17 @@
 
 | 参数 | 类型 | 必填 | 描述 |
 |------|------|------|------|
-| `module` | string | ✅ | 模块名称 |
-| `requirement_doc` | string | ✅ | 需求文档路径（PRD/User Story） |
+| `module` | string | ❌ | 模块名称（兼容字段，优先从 FEAT 推导） |
+| `feat_freeze` | string | 推荐 | FEAT freeze 路径，新的主输入 |
+| `requirement_doc` | string | ❌ | 需求文档路径（兼容旧链路） |
 | `tech_design` | string | ❌ | 技术设计文档路径（可选） |
+| `delivery_prep_bundle` | string | 推荐 | 研发准备包，用于风险、依赖和集成点补强 |
+| `ui_specs` | string | ❌ | 可选 UI 输入，用于 UI 测试重点 |
+| `governing_adrs` | array | 推荐 | ADR refs，作为 TESTSET 生成与审评的治理上下文 |
+| `decision_refs` | array | ❌ | 本次执行采用的 ADR 引用，用于 trace |
+| `decision_constraints` | array | ❌ | 从 ADR 提炼出的决策规则摘要 |
+| `architecture_constraints` | array | ❌ | 对 FEAT 派生、依赖边界、API 归属等的硬约束 |
+| `process_constraints` | array | ❌ | 对 freeze、review、evidence、handoff 的硬约束 |
 
 ---
 
@@ -207,7 +216,7 @@
 
 | 输出 | 路径 | Schema | 描述 |
 |------|------|--------|------|
-| `test_set` | `{{ qa_specs_dir }}/test-sets/ts-{module}.yaml` | `../../contracts/test-set/v1/schema.yaml` | 生成的 Test Set 设计资产 |
+| `test_set` | `{{ qa_specs_dir }}/test-sets/ts-{module}.yaml` | `../../contracts/test-set/v1/schema.yaml` | 生成的 Test Set 设计资产（验证 FEAT） |
 | `analysis_report` | `{{ qa_specs_dir }}/test-sets/ts-{module}/analysis.md` | - | 需求分析报告 |
 | `strategy_draft` | `{{ qa_specs_dir }}/test-sets/ts-{module}/strategy-draft.yaml` | - | 测试策略草稿 |
 
@@ -227,6 +236,8 @@
 **说明**:
 - `qa_specs_dir` = `spec/qa`（QA 冻结资产目录）
 - Test Set 主文件与详细报告分离存放
+- 新主链中，Test Set 应显式 trace 到单一 FEAT，并覆盖其 Acceptance Criteria
+- 如流程受 ADR 约束，还应在 `traceability` 中保留 `governing_adrs` 或 `decision_refs`
 
 ---
 
@@ -359,8 +370,16 @@
 | 字段 | 描述 |
 |------|------|
 | `module` | 模块名称 |
-| `requirement_doc` | 需求文档路径 |
+| `feat_freeze` | FEAT freeze 路径 |
+| `requirement_doc` | 需求文档路径（兼容） |
 | `tech_design` | 技术设计文档路径（可选） |
+| `delivery_prep_bundle` | Delivery Prep 路径 |
+| `ui_specs` | UI 规格路径 |
+| `governing_adrs` | ADR 治理上下文 |
+| `decision_refs` | ADR trace 引用 |
+| `decision_constraints` | 决策规则摘要 |
+| `architecture_constraints` | 架构约束 |
+| `process_constraints` | 流程约束 |
 
 ### 输出字段
 | 字段 | 描述 |
@@ -424,6 +443,12 @@ Production L3（设计）          Execution L3（执行）
 - Test Set 批准需要 `qa_lead` + `pm` 双人批准
 - 确保测试设计同时满足质量和产品需求
 
+### 5. FEAT Traceability
+
+- 每个 Test Set 必须验证单一 FEAT
+- `feature_ids` 应绑定到 FEAT ID
+- 测试重点应覆盖该 FEAT 的 Acceptance Criteria
+
 ### 4. 路径变量化
 
 - 使用 `{{ qa_specs_dir }}` 指向 `spec/qa`（冻结资产目录）
@@ -440,4 +465,4 @@ Production L3（设计）          Execution L3（执行）
 
 ---
 
-*文档由 LEE 框架自动生成 | 最后更新：2026-03-05*
+*文档由 LEE 框架自动生成 | 最后更新：2026-03-08*

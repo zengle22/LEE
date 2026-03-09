@@ -13,3 +13,14 @@ risks:
   - "Potential impact on ..."
 assumptions:
   - "Assumption ..."
+governance_context:
+  governing_adrs:
+    - "<ADR-ID-if-applicable>"
+  decision_refs:
+    - "<decision-ref-if-applicable>"
+  decision_constraints:
+    - "<decision-constraint-if-applicable>"
+  architecture_constraints:
+    - "<architecture-constraint-if-applicable>"
+  process_constraints:
+    - "<process-constraint-if-applicable>"

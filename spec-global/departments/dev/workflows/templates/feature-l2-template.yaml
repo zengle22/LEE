@@ -100,6 +100,11 @@ l3_input_schema:
   optional_fields:
     - existing_contracts
     - contract_version
+    - governing_adrs
+    - decision_refs
+    - decision_constraints
+    - architecture_constraints
+    - process_constraints
 
 # L3 to L2 data contract
 l3_output_schema:
@@ -128,6 +133,11 @@ instance_schema:
     - feature_spec_path
     - repo_frontend
     - repo_backend
+    - governing_adrs
+    - decision_refs
+    - decision_constraints
+    - architecture_constraints
+    - process_constraints
   phase_fields:
     - id
     - complexity
@@ -163,3 +173,13 @@ constitution:
     - id: smoke_gate_blocking
       name: "Smoke Gate Blocking"
       rule: "Smoke test failure blocks merge with highest priority"
+
+adr_context_policy:
+  description: "ADR is governance context, not business source"
+  rules:
+    - rule: "governance_context_input"
+      description: "When provided, governing_adrs / decision_constraints / architecture_constraints / process_constraints must be propagated to L3s and treated as hard execution constraints"
+    - rule: "decision_refs_trace"
+      description: "Dev outputs should retain decision_refs or governing_adrs in trace so contract / TECH / TASK implementation decisions remain auditable"
+    - rule: "adr_not_business_parent"
+      description: "ADR may constrain implementation, but must not replace feature_spec or act as the business source object"
