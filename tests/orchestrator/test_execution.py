@@ -10,6 +10,7 @@ import pytest
 import asyncio
 from datetime import datetime
 from pathlib import Path
+import json
 
 from lee.orchestrator.storage.models import (
     WorkflowLevel,
@@ -395,6 +396,55 @@ def test_executor_factory():
         assert False, "Should raise ValueError"
     except ValueError as e:
         assert "Unknown executor type" in str(e)
+
+
+@pytest.mark.asyncio
+async def test_llm_step_persists_failed_task_execution_when_executor_init_fails(
+    template_dir: Path,
+    monkeypatch,
+):
+    failing_template = """
+id: task_llm_failure
+level: task
+name: LLM Failure Task
+description: Test executor init failure persistence
+steps:
+  - id: feat_boundary_design
+    kind: agent
+    agent_id: agent.product.prd_writer
+    executor_type: llm
+""".strip()
+
+    (template_dir / "task_llm_failure.yaml").write_text(failing_template, encoding="utf-8")
+
+    db = SQLiteStore(":memory:")
+    await db.connect()
+    orchestrator = _create_orchestrator(db, template_dir)
+
+    workflow = await orchestrator.create_workflow(
+        level=WorkflowLevel.TASK,
+        template_id="task_llm_failure",
+    )
+
+    original_create = orchestrator.executor_factory.create
+
+    def _boom(executor_type, **kwargs):
+        if executor_type == "llm":
+            raise ValueError("LLM config 'qwen' missing api_key")
+        return original_create(executor_type, **kwargs)
+
+    monkeypatch.setattr(orchestrator.executor_factory, "create", _boom)
+
+    result = await orchestrator.run_step(workflow.id)
+
+    assert result.status == "failed"
+    executions = await db.get_task_executions(workflow.id)
+    assert len(executions) == 1
+    assert executions[0].step_name == "feat_boundary_design"
+    assert executions[0].status == TaskExecutionStatus.FAILED
+    assert "missing api_key" in (executions[0].error_message or "")
+
+    await db.close()
 
 
 if __name__ == "__main__":

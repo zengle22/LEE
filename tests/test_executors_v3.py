@@ -25,6 +25,63 @@ from lee.orchestrator.execution.executors import (
     MetaGPTExecutor,
     ExecutorFactory,
 )
+from lee.orchestrator.execution.llm_executor import LLMConfig
+
+
+def test_llm_config_falls_back_to_project_config(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "llm_config.yaml").write_text(
+        "\n".join(
+            [
+                "default_profile: sample_profile",
+                "sample_profile:",
+                "  type: llm",
+                "  provider: openai",
+                "  base_url: https://example.invalid/v1",
+                "  api_key: ${SAMPLE_API_KEY}",
+                "  model: sample-model",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / ".env").write_text("SAMPLE_API_KEY=sample-key\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SAMPLE_API_KEY", raising=False)
+
+    config = LLMConfig()
+
+    assert config.config_path == config_dir / "llm_config.yaml"
+    assert config.get_default_profile() == "sample_profile"
+    assert config.get_config("sample_profile")["api_key"] == "sample-key"
+
+
+def test_executor_factory_uses_config_default_profile(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "llm_config.yaml").write_text(
+        "\n".join(
+            [
+                "default_profile: sample_profile",
+                "sample_profile:",
+                "  type: llm",
+                "  provider: openai",
+                "  base_url: https://example.invalid/v1",
+                "  api_key: sample-key",
+                "  model: sample-model",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("LLM_PROFILE", raising=False)
+
+    executor = ExecutorFactory.create("llm")
+
+    assert isinstance(executor, LLMExecutor)
+    assert executor._executor.profile == "sample_profile"
 
 
 @pytest.mark.asyncio
