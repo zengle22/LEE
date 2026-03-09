@@ -6,12 +6,17 @@
 
 `SRC -> EPIC -> FEAT -> UI / TECH / TASK / TESTSET -> TC -> REPORT / BUG -> EVI`
 
+治理决策链单独存在：
+
+`ADR -> governs / constrains -> workflow / contract / agent / skill / UI / TECH / TASK / TESTSET`
+
 边界约束：
 
 - `商业机会` 不是 `EPIC`，默认作为上游 `SRC`
 - `EPIC` 只聚合多个 `FEAT`，不直接挂 `UI/TECH/TASK/TESTSET`
 - 正式 SSOT 主文件落在项目内容目录，不落 `.artifacts/ssot/{type}/`
 - `.artifacts/` 只保留 registry、manifest、缓存、运行态索引
+- `ADR` 是 decision SSOT，不是业务主链源头，也不默认作为 `EPIC/FEAT` 的派生产物
 
 ## 2. Agent Contract Required Fields
 
@@ -65,6 +70,7 @@
 | `test-case` / `test-case-contract` | `departments/qa/contracts/test-case*/v1` | `TC` | `parent_id -> TESTSET` and `verifies -> FEAT` | 测试执行树正式节点 |
 | `test-report` | `departments/qa/contracts/test-report/v1` | `REPORT` | `parent_id -> FEAT` | 验证/验收结果 |
 | `bug-contract` | `departments/qa/contracts/bug-contract/v1` | `BUG` | `parent_id -> TC` or `FEAT` | 缺陷归属到测试或功能范围 |
+| `ADR-*` | `spec/adr/` | `ADR` | root or `derived_from -> ADR` | 决策型 SSOT；用于治理约束和上下文注入，不进入业务主链 |
 | evidence bundle / logs / screenshots | workflow outputs | `EVI` | `parent_id -> REPORT / TC / BUG / TECH / TASK` | 证据附件 |
 | `test_submission_freeze_package` | workflow only | non-SSOT bundle | 引用 `TESTSET/TC/REPORT` | 提测交接包 |
 | `deliverable_release` | cross workflow output | non-SSOT release bundle | 引用发布集合 | 不是 SSOT 主对象 |
@@ -98,3 +104,59 @@
 
 - 正式主对象：按上表映射到 `SRC/EPIC/FEAT/UI/TECH/TASK/TESTSET/TC/BUG/REPORT/EVI`
 - 交接包：保持 non-SSOT bundle，不进入主链
+
+## 6. Product Department Canonical Design
+
+产品部门新的 canonical 设计说明位于：
+
+- `spec/adr/ADR-003__product-department-ssot-design.md`
+
+约束：
+
+- 该文档是产品部门从 `raw input -> SRC -> EPIC -> FEAT -> UI / TECH / TASK` 的正式设计说明
+- `departments/prd/` 不再承载前向产品部门设计，只保留兼容与历史参考
+- `spec-global/` 保留框架规则；项目级正式设计正文进入 `spec/`
+
+## 7. ADR Position And Usage
+
+`ADR` 的定位：
+
+- `ADR` 是 decision SSOT / governance SSOT
+- `ADR` 不作为 `SRC -> EPIC -> FEAT` 业务主链的源头
+- `ADR` 也不默认作为 `EPIC` 或 `FEAT` 的派生产物
+- `ADR` 用于记录正式决策，并约束后续对象和流程
+
+推荐关系语义：
+
+- `ADR governs workflow`
+- `ADR constrains contract`
+- `ADR constrains TECH / TASK / TESTSET`
+- `ADR explains why a chain, split, or rule exists`
+
+推荐使用方式：
+
+- 在 workflow / agent / skill / contract 的执行上下文中传入 `governing_adrs`
+- 在产物 trace 中保留 `decision_refs` 或 `governing_adrs`
+- agent 和 skill 必须将这些 ADR 视为硬约束，而不是普通参考资料
+
+推荐标准字段：
+
+- `governing_adrs`: 相关 ADR ID / path / ref 列表；用于注入正式治理上下文
+- `decision_refs`: 产物或流程实际采用的 ADR 引用；用于 trace / 审计
+- `decision_constraints`: 从 ADR 提炼出的必须遵守规则摘要
+- `architecture_constraints`: 与结构拆分、依赖边界、对象归属相关的硬约束
+- `process_constraints`: 与 freeze、review、handoff、evidence、gate 相关的硬约束
+
+标准化规则：
+
+- `ADR` 不作为业务主对象父节点
+- `ADR` 不替代 `SRC` / `EPIC` / `FEAT`
+- `workflow / agent / skill / contract` 应在输入上下文显式声明 `governing_adrs`
+- `TECH / TASK / TESTSET` 应在 trace 或 properties 中保留 `decision_refs` / `governing_adrs`
+- 执行 agent 必须优先遵守 `decision_constraints`，不能把 ADR 只当背景材料
+
+禁止：
+
+- 把 `ADR` 当作业务需求源对象
+- 把 `ADR` 直接挂入 `SRC -> EPIC -> FEAT` 主派生链
+- 用 `ADR` 替代 `SRC` / `EPIC` / `FEAT` 的正式业务定义
