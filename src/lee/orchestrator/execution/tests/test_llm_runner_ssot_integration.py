@@ -1,5 +1,6 @@
 import shutil
 import tempfile
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -909,3 +910,162 @@ traceability:
 
     assert isinstance(payload, dict)
     assert payload["test_set_id"] == "TS-DEMO-MODULE"
+
+
+def test_expected_feat_review_subject_refs_reads_generated_feat_id(runner):
+    instance_data = {
+        "step_outputs": {
+            "feat_spec_generation": {
+                "generated_text": json.dumps(
+                    {
+                        "business_output": {
+                            "feat_id": "FEAT-900",
+                            "title": "训练计划智能调整",
+                        }
+                    },
+                    ensure_ascii=False,
+                )
+            }
+        }
+    }
+
+    refs = runner._expected_feat_review_subject_refs(instance_data)
+
+    assert refs == ["FEAT-900"]
+
+
+def test_expected_feat_review_subject_refs_prefers_materialized_feat_id(runner):
+    instance_data = {
+        "step_outputs": {
+            "feat_spec_generation": {
+                "generated_text": json.dumps(
+                    {
+                        "business_output": {
+                            "feat_id": "FEAT-1",
+                            "title": "训练计划智能调整",
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                "ssot_materialized": {
+                    "feat": {
+                        "id": "FEAT-900",
+                    }
+                },
+            }
+        }
+    }
+
+    refs = runner._expected_feat_review_subject_refs(instance_data)
+
+    assert refs == ["FEAT-900"]
+
+
+def test_validate_feat_review_semantics_requires_exact_subject_refs(runner):
+    payload = {
+        "review_id": "RVW-001",
+        "review_type": "feat_review",
+        "subject_refs": ["FEAT-123"],
+        "summary": "review summary",
+        "findings": [],
+        "decision": "pass",
+        "risks": [],
+        "recommendations": [],
+    }
+
+    error = runner._validate_feat_review_semantics(payload, ["FEAT-900"])
+
+    assert error == "FEAT review subject_refs must exactly match the reviewed FEAT ID(s): FEAT-900"
+
+
+def test_validate_feat_review_semantics_rejects_pass_with_findings(runner):
+    payload = {
+        "review_id": "RVW-001",
+        "review_type": "feat_review",
+        "subject_refs": ["FEAT-900"],
+        "summary": "review summary",
+        "findings": ["acceptance checks are incomplete"],
+        "decision": "pass",
+        "risks": [],
+        "recommendations": [],
+    }
+
+    error = runner._validate_feat_review_semantics(payload, ["FEAT-900"])
+
+    assert error == "FEAT review output with decision=pass must not include findings"
+
+
+def test_validate_feat_review_semantics_rejects_pass_with_negative_summary(runner):
+    payload = {
+        "review_id": "RVW-001",
+        "review_type": "feat_review",
+        "subject_refs": ["FEAT-900"],
+        "summary": "存在阻塞问题，需修订后才能通过",
+        "findings": [],
+        "decision": "pass",
+        "risks": [],
+        "recommendations": [],
+    }
+
+    error = runner._validate_feat_review_semantics(payload, ["FEAT-900"])
+
+    assert error == "FEAT review summary conflicts with decision=pass"
+
+
+def test_validate_feat_review_semantics_requires_findings_for_revise(runner):
+    payload = {
+        "review_id": "RVW-001",
+        "review_type": "feat_review",
+        "subject_refs": ["FEAT-900"],
+        "summary": "需要修订",
+        "findings": [],
+        "decision": "revise",
+        "risks": [],
+        "recommendations": [],
+    }
+
+    error = runner._validate_feat_review_semantics(payload, ["FEAT-900"])
+
+    assert error == "FEAT review output with decision=revise must include at least one finding"
+
+
+def test_normalize_prd_writer_feat_payload_repairs_fixed_contract_fields(runner):
+    step = SimpleNamespace(agent_id="agent.product.prd_writer")
+    business_output = {
+        "feat_id": "FEAT-900",
+        "title": "训练计划智能调整",
+        "source_refs": ["EPIC-001#scope"],
+        "ssot": {
+            "parent": "EPIC-001",
+            "derived_from": "EPIC-001",
+        },
+    }
+    structured_payload = {
+        "business_output": business_output,
+        "ssot_output_contract": {
+            "outputs": [
+                {
+                    "key": "feat",
+                }
+            ]
+        },
+    }
+
+    normalized_business, normalized_structured = runner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-task-001",
+        business_output=business_output,
+        structured_payload=structured_payload,
+    )
+
+    assert normalized_business["ssot"]["identity_kind"] == "ssot"
+    assert normalized_business["ssot"]["ssot_type"] == "FEAT"
+    assert normalized_business["derived_object_expectations"]["task_required"] is True
+    assert normalized_business["derived_object_expectations"]["testset_required"] is True
+    assert normalized_business["derived_object_expectations"]["testset_owner"] == "qa"
+    assert normalized_business["derived_object_expectations"]["qa_seed_required"] is True
+    assert normalized_structured["ssot_output_contract"]["contract_version"] == "1.0"
+    assert normalized_structured["ssot_output_contract"]["run_id"] == "wf-task-001"
+    assert normalized_structured["ssot_output_contract"]["outputs"][0]["identity_kind"] == "ssot"
+    assert normalized_structured["ssot_output_contract"]["outputs"][0]["ssot_type"] == "feat"
+    assert normalized_structured["ssot_output_contract"]["outputs"][0]["parent"] == "EPIC-001"

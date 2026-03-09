@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 def _get_package_config_path() -> Optional[Path]:
-    """ 目录路径"""
-    from获取包内 config lee.data_path import with_builtin_config_dir
+    """获取包内 config 目录路径"""
+    from lee.data_path import with_builtin_config_dir
 
     try:
         return with_builtin_config_dir(lambda p: p)

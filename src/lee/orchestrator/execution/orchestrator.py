@@ -662,40 +662,58 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             # 执行第一个就绪步骤
             step_to_execute = ready_steps[0]
 
-        # 开始步骤
-        await self.state_machine.start_step(workflow_id, step_to_execute.id)
+        trace_span = None
+        try:
+            # 开始步骤
+            await self.state_machine.start_step(workflow_id, step_to_execute.id)
 
-        # v3.2: 记录步骤开始事件 (Legacy EventLog)
-        self.event_log.log_step_started(
-            step_id=step_to_execute.id,
-            agent_id=getattr(step_to_execute, 'agent_id', None) or step_to_execute.kind,
-        )
+            # v3.2: 记录步骤开始事件 (Legacy EventLog)
+            self.event_log.log_step_started(
+                step_id=step_to_execute.id,
+                agent_id=getattr(step_to_execute, 'agent_id', None) or step_to_execute.kind,
+            )
 
-        # v3.5: Publish EventBus event (PM Agent)
-        get_event_bus().publish(Event(
-            type=EventType.STEP_STARTED,
-            payload={
-                "run_id": instance.data.get("run_id", workflow_id),
-                "step_id": step_to_execute.id,
-                "kind": step_to_execute.kind
-            },
-            source_workflow=workflow_id,
-            timestamp=datetime.now(UTC).isoformat(),
-            event_id=uuid.uuid4().hex
-        ))
+            # v3.5: Publish EventBus event (PM Agent)
+            get_event_bus().publish(Event(
+                type=EventType.STEP_STARTED,
+                payload={
+                    "run_id": instance.data.get("run_id", workflow_id),
+                    "step_id": step_to_execute.id,
+                    "kind": step_to_execute.kind
+                },
+                source_workflow=workflow_id,
+                timestamp=datetime.now(UTC).isoformat(),
+                event_id=uuid.uuid4().hex
+            ))
 
-        # v3.4: 开始追踪 Span
-        trace_span = self.trace_log.start_span(
-            span_type=SpanType.ORCHESTRATOR,
-            name=f"step.{step_to_execute.id}",
-            input_data={
-                "step_id": step_to_execute.id,
-                "step_kind": step_to_execute.kind,
-                "executor_type": getattr(step_to_execute, 'executor_type', None),
-                "agent_id": getattr(step_to_execute, 'agent_id', None),
-            },
-            tags=[f"kind:{step_to_execute.kind}"],
-        )
+            # v3.4: 开始追踪 Span
+            trace_span = self.trace_log.start_span(
+                span_type=SpanType.ORCHESTRATOR,
+                name=f"step.{step_to_execute.id}",
+                input_data={
+                    "step_id": step_to_execute.id,
+                    "step_kind": step_to_execute.kind,
+                    "executor_type": getattr(step_to_execute, 'executor_type', None),
+                    "agent_id": getattr(step_to_execute, 'agent_id', None),
+                },
+                tags=[f"kind:{step_to_execute.kind}"],
+            )
+        except Exception as e:
+            await self.state_machine.fail_step(workflow_id, step_to_execute.id, str(e))
+            try:
+                self.event_log.log_step_failed(
+                    step_id=step_to_execute.id,
+                    agent_id=getattr(step_to_execute, 'agent_id', None) or step_to_execute.kind,
+                    error=f"step_start_instrumentation_failed: {e}",
+                )
+            except Exception:
+                pass
+            return StepResult(
+                status="failed",
+                step_id=step_to_execute.id,
+                workflow_id=workflow_id,
+                message=f"Step startup failed before runner dispatch: {e}",
+            )
 
         # 根据 step.kind 分支处理（v1.4）
         # v1.5: 新增 orchestrator_cli 和 compliance_gate 类型
@@ -891,11 +909,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         except Exception as e:
             # v3.4: 失败追踪 Span
-            self.trace_log.fail_span(
-                trace_span.span_id,
-                error_code=type(e).__name__,
-                error_message=str(e),
-            )
+            if trace_span is not None:
+                self.trace_log.fail_span(
+                    trace_span.span_id,
+                    error_code=type(e).__name__,
+                    error_message=str(e),
+                )
             # 步骤失败
             await self.state_machine.fail_step(workflow_id, step_to_execute.id, str(e))
             # v3.2: 记录步骤失败事件

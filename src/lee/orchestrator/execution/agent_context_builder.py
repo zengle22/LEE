@@ -114,7 +114,7 @@ class AgentContextBuilder:
 
         # 2. 读取上下文文件
         context_files = await self._load_context_files(
-            step.input.get("context_files", []),
+            self._extract_context_file_refs(step),
             workflow_context
         )
 
@@ -520,25 +520,17 @@ Verification items:
                 elif isinstance(instructions, str):
                     parts.append(instructions)
 
-            # 添加步骤输入数据（从 step.input 获取）
-            step_inputs = {}
-            if step and hasattr(step, 'input'):
-                step_inputs = step.input
+            # 添加步骤输入数据（兼容 dict/list 输入定义）
+            step_inputs = self._collect_step_inputs(step, workflow_context)
 
             if step_inputs:
                 parts.append("\n## Input Data")
-                for key, value in step_inputs.items():
-                    if key not in ["run_id", "workflow_key", "context_files"]:  # 过滤掉元数据
-                        if isinstance(value, (str, int, float, bool)):
-                            parts.append(f"- {key}: {value}")
-                        elif isinstance(value, dict):
-                            import json
-                            parts.append(f"- {key}:")
-                            parts.append(f"```json\n{json.dumps(value, indent=2, ensure_ascii=False)}\n```")
-                        elif isinstance(value, list):
-                            import json
-                            parts.append(f"- {key}:")
-                            parts.append(f"```json\n{json.dumps(value, indent=2, ensure_ascii=False)}\n```")
+                self._append_prompt_kv_pairs(parts, step_inputs)
+
+            upstream_outputs = self._collect_upstream_step_outputs(step, workflow_context)
+            if upstream_outputs:
+                parts.append("\n## Upstream Step Outputs")
+                self._append_prompt_kv_pairs(parts, upstream_outputs)
 
             # 添加上下文文件
             if context_files:
@@ -576,6 +568,111 @@ Verification items:
                 user_prompt += f"Please analyze the failure and generate a fix.\n"
 
         return user_prompt
+
+    def _collect_step_inputs(
+        self,
+        step,
+        workflow_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not step:
+            return {}
+
+        raw_inputs = self._get_step_input_definition(step)
+        if isinstance(raw_inputs, dict):
+            return {
+                key: value
+                for key, value in raw_inputs.items()
+                if key not in ["run_id", "workflow_key", "context_files"]
+            }
+
+        if not isinstance(raw_inputs, list):
+            return {"input": raw_inputs}
+
+        resolved: Dict[str, Any] = {}
+        data = workflow_context.get("data", {}) if isinstance(workflow_context, dict) else {}
+        params = data.get("params", {}) if isinstance(data.get("params", {}), dict) else {}
+        step_outputs = data.get("step_outputs", {}) if isinstance(data.get("step_outputs", {}), dict) else {}
+
+        for item in raw_inputs:
+            if not isinstance(item, dict):
+                continue
+
+            source = item.get("source")
+            if not source:
+                continue
+
+            value: Any = None
+            if source in data:
+                value = data[source]
+            elif source in params:
+                value = params[source]
+            elif source in step_outputs:
+                value = step_outputs[source]
+
+            if value is None and isinstance(source, str) and source.endswith("_specs"):
+                base_name = source[:-1] if source.endswith("s") else source
+                for step_id, output in step_outputs.items():
+                    if not isinstance(output, dict):
+                        continue
+                    if "business_output" in output:
+                        value = output["business_output"]
+                        if step and step_id in getattr(step, "depends_on", []):
+                            break
+
+            resolved[source] = value if value is not None else {"source": source, "required": item.get("required", True)}
+
+        return resolved
+
+    @staticmethod
+    def _get_step_input_definition(step) -> Any:
+        if not step:
+            return {}
+
+        raw_inputs = getattr(step, "input", None)
+        if raw_inputs not in (None, {}, []):
+            return raw_inputs
+
+        raw_inputs = getattr(step, "inputs", None)
+        if raw_inputs is not None:
+            return raw_inputs
+
+        return {}
+
+    def _extract_context_file_refs(self, step) -> List[str]:
+        raw_inputs = self._get_step_input_definition(step)
+        if isinstance(raw_inputs, dict):
+            context_files = raw_inputs.get("context_files", [])
+            return context_files if isinstance(context_files, list) else []
+        return []
+
+    def _collect_upstream_step_outputs(
+        self,
+        step,
+        workflow_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if not step or not getattr(step, "depends_on", None):
+            return {}
+
+        data = workflow_context.get("data", {}) if isinstance(workflow_context, dict) else {}
+        step_outputs = data.get("step_outputs", {}) if isinstance(data.get("step_outputs", {}), dict) else {}
+        upstream: Dict[str, Any] = {}
+        for step_id in step.depends_on:
+            output = step_outputs.get(step_id)
+            if output is not None:
+                upstream[step_id] = output
+        return upstream
+
+    def _append_prompt_kv_pairs(
+        self,
+        parts: List[str],
+        values: Dict[str, Any],
+    ) -> None:
+        for key, value in values.items():
+            if isinstance(value, (str, int, float, bool)):
+                parts.append(f"- {key}: {value}")
+            elif isinstance(value, (dict, list)):
+                parts.append(f"- {key}:")
+                parts.append(f"```json\n{json.dumps(value, indent=2, ensure_ascii=False)}\n```")
 
     def _build_output_contract_guidance(
         self,

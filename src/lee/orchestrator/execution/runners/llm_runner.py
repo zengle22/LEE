@@ -378,15 +378,6 @@ class LLMRunner(StepRunnerBase):
         # 2. 解析 executor_type：CLI 参数优先级最高
         executor_type = instance.data.get("executor_override") or step.executor_type or "llm"
 
-        # 3. 调用 LLM Executor
-        # 优先使用环境变量，否则从配置文件读取 default_profile，最后兜底为 huawei_deepseek
-        default_profile = ctx.llm_config_loader.get_default_profile() if hasattr(ctx, 'llm_config_loader') else "huawei_deepseek"
-        executor = ctx.executor_factory.create(
-            executor_type,
-            profile=os.getenv("LLM_PROFILE", default_profile),
-            agent_id=step.agent_id or ""
-        )
-
         input_data = self._build_executor_input(
             executor_type=executor_type,
             step=step,
@@ -415,6 +406,15 @@ class LLMRunner(StepRunnerBase):
         logging.info(f"[LLMRunner] Starting execution for step {step.id} (workflow={workflow_id}, execution={execution_id})")
 
         try:
+            # 3. 调用 LLM Executor
+            # 优先使用环境变量，否则从配置文件读取 default_profile，最后兜底为 huawei_deepseek
+            default_profile = ctx.llm_config_loader.get_default_profile() if hasattr(ctx, 'llm_config_loader') else "huawei_deepseek"
+            executor = ctx.executor_factory.create(
+                executor_type,
+                profile=os.getenv("LLM_PROFILE", default_profile),
+                agent_id=step.agent_id or ""
+            )
+
             # v3.5: 步骤级超时保护
             import asyncio
             STEP_TIMEOUT = int(os.getenv("LEE_STEP_TIMEOUT_SECONDS", "300"))  # 5分钟
@@ -557,12 +557,29 @@ class LLMRunner(StepRunnerBase):
                 step=step,
                 written_files=written_files,
             )
+            business_output, structured_payload = self._normalize_prd_writer_feat_payload(
+                step=step,
+                workflow_id=workflow_id,
+                business_output=business_output,
+                structured_payload=structured_payload,
+            )
             validation_result = self._validate_step_output(step, business_output)
             if validation_result and not validation_result.passed:
                 strict = (step.config or {}).get("strict_output_validation", False)
                 if strict:
                     error_msg = f"Output schema validation failed: {validation_result.errors[0].message if validation_result.errors else 'unknown'}"
                     await ctx.state_machine.fail_step(workflow_id, step.id, error_msg)
+                    await ctx.store.update_task_execution(
+                        execution_id,
+                        TaskExecutionStatus.FAILED,
+                        output_data={
+                            "generated_text": generated_text,
+                            "business_output": business_output,
+                            "validation_result": validation_result.to_dict(),
+                        },
+                        error_message=error_msg,
+                        completed_at=datetime.now(),
+                    )
                     return StepResult(
                         status="failed",
                         step_id=step.id,
@@ -571,6 +588,39 @@ class LLMRunner(StepRunnerBase):
                     )
                 else:
                     print(f"[OutputValidation] Warning: Step {step.id} output schema validation failed (soft mode)")
+
+            feat_review_subject_error = None
+            expected_subject_refs: List[str] = []
+            if getattr(step, "agent_id", "") == "agent.product.feat_reviewer":
+                expected_subject_refs = self._expected_feat_review_subject_refs(instance.data)
+                feat_review_subject_error = self._validate_feat_review_subject_refs(
+                    business_output,
+                    expected_subject_refs,
+                )
+                if not feat_review_subject_error:
+                    feat_review_subject_error = self._validate_feat_review_semantics(
+                        business_output,
+                        expected_subject_refs,
+                    )
+            if feat_review_subject_error:
+                await ctx.state_machine.fail_step(workflow_id, step.id, feat_review_subject_error)
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    output_data={
+                        "generated_text": generated_text,
+                        "business_output": business_output,
+                        "expected_subject_refs": expected_subject_refs,
+                    },
+                    error_message=feat_review_subject_error,
+                    completed_at=datetime.now(),
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=feat_review_subject_error,
+                )
 
             if governance_preflight["warnings"]:
                 for warning in governance_preflight["warnings"]:
@@ -876,6 +926,217 @@ class LLMRunner(StepRunnerBase):
             if file_output is not None:
                 return file_output
         return fallback_text
+
+    def _expected_feat_review_subject_refs(
+        self,
+        instance_data: Dict[str, Any],
+    ) -> List[str]:
+        step_outputs = instance_data.get("step_outputs", {}) if isinstance(instance_data, dict) else {}
+        feat_spec_output = step_outputs.get("feat_spec_generation")
+        if not isinstance(feat_spec_output, dict):
+            return []
+
+        ssot_materialized = feat_spec_output.get("ssot_materialized")
+        if isinstance(ssot_materialized, dict):
+            feat_entry = ssot_materialized.get("feat")
+            if isinstance(feat_entry, dict):
+                feat_id = feat_entry.get("id")
+                if isinstance(feat_id, str) and feat_id.strip():
+                    return [feat_id]
+
+        generated_text = feat_spec_output.get("generated_text", "")
+        feat_payload: Any = None
+        try:
+            parsed_output = StepRunnerBase._parse_structured_output(generated_text)
+        except Exception:
+            parsed_output = None
+
+        if isinstance(parsed_output, dict):
+            if isinstance(parsed_output.get("business_output"), dict):
+                feat_payload = parsed_output.get("business_output")
+            else:
+                feat_payload = parsed_output
+
+        if feat_payload is None:
+            feat_payload = self._extract_business_output_payload(None, generated_text)
+        if not isinstance(feat_payload, dict):
+            return []
+
+        feat_id = feat_payload.get("feat_id")
+        return [feat_id] if isinstance(feat_id, str) and feat_id.strip() else []
+
+    @staticmethod
+    def _normalize_prd_writer_feat_payload(
+        step,
+        workflow_id: str,
+        business_output: Any,
+        structured_payload: Any,
+    ) -> tuple[Any, Any]:
+        if getattr(step, "agent_id", "") != "agent.product.prd_writer":
+            return business_output, structured_payload
+        if not isinstance(business_output, dict):
+            return business_output, structured_payload
+
+        normalized_business = dict(business_output)
+        ssot = normalized_business.get("ssot")
+        if isinstance(ssot, dict):
+            normalized_ssot = dict(ssot)
+        else:
+            normalized_ssot = {}
+        if normalized_business.get("feat_id"):
+            normalized_ssot.setdefault("identity_kind", "ssot")
+            normalized_ssot.setdefault("ssot_type", "FEAT")
+        if normalized_ssot:
+            normalized_business["ssot"] = normalized_ssot
+
+        derived = normalized_business.get("derived_object_expectations")
+        if isinstance(derived, dict):
+            normalized_derived = dict(derived)
+        else:
+            normalized_derived = {}
+        normalized_derived.setdefault("task_required", True)
+        normalized_derived.setdefault("testset_required", True)
+        normalized_derived.setdefault("testset_owner", "qa")
+        normalized_derived.setdefault("qa_seed_required", True)
+        normalized_business["derived_object_expectations"] = normalized_derived
+
+        normalized_structured = structured_payload
+        if isinstance(structured_payload, dict):
+            normalized_structured = dict(structured_payload)
+            normalized_structured["business_output"] = normalized_business
+
+            ssot_contract = normalized_structured.get("ssot_output_contract")
+            if isinstance(ssot_contract, dict):
+                normalized_contract = dict(ssot_contract)
+            else:
+                normalized_contract = {}
+            normalized_contract.setdefault("contract_version", "1.0")
+            normalized_contract.setdefault("run_id", workflow_id)
+
+            outputs = normalized_contract.get("outputs")
+            if isinstance(outputs, list):
+                normalized_outputs = []
+                for item in outputs:
+                    if not isinstance(item, dict):
+                        normalized_outputs.append(item)
+                        continue
+                    normalized_item = dict(item)
+                    normalized_item.setdefault("identity_kind", "ssot")
+                    if normalized_item.get("key") == "feat":
+                        normalized_item.setdefault("ssot_type", "feat")
+                        if normalized_business.get("title"):
+                            normalized_item.setdefault("title", normalized_business["title"])
+                        parent = normalized_business.get("ssot", {}).get("parent")
+                        if parent:
+                            normalized_item.setdefault("parent", parent)
+                        source_refs = normalized_business.get("source_refs")
+                        if isinstance(source_refs, list) and source_refs:
+                            normalized_item.setdefault("source_refs", source_refs)
+                    normalized_outputs.append(normalized_item)
+                normalized_contract["outputs"] = normalized_outputs
+            normalized_structured["ssot_output_contract"] = normalized_contract
+
+        return normalized_business, normalized_structured
+
+    @staticmethod
+    def _validate_feat_review_subject_refs(
+        review_payload: Any,
+        expected_subject_refs: List[str],
+    ) -> Optional[str]:
+        if not expected_subject_refs:
+            return None
+        if not isinstance(review_payload, dict):
+            return "FEAT review output is not a structured object"
+
+        subject_refs = review_payload.get("subject_refs")
+        if not isinstance(subject_refs, list):
+            return "FEAT review output missing subject_refs list"
+
+        expected = {ref for ref in expected_subject_refs if isinstance(ref, str) and ref.strip()}
+        actual = {ref for ref in subject_refs if isinstance(ref, str) and ref.strip()}
+        if not expected.issubset(actual):
+            return (
+                "FEAT review subject_refs must include the reviewed FEAT ID(s): "
+                + ", ".join(sorted(expected))
+            )
+        return None
+
+    @staticmethod
+    def _validate_feat_review_semantics(
+        review_payload: Any,
+        expected_subject_refs: List[str],
+    ) -> Optional[str]:
+        if not isinstance(review_payload, dict):
+            return "FEAT review output is not a structured object"
+
+        review_type = review_payload.get("review_type")
+        if review_type != "feat_review":
+            return "FEAT review output must set review_type=feat_review"
+
+        summary = review_payload.get("summary")
+        if not isinstance(summary, str) or not summary.strip():
+            return "FEAT review output must include a non-empty summary"
+
+        decision = review_payload.get("decision")
+        if decision not in {"pass", "revise", "reject"}:
+            return "FEAT review output decision must be one of: pass, revise, reject"
+
+        for field_name in ("findings", "risks", "recommendations"):
+            value = review_payload.get(field_name)
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                return f"FEAT review output field '{field_name}' must be a string array"
+
+        subject_refs = review_payload.get("subject_refs")
+        if not isinstance(subject_refs, list):
+            return "FEAT review output missing subject_refs list"
+
+        expected = [ref for ref in expected_subject_refs if isinstance(ref, str) and ref.strip()]
+        actual = [ref for ref in subject_refs if isinstance(ref, str) and ref.strip()]
+        if expected and sorted(actual) != sorted(expected):
+            return (
+                "FEAT review subject_refs must exactly match the reviewed FEAT ID(s): "
+                + ", ".join(sorted(expected))
+            )
+
+        findings = review_payload.get("findings") or []
+        if decision == "pass":
+            if findings:
+                return "FEAT review output with decision=pass must not include findings"
+            if LLMRunner._contains_feat_review_negative_signal(summary):
+                return "FEAT review summary conflicts with decision=pass"
+
+        if decision in {"revise", "reject"} and not findings:
+            return f"FEAT review output with decision={decision} must include at least one finding"
+
+        return None
+
+    @staticmethod
+    def _contains_feat_review_negative_signal(text: Any) -> bool:
+        if not isinstance(text, str):
+            return False
+        normalized = text.strip().lower()
+        if not normalized:
+            return False
+
+        patterns = [
+            r"\bblocker\b",
+            r"\bmajor\b",
+            r"\breject\b",
+            r"\brevise\b",
+            r"\bmust fix\b",
+            r"\bcritical issue\b",
+            r"阻塞",
+            r"不通过",
+            r"拒绝",
+            r"驳回",
+            r"需修订",
+            r"需要修订",
+            r"必须修复",
+            r"关键问题",
+            r"严重问题",
+            r"不可通过",
+        ]
+        return any(re.search(pattern, normalized) for pattern in patterns)
 
     @staticmethod
     def _extract_primary_file_output(step, written_files: List[str]) -> Optional[Any]:
@@ -1446,6 +1707,16 @@ class ClaudeCodeRunner(StepRunnerBase):
                 if strict:
                     error_msg = f"Output schema validation failed: {cc_validation.errors[0].message if cc_validation.errors else 'unknown'}"
                     await ctx.state_machine.fail_step(workflow_id, step.id, error_msg)
+                    await ctx.store.update_task_execution(
+                        execution_id,
+                        TaskExecutionStatus.FAILED,
+                        output_data={
+                            "raw_output": cc_output_text,
+                            "validation_result": cc_validation.to_dict(),
+                        },
+                        error_message=error_msg,
+                        completed_at=datetime.now(),
+                    )
                     return StepResult(
                         status="failed",
                         step_id=step.id,

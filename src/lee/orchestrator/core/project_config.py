@@ -1145,6 +1145,7 @@ def _create_repo_registry(project_root: Path, auto_discover: bool = True, max_de
 
     repos = {}
     if auto_discover:
+        print(f"  🔍 Scanning for git repositories (depth={max_depth})...")
         repos = _discover_repos(project_root, max_depth=max_depth)
 
     # If no repos found, create a default entry
@@ -1164,6 +1165,9 @@ def _create_repo_registry(project_root: Path, auto_discover: bool = True, max_de
 
     with open(repos_file, "w", encoding="utf-8") as f:
         yaml.dump(repo_registry, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    
+    repo_count = len(repos)
+    print(f"  ✓ Created .lee/repos.yaml ({repo_count} repo{'s' if repo_count > 1 else ''} found)")
 
 
 def _copy_tree(src: Path, dest: Path) -> None:

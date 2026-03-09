@@ -551,42 +551,19 @@ def init(project_dir: str, no_discover: bool, depth: int, force: bool, no_readme
         force=force,
     )
 
-    # 分类显示
-    tool_dirs = [d for d in dirs if d.startswith(".")]
-    content_dirs = [d for d in dirs if not d.startswith(".")]
-    legacy_dirs = ["spec/dev", "spec/qa", "spec/devops", "evidence", "env"]
-
-    click.echo(f"  ✓ Created tool directories: {', '.join(tool_dirs)}")
-    click.echo(f"  ✓ Created content directories: {', '.join(content_dirs[:5])}...")
-    click.echo(f"  ✓ Created legacy directories: {', '.join(legacy_dirs)}")
-
-    # Create .project/dirs.yaml (Directory structure SSOT)
-    _create_dirs_yaml(project_root, force=force)
-
-    # Create .lee directory with config files
-    _create_repo_registry(project_root, auto_discover=not no_discover, max_depth=depth, force=force)
-    _create_config(project_root, force=force)
-
-    # Create .lee/lee.lock (version lock)
-    _create_lee_lock(project_root, force=force)
-
-    # Copy templates
-    repo_root = Path(__file__).resolve().parents[4]
-    templates_root = repo_root / "templates"
-    if templates_root.exists():
-        _copy_tree(templates_root / "spec", project_root / "spec")
-        _copy_tree(templates_root / "env", project_root / "env")
+    # CLI-specific output formatting
+    click.echo(f"  ✓ Created directory structure ({len(config.directories)} directories)")
+    
+    if not no_readme:
+        click.echo("  ✓ Generated README files")
+    
+    if not no_templates:
         click.echo("  ✓ Copied template files")
-
-    if not no_discover:
-        repos_file = project_root / ".lee" / "repos.yaml"
-        if repos_file.exists():
-            click.echo("  ✓ Created .lee/repos.yaml")
 
     click.echo()
     click.echo(click.style("✅ Project initialized successfully!", fg="green", bold=True))
     click.echo()
     click.echo("Next steps:")
     click.echo(f"  1. cd {project_root}")
-    click.echo("  2. Edit .lee/repos.yaml to configure your repositories")
-    click.echo("  3. Run 'lee chat' to start an interactive session")
+    click.echo("  2. Edit .lee/config.yaml to configure your project")
+    click.echo("  3. Run 'lee doctor' to verify configuration")

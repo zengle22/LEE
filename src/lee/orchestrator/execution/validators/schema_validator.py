@@ -189,8 +189,14 @@ class SchemaValidator(Validator):
         resolved_path = self._resolve_path(schema_path)
         path = Path(resolved_path)
 
+        if not path.exists() and not Path(schema_path).is_absolute():
+            base = Path(self.project_dir or Path.cwd())
+            spec_global_candidate = (base / "spec-global" / schema_path).resolve()
+            if spec_global_candidate.exists():
+                path = spec_global_candidate
+
         if not path.exists():
-            return None
+            return None, []
 
         try:
             with open(path, "r", encoding="utf-8") as f:

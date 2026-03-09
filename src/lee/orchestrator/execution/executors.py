@@ -53,6 +53,7 @@ from lee.orchestrator.execution.mock_executor import MockLLMExecutor
 from lee.orchestrator.execution.metagpt_executor import MetaGPTExecutor as RealMetaGPTExecutor
 from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor
 from lee.orchestrator.execution.codex_executor import CodexExecutor
+from lee.orchestrator.execution.llm_executor import LLMConfig
 
 
 class LLMExecutor(BaseExecutor):
@@ -223,8 +224,8 @@ class ExecutorFactory:
                 return MockLLMExecutor(agent_id=kwargs.get("agent_id", ""))
 
             if "profile" not in kwargs:
-                # Default to qwen (fastest); can be overridden via env var.
-                kwargs["profile"] = os.getenv("LLM_PROFILE", "qwen")
+                default_profile = LLMConfig(kwargs.get("config_path")).get_default_profile()
+                kwargs["profile"] = os.getenv("LLM_PROFILE", default_profile)
 
             try:
                 return executor_class(**kwargs)

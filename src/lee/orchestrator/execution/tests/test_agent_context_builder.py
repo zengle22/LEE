@@ -89,3 +89,47 @@ def test_build_output_contract_guidance_for_file_plus_ssot(builder):
     assert "file section" in rendered
     assert "`ssot_output_contract`" in rendered
     assert "test_set_id" in rendered
+
+
+@pytest.mark.asyncio
+async def test_default_prompt_includes_upstream_step_outputs(builder):
+    step = SimpleNamespace(
+        id="feat_review",
+        agent_id="agent.product.feat_reviewer",
+        input=[{"source": "feat_specs", "required": True}],
+        depends_on=["feat_spec_generation"],
+        outputs=[],
+    )
+    workflow_context = {
+        "data": {
+            "step_outputs": {
+                "feat_spec_generation": {
+                    "business_output": {
+                        "feat_id": "FEAT-042",
+                        "title": "训练计划智能调整",
+                    }
+                }
+            }
+        }
+    }
+    agent_spec = {
+        "_raw_data": {
+            "description": "Review FEAT objects only.",
+            "prompting": {
+                "instructions": [
+                    "Return JSON only.",
+                ]
+            },
+        }
+    }
+
+    prompt = await builder._build_user_prompt(
+        agent_spec,
+        context_files={},
+        workflow_context=workflow_context,
+        step=step,
+    )
+
+    assert "## Upstream Step Outputs" in prompt
+    assert "feat_spec_generation" in prompt
+    assert "FEAT-042" in prompt

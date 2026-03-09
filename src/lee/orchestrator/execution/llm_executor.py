@@ -49,18 +49,51 @@ class LLMConfig:
         Args:
             config_path: 配置文件路径，默认为包内 config/llm_config.yaml
         """
-        if config_path is None:
-            # 优先使用包内配置
+        self.config_path = self._resolve_config_path(config_path)
+        self._load_project_env(self.config_path)
+        self.configs = self._load_config() if self.config_path else {}
+
+    def _resolve_config_path(self, config_path: Optional[str]) -> Optional[Path]:
+        """解析实际要读取的 llm_config.yaml 路径。"""
+        candidates: List[Path] = []
+        if config_path:
+            candidates.append(Path(config_path))
+        else:
             pkg_config = _get_package_config_path()
             if pkg_config:
-                config_path = str(pkg_config / "llm_config.yaml")
+                candidates.append(pkg_config / "llm_config.yaml")
+            candidates.append(Path.cwd() / "config" / "llm_config.yaml")
 
-        self.config_path = Path(config_path) if config_path else None
-        self.configs = self._load_config() if self.config_path else {}
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0] if candidates else None
+
+    def _load_project_env(self, config_path: Optional[Path]) -> None:
+        """尽量从当前项目加载 .env，避免 profile 解析依赖外部进程预先注入环境变量。"""
+        if "load_dotenv" not in globals():
+            return
+
+        candidates: List[Path] = [Path.cwd() / ".env"]
+        if config_path:
+            candidates.append(config_path.parent.parent / ".env")
+
+        seen = set()
+        for candidate in candidates:
+            try:
+                resolved = candidate.resolve()
+            except Exception:
+                resolved = candidate
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            if resolved.exists():
+                load_dotenv(resolved, override=False)
+                break
 
     def _load_config(self) -> Dict[str, Any]:
         """加载 YAML 配置文件"""
-        if not self.config_path.exists():
+        if not self.config_path or not self.config_path.exists():
             return {}
 
         with open(self.config_path, 'r', encoding='utf-8') as f:
@@ -120,11 +153,19 @@ class LLMConfig:
                     resolved[key] = os.getenv(env_var, default_val)
                 else:
                     # 没有默认值，直接使用环境变量
+                    env_var = env_expr
                     resolved[key] = os.getenv(env_var, value)
             else:
                 resolved[key] = value
 
         return resolved
+
+    def get_default_profile(self) -> str:
+        """读取配置文件中的 default_profile，未配置时回退到 default。"""
+        configured = self.configs.get("default_profile")
+        if isinstance(configured, str) and configured.strip():
+            return configured.strip()
+        return "default"
 
 
 class LLMExecutor:
