@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 
+from lee import __version__ as LEE_VERSION
 from lee.orchestrator.core.project_config import DirectoryStructureConfig, DirectoryConfig, initialize_project
 
 
@@ -480,18 +481,10 @@ def _create_lee_lock(project_root: Path, force: bool = False) -> None:
         click.echo(f"  ✓ lee.lock already exists (use --force to regenerate)")
         return
 
-    # Get LEE version
-    lee_version = "0.2.0"  # 默认版本，实际应该从包或配置获取
-    try:
-        from lee import __version__ as pkg_version
-        lee_version = pkg_version
-    except ImportError:
-        pass
-
     # Create lock file
     lock_data = {
         "schema_version": 1,
-        "lee_version": lee_version,
+        "lee_version": LEE_VERSION,
         "lee_install": "pypi",  # 默认假设从 PyPI 安装
         "mode": "prod",
         "initialized_at": datetime.utcnow().isoformat() + "Z"
@@ -503,7 +496,7 @@ def _create_lee_lock(project_root: Path, force: bool = False) -> None:
     click.echo(f"  ✓ Created .lee/lee.lock")
 
     # Optionally create requirements-lee.txt
-    _create_requirements_lee(project_root, lee_version)
+    _create_requirements_lee(project_root, LEE_VERSION)
 
 
 def _create_requirements_lee(project_root: Path, version: str) -> None:
