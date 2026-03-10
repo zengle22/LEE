@@ -29,19 +29,6 @@ default:
 # ============================================
 
 
-# 智谱 GLM (备用)
-# 优先级：低
-zhipu:
-  type: llm
-  provider: zhipu
-  base_url: https://open.bigmodel.cn/api/paas/v4
-  api_key: ${ZHIPU_API_KEY:-dummy-key}
-  model: ${ZHIPU_MODEL:-glm-4}
-  temperature: 0.7
-  max_tokens: 8000
-  timeout: 120
-  description: "智谱 GLM-4 模型（备用）"
-
 # 本地 Ollama (通用 LLM，最低优先级）
 # 优先级：最低（最先尝试）
 ollama:
@@ -54,20 +41,6 @@ ollama:
   max_tokens: 8000
   timeout: 120
   description: "本地 Ollama 服务，使用 Qwen2.5 模型（最低优先级，兜底）"
-
-
-# 华为 DeepSeek (ModelArts 部署 - OpenAI 兼容端点)
-# 优先级：高
-huawei_deepseek:
-  type: llm
-  provider: openai
-  base_url: https://api.modelarts-maas.com/openai/v1
-  api_key: 6LGK3QzeXXuucUO99ZHrP048nmw6xZbkyOZ8QL2UpEDKNX_J8a-SlJLYyg_Ncs5Any4tJFKyOmBAkwd2FCuLkw
-  model: DeepSeek-R1
-  temperature: 0.7
-  max_tokens: 16000
-  timeout: 300
-  description: "华为 ModelArts 部署的 DeepSeek-R1 模型（OpenAI 兼容端点）"
 
 
 
