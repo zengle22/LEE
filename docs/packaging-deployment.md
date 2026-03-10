@@ -10,6 +10,8 @@ date: 2026-03-05
 
 ## 背景
 
+版本号规则见 [LEE 版本号规则](/E:/ai/LEE/docs/guides/technical/LEE-VERSIONING.md)。
+
 ### 问题陈述
 
 LEE 是一个 AI 驱动的研发框架，用于生成和驱动其他目标项目的开发。传统方式将 LEE 代码与目标项目混在一起，导致：

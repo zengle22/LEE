@@ -24,6 +24,19 @@ pip install -r demo_l3_orchestration/requirements.txt
 
 ## Commands
 
+### `lee --version`
+Show the currently installed LEE package version.
+
+```bash
+lee --version
+lee -v
+python -m lee --version
+```
+
+用途：
+- 确认目标项目升级后实际生效的版本
+- 核对 `.lee/lee.lock` 与安装包是否一致
+
 ### `lee run`
 Run a registered workflow.
 
