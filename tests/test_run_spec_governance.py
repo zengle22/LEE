@@ -167,3 +167,32 @@ def test_render_workflow_template_injects_params_at_top_level(tmp_path: Path) ->
     rendered = rendered_path.read_text(encoding="utf-8")
 
     assert "demo-module/demo-module/report.md" in rendered
+
+
+def test_workflow_registry_respects_explicit_env_path(monkeypatch, tmp_path: Path) -> None:
+    registry_path = tmp_path / "config" / "workflow-registry.yaml"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text("workflows: {}\n", encoding="utf-8")
+
+    monkeypatch.setenv("LEE_WORKFLOW_REGISTRY", str(registry_path))
+    monkeypatch.delenv("LEE_FRAMEWORK_ROOT", raising=False)
+
+    assert get_workflow_registry_path() == registry_path.resolve()
+    assert _load_registry() == {"workflows": {}}
+
+
+def test_workflow_template_path_supports_packaged_data_layout(monkeypatch, tmp_path: Path) -> None:
+    registry_path = tmp_path / "lee" / "config" / "workflow-registry.yaml"
+    template_path = tmp_path / "lee" / "data" / "spec-global" / "core" / "workflows" / "templates" / "spec-governance-l3-template.yaml"
+
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    template_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text("workflows: {}\n", encoding="utf-8")
+    template_path.write_text("steps: []\n", encoding="utf-8")
+
+    monkeypatch.setenv("LEE_WORKFLOW_REGISTRY", str(registry_path))
+    monkeypatch.delenv("LEE_FRAMEWORK_ROOT", raising=False)
+
+    resolved = resolve_workflow_template_path("spec-global/core/workflows/templates/spec-governance-l3-template.yaml")
+
+    assert resolved == template_path.resolve()
