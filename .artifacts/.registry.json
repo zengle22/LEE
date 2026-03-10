@@ -1,6 +1,6 @@
 {
   "version": "2.1.0",
-  "last_rebuilt": "2026-03-09T14:14:51.302074",
+  "last_rebuilt": "2026-03-10T12:28:17.627667",
   "artifacts": {
     "ART-00003": {
       "id": "ART-00003",
@@ -6800,6 +6800,44 @@
         ]
       }
     },
+    "ADR-004": {
+      "id": "ADR-004",
+      "type": "DOCUMENT",
+      "category": "ssot_object",
+      "status": "DRAFT",
+      "path": "spec/adr/ADR-004__claude-code-executor-liushikeguancexinggaizao.md",
+      "path_root": ".",
+      "external_path": null,
+      "adopt_mode": null,
+      "run_id": "",
+      "workflow_id": null,
+      "department": null,
+      "depends_on": [],
+      "derived_from": null,
+      "consumed_by": [],
+      "implements": [],
+      "verifies": [],
+      "supersedes": null,
+      "governance_kind": "knowledge",
+      "git_sha": null,
+      "git_repo_path": null,
+      "title": "Claude Code Executor 流式可观测性改造",
+      "description": "",
+      "tags": [],
+      "size_bytes": null,
+      "content_hash": null,
+      "created_at": "2026-03-10T12:09:32.896922",
+      "updated_at": "2026-03-10T12:09:32.908933",
+      "frozen_at": null,
+      "archived_at": null,
+      "properties": {
+        "ssot_type": "adr",
+        "parent_id": null,
+        "source_refs": [],
+        "version": "v1",
+        "derived_from_ids": []
+      }
+    },
     "TESTSET-FEAT-045-001": {
       "id": "TESTSET-FEAT-045-001",
       "type": "DOCUMENT",
@@ -6880,12 +6918,12 @@
         "derived_from_ids": []
       }
     },
-    "FEAT-001": {
-      "id": "FEAT-001",
+    "EPIC-001": {
+      "id": "EPIC-001",
       "type": "DOCUMENT",
       "category": "ssot_object",
       "status": "ACTIVE",
-      "path": "spec/requirements/features/FEAT-001__xunlianjihuashengchengqi.md",
+      "path": "spec/requirements/epics/EPIC-001__zengchangjichusheshi.md",
       "path_root": ".",
       "external_path": null,
       "adopt_mode": null,
@@ -6901,21 +6939,59 @@
       "governance_kind": "knowledge",
       "git_sha": null,
       "git_repo_path": null,
-      "title": "训练计划生成器",
+      "title": "增长基础设施",
       "description": "",
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-08T22:12:40.861466",
-      "updated_at": "2026-03-09T08:30:42.500495",
+      "created_at": "2026-03-10T12:19:43.931965",
+      "updated_at": "2026-03-10T12:19:59.048200",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
-        "contract_key": "feat",
-        "identity_kind": "ssot",
-        "ssot_type": "feat",
+        "ssot_type": "epic",
         "parent_id": null,
         "source_refs": [],
+        "version": "v1",
+        "derived_from_ids": []
+      }
+    },
+    "FEAT-001": {
+      "id": "FEAT-001",
+      "type": "DOCUMENT",
+      "category": "ssot_object",
+      "status": "DRAFT",
+      "path": "spec/requirements/features/FEAT-001__yonghuzhuce.md",
+      "path_root": ".",
+      "external_path": null,
+      "adopt_mode": null,
+      "run_id": "",
+      "workflow_id": null,
+      "department": null,
+      "depends_on": [],
+      "derived_from": null,
+      "consumed_by": [],
+      "implements": [],
+      "verifies": [],
+      "supersedes": null,
+      "governance_kind": "knowledge",
+      "git_sha": null,
+      "git_repo_path": null,
+      "title": "用户注册",
+      "description": "",
+      "tags": [],
+      "size_bytes": null,
+      "content_hash": null,
+      "created_at": "2026-03-10T12:19:43.936594",
+      "updated_at": "2026-03-10T12:19:59.053816",
+      "frozen_at": null,
+      "archived_at": null,
+      "properties": {
+        "ssot_type": "feat",
+        "parent_id": "EPIC-001",
+        "source_refs": [
+          "EPIC-001#scope"
+        ],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -6946,8 +7022,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-08T22:19:39.057403",
-      "updated_at": "2026-03-09T08:30:42.502020",
+      "created_at": "2026-03-09T14:19:31.803091",
+      "updated_at": "2026-03-09T14:19:31.804622",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -6986,8 +7062,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-08T22:49:43.927606",
-      "updated_at": "2026-03-09T08:30:42.502020",
+      "created_at": "2026-03-09T14:19:31.839804",
+      "updated_at": "2026-03-09T14:19:31.840813",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -7026,8 +7102,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-08T23:00:06.338731",
-      "updated_at": "2026-03-09T08:30:42.502020",
+      "created_at": "2026-03-09T14:19:31.866766",
+      "updated_at": "2026-03-09T14:19:31.867286",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -7066,8 +7142,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-08T23:08:25.737701",
-      "updated_at": "2026-03-09T08:30:42.502020",
+      "created_at": "2026-03-09T14:19:31.901440",
+      "updated_at": "2026-03-09T14:19:31.901440",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -7106,8 +7182,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-08T23:10:12.547348",
-      "updated_at": "2026-03-09T08:30:42.502020",
+      "created_at": "2026-03-09T14:19:31.925066",
+      "updated_at": "2026-03-09T14:19:31.926077",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -7146,18 +7222,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T10:25:14.422555",
-      "updated_at": "2026-03-09T10:25:14.424082",
+      "created_at": "2026-03-09T14:19:31.959173",
+      "updated_at": "2026-03-09T14:19:31.959678",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-002",
-        "source_refs": [
-          "EPIC-002#spec_standard"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7188,18 +7262,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T10:32:52.382343",
-      "updated_at": "2026-03-09T10:32:52.382343",
+      "created_at": "2026-03-09T14:19:31.988843",
+      "updated_at": "2026-03-09T14:19:31.990358",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-001",
-        "source_refs": [
-          "EPIC-001#spec_generation"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7230,18 +7302,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T10:50:33.731848",
-      "updated_at": "2026-03-09T10:50:33.731848",
+      "created_at": "2026-03-09T14:19:32.050476",
+      "updated_at": "2026-03-09T14:19:32.050476",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-123",
-        "source_refs": [
-          "EPIC-123#spec_generation"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7272,18 +7342,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T10:57:06.168222",
-      "updated_at": "2026-03-09T10:57:06.168222",
+      "created_at": "2026-03-09T14:19:32.076542",
+      "updated_at": "2026-03-09T14:19:32.076542",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-002",
-        "source_refs": [
-          "EPIC-002#adaptation"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7314,18 +7382,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T10:59:19.635230",
-      "updated_at": "2026-03-09T10:59:19.635230",
+      "created_at": "2026-03-09T14:19:32.109414",
+      "updated_at": "2026-03-09T14:19:32.110423",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-001",
-        "source_refs": [
-          "EPIC-001#visualization"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7356,18 +7422,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T11:03:56.345957",
-      "updated_at": "2026-03-09T11:03:56.345957",
+      "created_at": "2026-03-09T14:19:32.151303",
+      "updated_at": "2026-03-09T14:19:32.151303",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-002",
-        "source_refs": [
-          "EPIC-002#flexibility"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7398,18 +7462,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T11:06:01.148665",
-      "updated_at": "2026-03-09T11:06:01.149176",
+      "created_at": "2026-03-09T14:19:32.185196",
+      "updated_at": "2026-03-09T14:19:32.186715",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-002",
-        "source_refs": [
-          "EPIC-002#adaptation"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7440,18 +7502,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T11:12:26.000867",
-      "updated_at": "2026-03-09T11:12:26.001370",
+      "created_at": "2026-03-09T14:19:32.210295",
+      "updated_at": "2026-03-09T14:19:32.210800",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-001",
-        "source_refs": [
-          "EPIC-001#scope"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7482,18 +7542,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T11:14:31.323309",
-      "updated_at": "2026-03-09T11:14:31.324315",
+      "created_at": "2026-03-09T14:19:32.244033",
+      "updated_at": "2026-03-09T14:19:32.244033",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-002",
-        "source_refs": [
-          "EPIC-002#adaptation"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7524,18 +7582,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T11:38:01.655245",
-      "updated_at": "2026-03-09T11:38:01.655245",
+      "created_at": "2026-03-09T14:19:32.268210",
+      "updated_at": "2026-03-09T14:19:32.269217",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-002",
-        "source_refs": [
-          "EPIC-002#adaptation"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7566,18 +7622,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T11:43:30.789090",
-      "updated_at": "2026-03-09T11:43:30.789090",
+      "created_at": "2026-03-09T14:19:32.304059",
+      "updated_at": "2026-03-09T14:19:32.304570",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-001",
-        "source_refs": [
-          "EPIC-001#auth_scope"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7608,18 +7662,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T12:06:20.617097",
-      "updated_at": "2026-03-09T12:06:20.617097",
+      "created_at": "2026-03-09T14:19:32.338392",
+      "updated_at": "2026-03-09T14:19:32.339918",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-TEST-001",
-        "source_refs": [
-          "EPIC-TEST-001"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7650,18 +7702,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T12:06:55.568217",
-      "updated_at": "2026-03-09T12:06:55.568728",
+      "created_at": "2026-03-09T14:19:32.372916",
+      "updated_at": "2026-03-09T14:19:32.373885",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-TEST-001",
-        "source_refs": [
-          "EPIC-TEST-001"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7692,18 +7742,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T12:09:15.530108",
-      "updated_at": "2026-03-09T12:09:15.530108",
+      "created_at": "2026-03-09T14:19:32.396396",
+      "updated_at": "2026-03-09T14:19:32.396901",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-TEST-001",
-        "source_refs": [
-          "EPIC-TEST-001"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7734,18 +7782,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T12:15:25.609294",
-      "updated_at": "2026-03-09T12:15:25.609294",
+      "created_at": "2026-03-09T14:19:32.428272",
+      "updated_at": "2026-03-09T14:19:32.428776",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-TEST-001",
-        "source_refs": [
-          "EPIC-TEST-001"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7776,18 +7822,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T12:20:40.917473",
-      "updated_at": "2026-03-09T12:20:40.917473",
+      "created_at": "2026-03-09T14:19:32.450630",
+      "updated_at": "2026-03-09T14:19:32.451636",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-SEC-001",
-        "source_refs": [
-          "EPIC-SEC-001#auth_enhancement"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7818,18 +7862,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T12:37:44.686622",
-      "updated_at": "2026-03-09T12:37:44.686622",
+      "created_at": "2026-03-09T14:19:32.483257",
+      "updated_at": "2026-03-09T14:19:32.483257",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-ORDER-MGMT",
-        "source_refs": [
-          "EPIC-ORDER-MGMT#data-modeling"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7860,18 +7902,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T12:43:33.067067",
-      "updated_at": "2026-03-09T12:43:33.067067",
+      "created_at": "2026-03-09T14:19:32.523715",
+      "updated_at": "2026-03-09T14:19:32.523715",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-001",
-        "source_refs": [
-          "EPIC-001#scope"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -7902,17 +7942,97 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-09T12:47:16.981352",
-      "updated_at": "2026-03-09T12:47:17.009865",
+      "created_at": "2026-03-09T14:19:32.555843",
+      "updated_at": "2026-03-09T14:19:32.555843",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-001",
+        "parent_id": null,
+        "source_refs": [],
+        "version": "v1",
+        "derived_from_ids": []
+      }
+    },
+    "FEAT-046": {
+      "id": "FEAT-046",
+      "type": "DOCUMENT",
+      "category": "ssot_object",
+      "status": "DRAFT",
+      "path": "spec/requirements/features/FEAT-046__claude-code-stream-json-xieyishengjijichu.md",
+      "path_root": ".",
+      "external_path": null,
+      "adopt_mode": null,
+      "run_id": "",
+      "workflow_id": null,
+      "department": null,
+      "depends_on": [],
+      "derived_from": null,
+      "consumed_by": [],
+      "implements": [],
+      "verifies": [],
+      "supersedes": null,
+      "governance_kind": "knowledge",
+      "git_sha": null,
+      "git_repo_path": null,
+      "title": "Claude Code stream-json 协议升级基础",
+      "description": "",
+      "tags": [],
+      "size_bytes": null,
+      "content_hash": null,
+      "created_at": "2026-03-10T12:13:47.091574",
+      "updated_at": "2026-03-10T12:14:41.103192",
+      "frozen_at": null,
+      "archived_at": null,
+      "properties": {
+        "ssot_type": "feat",
+        "parent_id": null,
         "source_refs": [
-          "EPIC-001#用户认证体系"
+          "EPIC-001",
+          "ADR-004"
+        ],
+        "version": "v1",
+        "derived_from_ids": []
+      }
+    },
+    "FEAT-047": {
+      "id": "FEAT-047",
+      "type": "DOCUMENT",
+      "category": "ssot_object",
+      "status": "DRAFT",
+      "path": "spec/requirements/features/FEAT-047__zai-lee-cli-zhongbaolu-claude-code-shishishuchu.md",
+      "path_root": ".",
+      "external_path": null,
+      "adopt_mode": null,
+      "run_id": "",
+      "workflow_id": null,
+      "department": null,
+      "depends_on": [],
+      "derived_from": null,
+      "consumed_by": [],
+      "implements": [],
+      "verifies": [],
+      "supersedes": null,
+      "governance_kind": "knowledge",
+      "git_sha": null,
+      "git_repo_path": null,
+      "title": "在 LEE CLI 中暴露 Claude Code 实时输出",
+      "description": "",
+      "tags": [],
+      "size_bytes": null,
+      "content_hash": null,
+      "created_at": "2026-03-10T12:13:47.115829",
+      "updated_at": "2026-03-10T12:14:41.104512",
+      "frozen_at": null,
+      "archived_at": null,
+      "properties": {
+        "ssot_type": "feat",
+        "parent_id": null,
+        "source_refs": [
+          "EPIC-001",
+          "ADR-004"
         ],
         "version": "v1",
         "derived_from_ids": []
