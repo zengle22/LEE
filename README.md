@@ -40,7 +40,7 @@ LEE 框架是一个通用的 AI 工作流编排系统，用于管理和执行复
 ## 核心特性
 
 - **工作流编排**：DAG 调度、状态管理、事件溯源
-- **多引擎支持**：MetaGPT、单 Agent、Python/CLI
+- **多引擎支持**：单 Agent、Python/CLI
 - **人工门禁**：工作流中的审批节点
 - **规范管理**：全局规范模板 + 产品专属规范
 - **部门化组织**：按 PM/Dev/QA/DevOps 部门组织规范
@@ -265,20 +265,17 @@ cd LEE
 pip install -e .
 ```
 
-### 安装 MetaGPT 引擎
+### 安装可选依赖
 
 ```bash
-# 安装包含 MetaGPT 引擎的完整版本
-pip install -e ".[metagpt]"
-
-# 或者安装所有可选依赖
+# 安装所有可选依赖
 pip install -e ".[all]"
 ```
 
 ### 开发环境安装
 
 ```bash
-# 安装开发依赖（包含 MetaGPT 和测试工具）
+# 安装开发依赖（包含测试工具）
 pip install -e ".[dev]"
 ```
 

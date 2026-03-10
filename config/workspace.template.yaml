@@ -122,19 +122,6 @@ orchestrator:
 # 执行引擎配置
 # ============================================================
 engines:
-  # MetaGPT 引擎
-  metagpt:
-    enabled: true
-
-    # MetaGPT 配置文件路径（可选）
-    config_path: "./config/metagpt.yaml"
-
-    # 资源限制
-    limits:
-      max_rounds: 10
-      max_tokens: 50000
-      timeout_sec: 600
-
   # Python 执行引擎
   python:
     enabled: true

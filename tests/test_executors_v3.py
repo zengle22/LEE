@@ -4,7 +4,7 @@
 验证：
 1. LLM Executor 创建和执行
 2. Shell Executor 创建和执行
-3. MetaGPT Executor 创建
+3. 未知执行器会报错
 4. ExecutorFactory 正常工作
 """
 
@@ -22,7 +22,6 @@ from lee.orchestrator.execution.executors import (
     BaseExecutor,
     LLMExecutor,
     ShellExecutor,
-    MetaGPTExecutor,
     ExecutorFactory,
 )
 from lee.orchestrator.execution.llm_executor import LLMConfig
@@ -111,15 +110,11 @@ async def test_executor_factory():
     assert isinstance(shell_executor, ShellExecutor)
     print("   ✅ Shell Executor 创建成功")
 
-    # 测试 MetaGPT Executor 创建
-    print("\n3. 测试 MetaGPT Executor 创建...")
-    try:
-        metagpt_executor = ExecutorFactory.create("metagpt", role="Developer")
-        assert isinstance(metagpt_executor, BaseExecutor)
-        assert isinstance(metagpt_executor, MetaGPTExecutor)
-        print("   ✅ MetaGPT Executor 创建成功")
-    except ImportError as e:
-        print(f"   ⚠️  MetaGPT 未安装，跳过: {e}")
+    # 测试未知类型报错
+    print("\n3. 测试未知类型报错...")
+    with pytest.raises(ValueError, match="Unknown executor type: legacy_executor"):
+        ExecutorFactory.create("legacy_executor", role="Developer")
+    print("   ✅ 未知类型报错正常")
 
     # 测试未知类型
     print("\n4. 测试未知类型...")
@@ -258,7 +253,7 @@ async def main():
         print("  ✅ ExecutorFactory 正常工作")
         print("  ✅ LLM Executor 可创建")
         print("  ✅ Shell Executor 可执行")
-        print("  ✅ MetaGPT Executor 可创建")
+        print("  ✅ 未知类型报错正常")
         print("  ✅ 支持自定义 Executor 注册")
         return 0
     else:
