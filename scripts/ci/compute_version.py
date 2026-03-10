@@ -39,7 +39,11 @@ def compute_version(mode: str, base_version: str, ref_name: str | None, sha: str
 
 
 def write_version(pyproject_path: pathlib.Path, text: str, version: str) -> None:
-    updated, count = VERSION_RE.subn(rf'\1{version}\3', text, count=1)
+    updated, count = VERSION_RE.subn(
+        lambda match: f'{match.group(1)}{version}{match.group(3)}',
+        text,
+        count=1,
+    )
     if count != 1:
         raise ValueError(f"Failed to update version in {pyproject_path}")
     pyproject_path.write_text(updated, encoding="utf-8")
