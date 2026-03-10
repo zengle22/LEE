@@ -14,7 +14,7 @@ last_updated: 2026-02-19
 >
 > The new architecture introduces:
 > - **PM Agent Layer**: Decision-making AI that only orchestrates, doesn't execute
-> - **Unified Engine Interface**: Standardized executors for LLM/MetaGPT/Shell/MCP
+> - **Unified Engine Interface**: Standardized executors for LLM/Legacy Executor/Shell/MCP
 > - **Orchestrator Evolution**: Now controls execution through EngineRegistry, not external AI tools
 >
 > **For the latest architecture, see**: [architecture.md](./architecture.md)
@@ -1158,7 +1158,7 @@ pydantic = "^2.0"         # 数据验证
 
 ```toml
 [tool.poetry.dependencies]
-metagpt = {version = "^0.8.0", optional = true}
+legacy_executor = {version = "^0.8.0", optional = true}
 ```
 
 ### 8.2 存储约束
@@ -1440,7 +1440,7 @@ metagpt = {version = "^0.8.0", optional = true}
    - Orchestrator 完整使用指南
 
 2. **相关项目**：
-   - MetaGPT: https://github.com/geekan/MetaGpt
+   - Legacy Executor: https://github.com/geekan/Legacy Executor
    - Apache Airflow: https://airflow.apache.org/
    - Temporal: https://temporal.io/
 

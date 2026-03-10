@@ -140,7 +140,7 @@ high_issues:
     files:
       - path: src/lee/orchestrator/api/__init__.py
         lines: 748
-      - path: src/lee/orchestrator/execution/metagpt_executor.py
+      - path: src/lee/orchestrator/execution/legacy_executor_executor.py
         lines: 105
       - path: src/lee/orchestrator/execution/template_manager.py
         lines: 286, 303
@@ -315,7 +315,7 @@ medium_issues:
     description: |
       依赖使用 >= 版本约束，可能导致不兼容更新
       没有 requirements.lock 或 poetry.lock
-      MetaGPT 依赖版本范围太宽：metagpt>=0.8.0,<0.9.0
+      Legacy Executor 依赖版本范围太宽：legacy_executor>=0.8.0,<0.9.0
     impact: |
       不同环境可能安装不同版本
       潜在的兼容性问题
@@ -356,7 +356,7 @@ medium_issues:
     priority: P2
     status: open
     files:
-      - path: src/lee/orchestrator/execution/metagpt_executor.py
+      - path: src/lee/orchestrator/execution/legacy_executor_executor.py
         lines: 184
     description: |
       # TODO: 实现专门的 Bug 修复团队

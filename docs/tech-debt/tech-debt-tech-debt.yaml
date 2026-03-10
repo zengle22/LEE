@@ -104,10 +104,10 @@ critical_debt:
     title: "Python Version Incompatibility"
     category: "code_quality"
     severity: "critical"
-    impact: "MetaGPT engine requires Python 3.9-3.10, but project supports 3.8+"
+    impact: "Legacy Executor engine requires Python 3.9-3.10, but project supports 3.8+"
     location: "pyproject.toml:10,12"
     effort_hours: 8
-    recommendation: "Update minimum Python version to 3.9 or document MetaGPT constraints clearly"
+    recommendation: "Update minimum Python version to 3.9 or document Legacy Executor constraints clearly"
     risk_if_ignored: "High - user confusion, installation failures"
 
   - id: "DEBT-008"

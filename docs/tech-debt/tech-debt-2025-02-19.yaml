@@ -225,7 +225,7 @@ critical_debt:
     impact: "安全漏洞，错过 bug 修复和性能改进"
     location: "pyproject.toml"
     current_state: |
-      MetaGPT 固定在 0.8.x，错过更新
+      Legacy Executor 固定在 0.8.x，错过更新
     effort_hours: 12
     recommendation: |
       1. 定期更新依赖（至少每月一次）

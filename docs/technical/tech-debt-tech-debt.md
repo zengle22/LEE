@@ -155,11 +155,11 @@ disallow_untyped_defs = false  # 暂时关闭，逐步开启
 **Severity:** Critical
 **Effort:** 8 hours
 
-**Impact:** MetaGPT engine requires Python 3.9-3.10, but project supports 3.8+
+**Impact:** Legacy Executor engine requires Python 3.9-3.10, but project supports 3.8+
 
 **Location:** `pyproject.toml:10,12`
 
-**Recommendation:** Update minimum Python version to 3.9 or document MetaGPT constraints clearly
+**Recommendation:** Update minimum Python version to 3.9 or document Legacy Executor constraints clearly
 
 **Risk if Ignored:** High - user confusion, installation failures
 

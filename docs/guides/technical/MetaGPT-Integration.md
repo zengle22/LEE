@@ -1,25 +1,25 @@
 ---
-title: MetaGPT LEE 适配层实现总结
+title: Legacy Executor LEE 适配层实现总结
 author: LEE Team
 date: 2026-01-29
 version: 1.0
 last_updated: 2026-02-19
 ---
 
-# MetaGPT LEE 适配层实现总结
+# Legacy Executor LEE 适配层实现总结
 
 ## 项目概述
 
-成功为 MetaGPT 实现了 LEE 调度系统的标准接口适配层，使 MetaGPT 可以作为执行单元被 LEE 编排系统调用。
+成功为 Legacy Executor 实现了 LEE 调度系统的标准接口适配层，使 Legacy Executor 可以作为执行单元被 LEE 编排系统调用。
 
 ## 创建的文件
 
-### 核心模块 (metagpt/lee/)
+### 核心模块 (legacy_executor/lee/)
 
 | 文件 | 说明 | 主要内容 |
 |------|------|---------|
 | `protocol.py` | LEE 协议类型定义 | `LEERequest`, `LEEResult`, `LEENodeContext`, `LEEBudget` |
-| `adapter.py` | 核心适配器实现 | `run_lee_unit()`, `MetaGPTAdapter` 类 |
+| `adapter.py` | 核心适配器实现 | `run_lee_unit()`, `Legacy ExecutorAdapter` 类 |
 | `scenarios.py` | 场景化实现 | `CodeImplementationScenario`, `BugFixScenario`, `CodeReviewScenario` |
 | `__init__.py` | 模块导出 | 导出所有公共接口 |
 | `README.md` | 详细文档 | 完整的使用说明和 API 文档 |
@@ -45,7 +45,7 @@ LEERequest
 run_lee_unit(req)  ← 标准接口入口
         |
         v
-MetaGPTAdapter
+Legacy ExecutorAdapter
         |
         +-- code_implementation → SoftwareCompany
         +-- bug_autofix → BugFixScenario
@@ -97,14 +97,14 @@ LEEResult.failure(
 ### Python 调用
 
 ```python
-from metagpt.lee import LEERequest, LEENodeContext, LEEBudget, run_lee_unit
+from legacy_executor.lee import LEERequest, LEENodeContext, LEEBudget, run_lee_unit
 
 request = LEERequest(
     node=LEENodeContext(
         run_id="run_001",
         node_id="impl_feature",
         attempt=1,
-        engine="metagpt",
+        engine="legacy_executor",
         node_type="team",
         workdir="/tmp/workdir",
     ),
@@ -127,8 +127,8 @@ if result.status == "success":
 nodes:
   - id: impl_feature
     type: team
-    engine: metagpt
-    impl: metagpt.lee.adapter:run_lee_unit
+    engine: legacy_executor
+    impl: legacy_executor.lee.adapter:run_lee_unit
     task: "code_implementation"
 
     inputs:
@@ -247,7 +247,7 @@ if req.task == "new_task":
 
 ## 关键设计决策
 
-1. **同步接口**: LEE 接口设计为同步调用，内部使用 `asyncio.run()` 处理 MetaGPT 的异步逻辑
+1. **同步接口**: LEE 接口设计为同步调用，内部使用 `asyncio.run()` 处理 Legacy Executor 的异步逻辑
 2. **工作目录隔离**: 每个节点有独立的工作目录，避免冲突
 3. **明确的错误处理**: 失败必须返回 `status="failed"` 和详细的 `error` 信息
 4. **产物索引**: 所有生成的文件通过 `artifacts` 字段返回，方便 LEE 系统跟踪
@@ -256,7 +256,7 @@ if req.task == "new_task":
 ## 文档索引
 
 - **快速入门**: `examples/lee/quickstart.md`
-- **详细文档**: `metagpt/lee/README.md`
+- **详细文档**: `legacy_executor/lee/README.md`
 - **测试示例**: `examples/lee/simple_test.py`
 - **Workflow 示例**: `examples/lee/workflow_*.yaml`
 
@@ -265,7 +265,7 @@ if req.task == "new_task":
 成功实现了完整的 LEE 适配层，包括：
 
 1. **标准化协议**: 清晰的请求/响应数据结构
-2. **核心适配器**: 连接 LEE 和 MetaGPT 的桥梁
+2. **核心适配器**: 连接 LEE 和 Legacy Executor 的桥梁
 3. **场景化实现**: 针对不同任务的专门处理
 4. **完整文档**: 从快速入门到详细 API 说明
 5. **测试示例**: 可运行的测试脚本和 workflow 配置

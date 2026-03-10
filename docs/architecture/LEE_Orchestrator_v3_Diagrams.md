@@ -78,7 +78,7 @@ last_updated: 2026-02-19
 │                        执行器层（Executors）                             │
 │                                                                           │
 │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐      │
-│  │    LLM     │  │   Shell    │  │    MCP     │  │  MetaGPT   │      │
+│  │    LLM     │  │   Shell    │  │    MCP     │  │  Legacy Executor   │      │
 │  │  Executor  │  │  Executor  │  │  Executor  │  │  Executor  │      │
 │  └────────────┘  └────────────┘  └────────────┘  └────────────┘      │
 │                                                                           │
@@ -450,7 +450,7 @@ src/lee/orchestrator/
 │   ├── executors.py           # 执行器工厂（v3 原有）
 │   ├── llm_executor.py        # LLM 执行器（v3 原有）
 │   ├── shell_executor.py      # Shell 执行器（v3 原有）
-│   ├── metagpt_executor.py    # MetaGPT 执行器（v3 原有）
+│   ├── legacy_executor_executor.py    # Legacy Executor 执行器（v3 原有）
 │   ├── gate_api.py           # Gate API（v3 原有）
 │   │
 │   ├── Agent 系统（v1 迁移）✅

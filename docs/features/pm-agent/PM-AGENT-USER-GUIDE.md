@@ -412,11 +412,11 @@ engine:
 
 ---
 
-### 4. MetaGPT Executor - MetaGPT 多智能体执行器
+### 4. Legacy Executor Executor - Legacy Executor 多智能体执行器
 
-**用途**: 调用 MetaGPT 框架进行多智能体协作
+**用途**: 调用 Legacy Executor 框架进行多智能体协作
 
-**注意**: MetaGPT 是可选依赖，如果未安装则不可用
+**注意**: Legacy Executor 是可选依赖，如果未安装则不可用
 
 **配置示例** (`agent.yaml`):
 
@@ -426,7 +426,7 @@ id: dev.tech_architect
 version: 1.0
 
 engine:
-  type: metagpt
+  type: legacy_executor
   scenario: technical_design  # 场景名称
   role: architect             # 角色
   enable_human_interaction: false
@@ -435,7 +435,7 @@ system_prompt: |
   你是技术架构专家...
 ```
 
-**支持的场景** (根据 MetaGPT 定义):
+**支持的场景** (根据 Legacy Executor 定义):
 - 技术设计
 - 代码生成
 - 文档生成
@@ -444,19 +444,19 @@ system_prompt: |
 **使用场景**:
 - 复杂的多智能体协作任务
 - 需要角色分工的场景
-- MetaGPT 生态集成
+- Legacy Executor 生态集成
 
 ---
 
 ## 执行器对比
 
-| 特性 | LLM | Shell | MCP | MetaGPT |
+| 特性 | LLM | Shell | MCP | Legacy Executor |
 |------|-----|-------|-----|---------|
 | **用途** | 推理生成 | 命令执行 | 服务调用 | 多智能体 |
 | **主要场景** | 文档/代码 | 测试/构建 | CI/CD/K8s | 复杂协作 |
 | **输入** | Prompt | 命令 | 参数 | 场景+角色 |
 | **输出** | 文本响应 | stdout/stderr | JSON结果 | 多agent输出 |
-| **依赖** | LLM API | 本地环境 | MCP服务 | MetaGPT |
+| **依赖** | LLM API | 本地环境 | MCP服务 | Legacy Executor |
 | **异步** | ✅ | ✅ | ✅ | ✅ |
 | **超时控制** | ❌ | ✅ | ✅ | ✅ |
 
@@ -612,7 +612,7 @@ monitor_workflow(".")
 - **LLM**: 需要推理、生成、分析
 - **Shell**: 需要执行本地命令
 - **MCP**: 需要调用远程服务
-- **MetaGPT**: 需要多智能体协作
+- **Legacy Executor**: 需要多智能体协作
 
 ---
 

@@ -14,7 +14,7 @@ LEE 存在两套执行子系统：
 |:----:|:----:|:----:|
 | 定位 | 生产引擎 | 下一代 (v0.1.0) |
 | 调度 | StateMachine + step-by-step | LangGraph graph.invoke() |
-| 类型 | llm / shell / metagpt / mock | l3.impl.coding / l3.test.unit |
+| 类型 | llm / shell / legacy_executor / mock | l3.impl.coding / l3.test.unit |
 | 契约 | `Dict[str, Any]` 松散 | `ExecutorTaskSpec` / `ExecutionResult` 强类型 |
 | 追踪 | trace.py | SpanBuilder |
 | 代码量 | ~323K (26 files) | ~50K (14 files) |
@@ -33,7 +33,7 @@ LEE 存在两套执行子系统：
 |------|-----------|
 | L1/L2 Agent（单次 prompt） | 当前引擎 ✅ |
 | L3 自动编码（需内部迭代） | LangGraph ✅ |
-| Shell / MetaGPT | 当前引擎 ✅ |
+| Shell / Legacy Executor | 当前引擎 ✅ |
 
 ---
 

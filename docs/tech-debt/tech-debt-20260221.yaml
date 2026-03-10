@@ -462,7 +462,7 @@ items:
     description: |
       TODO markers in code without corresponding issues or implementation
     location:
-      file: src/lee/orchestrator/execution/metagpt_executor.py
+      file: src/lee/orchestrator/execution/legacy_executor_executor.py
       lines: [184]
     impact: "Incomplete features, unclear project status"
     remediation: |
@@ -871,9 +871,9 @@ items:
   - id: TD-048
     category: configuration
     severity: medium
-    title: Potentially Outdated MetaGPT Version Constraint
+    title: Potentially Outdated Legacy Executor Version Constraint
     description: |
-      metagpt>=0.8.0,<0.9.0 may miss important fixes
+      legacy_executor>=0.8.0,<0.9.0 may miss important fixes
     location:
       file: pyproject.toml
       lines: [25]

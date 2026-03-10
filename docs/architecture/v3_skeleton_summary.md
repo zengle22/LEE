@@ -132,7 +132,7 @@ last_updated: 2026-02-19
 
 **Task 2.1**: Keep new executors
 - [ ] Verify `llm_executor.py` works
-- [ ] Verify `metagpt_executor.py` works
+- [ ] Verify `legacy_executor_executor.py` works
 - [ ] Verify `executors.py` proxy pattern
 
 **Task 2.2**: Remove old executors
@@ -199,7 +199,7 @@ src/lee/orchestrator/
 │   ├── template_manager_v3.py ✅ Template manager skeleton
 │   ├── executors.py          ✅ Existing (keep)
 │   ├── llm_executor.py       ✅ Existing (keep)
-│   └── metagpt_executor.py   ✅ Existing (keep)
+│   └── legacy_executor_executor.py   ✅ Existing (keep)
 tests/
 └── test_storage_v3.py        ✅ All tests passing
 docs/architecture/
