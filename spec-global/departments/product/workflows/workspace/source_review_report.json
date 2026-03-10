@@ -1,0 +1,24 @@
+{
+  "review_id": "src-review-20250310-001",
+  "review_type": "source_review",
+  "subject_refs": [
+    "src-20250310-001"
+  ],
+  "summary": "SRC candidate (src-20250310-001) 已通过对齐评审。该文档具备足够稳定的问题定义和来源可追溯性，可作为后续 EPIC 的正式输入。问题陈述清晰，目标用户明确，业务动因充分，关键约束完整。",
+  "findings": [
+    "来源可追溯：source_refs 包含 freeze-20250123-001, layer3_freeze, market_signal_analysis 三个引用，ssot.derived_from 指向 raw_source_input，来源链条完整",
+    "问题定义稳定：problem_statement 准确描述了中端市场 B2B 公司缺乏可负担 AI 销售工具的核心问题",
+    "目标用户明确：target_user 明确定义了 VP of Sales 和 Sales Manager 两个角色画像，包含公司规模（200-1000 员工）",
+    "触发场景清晰：trigger_context 描述了季度规划周期中销售领导者评估工具的场景",
+    "业务动因充分：business_motivation 列出 4 个市场信号（搜索量增长 150%、中端市场未被服务、AI 技术商品化、垂直领域空白）",
+    "约束条件完整：constraints 包含 5 个关键约束，覆盖公司规模、复杂度、垂直领域、部署周期和价格范围",
+    "数据结构合规：normalized_src.json 符合 source-freeze-contract/v1/schema.json 的所有必填字段要求"
+  ],
+  "decision": "pass",
+  "risks": [],
+  "recommendations": [
+    "建议在后续 EPIC 设计时进一步细化垂直领域（Healthcare, Education, Legal）的优先级排序",
+    "建议补充竞争分析信息以增强业务动因的说服力",
+    "freeze_meta.status 当前为 draft，后续需在 source_freeze gate 中更新为 frozen"
+  ]
+}
