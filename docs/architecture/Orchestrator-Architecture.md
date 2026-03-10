@@ -14,7 +14,7 @@ last_updated: 2026-02-19
 >
 > The new architecture introduces:
 > - **PM Agent Layer**: Decision-making AI that only orchestrates, doesn't execute
-> - **Unified Engine Interface**: Standardized executors for LLM/MetaGPT/Shell/MCP
+> - **Unified Engine Interface**: Standardized executors for LLM/Legacy Executor/Shell/MCP
 > - **Orchestrator Evolution**: Now controls execution through EngineRegistry, not external AI tools
 >
 > **For the latest architecture, see**: [architecture.md](./architecture.md)
@@ -1655,7 +1655,7 @@ pyyaml = "^6.0"
 pydantic = "^2.0"
 
 # 可选依赖
-metagpt = {version = "^0.8.0", optional = true}
+legacy_executor = {version = "^0.8.0", optional = true}
 ```
 
 **开发依赖**：

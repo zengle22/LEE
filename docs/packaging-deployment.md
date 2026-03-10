@@ -123,7 +123,7 @@ executor:
 | 配置项 | 说明 | 可选值 |
 |--------|------|--------|
 | `spec_root` | 规范模板根目录 | `builtin`（默认包内）、`./my-spec`（项目内）、`/absolute/path`（绝对路径） |
-| `executor.default_type` | 默认执行器 | `claude_code`、`llm`、`metagpt` 等 |
+| `executor.default_type` | 默认执行器 | `claude_code`、`llm`、`legacy_executor` 等 |
 
 ### .lee/lee.lock
 

@@ -61,13 +61,22 @@ def get_changed_files() -> list[str]:
 def is_l3_template_related(file_path: str) -> bool:
     """检查文件是否与 L3 模板相关"""
     path = Path(file_path)
+    normalized_parts = {part.lower() for part in path.parts}
+    is_yaml = path.suffix.lower() in (".yaml", ".yml")
     
     # 检查是否是 L3 模板文件
-    if "l3" in file_path.lower() and path.suffix in ('.yaml', '.yml'):
+    if "l3" in file_path.lower() and is_yaml:
         return True
     
-    # 检查是否在 workflows 目录
-    if "workflows" in file_path and path.suffix in ('.yaml', '.yml'):
+    # 仅检查 LEE 规范目录下的 workflow 模板，避免误伤 .github/workflows。
+    if (
+        is_yaml
+        and "workflows" in normalized_parts
+        and (
+            {"spec-global", "departments"} <= normalized_parts
+            or {"spec-global", "core"} <= normalized_parts
+        )
+    ):
         return True
     
     # 检查是否是 lint 脚本本身

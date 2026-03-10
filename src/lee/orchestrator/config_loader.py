@@ -23,7 +23,7 @@ on_failure:
   default_fallback: human_review
 
 executor:
-  default_type: llm
+  default_type: claude_code
   llm_model: gpt-4
   timeout_seconds: 600
 
@@ -82,7 +82,7 @@ class OnFailureConfig:
 @dataclass
 class ExecutorConfig:
     """执行器配置"""
-    default_type: str = "llm"
+    default_type: str = "claude_code"
     coding_executor: str = "claude_code"       # 编码步骤首选执行器
     coding_fallback: str = "llm_patch"         # 编码步骤降级执行器
     llm_model: Optional[str] = None
@@ -91,7 +91,7 @@ class ExecutorConfig:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ExecutorConfig":
         return cls(
-            default_type=data.get("default_type", "llm"),
+            default_type=data.get("default_type", "claude_code"),
             coding_executor=data.get("coding_executor", "claude_code"),
             coding_fallback=data.get("coding_fallback", "llm_patch"),
             llm_model=data.get("llm_model"),

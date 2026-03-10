@@ -376,7 +376,7 @@ class LLMRunner(StepRunnerBase):
             pass  # token 签发失败不阻塞执行
 
         # 2. 解析 executor_type：CLI 参数优先级最高
-        executor_type = instance.data.get("executor_override") or step.executor_type or "llm"
+        executor_type = instance.data.get("executor_override") or step.executor_type or "claude_code"
 
         input_data = self._build_executor_input(
             executor_type=executor_type,

@@ -105,7 +105,7 @@ rm src/lee/orchestrator/storage/migrations/migration_002_gate_actions_v1_1.py
 **问题位置**:
 - `src/lee/orchestrator/execution/executors.py` (包装器)
 - `src/lee/orchestrator/execution/llm_executor.py` (真实实现)
-- `src/lee/orchestrator/execution/metagpt_executor.py` (真实实现)
+- `src/lee/orchestrator/execution/legacy_executor_executor.py` (真实实现)
 
 **问题描述**:
 存在无意义的包装器层：
@@ -127,7 +127,7 @@ class LLMExecutor(BaseExecutor):
 
 # 重命名：
 # RealLLMExecutor -> LLMExecutor
-# RealMetaGPTExecutor -> MetaGPTExecutor
+# RealLegacy ExecutorExecutor -> Legacy ExecutorExecutor
 
 # 删除 executors.py 中的 BaseExecutor 包装模式
 # 或者：保留 BaseExecutor 作为接口定义，但不创建包装器实例

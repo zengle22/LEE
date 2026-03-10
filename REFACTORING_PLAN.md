@@ -283,7 +283,7 @@ print('OK')
 **当前错误描述** (需要删除):
 ```python
 from flowcore.orchestrator.runner import run_workflow  # 不存在
-from flowcore.engines.metagpt.adapter import run_lee_unit  # 不存在
+from flowcore.engines.legacy_executor.adapter import run_lee_unit  # 不存在
 ```
 
 **正确描述**:

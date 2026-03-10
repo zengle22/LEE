@@ -10,7 +10,7 @@ last_updated: 2026-02-19
 
 ## 概述
 
-本指南说明如何使用 Conda + Python 3.10 搭建 LEE 框架的开发环境，解决 MetaGPT 的依赖问题。
+本指南说明如何使用 Conda + Python 3.10 搭建 LEE 框架的开发环境，解决 Legacy Executor 的依赖问题。
 
 ## 前提条件
 
@@ -44,14 +44,14 @@ conda activate lee-env
 conda run -n lee-env python --version
 ```
 
-### 3. 安装 MetaGPT
+### 3. 安装 Legacy Executor
 
 ```bash
 # 安装最新稳定版
-conda run -n lee-env pip install metagpt
+conda run -n lee-env pip install legacy_executor
 
 # 或安装特定版本
-conda run -n lee-env pip install metagpt==0.8.2
+conda run -n lee-env pip install legacy_executor==0.8.2
 ```
 
 **预计时间**：3-5 分钟（取决于网络速度）
@@ -59,8 +59,8 @@ conda run -n lee-env pip install metagpt==0.8.2
 ### 4. 验证安装
 
 ```bash
-# 方式 1：检查 MetaGPT 版本
-conda run -n lee-env python -c "import metagpt; print(metagpt.__version__)"
+# 方式 1：检查 Legacy Executor 版本
+conda run -n lee-env python -c "import legacy_executor; print(legacy_executor.__version__)"
 
 # 方式 2：运行验证脚本
 conda run -n lee-env python tools/verify_env.py
@@ -71,8 +71,8 @@ conda run -n lee-env python tools/verify_env.py
 ```bash
 cd /path/to/LEE
 
-# 安装完整版（包含 MetaGPT）
-conda run -n lee-env pip install -e ".[metagpt]"
+# 安装完整版（包含 Legacy Executor）
+conda run -n lee-env pip install -e ".[legacy_executor]"
 
 # 或仅安装核心功能
 conda run -n lee-env pip install -e .
@@ -167,12 +167,12 @@ conda env create -f environment.yml
 # 重新打开终端，或 source ~/.bashrc
 ```
 
-### Q2: ModuleNotFoundError: No module named 'metagpt'
+### Q2: ModuleNotFoundError: No module named 'legacy_executor'
 
-**A**: MetaGPT 还在安装中，请等待：
+**A**: Legacy Executor 还在安装中，请等待：
 ```bash
 # 检查安装状态
-conda run -n lee-env pip show metagpt
+conda run -n lee-env pip show legacy_executor
 
 # 如果显示 WARNING: Package(s) not found，说明还在安装
 # 请等待 3-5 分钟后重试
@@ -255,7 +255,7 @@ pip install -e ".[dev]"
 安装完成后，验证以下项目：
 
 - [ ] `conda run -n lee-env python --version` 显示 3.10.x
-- [ ] `conda run -n lee-env pip show metagpt` 显示版本信息
+- [ ] `conda run -n lee-env pip show legacy_executor` 显示版本信息
 - [ ] `conda run -n lee-env python -c "import faiss; print(faiss.__version__)"` 显示 faiss 版本
 - [ ] `conda run -n lee-env python tools/verify_env.py` 全部通过
 

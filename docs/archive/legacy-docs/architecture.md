@@ -18,7 +18,7 @@ last_updated: 2026-02-19
 
 1. **将「流程控制」与「具体执行」彻底解耦**。
 2. **保证 AI 无法绕过流程直接产生"有效副作用"**。
-3. **支持多种执行形态**：LLM / MetaGPT / Skill / MCP / Shell。
+3. **支持多种执行形态**：LLM / Legacy Executor / Skill / MCP / Shell。
 4. **允许顶层 AI（PM agent）参与决策，但不拥有执行权**。
 5. **在无 IDE / 无人值守的情况下，Orchestrator + Executors 仍可独立运行**（CLI / API 驱动）。
 6. **以 spec-global 作为“可执行制度”**：workflow/agent/gate/contract/skill 全部外置为规范文件。
@@ -39,7 +39,7 @@ Orchestrator 不负责任何业务逻辑，只负责：
 
 Orchestrator **不直接**：
 
-- 调用 LLM / MetaGPT API
+- 调用 LLM / Legacy Executor API
 - 跑测试 / 构建 / 部署
 - 调用 Figma / CI / K8s 等外部系统
 
@@ -68,7 +68,7 @@ Orchestrator **不直接**：
 - 顶层 AI **不直接**：
   - 写项目文件
   - 调 shell / CI / K8s
-  - 调 LLM / MetaGPT 生成最终产物
+  - 调 LLM / Legacy Executor 生成最终产物
 - 顶层 AI 不能自行判定 step 完成情况，完成与否以 Orchestrator 的 state 为准。
 
 ---
@@ -104,7 +104,7 @@ flowchart TB
   subgraph Exec["Executors"]
     LLM[LLMExecutor]:::exec
     SH[ShellExecutor]:::exec
-    MG[MetaGPTExecutor]:::exec
+    MG[Legacy ExecutorExecutor]:::exec
   end
 
   subgraph Ext["External Systems"]
@@ -217,7 +217,7 @@ sequenceDiagram
 4. **构造 Agent/Skill 上下文**
    * `AgentContextBuilder` 负责加载 agent spec、拼接 prompt/context、注入输入产物引用等。
 5. **调用 Executor 执行**
-   * `ExecutorFactory.create("llm"|"shell"|"metagpt")`
+   * `ExecutorFactory.create("llm"|"shell"|"legacy_executor")`
 6. **更新 state 与产物记录（SQLite）**
    * 标记 step 状态（`completed/failed`）。
    * 记录 `outputs`（写入文件路径、stdout/stderr 摘要、结构化输出等）。
@@ -249,7 +249,7 @@ async def execute(input_data: dict) -> dict:
 | Executor           | 用途                      |
 | ------------------ | ----------------------- |
 | LLMExecutor        | 文本 / 代码 / 分析类工作         |
-| MetaGPTExecutor    | 多角色、重型开发任务              |
+| Legacy ExecutorExecutor    | 多角色、重型开发任务              |
 | ShellExecutor      | pytest / build / script |
 | MCP (via Shell/HTTP) | CI / Figma / K8s 等（通过 Skill/MCP 适配） |
 
@@ -371,7 +371,7 @@ LEE 采用**渐进式替换策略**：当前引擎与下一代 LangGraph 引擎�
 |:----:|:----:|:----:|
 | **定位** | 生产引擎 | 下一代引擎 (v0.1.0) |
 | **调度模型** | StateMachine + step-by-step | LangGraph graph.invoke() |
-| **Executor 类型** | llm / shell / metagpt / mock | l3.impl.coding / l3.test.unit |
+| **Executor 类型** | llm / shell / legacy_executor / mock | l3.impl.coding / l3.test.unit |
 | **数据契约** | `Dict[str, Any]` (松散) | `ExecutorTaskSpec` / `ExecutionResult` (强类型) |
 | **追踪** | `trace.py` + `tracing_integration.py` | `SpanBuilder` |
 | **安全** | ToolGuard (token_manager) | `security.py` + `allowed_write_patterns` |
@@ -385,7 +385,7 @@ LEE 采用**渐进式替换策略**：当前引擎与下一代 LangGraph 引擎�
 ExecutorFactory
     ├── "llm"       → LLMExecutor        当前引擎
     ├── "shell"     → ShellExecutor       当前引擎
-    ├── "metagpt"   → MetaGPTExecutor     当前引擎
+    ├── "legacy_executor"   → Legacy ExecutorExecutor     当前引擎
     └── "langgraph" → LangGraphExecutor   适配器
                          ↓ (桥接)
                      runtime/executor/run_task()
@@ -423,7 +423,7 @@ steps:
 | L3 代码实现 | `langgraph` + `task_type: l3.impl.coding` | LangGraph DAG |
 | L3 单元测试 | `langgraph` + `task_type: l3.test.unit` | 同上 |
 | Shell 脚本 | `shell` | 直接执行 |
-| MetaGPT 团队任务 | `metagpt` | 多角色 |
+| Legacy Executor 团队任务 | `legacy_executor` | 多角色 |
 
 新增 Graph Builder：
 ```python

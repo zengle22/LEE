@@ -29,7 +29,7 @@ OPENAI_MODEL=gemini-3-flash
 ZHIPU_API_KEY=06bc11ad44e3431d8f685bfe3405284e.KlPI5clCIbAb4aOa
 ZHIPU_MODEL=glm-4-flash
 
-# MetaGPT 配置
+# Legacy Executor 配置
 METAGPT_ENABLED=true
 METAGPT_API_KEY=06bc11ad44e3431d8f685bfe3405284e.KlPI5clCIbAb4aOa
 METAGPT_MODEL=glm-4-flash
@@ -69,9 +69,9 @@ MCP_SERVER_URL=http://localhost:3000
 
 ---
 
-### ✅ 3. MetaGPT Executor 配置
+### ✅ 3. Legacy Executor Executor 配置
 
-**文件**: `flowcore/engines/metagpt/config.yaml`
+**文件**: `flowcore/engines/legacy_executor/config.yaml`
 
 **配置场景**:
 - `technical_design` - 技术设计
@@ -83,7 +83,7 @@ MCP_SERVER_URL=http://localhost:3000
 - Base URL: http://127.0.0.1:8045/v1
 - Model: gemini-3-flash / glm-4-flash
 
-**状态**: 配置完成（MetaGPT 为可选依赖）
+**状态**: 配置完成（Legacy Executor 为可选依赖）
 
 ---
 
@@ -129,7 +129,7 @@ MCP_SERVER_URL=http://localhost:3000
    - 测试原生 OpenAI 客户端
    - ✅ **3/3 测试通过**
 
-2. **`scripts/test_metagpt.py`** - MetaGPT Executor 测试
+2. **`scripts/test_legacy_executor.py`** - Legacy Executor Executor 测试
    - 测试模块导入
    - 测试 Executor 创建
    - ✅ **基础功能正常**
@@ -226,8 +226,8 @@ LEE/
 │   │   ├── llm/
 │   │   │   ├── config.yaml       # ✅ LLM 配置
 │   │   │   └── executor.py
-│   │   ├── metagpt/
-│   │   │   ├── config.yaml       # ✅ MetaGPT 配置
+│   │   ├── legacy_executor/
+│   │   │   ├── config.yaml       # ✅ Legacy Executor 配置
 │   │   │   └── executor_v2.py
 │   │   └── mcp/
 │   │       ├── executor.py
@@ -243,7 +243,7 @@ LEE/
 │   ├── setup_env.py              # ✅ 环境设置
 │   ├── install_requirements.py   # ✅ 安装依赖
 │   ├── test_llm.py               # ✅ LLM 测试
-│   ├── test_metagpt.py           # ✅ MetaGPT 测试
+│   ├── test_legacy_executor.py           # ✅ Legacy Executor 测试
 │   ├── test_mcp.py               # ✅ MCP 测试
 │   ├── test_all.py               # ✅ 完整测试
 │   ├── run_mock_mcp.py           # ✅ Mock MCP Server
@@ -287,8 +287,8 @@ python scripts/test_llm.py
 # MCP 测试
 python scripts/test_mcp.py
 
-# MetaGPT 测试
-python scripts/test_metagpt.py
+# Legacy Executor 测试
+python scripts/test_legacy_executor.py
 ```
 
 ### 在 Agent/Skill 中使用
@@ -362,7 +362,7 @@ server_url: http://localhost:3000
 
 - [x] .env 文件配置完成
 - [x] LLM Executor 配置完成
-- [x] MetaGPT Executor 配置完成
+- [x] Legacy Executor Executor 配置完成
 - [x] MCP Server 环境搭建完成
 - [x] Python 依赖安装完成
 - [x] Antigravity 反代测试通过
@@ -378,7 +378,7 @@ server_url: http://localhost:3000
 | 测试项 | 状态 | 通过率 |
 |--------|------|--------|
 | **LLM Executor** | ✅ | 3/3 (100%) |
-| **MetaGPT Executor** | ✅ | 基础功能正常 |
+| **Legacy Executor Executor** | ✅ | 基础功能正常 |
 | **MCP Server** | ✅ | 4/4 (100%) |
 | **总计** | ✅ | 7/7+ (100%) |
 
@@ -392,7 +392,7 @@ server_url: http://localhost:3000
 1. ✅ 配置 Antigravity 反代服务
 2. ✅ 配置智谱 GLM API
 3. ✅ 配置 LLM Executor
-4. ✅ 配置 MetaGPT Executor
+4. ✅ 配置 Legacy Executor Executor
 5. ✅ 搭建 MCP Server 环境
 6. ✅ 创建完整测试套件
 7. ✅ 所有测试通过
@@ -401,7 +401,7 @@ server_url: http://localhost:3000
 - ✅ LLM 推理和生成（Antigravity + 智谱 GLM）
 - ✅ Shell 命令执行
 - ✅ MCP 服务调用
-- ✅ MetaGPT 多智能体（可选）
+- ✅ Legacy Executor 多智能体（可选）
 
 ### 下一步
 1. 运行实际 workflow 测试

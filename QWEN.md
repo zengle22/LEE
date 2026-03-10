@@ -7,7 +7,7 @@
 ### 核心特性
 
 - **工作流编排**: DAG 调度、状态管理、事件溯源
-- **多引擎支持**: MetaGPT、单 Agent、Python/CLI
+- **多引擎支持**: 单 Agent、Python/CLI
 - **人工门禁**: 工作流中的审批节点
 - **规范管理**: 全局规范模板 + 产品专属规范
 - **部门化组织**: 按 PM/Dev/QA/DevOps 部门组织规范
@@ -16,9 +16,8 @@
 
 ### 技术栈
 
-- **语言**: Python 3.8+ (推荐 3.9-3.10 以支持 MetaGPT)
+- **语言**: Python 3.8+
 - **核心依赖**: PyYAML, jsonschema, aiosqlite, jinja2, click
-- **可选引擎**: MetaGPT 0.8.x
 - **测试框架**: pytest
 - **代码质量**: black, flake8, mypy
 
@@ -90,7 +89,7 @@ LEE/
 # 基础安装
 pip install -e .
 
-# 完整安装（含 MetaGPT 引擎）
+# 完整安装（含可选依赖）
 pip install -e ".[all]"
 
 # 开发环境安装（含测试工具）
@@ -165,7 +164,7 @@ mypy src/
 
 ### 代码规范
 
-- **Python 版本**: Python 3.8+ (MetaGPT 引擎需要 3.9-3.10)
+- **Python 版本**: Python 3.8+
 - **行长度**: 100 字符（Black 配置）
 - **测试文件**: 命名为 `test_*.py`，放在 `tests/` 目录
 - **类名**: 使用 PascalCase（如 `InstanceGenerator`）
@@ -215,7 +214,6 @@ LEE 框架采用 **Plan → Instance → Execute** 统一流程：
 - **位置**: `src/flowcore/engines/`
 - **职责**: 执行不同类型的工作流节点
 - **支持引擎**:
-  - MetaGPT 引擎（通过 `metagpt/` 适配层）
   - 单 Agent 引擎
   - Python/CLI 引擎
 
@@ -313,7 +311,7 @@ pytest tests/e2e/
 
 - **当前版本**: v0.2.0
 - **最后更新**: 2026-02-26
-- **Python 要求**: >= 3.8 (MetaGPT 需要 3.9-3.10)
+- **Python 要求**: >= 3.8
 - **许可**: MIT License
 
 ---
@@ -323,5 +321,5 @@ pytest tests/e2e/
 1. **环境变量**: 使用 `.env` 文件配置 LLM API 和其他敏感信息，不要提交到 Git
 2. **工作流格式**: 新工作流必须使用 `spec-global` 格式，旧的 `templates.yaml` 格式已废弃
 3. **测试覆盖**: 修改核心功能时，必须确保测试通过且覆盖率达标
-4. **MetaGPT 兼容性**: 如需使用 MetaGPT 引擎，请使用 Python 3.9-3.10
+4. **执行器选择**: 默认使用 Claude Code，可通过配置切换
 5. **技术债务**: 参见 `docs/technical-debt.md` 了解已知问题和改进计划

@@ -85,7 +85,7 @@ python -m py_compile flowcore/**/*.py
 ### 6. 清理原始目录（确认无误后）
 
 ```bash
-rm -rf orchestrator ai-spec MetaGPT/metagpt/lee
+rm -rf orchestrator ai-spec Legacy Executor/legacy_executor/lee
 ```
 
 ## 目标结构
@@ -100,7 +100,7 @@ LEE/                                    # ★ LEE 框架根目录（本项目）
 │   ├── engines/                        # 执行引擎
 │   │   ├── README.md
 │   │   ├── ARCHITECTURE.md
-│   │   └── metagpt/                    # MetaGPT 适配层
+│   │   └── legacy_executor/                    # Legacy Executor 适配层
 │   ├── utils/                          # 工具模块
 │   └── cli/                            # 命令行工具
 ├── spec-global/                        # ★ 全局规范模板（按部门组织）
@@ -125,14 +125,14 @@ LEE/                                    # ★ LEE 框架根目录（本项目）
 
 ```python
 from orchestrator.core.state_machine import StateMachine
-from metagpt.lee.protocol import LEERequest
+from legacy_executor.lee.protocol import LEERequest
 ```
 
 ### 目标（v2）
 
 ```python
 from flowcore.orchestrator.state_machine import StateMachine
-from flowcore.engines.metagpt.protocol import LEERequest
+from flowcore.engines.legacy_executor.protocol import LEERequest
 ```
 
 ## 被其他产品项目引用

@@ -72,8 +72,8 @@ critical_issues:
   - id: "P0-003"
     category: "architecture"
     severity: "critical"
-    title: "MetaGPT Executor Bug 修复功能未实现"
-    file: "src/lee/orchestrator/execution/metagpt_executor.py"
+    title: "Legacy Executor Executor Bug 修复功能未实现"
+    file: "src/lee/orchestrator/execution/legacy_executor_executor.py"
     line: 184
     description: |
       bug_autofix 任务类型的实现只是占位符，返回虚假的完成状态。
@@ -85,7 +85,7 @@ critical_issues:
     recommendation: |
       要么实现真正的 Bug 修复逻辑，要么明确标记为不支持并返回错误。
     reference: "TODO 注释第 184 行"
-    tags: ["incomplete-implementation", "metagpt", "bug-fix"]
+    tags: ["incomplete-implementation", "legacy_executor", "bug-fix"]
 
   - id: "P0-004"
     category: "security"

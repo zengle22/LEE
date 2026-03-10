@@ -223,7 +223,7 @@ spec-global/departments/
 
 1. 创建目录结构（7 个部门）
 2. 迁移 orchestrator
-3. 迁移 MetaGPT 适配层
+3. 迁移 Legacy Executor 适配层
 4. 迁移 ai-spec（按部门重组）
 5. 创建基础文件
 6. **调用 create_department_readmes.py 创建部门 README**

@@ -128,7 +128,7 @@ last_updated: 2026-02-19
 - [x] **2.1 保留 v3 版本 Executors**
   - [x] `llm_executor.py`（已集成）
   - [x] `shell_executor.py`（已实现）
-  - [x] `metagpt_executor.py`（已实现）
+  - [x] `legacy_executor_executor.py`（已实现）
 
 - [x] **2.2 v1 Executors 不再需要**
   - [x] 停用 `flowcore/engines/` 目录（备份到 flowcore.backup）
@@ -141,7 +141,7 @@ last_updated: 2026-02-19
 **产出**:
 - ✅ `src/lee/orchestrator/execution/llm_executor.py`（保留 v3）
 - ✅ `src/lee/orchestrator/execution/shell_executor.py`（保留 v3）
-- ✅ `src/lee/orchestrator/execution/metagpt_executor.py`（保留 v3）
+- ✅ `src/lee/orchestrator/execution/legacy_executor_executor.py`（保留 v3）
 - ✅ `src/lee/orchestrator/execution/executors.py`（保留 v3）
 
 ---
@@ -345,7 +345,7 @@ last_updated: 2026-02-19
 ### 6.2 功能指标 ✅
 
 - [x] 支持 L1/L2/L3 workflow
-- [x] 支持 LLM/Shell/MetaGPT 执行器
+- [x] 支持 LLM/Shell/Legacy Executor 执行器
 - [x] Agent 系统完整迁移
 - [x] 可观测性系统完整迁移
 - [x] 验证器系统完整迁移

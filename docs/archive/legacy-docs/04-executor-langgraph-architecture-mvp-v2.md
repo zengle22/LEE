@@ -74,7 +74,7 @@ v3.1 Workflow 层级:           本文档 执行架构层:
 本 MVP 设计采用**渐进式替换**策略：
 
 1. **Phase A/B (当前)**: 新的 LangGraph Executor 与现有 Executor **并存**
-   - 现有 `LLMExecutor`, `ShellExecutor`, `MetaGPTExecutor` 继续工作
+   - 现有 `LLMExecutor`, `ShellExecutor`, `Legacy ExecutorExecutor` 继续工作
    - 新的 LangGraph Executor 处理特定 `task_type`
    - 通过 `execution_context.task_type` 字段路由
 

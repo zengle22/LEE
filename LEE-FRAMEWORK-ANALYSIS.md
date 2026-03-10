@@ -201,7 +201,7 @@ lee = "lee.cli.main:main"  # 指向不存在的文件
 ```markdown
 # README 中的示例
 from flowcore.orchestrator.runner import run_workflow  # 不存在
-from flowcore.engines.metagpt.adapter import run_lee_unit  # 不存在
+from flowcore.engines.legacy_executor.adapter import run_lee_unit  # 不存在
 ```
 
 ### 4.2 缺少关键文档

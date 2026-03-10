@@ -187,7 +187,7 @@ lee run <workflow_key> --executor <executor_type>
 **支持的执行器类型**：
 - `llm` - LLM Executor（默认）
 - `shell` - Shell Executor
-- `metagpt` - MetaGPT Executor
+- `legacy_executor` - Legacy Executor Executor
 - `claude_code` - Claude Code Executor
 - `codex` - Codex Executor
 - `langgraph` - LangGraph Executor
