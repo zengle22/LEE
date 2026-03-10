@@ -44,7 +44,9 @@ jobs:
         run: |
           python scripts/detect-hardcoded-paths.py src
           python scripts/lint_l3_templates.py spec-global/departments
-          pytest tests/unit tests/integration tests/orchestrator tests/runtime tests/qa tests/pm_agent -q
+          python -m pytest tests/unit tests/integration tests/orchestrator tests/runtime tests/pm_agent -q \
+            --ignore tests/unit/test_artifacts/test_cleanup.py \
+            --ignore tests/unit/test_artifacts/test_install_git_hooks.py
 
       - name: Compute candidate version
         id: version

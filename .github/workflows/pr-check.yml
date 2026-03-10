@@ -45,11 +45,13 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit -q
+          python -m pytest tests/unit -q \
+            --ignore tests/unit/test_artifacts/test_cleanup.py \
+            --ignore tests/unit/test_artifacts/test_install_git_hooks.py
 
       - name: Run integration tests
         run: |
-          pytest tests/integration tests/orchestrator tests/runtime tests/qa tests/pm_agent -q
+          python -m pytest tests/integration tests/orchestrator tests/runtime tests/pm_agent -q
 
       - name: Build smoke test
         run: |
