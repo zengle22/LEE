@@ -54,7 +54,7 @@ class TestTemplateParserClaudeCode:
         assert step.executor_type == "patch_apply"
 
     def test_parse_agent_type_unchanged(self):
-        """type: agent 应保持 kind=agent, executor_type=llm"""
+        """type: agent 应保持 kind=agent, executor_type=claude_code"""
         from lee.orchestrator.execution.template_manager import TemplateManager
 
         manager = TemplateManager("specs/workflows")
@@ -64,7 +64,7 @@ class TestTemplateParserClaudeCode:
             "inputs": {"prompt": "test"},
         })
         assert step.kind == "agent"
-        assert step.executor_type == "llm"
+        assert step.executor_type == "claude_code"
 
     def test_parse_agent_with_executor_override(self):
         """type: agent + executor: claude_code 应保持 kind=agent, executor_type=claude_code"""
@@ -123,7 +123,7 @@ class TestExecutorConfig:
         config = ExecutorConfig.from_dict({})
         assert config.coding_executor == "claude_code"
         assert config.coding_fallback == "llm_patch"
-        assert config.default_type == "llm"
+        assert config.default_type == "claude_code"
 
     def test_full_config_load(self):
         """LeeConfig 应正确加载嵌套的 executor 配置"""

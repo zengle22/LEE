@@ -751,7 +751,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 elif step_to_execute.kind == "skill":
                     return await self._run_skill_step(workflow_id, step_to_execute)
                 else:
-                    executor = self.executor_factory.create(step_to_execute.executor_type or "llm")
+                    executor = self.executor_factory.create(step_to_execute.executor_type or "claude_code")
                     input_data = step_to_execute.input or {}
 
                     # v3.5: worktree 强制隔离
@@ -822,7 +822,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                                 patch_hash=patch_bundle.patch_hash if patch_bundle else "",
                                 exit_code=0,
                                 timestamp=datetime.now(timezone.utc).isoformat(),
-                                executor_type=step_to_execute.executor_type or "llm",
+                                executor_type=step_to_execute.executor_type or "claude_code",
                             )
                             self.receipt_store.save(receipt)
 

@@ -652,8 +652,8 @@ def _release_project_run_lock(lock_fp) -> None:
 @click.option("--branch", help="目标分支")
 @click.option("--project-dir", default=".", help="项目目录")
 @click.option("--max-steps", default=10, show_default=True, help="最大执行步数")
-@click.option("--executor", help="强制指定执行器类型（覆盖 spec 中的配置）", type=click.Choice([
-    "llm", "shell", "metagpt", "claude_code", "codex", "langgraph"
+@click.option("--executor", default="claude_code", show_default=True, help="强制指定执行器类型（覆盖 spec 中的配置）", type=click.Choice([
+    "llm", "shell", "claude_code", "codex", "langgraph"
 ]))
 @click.option("--plan-only", is_flag=True, help="只生成 Plan，不执行")
 @click.option("--skip-plan", is_flag=True, help="跳过 Plan，直接执行")
