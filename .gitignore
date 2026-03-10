@@ -91,3 +91,6 @@ demo-test-artifacts
 docs/reports/governance
 test-temp-system
 tmp_epic_to_feat_sample.yaml
+.tmp/
+tmp_*.yaml
+vibe-kanban/
