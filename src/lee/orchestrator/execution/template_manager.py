@@ -814,6 +814,19 @@ class TemplateManager:
         """
         steps = []
 
+        def resolve_executor_type(kind: str) -> Optional[str]:
+            if kind == "agent":
+                return self.config.executor.default_type
+            if kind == "claude_code":
+                return "claude_code"
+            if kind == "patch_apply":
+                return "patch_apply"
+            if kind == "skill":
+                return "shell"
+            if kind in ("gate", "human_gate", "workflow_spawn", "subworkflow", "orchestrator_cli", "compliance_gate"):
+                return None
+            return "shell"
+
         # 格式1: 嵌套格式: stages -> steps (v1.2 新格式)
         if "stages" in doc:
             for stage in doc.get("stages", []):
@@ -861,7 +874,7 @@ class TemplateManager:
                         id=step_id,
                         kind=kind,
                         agent_id=agent_id,
-                        executor_type="llm" if kind == "agent" else "shell",
+                        executor_type=resolve_executor_type(kind),
                         depends_on=combined_deps,
                         input={
                             "step_id": step_id,
@@ -919,7 +932,7 @@ class TemplateManager:
                     id=step_id,
                     kind=kind,
                     agent_id=agent_id,
-                    executor_type="llm" if kind == "agent" else "shell",
+                    executor_type=resolve_executor_type(kind),
                     depends_on=depends_on,
                     input={
                         "step_id": step_id,
