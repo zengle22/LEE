@@ -171,6 +171,11 @@ def parse_id(id: str) -> IDParseResult:
         return IDParseResult(id, prefix, parent_scope, sequence, suffix, True)
 
     prefix = id.split("-", 1)[0].upper()
+    known_prefixes = {"REL"} | {item.value.upper() for item in SSOTType}
+    if prefix not in known_prefixes:
+        error = f"Invalid prefix: {prefix}"
+    else:
+        error = f"Unsupported SSOT ID format: {id}"
     return IDParseResult(
         id=id,
         prefix=prefix,
@@ -178,7 +183,7 @@ def parse_id(id: str) -> IDParseResult:
         sequence=None,
         suffix=None,
         is_valid=False,
-        error=f"Unsupported SSOT ID format: {id}",
+        error=error,
     )
 
 
@@ -204,6 +209,12 @@ def validate_parent_consistency(
     category = ObjectCategory.for_type(ssot_type)
 
     if category == ObjectCategory.INDEPENDENT:
+        if ssot_type == SSOTType.FEAT:
+            if not parent_id:
+                return None
+            if re.match(r"^EPIC-\d{3}$", parent_id):
+                return None
+            return f"类型 {ssot_type.value} 的 parent_id 若提供，必须为 EPIC，当前为 {parent_id}"
         if parent_id:
             return f"类型 {ssot_type.value} 不应设置 parent_id，当前为 {parent_id}"
         return None

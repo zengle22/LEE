@@ -101,3 +101,5 @@ def test_materialize_full_chain_and_non_ssot(materializer):
     assert ".artifacts" in str(outputs["note"].artifact.absolute_path)
     assert outputs["feat"].artifact.absolute_path.exists()
     assert outputs["tc"].artifact.absolute_path.exists()
+    validator = materializer.manager.registry
+    assert validator.get(outputs["feat"].artifact.id).properties["parent_id"] == outputs["epic"].artifact.id

@@ -253,6 +253,50 @@ class TestSSOTBuildIndexCommand:
         assert Path(custom_path).exists()
 
 
+class TestSSOTCreateCommand:
+    """测试 lee ssot create 命令"""
+
+    def test_create_feat_with_epic_parent_passes_p0(self, runner, artifact_manager):
+        epic = artifact_manager.create_ssot(
+            ssot_type="epic",
+            title="增长基础设施",
+            content="# Epic\n",
+            run_id="test-run-create-feat-parent",
+        )
+
+        feat_body = artifact_manager.project_root / "feat-body.md"
+        feat_body.write_text("# 用户注册\n", encoding="utf-8")
+
+        result = runner.invoke(
+            ssot,
+            [
+                "create",
+                "--type",
+                "feat",
+                "--title",
+                "用户注册",
+                "--content-file",
+                str(feat_body),
+                "--run-id",
+                "test-run-create-feat-parent",
+                "--status",
+                "draft",
+                "--version",
+                "v1",
+                "--parent-id",
+                epic.id,
+                "--source-ref",
+                f"{epic.id}#scope",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "created FEAT-001" in result.output
+
+        validate_result = runner.invoke(ssot, ["validate-p0", "FEAT-001"])
+        assert validate_result.exit_code == 0
+        assert "P0 validation passed for FEAT-001" in validate_result.output
+
+
 class TestSSOTImpactCommand:
     """测试 lee ssot impact 命令"""
 

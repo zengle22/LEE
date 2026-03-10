@@ -176,6 +176,17 @@ class TestValidateParentConsistency:
         result = validate_parent_consistency("FEAT-001", None, SSOTType.FEAT)
         assert result is None
 
+    def test_feat_parent_allows_epic(self):
+        """FEAT 可选挂到 EPIC"""
+        result = validate_parent_consistency("FEAT-001", "EPIC-001", SSOTType.FEAT)
+        assert result is None
+
+    def test_feat_parent_rejects_non_epic(self):
+        """FEAT parent_id 若提供必须为 EPIC"""
+        result = validate_parent_consistency("FEAT-001", "ADR-001", SSOTType.FEAT)
+        assert result is not None
+        assert "必须为 EPIC" in result
+
     def test_direct_parent_consistent(self):
         """直接父对象一致型应一致"""
         result = validate_parent_consistency(

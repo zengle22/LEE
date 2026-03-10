@@ -287,6 +287,7 @@ class ObjectCategory(str, Enum):
             必需的 parent_id 类型，或 None 表示可选
         """
         parent_requirements = {
+            SSOTType.FEAT: "EPIC",
             SSOTType.UI: "FEAT",
             SSOTType.TECH: "FEAT",
             SSOTType.DEVPLAN: "RELEASE",
