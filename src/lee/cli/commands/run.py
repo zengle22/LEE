@@ -17,6 +17,7 @@ import yaml
 from lee.cli.commands.workflow_registry import load_workflow_registry, resolve_workflow_template_path
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
+from lee.orchestrator.execution.error_hints import diagnose_executor_error
 from lee.orchestrator.execution.artifacts import ArtifactManager, ManifestManager
 from lee.orchestrator.execution.artifacts.types import ArtifactType, GovernanceKind
 
@@ -26,6 +27,56 @@ except ImportError:  # pragma: no cover
     fcntl = None
 
 TERMINAL_WORKFLOW_STATUSES = {"completed", "failed", "superseded"}
+
+
+def _print_failed_step_details(project_root: Path, workflow_id: str) -> None:
+    db_path = project_root / ".workflow" / "orchestrator.db"
+    if not db_path.exists():
+        return
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT step_name, error_message
+               FROM task_executions
+               WHERE workflow_id = ? AND status = 'failed'
+               ORDER BY started_at DESC""",
+            (workflow_id,),
+        )
+        failed_steps = cursor.fetchall()
+        conn.close()
+    except Exception:
+        return
+
+    if not failed_steps:
+        return
+
+    click.echo("\n❌ 失败原因:")
+    for step_name, error in failed_steps:
+        click.echo(f"  - {step_name}: {error}")
+        hints = diagnose_executor_error(error)
+        if hints:
+            click.echo("    环境提示:")
+            for hint in hints:
+                click.echo(f"    - {hint}")
+
+
+def _param_aliases(name: str) -> List[str]:
+    if not isinstance(name, str):
+        return []
+    if name.endswith("_freeze"):
+        return [f"{name}_ref"]
+    if name.endswith("_freeze_ref"):
+        return [name[:-4]]
+    return []
+
+
+def _has_param_with_aliases(params: Dict[str, Any], name: str) -> bool:
+    for candidate in [name, *_param_aliases(name)]:
+        if candidate in params:
+            return True
+    return False
 
 
 def _load_registry() -> Dict[str, Any]:
@@ -251,6 +302,9 @@ def _print_summary(project_root: Path, workflow_id: str, summary: Dict[str, Any]
         raise click.ClickException(f"Missing status in summary: {summary}")
 
     click.echo(f"\n最终状态: {status}")
+
+    if status == "failed":
+        _print_failed_step_details(project_root, workflow_id)
 
     if summary.get("blocked_at"):
         click.echo(f"阻塞在: {summary.get('blocked_at')}")
@@ -692,7 +746,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         params.setdefault(k, v)
 
     required = entry.get("required_params", []) or []
-    missing = [p for p in required if p not in params]
+    missing = [p for p in required if not _has_param_with_aliases(params, p)]
     if missing:
         raise click.ClickException(f"Missing required params: {', '.join(missing)}")
 

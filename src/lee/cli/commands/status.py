@@ -10,6 +10,7 @@ from typing import Optional
 import click
 
 from lee.orchestrator.api import pm_workflow
+from lee.orchestrator.execution.error_hints import diagnose_executor_error
 
 
 @click.command()
@@ -77,6 +78,11 @@ def status(workflow_id: Optional[str], project_dir: str, timeout: int) -> None:
                         click.echo("\n❌ 失败原因:")
                         for step_name, error, status in failed_steps:
                             click.echo(f"  - {step_name}: {error}")
+                            hints = diagnose_executor_error(error)
+                            if hints:
+                                click.echo("    环境提示:")
+                                for hint in hints:
+                                    click.echo(f"    - {hint}")
 
                     conn.close()
             except Exception:
