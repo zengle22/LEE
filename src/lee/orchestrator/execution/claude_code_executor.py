@@ -125,6 +125,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         goal = input_data["goal"]
         workspace = input_data["workspace"]
         context_files = input_data.get("context_files") or []
+        step_workspace = str(input_data.get("step_workspace") or "").strip()
 
         configured_commands = input_data.get("allowed_commands")
         if isinstance(configured_commands, list):
@@ -257,6 +258,18 @@ class ClaudeCodeExecutor(BaseExecutor):
             detail = str(e).strip()
             if not detail:
                 detail = "timeout"
+            recovered = await self._recover_timeout_result(
+                workspace=workspace,
+                step_workspace=step_workspace,
+                evidence_dir=str(evidence_dir),
+                conversation_log_path=conversation_live_log_path,
+                debug_log_path=claude_debug_log_path,
+                prompt_system_path=prompt_system_path,
+                prompt_user_path=prompt_user_path,
+                detail=detail,
+            )
+            if recovered is not None:
+                return recovered
             return self._build_result(
                 status="timeout",
                 error=(
@@ -340,6 +353,47 @@ class ClaudeCodeExecutor(BaseExecutor):
             "error": append_executor_hints(parsed.get("error")),
         }
 
+    async def _recover_timeout_result(
+        self,
+        *,
+        workspace: str,
+        step_workspace: str,
+        evidence_dir: str,
+        conversation_log_path: str,
+        debug_log_path: str,
+        prompt_system_path: str,
+        prompt_user_path: str,
+        detail: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Recover success from timeout when step workspace already contains outputs."""
+        changed_files = self._collect_step_workspace_files(
+            workspace=workspace,
+            step_workspace=step_workspace,
+        )
+        if not changed_files:
+            return None
+        diff_summary = await self._collect_diff_summary(workspace)
+        return {
+            "status": "success",
+            "iterations_used": 0,
+            "changed_files": changed_files,
+            "commands_run": [],
+            "test_results": {},
+            "diff_summary": diff_summary,
+            "evidence_bundle_path": evidence_dir,
+            "conversation_log_path": conversation_log_path,
+            "debug_log_path": debug_log_path,
+            "prompt_system_path": prompt_system_path,
+            "prompt_user_path": prompt_user_path,
+            "generated_text": "",
+            "error": None,
+            "recovered_from_timeout": True,
+            "recovery_note": (
+                "Recovered from timeout using files already written under step workspace "
+                f"after executor stalled: {detail}"
+            ),
+        }
+
     # ================================================================
     # 内部方法
     # ================================================================
@@ -372,6 +426,33 @@ class ClaudeCodeExecutor(BaseExecutor):
             )
         evidence_dir.mkdir(parents=True, exist_ok=True)
         return evidence_dir
+
+    @staticmethod
+    def _collect_step_workspace_files(
+        *,
+        workspace: str,
+        step_workspace: str,
+    ) -> List[str]:
+        step_dir = Path(step_workspace)
+        if not step_workspace or not step_dir.exists() or not step_dir.is_dir():
+            return []
+
+        workspace_path = Path(workspace).resolve()
+        recovered: List[str] = []
+        for file_path in sorted(step_dir.rglob("*")):
+            if not file_path.is_file():
+                continue
+            name = file_path.name
+            if name == "latest":
+                continue
+            if name.endswith(".tmp") or ".tmp." in name:
+                continue
+            resolved = file_path.resolve()
+            try:
+                recovered.append(str(resolved.relative_to(workspace_path)))
+            except ValueError:
+                recovered.append(str(resolved))
+        return recovered
 
     def _build_system_prompt(
         self,
