@@ -1053,6 +1053,144 @@ async def test_llm_runner_does_not_fail_after_successful_schema_repair(temp_proj
     state_machine.complete_step.assert_awaited_once()
 
 
+@pytest.mark.asyncio
+async def test_llm_runner_rejects_feat_bundle_semantic_drift_before_materialization(temp_project_root):
+    runner = LLMRunner()
+    epic_path = temp_project_root / "spec" / "requirements" / "epics" / "EPIC-001__workflow-first.md"
+    epic_path.parent.mkdir(parents=True, exist_ok=True)
+    epic_path.write_text(
+        """---
+id: EPIC-001
+ssot_type: epic
+title: LEE CLI Workflow-First 治理入口重构
+status: draft
+version: v1
+parent_id: null
+derived_from_ids: []
+source_refs: []
+owner: codex
+tags: []
+properties: {}
+---
+
+# Goal
+
+统一 CLI、workflow、SSOT 和 gate 的治理边界。
+""",
+        encoding="utf-8",
+    )
+    schema_path = temp_project_root / "feat-bundle.schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "required": ["epic_ref", "feat_specs"],
+                "properties": {
+                    "epic_ref": {"type": "string"},
+                    "feat_specs": {"type": "array"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    step = SimpleNamespace(
+        id="feat_spec_generation",
+        agent_id="agent.product.prd_writer",
+        executor_type="llm",
+        config={"output_contract": str(schema_path), "strict_output_validation": True},
+        input={},
+        outputs=[],
+    )
+    llm_payload = {
+        "status": "success",
+        "provider": "test",
+        "model": "test-model",
+        "tokens_used": 1,
+        "input_tokens": 1,
+        "output_tokens": 1,
+        "duration_seconds": 0.1,
+        "stop_reason": "stop",
+        "generated_text": json.dumps(
+            {
+                "business_output": {
+                    "epic_ref": "EPIC-001",
+                    "feat_specs": [
+                        {
+                            "feat_id": "FEAT-001",
+                            "title": "短信验证码发送服务",
+                            "goal": "实现手机号登录验证码发送",
+                            "user_value": "用户输入手机号即可收到短信验证码",
+                            "inputs": ["手机号"],
+                            "processing": ["发送短信"],
+                            "outputs": ["验证码发送结果"],
+                            "acceptance_criteria": ["支持短信验证码登录"],
+                            "dependencies": [],
+                            "non_goals": [],
+                        }
+                    ],
+                }
+            },
+            ensure_ascii=False,
+        ),
+    }
+    executor = MagicMock()
+    executor.execute = AsyncMock(return_value=llm_payload)
+    file_handler = MagicMock()
+    file_handler.handle = AsyncMock(return_value=[])
+    store = MagicMock()
+    store.get_workflow = AsyncMock(
+        return_value=SimpleNamespace(
+            data={"run_id": "run-001"},
+            level="task",
+            template_id="template.product.epic_to_feat",
+        )
+    )
+    store.create_task_execution = AsyncMock(return_value="exec-001")
+    store.update_task_execution = AsyncMock()
+    state_machine = MagicMock()
+    state_machine.complete_step = AsyncMock()
+    state_machine.fail_step = AsyncMock()
+    event_log = MagicMock()
+    event_log.emit = AsyncMock()
+    evidence_collector = MagicMock()
+    evidence_collector.collect_task_execution = AsyncMock()
+    verifier_engine = MagicMock()
+    agent_loader = MagicMock()
+    agent_loader.load.return_value = None
+    agent_context_builder = MagicMock()
+    agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="system",
+            user_prompt="user",
+            temperature=0.1,
+            max_tokens=100,
+        )
+    )
+    agent_context_builder.agent_loader = agent_loader
+    token_manager = MagicMock()
+    token_manager.issue_token = MagicMock(return_value=None)
+    ctx = RunnerContext(
+        store=store,
+        state_machine=state_machine,
+        event_log=event_log,
+        evidence_collector=evidence_collector,
+        verifier_engine=verifier_engine,
+        executor_factory=MagicMock(create=MagicMock(return_value=executor)),
+        agent_context_builder=agent_context_builder,
+        contract_discovery=MagicMock(get_workflow_inputs=MagicMock(return_value={})),
+        file_output_handler=file_handler,
+        token_manager=token_manager,
+        project_root=str(temp_project_root),
+    )
+    runner._materialize_ssot_outputs = AsyncMock(return_value=None)
+
+    result = await runner.execute("wf-001", step, ctx)
+
+    assert result.status == "failed"
+    state_machine.fail_step.assert_awaited_once()
+    runner._materialize_ssot_outputs.assert_not_awaited()
+
+
 def test_extract_business_output_payload_uses_written_file_when_mixed_output(temp_project_root, runner):
     output_path = temp_project_root / "spec" / "qa" / "test-sets" / "ts-demo-module.yaml"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1236,6 +1374,105 @@ def test_validate_feat_review_semantics_requires_findings_for_revise(runner):
     assert error == "FEAT review output with decision=revise must include at least one finding"
 
 
+def test_validate_feat_bundle_epic_semantics_accepts_governance_bundle(temp_project_root, runner):
+    epic_path = temp_project_root / "spec" / "requirements" / "epics" / "EPIC-001__workflow-first.md"
+    epic_path.parent.mkdir(parents=True, exist_ok=True)
+    epic_path.write_text(
+        """---
+id: EPIC-001
+ssot_type: epic
+title: LEE CLI Workflow-First 治理入口重构
+status: draft
+version: v1
+parent_id: null
+derived_from_ids: []
+source_refs: []
+owner: codex
+tags: []
+properties: {}
+---
+
+# Goal
+
+统一 CLI、workflow、SSOT 和 gate 的治理边界。
+""",
+        encoding="utf-8",
+    )
+
+    error = runner._validate_feat_bundle_epic_semantics(
+        project_root=str(temp_project_root),
+        business_output={
+            "epic_ref": "EPIC-001",
+            "feat_specs": [
+                {
+                    "title": "Gate 三类治理模型定义",
+                    "goal": "统一 gate / review / approval / freeze 语义",
+                    "user_value": "让 workflow 与 ssot 治理边界清晰",
+                    "inputs": ["workflow config"],
+                    "processing": ["治理规则校验"],
+                    "outputs": ["gate result"],
+                    "acceptance_criteria": ["CLI 与 workflow 入口语义一致"],
+                    "dependencies": [],
+                    "non_goals": [],
+                }
+            ],
+        },
+    )
+
+    assert error is None
+
+
+def test_validate_feat_bundle_epic_semantics_rejects_auth_bundle_for_governance_epic(temp_project_root, runner):
+    epic_path = temp_project_root / "spec" / "requirements" / "epics" / "EPIC-001__workflow-first.md"
+    epic_path.parent.mkdir(parents=True, exist_ok=True)
+    epic_path.write_text(
+        """---
+id: EPIC-001
+ssot_type: epic
+title: LEE CLI Workflow-First 治理入口重构
+status: draft
+version: v1
+parent_id: null
+derived_from_ids: []
+source_refs: []
+owner: codex
+tags: []
+properties: {}
+---
+
+# Goal
+
+统一 CLI、workflow、SSOT 和 gate 的治理边界。
+""",
+        encoding="utf-8",
+    )
+
+    error = runner._validate_feat_bundle_epic_semantics(
+        project_root=str(temp_project_root),
+        business_output={
+            "epic_ref": "EPIC-001",
+            "feat_specs": [
+                {
+                    "title": "短信验证码发送服务",
+                    "goal": "实现手机号登录验证码发送",
+                    "user_value": "用户输入手机号即可收到短信验证码",
+                    "inputs": ["手机号"],
+                    "processing": ["发送短信", "校验验证码"],
+                    "outputs": ["验证码发送结果"],
+                    "acceptance_criteria": ["支持短信验证码登录"],
+                    "dependencies": [],
+                    "non_goals": [],
+                }
+            ],
+        },
+    )
+
+    assert error == (
+        "FEAT bundle semantics drift from EPIC-001: "
+        "epic topic families=['governance'], feat topic families=['auth_sms']"
+    )
+
+
 def test_normalize_prd_writer_feat_payload_repairs_fixed_contract_fields(runner):
     step = SimpleNamespace(agent_id="agent.product.prd_writer")
     business_output = {
@@ -1322,6 +1559,85 @@ def test_normalize_prd_writer_feat_bundle_payload_repairs_nested_feat_fields(run
     assert feat["derived_object_expectations"]["testset_owner"] == "qa"
     assert feat["derived_object_expectations"]["qa_seed_required"] is True
     assert normalized_structured["ssot_output_contract"]["contract_version"] == "1.0"
+    assert normalized_structured["ssot_output_contract"]["outputs"][0]["key"] == "feat"
+
+
+def test_normalize_prd_writer_feat_bundle_payload_rebuilds_invalid_contract_keys(runner):
+    step = SimpleNamespace(agent_id="agent.product.prd_writer")
+    business_output = {
+        "epic_ref": "EPIC-004",
+        "feat_specs": [
+            {
+                "feat_id": "FEAT-004-01",
+                "title": "流式输出能力建设",
+                "inputs": ["stdout"],
+                "processing": ["pipe"],
+                "outputs": ["terminal"],
+                "acceptance_criteria": ["延迟 <= 500ms"],
+                "acceptance_checks": [
+                    {
+                        "id": "AC-1",
+                        "scenario": "ok",
+                        "given": "given",
+                        "when": "when",
+                        "then": "then",
+                        "trace_hints": ["TECH"],
+                    }
+                ],
+                "dependencies": [],
+                "non_goals": [],
+                "priority": "P0",
+                "delivery_slice": "mvp",
+                "lifecycle_status": "draft",
+                "ssot": {"parent": "EPIC-004"},
+            },
+            {
+                "feat_id": "FEAT-004-02",
+                "title": "执行状态可视化",
+                "inputs": ["heartbeat"],
+                "processing": ["track"],
+                "outputs": ["status"],
+                "acceptance_criteria": ["状态可见"],
+                "acceptance_checks": [
+                    {
+                        "id": "AC-2",
+                        "scenario": "ok",
+                        "given": "given",
+                        "when": "when",
+                        "then": "then",
+                        "trace_hints": ["UI"],
+                    }
+                ],
+                "dependencies": [],
+                "non_goals": [],
+                "priority": "P0",
+                "delivery_slice": "mvp",
+                "lifecycle_status": "draft",
+                "ssot": {"parent": "EPIC-004"},
+            },
+        ],
+    }
+    structured_payload = {
+        "business_output": business_output,
+        "ssot_output_contract": {
+            "outputs": [
+                {"key": "FEAT-004-01"},
+                {"key": "FEAT-004-02"},
+            ]
+        },
+    }
+
+    _, normalized_structured = runner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-task-004",
+        business_output=business_output,
+        structured_payload=structured_payload,
+    )
+
+    outputs = normalized_structured["ssot_output_contract"]["outputs"]
+    assert [item["key"] for item in outputs] == ["feat_001", "feat_002"]
+    assert all(item["ssot_type"] == "feat" for item in outputs)
+    assert all(item["parent"] == "EPIC-004" for item in outputs)
 
 
 def test_claude_code_validation_prefers_written_business_file(temp_project_root):
