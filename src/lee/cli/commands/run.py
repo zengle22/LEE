@@ -7,6 +7,7 @@ import os
 import sqlite3
 import threading
 import time
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -20,6 +21,11 @@ from lee.orchestrator.core.template_engine import TemplateEngine
 from lee.orchestrator.execution.error_hints import diagnose_executor_error
 from lee.orchestrator.execution.artifacts import ArtifactManager, ManifestManager
 from lee.orchestrator.execution.artifacts.types import ArtifactType, GovernanceKind
+from lee.orchestrator.execution.concurrency_scope import (
+    ConcurrencyScopeInfo,
+    derive_concurrency_scope,
+    describe_conflict_scope,
+)
 
 try:
     import fcntl
@@ -217,9 +223,14 @@ def _load_template_param_defaults(template_path: Path) -> Dict[str, Any]:
     return defaults
 
 
-def _list_existing_same_workflows(project_root: Path, workflow_key: str) -> List[Dict[str, Any]]:
+def _list_conflicting_workflows(
+    project_root: Path,
+    workflow_key: str,
+    concurrency_scope: str,
+) -> List[Dict[str, Any]]:
     """
-    查询同项目目录下、同 workflow_key 的旧流程（running/paused/pending）。
+    查询同项目目录下、同 workflow_key + concurrency_scope 的旧流程。
+    对缺少 concurrency_scope 的历史实例，保守视为冲突。
     """
     db_path = project_root / ".workflow" / "orchestrator.db"
     if not db_path.exists():
@@ -244,12 +255,17 @@ def _list_existing_same_workflows(project_root: Path, workflow_key: str) -> List
                 data = {}
             if data.get("workflow_key") != workflow_key:
                 continue
+            existing_scope = data.get("concurrency_scope")
+            if existing_scope and existing_scope != concurrency_scope:
+                continue
             rows.append(
                 {
                     "id": workflow_id,
                     "status": status,
                     "current_step": current_step,
                     "created_at": created_at,
+                    "concurrency_scope": existing_scope or "<legacy-unspecified>",
+                    "scope_source": data.get("scope_source") or "<legacy>",
                 }
             )
     finally:
@@ -374,17 +390,21 @@ def _refresh_summary_from_store(
     return refreshed
 
 
-def _select_existing_workflow_action(existing: List[Dict[str, Any]]) -> tuple[str, str]:
+def _select_existing_workflow_action(
+    existing: List[Dict[str, Any]],
+    scope_info: ConcurrencyScopeInfo,
+) -> tuple[str, str]:
     """
     让用户在“继续旧流程”与“结束旧流程后开新流程”之间做选择。
     返回 (action, selected_workflow_id)
     """
-    click.echo("\n检测到同目录下存在相同 workflow_key 的旧流程:")
+    click.echo(f"\n{describe_conflict_scope(scope_info)}:")
     for item in existing:
         click.echo(
             f"  - {item['id']} [{item['status']}] "
             f"current_step={item.get('current_step') or '-'} "
-            f"created_at={item.get('created_at') or '-'}"
+            f"created_at={item.get('created_at') or '-'} "
+            f"concurrency_scope={item.get('concurrency_scope') or '-'}"
         )
 
     if click.get_text_stream("stdin").isatty():
@@ -656,13 +676,21 @@ def _run_until_settled_with_gates(
         click.echo("✅ 门禁已决策，继续执行后续步骤...")
 
 
-def _acquire_project_run_lock(project_root: Path):
+def _scope_lock_name(lock_key: str) -> str:
+    digest = hashlib.sha1(lock_key.encode("utf-8")).hexdigest()[:16]
+    return f"run-scope-{digest}.lock"
+
+
+def _acquire_run_scope_lock(
+    project_root: Path,
+    scope_info: ConcurrencyScopeInfo,
+):
     """
-    单项目并发锁：同一 project_dir 只允许一个 `lee run` 进程。
+    同 scope 并发锁：只阻止同一并发作用域上的并发 `lee run`。
     """
-    lock_dir = project_root / ".workflow"
+    lock_dir = project_root / ".workflow" / "locks"
     lock_dir.mkdir(parents=True, exist_ok=True)
-    lock_path = lock_dir / "run.lock"
+    lock_path = lock_dir / _scope_lock_name(scope_info.concurrency_key)
     lock_fp = open(lock_path, "a+", encoding="utf-8")
 
     if fcntl is None:
@@ -675,15 +703,21 @@ def _acquire_project_run_lock(project_root: Path):
         owner = lock_fp.read().strip() or "unknown owner"
         lock_fp.close()
         raise click.ClickException(
-            "Detected another active `lee run` in this project. "
-            f"Lock info: {owner}"
+            "Detected another active `lee run` in the same concurrency scope. "
+            f"workflow_key={scope_info.workflow_key} "
+            f"concurrency_scope={scope_info.concurrency_scope} "
+            f"lock_info={owner}"
         )
 
     lock_fp.seek(0)
     lock_fp.truncate()
-    lock_fp.write(
-        f"pid={os.getpid()} started_at={datetime.now().isoformat()} project={project_root}"
-    )
+    lock_fp.write(json.dumps({
+        "pid": os.getpid(),
+        "started_at": datetime.now().isoformat(),
+        "workflow_key": scope_info.workflow_key,
+        "concurrency_scope": scope_info.concurrency_scope,
+        "concurrency_key": scope_info.concurrency_key,
+    }, ensure_ascii=False))
     lock_fp.flush()
     return lock_fp
 
@@ -751,6 +785,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         raise click.ClickException(f"Missing required params: {', '.join(missing)}")
 
     project_root = Path(project_dir).resolve()
+    scope_info = derive_concurrency_scope(workflow_key, params, project_root)
 
     # SSOT Root 确认 (v1 简化版)
     ssot_root_id = task_id
@@ -778,7 +813,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             f"   lee run {workflow_key} --new-task \"任务描述\"\n"
         )
 
-    lock_fp = _acquire_project_run_lock(project_root)
+    lock_fp = _acquire_run_scope_lock(project_root, scope_info)
     try:
         if instance:
             workflow_id = instance
@@ -794,9 +829,13 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             _print_summary(project_root, workflow_id, summary)
             return
 
-        existing = _list_existing_same_workflows(project_root, workflow_key)
+        existing = _list_conflicting_workflows(
+            project_root,
+            workflow_key,
+            scope_info.concurrency_scope,
+        )
         if existing:
-            action, existing_workflow_id = _select_existing_workflow_action(existing)
+            action, existing_workflow_id = _select_existing_workflow_action(existing, scope_info)
             if action == "continue":
                 selected = next((item for item in existing if item["id"] == existing_workflow_id), existing[0])
                 if selected["status"] == "paused":
@@ -877,7 +916,6 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
                 monitor.join(timeout=1)
             summary = _refresh_summary_from_store(project_root, workflow_id, summary)
             _print_summary(project_root, workflow_id, summary)
-            _release_project_run_lock(lock_fp)
             return
 
         # 原有逻辑: 直接执行
@@ -885,7 +923,13 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
 
         # Create workflow instance (L3 task)
         # 如果指定了 executor override，将其加入 data 中传递给 workflow
-        workflow_data: Dict[str, Any] = {"params": params, "workflow_key": workflow_key}
+        workflow_data: Dict[str, Any] = {
+            "params": params,
+            "workflow_key": workflow_key,
+            "concurrency_scope": scope_info.concurrency_scope,
+            "concurrency_key": scope_info.concurrency_key,
+            "scope_source": scope_info.scope_source,
+        }
         if executor:
             workflow_data["executor_override"] = executor
             click.echo(f"Executor override: {executor}")
