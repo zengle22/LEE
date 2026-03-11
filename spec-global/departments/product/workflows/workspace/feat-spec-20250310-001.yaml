@@ -1,0 +1,796 @@
+business_output:
+  epic_ref: epic-20250310-001
+  feat_specs:
+    - feat_id: FEAT-001
+      title: 基础用户认证与账户管理
+      goal: 为中端市场客户提供安全的账户注册、登录和基础账户管理能力，确保只有授权用户才能访问 AI 销售助手平台
+      user_value: 为中端市场客户提供安全的账户注册、登录和基础账户管理能力，确保只有授权用户才能访问 AI 销售助手平台
+      inputs:
+        - 用户邮箱/手机号
+        - 用户密码
+        - 账户基本信息（姓名、公司名称）
+      processing:
+        - 用户身份验证
+        - 密码加密存储
+        - JWT token 生成
+        - 会话管理
+        - 账户信息存储
+      outputs:
+        - JWT access token
+        - JWT refresh token
+        - 用户 profile 信息
+        - 登录状态
+      user_stories:
+        - as_a: 新客户
+          i_want: 快速注册账户并登录系统
+          so_that: 我可以立即开始使用 AI 销售助手
+        - as_a: 已注册用户
+          i_want: 修改个人账户信息
+          so_that: 保持我的账户信息最新
+      acceptance_criteria:
+        - 用户可在 2 分钟内完成注册并登录系统
+        - 登录后能查看个人账户信息
+        - 用户可编辑个人账户信息
+        - JWT token 有效期为 24 小时
+      acceptance_checks:
+        - id: AC-001
+          scenario: 用户成功注册并登录系统
+          given: 用户在注册页面输入有效邮箱和密码
+          when: 点击注册按钮并完成验证
+          then: 系统创建账户并返回 JWT token，用户跳转至首页
+          trace_hints:
+            - UI
+            - TECH
+            - TASK
+            - TESTSET
+        - id: AC-002
+          scenario: 用户使用邮箱密码登录
+          given: 用户已注册账户
+          when: 输入正确邮箱和密码后点击登录
+          then: 系统验证通过，返回 JWT token 并跳转至首页
+          trace_hints:
+            - UI
+            - TECH
+            - TASK
+            - TESTSET
+        - id: AC-003
+          scenario: 用户查看和编辑账户信息
+          given: 用户已登录系统
+          when: 点击账户设置页面
+          then: 显示当前账户信息，用户可编辑并保存
+          trace_hints:
+            - UI
+            - TECH
+            - TESTSET
+      dependencies: []
+      non_goals:
+        - 不提供 SSO 企业联合登录
+        - 不提供多租户隔离
+        - 不包含权限细粒度管理
+      priority: P0
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+    - feat_id: FEAT-002
+      title: AI 销售会话智能 - 实时通话辅助
+      goal: 销售人员在进行客户电话沟通时，可实时获得 AI 辅助建议、关键信息提取和下一步行动推荐，提升通话效率和专业度
+      user_value: 销售人员在进行客户电话沟通时，可实时获得 AI 辅助建议、关键信息提取和下一步行动推荐，提升通话效率和专业度
+      inputs:
+        - 通话音频流/实时文字输入
+        - 客户背景信息
+        - 销售话术模板库
+      processing:
+        - 语音识别（STT）
+        - NLP 意图分析
+        - 上下文理解
+        - 实时建议生成
+        - 关键信息提取
+      outputs:
+        - 实时辅助建议面板
+        - 通话摘要（含关键要点）
+        - 下一步行动推荐
+        - 行动项清单
+      user_stories:
+        - as_a: 销售人员
+          i_want: 在与客户通话时获得实时 AI 建议
+          so_that: 我可以更专业地回应客户，提升成交率
+      acceptance_criteria:
+        - 销售人员在通话中能收到 AI 实时建议
+        - 通话结束后自动生成包含关键要点和行动项的摘要
+        - 建议响应时间小于 3 秒
+      acceptance_checks:
+        - id: AC-001
+          scenario: 销售人员在通话中获得实时 AI 建议
+          given: 销售人员在通话中
+          when: 输入客户语音或文字内容
+          then: 系统在 3 秒内返回相关建议
+          trace_hints:
+            - UI
+            - TECH
+            - TASK
+            - TESTSET
+        - id: AC-002
+          scenario: 通话结束后生成摘要
+          given: 通话已结束
+          when: 用户点击生成摘要
+          then: 系统返回包含关键要点和行动项的摘要
+          trace_hints:
+            - UI
+            - TECH
+            - TASK
+            - TESTSET
+      dependencies:
+        - FEAT-001
+      non_goals:
+        - 不提供通话录音存储
+        - 不包含视频会议辅助
+        - 不支持多语言实时翻译
+      priority: P0
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+    - feat_id: FEAT-003
+      title: AI 销售会话智能 - 内容提取
+      goal: 从销售通话和客户沟通记录中自动提取关键业务信息，形成结构化客户画像
+      user_value: 从销售通话和客户沟通记录中自动提取关键业务信息（需求、预算、决策人、时间线等），形成结构化客户画像
+      inputs:
+        - 通话文字稿
+        - 邮件内容
+        - 客户历史档案
+      processing:
+        - 实体识别（NER）
+        - 信息抽取
+        - 关键信息结构化
+        - 客户画像构建
+      outputs:
+        - 结构化客户画像（需求、预算、痛点、决策人等字段）
+        - 提取结果编辑界面
+        - 客户档案同步
+      user_stories:
+        - as_a: 销售人员
+          i_want: 从通话记录中自动提取客户关键信息
+          so_that: 我可以快速建立完整的客户画像，减少手动录入时间
+      acceptance_criteria:
+        - 系统能从文字记录中提取至少 10 个关键业务实体
+        - 提取结果可编辑
+        - 编辑后可同步到客户档案
+      acceptance_checks:
+        - id: AC-001
+          scenario: 系统提取关键业务实体
+          given: 用户上传通话文字稿
+          when: 点击提取按钮
+          then: 系统返回至少 10 个关键业务实体
+          trace_hints:
+            - TECH
+            - TASK
+            - TESTSET
+        - id: AC-002
+          scenario: 提取结果可编辑并同步
+          given: 提取结果已生成
+          when: 用户编辑内容后点击保存
+          then: 内容保存成功并同步到客户档案
+          trace_hints:
+            - UI
+            - TECH
+            - TESTSET
+      dependencies:
+        - FEAT-002
+      non_goals:
+        - 不提供 OCR 文档解析
+        - 不包含情感分析
+        - 不生成自动回复建议
+      priority: P0
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+    - feat_id: FEAT-004
+      title: AI 销售线索评分与优先级排序
+      goal: 帮助销售团队自动评估和排序潜在客户，根据多维度因素给出优先级建议
+      user_value: 帮助销售团队自动评估和排序潜在客户，根据多维度因素给出优先级建议，让销售资源聚焦于最高价值机会
+      inputs:
+        - 潜在客户基础信息（公司规模、行业、职位等）
+        - 行为数据（官网访问、邮件互动）
+        - 历史成交数据
+      processing:
+        - 多维度评分模型计算
+        - 优先级算法
+        - 线索排序
+      outputs:
+        - 线索评分（0-100）
+        - 优先级标签（高/中/低）
+        - 排序后的线索列表
+        - 评分解释
+      acceptance_criteria:
+        - 系统对每条线索给出 0-100 评分
+        - 评分解释清晰可解释
+        - 高优先级线索自动排在列表前
+      acceptance_checks:
+        - id: AC-001
+          scenario: 系统生成线索评分
+          given: 潜在客户基础信息和行为数据
+          when: 点击评分按钮
+          then: 系统返回 0-100 的评分
+          trace_hints:
+            - TECH
+            - TASK
+            - TESTSET
+        - id: AC-002
+          scenario: 高优先级线索排在前面
+          given: 多条已评分的线索
+          when: 查看线索列表
+          then: 高优先级线索自动排在列表最前
+          trace_hints:
+            - UI
+            - TECH
+            - TESTSET
+      dependencies:
+        - FEAT-001
+      non_goals:
+        - 不提供 CRM 数据同步
+        - 不包含预测性成交率
+        - 不支持自定义评分模型训练
+      priority: P0
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+    - feat_id: FEAT-005
+      title: 自助式配置门户 - 基础设置
+      goal: 让中端市场客户无需技术人员支持，通过可视化界面自主配置销售助手参数
+      user_value: 让中端市场客户无需技术人员支持，通过可视化界面自主配置销售助手参数，快速启动使用
+      inputs:
+        - 团队成员配置
+        - 业务类型选择
+        - 销售目标设置
+        - 通知偏好
+      processing:
+        - 参数校验
+        - 配置存储
+        - 默认值填充
+        - 配置验证
+      outputs:
+        - 可视化配置表单
+        - 配置预览
+        - 配置保存结果
+        - 生效状态
+      user_stories:
+        - as_a: 客户管理员
+          i_want: 通过可视化界面配置销售助手
+          so_that: 我可以快速启动使用，无需等待技术人员支持
+      acceptance_criteria:
+        - 非技术用户可在 15 分钟内完成基础配置
+        - 所有配置项都有默认值
+        - 配置保存后立即生效
+      acceptance_checks:
+        - id: AC-001
+          scenario: 用户完成基础配置
+          given: 用户进入配置页面
+          when: 填写配置项并保存
+          then: 配置保存成功，所有配置项立即生效
+          trace_hints:
+            - UI
+            - TECH
+            - TASK
+            - TESTSET
+        - id: AC-002
+          scenario: 配置项有默认值
+          given: 用户首次进入配置页面
+          when: 查看配置表单
+          then: 所有配置项预填默认值
+          trace_hints:
+            - UI
+            - TECH
+            - TESTSET
+      dependencies:
+        - FEAT-001
+      non_goals:
+        - 不提供 API 配置接口
+        - 不支持配置模板导入导出
+        - 不包含高级工作流配置
+      priority: P0
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+    - feat_id: FEAT-006
+      title: 自助式配置门户 - 行业垂直配置
+      goal: 客户可根据所在行业选择预设的行业模板，快速获得针对其行业的最佳配置方案
+      user_value: 客户可根据所在行业（医疗/教育/法律）选择预设的行业模板，快速获得针对其行业的最佳配置方案
+      inputs:
+        - 行业选择（医疗/教育/法律）
+        - 行业特定参数
+      processing:
+        - 行业模板加载
+        - 字段适配
+        - 行业配置验证
+      outputs:
+        - 行业特定的配置界面
+        - 预填充的行业参数
+        - 行业配置摘要
+      acceptance_criteria:
+        - 客户选择行业后能看到该行业的配置模板
+        - 模板包含至少 5 个行业特定配置项
+        - 切换行业后配置自动适配
+      acceptance_checks:
+        - id: AC-001
+          scenario: 客户选择行业模板
+          given: 用户进入配置页面
+          when: 选择所属行业
+          then: 页面更新为该行业的配置模板
+          trace_hints:
+            - UI
+            - TECH
+            - TASK
+            - TESTSET
+        - id: AC-002
+          scenario: 行业特定配置项数量
+          given: 已选择行业
+          when: 查看行业配置项
+          then: 至少显示 5 个行业特定配置项
+          trace_hints:
+            - UI
+            - TECH
+            - TESTSET
+      dependencies:
+        - FEAT-005
+      non_goals:
+        - 不提供行业模板自定义
+        - 不支持多行业并行
+        - 不包含行业数据导入
+      priority: P1
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+    - feat_id: FEAT-007
+      title: 行业特定销售内容生成 - 医疗行业
+      goal: 为医疗行业销售团队提供 AI 生成的专业销售内容
+      user_value: 为医疗行业销售团队提供 AI 生成的专业销售内容，包括病历解读、医疗设备介绍、合规话术等医疗场景专用内容
+      inputs:
+        - 客户背景信息
+        - 产品信息
+        - 沟通目标
+      processing:
+        - 医疗领域内容模板调用
+        - 医学专业术语适配
+        - 合规检查
+        - 内容生成
+      outputs:
+        - 销售邮件草稿
+        - 话术建议
+        - 产品介绍文案
+      acceptance_criteria:
+        - 生成内容符合医疗行业术语规范
+        - 提供至少 3 种内容类型（邮件、话术、介绍）
+        - 内容可通过人工编辑后发送
+      acceptance_checks:
+        - id: AC-001
+          scenario: 生成医疗行业销售内容
+          given: 输入客户和产品信息
+          when: 选择内容类型并生成
+          then: 系统返回符合医疗术语的内容
+          trace_hints:
+            - UI
+            - TECH
+            - TASK
+            - TESTSET
+        - id: AC-002
+          scenario: 内容类型覆盖
+          given: 在内容生成页面
+          when: 查看可选内容类型
+          then: 至少显示 3 种内容类型选项
+          trace_hints:
+            - UI
+            - TESTSET
+      dependencies:
+        - FEAT-004
+        - FEAT-005
+      non_goals:
+        - 不提供医学诊断建议
+        - 不包含患者隐私数据处理
+        - 不生成临床文档
+      priority: P1
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+    - feat_id: FEAT-008
+      title: 行业特定销售内容生成 - 教育行业
+      goal: 为教育行业销售团队提供 AI 生成的专业销售内容
+      user_value: 为教育行业销售团队提供 AI 生成的专业销售内容，包括课程产品介绍、院校合作方案、教育场景话术等教育行业专用内容
+      inputs:
+        - 客户背景信息
+        - 产品信息
+        - 沟通目标
+      processing:
+        - 教育领域内容模板调用
+        - 院校场景适配
+        - 内容生成
+      outputs:
+        - 销售邮件草稿
+        - 方案建议
+        - 报价模板
+      acceptance_criteria:
+        - 生成内容使用教育行业常用表述
+        - 提供至少 3 种内容类型
+        - 内容可通过人工编辑后发送
+      acceptance_checks:
+        - id: AC-001
+          scenario: 生成教育行业销售内容
+          given: 输入客户和产品信息
+          when: 选择内容类型并生成
+          then: 系统返回符合教育行业表述的内容
+          trace_hints:
+            - UI
+            - TECH
+            - TASK
+            - TESTSET
+        - id: AC-002
+          scenario: 内容类型覆盖
+          given: 在内容生成页面
+          when: 查看可选内容类型
+          then: 至少显示 3 种内容类型选项
+          trace_hints:
+            - UI
+            - TESTSET
+      dependencies:
+        - FEAT-004
+        - FEAT-005
+      non_goals:
+        - 不提供课程设计建议
+        - 不包含学生数据处理
+        - 不支持教育产品推荐算法
+      priority: P1
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+    - feat_id: FEAT-009
+      title: 行业特定销售内容生成 - 法律行业
+      goal: 为法律行业销售团队提供 AI 生成的专业销售内容
+      user_value: 为法律行业销售团队提供 AI 生成的专业销售内容，包括法律服务介绍、律所合作方案、合规销售话术等法律行业专用内容
+      inputs:
+        - 客户背景信息
+        - 产品信息
+        - 沟通目标
+      processing:
+        - 法律领域内容模板调用
+        - 法律专业术语适配
+        - 内容生成
+      outputs:
+        - 销售邮件草稿
+        - 方案建议
+        - 话术脚本
+      acceptance_criteria:
+        - 生成内容使用法律行业专业表述
+        - 提供至少 3 种内容类型
+        - 内容可通过人工编辑后发送
+      acceptance_checks:
+        - id: AC-001
+          scenario: 生成法律行业销售内容
+          given: 输入客户和产品信息
+          when: 选择内容类型并生成
+          then: 系统返回符合法律专业表述的内容
+          trace_hints:
+            - UI
+            - TECH
+            - TASK
+            - TESTSET
+        - id: AC-002
+          scenario: 内容类型覆盖
+          given: 在内容生成页面
+          when: 查看可选内容类型
+          then: 至少显示 3 种内容类型选项
+          trace_hints:
+            - UI
+            - TESTSET
+      dependencies:
+        - FEAT-004
+        - FEAT-005
+      non_goals:
+        - 不提供法律咨询
+        - 不包含案例研究生成
+        - 不支持合同审查
+      priority: P1
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+    - feat_id: FEAT-010
+      title: 分层定价与计费系统
+      goal: 为中端市场客户提供透明的分层定价方案，支持按月订阅计费
+      user_value: 为中端市场客户提供透明的分层定价方案，支持按月订阅计费，确保客户支出控制在 $500-2000/月预算内
+      inputs:
+        - 用户选择的套餐类型
+        - 使用量数据
+      processing:
+        - 套餐费用计算
+        - 费用汇总
+        - 账单生成
+        - 计费周期管理
+      outputs:
+        - 套餐选择界面
+        - 当前账单
+        - 使用量仪表盘
+        - 费用明细
+      acceptance_criteria:
+        - 提供 3 个套餐档次（基础/专业/企业），价格覆盖 $500-2000/月范围
+        - 客户可在门户查看当前套餐和费用明细
+        - 套餐切换在下个计费周期生效
+      acceptance_checks:
+        - id: AC-001
+          scenario: 套餐价格范围覆盖
+          given: 在套餐选择页面
+          when: 查看可选套餐
+          then: 显示 3 个套餐，价格分别为 $500、$1200、$2000/月
+          trace_hints:
+            - UI
+            - TECH
+            - TESTSET
+        - id: AC-002
+          scenario: 查看费用明细
+          given: 用户已选择套餐
+          when: 进入账单页面
+          then: 显示当前套餐信息和费用明细
+          trace_hints:
+            - UI
+            - TECH
+            - TESTSET
+      dependencies:
+        - FEAT-001
+        - FEAT-005
+      non_goals:
+        - 不支持按用量实时计费
+        - 不提供年度预付费折扣
+        - 不包含发票自动开具
+      priority: P0
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+    - feat_id: FEAT-011
+      title: 快速部署工作流 - 引导式上线
+      goal: 让客户从注册到首次使用 AI 销售助手的部署周期从行业平均 3 个月缩短至 2 周内
+      user_value: 让客户从注册到首次使用 AI 销售助手的部署周期从行业平均 3 个月缩短至 2 周内
+      inputs:
+        - 客户基本信息
+        - 团队配置
+        - 业务目标
+      processing:
+        - 分步引导
+        - 配置检查
+        - 上线准备验证
+        - 进度跟踪
+      outputs:
+        - 分步上线任务清单
+        - 上线进度追踪
+        - 就绪确认
+      acceptance_criteria:
+        - 提供清晰的上线任务清单（不超过 10 个步骤）
+        - 每步骤有明确完成标准
+        - 支持客户自主完成上线流程
+      acceptance_checks:
+        - id: AC-001
+          scenario: 上线任务清单步骤数
+          given: 进入部署引导流程
+          when: 查看任务清单
+          then: 显示不超过 10 个步骤的任务列表
+          trace_hints:
+            - UI
+            - TECH
+            - TESTSET
+        - id: AC-002
+          scenario: 步骤完成标准明确
+          given: 在某个上线步骤
+          when: 查看步骤详情
+          then: 显示该步骤的完成标准和指引
+          trace_hints:
+            - UI
+            - TECH
+            - TESTSET
+      dependencies:
+        - FEAT-001
+        - FEAT-005
+      non_goals:
+        - 不提供人工部署支持
+        - 不包含数据迁移服务
+        - 不支持一键导入现有 CRM 数据
+      priority: P0
+      delivery_slice: mvp
+      lifecycle_status: draft
+      derived_object_expectations:
+        task_required: true
+        testset_required: true
+        testset_owner: qa
+        qa_seed_required: true
+      source_refs:
+        - epic-20250310-001#scope
+      ssot:
+        identity_kind: ssot
+        ssot_type: FEAT
+        parent: epic-20250310-001
+        derived_from: epic-20250310-001#scope
+ssot_output_contract:
+  contract_version: "1.0"
+  run_id: product-run-001
+  outputs:
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: 基础用户认证与账户管理
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: AI 销售会话智能 - 实时通话辅助
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: AI 销售会话智能 - 内容提取
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: AI 销售线索评分与优先级排序
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: 自助式配置门户 - 基础设置
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: 自助式配置门户 - 行业垂直配置
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: 行业特定销售内容生成 - 医疗行业
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: 行业特定销售内容生成 - 教育行业
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: 行业特定销售内容生成 - 法律行业
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: 分层定价与计费系统
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope
+    - key: feat
+      identity_kind: ssot
+      ssot_type: feat
+      title: 快速部署工作流 - 引导式上线
+      parent: epic-20250310-001
+      source_refs:
+        - epic-20250310-001#scope

@@ -94,3 +94,4 @@ tmp_epic_to_feat_sample.yaml
 .tmp/
 tmp_*.yaml
 vibe-kanban/
+.tmp*

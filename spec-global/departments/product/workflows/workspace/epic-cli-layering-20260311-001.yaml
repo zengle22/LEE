@@ -1,0 +1,6 @@
+epic_freeze:
+  artifact_id: EPIC-003
+  path: spec/requirements/epics/EPIC-003__lee-cli-workflow-first-zhilirukouzhonggou.md
+  source_refs:
+    - SRC-001
+    - ADR-006

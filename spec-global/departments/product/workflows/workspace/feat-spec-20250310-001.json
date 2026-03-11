@@ -1,0 +1,806 @@
+{
+  "business_output": {
+    "epic_ref": "epic-20250310-001",
+    "feat_specs": [
+      {
+        "feat_id": "FEAT-001",
+        "title": "基础用户认证与账户管理",
+      "goal": "为中端市场客户提供安全的账户注册、登录和基础账户管理能力，确保只有授权用户才能访问 AI 销售助手平台",
+      "user_value": "为中端市场客户提供安全的账户注册、登录和基础账户管理能力，确保只有授权用户才能访问 AI 销售助手平台",
+      "inputs": ["用户邮箱", "手机号", "密码"],
+      "processing": ["用户身份验证", "会话管理", "账户信息存储", "JWT token 生成"],
+      "outputs": ["JWT token", "用户 profile 信息"],
+      "user_stories": [
+        {
+          "as_a": "新客户",
+          "i_want": "注册并登录系统",
+          "so_that": "我可以安全访问 AI 销售助手平台"
+        }
+      ],
+      "acceptance_criteria": [
+        "用户可在 2 分钟内完成注册并登录系统",
+        "登录后能查看个人账户信息",
+        "登录后能编辑个人账户信息"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-001",
+          "scenario": "新用户成功注册并登录",
+          "given": "用户访问注册页面",
+          "when": "填写邮箱、密码并提交注册",
+          "then": "系统创建账户并返回 JWT token，用户跳转至登录后首页",
+          "trace_hints": ["UI", "TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-001",
+          "scenario": "已注册用户成功登录",
+          "given": "用户已有账户",
+          "when": "输入邮箱和密码登录",
+          "then": "系统验证凭据并返回 JWT token，用户跳转至登录后首页",
+          "trace_hints": ["UI", "TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-003-FEAT-001",
+          "scenario": "用户查看和编辑账户信息",
+          "given": "用户已登录",
+          "when": "访问账户设置页面",
+          "then": "显示当前账户信息，支持修改并保存",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": [],
+      "non_goals": ["不提供 SSO 企业联合登录", "不提供多租户隔离", "不包含权限细粒度管理"],
+      "priority": "P0",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    },
+    {
+      "feat_id": "FEAT-002",
+      "title": "AI 销售会话智能 - 实时通话辅助",
+      "goal": "销售人员在进行客户电话沟通时，可实时获得 AI 辅助建议、关键信息提取和下一步行动推荐，提升通话效率和专业度",
+      "user_value": "销售人员在进行客户电话沟通时，可实时获得 AI 辅助建议、关键信息提取和下一步行动推荐，提升通话效率和专业度",
+      "inputs": ["通话音频流", "实时文字输入"],
+      "processing": ["语音识别", "NLP 意图分析", "实时建议生成"],
+      "outputs": ["实时辅助建议面板", "通话摘要"],
+      "user_stories": [
+        {
+          "as_a": "销售人员",
+          "i_want": "在通话中实时获得 AI 辅助",
+          "so_that": "我可以提升通话效率和专业度"
+        }
+      ],
+      "acceptance_criteria": [
+        "销售人员在通话中能收到 AI 实时建议",
+        "通话结束后自动生成包含关键要点和行动项的摘要"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-002",
+          "scenario": "销售人员在通话中获得实时 AI 建议",
+          "given": "销售人员在进行电话沟通",
+          "when": "系统实时分析通话内容",
+          "then": "显示实时辅助建议面板，包含下一步行动推荐",
+          "trace_hints": ["UI", "TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-002",
+          "scenario": "通话结束后自动生成摘要",
+          "given": "通话已结束",
+          "when": "系统完成通话分析",
+          "then": "生成包含关键要点和行动项的通话摘要",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": ["FEAT-001"],
+      "non_goals": ["不提供通话录音存储", "不包含视频会议辅助", "不支持多语言实时翻译"],
+      "priority": "P0",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    },
+    {
+      "feat_id": "FEAT-003",
+      "title": "AI 销售会话智能 - 内容提取",
+      "goal": "从销售通话和客户沟通记录中自动提取关键业务信息（需求、预算、决策人、时间线等），形成结构化客户画像",
+      "user_value": "从销售通话和客户沟通记录中自动提取关键业务信息（需求、预算、决策人、时间线等），形成结构化客户画像",
+      "inputs": ["通话文字稿", "邮件内容"],
+      "processing": ["实体识别", "信息抽取", "关键信息结构化"],
+      "outputs": ["结构化的客户画像（需求、预算、痛点、决策人等字段）"],
+      "user_stories": [
+        {
+          "as_a": "销售人员",
+          "i_want": "自动从沟通记录中提取关键业务信息",
+          "so_that": "我可以快速形成结构化客户画像"
+        }
+      ],
+      "acceptance_criteria": [
+        "系统能从文字记录中提取至少 10 个关键业务实体",
+        "提取结果可编辑并同步到客户档案"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-003",
+          "scenario": "从通话文字稿提取关键业务实体",
+          "given": "系统获取通话文字稿",
+          "when": "执行实体识别和信息抽取",
+          "then": "返回包含至少 10 个关键业务实体的结构化结果",
+          "trace_hints": ["TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-003",
+          "scenario": "提取结果可编辑并同步",
+          "given": "系统完成信息提取",
+          "when": "用户查看提取结果",
+          "then": "用户可编辑提取内容并保存至客户档案",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": ["FEAT-002"],
+      "non_goals": ["不提供 OCR 文档解析", "不包含情感分析", "不生成自动回复建议"],
+      "priority": "P0",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    },
+    {
+      "feat_id": "FEAT-004",
+      "title": "AI 销售线索评分与优先级排序",
+      "goal": "帮助销售团队自动评估和排序潜在客户，根据多维度因素给出优先级建议，让销售资源聚焦于最高价值机会",
+      "user_value": "帮助销售团队自动评估和排序潜在客户，根据多维度因素给出优先级建议，让销售资源聚焦于最高价值机会",
+      "inputs": ["潜在客户基础信息（公司规模、行业、职位等）", "行为数据（官网访问、邮件互动）"],
+      "processing": ["多维度评分模型", "优先级算法"],
+      "outputs": ["线索评分（0-100）", "优先级标签（高/中/低）", "排序后的线索列表"],
+      "user_stories": [
+        {
+          "as_a": "销售经理",
+          "i_want": "自动获得线索优先级建议",
+          "so_that": "我可以聚焦最高价值的销售机会"
+        }
+      ],
+      "acceptance_criteria": [
+        "系统对每条线索给出 0-100 评分",
+        "评分解释清晰可解释",
+        "高优先级线索自动排在列表前"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-004",
+          "scenario": "线索评分生成",
+          "given": "系统获取潜在客户信息",
+          "when": "执行多维度评分模型",
+          "then": "返回 0-100 的评分值及优先级标签",
+          "trace_hints": ["TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-004",
+          "scenario": "评分可解释性",
+          "given": "评分已完成",
+          "when": "用户查看线索详情",
+          "then": "显示清晰的评分解释，说明各维度得分",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        },
+        {
+          "id": "AC-003-FEAT-004",
+          "scenario": "线索列表按优先级排序",
+          "given": "存在多条线索",
+          "when": "显示线索列表",
+          "then": "高优先级线索自动排在列表前面",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": ["FEAT-001"],
+      "non_goals": ["不提供 CRM 数据同步", "不包含预测性成交率", "不支持自定义评分模型训练"],
+      "priority": "P0",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    },
+    {
+      "feat_id": "FEAT-005",
+      "title": "自助式配置门户 - 基础设置",
+      "goal": "让中端市场客户无需技术人员支持，通过可视化界面自主配置销售助手参数，快速启动使用",
+      "user_value": "让中端市场客户无需技术人员支持，通过可视化界面自主配置销售助手参数，快速启动使用",
+      "inputs": ["用户配置的参数（团队成员、业务类型、目标等）"],
+      "processing": ["参数校验", "配置存储", "默认值填充"],
+      "outputs": ["可视化配置表单", "配置预览", "配置保存结果"],
+      "user_stories": [
+        {
+          "as_a": "业务用户",
+          "i_want": "自主配置销售助手参数",
+          "so_that": "我可以在无需技术人员支持下快速启动使用"
+        }
+      ],
+      "acceptance_criteria": [
+        "非技术用户可在 15 分钟内完成基础配置",
+        "所有配置项都有默认值",
+        "配置保存后立即生效"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-005",
+          "scenario": "基础配置完成",
+          "given": "用户访问配置页面",
+          "when": "填写配置项并保存",
+          "then": "系统校验并保存配置，返回成功提示",
+          "trace_hints": ["UI", "TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-005",
+          "scenario": "配置项默认值",
+          "given": "用户进入配置页面",
+          "when": "页面加载",
+          "then": "所有配置项显示默认值",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        },
+        {
+          "id": "AC-003-FEAT-005",
+          "scenario": "配置立即生效",
+          "given": "配置已保存",
+          "when": "用户使用系统功能",
+          "then": "配置立即应用于系统行为",
+          "trace_hints": ["TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": ["FEAT-001"],
+      "non_goals": ["不提供 API 配置接口", "不支持配置模板导入导出", "不包含高级工作流配置"],
+      "priority": "P0",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    },
+    {
+      "feat_id": "FEAT-006",
+      "title": "自助式配置门户 - 行业垂直配置",
+      "goal": "客户可根据所在行业（医疗/教育/法律）选择预设的行业模板，快速获得针对其行业的最佳配置方案",
+      "user_value": "客户可根据所在行业（医疗/教育/法律）选择预设的行业模板，快速获得针对其行业的最佳配置方案",
+      "inputs": ["行业选择（医疗/教育/法律）"],
+      "processing": ["行业模板加载", "字段适配"],
+      "outputs": ["行业特定的配置界面", "预填充的行业参数"],
+      "user_stories": [
+        {
+          "as_a": "医疗行业客户",
+          "i_want": "选择医疗行业模板",
+          "so_that": "我可以获得针对医疗行业的最佳配置方案"
+        }
+      ],
+      "acceptance_criteria": [
+        "客户选择行业后能看到该行业的配置模板",
+        "模板包含至少 5 个行业特定配置项",
+        "切换行业后配置自动适配"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-006",
+          "scenario": "行业模板加载",
+          "given": "用户选择行业",
+          "when": "提交行业选择",
+          "then": "系统加载对应行业模板，显示行业特定配置项",
+          "trace_hints": ["UI", "TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-006",
+          "scenario": "行业特定配置项数量",
+          "given": "行业模板已加载",
+          "when": "显示配置界面",
+          "then": "显示至少 5 个行业特定配置项",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        },
+        {
+          "id": "AC-003-FEAT-006",
+          "scenario": "行业切换自动适配",
+          "given": "用户切换行业",
+          "when": "选择新行业",
+          "then": "配置自动适配新行业模板",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": ["FEAT-005"],
+      "non_goals": ["不提供行业模板自定义", "不支持多行业并行", "不包含行业数据导入"],
+      "priority": "P1",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    },
+    {
+      "feat_id": "FEAT-007",
+      "title": "行业特定销售内容生成 - 医疗行业",
+      "goal": "为医疗行业销售团队提供 AI 生成的专业销售内容，包括病历解读、医疗设备介绍、合规话术等医疗场景专用内容",
+      "user_value": "为医疗行业销售团队提供 AI 生成的专业销售内容，包括病历解读、医疗设备介绍、合规话术等医疗场景专用内容",
+      "inputs": ["客户背景", "产品信息", "沟通目标"],
+      "processing": ["医疗领域内容模板调用", "专业术语适配", "合规检查"],
+      "outputs": ["销售邮件草稿", "话术建议", "产品介绍文案"],
+      "user_stories": [
+        {
+          "as_a": "医疗行业销售人员",
+          "i_want": "生成专业的医疗销售内容",
+          "so_that": "我可以更高效地与医疗行业客户沟通"
+        }
+      ],
+      "acceptance_criteria": [
+        "生成内容符合医疗行业术语规范",
+        "提供至少 3 种内容类型（邮件、话术、介绍）",
+        "内容可通过人工编辑后发送"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-007",
+          "scenario": "医疗行业内容生成",
+          "given": "用户提供客户背景和产品信息",
+          "when": "提交内容生成请求",
+          "then": "生成符合医疗术语规范的销售内容",
+          "trace_hints": ["TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-007",
+          "scenario": "多类型内容输出",
+          "given": "内容生成完成",
+          "when": "返回结果",
+          "then": "提供邮件、话术、介绍至少 3 种类型",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        },
+        {
+          "id": "AC-003-FEAT-007",
+          "scenario": "内容可编辑",
+          "given": "生成内容已返回",
+          "when": "用户编辑内容",
+          "then": "支持人工修改并保存",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": ["FEAT-004", "FEAT-005"],
+      "non_goals": ["不提供医学诊断建议", "不包含患者隐私数据处理", "不生成临床文档"],
+      "priority": "P1",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    },
+    {
+      "feat_id": "FEAT-008",
+      "title": "行业特定销售内容生成 - 教育行业",
+      "goal": "为教育行业销售团队提供 AI 生成的专业销售内容，包括课程产品介绍、院校合作方案、教育场景话术等教育行业专用内容",
+      "user_value": "为教育行业销售团队提供 AI 生成的专业销售内容，包括课程产品介绍、院校合作方案、教育场景话术等教育行业专用内容",
+      "inputs": ["客户背景", "产品信息", "沟通目标"],
+      "processing": ["教育领域内容模板调用", "院校场景适配"],
+      "outputs": ["销售邮件草稿", "方案建议", "报价模板"],
+      "user_stories": [
+        {
+          "as_a": "教育行业销售人员",
+          "i_want": "生成专业的教育销售内容",
+          "so_that": "我可以更高效地与教育行业客户沟通"
+        }
+      ],
+      "acceptance_criteria": [
+        "生成内容使用教育行业常用表述",
+        "提供至少 3 种内容类型",
+        "内容可通过人工编辑后发送"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-008",
+          "scenario": "教育行业内容生成",
+          "given": "用户提供客户背景和产品信息",
+          "when": "提交内容生成请求",
+          "then": "生成使用教育行业常用表述的销售内容",
+          "trace_hints": ["TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-008",
+          "scenario": "多类型内容输出",
+          "given": "内容生成完成",
+          "when": "返回结果",
+          "then": "提供邮件、方案、报价至少 3 种类型",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        },
+        {
+          "id": "AC-003-FEAT-008",
+          "scenario": "内容可编辑",
+          "given": "生成内容已返回",
+          "when": "用户编辑内容",
+          "then": "支持人工修改并保存",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": ["FEAT-004", "FEAT-005"],
+      "non_goals": ["不提供课程设计建议", "不包含学生数据处理", "不支持教育产品推荐算法"],
+      "priority": "P1",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    },
+    {
+      "feat_id": "FEAT-009",
+      "title": "行业特定销售内容生成 - 法律行业",
+      "goal": "为法律行业销售团队提供 AI 生成的专业销售内容，包括法律服务介绍、律所合作方案、合规销售话术等法律行业专用内容",
+      "user_value": "为法律行业销售团队提供 AI 生成的专业销售内容，包括法律服务介绍、律所合作方案、合规销售话术等法律行业专用内容",
+      "inputs": ["客户背景", "产品信息", "沟通目标"],
+      "processing": ["法律领域内容模板调用", "专业术语适配"],
+      "outputs": ["销售邮件草稿", "方案建议", "话术脚本"],
+      "user_stories": [
+        {
+          "as_a": "法律行业销售人员",
+          "i_want": "生成专业的法律销售内容",
+          "so_that": "我可以更高效地与法律行业客户沟通"
+        }
+      ],
+      "acceptance_criteria": [
+        "生成内容使用法律行业专业表述",
+        "提供至少 3 种内容类型",
+        "内容可通过人工编辑后发送"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-009",
+          "scenario": "法律行业内容生成",
+          "given": "用户提供客户背景和产品信息",
+          "when": "提交内容生成请求",
+          "then": "生成使用法律行业专业表述的销售内容",
+          "trace_hints": ["TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-009",
+          "scenario": "多类型内容输出",
+          "given": "内容生成完成",
+          "when": "返回结果",
+          "then": "提供邮件、方案、话术至少 3 种类型",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        },
+        {
+          "id": "AC-003-FEAT-009",
+          "scenario": "内容可编辑",
+          "given": "生成内容已返回",
+          "when": "用户编辑内容",
+          "then": "支持人工修改并保存",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": ["FEAT-004", "FEAT-005"],
+      "non_goals": ["不提供法律咨询", "不包含案例研究生成", "不支持合同审查"],
+      "priority": "P1",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    },
+    {
+      "feat_id": "FEAT-010",
+      "title": "分层定价与计费系统",
+      "goal": "为中端市场客户提供透明的分层定价方案，支持按月订阅计费，确保客户支出控制在 $500-2000/月预算内",
+      "user_value": "为中端市场客户提供透明的分层定价方案，支持按月订阅计费，确保客户支出控制在 $500-2000/月预算内",
+      "inputs": ["用户选择的套餐类型", "使用量数据"],
+      "processing": ["套餐计算", "费用汇总", "账单生成"],
+      "outputs": ["套餐选择界面", "当前账单", "使用量仪表盘"],
+      "user_stories": [
+        {
+          "as_a": "客户财务负责人",
+          "i_want": "查看和选择透明的分层定价方案",
+          "so_that": "我可以控制支出在预算范围内"
+        }
+      ],
+      "acceptance_criteria": [
+        "提供 3 个套餐档次（基础/专业/企业），价格覆盖 $500-2000/月范围",
+        "客户可在门户查看当前套餐和费用明细",
+        "套餐切换在下个计费周期生效"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-010",
+          "scenario": "套餐选择",
+          "given": "用户访问定价页面",
+          "when": "选择套餐并确认",
+          "then": "显示 3 个套餐档次，价格覆盖 $500-2000/月",
+          "trace_hints": ["UI", "TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-010",
+          "scenario": "费用明细查看",
+          "given": "用户已选择套餐",
+          "when": "访问账单页面",
+          "then": "显示当前套餐和费用明细",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        },
+        {
+          "id": "AC-003-FEAT-010",
+          "scenario": "套餐切换生效时间",
+          "given": "用户切换套餐",
+          "when": "确认套餐变更",
+          "then": "新套餐在下个计费周期生效",
+          "trace_hints": ["TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": ["FEAT-001", "FEAT-005"],
+      "non_goals": ["不支持按用量实时计费", "不提供年度预付费折扣", "不包含发票自动开具"],
+      "priority": "P0",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    },
+    {
+      "feat_id": "FEAT-011",
+      "title": "快速部署工作流 - 引导式上线",
+      "goal": "让客户从注册到首次使用 AI 销售助手的部署周期从行业平均 3 个月缩短至 2 周内",
+      "user_value": "让客户从注册到首次使用 AI 销售助手的部署周期从行业平均 3 个月缩短至 2 周内",
+      "inputs": ["客户基本信息", "团队配置", "业务目标"],
+      "processing": ["分步引导", "配置检查", "上线准备验证"],
+      "outputs": ["分步上线任务清单", "上线进度追踪", "就绪确认"],
+      "user_stories": [
+        {
+          "as_a": "新客户",
+          "i_want": "通过引导式流程完成上线",
+          "so_that": "我可以在 2 周内开始使用 AI 销售助手"
+        }
+      ],
+      "acceptance_criteria": [
+        "提供清晰的上线任务清单（不超过 10 个步骤）",
+        "每步骤有明确完成标准",
+        "支持客户自主完成上线流程"
+      ],
+      "acceptance_checks": [
+        {
+          "id": "AC-001-FEAT-011",
+          "scenario": "上线任务清单显示",
+          "given": "用户开始上线流程",
+          "when": "进入部署引导页面",
+          "then": "显示不超过 10 个步骤的任务清单",
+          "trace_hints": ["UI", "TECH", "TASK", "TESTSET"]
+        },
+        {
+          "id": "AC-002-FEAT-011",
+          "scenario": "步骤完成标准明确",
+          "given": "用户查看单个步骤",
+          "when": "展开步骤详情",
+          "then": "显示该步骤的明确完成标准",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        },
+        {
+          "id": "AC-003-FEAT-011",
+          "scenario": "上线进度追踪",
+          "given": "用户完成部分步骤",
+          "when": "查看进度",
+          "then": "显示已完成和待完成步骤的进度追踪",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        },
+        {
+          "id": "AC-004-FEAT-011",
+          "scenario": "就绪确认",
+          "given": "所有步骤已完成",
+          "when": "系统验证",
+          "then": "显示就绪确认，客户可开始使用",
+          "trace_hints": ["UI", "TECH", "TESTSET"]
+        }
+      ],
+      "dependencies": ["FEAT-001", "FEAT-005"],
+      "non_goals": ["不提供人工部署支持", "不包含数据迁移服务", "不支持一键导入现有 CRM 数据"],
+      "priority": "P0",
+      "delivery_slice": "mvp",
+      "lifecycle_status": "draft",
+      "derived_object_expectations": {
+        "task_required": true,
+        "testset_required": true,
+        "testset_owner": "qa",
+        "qa_seed_required": true
+      },
+      "source_refs": ["epic-20250310-001#scope"],
+      "ssot": {
+        "identity_kind": "ssot",
+        "ssot_type": "FEAT",
+        "parent": "epic-20250310-001",
+        "derived_from": "epic-20250310-001#breakdown"
+      }
+    }
+  ]
+  },
+  "ssot_output_contract": {
+    "contract_version": "1.0",
+    "run_id": "feat_spec_generation-20250310-001",
+    "outputs": [
+      {
+        "key": "feat-001",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "基础用户认证与账户管理",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      },
+      {
+        "key": "feat-002",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "AI 销售会话智能 - 实时通话辅助",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      },
+      {
+        "key": "feat-003",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "AI 销售会话智能 - 内容提取",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      },
+      {
+        "key": "feat-004",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "AI 销售线索评分与优先级排序",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      },
+      {
+        "key": "feat-005",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "自助式配置门户 - 基础设置",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      },
+      {
+        "key": "feat-006",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "自助式配置门户 - 行业垂直配置",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      },
+      {
+        "key": "feat-007",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "行业特定销售内容生成 - 医疗行业",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      },
+      {
+        "key": "feat-008",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "行业特定销售内容生成 - 教育行业",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      },
+      {
+        "key": "feat-009",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "行业特定销售内容生成 - 法律行业",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      },
+      {
+        "key": "feat-010",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "分层定价与计费系统",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      },
+      {
+        "key": "feat-011",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "快速部署工作流 - 引导式上线",
+        "parent": "epic-20250310-001",
+        "source_refs": ["epic-20250310-001#scope"]
+      }
+    ]
+  }
+}
