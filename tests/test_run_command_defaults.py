@@ -1,5 +1,7 @@
 from pathlib import Path
 from typing import Any, Dict, List
+import json
+import sqlite3
 
 from click.testing import CliRunner
 import yaml
@@ -63,7 +65,7 @@ params:
             }
         },
     )
-    monkeypatch.setattr(run_module, "_list_existing_same_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
     monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
     monkeypatch.setattr(
         run_module,
@@ -90,6 +92,8 @@ params:
     params = captured_create_payload[0]["data"]["params"]
     assert params["workspace_path"] == "."
     assert params["author_name"] == "LEE Team"
+    assert captured_create_payload[0]["data"]["concurrency_scope"].startswith("project:")
+    assert captured_create_payload[0]["data"]["concurrency_key"].startswith("office.workspace-cleanup::")
 
 
 def test_render_workflow_template_injects_date_and_timestamp(tmp_path: Path) -> None:
@@ -143,7 +147,7 @@ def test_run_loads_object_spec_into_params_without_registry_flag(monkeypatch, tm
             }
         },
     )
-    monkeypatch.setattr(run_module, "_list_existing_same_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
     monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
     monkeypatch.setattr(
         run_module,
@@ -193,7 +197,7 @@ def test_run_falls_back_to_spec_path_for_non_object_spec(monkeypatch, tmp_path: 
             }
         },
     )
-    monkeypatch.setattr(run_module, "_list_existing_same_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
     monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
     monkeypatch.setattr(
         run_module,
@@ -243,7 +247,7 @@ def test_run_uses_instance_without_existing_workflow_selection(monkeypatch, tmp_
     def fail_existing(*_args, **_kwargs):
         raise AssertionError("existing workflow selection should be skipped when --instance is provided")
 
-    monkeypatch.setattr(run_module, "_list_existing_same_workflows", fail_existing)
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", fail_existing)
     monkeypatch.setattr(
         run_module,
         "_run_until_settled_with_gates",
@@ -295,3 +299,121 @@ def test_refresh_summary_from_store_promotes_terminal_status(tmp_path: Path) -> 
 
     assert refreshed["status"] == "completed"
     assert refreshed["completed_steps"] == 5
+
+
+def test_run_uses_epic_scope_for_epic_to_feat(monkeypatch, tmp_path: Path) -> None:
+    template = tmp_path / "workflow.yaml"
+    template.write_text("kind: workflow\nversion: '1.0'\n", encoding="utf-8")
+    spec_file = tmp_path / "input.yaml"
+    spec_file.write_text("epic_freeze:\n  artifact_id: EPIC-123\n", encoding="utf-8")
+    rendered = tmp_path / "rendered.yaml"
+    rendered.write_text("kind: workflow\nid: x\nversion: '1.0'\n", encoding="utf-8")
+
+    captured_create_payload: List[Dict[str, Any]] = []
+
+    monkeypatch.setattr(
+        run_module,
+        "_load_registry",
+        lambda: {
+            "workflows": {
+                "product.epic-to-feat": {
+                    "path": str(template),
+                    "required_params": ["epic_freeze"],
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        run_module,
+        "_run_until_settled_with_gates",
+        lambda *_a, **_k: {"status": "running", "completed_steps": 0, "blocked_at": None},
+    )
+    monkeypatch.setattr(run_module, "_print_summary", lambda *_a, **_k: None)
+
+    def fake_pm_workflow(action: str, **kwargs):
+        if action == "create":
+            captured_create_payload.append(kwargs)
+            return {"workflow_id": "wf_new_001"}
+        raise AssertionError(f"unexpected pm_workflow action: {action}")
+
+    monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_module.run,
+        ["product.epic-to-feat", "--project-dir", str(tmp_path), "--skip-plan", "--spec", str(spec_file)],
+    )
+
+    assert result.exit_code == 0, result.output
+    create_data = captured_create_payload[0]["data"]
+    assert create_data["concurrency_scope"] == "epic:EPIC-123"
+    assert create_data["scope_source"] == "params.epic_freeze.artifact_id"
+
+
+def test_list_conflicting_workflows_matches_scope_and_legacy_rows(tmp_path: Path) -> None:
+    db_path = tmp_path / ".workflow" / "orchestrator.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            """
+            CREATE TABLE workflow_instances (
+                id TEXT,
+                status TEXT,
+                current_step TEXT,
+                created_at TEXT,
+                data TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO workflow_instances VALUES (?, ?, ?, ?, ?)",
+            (
+                "wf_same_scope",
+                "running",
+                "step_a",
+                "2026-03-11T10:00:00",
+                json.dumps({
+                    "workflow_key": "product.epic-to-feat",
+                    "concurrency_scope": "epic:EPIC-123",
+                }),
+            ),
+        )
+        conn.execute(
+            "INSERT INTO workflow_instances VALUES (?, ?, ?, ?, ?)",
+            (
+                "wf_other_scope",
+                "running",
+                "step_b",
+                "2026-03-11T10:01:00",
+                json.dumps({
+                    "workflow_key": "product.epic-to-feat",
+                    "concurrency_scope": "epic:EPIC-999",
+                }),
+            ),
+        )
+        conn.execute(
+            "INSERT INTO workflow_instances VALUES (?, ?, ?, ?, ?)",
+            (
+                "wf_legacy",
+                "paused",
+                "step_c",
+                "2026-03-11T10:02:00",
+                json.dumps({
+                    "workflow_key": "product.epic-to-feat",
+                }),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    conflicts = run_module._list_conflicting_workflows(
+        tmp_path,
+        "product.epic-to-feat",
+        "epic:EPIC-123",
+    )
+
+    assert [item["id"] for item in conflicts] == ["wf_legacy", "wf_same_scope"]
