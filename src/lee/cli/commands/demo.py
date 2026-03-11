@@ -17,6 +17,23 @@ from lee.cli.commands.workflow_registry import (
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
 
+
+def _param_aliases(name: str) -> list[str]:
+    if not isinstance(name, str):
+        return []
+    if name.endswith("_freeze"):
+        return [f"{name}_ref"]
+    if name.endswith("_freeze_ref"):
+        return [name[:-4]]
+    return []
+
+
+def _has_param_with_aliases(params: Dict[str, Any], name: str) -> bool:
+    for candidate in [name, *_param_aliases(name)]:
+        if candidate in params:
+            return True
+    return False
+
 def _load_registry() -> Dict[str, Any]:
     return load_workflow_registry()
 
@@ -87,7 +104,7 @@ def _create_and_run(
 
     entry = workflows[workflow_key]
     required = entry.get("required_params", []) or []
-    missing = [p for p in required if p not in params]
+    missing = [p for p in required if not _has_param_with_aliases(params, p)]
     if missing:
         raise click.ClickException(f"Missing required params for {workflow_key}: {', '.join(missing)}")
 
