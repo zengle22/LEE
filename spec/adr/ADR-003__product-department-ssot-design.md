@@ -2,19 +2,23 @@
 id: ADR-003
 ssot_type: adr
 title: Product Department SSOT Design
-status: draft
+status: frozen
 version: v1
-parent_id:
+parent_id: null
 derived_from_ids:
-  - ADR-001
-source_refs:
-  []
+- ADR-001
+source_refs: []
 owner: product
-tags: [ssot, product, governance, workflow]
+tags:
+- ssot
+- product
+- governance
+- workflow
 properties:
   adr_kind: department_design
   decision_scope: product_department_canonical_path
   replaces_path: spec-global/departments/prd
+frozen_at: '2026-03-11T14:29:43.815587'
 ---
 
 # Product Department SSOT Design
