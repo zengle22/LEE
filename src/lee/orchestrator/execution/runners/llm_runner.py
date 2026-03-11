@@ -2063,6 +2063,7 @@ class LLMRunner(StepRunnerBase):
         workflow_id: str,
         business_output: Any,
         structured_payload: Any,
+        instance_data: Optional[Dict[str, Any]] = None,
     ) -> tuple[Any, Any]:
         if getattr(step, "agent_id", "") != "agent.product.pm_planner":
             return business_output, structured_payload
@@ -2133,6 +2134,91 @@ class LLMRunner(StepRunnerBase):
                 return "refactor"
             return "implementation"
 
+        def _title_key(value: Any) -> str:
+            lowered = _clean_text(value).lower()
+            return re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", lowered)
+
+        def _derive_project_root_from_feat_freeze(feat_freeze_path: str) -> Optional[Path]:
+            candidate = Path(feat_freeze_path)
+            for parent in [candidate, *candidate.parents]:
+                if parent.name == ".workflow":
+                    return parent.parent
+            return None
+
+        def _extract_canonical_title_map(project_root: Optional[Path]) -> Dict[str, str]:
+            if project_root is None:
+                return {}
+            features_dir = project_root / "spec" / "requirements" / "features"
+            if not features_dir.exists():
+                return {}
+            title_map: Dict[str, str] = {}
+            for path in sorted(features_dir.glob("*.md")):
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                if not text.startswith("---"):
+                    continue
+                try:
+                    _, frontmatter, _ = text.split("---", 2)
+                    metadata = yaml.safe_load(frontmatter) or {}
+                except Exception:
+                    continue
+                if not isinstance(metadata, dict):
+                    continue
+                title = _clean_text(metadata.get("title"))
+                canonical_id = _clean_text(metadata.get("id"))
+                if title and canonical_id:
+                    title_map[_title_key(title)] = canonical_id
+            return title_map
+
+        def _extract_source_feat_title_map(feat_freeze_path: str) -> Dict[str, str]:
+            freeze_path = Path(feat_freeze_path)
+            if not freeze_path.exists():
+                return {}
+            try:
+                payload = yaml.safe_load(freeze_path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                return {}
+            title_map: Dict[str, str] = {}
+            candidates = payload.get("feat_specifications")
+            if not isinstance(candidates, list):
+                candidates = payload.get("feat_specs")
+            if not isinstance(candidates, list):
+                return {}
+            for item in candidates:
+                if not isinstance(item, dict):
+                    continue
+                feat_id = _clean_text(item.get("feat_id"))
+                title = _clean_text(item.get("title"))
+                if feat_id and title:
+                    title_map[feat_id] = title
+            return title_map
+
+        def _build_feat_alias_map(instance_payload: Optional[Dict[str, Any]]) -> Dict[str, str]:
+            if not isinstance(instance_payload, dict):
+                return {}
+            params = instance_payload.get("params") if isinstance(instance_payload.get("params"), dict) else {}
+            feat_freeze_path = params.get("feat_freeze")
+            if not isinstance(feat_freeze_path, str) or not feat_freeze_path.strip():
+                return {}
+            source_title_map = _extract_source_feat_title_map(feat_freeze_path)
+            if not source_title_map:
+                return {}
+            canonical_title_map = _extract_canonical_title_map(
+                _derive_project_root_from_feat_freeze(feat_freeze_path)
+            )
+            if not canonical_title_map:
+                return {}
+            alias_map: Dict[str, str] = {}
+            for source_feat_id, title in source_title_map.items():
+                canonical_id = canonical_title_map.get(_title_key(title))
+                if canonical_id:
+                    alias_map[source_feat_id] = canonical_id
+            return alias_map
+
+        feat_alias_map = _build_feat_alias_map(instance_data)
+
         def _build_task_markdown(task_spec: Dict[str, Any]) -> str:
             lines = [
                 f"# Objective\n\n{_clean_text(task_spec.get('objective'))}\n",
@@ -2171,7 +2257,7 @@ class LLMRunner(StepRunnerBase):
                 epic_ref = _clean_text(metadata.get("epic_id"))
             feat_tasks = payload.get("feat_tasks") if isinstance(payload.get("feat_tasks"), list) else []
             source_feats = [
-                _clean_text(item.get("feat_id"))
+                feat_alias_map.get(_clean_text(item.get("feat_id")), _clean_text(item.get("feat_id")))
                 for item in feat_tasks
                 if isinstance(item, dict) and _clean_text(item.get("feat_id"))
             ]
@@ -2185,7 +2271,10 @@ class LLMRunner(StepRunnerBase):
             for feat_entry in feat_tasks:
                 if not isinstance(feat_entry, dict):
                     continue
-                feat_id = _clean_text(feat_entry.get("feat_id"))
+                feat_id = feat_alias_map.get(
+                    _clean_text(feat_entry.get("feat_id")),
+                    _clean_text(feat_entry.get("feat_id")),
+                )
                 phases = (
                     feat_entry.get("implementation_plan", {}).get("phases")
                     if isinstance(feat_entry.get("implementation_plan"), dict)
@@ -2290,9 +2379,10 @@ class LLMRunner(StepRunnerBase):
                     for task in tasks:
                         if not isinstance(task, dict):
                             continue
-                        feat_id = _clean_text(
+                        raw_feat_id = _clean_text(
                             task.get("related_feat") or task.get("source_feat") or task.get("feat_id")
                         )
+                        feat_id = feat_alias_map.get(raw_feat_id, raw_feat_id)
                         if feat_id and feat_id not in seen_source_feats:
                             source_feats.append(feat_id)
                             seen_source_feats.add(feat_id)
@@ -2531,6 +2621,7 @@ class LLMRunner(StepRunnerBase):
             workflow_id=workflow_id,
             business_output=business_output,
             structured_payload=structured_payload,
+            instance_data=instance_data,
         )
         business_output, structured_payload = LLMRunner._normalize_product_review_payload(
             step=step,
