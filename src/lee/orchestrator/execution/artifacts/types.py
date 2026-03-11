@@ -292,7 +292,7 @@ class ObjectCategory(str, Enum):
             SSOTType.TECH: "FEAT",
             SSOTType.DEVPLAN: "RELEASE",
             SSOTType.TESTPLAN: "RELEASE",
-            SSOTType.TASK: "DEVPLAN|TESTPLAN",
+            SSOTType.TASK: "FEAT",
             SSOTType.TESTSET: "FEAT",
             SSOTType.TC: "TESTSET",  # 强制：TC.parent_id 必须为 TESTSET
             SSOTType.BUG: "FEAT",   # 可选：FEAT 或 TC

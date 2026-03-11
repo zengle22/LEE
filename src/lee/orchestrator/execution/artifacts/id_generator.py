@@ -117,6 +117,14 @@ class SSOTIDGenerator:
         else:
             cache_key = ssot_type.value
 
+        if parent_scope and cache_key not in self._sequences:
+            seq_file = self.root_path / "sequences" / parent_scope / f"{ssot_type.value}.seq"
+            if seq_file.exists():
+                try:
+                    self._sequences[cache_key] = int(seq_file.read_text().strip())
+                except (ValueError, IOError):
+                    self._sequences[cache_key] = 0
+
         # 获取当前序号
         current = self._sequences.get(cache_key, 0)
         current += 1

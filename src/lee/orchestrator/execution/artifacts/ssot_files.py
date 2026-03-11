@@ -52,7 +52,7 @@ def is_formal_ssot_file(path: Path) -> bool:
         return True
     try:
         front_matter, _ = parse_front_matter(path)
-    except ValueError:
+    except Exception:
         return False
     return bool(front_matter.get("ssot_type"))
 
@@ -61,12 +61,13 @@ def lint_ssot_front_matter(project_root: Path) -> List[str]:
     """Validate formal SSOT markdown files only."""
     errors: List[str] = []
     required_fields = {"id", "ssot_type", "title", "status", "version"}
+    seen_ids: Dict[str, List[Path]] = {}
     for path in iter_ssot_markdown_files(project_root):
         if not is_formal_ssot_file(path):
             continue
         try:
             front_matter, _ = parse_front_matter(path)
-        except ValueError as exc:
+        except Exception as exc:
             errors.append(str(exc))
             continue
 
@@ -76,4 +77,12 @@ def lint_ssot_front_matter(project_root: Path) -> List[str]:
         file_id = path.name.split("__", 1)[0]
         if front_matter.get("id") and file_id != front_matter["id"]:
             errors.append(f"{path}: filename ID {file_id} != front matter id {front_matter['id']}")
+        artifact_id = front_matter.get("id")
+        if artifact_id:
+            seen_ids.setdefault(str(artifact_id), []).append(path)
+
+    for artifact_id, paths in sorted(seen_ids.items()):
+        if len(paths) > 1:
+            rendered = ", ".join(str(path) for path in sorted(paths))
+            errors.append(f"duplicate SSOT id {artifact_id}: {rendered}")
     return errors

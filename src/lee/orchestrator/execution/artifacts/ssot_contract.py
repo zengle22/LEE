@@ -101,7 +101,7 @@ class SSOTContractMaterializer:
         refs.extend(self._extract_local_keys(output.get("source_refs", [])))
         refs.extend(output.get("verifies", []))
         refs.extend(output.get("implements", []))
-        local_refs = [ref for ref in refs if ref in self._output_keys_hint(output, refs) or ref.isidentifier()]
+        local_refs = [ref for ref in refs if isinstance(ref, str) and ref.isidentifier()]
 
         for ref in local_refs:
             if ref in materialized:
@@ -111,10 +111,6 @@ class SSOTContractMaterializer:
             if ref not in materialized:
                 return False
         return True
-
-    def _output_keys_hint(self, output: Dict[str, Any], refs: List[str]) -> set[str]:
-        del output
-        return {ref for ref in refs if not self._is_literal_id(ref)}
 
     def _materialize_one(
         self,

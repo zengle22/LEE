@@ -11,6 +11,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Union
+import re
 import yaml
 
 from .models import ArtifactMetadata, RunManifest
@@ -768,7 +769,7 @@ class ArtifactManager:
             return metadata
 
         if metadata.adopt_mode == AdoptMode.REFERENCE or not self._is_artifacts_storage(metadata):
-            # reference_mode 只更新状态
+            self._update_project_ssot_front_matter_status(metadata, ArtifactStatus.FROZEN)
             metadata.status = ArtifactStatus.FROZEN
             metadata.frozen_at = datetime.now()
             metadata.updated_at = datetime.now()
@@ -792,6 +793,38 @@ class ArtifactManager:
 
         self.registry.update(metadata)
         return metadata
+
+    def _update_project_ssot_front_matter_status(
+        self,
+        metadata: ArtifactMetadata,
+        status: ArtifactStatus,
+    ) -> None:
+        artifact_path = self._resolve_metadata_path(metadata)
+        if not artifact_path.exists():
+            return
+        if artifact_path.suffix.lower() != ".md":
+            return
+        try:
+            raw_text = artifact_path.read_text(encoding="utf-8")
+        except OSError:
+            return
+        if not raw_text.startswith("---\n"):
+            return
+        match = re.match(r"^---\n(.*?)\n---\n?", raw_text, re.DOTALL)
+        if not match:
+            return
+        try:
+            front_matter = yaml.safe_load(match.group(1)) or {}
+        except yaml.YAMLError:
+            return
+        if not isinstance(front_matter, dict):
+            return
+        front_matter["status"] = status.value.lower()
+        frozen_at = datetime.now().isoformat()
+        front_matter["frozen_at"] = frozen_at
+        body = raw_text[match.end():]
+        front_matter_yaml = yaml.safe_dump(front_matter, allow_unicode=True, sort_keys=False).strip()
+        artifact_path.write_text(f"---\n{front_matter_yaml}\n---\n{body}", encoding="utf-8")
 
     def create_ssot(
         self,
@@ -860,7 +893,7 @@ class ArtifactManager:
         filename = f"{artifact_id}__{slug}.md"
 
         # 正式 SSOT 主文件落在项目内容目录，而不是 .artifacts/ssot/
-        relative_dir = resolve_ssot_relative_dir(ssot_type)
+        relative_dir = resolve_ssot_relative_dir(ssot_type, parent_id=parent_id)
         artifact_dir = self.project_root / relative_dir
         artifact_dir.mkdir(parents=True, exist_ok=True)
         artifact_path = artifact_dir / filename

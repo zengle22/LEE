@@ -911,11 +911,9 @@ class SSOTValidator:
             parent_prefix = parent_id.split("-", 1)[0].upper()
             if expected == "RELEASE" and parent_prefix != "REL":
                 result.add_error(f"类型 {ssot_type.value} 的 parent_id 必须是 RELEASE，当前为 {parent_prefix}")
-            elif expected == "DEVPLAN|TESTPLAN" and parent_prefix not in ("DEVPLAN", "TESTPLAN"):
-                result.add_error(f"TASK 对象的 parent_id 必须是 DEVPLAN 或 TESTPLAN，当前为 {parent_prefix}")
             elif expected == "RELEASE|DEVPLAN|TESTPLAN|TASK|FEAT" and parent_prefix not in ("REL", "DEVPLAN", "TESTPLAN", "TASK", "FEAT"):
                 result.add_error(f"REPORT 对象的 parent_id 类型不合法，当前为 {parent_prefix}")
-            elif expected not in ("RELEASE", "DEVPLAN|TESTPLAN", "RELEASE|DEVPLAN|TESTPLAN|TASK|FEAT") and parent_prefix != expected:
+            elif expected not in ("RELEASE", "RELEASE|DEVPLAN|TESTPLAN|TASK|FEAT") and parent_prefix != expected:
                 result.add_error(f"类型 {ssot_type.value} 的 parent_id 必须是 {expected}，当前为 {parent_prefix}")
 
     def _validate_tc_parent(self, artifact, result: ValidationResult) -> None:

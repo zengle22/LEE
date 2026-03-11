@@ -6,6 +6,7 @@ SSOT placement policy.
 """
 
 from pathlib import Path
+from typing import Optional
 
 from .types import SSOTType
 
@@ -28,12 +29,16 @@ SSOT_PLACEMENT_DIRS = {
     SSOTType.EVI: Path("docs/reports/evidence"),
 }
 
-
-def resolve_ssot_relative_dir(ssot_type: SSOTType) -> Path:
+def resolve_ssot_relative_dir(ssot_type: SSOTType, parent_id: Optional[str] = None) -> Path:
     """
     Resolve the project-relative directory for a formal SSOT object.
     """
     try:
-        return SSOT_PLACEMENT_DIRS[ssot_type]
+        base_dir = SSOT_PLACEMENT_DIRS[ssot_type]
     except KeyError as exc:
         raise ValueError(f"Unsupported SSOT placement type: {ssot_type}") from exc
+
+    if ssot_type == SSOTType.TASK and parent_id:
+        return base_dir / parent_id
+
+    return base_dir
