@@ -126,6 +126,47 @@ class TestTimeoutHandling:
             assert "timed out" in result["error"].lower()
 
     @pytest.mark.asyncio
+    async def test_timeout_recovers_written_step_workspace_files(self, executor, base_input, workspace):
+        """超时时若 step workspace 已有产物，应回收 changed_files 并返回 success。"""
+        step_workspace = workspace / ".workflow" / "workspace" / "wf-task-1" / "tech_design"
+        step_workspace.mkdir(parents=True)
+        artifact = step_workspace / "tech-architecture.yaml"
+        artifact.write_text("architecture: ready\n", encoding="utf-8")
+
+        recover_input = dict(base_input)
+        recover_input["step_workspace"] = str(step_workspace)
+
+        with patch.object(executor, "_invoke_claude", side_effect=asyncio.TimeoutError("stalled")):
+            with patch.object(
+                executor,
+                "_collect_diff_summary",
+                new=AsyncMock(return_value={"files_changed": 1, "lines_added": 1, "lines_deleted": 0}),
+            ):
+                result = await executor.execute(recover_input)
+
+        assert result["status"] == "success"
+        assert result["recovered_from_timeout"] is True
+        assert any(
+            path.replace("\\", "/") == ".workflow/workspace/wf-task-1/tech_design/tech-architecture.yaml"
+            for path in result["changed_files"]
+        )
+        assert result["error"] is None
+
+    @pytest.mark.asyncio
+    async def test_timeout_without_step_workspace_artifacts_stays_timeout(self, executor, base_input, workspace):
+        """超时且 step workspace 无文件时，仍应返回 timeout。"""
+        empty_step_workspace = workspace / ".workflow" / "workspace" / "wf-task-2" / "tech_design"
+        empty_step_workspace.mkdir(parents=True)
+
+        recover_input = dict(base_input)
+        recover_input["step_workspace"] = str(empty_step_workspace)
+
+        with patch.object(executor, "_invoke_claude", side_effect=asyncio.TimeoutError("stalled")):
+            result = await executor.execute(recover_input)
+
+        assert result["status"] == "timeout"
+
+    @pytest.mark.asyncio
     async def test_cli_not_found(self, executor, base_input):
         """claude CLI 不存在应返回 failed"""
         with patch.object(executor, '_invoke_claude', side_effect=FileNotFoundError()):
