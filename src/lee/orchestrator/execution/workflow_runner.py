@@ -25,6 +25,7 @@ from lee.orchestrator.core.instance_generator import InstanceGenerator
 from lee.orchestrator.execution.plan_agent import PlanAgent, PlanConfig, create_plan
 from lee.orchestrator.execution.llm_executor import LLMExecutor
 from lee.orchestrator.execution.review_gate import ReviewGate, check_review_gate
+from lee.orchestrator.execution.concurrency_scope import derive_concurrency_scope
 
 
 def _get_pm_workflow():
@@ -318,6 +319,11 @@ class WorkflowRunner:
     async def _create_workflow(self, instance_path: Path) -> str:
         """创建工作流实例"""
         pm_workflow = _get_pm_workflow()
+        scope_info = derive_concurrency_scope(
+            self.config.workflow_key,
+            self.config.params,
+            self.config.project_root,
+        )
         result = pm_workflow(
             "create",
             project_dir=str(self.config.project_root),
@@ -326,7 +332,10 @@ class WorkflowRunner:
             data={
                 "params": self.config.params,
                 "workflow_key": self.config.workflow_key,
-                "instance_path": str(instance_path)
+                "instance_path": str(instance_path),
+                "concurrency_scope": scope_info.concurrency_scope,
+                "concurrency_key": scope_info.concurrency_key,
+                "scope_source": scope_info.scope_source,
             }
         )
 
