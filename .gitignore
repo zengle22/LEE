@@ -59,7 +59,6 @@ examples/*/*/*/__pycache__/
 demo_l3_orchestration/output/
 
 # Generated files
-contracts/
 nul
 
 # Backup files
