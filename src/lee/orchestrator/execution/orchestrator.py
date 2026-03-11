@@ -730,7 +730,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     gate_type = step_to_execute.config.get("gate", {}).get("type", "auto_check") if step_to_execute.config else "auto_check"
                     if gate_type == "auto_check":
                         return await self._run_auto_check_gate_step(workflow_id, step_to_execute)
-                    elif gate_type in ("human_review", "human_decision"):
+                    elif gate_type in ("human_review", "human_decision", "human_approval"):
                         return await self._handle_human_gate(workflow_id, step_to_execute)
                     else:
                         # 默认当作 auto_check 处理
