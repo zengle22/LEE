@@ -2,6 +2,9 @@ import shutil
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
 
 from lee.orchestrator.execution.artifacts.manager import ArtifactManager
 from lee.orchestrator.execution.artifacts.ssot_contract import SSOTContractMaterializer
@@ -15,6 +18,10 @@ class _GateHarness(GateOperationsMixin):
         self.project_root = None
         self.state_machine = SimpleNamespace(
             _resolve_step_inputs_for_freeze=lambda step_id, instance: ["feat_freeze_ref"]
+        )
+        self.store = SimpleNamespace(
+            get_workflow=AsyncMock(),
+            update_workflow_data=AsyncMock(),
         )
 
 
@@ -155,5 +162,59 @@ def test_ssot_contract_allows_external_source_refs():
 
         assert "task_runtime" in outputs
         assert outputs["task_runtime"].artifact.id.startswith("TASK-FEAT-056-")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.mark.asyncio
+async def test_gate_publish_epic_freeze_to_canonical_spec_directory():
+    temp_dir = Path(tempfile.mkdtemp())
+    try:
+        harness = _GateHarness()
+        harness.project_root = temp_dir
+        harness.state_machine = SimpleNamespace(
+            _resolve_step_inputs_for_freeze=lambda step_id, instance: ["epic_candidate"]
+        )
+
+        instance = SimpleNamespace(
+            data={
+                "params": {},
+                "step_outputs": {
+                    "epic_candidate": {
+                        "business_output": {
+                            "title": "QA SSOT Alignment Epic",
+                            "goal": "Make QA outputs enter the canonical SSOT chain.",
+                            "scope": ["Bind TESTPLAN to RELEASE"],
+                            "non_goals": ["Do not redesign the SSOT model itself"],
+                            "success_metrics": ["Gate output must publish canonical EPIC"],
+                            "priority": "P0",
+                            "source_refs": ["SRC-001", "ADR-007"],
+                            "ssot": {
+                                "identity_kind": "ssot",
+                                "ssot_type": "EPIC",
+                                "derived_from": "SRC-001",
+                            },
+                        }
+                    },
+                    "epic_freeze": {"gate_approved": True},
+                },
+            }
+        )
+        harness.store.get_workflow.return_value = instance
+
+        await harness._freeze_gate_targets("wf-epic-001", "epic_freeze")
+
+        epic_files = list((temp_dir / "spec" / "requirements" / "epics").glob("EPIC-*__*.md"))
+        assert len(epic_files) == 1
+        epic_text = epic_files[0].read_text(encoding="utf-8")
+        assert "ssot_type: epic" in epic_text
+        assert "status: frozen" in epic_text
+        assert "QA SSOT Alignment Epic" in epic_text
+
+        harness.store.update_workflow_data.assert_awaited_once()
+        updated_data = harness.store.update_workflow_data.await_args.args[1]
+        assert updated_data["params"]["epic_freeze_ref"]["artifact_id"].startswith("EPIC-")
+        assert updated_data["params"]["epic_freeze_ref"]["path"].startswith("spec/requirements/epics/")
+        assert updated_data["step_outputs"]["epic_freeze"]["epic_freeze_ref"]["artifact_id"].startswith("EPIC-")
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
