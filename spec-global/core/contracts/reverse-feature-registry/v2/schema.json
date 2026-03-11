@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/spec-global/core/contracts/reverse-feature-registry/v2/schema.json",
+  "title": "Reverse Feature Registry",
+  "type": "object",
+  "required": ["generated_at", "features"],
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": { "type": "string" },
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "feature_id",
+          "feature_key",
+          "capability_id",
+          "title",
+          "summary",
+          "acceptance_boundary",
+          "acceptance_checks",
+          "preconditions",
+          "main_flow",
+          "edge_cases",
+          "state_updates",
+          "code_refs",
+          "evidence_refs",
+          "primary_refs",
+          "evidence_layers",
+          "evidence_strategy"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "feature_id": { "type": "string", "minLength": 1 },
+          "feature_key": { "type": "string", "minLength": 1 },
+          "capability_id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string" },
+          "summary": { "type": "string" },
+          "acceptance_boundary": { "type": "string" },
+          "acceptance_checks": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "required": ["id", "scenario", "given", "when", "then", "trace_hints"],
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string" },
+                "scenario": { "type": "string" },
+                "given": { "type": "string" },
+                "when": { "type": "string" },
+                "then": { "type": "string" },
+                "trace_hints": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          },
+          "preconditions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "main_flow": { "type": "array", "minItems": 2, "items": { "type": "string" } },
+          "edge_cases": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "state_updates": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "code_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "primary_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "evidence_layers": {
+            "type": "object",
+            "required": ["impl_refs", "api_refs", "test_refs", "doc_refs"],
+            "additionalProperties": false,
+            "properties": {
+              "impl_refs": { "type": "array", "items": { "type": "string" } },
+              "api_refs": { "type": "array", "items": { "type": "string" } },
+              "test_refs": { "type": "array", "items": { "type": "string" } },
+              "doc_refs": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "evidence_strategy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "primary_selection": { "type": "string", "enum": ["ordered_impl_api_first"] },
+              "ranking_signals": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["path_quality", "semantic_path_match", "page_content_match", "onboarding_local_rerank"]
+                }
+              }
+            }
+          },
+          "inferred_fields": { "type": "array", "items": { "type": "string" } },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    }
+  }
+}

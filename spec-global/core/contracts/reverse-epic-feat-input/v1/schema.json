@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/spec-global/core/contracts/reverse-epic-feat-input/v1/schema.json",
+  "title": "Reverse EPIC FEAT Input Contract",
+  "type": "object",
+  "required": ["request_id", "repo_root", "objective"],
+  "additionalProperties": false,
+  "properties": {
+    "request_id": { "type": "string", "minLength": 1 },
+    "repo_root": { "type": "string", "minLength": 1 },
+    "objective": { "type": "string", "enum": ["reverse_epic_feat"] },
+    "include_paths": { "type": "array", "items": { "type": "string" } },
+    "exclude_paths": { "type": "array", "items": { "type": "string" } },
+    "existing_prd_paths": { "type": "array", "items": { "type": "string" } },
+    "runtime_evidence_paths": { "type": "array", "items": { "type": "string" } },
+    "strict_evidence": { "type": "boolean", "default": true },
+    "max_capabilities": { "type": "integer", "minimum": 1, "maximum": 20, "default": 12 },
+    "max_features_per_capability": { "type": "integer", "minimum": 1, "maximum": 20, "default": 8 },
+    "publish_mode": { "type": "string", "enum": ["draft", "publish", "freeze"], "default": "draft" },
+    "human_gate_required": { "type": "boolean", "default": true }
+  }
+}

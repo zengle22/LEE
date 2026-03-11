@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/spec-global/core/contracts/reverse-epic-feat-output/v1/schema.json",
+  "title": "Reverse EPIC FEAT Output Contract",
+  "type": "object",
+  "required": ["request_id", "workflow_id", "run_id", "system_map_path", "capability_map_path", "feature_registry_path", "epic_feat_ssot_output_path", "review_report_path", "reverse_ssot_status"],
+  "additionalProperties": false,
+  "properties": {
+    "request_id": { "type": "string" },
+    "workflow_id": { "type": "string" },
+    "run_id": { "type": "string" },
+    "system_map_path": { "type": "string" },
+    "capability_map_path": { "type": "string" },
+    "feature_registry_path": { "type": "string" },
+    "epic_feat_ssot_output_path": { "type": "string" },
+    "review_report_path": { "type": "string" },
+    "completion_summary_path": { "type": "string" },
+    "epic_count": { "type": "integer", "minimum": 0 },
+    "feat_count": { "type": "integer", "minimum": 0 },
+    "blocker_count": { "type": "integer", "minimum": 0 },
+    "major_count": { "type": "integer", "minimum": 0 },
+    "evidence_strategy_version": { "type": "string" },
+    "evidence_layering_enabled": { "type": "boolean" },
+    "primary_ref_ranking_signals": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["path_quality", "semantic_path_match", "page_content_match", "onboarding_local_rerank"]
+      }
+    },
+    "reverse_ssot_status": { "type": "string", "enum": ["draft_generated", "review_warning", "blocked", "published", "frozen"] }
+  }
+}
