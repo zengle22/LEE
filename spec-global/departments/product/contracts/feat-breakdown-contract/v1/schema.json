@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-spec.example.com/contracts/product-feat-breakdown-contract/v1/schema.json",
+  "title": "Product FEAT Breakdown Contract",
+  "description": "产品 FEAT 拆解契约 - 记录 EPIC 到 FEAT 的边界拆解结果",
+  "type": "object",
+  "required": [
+    "breakdown_id",
+    "epic_ref",
+    "feat_candidates"
+  ],
+  "properties": {
+    "breakdown_id": { "type": "string" },
+    "epic_ref": { "type": "string" },
+    "feat_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "user_value", "acceptance_boundary"],
+        "properties": {
+          "title": { "type": "string" },
+          "user_value": { "type": "string" },
+          "acceptance_boundary": { "type": "string" },
+          "dependencies": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "non_goals": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["P0", "P1", "P2"]
+          }
+        }
+      }
+    }
+  }
+}

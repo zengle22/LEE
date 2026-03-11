@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-spec.example.com/contracts/source-freeze-contract/v1/schema.json",
+  "title": "Source Freeze Contract",
+  "description": "需求源冻结契约 - 正式 SRC 对象或其冻结视图",
+  "type": "object",
+  "required": [
+    "source_id",
+    "title",
+    "problem_statement",
+    "target_user",
+    "business_motivation",
+    "constraints",
+    "freeze_meta",
+    "ssot"
+  ],
+  "properties": {
+    "source_id": {
+      "type": "string",
+      "description": "SRC 对象唯一标识"
+    },
+    "title": {
+      "type": "string",
+      "description": "SRC 标题"
+    },
+    "problem_statement": {
+      "type": "string",
+      "description": "问题陈述"
+    },
+    "target_user": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "目标用户"
+    },
+    "trigger_context": {
+      "type": "string",
+      "description": "触发场景"
+    },
+    "business_motivation": {
+      "type": "string",
+      "description": "业务动因"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "关键约束"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "freeze_meta": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["draft", "frozen", "superseded"]
+        },
+        "frozen_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "frozen_by": {
+          "type": "string"
+        }
+      }
+    },
+    "ssot": {
+      "type": "object",
+      "required": ["identity_kind", "ssot_type"],
+      "properties": {
+        "identity_kind": {
+          "type": "string",
+          "enum": ["ssot"]
+        },
+        "ssot_type": {
+          "type": "string",
+          "enum": ["SRC"]
+        },
+        "derived_from": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

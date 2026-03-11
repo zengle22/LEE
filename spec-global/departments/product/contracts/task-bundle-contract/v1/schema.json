@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-spec.example.com/contracts/product-task-bundle-contract/v1/schema.json",
+  "title": "Product Task Bundle Contract",
+  "description": "TASK bundle 契约 - 从 FEAT bundle 派生的一组正式 TASK 对象及其实施计划摘要。",
+  "type": "object",
+  "required": [
+    "parent_epic",
+    "source_feats",
+    "task_specs",
+    "milestones",
+    "dependency_graph",
+    "resource_allocation",
+    "risk_mitigation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "parent_epic": {
+      "type": "string",
+      "pattern": "^EPIC-\\d{3}$"
+    },
+    "source_feats": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^FEAT-\\d{3}$"
+      }
+    },
+    "planning_metadata": {
+      "type": "object",
+      "properties": {
+        "planning_timestamp": {
+          "type": "string"
+        },
+        "project_profile": {
+          "type": "string"
+        },
+        "task_directory": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "task_specs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "../../task-contract/v1/schema.json"
+      }
+    },
+    "milestones": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "task_ids", "acceptance_criteria"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "target_date": { "type": "string" },
+          "task_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "acceptance_criteria": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dependency_graph": {
+      "type": "object",
+      "required": ["critical_path"],
+      "additionalProperties": false,
+      "properties": {
+        "critical_path": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "parallel_tracks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["track", "tasks"],
+            "additionalProperties": false,
+            "properties": {
+              "track": { "type": "string" },
+              "tasks": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "resource_allocation": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["tasks"],
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "total_effort": { "type": "string" }
+        }
+      }
+    },
+    "risk_mitigation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["risk", "mitigation", "affected_tasks"],
+        "additionalProperties": false,
+        "properties": {
+          "risk": { "type": "string" },
+          "mitigation": { "type": "string" },
+          "affected_tasks": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

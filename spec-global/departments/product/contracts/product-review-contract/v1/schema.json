@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-spec.example.com/contracts/product-review-contract/v1/schema.json",
+  "title": "Product Review Contract",
+  "description": "产品评审契约 - 统一承载对齐评审、拆分评审、实施计划评审结果",
+  "type": "object",
+  "required": [
+    "review_id",
+    "review_type",
+    "subject_refs",
+    "summary",
+    "findings",
+    "decision"
+  ],
+  "properties": {
+    "review_id": { "type": "string" },
+    "review_type": {
+      "type": "string",
+      "enum": ["source_review", "epic_review", "feat_review", "delivery_plan_review"]
+    },
+    "subject_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": { "type": "string" },
+    "findings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["pass", "revise", "reject"]
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
