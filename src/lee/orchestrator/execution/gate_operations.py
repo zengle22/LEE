@@ -9,8 +9,9 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Dict, List, Optional
 
+from lee.orchestrator.execution.artifacts.types import SSOTType
 from lee.orchestrator.storage.models import StepResult
 
 
@@ -504,7 +505,47 @@ class GateOperationsMixin:
             except Exception as exc:
                 logger.warning(f"Freeze target {artifact_id} failed: {exc}")
 
-    def _collect_gate_freeze_target_ids(self, instance, gate_step_id: str) -> List[str]:
+        await self._publish_gate_canonical_ssot(instance, workflow_id, gate_step_id, manager)
+
+    async def _publish_gate_canonical_ssot(
+        self,
+        instance,
+        workflow_id: str,
+        gate_step_id: str,
+        manager,
+    ) -> None:
+        """发布Gate产出的规范SSOT对象到标准目录"""
+        payloads = self._collect_gate_freeze_payloads(instance, gate_step_id)
+        if not payloads:
+            return
+
+        published_refs: Dict[str, Dict[str, Any]] = {}
+        for payload in payloads:
+            for candidate in self._collect_publishable_ssot_candidates(payload):
+                published = self._materialize_canonical_ssot_candidate(candidate, manager)
+                if not published:
+                    continue
+                alias = f"{gate_step_id}_ref"
+                published_refs[alias] = published
+
+        if not published_refs:
+            return
+
+        instance_data = dict(getattr(instance, "data", {}) or {})
+        params = dict(instance_data.get("params", {}) or {})
+        params.update(published_refs)
+        instance_data["params"] = params
+
+        step_outputs = dict(instance_data.get("step_outputs", {}) or {})
+        gate_output = dict(step_outputs.get(gate_step_id, {}) or {})
+        gate_output.update(published_refs)
+        step_outputs[gate_step_id] = gate_output
+        instance_data["step_outputs"] = step_outputs
+
+        await self.store.update_workflow_data(workflow_id, instance_data)
+
+    def _collect_gate_freeze_payloads(self, instance, gate_step_id: str) -> List[Any]:
+        """收集Gate freeze所需的payloads，支持别名解析"""
         instance_data = getattr(instance, "data", {}) or {}
         step_output_map = instance_data.get("step_outputs", {}) or {}
         params = instance_data.get("params", {}) or {}
@@ -519,15 +560,164 @@ class GateOperationsMixin:
 
         payloads: List[Any] = []
         for source in sources:
-            if source in step_output_map:
-                payloads.append(step_output_map[source])
-            elif source in params:
-                payloads.append(params[source])
+            for key in (source, *self._freeze_source_aliases(source)):
+                if key in step_output_map:
+                    payloads.append(step_output_map[key])
+                    break
+                if key in params:
+                    payloads.append(params[key])
+                    break
 
-        # 兼容未声明 inputs 但上游已经 materialize 的旧 gate。
         if not payloads:
             payloads.extend(step_output_map.values())
+        return payloads
 
+    @staticmethod
+    def _freeze_source_aliases(source: str) -> List[str]:
+        """生成freeze源的别名列表"""
+        if not isinstance(source, str):
+            return []
+        if source.endswith("_freeze_ref"):
+            return [source[:-4]]
+        if source.endswith("_freeze"):
+            return [f"{source}_ref"]
+        return []
+
+    def _collect_publishable_ssot_candidates(self, payload: Any) -> List[Dict[str, Any]]:
+        """从payload中收集可发布的SSOT候选对象"""
+        collected: List[Dict[str, Any]] = []
+        self._walk_publishable_candidates(payload, collected)
+        return collected
+
+    def _walk_publishable_candidates(self, payload: Any, collected: List[Dict[str, Any]]) -> None:
+        """递归遍历payload寻找SSOT候选"""
+        if isinstance(payload, dict):
+            if self._candidate_ssot_type(payload):
+                collected.append(payload)
+            for value in payload.values():
+                if isinstance(value, (dict, list)):
+                    self._walk_publishable_candidates(value, collected)
+        elif isinstance(payload, list):
+            for item in payload:
+                self._walk_publishable_candidates(item, collected)
+
+    def _candidate_ssot_type(self, payload: Dict[str, Any]) -> Optional[str]:
+        """识别payload是否为可物化的SSOT候选类型"""
+        if not isinstance(payload, dict):
+            return None
+        ssot_identity = payload.get("ssot_identity")
+        if isinstance(ssot_identity, dict) and str(ssot_identity.get("ssot_type", "")).upper() == "SRC":
+            if isinstance(payload.get("src_structure"), dict):
+                return "SRC"
+        ssot = payload.get("ssot")
+        if isinstance(ssot, dict) and str(ssot.get("ssot_type", "")).upper() == "EPIC":
+            if payload.get("title") and payload.get("goal"):
+                return "EPIC"
+        return None
+
+    def _materialize_canonical_ssot_candidate(self, payload: Dict[str, Any], manager) -> Optional[Dict[str, Any]]:
+        """物化SSOT候选对象为规范制品"""
+        candidate_type = self._candidate_ssot_type(payload)
+        if candidate_type == "SRC":
+            return self._materialize_src_candidate(payload, manager)
+        if candidate_type == "EPIC":
+            return self._materialize_epic_candidate(payload, manager)
+        return None
+
+    def _materialize_src_candidate(self, payload: Dict[str, Any], manager) -> Dict[str, Any]:
+        """将SRC候选物化为规范SRC文件"""
+        src_structure = payload.get("src_structure", {}) or {}
+        governance_refs = payload.get("governance_refs", {}) or {}
+        title = str(src_structure.get("title") or "Untitled SRC")
+        derived_ref = (
+            ((payload.get("ssot_identity") or {}).get("derived_from"))
+            or ((governance_refs.get("source_refs") or [None])[0])
+        )
+        source_refs = self._dedupe_strings([
+            *(governance_refs.get("source_refs") or []),
+            derived_ref,
+        ])
+
+        content_lines = [f"# {title}", ""]
+
+        problem_statement = src_structure.get("problem_statement")
+        if problem_statement:
+            content_lines.extend(["## 问题陈述", "", str(problem_statement), ""])
+
+        content = "\n".join(content_lines)
+
+        metadata = manager.create_ssot(
+            ssot_type=SSOTType.SRC,
+            title=title,
+            content=content,
+            run_id=derived_ref or "gate-materialize",
+            parent_id=None,
+        )
+        return {"artifact_id": metadata.id, "path": metadata.path}
+
+    def _materialize_epic_candidate(self, payload: Dict[str, Any], manager) -> Dict[str, Any]:
+        """将EPIC候选物化为规范EPIC文件"""
+        title = str(payload.get("title") or "Untitled Epic")
+        goal = str(payload.get("goal") or "")
+        scope = payload.get("scope", []) or []
+        non_goals = payload.get("non_goals", []) or []
+        success_metrics = payload.get("success_metrics", []) or []
+        priority = str(payload.get("priority") or "P1")
+        source_refs = self._dedupe_strings(payload.get("source_refs", []))
+        ssot = payload.get("ssot", {}) or {}
+        derived_from = ssot.get("derived_from")
+
+        content_lines = [f"# {title}", ""]
+
+        if goal:
+            content_lines.extend(["## 目标", "", goal, ""])
+
+        if scope:
+            content_lines.extend(["## 范围", ""])
+            for item in scope:
+                content_lines.append(f"- {item}")
+            content_lines.append("")
+
+        if non_goals:
+            content_lines.extend(["## 非目标", ""])
+            for item in non_goals:
+                content_lines.append(f"- {item}")
+            content_lines.append("")
+
+        if success_metrics:
+            content_lines.extend(["## 成功标准", ""])
+            for item in success_metrics:
+                content_lines.append(f"- {item}")
+            content_lines.append("")
+
+        content = "\n".join(content_lines)
+
+        metadata = manager.create_ssot(
+            ssot_type=SSOTType.EPIC,
+            title=title,
+            content=content,
+            run_id=derived_from or "gate-materialize",
+            parent_id=None,
+        )
+
+        # 冻结为正式EPIC
+        frozen = manager.freeze(metadata.id)
+        return {"artifact_id": frozen.id, "path": frozen.path}
+
+    def _dedupe_strings(self, items: List[Any]) -> List[str]:
+        """去重字符串列表"""
+        seen: set = set()
+        result: List[str] = []
+        for item in items:
+            if isinstance(item, str) and item.strip():
+                s = item.strip()
+                if s not in seen:
+                    seen.add(s)
+                    result.append(s)
+        return result
+
+    def _collect_gate_freeze_target_ids(self, instance, gate_step_id: str) -> List[str]:
+        payloads = self._collect_gate_freeze_payloads(instance, gate_step_id)
         collected: List[str] = []
         for payload in payloads:
             self._collect_artifact_ids_from_payload(payload, collected)
