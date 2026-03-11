@@ -587,6 +587,7 @@ class TestSystemPrompt:
             workspace="/my/project",
             allowed_commands=["pytest"],
             write_scope=["src/**"],
+            forbidden_read_paths=[],
             max_iterations=5,
             max_bash_calls=12,
             stop_conditions={},
@@ -604,12 +605,32 @@ class TestSystemPrompt:
             workspace="/my/project",
             allowed_commands=[],
             write_scope=[],
+            forbidden_read_paths=[],
             max_iterations=5,
             max_bash_calls=0,
             stop_conditions={},
             system_prompt_extra="不允许修改 go.mod",
         )
         assert "不允许修改 go.mod" in prompt
+
+    def test_includes_forbidden_read_paths(self, executor):
+        """system prompt 应显式禁止读取历史产物目录"""
+        prompt = executor._build_system_prompt(
+            goal="test",
+            workspace="/my/project",
+            allowed_commands=["cat"],
+            write_scope=["spec/**"],
+            forbidden_read_paths=["output/", "evidence/", ".workflow/claude-code/"],
+            max_iterations=5,
+            max_bash_calls=0,
+            stop_conditions={},
+            system_prompt_extra="",
+        )
+        assert "禁止读取或引用的路径" in prompt
+        assert "output/" in prompt
+        assert "evidence/" in prompt
+        assert ".workflow/claude-code/" in prompt
+        assert "不要扫描仓库寻找相似的 EPIC、FEAT、SRC、ADR" in prompt
 
     def test_scan_bash_calls_from_debug_log(self, tmp_path):
         """debug 日志增量扫描应能统计 Bash 调用次数。"""
@@ -624,7 +645,7 @@ class TestSystemPrompt:
             0,
         )
         assert count == 2
-        assert offset == len(debug_file.read_text(encoding="utf-8"))
+        assert offset == debug_file.stat().st_size
 
 
 # ========================================================================

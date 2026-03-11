@@ -10,7 +10,9 @@ QA Test Plan Execution 集成测试
 
 import asyncio
 import pytest
+import yaml
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from lee.orchestrator.storage.models import (
@@ -18,8 +20,9 @@ from lee.orchestrator.storage.models import (
     WorkflowStatus,
     TaskExecution,
     TaskExecutionStatus,
+    OutputSpec,
 )
-from lee.orchestrator.execution.state_machine import StateMachine
+from lee.orchestrator.execution.state_machine import WorkflowStateMachine
 from lee.orchestrator.execution.runners.auto_check_gate_runner import AutoCheckGateRunner
 
 
@@ -34,7 +37,7 @@ class TestBugFixes:
         self.mock_event_log = MagicMock()
 
         # 创建 StateMachine 实例
-        self.state_machine = StateMachine(self.mock_store)
+        self.state_machine = WorkflowStateMachine(self.mock_store)
 
     # ========================================================================
     # BUG-2026-0037: auto_check 门禁自动通过
@@ -427,3 +430,115 @@ class TestBugFixes:
 
         assert "step_B" in data["step_outputs"], "步骤 ID 应该在 step_outputs 中"
         assert "/tmp/output.txt" in data["step_outputs"]["step_B"]["paths"], "输出路径应该被记录"
+
+    @pytest.mark.asyncio
+    async def test_fail_step_clears_current_step_for_retry(self):
+        """
+        验证 fail_step 会清除 current_step，避免失败后的 step 被永久卡住
+
+        场景：
+        - 步骤执行失败
+        - 工作流后续被切回 RUNNING 重新调度
+
+        预期结果：
+        - update_workflow_status 带 clear_current_step=True
+        """
+        await self.state_machine.fail_step(
+            "workflow-123",
+            "step_B",
+            "boom",
+        )
+
+        self.mock_store.update_workflow_status.assert_called_once_with(
+            "workflow-123",
+            WorkflowStatus.FAILED,
+            clear_current_step=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_complete_step_materializes_declared_gate_output_file(self, tmp_path):
+        rendered_dir = tmp_path / ".workflow" / "rendered"
+        rendered_dir.mkdir(parents=True, exist_ok=True)
+        template_path = rendered_dir / "workflow-test.yaml"
+        template_path.write_text("id: dummy\n", encoding="utf-8")
+
+        mock_instance = MagicMock()
+        mock_instance.template_id = str(template_path)
+        mock_instance.status = WorkflowStatus.RUNNING
+        mock_instance.data = {
+            "completed_steps": ["feat_spec_generation", "feat_review"],
+            "step_outputs": {
+                "feat_spec_generation": {"business_output": {"epic_ref": "EPIC-001"}},
+                "feat_review": {"decision": "pass"},
+            },
+            "params": {"project": "demo"},
+        }
+        self.mock_store.get_workflow.return_value = mock_instance
+
+        step_info = MagicMock()
+        step_info.outputs = [OutputSpec(type="file", path="output/design-frozen/{project}-feat-freeze.yaml", format="yaml")]
+        step_info.input = [{"source": "feat_spec_generation"}, {"source": "feat_review"}]
+
+        template = MagicMock()
+        template.get_step_info.return_value = step_info
+        template_manager = MagicMock()
+        template_manager.get_template.return_value = template
+
+        state_machine = WorkflowStateMachine(self.mock_store, template_manager=template_manager)
+        await state_machine.complete_step(
+            "workflow-123",
+            "feat_freeze",
+            {"gate_approved": True, "comments": "ok"},
+        )
+
+        frozen_path = tmp_path / "output" / "design-frozen" / "demo-feat-freeze.yaml"
+        assert frozen_path.exists()
+        content = frozen_path.read_text(encoding="utf-8")
+        assert "gate_approved: true" in content
+        assert "feat_spec_generation:" in content
+
+    @pytest.mark.asyncio
+    async def test_complete_step_materializes_freeze_ref_alias_inputs(self, tmp_path):
+        rendered_dir = tmp_path / ".workflow" / "rendered"
+        rendered_dir.mkdir(parents=True, exist_ok=True)
+        template_path = rendered_dir / "workflow-test.yaml"
+        template_path.write_text("id: dummy\n", encoding="utf-8")
+
+        mock_instance = MagicMock()
+        mock_instance.template_id = str(template_path)
+        mock_instance.status = WorkflowStatus.RUNNING
+        mock_instance.data = {
+            "completed_steps": ["feat_review"],
+            "step_outputs": {
+                "feat_review": {"decision": "pass"},
+            },
+            "params": {
+                "project": "demo",
+                "epic_freeze_ref": {
+                    "artifact_id": "EPIC-001",
+                    "path": "spec/requirements/epics/EPIC-001__demo.md",
+                },
+            },
+        }
+        self.mock_store.get_workflow.return_value = mock_instance
+
+        step_info = MagicMock()
+        step_info.outputs = [OutputSpec(type="file", path="output/design-frozen/{project}-feat-freeze.yaml", format="yaml")]
+        step_info.input = [{"source": "epic_freeze"}, {"source": "feat_review"}]
+
+        template = MagicMock()
+        template.get_step_info.return_value = step_info
+        template_manager = MagicMock()
+        template_manager.get_template.return_value = template
+
+        state_machine = WorkflowStateMachine(self.mock_store, template_manager=template_manager)
+        await state_machine.complete_step(
+            "workflow-456",
+            "feat_freeze",
+            {"gate_approved": True},
+        )
+
+        frozen_path = tmp_path / "output" / "design-frozen" / "demo-feat-freeze.yaml"
+        payload = yaml.safe_load(frozen_path.read_text(encoding="utf-8"))
+        assert payload["frozen_inputs"]["epic_freeze_ref"]["artifact_id"] == "EPIC-001"
+        assert payload["frozen_inputs"]["feat_review"]["decision"] == "pass"
