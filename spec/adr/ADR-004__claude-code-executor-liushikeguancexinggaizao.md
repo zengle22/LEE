@@ -2,7 +2,7 @@
 id: ADR-004
 ssot_type: adr
 title: Claude Code Executor 流式可观测性改造
-status: draft
+status: frozen
 version: v1
 parent_id: null
 derived_from_ids: []
@@ -10,6 +10,7 @@ source_refs: []
 owner: codex
 tags: []
 properties: {}
+frozen_at: '2026-03-11T15:41:56.099029'
 ---
 
 # Claude Code Executor 流式可观测性改造
