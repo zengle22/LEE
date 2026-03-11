@@ -79,6 +79,10 @@ def _should_lock(argv: list[str]) -> bool:
     if first == "approve":
         return False
 
+    # `lee run` 使用 workflow-scope 互斥，不再使用项目级 CLI 锁
+    if first == "run":
+        return False
+
     # gates 子命令需要特殊处理
     if first == "gates" and len(argv) >= 2:
         subcommand = argv[1]
