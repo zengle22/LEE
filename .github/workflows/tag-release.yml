@@ -1,9 +1,7 @@
 name: Tag Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
 
 concurrency:
   group: tag-release-${{ github.ref }}
