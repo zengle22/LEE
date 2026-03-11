@@ -1,6 +1,6 @@
 {
   "version": "2.1.0",
-  "last_rebuilt": "2026-03-11T20:28:36.640716",
+  "last_rebuilt": "2026-03-11T22:31:24.251239",
   "artifacts": {
     "ART-00003": {
       "id": "ART-00003",
@@ -7171,8 +7171,8 @@
       ],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:13:02.296566",
-      "updated_at": "2026-03-11T16:13:02.296566",
+      "created_at": "2026-03-11T22:17:25.653845",
+      "updated_at": "2026-03-11T22:17:25.653845",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -7235,8 +7235,8 @@
       ],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:24:59.145194",
-      "updated_at": "2026-03-11T16:24:59.145194",
+      "created_at": "2026-03-11T22:17:25.653845",
+      "updated_at": "2026-03-11T22:17:25.653845",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -9936,8 +9936,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T15:33:14.133694",
-      "updated_at": "2026-03-11T16:27:48.772818",
+      "created_at": "2026-03-11T22:17:25.656911",
+      "updated_at": "2026-03-11T22:17:25.656911",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -9978,8 +9978,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T15:33:14.142872",
-      "updated_at": "2026-03-11T16:27:48.772818",
+      "created_at": "2026-03-11T22:17:25.656911",
+      "updated_at": "2026-03-11T22:17:25.656911",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -10020,8 +10020,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T15:33:14.151332",
-      "updated_at": "2026-03-11T16:27:48.774352",
+      "created_at": "2026-03-11T22:17:25.656911",
+      "updated_at": "2026-03-11T22:17:25.656911",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -10062,8 +10062,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:21:10.453488",
-      "updated_at": "2026-03-11T16:23:57.935153",
+      "created_at": "2026-03-11T22:17:25.656911",
+      "updated_at": "2026-03-11T22:17:25.656911",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -10104,8 +10104,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:21:10.460523",
-      "updated_at": "2026-03-11T16:23:57.944259",
+      "created_at": "2026-03-11T22:17:25.656911",
+      "updated_at": "2026-03-11T22:17:25.656911",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -10146,8 +10146,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:21:10.466636",
-      "updated_at": "2026-03-11T16:23:57.950432",
+      "created_at": "2026-03-11T22:17:25.658440",
+      "updated_at": "2026-03-11T22:17:25.658440",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -10188,8 +10188,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:21:10.475822",
-      "updated_at": "2026-03-11T16:23:57.958070",
+      "created_at": "2026-03-11T22:17:25.658440",
+      "updated_at": "2026-03-11T22:17:25.658440",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -10230,8 +10230,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:21:10.483130",
-      "updated_at": "2026-03-11T16:23:57.966372",
+      "created_at": "2026-03-11T22:17:25.658440",
+      "updated_at": "2026-03-11T22:17:25.658440",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -10272,8 +10272,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:21:10.489297",
-      "updated_at": "2026-03-11T16:23:57.973550",
+      "created_at": "2026-03-11T22:17:25.658440",
+      "updated_at": "2026-03-11T22:17:25.658440",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -10314,8 +10314,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:21:10.496268",
-      "updated_at": "2026-03-11T16:23:57.979938",
+      "created_at": "2026-03-11T22:17:25.658440",
+      "updated_at": "2026-03-11T22:17:25.658440",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -10448,8 +10448,8 @@
       ],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T15:41:56.108712",
-      "updated_at": "2026-03-11T16:28:07.971774",
+      "created_at": "2026-03-11T22:17:25.653845",
+      "updated_at": "2026-03-11T22:17:25.653845",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -11976,8 +11976,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T15:11:40.575803",
-      "updated_at": "2026-03-11T15:17:41.912188",
+      "created_at": "2026-03-11T22:17:25.653845",
+      "updated_at": "2026-03-11T22:17:25.653845",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -12018,8 +12018,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T15:11:40.582589",
-      "updated_at": "2026-03-11T15:17:41.919851",
+      "created_at": "2026-03-11T22:17:25.653845",
+      "updated_at": "2026-03-11T22:17:25.653845",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -12060,8 +12060,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T15:11:40.589445",
-      "updated_at": "2026-03-11T15:17:41.927883",
+      "created_at": "2026-03-11T22:17:25.655362",
+      "updated_at": "2026-03-11T22:17:25.655362",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -12102,8 +12102,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T15:11:40.597336",
-      "updated_at": "2026-03-11T15:17:41.935183",
+      "created_at": "2026-03-11T22:17:25.655362",
+      "updated_at": "2026-03-11T22:17:25.655362",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -12144,8 +12144,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T15:11:40.603324",
-      "updated_at": "2026-03-11T15:17:41.942253",
+      "created_at": "2026-03-11T22:17:25.655362",
+      "updated_at": "2026-03-11T22:17:25.655362",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -12186,8 +12186,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:05:54.455578",
-      "updated_at": "2026-03-11T16:07:19.702398",
+      "created_at": "2026-03-11T22:17:25.655362",
+      "updated_at": "2026-03-11T22:17:25.655362",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -12228,8 +12228,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:05:54.463084",
-      "updated_at": "2026-03-11T16:07:19.709991",
+      "created_at": "2026-03-11T22:17:25.655362",
+      "updated_at": "2026-03-11T22:17:25.655362",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -12270,8 +12270,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:05:54.469173",
-      "updated_at": "2026-03-11T16:07:19.716126",
+      "created_at": "2026-03-11T22:17:25.655362",
+      "updated_at": "2026-03-11T22:17:25.655362",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -12312,8 +12312,8 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-11T16:05:54.475764",
-      "updated_at": "2026-03-11T16:07:19.722884",
+      "created_at": "2026-03-11T22:17:25.655362",
+      "updated_at": "2026-03-11T22:17:25.656911",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -12431,6 +12431,102 @@
         "derived_from_ids": [
           "FEAT-071"
         ]
+      }
+    },
+    "FEAT-089": {
+      "id": "FEAT-089",
+      "type": "DOCUMENT",
+      "category": "ssot_object",
+      "status": "DRAFT",
+      "path": "spec/requirements/features/FEAT-089__lee-run-ssot-zuoyongyubingfahuchi.md",
+      "path_root": ".",
+      "external_path": null,
+      "adopt_mode": null,
+      "run_id": "manual-concurrency-task-split-20260311",
+      "workflow_id": null,
+      "department": null,
+      "depends_on": [],
+      "derived_from": null,
+      "consumed_by": [],
+      "implements": [],
+      "verifies": [],
+      "supersedes": null,
+      "governance_kind": "transfer",
+      "git_sha": null,
+      "git_repo_path": null,
+      "title": "lee run SSOT 作用域并发互斥",
+      "description": "",
+      "tags": [
+        "cli",
+        "workflow",
+        "concurrency",
+        "ssot"
+      ],
+      "size_bytes": 1062,
+      "content_hash": "e0402bd305f08ad4f8ddd8417de344cc12f30fe230c21d1def689afc9ba61f42",
+      "created_at": "2026-03-11T22:48:31.587205",
+      "updated_at": "2026-03-11T22:48:31.587217",
+      "frozen_at": null,
+      "archived_at": null,
+      "properties": {
+        "ssot_type": "feat",
+        "parent_id": "EPIC-003",
+        "source_refs": [
+          "SRC-002",
+          "ADR-009"
+        ],
+        "related_ids": [],
+        "owner": "codex",
+        "version": "v1",
+        "placement_dir": "spec/requirements/features",
+        "derived_from_ids": []
+      }
+    },
+    "TASK-FEAT-089-002": {
+      "id": "TASK-FEAT-089-002",
+      "type": "DOCUMENT",
+      "category": "ssot_object",
+      "status": "ACTIVE",
+      "path": "spec/tasks/FEAT-089/TASK-FEAT-089-002__run-minglingbingfachongtujianceyutishigaizao.md",
+      "path_root": ".",
+      "external_path": null,
+      "adopt_mode": null,
+      "run_id": "manual-concurrency-task-split-20260311",
+      "workflow_id": null,
+      "department": null,
+      "depends_on": [],
+      "derived_from": null,
+      "consumed_by": [],
+      "implements": [],
+      "verifies": [],
+      "supersedes": null,
+      "governance_kind": "transfer",
+      "git_sha": null,
+      "git_repo_path": null,
+      "title": "run 命令并发冲突检测与提示改造",
+      "description": "",
+      "tags": [
+        "cli",
+        "workflow",
+        "concurrency"
+      ],
+      "size_bytes": 328,
+      "content_hash": "820bb92d3af5b7e302282d83c0abe72223803e29a991f13e357a633dd2d54026",
+      "created_at": "2026-03-11T22:48:31.675367",
+      "updated_at": "2026-03-11T22:48:31.675383",
+      "frozen_at": null,
+      "archived_at": null,
+      "properties": {
+        "ssot_type": "task",
+        "parent_id": "FEAT-089",
+        "source_refs": [
+          "FEAT-089#delivery"
+        ],
+        "related_ids": [],
+        "owner": null,
+        "version": "v1",
+        "placement_dir": "spec/tasks/FEAT-089",
+        "derived_from_ids": []
       }
     }
   }
