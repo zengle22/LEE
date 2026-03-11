@@ -700,6 +700,7 @@ class LLMRunner(StepRunnerBase):
                             business_output = repaired["business_output"]
                             structured_payload = repaired["structured_payload"]
                             generated_text = repaired["output"].get("generated_text", generated_text)
+                            validation_result = repaired_validation
                             repaired_workspace_files = self._materialize_symbolic_workspace_outputs(
                                 step=step,
                                 workflow_id=workflow_id,
@@ -2452,6 +2453,7 @@ class ClaudeCodeRunner(StepRunnerBase):
                             output["business_output"] = business_output
                             if isinstance(structured_payload, dict):
                                 output["structured_payload"] = structured_payload
+                            cc_validation = repaired_validation
                         else:
                             error_msg = (
                                 "Output schema validation failed after repair retry: "
