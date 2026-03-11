@@ -600,6 +600,72 @@ def test_normalize_requirement_decomposer_payload_overrides_epic_ref():
     assert normalized_structured["business_output"]["epic_ref"] == "EPIC-003"
 
 
+def test_normalize_prd_writer_feat_payload_rebuilds_feat_specs_from_feat_specifications_shape():
+    step = SimpleNamespace(id="feat_spec_generation", agent_id="agent.product.prd_writer")
+    business_output = {
+        "metadata": {
+            "epic_id": "EPIC-012",
+        },
+        "feat_specifications": [
+            {
+                "feat_id": "FEAT-012-001",
+                "title": "raw_to_src L3 Workflow 定义",
+                "parent_epic": "EPIC-012",
+                "status": "specified",
+                "priority": "high",
+                "requirement": {
+                    "description": "定义独立的 raw_to_src workflow",
+                    "acceptance_criteria": [
+                        {"criterion_id": "AC-001", "description": "输出符合 SRCSchema"}
+                    ],
+                },
+                "interface_spec": {
+                    "input_schema": {
+                        "fields": [
+                            {"name": "content"},
+                            {"name": "format"},
+                        ]
+                    },
+                    "output_schema": {
+                        "fields": [
+                            {"name": "src_id"},
+                            {"name": "problem_definition"},
+                        ]
+                    },
+                },
+                "state_machine": {
+                    "transitions": [
+                        {"trigger": "raw_input_received"},
+                        {"trigger": "validation_passed"},
+                    ]
+                },
+                "dependencies": {
+                    "upstream": [
+                        {"feat_id": "FEAT-000"},
+                    ]
+                },
+            }
+        ],
+    }
+
+    normalized_business, _ = LLMRunner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-epic-to-feat",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+    )
+
+    assert normalized_business["epic_ref"] == "EPIC-012"
+    feat_spec = normalized_business["feat_specs"][0]
+    assert feat_spec["feat_id"] == "FEAT-012-001"
+    assert feat_spec["priority"] == "P0"
+    assert feat_spec["inputs"] == ["content", "format"]
+    assert feat_spec["outputs"] == ["src_id", "problem_definition"]
+    assert feat_spec["processing"] == ["raw_input_received", "validation_passed"]
+    assert feat_spec["acceptance_criteria"] == ["输出符合 SRCSchema"]
+    assert feat_spec["dependencies"] == ["FEAT-000"]
+
+
 def test_resolve_epic_ref_from_instance_data_reads_path_file(tmp_path):
     epic_path = tmp_path / "epic-freeze.yaml"
     epic_path.write_text(
@@ -766,6 +832,65 @@ def test_normalize_pm_planner_task_payload_converts_legacy_task_planning_view():
     assert normalized_structured["ssot_output_contract"]["outputs"][0]["parent"] == "FEAT-001"
 
 
+def test_normalize_pm_planner_task_payload_converts_task_hierarchy_view():
+    step = SimpleNamespace(id="task_planning", agent_id="agent.product.pm_planner")
+    business_output = {
+        "metadata": {
+            "epic_id": "EPIC-012",
+            "status": "planning_complete",
+        },
+        "task_hierarchy": [
+            {
+                "phase": "Phase 1 - Runtime",
+                "phase_id": "P1",
+                "tasks": [
+                    {
+                        "task_id": "T-001",
+                        "title": "实现 RawInput 解析器",
+                        "related_feat": "FEAT-012-001",
+                        "priority": "high",
+                        "assignee_role": "backend_dev",
+                        "description": "支持 raw 输入解析",
+                        "acceptance_criteria": ["支持 markdown", "支持 structured_yaml"],
+                        "dependencies": [],
+                        "story_points": 3,
+                    }
+                ],
+            }
+        ],
+    }
+
+    normalized_business, normalized_structured = LLMRunner._normalize_pm_planner_task_payload(
+        step=step,
+        workflow_id="wf-task",
+        business_output=business_output,
+        structured_payload=None,
+    )
+
+    assert normalized_business["parent_epic"] == "EPIC-012"
+    assert normalized_business["source_feats"] == ["FEAT-012-001"]
+    assert normalized_business["task_specs"][0]["task_id"] == "T-001"
+    assert normalized_business["task_specs"][0]["priority"] == "P0"
+    assert normalized_structured["ssot_output_contract"]["outputs"][0]["parent"] == "FEAT-012-001"
+
+
+def test_resolve_changed_file_paths_prefers_project_root_for_workflow_paths(tmp_path):
+    project_root = tmp_path / "project"
+    workspace = project_root / ".workflow" / "workspace" / "wf-1" / "feat_spec_generation"
+    target_file = project_root / ".workflow" / "workspace" / "wf-legacy" / "feat_spec_generation" / "feat_specs.yaml"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    workspace.mkdir(parents=True, exist_ok=True)
+    target_file.write_text("feat_specs: []\n", encoding="utf-8")
+
+    resolved = LLMRunner._resolve_changed_file_paths(
+        workspace=str(workspace),
+        project_root=str(project_root),
+        changed_files=[".workflow/workspace/wf-legacy/feat_spec_generation/feat_specs.yaml"],
+    )
+
+    assert resolved == [str(target_file.resolve())]
+
+
 @pytest.mark.asyncio
 async def test_materialize_ssot_outputs_without_agent_schema_uses_default_contract_schema(tmp_path):
     runner = LLMRunner()
@@ -836,6 +961,46 @@ def test_extract_business_output_for_validation_prefers_generated_text_over_wrap
     assert isinstance(business_output, dict)
     assert business_output["epic_ref"] == "EPIC-003"
     assert structured_payload["business_output"]["epic_ref"] == "EPIC-003"
+
+
+def test_extract_business_output_for_validation_prefers_task_plan_file_over_empty_wrapper(tmp_path):
+    step = SimpleNamespace(id="task_planning", agent_id="agent.product.pm_planner", outputs=[])
+    task_plan_path = tmp_path / "task-plan.yaml"
+    task_plan_path.write_text(
+        "\n".join(
+            [
+                "metadata:",
+                "  epic_id: EPIC-012",
+                "task_hierarchy:",
+                "  - phase: Runtime",
+                "    phase_id: P1",
+                "    tasks:",
+                "      - task_id: T-001",
+                "        title: 实现 RawInput 解析器",
+                "        related_feat: FEAT-012-001",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output = {
+        "raw_output": "",
+        "generated_text": "",
+        "structured_payload": {
+            "business_output": {
+                "parent_epic": "EPIC-001",
+                "task_specs": [],
+            }
+        },
+    }
+
+    business_output, _ = ClaudeCodeRunner._extract_business_output_for_validation(
+        step=step,
+        workflow_id="wf-task",
+        output=output,
+        written_files=[str(task_plan_path)],
+    )
+
+    assert business_output["metadata"]["epic_id"] == "EPIC-012"
 
 
 def test_extract_business_output_for_validation_prefers_feat_breakdown_file_over_generic_summary(tmp_path):
