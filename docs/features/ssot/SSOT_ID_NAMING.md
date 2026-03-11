@@ -688,13 +688,17 @@ Workflow / Agent
 - `FEAT -> spec/requirements/features/`
 - `UI -> spec/ui/`
 - `TECH -> spec/tech/`
-- `TASK -> spec/tasks/`
+- `TASK -> spec/tasks/<FEAT-ID>/`
 - `TESTSET -> spec/testing/testsets/`
 - `TC -> tests/cases/`
 - `BUG -> tests/bugs/`
 - `REPORT -> docs/reports/testing/`
 - `ADR -> spec/adr/`
 - `EVI -> docs/reports/evidence/`
+
+补充约束：
+- `spec/requirements/` 根目录不承载正式 `EPIC/FEAT` 主文件。
+- `spec/requirements/epic-registry.md`、`spec/requirements/feature-registry.md` 这类文件仅为索引/辅助文档，不是正式 SSOT 对象。
 
 ### A.2 Contract 必须显式声明 SSOT 关系语义
 
@@ -720,6 +724,7 @@ Agent contract 不再靠目录或文件名推断治理身份，至少应显式�
 - `商业机会` 默认作为 `SRC`，不是 `EPIC`
 - `EPIC` 只聚合多个 `FEAT`
 - `UI/TECH/TASK/TESTSET` 一律挂 `FEAT`
+- `TASK` 是执行边界 SSOT，对应 AI 执行、审计、观测、重跑和回滚的基准对象
 - `test-plan` 保持 non-SSOT 规划文档
 
 ---
