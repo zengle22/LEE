@@ -890,6 +890,7 @@ class TemplateManager:
                             "stage_id": stage_id,
                         },
                     ))
+                    steps[-1].inputs = step_data.get("inputs", [])
 
         # 格式2: 扁平 steps (旧格式)
         elif "steps" in doc:
@@ -947,6 +948,7 @@ class TemplateManager:
                         "mandatory": step_data.get("mandatory", True),
                     },
                 ))
+                steps[-1].inputs = step_data.get("inputs", [])
 
         return WorkflowTemplate(
             id=doc.get("id", template_id),
@@ -1068,7 +1070,7 @@ class TemplateManager:
                         description=output_item.get("description", ""),
                     ))
 
-        return Step(
+        step = Step(
             id=step_dict["id"],
             kind=step_dict.get("kind", "agent"),
             executor_type=step_dict.get("executor_type"),
@@ -1081,6 +1083,8 @@ class TemplateManager:
             config=step_dict.get("config", {}),
             on_failure=step_dict.get("on_failure", (step_dict.get("config", {}) or {}).get("on_failure")),
         )
+        step.inputs = step_dict.get("inputs", [])
+        return step
 
     def _parse_step(self, step_data: Dict[str, Any]) -> Step:
         """

@@ -50,7 +50,10 @@ class BaseExecutor(ABC):
 # 导入实际的执行器实现
 from lee.orchestrator.execution.llm_executor import LLMExecutor as RealLLMExecutor
 from lee.orchestrator.execution.mock_executor import MockLLMExecutor
-from lee.orchestrator.execution.metagpt_executor import MetaGPTExecutor as RealMetaGPTExecutor
+try:
+    from lee.orchestrator.execution.metagpt_executor import MetaGPTExecutor as RealMetaGPTExecutor
+except ModuleNotFoundError:  # Optional dependency in some installs
+    RealMetaGPTExecutor = None
 from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor
 from lee.orchestrator.execution.codex_executor import CodexExecutor
 from lee.orchestrator.execution.llm_executor import LLMConfig
@@ -162,6 +165,10 @@ class MetaGPTExecutor(BaseExecutor):
     """
 
     def __init__(self, role: str = "Developer", llm_config: Dict = None, **kwargs):
+        if RealMetaGPTExecutor is None:
+            raise ModuleNotFoundError(
+                "MetaGPT executor is unavailable: lee.orchestrator.execution.metagpt_executor is missing"
+            )
         self._executor = RealMetaGPTExecutor(role=role, llm_config=llm_config)
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:

@@ -35,6 +35,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .error_hints import append_executor_hints
 from .executors import BaseExecutor
 
 logger = logging.getLogger(__name__)
@@ -265,8 +266,10 @@ class CodexExecutor(BaseExecutor):
             )
         except FileNotFoundError:
             return self._build_error_result(
-                f"Codex CLI binary not found: {self._codex_binary}. "
-                "Install with: npm install -g @openai/codex",
+                append_executor_hints(
+                    f"Codex CLI binary not found: {self._codex_binary}. "
+                    "Install with: npm install -g @openai/codex"
+                ),
                 evidence_dir=str(evidence_dir),
                 conversation_log_path=conversation_live_log_path,
                 debug_log_path=codex_debug_log_path,
@@ -275,7 +278,7 @@ class CodexExecutor(BaseExecutor):
             )
         except Exception as e:
             return self._build_error_result(
-                f"Codex CLI invocation failed: {e}",
+                append_executor_hints(f"Codex CLI invocation failed: {e}"),
                 evidence_dir=str(evidence_dir),
                 conversation_log_path=conversation_live_log_path,
                 debug_log_path=codex_debug_log_path,
@@ -314,7 +317,7 @@ class CodexExecutor(BaseExecutor):
             "prompt_system_path": prompt_system_path,
             "prompt_user_path": prompt_user_path,
             "generated_text": parsed.get("result_text", ""),
-            "error": parsed.get("error"),
+            "error": append_executor_hints(parsed.get("error")),
             "cost_usd": parsed.get("cost_usd", 0),
             "tokens_used": parsed.get("tokens_used", 0),
             "thread_id": parsed.get("thread_id", ""),

@@ -32,6 +32,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .error_hints import append_executor_hints
 from .executors import BaseExecutor
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             allowed_commands = list(self.DEFAULT_ALLOWED_COMMANDS)
 
         write_scope = input_data.get("write_scope") or []
+        forbidden_read_paths = input_data.get("forbidden_read_paths") or []
         max_iterations = self._coerce_positive_int(
             input_data.get("max_iterations"),
             self.DEFAULT_MAX_ITERATIONS,
@@ -185,6 +187,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             workspace=workspace,
             allowed_commands=allowed_commands,
             write_scope=write_scope,
+            forbidden_read_paths=forbidden_read_paths,
             max_iterations=max_iterations,
             max_bash_calls=max_bash_calls,
             stop_conditions=stop_conditions,
@@ -282,8 +285,10 @@ class ClaudeCodeExecutor(BaseExecutor):
         except FileNotFoundError:
             return self._build_result(
                 status="failed",
-                error=f"Claude CLI binary not found: {self._claude_binary}. "
-                      "Install with: npm install -g @anthropic-ai/claude-code",
+                error=append_executor_hints(
+                    f"Claude CLI binary not found: {self._claude_binary}. "
+                    "Install with: npm install -g @anthropic-ai/claude-code"
+                ),
                 evidence_dir=str(evidence_dir),
                 conversation_log_path=conversation_live_log_path,
                 debug_log_path=claude_debug_log_path,
@@ -293,7 +298,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         except Exception as e:
             return self._build_result(
                 status="failed",
-                error=f"Claude CLI invocation failed: {e}",
+                error=append_executor_hints(f"Claude CLI invocation failed: {e}"),
                 evidence_dir=str(evidence_dir),
                 conversation_log_path=conversation_live_log_path,
                 debug_log_path=claude_debug_log_path,
@@ -332,7 +337,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             "prompt_system_path": prompt_system_path,
             "prompt_user_path": prompt_user_path,
             "generated_text": parsed.get("result_text", ""),
-            "error": parsed.get("error"),
+            "error": append_executor_hints(parsed.get("error")),
         }
 
     # ================================================================
@@ -374,6 +379,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         workspace: str,
         allowed_commands: List[str],
         write_scope: List[str],
+        forbidden_read_paths: List[str],
         max_iterations: int,
         max_bash_calls: int,
         stop_conditions: Dict[str, str],
@@ -395,6 +401,14 @@ class ClaudeCodeExecutor(BaseExecutor):
             )
         else:
             constraints.append("允许写入工作目录内的任何文件")
+
+        if forbidden_read_paths:
+            constraints.append(
+                f"禁止读取或引用的路径: {', '.join(forbidden_read_paths)}"
+            )
+            constraints.append(
+                "这些路径中的文件不能作为需求事实源、示例源、回填源或 ID/标题参考源"
+            )
 
         if stop_conditions:
             cond_desc = "; ".join(
@@ -425,7 +439,9 @@ class ClaudeCodeExecutor(BaseExecutor):
 - 任务完成后立即退出：完成任务后请立即输出 JSON 结果，不要进行额外的检查或验证操作。
 - 避免重复操作：不要重复执行已经成功的命令。
 - 在执行过程中完成验证：如果需要验证文件存在，请在任务执行过程中完成。
-- 提前退出是成功的：任务已完成时输出成功并退出是正确的行为。"""
+- 提前退出是成功的：任务已完成时输出成功并退出是正确的行为。
+- 只允许把当前 workspace 和显式提供的 context_files 当作权威输入；不要扫描仓库寻找相似的 EPIC、FEAT、SRC、ADR。
+- 不要读取或引用任何历史运行目录、历史证据目录或历史输出目录中的文件来替代当前输入。"""
 
         if system_prompt_extra:
             prompt += f"\n\n## 额外约束\n\n{system_prompt_extra}"
