@@ -26,20 +26,21 @@ def test_run_continue_existing_workflow(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(run_module, "_load_registry", lambda: _make_registry(template))
     monkeypatch.setattr(
         run_module,
-        "_list_existing_same_workflows",
+        "_list_conflicting_workflows",
         lambda *_args, **_kwargs: [
             {
                 "id": "wf_old_001",
                 "status": "paused",
                 "current_step": "s1_1_analyze_files",
                 "created_at": "2026-02-18T21:00:00",
+                "concurrency_scope": "project:demo",
             }
         ],
     )
     monkeypatch.setattr(
         run_module,
         "_select_existing_workflow_action",
-        lambda _existing: ("continue", "wf_old_001"),
+        lambda _existing, _scope_info: ("continue", "wf_old_001"),
     )
     monkeypatch.setattr(
         run_module,
@@ -63,7 +64,7 @@ def test_run_continue_existing_workflow(monkeypatch, tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(
         run_module.run,
-        ["office.workspace-cleanup", "--project-dir", str(tmp_path)],
+        ["office.workspace-cleanup", "--project-dir", str(tmp_path), "--skip-plan"],
     )
 
     assert result.exit_code == 0, result.output
@@ -82,26 +83,28 @@ def test_run_restart_existing_workflow(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(run_module, "_load_registry", lambda: _make_registry(template))
     monkeypatch.setattr(
         run_module,
-        "_list_existing_same_workflows",
+        "_list_conflicting_workflows",
         lambda *_args, **_kwargs: [
             {
                 "id": "wf_old_001",
                 "status": "running",
                 "current_step": "s1_1_analyze_files",
                 "created_at": "2026-02-18T21:00:00",
+                "concurrency_scope": "project:demo",
             },
             {
                 "id": "wf_old_000",
                 "status": "paused",
                 "current_step": "s1_1_analyze_files",
                 "created_at": "2026-02-18T20:00:00",
+                "concurrency_scope": "project:demo",
             },
         ],
     )
     monkeypatch.setattr(
         run_module,
         "_select_existing_workflow_action",
-        lambda _existing: ("restart", "wf_old_001"),
+        lambda _existing, _scope_info: ("restart", "wf_old_001"),
     )
     monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_args, **_kwargs: rendered)
     monkeypatch.setattr(
@@ -128,7 +131,7 @@ def test_run_restart_existing_workflow(monkeypatch, tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(
         run_module.run,
-        ["office.workspace-cleanup", "--project-dir", str(tmp_path)],
+        ["office.workspace-cleanup", "--project-dir", str(tmp_path), "--skip-plan"],
     )
 
     assert result.exit_code == 0, result.output
