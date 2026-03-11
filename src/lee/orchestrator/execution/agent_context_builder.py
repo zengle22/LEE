@@ -522,15 +522,37 @@ Verification items:
 
             # 添加步骤输入数据（兼容 dict/list 输入定义）
             step_inputs = self._collect_step_inputs(step, workflow_context)
+            step_inputs = await self._hydrate_prompt_inputs(step_inputs, workflow_context)
 
             if step_inputs:
                 parts.append("\n## Input Data")
                 self._append_prompt_kv_pairs(parts, step_inputs)
+                if self._has_authoritative_input_content(step_inputs):
+                    parts.append("\n## Source of Truth Rules")
+                    parts.append(
+                        "Treat any provided input object `content` as the authoritative truth source for this step."
+                    )
+                    parts.append(
+                        "Do not search the repository for alternative EPIC/FEAT/SRC documents with the same or similar IDs unless they are explicitly referenced in the provided input."
+                    )
+                    parts.append(
+                        "If repository files conflict with the provided input content, prefer the provided input content and preserve its IDs, parent links, and scope."
+                    )
 
             upstream_outputs = self._collect_upstream_step_outputs(step, workflow_context)
             if upstream_outputs:
                 parts.append("\n## Upstream Step Outputs")
                 self._append_prompt_kv_pairs(parts, upstream_outputs)
+                parts.append("\n## Upstream Consistency Rules")
+                parts.append(
+                    "Treat upstream step outputs as authoritative derived inputs for this step."
+                )
+                parts.append(
+                    "Do not replace their domain, topic, FEAT titles, parent IDs, or scope with unrelated repository examples."
+                )
+                parts.append(
+                    "If this step expands upstream FEAT candidates into detailed specs, preserve the same FEAT boundaries and business topic."
+                )
 
             # 添加上下文文件
             if context_files:
@@ -542,14 +564,49 @@ Verification items:
             # 添加输出要求（从 step.outputs 获取）
             if step and hasattr(step, 'outputs') and step.outputs:
                 parts.append("\n## Required Outputs")
+                has_explicit_output = False
                 for output in step.outputs:
-                    if hasattr(output, 'path'):
-                        parts.append(f"- {output.path} ({output.type}): {output.description}")
+                    output_path = getattr(output, "path", None)
+                    output_symbol = getattr(output, "symbol", None)
+                    output_type = getattr(output, "type", "unknown")
+                    output_description = getattr(output, "description", "")
+                    output_contract = getattr(output, "contract", None)
+
+                    if isinstance(output_path, str) and output_path.strip():
+                        parts.append(f"- {output_path} ({output_type}): {output_description}")
+                        has_explicit_output = True
+                        continue
+
+                    if isinstance(output_symbol, str) and output_symbol.strip():
+                        contract_suffix = f", contract: {output_contract}" if output_contract else ""
+                        parts.append(
+                            f"- {output_symbol} (symbol{contract_suffix}): {output_description}"
+                        )
+                        has_explicit_output = True
+
+                if not has_explicit_output:
+                    parts.append("- No explicit file outputs declared for this step.")
 
             contract_guidance = self._build_output_contract_guidance(agent_spec, step)
             if contract_guidance:
                 parts.append("\n## Output Contract")
                 parts.extend(contract_guidance)
+
+            if step and hasattr(step, "outputs") and step.outputs:
+                has_file_outputs = any(getattr(output, "path", None) for output in step.outputs)
+                if not has_file_outputs:
+                    workflow_id = workflow_context.get("workflow_id", "") if isinstance(workflow_context, dict) else ""
+                    workspace_dir = f".workflow/workspace/{workflow_id}/{getattr(step, 'id', '')}/"
+                    parts.append("\n## Workspace Policy")
+                    parts.append(
+                        f"If you need to persist any helper, draft, or intermediate files during execution, write them only under `{workspace_dir}`."
+                    )
+                    parts.append(
+                        "Do not write intermediate artifacts under `spec-global/...`, `spec/...`, or `output/...` unless the step explicitly declares a file output path there."
+                    )
+                    parts.append(
+                        "If this step declares symbol outputs instead of file outputs, produce those symbol objects directly from the provided inputs and use the workspace only for temporary drafts."
+                    )
 
             # 添加具体任务指令
             parts.append("\n## Instructions")
@@ -568,6 +625,42 @@ Verification items:
                 user_prompt += f"Please analyze the failure and generate a fix.\n"
 
         return user_prompt
+
+    async def _hydrate_prompt_inputs(
+        self,
+        values: Any,
+        workflow_context: Dict[str, Any],
+    ) -> Any:
+        if isinstance(values, dict):
+            hydrated: Dict[str, Any] = {}
+            for key, value in values.items():
+                hydrated[key] = await self._hydrate_prompt_inputs(value, workflow_context)
+
+            raw_path = hydrated.get("path")
+            if isinstance(raw_path, str) and raw_path.strip():
+                try:
+                    resolved_path = self._resolve_path(raw_path, workflow_context)
+                    content = await self._read_file(resolved_path)
+                    hydrated.setdefault("resolved_path", resolved_path)
+                    hydrated.setdefault("content", content)
+                except Exception:
+                    pass
+            return hydrated
+
+        if isinstance(values, list):
+            return [await self._hydrate_prompt_inputs(item, workflow_context) for item in values]
+
+        return values
+
+    @staticmethod
+    def _has_authoritative_input_content(values: Any) -> bool:
+        if isinstance(values, dict):
+            if isinstance(values.get("content"), str) and values["content"].strip():
+                return True
+            return any(AgentContextBuilder._has_authoritative_input_content(value) for value in values.values())
+        if isinstance(values, list):
+            return any(AgentContextBuilder._has_authoritative_input_content(item) for item in values)
+        return False
 
     def _collect_step_inputs(
         self,
@@ -601,13 +694,13 @@ Verification items:
             if not source:
                 continue
 
-            value: Any = None
-            if source in data:
-                value = data[source]
-            elif source in params:
-                value = params[source]
-            elif source in step_outputs:
-                value = step_outputs[source]
+            value = self._resolve_workflow_input_source(
+                source=source,
+                item=item,
+                data=data,
+                params=params,
+                step_outputs=step_outputs,
+            )
 
             if value is None and isinstance(source, str) and source.endswith("_specs"):
                 base_name = source[:-1] if source.endswith("s") else source
@@ -624,16 +717,59 @@ Verification items:
         return resolved
 
     @staticmethod
+    def _freeze_source_aliases(source: str) -> List[str]:
+        if not isinstance(source, str):
+            return []
+        if source.endswith("_freeze_ref"):
+            return [source[:-4]]
+        if source.endswith("_freeze"):
+            return [f"{source}_ref"]
+        return []
+
+    def _resolve_workflow_input_source(
+        self,
+        *,
+        source: str,
+        item: Optional[Dict[str, Any]] = None,
+        data: Dict[str, Any],
+        params: Dict[str, Any],
+        step_outputs: Dict[str, Any],
+    ) -> Any:
+        candidate_keys = [source, *self._freeze_source_aliases(source)]
+        for key in candidate_keys:
+            if key in data:
+                return data[key]
+            if key in params:
+                return params[key]
+            if key in step_outputs:
+                return step_outputs[key]
+
+        if source == "external" and isinstance(item, dict):
+            raw_types = item.get("type", [])
+            if isinstance(raw_types, str):
+                raw_types = [raw_types]
+            for type_name in raw_types:
+                if not isinstance(type_name, str):
+                    continue
+                if type_name in data:
+                    return data[type_name]
+                if type_name in params:
+                    return params[type_name]
+        return None
+
+    @staticmethod
     def _get_step_input_definition(step) -> Any:
         if not step:
             return {}
 
-        raw_inputs = getattr(step, "input", None)
-        if raw_inputs not in (None, {}, []):
+        raw_inputs = getattr(step, "inputs", None)
+        if isinstance(raw_inputs, list) and raw_inputs:
+            return raw_inputs
+        if isinstance(raw_inputs, dict) and raw_inputs:
             return raw_inputs
 
-        raw_inputs = getattr(step, "inputs", None)
-        if raw_inputs is not None:
+        raw_inputs = getattr(step, "input", None)
+        if raw_inputs not in (None, {}, []):
             return raw_inputs
 
         return {}
