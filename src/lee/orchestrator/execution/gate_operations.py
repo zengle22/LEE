@@ -7,7 +7,9 @@ LEE Orchestrator v3.1 - 门禁操作 Mixin
 from __future__ import annotations
 
 import logging
-from typing import List
+import re
+from pathlib import Path
+from typing import Any, List
 
 from lee.orchestrator.storage.models import StepResult
 
@@ -111,6 +113,8 @@ class GateOperationsMixin:
             gate_approval.step_id,
             gate_output
         )
+
+        await self._freeze_gate_targets(workflow_id, gate_approval.step_id)
 
         # 检查工作流是否完成
         await self._check_workflow_completion(workflow_id)
@@ -474,3 +478,84 @@ class GateOperationsMixin:
         # template_manager 目前不提供 GateIR 对象
         # 当 spec-global 全面迁移后，可以从 WorkflowIR.gates 中获取
         return None
+
+    async def _freeze_gate_targets(self, workflow_id: str, gate_step_id: str) -> None:
+        try:
+            instance = await self.store.get_workflow(workflow_id)
+        except Exception as exc:
+            logger.warning(f"Freeze target resolution failed for workflow {workflow_id}: {exc}")
+            return
+        if instance is None:
+            return
+
+        target_ids = self._collect_gate_freeze_target_ids(instance, gate_step_id)
+        if not target_ids:
+            return
+
+        from lee.orchestrator.execution.artifacts import ArtifactManager
+
+        manager = ArtifactManager(project_root=Path(self.project_root or ".").resolve())
+        for artifact_id in target_ids:
+            try:
+                metadata = manager.get(artifact_id)
+                if metadata is None:
+                    continue
+                manager.freeze(artifact_id)
+            except Exception as exc:
+                logger.warning(f"Freeze target {artifact_id} failed: {exc}")
+
+    def _collect_gate_freeze_target_ids(self, instance, gate_step_id: str) -> List[str]:
+        instance_data = getattr(instance, "data", {}) or {}
+        step_output_map = instance_data.get("step_outputs", {}) or {}
+        params = instance_data.get("params", {}) or {}
+
+        sources: List[str] = []
+        try:
+            resolved = self.state_machine._resolve_step_inputs_for_freeze(gate_step_id, instance)
+            if isinstance(resolved, list):
+                sources.extend(resolved)
+        except Exception:
+            pass
+
+        payloads: List[Any] = []
+        for source in sources:
+            if source in step_output_map:
+                payloads.append(step_output_map[source])
+            elif source in params:
+                payloads.append(params[source])
+
+        # 兼容未声明 inputs 但上游已经 materialize 的旧 gate。
+        if not payloads:
+            payloads.extend(step_output_map.values())
+
+        collected: List[str] = []
+        for payload in payloads:
+            self._collect_artifact_ids_from_payload(payload, collected)
+        deduped: List[str] = []
+        for artifact_id in collected:
+            if artifact_id not in deduped:
+                deduped.append(artifact_id)
+        return deduped
+
+    def _collect_artifact_ids_from_payload(self, payload: Any, collected: List[str]) -> None:
+        if isinstance(payload, dict):
+            if self._is_ssot_like_id(payload.get("id")):
+                collected.append(str(payload["id"]))
+            for key in ("ssot_materialized", "frozen_inputs", "business_output", "structured_payload", "outputs"):
+                value = payload.get(key)
+                if value is not None:
+                    self._collect_artifact_ids_from_payload(value, collected)
+            for value in payload.values():
+                if isinstance(value, (dict, list)):
+                    self._collect_artifact_ids_from_payload(value, collected)
+        elif isinstance(payload, list):
+            for item in payload:
+                self._collect_artifact_ids_from_payload(item, collected)
+        elif isinstance(payload, str) and self._is_ssot_like_id(payload):
+            collected.append(payload)
+
+    @staticmethod
+    def _is_ssot_like_id(value: Any) -> bool:
+        if not isinstance(value, str):
+            return False
+        return re.match(r"^(SRC|ADR|EPIC|FEAT|TECH|UI|TASK|TESTSET|DEVPLAN|TESTPLAN|REL|REPORT|BUG|TC|EVI)-", value) is not None
