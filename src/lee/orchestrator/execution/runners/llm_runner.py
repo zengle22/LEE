@@ -1135,7 +1135,16 @@ class LLMRunner(StepRunnerBase):
         written_files: Optional[List[str]] = None,
     ) -> Any:
         if isinstance(structured_payload, dict) and "business_output" in structured_payload:
-            return structured_payload["business_output"]
+            wrapped_business_output = structured_payload["business_output"]
+            if (
+                step
+                and written_files
+                and self._should_prefer_written_file_payload(step, wrapped_business_output)
+            ):
+                best_file_payload = self._extract_best_written_file_payload(step, written_files)
+                if best_file_payload is not None:
+                    return self._unwrap_business_output_candidate(best_file_payload)
+            return wrapped_business_output
         if isinstance(structured_payload, dict):
             return structured_payload
         segment_payload = self._extract_structured_segment_payload(fallback_text, "business_output")
@@ -1149,6 +1158,19 @@ class LLMRunner(StepRunnerBase):
             if best_file_payload is not None:
                 return self._unwrap_business_output_candidate(best_file_payload)
         return fallback_text
+
+    @classmethod
+    def _should_prefer_written_file_payload(cls, step, payload: Any) -> bool:
+        candidate = cls._unwrap_business_output_candidate(payload)
+        if not isinstance(candidate, dict):
+            return True
+        agent_id = getattr(step, "agent_id", "")
+        if agent_id == "agent.product.pm_planner":
+            task_specs = candidate.get("task_specs")
+            if isinstance(task_specs, list) and task_specs:
+                return False
+            return True
+        return False
 
     def _expected_feat_review_subject_refs(
         self,
@@ -1313,6 +1335,12 @@ class LLMRunner(StepRunnerBase):
             normalized = _clean_text(value).upper()
             if normalized in {"P0", "P1", "P2"}:
                 return normalized
+            if normalized in {"HIGH", "CRITICAL"}:
+                return "P0"
+            if normalized in {"MEDIUM", "NORMAL"}:
+                return "P1"
+            if normalized in {"LOW"}:
+                return "P2"
             if normalized in {"0", "1", "2"}:
                 return f"P{normalized}"
             if normalized.startswith("P") and len(normalized) > 1 and normalized[1:].isdigit():
@@ -1330,6 +1358,7 @@ class LLMRunner(StepRunnerBase):
                 "complete": "active",
                 "success": "active",
                 "done": "active",
+                "specified": "draft",
             }
             return mapping.get(normalized, "draft")
 
@@ -1442,13 +1471,20 @@ class LLMRunner(StepRunnerBase):
             payload: Dict[str, Any],
             fallback_epic_ref: Optional[str],
         ) -> tuple[Optional[List[Any]], Optional[str]]:
-            resolved_epic_ref = _clean_text(payload.get("epic_ref")) or fallback_epic_ref
+            metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+            resolved_epic_ref = (
+                _clean_text(payload.get("epic_ref"))
+                or _clean_text(metadata.get("epic_id"))
+                or fallback_epic_ref
+            )
             if isinstance(payload.get("features"), list):
                 return payload.get("features"), resolved_epic_ref
             if isinstance(payload.get("feats"), list):
                 return payload.get("feats"), resolved_epic_ref
             if isinstance(payload.get("feat_candidates"), list):
                 return payload.get("feat_candidates"), resolved_epic_ref
+            if isinstance(payload.get("feat_specifications"), list):
+                return payload.get("feat_specifications"), resolved_epic_ref
 
             epic_breakdowns = payload.get("epic_breakdowns")
             if not isinstance(epic_breakdowns, list):
@@ -1484,28 +1520,57 @@ class LLMRunner(StepRunnerBase):
 
             business_context = candidate.get("business_context") if isinstance(candidate.get("business_context"), dict) else {}
             scope_boundary = candidate.get("scope_boundary") if isinstance(candidate.get("scope_boundary"), dict) else {}
+            requirement = candidate.get("requirement") if isinstance(candidate.get("requirement"), dict) else {}
+            interface_spec = candidate.get("interface_spec") if isinstance(candidate.get("interface_spec"), dict) else {}
+            input_schema = interface_spec.get("input_schema") if isinstance(interface_spec.get("input_schema"), dict) else {}
+            output_schema = interface_spec.get("output_schema") if isinstance(interface_spec.get("output_schema"), dict) else {}
+            state_machine = candidate.get("state_machine") if isinstance(candidate.get("state_machine"), dict) else {}
+            dependency_block = candidate.get("dependencies") if isinstance(candidate.get("dependencies"), dict) else {}
             description = _clean_text(candidate.get("description"))
-            goal = _clean_text(candidate.get("goal")) or description or title
+            rich_description = _clean_text(requirement.get("description"))
+            goal = _clean_text(candidate.get("goal")) or rich_description or description or title
             user_value = (
                 _clean_text(candidate.get("user_value"))
                 or _clean_text(business_context.get("problem"))
+                or rich_description
                 or description
                 or title
             )
             inputs = _normalize_string_list(
-                candidate.get("inputs") or candidate.get("input") or scope_boundary.get("in_scope"),
+                candidate.get("inputs")
+                or candidate.get("input")
+                or [
+                    field.get("name")
+                    for field in (input_schema.get("fields") if isinstance(input_schema.get("fields"), list) else [])
+                    if isinstance(field, dict) and _clean_text(field.get("name"))
+                ]
+                or scope_boundary.get("in_scope"),
                 fallback=["Inputs defined by EPIC scope"],
             )
             processing = _normalize_string_list(
-                candidate.get("processing"),
-                fallback=[description or f"Deliver {title} capability"],
+                candidate.get("processing")
+                or [
+                    transition.get("trigger")
+                    for transition in (state_machine.get("transitions") if isinstance(state_machine.get("transitions"), list) else [])
+                    if isinstance(transition, dict) and _clean_text(transition.get("trigger"))
+                ],
+                fallback=[rich_description or description or f"Deliver {title} capability"],
             )
             outputs = _normalize_string_list(
-                candidate.get("outputs") or candidate.get("output") or candidate.get("acceptance_boundary"),
+                candidate.get("outputs")
+                or candidate.get("output")
+                or [
+                    field.get("name")
+                    for field in (output_schema.get("fields") if isinstance(output_schema.get("fields"), list) else [])
+                    if isinstance(field, dict) and _clean_text(field.get("name"))
+                ]
+                or candidate.get("acceptance_boundary"),
                 fallback=[f"{title} FEAT specification"],
             )
             acceptance_criteria = _normalize_acceptance_criteria(
-                candidate.get("acceptance_criteria") or candidate.get("acceptance_boundaries"),
+                candidate.get("acceptance_criteria")
+                or requirement.get("acceptance_criteria")
+                or candidate.get("acceptance_boundaries"),
                 title=title,
                 goal=goal,
             )
@@ -1521,7 +1586,11 @@ class LLMRunner(StepRunnerBase):
                 candidate.get("source_refs"),
                 fallback=[f"{normalized_epic_ref}#scope"] if normalized_epic_ref else [],
             )
-            dependencies = _normalize_dependency_ids(candidate.get("dependencies"))
+            dependencies = _normalize_dependency_ids(
+                candidate.get("dependencies")
+                if not isinstance(candidate.get("dependencies"), dict)
+                else dependency_block.get("upstream")
+            )
 
             synthesized = {
                 "feat_id": feat_id,
@@ -1949,6 +2018,46 @@ class LLMRunner(StepRunnerBase):
         return filtered
 
     @staticmethod
+    def _resolve_changed_file_paths(
+        *,
+        workspace: str,
+        project_root: Optional[str],
+        changed_files: List[str],
+    ) -> List[str]:
+        resolved_paths: List[str] = []
+        project_root_path = Path(project_root or workspace).resolve()
+        workspace_path = Path(workspace).resolve()
+        project_relative_roots = {
+            ".workflow",
+            ".artifacts",
+            "spec",
+            "output",
+            "docs",
+            "tests",
+            ".tmp",
+        }
+
+        for item in changed_files or []:
+            if not isinstance(item, str) or not item.strip():
+                continue
+            candidate = Path(item)
+            if candidate.is_absolute():
+                resolved_paths.append(str(candidate))
+                continue
+
+            normalized = candidate.as_posix()
+            project_candidate = (project_root_path / candidate).resolve()
+            workspace_candidate = (workspace_path / candidate).resolve()
+            root_part = normalized.split("/", 1)[0]
+            if root_part in project_relative_roots:
+                resolved_paths.append(str(project_candidate))
+            elif project_candidate.exists() and not workspace_candidate.exists():
+                resolved_paths.append(str(project_candidate))
+            else:
+                resolved_paths.append(str(workspace_candidate))
+        return resolved_paths
+
+    @staticmethod
     def _normalize_pm_planner_task_payload(
         step,
         workflow_id: str,
@@ -1969,7 +2078,16 @@ class LLMRunner(StepRunnerBase):
 
         def _normalize_priority(value: Any) -> str:
             normalized = _clean_text(value).upper()
-            return normalized if normalized in {"P0", "P1", "P2"} else "P1"
+            if normalized in {"P0", "P1", "P2"}:
+                return normalized
+            lowered = _clean_text(value).lower()
+            if lowered in {"critical", "high"}:
+                return "P0"
+            if lowered in {"medium", "normal"}:
+                return "P1"
+            if lowered in {"low", "minor"}:
+                return "P2"
+            return "P1"
 
         def _normalize_role(value: Any) -> str:
             normalized = _clean_text(value).lower().replace("_", "-").replace(" ", "-")
@@ -2048,6 +2166,9 @@ class LLMRunner(StepRunnerBase):
             normalized_business = dict(payload)
         else:
             epic_ref = _clean_text(payload.get("parent_epic") or payload.get("epic_ref"))
+            metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+            if not epic_ref:
+                epic_ref = _clean_text(metadata.get("epic_id"))
             feat_tasks = payload.get("feat_tasks") if isinstance(payload.get("feat_tasks"), list) else []
             source_feats = [
                 _clean_text(item.get("feat_id"))
@@ -2120,6 +2241,96 @@ class LLMRunner(StepRunnerBase):
                                 "priority": _normalize_priority(feat_entry.get("priority") or task.get("priority")),
                                 "milestone": milestone_id,
                                 "estimated_effort": _clean_text(task.get("effort") or task.get("estimated_effort") or "1 day"),
+                                "lifecycle_status": "draft",
+                                "observability": {
+                                    "execution_unit": "task",
+                                    "log_scope": "task-execution",
+                                    "audit_fields": ["run_id", "task_id", "changed_files", "evidence_refs"],
+                                },
+                                "evidence_requirements": {
+                                    "required_refs": [feat_id] if feat_id else ["delivery-plan"],
+                                    "review_required": True,
+                                },
+                                "rollback_strategy": {
+                                    "mode": "revert",
+                                    "restore_targets": [workstream],
+                                },
+                                "source_refs": [f"{feat_id}#delivery"] if feat_id and LLMRunner._is_literal_ssot_ref(feat_id) else [],
+                                "ssot": {
+                                    "identity_kind": "ssot",
+                                    "ssot_type": "TASK",
+                                    "parent": feat_id or "FEAT-001",
+                                    "derived_from": f"{feat_id}#delivery" if feat_id else "delivery-plan",
+                                },
+                            }
+                        )
+                        milestone["task_ids"].append(task_id)
+                        critical_path.append(task_id)
+                        resource_allocation.setdefault(role, {"tasks": []})
+                        resource_allocation[role]["tasks"].append(task_id)
+
+            if not task_specs:
+                task_hierarchy = payload.get("task_hierarchy") if isinstance(payload.get("task_hierarchy"), list) else []
+                seen_source_feats: set[str] = set(source_feats)
+                for phase in task_hierarchy:
+                    if not isinstance(phase, dict):
+                        continue
+                    milestone_id = _clean_text(phase.get("phase_id")) or f"M{len(milestones_map) + 1}"
+                    milestone_name = _clean_text(phase.get("phase")) or _clean_text(phase.get("name")) or milestone_id
+                    milestone = milestones_map.setdefault(
+                        milestone_id,
+                        {
+                            "id": milestone_id,
+                            "name": milestone_name,
+                            "task_ids": [],
+                            "acceptance_criteria": f"{milestone_name} completed",
+                        },
+                    )
+                    tasks = phase.get("tasks") if isinstance(phase.get("tasks"), list) else []
+                    for task in tasks:
+                        if not isinstance(task, dict):
+                            continue
+                        feat_id = _clean_text(
+                            task.get("related_feat") or task.get("source_feat") or task.get("feat_id")
+                        )
+                        if feat_id and feat_id not in seen_source_feats:
+                            source_feats.append(feat_id)
+                            seen_source_feats.add(feat_id)
+                        task_id = _clean_text(task.get("task_id")) or f"{feat_id or 'FEAT-001'}-TASK-{len(task_specs) + 1:03d}"
+                        title = _clean_text(task.get("title")) or task_id
+                        description = _clean_text(task.get("description")) or title
+                        role = _normalize_role(task.get("assignee_role") or task.get("responsible_role"))
+                        workstream = _normalize_workstream(task, role)
+                        acceptance_items = _normalize_list(task.get("acceptance_criteria"))
+                        if not acceptance_items:
+                            acceptance_items = [description]
+                        estimated_effort = _clean_text(task.get("estimated_effort") or task.get("effort"))
+                        if not estimated_effort and task.get("story_points") is not None:
+                            estimated_effort = f"{_clean_text(task.get('story_points'))} points"
+                        task_specs.append(
+                            {
+                                "task_id": task_id,
+                                "title": title,
+                                "objective": acceptance_items[0],
+                                "description": description,
+                                "source_feat": feat_id or "FEAT-001",
+                                "workstream": workstream,
+                                "task_kind": _infer_task_kind(task, role, workstream),
+                                "responsible_role": role,
+                                "acceptance_criteria_mapping": [
+                                    {
+                                        "feat": feat_id or "FEAT-001",
+                                        "ac": f"{feat_id or 'FEAT-001'}-AC-{index:03d}",
+                                        "description": item,
+                                    }
+                                    for index, item in enumerate(acceptance_items, start=1)
+                                ],
+                                "prerequisites": _normalize_list(task.get("prerequisites")),
+                                "dependencies": _normalize_list(task.get("dependencies")),
+                                "definition_of_done": acceptance_items[:3] or [f"{title} completed"],
+                                "priority": _normalize_priority(task.get("priority")),
+                                "milestone": milestone_id,
+                                "estimated_effort": estimated_effort or "1 day",
                                 "lifecycle_status": "draft",
                                 "observability": {
                                     "execution_unit": "task",
@@ -2259,7 +2470,12 @@ class LLMRunner(StepRunnerBase):
             }
             return business_output, payload
 
-        if step_id == "source_normalization" and str(business_output.get("ssot_type") or "").upper() == "SRC":
+        if step_id == "source_normalization":
+            normalized_content = (
+                business_output.get("normalized_content")
+                if isinstance(business_output.get("normalized_content"), dict)
+                else {}
+            )
             payload = LLMRunner._ensure_structured_envelope(
                 business_output=business_output,
                 structured_payload=structured_payload,
@@ -2272,7 +2488,15 @@ class LLMRunner(StepRunnerBase):
                         "key": "src",
                         "identity_kind": "ssot",
                         "ssot_type": "src",
-                        "title": str(business_output.get("title") or "SRC").strip() or "SRC",
+                        "title": (
+                            str(
+                                business_output.get("title")
+                                or normalized_content.get("title")
+                                or business_output.get("src_id")
+                                or "SRC"
+                            ).strip()
+                            or "SRC"
+                        ),
                         "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
                     }
                 ],
@@ -2933,6 +3157,16 @@ class LLMRunner(StepRunnerBase):
                 score += 80
             if isinstance(candidate.get("breakdown_id"), str) and candidate.get("breakdown_id").strip():
                 score += 10
+        elif agent_id == "agent.product.pm_planner":
+            if isinstance(candidate.get("task_specs"), list) and candidate.get("task_specs"):
+                score += 100
+            if isinstance(candidate.get("task_hierarchy"), list) and candidate.get("task_hierarchy"):
+                score += 95
+            if isinstance(candidate.get("task_planning"), dict):
+                score += 80
+            metadata = candidate.get("metadata")
+            if isinstance(metadata, dict) and isinstance(metadata.get("epic_id"), str) and metadata.get("epic_id").strip():
+                score += 10
         elif isinstance(candidate.get("business_output"), dict):
                 score += 10
         return score
@@ -3214,6 +3448,7 @@ class ClaudeCodeRunner(StepRunnerBase):
     _ensure_structured_envelope = staticmethod(LLMRunner._ensure_structured_envelope)
     _filter_materializable_refs = staticmethod(LLMRunner._filter_materializable_refs)
     _is_literal_ssot_ref = staticmethod(LLMRunner._is_literal_ssot_ref)
+    _resolve_changed_file_paths = staticmethod(LLMRunner._resolve_changed_file_paths)
     _synthesize_single_ssot_payload = staticmethod(LLMRunner._synthesize_single_ssot_payload)
     _extract_topic_families = classmethod(LLMRunner._extract_topic_families.__func__)
     _load_ssot_markdown = staticmethod(LLMRunner._load_ssot_markdown)
@@ -3472,6 +3707,9 @@ class ClaudeCodeRunner(StepRunnerBase):
         input_data = {
             "goal": agent_ctx.user_prompt or claude_config.get("goal", ""),
             "workspace": workspace,
+            "step_workspace": str(
+                Path(workspace) / ".workflow" / "workspace" / workflow_id / step.id
+            ),
             "context_files": context_files,
             "write_scope": claude_config.get("write_scope", []),
             "forbidden_read_paths": self._merge_forbidden_read_paths(
@@ -3481,6 +3719,8 @@ class ClaudeCodeRunner(StepRunnerBase):
             "timeout_seconds": claude_config.get("timeout_seconds", 3600),
             "timeout_retries": claude_config.get("timeout_retries", 1),
             "retry_backoff_seconds": claude_config.get("retry_backoff_seconds", 5),
+            "silence_timeout_seconds": claude_config.get("silence_timeout_seconds", 90),
+            "silence_grace_seconds": claude_config.get("silence_grace_seconds", 20),
             "stop_conditions": claude_config.get("stop_conditions", {}),
             "system_prompt_extra": agent_ctx.system_prompt or "",
         }
@@ -3497,14 +3737,6 @@ class ClaudeCodeRunner(StepRunnerBase):
             input_data["mcp_config_path"] = claude_config.get("mcp_config_path")
         if claude_config.get("model"):
             input_data["model"] = claude_config.get("model")
-        if "silence_timeout_seconds" in claude_config:
-            input_data["silence_timeout_seconds"] = claude_config.get(
-                "silence_timeout_seconds"
-            )
-        if "silence_grace_seconds" in claude_config:
-            input_data["silence_grace_seconds"] = claude_config.get(
-                "silence_grace_seconds"
-            )
         if "max_bash_calls" in claude_config:
             input_data["max_bash_calls"] = claude_config.get("max_bash_calls")
         if "resume_on_retry" in claude_config:
@@ -3654,10 +3886,11 @@ class ClaudeCodeRunner(StepRunnerBase):
                 await self._collect_evidence(ctx, workflow_id, step.id, [evidence_path])
             changed = output.get("changed_files", [])
             if changed:
-                abs_changed = [
-                    str(Path(workspace) / f) if not os.path.isabs(f) else f
-                    for f in changed
-                ]
+                abs_changed = self._resolve_changed_file_paths(
+                    workspace=workspace,
+                    project_root=ctx.project_root,
+                    changed_files=changed,
+                )
                 await self._collect_evidence(ctx, workflow_id, step.id, abs_changed)
 
             # 10. Verifiers
