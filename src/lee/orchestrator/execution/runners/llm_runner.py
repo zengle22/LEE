@@ -2248,8 +2248,51 @@ class LLMRunner(StepRunnerBase):
         if not isinstance(payload, dict):
             return business_output, structured_payload
 
-        if isinstance(payload.get("task_specs"), list):
+        if isinstance(payload.get("task_specs"), list) and payload.get("task_specs"):
             normalized_business = dict(payload)
+            normalized_business["source_feats"] = [
+                feat_alias_map.get(_clean_text(item), _clean_text(item))
+                for item in (payload.get("source_feats") or [])
+                if _clean_text(item)
+            ]
+            remapped_task_specs: List[Dict[str, Any]] = []
+            for task_spec in payload.get("task_specs") or []:
+                if not isinstance(task_spec, dict):
+                    continue
+                remapped_task = dict(task_spec)
+                raw_source_feat = _clean_text(task_spec.get("source_feat"))
+                canonical_source_feat = feat_alias_map.get(raw_source_feat, raw_source_feat) or "FEAT-001"
+                remapped_task["source_feat"] = canonical_source_feat
+                if isinstance(task_spec.get("source_refs"), list):
+                    remapped_task["source_refs"] = [
+                        f"{canonical_source_feat}#delivery"
+                        if isinstance(ref, str) and ref == f"{raw_source_feat}#delivery" and canonical_source_feat
+                        else ref
+                        for ref in task_spec.get("source_refs") or []
+                    ]
+                if isinstance(task_spec.get("ssot"), dict):
+                    remapped_ssot = dict(task_spec.get("ssot") or {})
+                    remapped_ssot["parent"] = canonical_source_feat
+                    derived_from = _clean_text(remapped_ssot.get("derived_from"))
+                    if raw_source_feat and derived_from == f"{raw_source_feat}#delivery":
+                        remapped_ssot["derived_from"] = f"{canonical_source_feat}#delivery"
+                    remapped_task["ssot"] = remapped_ssot
+                if isinstance(task_spec.get("acceptance_criteria_mapping"), list):
+                    remapped_task["acceptance_criteria_mapping"] = [
+                        {
+                            **item,
+                            "feat": canonical_source_feat if isinstance(item, dict) and _clean_text(item.get("feat")) == raw_source_feat else item.get("feat"),
+                            "ac": (
+                                str(item.get("ac")).replace(raw_source_feat, canonical_source_feat, 1)
+                                if isinstance(item, dict) and raw_source_feat and canonical_source_feat and isinstance(item.get("ac"), str)
+                                else item.get("ac")
+                            ),
+                        }
+                        for item in task_spec.get("acceptance_criteria_mapping") or []
+                        if isinstance(item, dict)
+                    ]
+                remapped_task_specs.append(remapped_task)
+            normalized_business["task_specs"] = remapped_task_specs
         else:
             epic_ref = _clean_text(payload.get("parent_epic") or payload.get("epic_ref"))
             metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
