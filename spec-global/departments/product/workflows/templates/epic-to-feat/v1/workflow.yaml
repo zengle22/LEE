@@ -26,11 +26,13 @@ overview:
   input:
     type: epic_freeze
     ssot_type: EPIC
+    preferred_ref: epic_freeze_ref
 
   output:
     type: feat_freeze_bundle
     ssot_type: FEAT
     description: 冻结后的 FEAT 集合
+    preferred_ref: feat_freeze_ref
 
 stages:
   - id: epic_to_feat_flow
@@ -64,7 +66,7 @@ stages:
         mandatory: true
         depends_on: [feat_boundary_design]
         config:
-          output_contract: departments/product/contracts/feat-contract/v2/schema.json
+          output_contract: departments/product/contracts/feat-bundle-contract/v1/schema.json
           strict_output_validation: true
         description: >
           为每个 FEAT 生成详细规格视图。
@@ -77,7 +79,7 @@ stages:
             required: true
         outputs:
           - symbol: feat_specs
-            contract: departments/product/contracts/feat-contract/v2/schema.json
+            contract: departments/product/contracts/feat-bundle-contract/v1/schema.json
             freeze: false
             ssot:
               identity_kind: ssot
@@ -175,6 +177,8 @@ instance_schema:
     - status
   context_fields:
     - epic_freeze
+    - epic_freeze_ref
+    - feat_freeze_ref
   output_fields:
     - feat_breakdown
     - feat_specs

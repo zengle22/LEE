@@ -37,6 +37,7 @@ overview:
     type: epic_freeze
     ssot_type: EPIC
     description: 冻结后的 EPIC 主对象或其冻结视图
+    preferred_ref: epic_freeze_ref
 
 stages:
   - id: src_to_epic_flow
@@ -254,6 +255,8 @@ instance_schema:
   context_fields:
     - raw_requirement
     - business_opportunity
+    - source_freeze_ref
+    - epic_freeze_ref
   output_fields:
     - source_freeze
     - epic_freeze
