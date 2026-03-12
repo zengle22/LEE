@@ -54,11 +54,12 @@ stages:
         name: UI 设计
         kind: agent
         agent_id: agent.design.ui_designer
-        mandatory: true
+        mandatory: false
         depends_on: []
         description: >
-          基于 FEAT 生成页面、交互流程和组件视图。
-          UI 是前端实现的直接设计依赖。
+          仅在 FEAT 明确包含页面、交互或组件边界时生成 UI 设计。
+          对纯 workflow、contract、governance、backend 或文档类 FEAT，
+          该步骤应视为 not applicable，不得阻塞后续 TECH / TASK。
         inputs:
           - source: feat_freeze
             required: true
@@ -119,7 +120,7 @@ stages:
           - source: feat_freeze
             required: true
           - source: ui_specs
-            required: true
+            required: false
           - source: tech_specs
             required: true
           - source: governing_adrs
@@ -154,7 +155,7 @@ stages:
           - source: feat_freeze
             required: true
           - source: ui_specs
-            required: true
+            required: false
           - source: tech_specs
             required: true
           - source: task_plan
@@ -184,7 +185,7 @@ stages:
           该冻结不只是设计准备完成，还要求形成可执行实施计划。
         inputs:
           - source: ui_specs
-            required: true
+            required: false
           - source: tech_specs
             required: true
           - source: task_plan
@@ -201,9 +202,9 @@ stages:
             - role: tech_lead
             - role: design_lead
           approval_criteria:
-            - label: "UI 依赖完备"
-              criteria: "前端实施所需 UI 信息完整"
-              required: true
+            - label: "UI 依赖完备（如适用）"
+              criteria: "仅当 FEAT 存在前端页面、交互或组件边界时，才要求 UI 信息完整"
+              required: false
             - label: "TECH 依赖完备"
               criteria: "API 与技术边界足以支撑前后端实现"
               required: true
