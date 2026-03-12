@@ -41,18 +41,26 @@ phases:
     level: task
     workflow: workflow.product.task.raw_to_src
     depends_on: []
+    output_map:
+      source_freeze: "$child_data.step_outputs.source_freeze"
 
   - id: src_to_epic
     name: SRC to EPIC
     level: task
     workflow: workflow.product.task.src_to_epic
     depends_on: [raw_to_src]
+    output_map:
+      epic_freeze: "$child_data.step_outputs.epic_freeze"
+      epic_freeze_ref: "$child_data.step_outputs.epic_freeze.epic_freeze_ref"
 
   - id: epic_to_feat
     name: EPIC to FEAT
     level: task
     workflow: workflow.product.task.epic_to_feat
     depends_on: [src_to_epic]
+    output_map:
+      feat_freeze: "$child_data.step_outputs.feat_freeze"
+      feat_freeze_ref: "$child_data.step_outputs.feat_freeze.feat_freeze_ref"
 
   - id: feat_to_delivery_prep
     name: FEAT to Delivery Prep

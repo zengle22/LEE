@@ -47,6 +47,8 @@ stages:
         agent_id: agent.product.requirement_decomposer
         config:
           implementation_facing: false
+          output_contract: departments/product/contracts/feat-breakdown-contract/v1/schema.json
+          strict_output_validation: true
         mandatory: true
         depends_on: []
         description: >
@@ -140,7 +142,7 @@ stages:
               criteria: "每个 FEAT 描述系统能力，而不是实现任务或页面动作"
               required: true
             - label: "边界完整"
-              criteria: "每个 FEAT 都说明输入、处理、输出"
+              criteria: "每个 FEAT 都说明输入、input_contract、处理、输出，且输入不能是占位值"
               required: true
             - label: "父子关系正确"
               criteria: "所有 FEAT 都显式挂接到对应 EPIC"

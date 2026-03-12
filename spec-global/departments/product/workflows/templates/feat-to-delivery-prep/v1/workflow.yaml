@@ -19,7 +19,7 @@ roles:
     - agent.design.ui_designer
     - agent.dev.tech_architect
     - agent.product.pm_planner
-    - agent.governance.approval_reviewer
+    - agent.product.delivery_plan_reviewer
   skills: []
   gates:
     - gate.product.delivery_prep_freeze
@@ -144,7 +144,7 @@ stages:
       - id: delivery_plan_validation
         name: 实施计划校验
         kind: agent
-        agent_id: agent.governance.approval_reviewer
+        agent_id: agent.product.delivery_plan_reviewer
         mandatory: true
         depends_on: [task_planning]
         description: >

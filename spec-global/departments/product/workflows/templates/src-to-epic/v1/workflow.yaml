@@ -60,6 +60,8 @@ stages:
           - symbol: problem_definition
             contract: departments/product/contracts/problem-definition/v1/schema.json
             freeze: false
+        config:
+          strict_output_validation: true
       - id: epic_design
         name: EPIC 设计
         kind: agent
@@ -80,6 +82,8 @@ stages:
               identity_kind: ssot
               ssot_type: EPIC
               source_refs: [external]
+        config:
+          strict_output_validation: true
       - id: epic_review
         name: EPIC 对齐评审
         kind: agent
@@ -95,6 +99,8 @@ stages:
           - symbol: epic_review_report
             contract: departments/product/contracts/product-review-contract/v1/schema.json
             freeze: false
+        config:
+          strict_output_validation: true
       - id: epic_freeze
         name: EPIC 冻结
         kind: gate
