@@ -58,6 +58,21 @@ from .id_generator import (
 )
 from .placement import SSOT_PLACEMENT_DIRS, resolve_ssot_relative_dir
 from .ssot_contract import SSOTContractMaterializer, MaterializedOutput
+from .chain_testing import (
+    ChainTestContext,
+    ChainTestIssue,
+    ChainTestResult,
+    ChainTestRunReport,
+    ChainTestRunner,
+    ExecutableChainTester,
+    OverlapChainTester,
+    ReplayChainTester,
+    SampleLibrary,
+    SchemaChainTester,
+    SemanticChainTester,
+    TraceChainTester,
+    write_chain_ci_templates,
+)
 
 __all__ = [
     # 类型枚举
@@ -112,6 +127,19 @@ __all__ = [
     "resolve_ssot_relative_dir",
     "SSOTContractMaterializer",
     "MaterializedOutput",
+    "ChainTestContext",
+    "ChainTestIssue",
+    "ChainTestResult",
+    "ChainTestRunReport",
+    "ChainTestRunner",
+    "ExecutableChainTester",
+    "OverlapChainTester",
+    "ReplayChainTester",
+    "SampleLibrary",
+    "SchemaChainTester",
+    "SemanticChainTester",
+    "TraceChainTester",
+    "write_chain_ci_templates",
 ]
 
 __version__ = "2.2.0"

@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Optional
 
 from lee.orchestrator.execution.artifacts import ArtifactManager, SSOTType
+from lee.orchestrator.execution.artifacts.chain_testing import (
+    ChainTestRunner,
+    SampleLibrary,
+    write_chain_ci_templates,
+)
 from lee.orchestrator.execution.artifacts.ssot_service import SSOTService, SSOTValidator
 from lee.orchestrator.execution.artifacts.ssot_files import (
     lint_ssot_front_matter,
@@ -640,6 +645,82 @@ def list_ssot(ssot_type: Optional[str], parent_id: Optional[str], output_format:
             ssot_type = a.properties.get("ssot_type", "?")
             parent = a.properties.get("parent_id", "-")
             click.echo(f"  [{ssot_type}] {a.id} - {a.title} (parent: {parent})")
+
+
+@ssot.command("chain-test")
+@click.option("--project-root", type=click.Path(file_okay=False, path_type=Path), default=Path.cwd(), show_default=True, help="项目根目录")
+@click.option("--output-dir", type=click.Path(file_okay=False, path_type=Path), default=None, help="报告输出目录，默认写入 .artifacts/trace/chain-tests")
+@click.option("--tester", "tester_ids", multiple=True, type=click.Choice(["schema", "trace", "semantic", "overlap", "replay", "executable"]), help="指定测试器，可重复")
+@click.option("--sample-strategy", type=click.Choice(["all", "random", "importance", "stratified"]), default="all", show_default=True, help="采样策略")
+@click.option("--sample-size", type=int, default=None, help="采样数量")
+@click.option("--seed", type=int, default=7, show_default=True, help="随机种子")
+@click.option("--use-cache/--no-cache", default=True, show_default=True, help="是否启用测试结果缓存")
+@click.option("--incremental/--no-incremental", default=False, show_default=True, help="是否按快照执行增量测试")
+@click.option("--baseline-path", type=click.Path(dir_okay=False, path_type=Path), default=None, help="增量测试基线快照路径")
+@click.option("--fail-under", type=float, default=None, help="overall 通过率阈值，低于该值返回非零退出码")
+def chain_test(
+    project_root: Path,
+    output_dir: Optional[Path],
+    tester_ids: tuple[str, ...],
+    sample_strategy: str,
+    sample_size: Optional[int],
+    seed: int,
+    use_cache: bool,
+    incremental: bool,
+    baseline_path: Optional[Path],
+    fail_under: Optional[float],
+):
+    """运行需求链一致性测试并输出 report.json / scorecard.md。"""
+    project_root = project_root.resolve()
+    manager = ArtifactManager(project_root=project_root, root_path=project_root / ".artifacts")
+    runner = ChainTestRunner(manager).register_defaults()
+    report = runner.run(
+        tester_ids=list(tester_ids) or None,
+        sample_strategy=sample_strategy,
+        sample_size=sample_size,
+        seed=seed,
+        use_cache=use_cache,
+        incremental=incremental,
+        baseline_path=baseline_path,
+    )
+    target_dir = output_dir or (manager.root_path / "trace" / "chain-tests")
+    written = runner.write_report(report, target_dir)
+    click.echo(f"Chain tests completed: {'PASS' if report.metrics.get('overall_passed') else 'FAIL'}")
+    click.echo(f"report.json: {written['report_json']}")
+    click.echo(f"scorecard.md: {written['scorecard_md']}")
+    if fail_under is not None:
+        pass_rate = (
+            (report.metrics.get("passed_tester_count", 0) / max(report.metrics.get("tester_count", 1), 1))
+            * 100
+        )
+        if pass_rate < fail_under:
+            raise click.ClickException(f"overall tester pass rate {pass_rate:.2f} is below fail-under {fail_under:.2f}")
+
+
+@ssot.command("chain-init-samples")
+@click.option("--project-root", type=click.Path(file_okay=False, path_type=Path), default=Path.cwd(), show_default=True, help="项目根目录")
+@click.option("--output-dir", type=click.Path(file_okay=False, path_type=Path), default=None, help="样本目录，默认 tests/fixtures/chain_testing")
+@click.option("--version", "sample_version", default="v1", show_default=True, help="样本版本号")
+def chain_init_samples(project_root: Path, output_dir: Optional[Path], sample_version: str):
+    """初始化黄金样本集目录与默认样本。"""
+    project_root = project_root.resolve()
+    root_dir = output_dir or (project_root / "tests" / "fixtures" / "chain_testing")
+    library = SampleLibrary(root_dir)
+    counts = library.initialize_defaults(version=sample_version)
+    click.echo(f"Initialized chain samples at {root_dir}")
+    click.echo(f"  active_version: {library.active_version()}")
+    for category, count in counts.items():
+        click.echo(f"  {category}: {count}")
+
+
+@ssot.command("chain-install-ci")
+@click.option("--project-root", type=click.Path(file_okay=False, path_type=Path), default=Path.cwd(), show_default=True, help="项目根目录")
+def chain_install_ci(project_root: Path):
+    """生成 requirement chain CI/CD 模板。"""
+    written = write_chain_ci_templates(project_root.resolve())
+    click.echo(f"github workflow: {written['github_workflow']}")
+    click.echo(f"gitlab ci: {written['gitlab_ci']}")
+    click.echo(f"dockerfile: {written['dockerfile']}")
 
 
 # 注册命令到主 CLI

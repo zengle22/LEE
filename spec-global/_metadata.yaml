@@ -252,7 +252,7 @@ workflow_registry:
     v3_1_compatible: true
     notes: |
       Product 部门新的 canonical L2 流程：
-      - 串联 SRC -> EPIC -> FEAT -> Delivery Prep
+      - 串联 SRC -> EPIC -> FEAT -> Delivery Prep -> Requirement Chain Validation
       - 以 SSOT 主链为中心，而不是以 PRD 文档为中心
       - 作为 departments/prd 的替代路径
 
@@ -274,6 +274,13 @@ workflow_registry:
     path: departments/product/workflows/templates/feat-to-delivery-prep/v1/workflow.yaml
     level: task
     description: "Product 部门 - L3 子流程：FEAT 到研发准备"
+    version: "1.0"
+    v3_1_compatible: true
+
+  - id: workflow.product.task.requirement_chain_validation
+    path: departments/product/workflows/templates/requirement-chain-validation/v1/workflow.yaml
+    level: task
+    description: "Product 部门 - L3 子流程：需求链一致性验证"
     version: "1.0"
     v3_1_compatible: true
 

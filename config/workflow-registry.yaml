@@ -166,6 +166,18 @@ workflows:
       - feat_freeze
     optional_params: []
 
+  product.requirement-chain-validation:
+    path: spec-global/departments/product/workflows/templates/requirement-chain-validation/v1/workflow.yaml
+    kind: l3_workflow_template
+    description: "Product L3 - requirement chain validation before final handoff"
+    load_spec_as_params: true
+    required_params: []
+    optional_params:
+      - source_freeze
+      - epic_freeze_bundle
+      - feat_freeze_bundle
+      - delivery_prep_bundle
+
   # ========== Office 工作流 ==========
   office.workspace-cleanup:
     path: spec-global/departments/office/workflows/workspace-cleanup/v1/workflow.yaml

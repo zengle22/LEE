@@ -118,7 +118,7 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 **ID**: `workflow.product.product_main_pipeline`
 **路径**: `departments/product/workflows/templates/product-main-pipeline/v1/workflow.yaml`
 
-**用途**: Product 部门新的 SSOT 主编排流程，串联 `SRC -> EPIC -> FEAT -> Delivery Prep`
+**用途**: Product 部门新的 SSOT 主编排流程，串联 `SRC -> EPIC -> FEAT -> Delivery Prep -> Requirement Chain Validation`
 
 ---
 
@@ -147,6 +147,13 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 **用途**: 基于冻结后的 FEAT 生成 UI / TECH / TASK 准备包
 
+#### 9. Requirement Chain Validation（需求链一致性验证）
+
+**ID**: `workflow.product.task.requirement_chain_validation`
+**路径**: `departments/product/workflows/templates/requirement-chain-validation/v1/workflow.yaml`
+
+**用途**: 在最终 handoff 前运行 requirement chain test，验证正式 SSOT 主链质量
+
 ---
 
 #### Deprecated: PRD Workflows
@@ -160,7 +167,7 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ### STG 部门
 
-#### 9. Opportunity Discovery（商业机会发现）
+#### 10. Opportunity Discovery（商业机会发现）
 
 **ID**: `workflow.stg.opportunity_discovery`
 **路径**: `departments/stg/workflows/opportunity_discovery/v1/workflow.yaml`
@@ -185,7 +192,7 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ### DevOps 部门（新增）
 
-#### 8. DevOps Deployment（DevOps 部署工作流）
+#### 11. DevOps Deployment（DevOps 部署工作流）
 
 **ID**: `workflow.devops.deployment`
 **路径**: `departments/devops/workflows/devops-deployment/v1/workflow.yaml`

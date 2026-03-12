@@ -37,6 +37,7 @@ def test_workflow_registry_contains_product_templates() -> None:
     assert "product.src-to-epic" in workflows
     assert "product.epic-to-feat" in workflows
     assert "product.feat-to-delivery-prep" in workflows
+    assert "product.requirement-chain-validation" in workflows
 
     assert workflows["product.main"]["path"] == (
         "spec-global/departments/product/workflows/templates/product-main-pipeline/v1/workflow.yaml"
@@ -55,11 +56,12 @@ def test_workflow_registry_contains_product_templates() -> None:
     assert "source_freeze_ref" in workflows["product.src-to-epic"]["optional_params"]
     assert workflows["product.epic-to-feat"]["load_spec_as_params"] is True
     assert workflows["product.feat-to-delivery-prep"]["load_spec_as_params"] is True
+    assert workflows["product.requirement-chain-validation"]["load_spec_as_params"] is True
     assert workflows["product.epic-to-feat"]["required_params"] == ["epic_freeze"]
     assert workflows["product.feat-to-delivery-prep"]["required_params"] == ["feat_freeze"]
+    assert "delivery_prep_bundle" in workflows["product.requirement-chain-validation"]["optional_params"]
 
-
-def test_product_main_pipeline_template_uses_four_stage_chain() -> None:
+def test_product_main_pipeline_template_uses_validation_stage_before_completion() -> None:
     template_path = (
         Path(__file__).resolve().parents[1]
         / "spec-global"
@@ -79,9 +81,12 @@ def test_product_main_pipeline_template_uses_four_stage_chain() -> None:
         "src_to_epic",
         "epic_to_feat",
         "feat_to_delivery_prep",
+        "requirement_chain_validation",
     ]
     assert phases[0]["workflow"] == "workflow.product.task.raw_to_src"
     assert phases[1]["depends_on"] == ["raw_to_src"]
+    assert phases[-1]["workflow"] == "workflow.product.task.requirement_chain_validation"
+    assert phases[-1]["depends_on"] == ["feat_to_delivery_prep"]
 
 
 def test_product_pipeline_handoff_contracts_are_aligned() -> None:
@@ -137,6 +142,33 @@ def test_product_pipeline_handoff_contracts_are_aligned() -> None:
     assert "business_opportunity_freeze" in raw_external_types
     assert {"src", "source_freeze"}.issubset(src_input_types)
     assert {"src", "source_freeze"}.issubset(src_external_types)
+
+
+def test_requirement_chain_validation_template_requires_delivery_outputs() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    validation_doc = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "product"
+            / "workflows"
+            / "templates"
+            / "requirement-chain-validation"
+            / "v1"
+            / "workflow.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    steps = validation_doc["stages"][0]["steps"]
+
+    assert validation_doc["id"] == "workflow.product.task.requirement_chain_validation"
+    assert [step["id"] for step in steps] == [
+        "requirement_chain_test_execution",
+        "requirement_chain_review",
+        "requirement_chain_validation_gate",
+    ]
+    execution_inputs = {item["source"] for item in steps[0]["inputs"]}
+    assert {"source_freeze", "epic_freeze_bundle", "feat_freeze_bundle", "delivery_prep_bundle"} == execution_inputs
 
 
 def test_workflow_registry_updates_qa_test_set_production_inputs() -> None:

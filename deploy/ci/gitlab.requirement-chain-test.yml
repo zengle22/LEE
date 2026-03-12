@@ -1,0 +1,15 @@
+requirement_chain_test:
+  image: python:3.10
+  stage: test
+  rules:
+    - changes:
+        - spec/**/*
+        - src/lee/**/*
+        - deploy/ci/gitlab.requirement-chain-test.yml
+  script:
+    - pip install -e .[dev]
+    - python -m lee.cli.main ssot chain-test --tester schema --tester trace --tester semantic --tester overlap --tester replay --tester executable
+  artifacts:
+    when: always
+    paths:
+      - .artifacts/trace/chain-tests/

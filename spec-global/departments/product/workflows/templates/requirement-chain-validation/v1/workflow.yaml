@@ -1,0 +1,143 @@
+kind: l3_workflow_template
+version: "1.0"
+id: workflow.product.task.requirement_chain_validation
+name: Product Requirement Chain Validation
+description: >
+  在产品部门完成 SRC、EPIC、FEAT 与 delivery prep 物化后，
+  运行需求链一致性测试，验证正式 SSOT 主链的结构、追溯、语义、重叠、稳定性与可执行性。
+  该文件是 checked-in workflow template，运行时实例由 Python runtime 动态生成。
+owner: product-ai
+tags: [product, workflow, l3, ssot, validation, adr011]
+
+roles:
+  agents:
+    - agent.review.requirement_reviewer
+    - agent.governance.approval_reviewer
+  skills: []
+  gates:
+    - gate.product.requirement_chain_validation
+
+overview:
+  input_types:
+    - type: source_freeze
+      description: 冻结后的 SRC
+    - type: epic_freeze_bundle
+      description: 冻结后的 EPIC 集合
+    - type: feat_freeze_bundle
+      description: 冻结后的 FEAT 集合
+    - type: delivery_prep_bundle
+      description: UI / TECH / TASK 研发准备包
+
+  output:
+    type: requirement_chain_validation_report
+    description: >
+      需求链一致性验证报告，包含 report.json、scorecard.md、
+      测试通过结论以及阻塞问题摘要。
+
+stages:
+  - id: requirement_chain_validation_flow
+    name: "Requirement Chain Validation Flow"
+    kind: stage
+    description: "运行需求链测试并在最终 handoff 前完成校验"
+    depends_on: []
+    steps:
+      - id: requirement_chain_test_execution
+        name: 需求链测试执行
+        kind: agent
+        agent_id: agent.review.requirement_reviewer
+        mandatory: true
+        depends_on: []
+        description: >
+          必须执行 `lee ssot chain-test`，
+          对正式 SSOT 主链运行 schema、trace、semantic、overlap、replay、executable 六类测试。
+          输出 report.json 与 scorecard.md，并记录 fail-under 与关键告警。
+        inputs:
+          - source: source_freeze
+            required: true
+          - source: epic_freeze_bundle
+            required: true
+          - source: feat_freeze_bundle
+            required: true
+          - source: delivery_prep_bundle
+            required: true
+        outputs:
+          - symbol: requirement_chain_test_report
+            contract: departments/product/contracts/product-review-contract/v1/schema.json
+            freeze: false
+      - id: requirement_chain_review
+        name: 需求链校验评审
+        kind: agent
+        agent_id: agent.governance.approval_reviewer
+        mandatory: true
+        depends_on: [requirement_chain_test_execution]
+        description: >
+          评审需求链测试结果，确认所有 blocker 级问题已清零，
+          非 blocker 风险已被记录，且输出足以作为 final handoff 前的质量证明。
+        inputs:
+          - source: requirement_chain_test_report
+            required: true
+          - source: feat_freeze_bundle
+            required: true
+          - source: delivery_prep_bundle
+            required: true
+        outputs:
+          - symbol: requirement_chain_review
+            contract: departments/product/contracts/product-review-contract/v1/schema.json
+            freeze: false
+      - id: requirement_chain_validation_gate
+        name: 需求链验证门禁
+        kind: gate
+        mandatory: true
+        depends_on: [requirement_chain_review]
+        description: >
+          在产品主流水线进入最终完成态前，必须确认需求链一致性测试已执行且通过最小门槛。
+          若存在 blocker 或 overall 通过率低于阈值，主流水线不得进入完成态。
+        inputs:
+          - source: requirement_chain_test_report
+            required: true
+          - source: requirement_chain_review
+            required: true
+        outputs:
+          - path: output/validation/{project}-requirement-chain-validation.yaml
+            required: true
+            freeze: true
+            contract: departments/product/contracts/product-review-contract/v1/schema.json
+        gate_rules:
+          reviewers:
+            - role: product_owner
+          approval_criteria:
+            - label: "链路测试已执行"
+              criteria: "已运行 requirement chain test，并生成 report.json 与 scorecard.md"
+              required: true
+            - label: "主链可追溯"
+              criteria: "SRC -> EPIC -> FEAT -> UI/TECH/TASK 主链无 blocker 级断裂"
+              required: true
+            - label: "交付前质量可接受"
+              criteria: "最终 handoff 前不存在阻塞交付的问题，剩余风险已明确记录"
+              required: true
+        config:
+          gate:
+            type: human_approval
+            gate_id: gate.product.requirement_chain_validation
+    step_order:
+      - requirement_chain_test_execution
+      - requirement_chain_review
+      - requirement_chain_validation_gate
+
+stage_order:
+  - requirement_chain_validation_flow
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+  context_fields:
+    - source_freeze
+    - epic_freeze_bundle
+    - feat_freeze_bundle
+    - delivery_prep_bundle
+  output_fields:
+    - requirement_chain_test_report
+    - requirement_chain_review
