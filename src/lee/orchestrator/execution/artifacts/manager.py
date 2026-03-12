@@ -832,6 +832,7 @@ class ArtifactManager:
         title: str,
         content,
         run_id: str,
+        formal_id: Optional[str] = None,
         parent_id: Optional[str] = None,
         derived_from: Optional[List[Union[str, Dict]]] = None,
         source_refs: Optional[List[str]] = None,
@@ -887,7 +888,11 @@ class ArtifactManager:
         elif ssot_type == SSOTType.REPORT and parent_id and str(parent_id).startswith("REL-"):
             generation_suffix = (properties or {}).get("report_kind")
 
-        artifact_id = generator.generate_id(ssot_type, parent_id, generation_suffix)
+        artifact_id = (formal_id or "").strip() or generator.generate_id(
+            ssot_type,
+            parent_id,
+            generation_suffix,
+        )
 
         # 生成文件名
         filename = f"{artifact_id}__{slug}.md"
@@ -897,6 +902,13 @@ class ArtifactManager:
         artifact_dir = self.project_root / relative_dir
         artifact_dir.mkdir(parents=True, exist_ok=True)
         artifact_path = artifact_dir / filename
+        existing_metadata = self.registry.get(artifact_id) if self.registry.exists(artifact_id) else None
+        self._cleanup_existing_ssot_paths(
+            artifact_id=artifact_id,
+            artifact_dir=artifact_dir,
+            target_path=artifact_path,
+            existing_metadata=existing_metadata,
+        )
 
         derived_from_ids = derived_from or []
         front_matter = {
@@ -965,10 +977,38 @@ class ArtifactManager:
         metadata.properties["placement_dir"] = relative_dir.as_posix()
         metadata.properties["derived_from_ids"] = derived_from_ids
 
-        # 注册
-        self.registry.register(metadata)
+        # 注册/更新
+        if existing_metadata is not None:
+            self.registry.update(metadata)
+        else:
+            self.registry.register(metadata)
 
         return metadata
+
+    def _cleanup_existing_ssot_paths(
+        self,
+        artifact_id: str,
+        artifact_dir: Path,
+        target_path: Path,
+        existing_metadata: Optional[ArtifactMetadata] = None,
+    ) -> None:
+        """
+        Remove stale checked-in SSOT files for the same formal ID before writing.
+
+        Reruns may regenerate the same SSOT with a different title/slug. The formal
+        ID must remain a single checked-in file, so we delete sibling variants first.
+        """
+        existing_paths = set(artifact_dir.glob(f"{artifact_id}__*.md"))
+        if existing_metadata is not None:
+            existing_path = self._resolve_metadata_path(existing_metadata)
+            if existing_path.exists():
+                existing_paths.add(existing_path)
+
+        for existing_path in existing_paths:
+            if existing_path.resolve() == target_path.resolve():
+                continue
+            if existing_path.exists():
+                existing_path.unlink()
 
     def get_ssot(self, artifact_id: str) -> Optional[ArtifactMetadata]:
         """

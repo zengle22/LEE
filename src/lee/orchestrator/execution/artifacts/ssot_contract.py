@@ -128,11 +128,20 @@ class SSOTContractMaterializer:
         }
 
         if identity_kind == "ssot":
+            formal_id = None
+            raw_properties = output.get("properties")
+            if isinstance(raw_properties, dict):
+                for candidate_key in ("formal_id", "task_id"):
+                    candidate_value = raw_properties.get(candidate_key)
+                    if isinstance(candidate_value, str) and candidate_value.strip():
+                        formal_id = candidate_value.strip()
+                        break
             artifact = self.manager.create_ssot(
                 ssot_type=SSOTType(output["ssot_type"]),
                 title=title,
                 content=content,
                 run_id=run_id,
+                formal_id=formal_id,
                 parent_id=self._resolve_optional_id(output.get("parent"), materialized),
                 derived_from=self._resolve_versioned_refs(
                     output.get("derived_from_ids"),

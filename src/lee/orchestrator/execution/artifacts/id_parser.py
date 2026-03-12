@@ -26,15 +26,20 @@ from .types import ObjectCategory, SSOTType
 
 
 REL_VERSION_PATTERN = r"(\d+\.\d+\.\d+)"
-INDEPENDENT_PATTERN = re.compile(r"^(SRC|EPIC|FEAT|ADR)-(\d{3})$")
+SRC_ID_PATTERN = r"SRC-\d{3}"
+EPIC_ID_PATTERN = r"EPIC(?:-\d{3}|-SRC-\d{3})"
+FEAT_ID_PATTERN = r"FEAT(?:-\d{3}|-SRC-\d{3}-\d{3})"
+INDEPENDENT_PATTERN = re.compile(
+    rf"^({SRC_ID_PATTERN}|{EPIC_ID_PATTERN}|{FEAT_ID_PATTERN}|ADR-\d{{3}})$"
+)
 RELEASE_PATTERN = re.compile(rf"^(REL-{REL_VERSION_PATTERN})$")
 DEVPLAN_PATTERN = re.compile(rf"^(DEVPLAN)-(REL-{REL_VERSION_PATTERN})$")
 TESTPLAN_PATTERN = re.compile(rf"^(TESTPLAN)-(REL-{REL_VERSION_PATTERN})$")
 TASK_PLAN_PATTERN = re.compile(rf"^(TASK)-((DEVPLAN|TESTPLAN)-(REL-{REL_VERSION_PATTERN}))-(.+)$")
-TASK_FEAT_PATTERN = re.compile(r"^(TASK)-(FEAT-\d{3})-(.+)$")
-DIRECT_FEAT_PATTERN = re.compile(r"^(UI|TECH|TESTSET|REPORT)-(FEAT-\d{3})(?:-(.+))?$")
+TASK_FEAT_PATTERN = re.compile(rf"^(TASK)-({FEAT_ID_PATTERN})-(.+)$")
+DIRECT_FEAT_PATTERN = re.compile(rf"^(UI|TECH|TESTSET|REPORT)-({FEAT_ID_PATTERN})(?:-(.+))?$")
 REPORT_REL_PATTERN = re.compile(rf"^(REPORT)-(REL-{REL_VERSION_PATTERN})-([A-Z0-9_]+)-(.+)$")
-SCOPE_PATTERN = re.compile(r"^(TC|BUG|EVI)-(FEAT-\d{3})-(.+)$")
+SCOPE_PATTERN = re.compile(rf"^(TC|BUG|EVI)-({FEAT_ID_PATTERN})-(.+)$")
 
 
 @dataclass
@@ -110,14 +115,14 @@ def resolve_scope(parent_id: str) -> Optional[str]:
     if not parent_id:
         return None
 
-    if re.match(r"^FEAT-\d{3}$", parent_id):
+    if re.match(rf"^{FEAT_ID_PATTERN}$", parent_id):
         return parent_id
 
-    if re.match(r"^(TC|BUG|EVI)-(FEAT-\d{3})-", parent_id):
+    if re.match(rf"^(TC|BUG|EVI)-({FEAT_ID_PATTERN})-", parent_id):
         return parse_scope(parent_id)
 
     parent = parse_parent(parent_id)
-    if parent and re.match(r"^FEAT-\d{3}$", parent):
+    if parent and re.match(rf"^{FEAT_ID_PATTERN}$", parent):
         return parent
 
     return None
@@ -130,7 +135,9 @@ def parse_id(id: str) -> IDParseResult:
 
     independent_match = INDEPENDENT_PATTERN.match(id)
     if independent_match:
-        prefix, sequence = independent_match.groups()
+        parsed_id = independent_match.group(1)
+        prefix = parsed_id.split("-", 1)[0]
+        sequence = parsed_id.split("-", 1)[1]
         return IDParseResult(id, prefix, None, sequence, None, True)
 
     release_match = RELEASE_PATTERN.match(id)
@@ -212,7 +219,7 @@ def validate_parent_consistency(
         if ssot_type == SSOTType.FEAT:
             if not parent_id:
                 return None
-            if re.match(r"^EPIC-\d{3}$", parent_id):
+            if re.match(rf"^{EPIC_ID_PATTERN}$", parent_id):
                 return None
             return f"类型 {ssot_type.value} 的 parent_id 若提供，必须为 EPIC，当前为 {parent_id}"
         if parent_id:
