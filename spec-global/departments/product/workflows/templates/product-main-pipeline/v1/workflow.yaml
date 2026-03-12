@@ -10,7 +10,7 @@ description: >
   负责将上游 SRC 输入串联为 EPIC、FEAT，以及研发准备包。
   该文件定义的是 checked-in workflow template，不是运行时 workflow instance。
   实际执行实例由 Python runtime 根据模板动态生成。
-  该模板本身不承载全部细节，而是调度 3 条 L3 子模板。
+  该模板本身不承载全部细节，而是调度 4 条 L3 子模板。
 owner: product-ai
 tags: [product, workflow, l2, ssot, canonical]
 
@@ -36,11 +36,17 @@ overview:
       description: 面向研发和 QA 的准备包，包含 UI / TECH / TASK 以及 TESTSET seed
 
 phases:
+  - id: raw_to_src
+    name: Raw to SRC
+    level: task
+    workflow: workflow.product.task.raw_to_src
+    depends_on: []
+
   - id: src_to_epic
     name: SRC to EPIC
     level: task
     workflow: workflow.product.task.src_to_epic
-    depends_on: []
+    depends_on: [raw_to_src]
 
   - id: epic_to_feat
     name: EPIC to FEAT
@@ -98,6 +104,7 @@ instance_schema:
 state_machine:
   states:
     - INIT: "初始化"
+    - RAW_TO_SRC: "原始输入到 SRC"
     - SRC_TO_EPIC: "SRC 到 EPIC"
     - EPIC_TO_FEAT: "EPIC 到 FEAT"
     - FEAT_TO_DELIVERY_PREP: "FEAT 到研发准备"
@@ -105,8 +112,13 @@ state_machine:
     - FAILED: "失败"
   transitions:
     INIT:
-      - to: SRC_TO_EPIC
+      - to: RAW_TO_SRC
         trigger: workflow_started
+    RAW_TO_SRC:
+      - to: SRC_TO_EPIC
+        trigger: raw_to_src_completed
+      - to: FAILED
+        trigger: raw_to_src_failed
     SRC_TO_EPIC:
       - to: EPIC_TO_FEAT
         trigger: src_to_epic_completed

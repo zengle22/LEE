@@ -126,15 +126,25 @@ workflows:
       - raw_requirement
       - business_opportunity_freeze
 
-  product.src-to-epic:
-    path: spec-global/departments/product/workflows/templates/src-to-epic/v1/workflow.yaml
+  product.raw-to-src:
+    path: spec-global/departments/product/workflows/templates/raw-to-src/v1/workflow.yaml
     kind: l3_workflow_template
-    description: "Product L3 - raw input / SRC to EPIC"
+    description: "Product L3 - raw input to SRC"
     load_spec_as_params: true
     required_params: []
     optional_params:
       - raw_requirement
       - business_opportunity
+
+  product.src-to-epic:
+    path: spec-global/departments/product/workflows/templates/src-to-epic/v1/workflow.yaml
+    kind: l3_workflow_template
+    description: "Product L3 - frozen SRC to EPIC"
+    load_spec_as_params: true
+    required_params: []
+    optional_params:
+      - source_freeze
+      - source_freeze_ref
 
   product.epic-to-feat:
     path: spec-global/departments/product/workflows/templates/epic-to-feat/v1/workflow.yaml

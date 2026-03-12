@@ -2,19 +2,24 @@
 id: ADR-006
 ssot_type: adr
 title: CLI 命令分层与 SSOT 物化边界
-status: draft
+status: frozen
 version: v1
-parent_id:
+parent_id: null
 derived_from_ids:
-  - ADR-001
-  - ADR-003
-  - ADR-005
+- ADR-001
+- ADR-003
+- ADR-005
 source_refs: []
 owner: governance
-tags: [cli, ssot, governance, workflow]
+tags:
+- cli
+- ssot
+- governance
+- workflow
 properties:
   adr_kind: governance_design
   decision_scope: cli_entrypoints_and_ssot_materialization
+frozen_at: '2026-03-12T16:44:14.940679'
 ---
 # CLI 命令分层与 SSOT 物化边界
 
