@@ -73,7 +73,8 @@ prompting:
     - "任务定义必须覆盖 acceptance_criteria_mapping、definition_of_done、observability、evidence_requirements、rollback_strategy"
     - "如果 FEAT 主题是 workflow / gate / freeze / registry / 文档迁移，则任务必须围绕仓库内真实改动面拆分，例如 workflow 模板、agent/contract、runtime、测试、文档；不要扩写成产品基础设施建设"
     - "如果某条 AC 描述的是阶段顺序、状态机、契约边界、schema/template 结构等结构性要求，不得只映射到工具实现任务；必须至少有一个 specification/governance 类 TASK 覆盖结构定义本身"
-    - "任务数必须克制：默认每个 FEAT 1-2 个任务，只有存在明确独立改动面时才继续拆分；文档或迁移规划类 FEAT 通常只有 1 个任务"
+    - "任务数必须与真实改动面成比例：小型 FEAT 可以是 1-2 个任务，但当 FEAT 同时覆盖规范、模板、runtime、测试、文档、迁移或门禁等多个独立面时，必须拆到足够表达真实执行边界，通常为 3-5 个任务"
+    - "如果 FEAT 属于 workflow / governance / contract / runtime 类基础能力，且 acceptance 同时覆盖结构定义、模板实现、运行时接线、验证/测试或迁移治理，则不得压缩成 1-2 个任务；必须至少覆盖这些独立改动面"
 
 ssot_output_contract:
   integration_pattern:

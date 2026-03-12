@@ -116,6 +116,8 @@ stages:
           每个 TASK 都必须是 FEAT 下的正式 SSOT 对象，并单独落盘到 spec/tasks/<FEAT-ID>/。
           规划结果必须可执行，包含责任人角色、任务顺序、依赖关系、里程碑和关键路径。
           每个任务都应可追溯回对应 FEAT 的 Acceptance Criteria。
+          当 FEAT 同时覆盖规范、模板、runtime、测试、文档、迁移或门禁等多个独立改动面时，
+          必须拆分为足够表达真实执行边界的多个 TASK，而不是压缩成 1-2 个笼统任务。
         inputs:
           - source: feat_freeze
             required: true

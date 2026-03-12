@@ -151,12 +151,12 @@ async def test_llm_runner_qwen_executor_defaults_to_qwen_profile(runner, ctx):
 
 
 @pytest.mark.asyncio
-async def test_llm_runner_kimi_executor_defaults_to_kimi_profile(runner, ctx):
+async def test_llm_runner_bridges_agent_step_to_kimi_code_executor(runner, ctx, temp_project_root):
     step = SimpleNamespace(
         id="source_normalization",
         agent_id="agent.analysis.product_goal",
         executor_type="llm",
-        config={},
+        config={"claude_code": {"allowed_commands": ["Get-ChildItem"]}},
         outputs=[],
     )
 
@@ -180,6 +180,7 @@ async def test_llm_runner_kimi_executor_defaults_to_kimi_profile(runner, ctx):
     ctx.token_manager.issue_token.return_value = None
     ctx.llm_config_loader = MagicMock()
     ctx.llm_config_loader.get_default_profile.return_value = "huawei_deepseek"
+    ctx.resolve_workdir = MagicMock(return_value=str(temp_project_root))
 
     executor = MagicMock()
     executor.execute = AsyncMock(return_value={"status": "failed", "error": "boom"})
@@ -193,6 +194,13 @@ async def test_llm_runner_kimi_executor_defaults_to_kimi_profile(runner, ctx):
         profile="kimi",
         agent_id="agent.analysis.product_goal",
     )
+    execution = ctx.store.create_task_execution.await_args.args[0]
+    assert execution.executor_type == "kimi"
+    assert execution.input_data["goal"] == "user"
+    assert execution.input_data["workspace"] == str(temp_project_root)
+    assert execution.input_data["system_prompt_extra"] == "system"
+    assert execution.input_data["allowed_commands"] == ["Get-ChildItem"]
+    assert "prompt" not in execution.input_data
 
 
 @pytest.mark.asyncio
@@ -721,12 +729,13 @@ def test_pm_planner_normalization_injects_governance_task_for_structural_feat(te
     assert governance_task["task_kind"] == "governance"
     assert governance_task["workstream"] == "governance-spec"
     assert governance_task["task_id"] == "TASK-FEAT-143-000"
+    assert governance_task["title"] == "执行入口链路规则与状态机规范"
     governance_ac_ids = [item["ac"] for item in governance_task["acceptance_criteria_mapping"]]
     assert "AC-003-003" in governance_ac_ids
     assert implementation_task["dependencies"][0] == "TASK-FEAT-143-000"
 
 
-def test_pm_planner_normalization_does_not_inject_governance_task_for_non_governance_feat(
+def test_pm_planner_normalization_injects_feat_specific_governance_task_for_executor_config_feat(
     temp_project_root, runner
 ):
     feat_dir = temp_project_root / "spec" / "requirements" / "features"
@@ -769,6 +778,7 @@ def test_pm_planner_normalization_does_not_inject_governance_task_for_non_govern
     business_output = {
         "parent_epic": "EPIC-022",
         "source_feats": ["FEAT-169"],
+        "planning_metadata": {"task_directory": "spec/tasks/<FEAT-ID>"},
         "task_specs": [
             {
                 "task_id": "TASK-FEAT-169-001",
@@ -860,11 +870,103 @@ def test_pm_planner_normalization_does_not_inject_governance_task_for_non_govern
     )
 
     task_ids = [item["task_id"] for item in normalized_business["task_specs"]]
+    governance_task = normalized_business["task_specs"][0]
 
-    assert task_ids == ["TASK-FEAT-169-001", "TASK-FEAT-169-002"]
-    assert normalized_business["task_specs"][1]["dependencies"] == [
-        {"task_id": "TASK-FEAT-169-001", "relation": "requires"}
-    ]
+    assert task_ids[:2] == ["TASK-FEAT-169-000", "TASK-FEAT-169-001"]
+    assert governance_task["title"] == "执行器配置优先级与验证规则规范"
+    assert governance_task["responsible_role"] == "executor-config-governance-owner"
+    assert governance_task["title"] != "QA 执行入口链路规则与状态机规范"
+    assert normalized_business["planning_metadata"]["task_directory"] == "spec/tasks/FEAT-169"
+
+
+def test_pm_planner_normalization_injects_config_governance_task_for_priority_rules(
+    temp_project_root, runner
+):
+    feat_dir = temp_project_root / "spec" / "requirements" / "features"
+    feat_dir.mkdir(parents=True, exist_ok=True)
+    feat_path = feat_dir / "FEAT-169__executor-config.md"
+    feat_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "id: FEAT-169",
+                "title: 系统配置层支持识别并透传 qwen 执行器类型标识",
+                "parent_id: EPIC-022",
+                "---",
+                "",
+                "## AC-003",
+                "- Scenario: 执行器来源优先级判定",
+                "- Then: 最终生效值为 qwen，并记录来源为 cli_override",
+                "",
+                "## AC-004",
+                "- Scenario: 非法执行器配置报错",
+                "- Then: 返回包含非法值与可选值列表的明确错误信息，且不进入 workflow 执行阶段",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    business_output = {
+        "parent_epic": "EPIC-022",
+        "source_feats": ["FEAT-169"],
+        "planning_metadata": {"task_directory": "spec/tasks/<FEAT-ID>"},
+        "task_specs": [
+            {
+                "task_id": "TASK-FEAT-169-001",
+                "title": "执行器类型配置核心组件与优先级解析实现",
+                "objective": "实现执行器配置解析逻辑",
+                "description": "实现解析逻辑",
+                "source_feat": "FEAT-169",
+                "workstream": "executor-config-core",
+                "task_kind": "implementation",
+                "responsible_role": "config-system-owner",
+                "acceptance_criteria_mapping": [
+                    {"feat": "FEAT-169", "ac": "AC-003", "description": "优先级规则实现"},
+                    {"feat": "FEAT-169", "ac": "AC-004", "description": "错误拦截实现"},
+                ],
+                "prerequisites": [],
+                "dependencies": [],
+                "definition_of_done": ["done"],
+                "priority": "P0",
+                "milestone": "M1",
+                "estimated_effort": "2 days",
+                "lifecycle_status": "planned",
+                "observability": {
+                    "execution_unit": "task",
+                    "log_scope": "task-execution",
+                    "audit_fields": ["run_id"],
+                },
+                "evidence_requirements": {"required_refs": ["FEAT-169"], "review_required": True},
+                "rollback_strategy": {"mode": "revert", "restore_targets": ["src/lee/orchestrator"]},
+                "ssot": {
+                    "identity_kind": "ssot",
+                    "ssot_type": "TASK",
+                    "parent": "FEAT-169",
+                    "derived_from": "FEAT-169#delivery",
+                },
+            }
+        ],
+        "milestones": [{"id": "M1", "name": "实现", "task_ids": ["TASK-FEAT-169-001"], "acceptance_criteria": "完成"}],
+        "dependency_graph": {"critical_path": ["TASK-FEAT-169-001"]},
+        "resource_allocation": {"config-system-owner": {"tasks": ["TASK-FEAT-169-001"]}},
+        "risk_mitigation": [],
+    }
+
+    normalized_business, _ = runner._normalize_pm_planner_task_payload(
+        step=SimpleNamespace(id="task_planning", agent_id="agent.product.pm_planner"),
+        workflow_id="wf-task-169-governance",
+        business_output=business_output,
+        structured_payload={},
+        instance_data={"params": {"feat_freeze_ref": str(feat_path)}},
+    )
+
+    governance_task = normalized_business["task_specs"][0]
+
+    assert governance_task["task_id"] == "TASK-FEAT-169-000"
+    assert governance_task["title"] == "执行器配置优先级与验证规则规范"
+    assert governance_task["responsible_role"] == "executor-config-governance-owner"
+    assert normalized_business["planning_metadata"]["task_directory"] == "spec/tasks/FEAT-169"
 
 
 def test_governance_preflight_accepts_acceptance_brief_anchor(temp_project_root, runner):
@@ -984,6 +1086,44 @@ def test_build_executor_input_bridges_agent_step_to_codex(temp_project_root, run
     assert input_data["token_context"] == "encoded-token"
 
 
+def test_build_executor_input_bridges_agent_step_to_kimi(temp_project_root, runner, ctx):
+    instance = SimpleNamespace(data={"run_id": "run-001"})
+    step = SimpleNamespace(
+        id="spec_maintenance",
+        agent_id="agent.governance.spec_maintainer",
+        config={
+            "claude_code": {
+                "max_iterations": 3,
+                "allowed_commands": ["Get-ChildItem"],
+            }
+        },
+    )
+    agent_ctx = SimpleNamespace(
+        system_prompt="system rules",
+        user_prompt="maintain the target spec",
+        temperature=0.2,
+        max_tokens=1200,
+    )
+    ctx.resolve_workdir = MagicMock(return_value=str(temp_project_root))
+    ctx.token_manager.encode_token_for_context.return_value = "encoded-token"
+
+    input_data = runner._build_executor_input(
+        executor_type="kimi",
+        step=step,
+        ctx=ctx,
+        instance=instance,
+        workflow_id="wf-001",
+        agent_ctx=agent_ctx,
+        step_token="raw-token",
+    )
+
+    assert input_data["goal"] == "maintain the target spec"
+    assert input_data["workspace"] == str(temp_project_root)
+    assert input_data["system_prompt_extra"] == "system rules"
+    assert input_data["allowed_commands"] == ["Get-ChildItem"]
+    assert input_data["token_context"] == "encoded-token"
+
+
 def test_claude_code_input_defaults_silence_timeout_to_executor_default(temp_project_root):
     agent_ctx = SimpleNamespace(
         system_prompt="system rules",
@@ -1046,6 +1186,53 @@ async def test_claude_code_runner_builds_llm_prompt_for_qwen_override(temp_proje
     assert execution.input_data["system_message"] == "system rules"
     assert "goal" not in execution.input_data
     assert "workspace" not in execution.input_data
+
+
+@pytest.mark.asyncio
+async def test_claude_code_runner_builds_code_prompt_for_kimi_override(temp_project_root, ctx):
+    runner = ClaudeCodeRunner()
+    step = SimpleNamespace(
+        id="feat_boundary_design",
+        agent_id="agent.product.requirement_decomposer",
+        executor_type="claude_code",
+        config={"claude_code": {"allowed_commands": ["Get-ChildItem"]}},
+        outputs=[],
+    )
+    instance = SimpleNamespace(
+        data={"executor_override": "kimi", "run_id": "run-kimi-001"},
+        template_id="workflow.product.task.epic_to_feat",
+    )
+    ctx.store.get_workflow = AsyncMock(return_value=instance)
+    ctx.store.create_task_execution = AsyncMock()
+    ctx.store.update_task_execution = AsyncMock()
+    ctx.state_machine.fail_step = AsyncMock()
+    ctx.contract_discovery.get_workflow_inputs.return_value = None
+    ctx.agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="system rules",
+            user_prompt="拆解 EPIC",
+            temperature=0.2,
+            max_tokens=1024,
+        )
+    )
+    ctx.token_manager.issue_token.return_value = None
+    ctx.resolve_workdir = MagicMock(return_value=str(temp_project_root))
+
+    executor = MagicMock()
+    executor.execute = AsyncMock(return_value={"status": "failed", "error": "boom"})
+    ctx.executor_factory.create.return_value = executor
+
+    result = await runner.execute("wf-kimi-001", step, ctx)
+
+    assert result.status == "failed"
+    execution = ctx.store.create_task_execution.await_args.args[0]
+    assert execution.executor_type == "kimi"
+    assert execution.input_data["goal"] == "拆解 EPIC"
+    assert execution.input_data["workspace"] == str(temp_project_root)
+    assert execution.input_data["system_prompt_extra"] == "system rules"
+    assert execution.input_data["allowed_commands"] == ["Get-ChildItem"]
+    assert "prompt" not in execution.input_data
+    assert "system_message" not in execution.input_data
 
 
 def test_extract_declared_output_values_reads_scalar_files(temp_project_root, runner):
@@ -2195,6 +2382,137 @@ def test_validate_delivery_plan_review_subject_refs_requires_exact_match(runner)
     )
 
 
+def test_validate_delivery_plan_review_semantics_rejects_false_positive_revise_findings(
+    temp_project_root, runner
+):
+    task_dir = temp_project_root / "spec" / "tasks" / "FEAT-143"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "TASK-FEAT-143-001__entry-spec.md").write_text("# task", encoding="utf-8")
+
+    payload = {
+        "review_type": "delivery_plan_review",
+        "subject_refs": ["FEAT-143"],
+        "summary": "delivery review completed",
+        "decision": "revise",
+        "findings": [
+            "TASK-FEAT-143-001 objective exists",
+            "task_directory is spec/tasks/FEAT-143 consistent with FEAT-ID",
+        ],
+        "risks": [],
+        "recommendations": [],
+    }
+    instance_data = {
+        "step_outputs": {
+            "task_planning": {
+                "business_output": {
+                    "source_feats": ["FEAT-143"],
+                    "planning_metadata": {"task_directory": "spec/tasks/FEAT-143"},
+                    "task_specs": [{"task_id": "TASK-FEAT-143-001", "source_feat": "FEAT-143"}],
+                }
+            }
+        }
+    }
+
+    error = runner._validate_delivery_plan_review_semantics(
+        project_root=str(temp_project_root),
+        review_payload=payload,
+        instance_data=instance_data,
+    )
+
+    assert error == "Delivery plan review findings contain no blocking issues"
+
+
+def test_validate_delivery_plan_review_semantics_rejects_false_unverified_persistence_and_spec_gap(
+    temp_project_root, runner
+):
+    features_dir = temp_project_root / "spec" / "requirements" / "features"
+    features_dir.mkdir(parents=True, exist_ok=True)
+    (features_dir / "FEAT-143__qa-entry.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "id: FEAT-143",
+                "title: QA 执行入口规范化",
+                "parent_id: EPIC-QA-SSOT-UPGRADE",
+                "---",
+                "",
+                "## AC-003-001",
+                "- Scenario: 执行入口唯一性验证",
+                "- Then: 仅允许通过 TASK 触发执行",
+                "",
+                "## AC-003-002",
+                "- Scenario: 执行路径完整性校验",
+                "- Then: 系统验证 RELEASE->PLAN->TASK 链路完整且有效",
+                "",
+                "## AC-003-003",
+                "- Scenario: 旁路执行入口阻断验证",
+                "- Then: 系统拒绝旁路请求并返回入口规范错误",
+                "",
+                "## AC-003-004",
+                "- Scenario: 执行入口审计验证",
+                "- Then: 日志中包含每次执行的入口来源、路径链、时间戳、操作用户",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    task_dir = temp_project_root / "spec" / "tasks" / "FEAT-143"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    for task_id in ("TASK-FEAT-143-001", "TASK-FEAT-143-002"):
+        (task_dir / f"{task_id}__demo.md").write_text("# task", encoding="utf-8")
+
+    payload = {
+        "review_type": "delivery_plan_review",
+        "subject_refs": ["FEAT-143"],
+        "summary": "needs revise",
+        "decision": "revise",
+        "findings": [
+            "FEAT-143 structural AC only map to implementation tasks without explicit spec/template coverage",
+            "task_plan.ssot_output_contract.outputs indicate task content generation but actual file persistence status unverified",
+        ],
+        "risks": [],
+        "recommendations": [],
+    }
+    instance_data = {
+        "step_outputs": {
+            "task_planning": {
+                "business_output": {
+                    "source_feats": ["FEAT-143"],
+                    "planning_metadata": {"task_directory": "spec/tasks/FEAT-143"},
+                    "task_specs": [
+                        {
+                            "task_id": "TASK-FEAT-143-001",
+                            "source_feat": "FEAT-143",
+                            "task_kind": "specification",
+                            "acceptance_criteria_mapping": [
+                                {"feat": "FEAT-143", "ac": "AC-003-001"},
+                                {"feat": "FEAT-143", "ac": "AC-003-002"},
+                                {"feat": "FEAT-143", "ac": "AC-003-003"},
+                                {"feat": "FEAT-143", "ac": "AC-003-004"},
+                            ],
+                        },
+                        {
+                            "task_id": "TASK-FEAT-143-002",
+                            "source_feat": "FEAT-143",
+                            "task_kind": "implementation",
+                        },
+                    ],
+                }
+            }
+        }
+    }
+
+    error = runner._validate_delivery_plan_review_semantics(
+        project_root=str(temp_project_root),
+        review_payload=payload,
+        instance_data=instance_data,
+    )
+
+    assert error in {
+        "Delivery plan review incorrectly reports TASK persistence as unverified",
+        "Delivery plan review incorrectly reports missing structural specification coverage",
+    }
+
+
 def test_validate_feat_bundle_epic_semantics_accepts_governance_bundle(temp_project_root, runner):
     epic_path = temp_project_root / "spec" / "requirements" / "epics" / "EPIC-001__workflow-first.md"
     epic_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3332,12 +3650,162 @@ def test_normalize_pm_planner_payload_writes_extended_task_sections_and_director
         structured_payload={"business_output": business_output},
     )
 
-    assert normalized_business["planning_metadata"]["task_directory"] == "spec/tasks/<FEAT-ID>"
+    assert normalized_business["planning_metadata"]["task_directory"] == "spec/tasks/EPIC-030"
     output = normalized_structured["ssot_output_contract"]["outputs"][0]
     assert "## Prerequisites" in output["content"]
     assert "## Observability" in output["content"]
     assert "## Evidence Requirements" in output["content"]
     assert "## Rollback Strategy" in output["content"]
+
+
+def test_pm_planner_normalization_preserves_concrete_task_directory_and_injects_governance_task(
+    temp_project_root, runner
+):
+    feat_dir = temp_project_root / "spec" / "requirements" / "features"
+    feat_dir.mkdir(parents=True, exist_ok=True)
+    feat_path = feat_dir / "FEAT-143__qa-entry.md"
+    feat_path.write_text(
+        "\n".join(
+            [
+                "---",
+                "id: FEAT-143",
+                "title: QA 执行入口规范化",
+                "parent_id: EPIC-QA-SSOT-UPGRADE",
+                "---",
+                "",
+                "## AC-003-001",
+                "- Scenario: 执行入口唯一性验证",
+                "- Then: 仅允许通过 TASK 触发执行",
+                "",
+                "## AC-003-002",
+                "- Scenario: 执行路径完整性校验",
+                "- Then: 系统验证 release_ref -> testplan_ref -> task_ref 链路完整且有效",
+                "",
+                "## AC-003-003",
+                "- Scenario: 旁路执行入口阻断验证",
+                "- Then: 系统拒绝旁路请求并返回入口规范错误，记录审计日志",
+                "",
+                "## AC-003-004",
+                "- Scenario: 执行入口审计验证",
+                "- Then: 日志中包含每次执行的入口来源、路径链、时间戳、操作用户",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    business_output = {
+        "parent_epic": "EPIC-QA-SSOT-UPGRADE",
+        "source_feats": ["FEAT-143"],
+        "planning_metadata": {
+            "project_profile": "qa_execution_gateway",
+            "task_directory": "spec/tasks/FEAT-143",
+        },
+        "task_specs": [
+            {
+                "task_id": "TASK-FEAT-143-001",
+                "title": "执行入口路由与路径校验规则实现",
+                "objective": "实现 QA 测试执行的唯一入口路由规则",
+                "description": "基于 FEAT-143 执行入口规范，实现执行请求路由层并阻断旁路请求",
+                "source_feat": "FEAT-143",
+                "workstream": "qa-execution-runtime",
+                "task_kind": "implementation",
+                "responsible_role": "qa-runtime-owner",
+                "acceptance_criteria_mapping": [
+                    {"feat": "FEAT-143", "ac": "AC-003-001", "description": "唯一入口"},
+                    {"feat": "FEAT-143", "ac": "AC-003-002", "description": "路径校验"},
+                    {"feat": "FEAT-143", "ac": "AC-003-003", "description": "旁路阻断"},
+                ],
+                "prerequisites": [],
+                "dependencies": [],
+                "definition_of_done": ["入口路由实现完成"],
+                "priority": "P0",
+                "milestone": "M1",
+                "estimated_effort": "3 days",
+                "lifecycle_status": "planned",
+                "observability": {
+                    "execution_unit": "task",
+                    "log_scope": "qa-entry-gateway",
+                    "audit_fields": ["run_id"],
+                },
+                "evidence_requirements": {"required_refs": ["FEAT-143"], "review_required": True},
+                "rollback_strategy": {"mode": "revert", "restore_targets": ["src/lee/qa/execution/gateway"]},
+                "ssot": {
+                    "identity_kind": "ssot",
+                    "ssot_type": "TASK",
+                    "parent": "FEAT-143",
+                    "derived_from": "FEAT-143#delivery",
+                },
+            },
+            {
+                "task_id": "TASK-FEAT-143-002",
+                "title": "审计日志与 SSOT 绑定追踪实现",
+                "objective": "建立执行入口的完整审计追踪能力",
+                "description": "实现审计日志结构化记录和查询接口",
+                "source_feat": "FEAT-143",
+                "workstream": "qa-execution-audit",
+                "task_kind": "implementation",
+                "responsible_role": "qa-audit-owner",
+                "acceptance_criteria_mapping": [
+                    {"feat": "FEAT-143", "ac": "AC-003-004", "description": "审计追溯"},
+                ],
+                "prerequisites": ["TASK-FEAT-143-001 入口路由规则已实现"],
+                "dependencies": ["TASK-FEAT-143-001"],
+                "definition_of_done": ["审计日志实现完成"],
+                "priority": "P0",
+                "milestone": "M1",
+                "estimated_effort": "2 days",
+                "lifecycle_status": "planned",
+                "observability": {
+                    "execution_unit": "task",
+                    "log_scope": "qa-audit-trail",
+                    "audit_fields": ["run_id"],
+                },
+                "evidence_requirements": {"required_refs": ["FEAT-143"], "review_required": True},
+                "rollback_strategy": {"mode": "revert", "restore_targets": ["src/lee/qa/execution/audit"]},
+                "ssot": {
+                    "identity_kind": "ssot",
+                    "ssot_type": "TASK",
+                    "parent": "FEAT-143",
+                    "derived_from": "FEAT-143#delivery",
+                },
+            },
+        ],
+        "milestones": [
+            {
+                "id": "M1",
+                "name": "执行入口规范化",
+                "task_ids": ["TASK-FEAT-143-001", "TASK-FEAT-143-002"],
+                "acceptance_criteria": "FEAT-143 所有 AC 可验证",
+            }
+        ],
+        "dependency_graph": {
+            "critical_path": ["TASK-FEAT-143-001", "TASK-FEAT-143-002"],
+            "dependencies": [{"from": "TASK-FEAT-143-002", "to": "TASK-FEAT-143-001", "type": "prerequisite"}],
+        },
+        "resource_allocation": {
+            "qa-runtime-owner": {"tasks": ["TASK-FEAT-143-001"]},
+            "qa-audit-owner": {"tasks": ["TASK-FEAT-143-002"]},
+        },
+        "risk_mitigation": [],
+    }
+
+    normalized_business, _ = runner._normalize_pm_planner_task_payload(
+        step=SimpleNamespace(id="task_planning", agent_id="agent.product.pm_planner"),
+        workflow_id="wf-task-143-real-shape",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+        instance_data={"params": {"feat_freeze_ref": str(feat_path)}},
+    )
+
+    assert normalized_business["planning_metadata"]["task_directory"] == "spec/tasks/FEAT-143"
+    assert normalized_business["task_specs"][0]["task_id"] == "TASK-FEAT-143-000"
+    assert normalized_business["task_specs"][0]["task_kind"] == "governance"
+    governance_ac_ids = [
+        item["ac"] for item in normalized_business["task_specs"][0]["acceptance_criteria_mapping"]
+    ]
+    assert "AC-003-003" in governance_ac_ids
+    assert normalized_business["task_specs"][1]["dependencies"][0] == "TASK-FEAT-143-000"
+    assert normalized_business["milestones"][0]["id"] == "M0-Governance-Baseline"
 
 
 def test_synthesize_single_ssot_payload_creates_tech_contract_from_written_markdown(tmp_path, runner):

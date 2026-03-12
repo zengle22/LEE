@@ -62,6 +62,24 @@ def diagnose_executor_error(error: str | None) -> List[str]:
             ]
         )
 
+    if "kimi cli binary not found" in text:
+        hints.extend(
+            [
+                "确认 Kimi CLI 已安装，并且 `kimi-cli --help` 可在当前终端直接执行。",
+                "如果二进制不在 PATH 中，设置 `KIMI_CLI_BINARY` 指向正确的可执行文件。",
+            ]
+        )
+    elif "kimi cli invocation failed" in text and (
+        "winerror 5" in text or "拒绝访问" in raw
+    ):
+        hints.extend(
+            [
+                "这是 Kimi CLI 启动权限问题，不是 workflow 输入问题。",
+                "先手动执行 `kimi-cli --help`，确认当前用户对 Kimi 可执行文件和工作目录有访问权限。",
+                "检查 Windows Defender、企业安全策略或 AppLocker 是否拦截了 `kimi-cli`。",
+            ]
+        )
+
     if "environment diagnosis:" in text or "环境排查:" in raw:
         return []
     return hints

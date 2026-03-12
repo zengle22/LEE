@@ -322,6 +322,12 @@ class LLMRunner(StepRunnerBase):
             "链路",
             "路径",
             "校验",
+            "优先级",
+            "priority",
+            "来源",
+            "source",
+            "source tracing",
+            "cli_override",
             "旁路",
             "阻断",
             "bypass",
@@ -501,7 +507,7 @@ class LLMRunner(StepRunnerBase):
         agent_ctx,
         step_token: Optional[str],
     ) -> Dict[str, Any]:
-        if executor_type in ("codex", "claude_code"):
+        if executor_type in ("codex", "claude_code", "kimi"):
             code_config = step.config.get("claude_code", {}) if step.config else {}
             workspace = ctx.resolve_workdir(step, instance.data.get("run_id", workflow_id))
             context_files = self._merge_context_files(
@@ -1243,6 +1249,12 @@ class LLMRunner(StepRunnerBase):
                     business_output,
                     expected_subject_refs,
                 )
+                if not semantic_error:
+                    semantic_error = self._validate_delivery_plan_review_semantics(
+                        project_root=ctx.project_root,
+                        review_payload=business_output,
+                        instance_data=instance.data,
+                    )
             if semantic_error:
                 await ctx.state_machine.fail_step(workflow_id, step.id, semantic_error)
                 await ctx.store.update_task_execution(
@@ -3213,37 +3225,106 @@ class LLMRunner(StepRunnerBase):
                 return []
             return LLMRunner._load_feat_acceptance_checks(str(project_root), feat_id)
 
-        def _is_governance_feat_scope(feat_id: str) -> bool:
+        def _load_formal_feat_title(feat_id: str) -> str:
             if not isinstance(project_root, Path):
-                return False
-            markdown = LLMRunner._load_ssot_markdown(str(project_root), feat_id)
-            if not isinstance(markdown, str) or not markdown.strip():
-                return False
-            source_families = LLMRunner._extract_topic_families(markdown)
-            if "governance" in source_families:
-                return True
-            return any(
-                LLMRunner._text_contains_keyword(
-                    markdown,
-                    keyword,
-                )
-                for keyword in (
-                    "workflow",
-                    "pipeline",
-                    "freeze",
-                    "gate",
-                    "registry",
-                    "migration guide",
-                    "调用文档",
-                    "契约",
-                    "文档",
-                    "模板",
-                    "工作流",
-                    "冻结",
-                    "门禁",
-                    "治理",
-                )
+                return ""
+            features_dir = project_root / "spec" / "requirements" / "features"
+            if not features_dir.exists():
+                return ""
+            for candidate in sorted(features_dir.glob(f"{feat_id}__*.md")):
+                frontmatter = LLMRunner._load_yaml_frontmatter(candidate) or {}
+                title = _clean_text(frontmatter.get("title"))
+                if title:
+                    return title
+            return ""
+
+        def _requires_structural_governance_task(structural_checks: List[Dict[str, Any]]) -> bool:
+            strong_markers = (
+                "rule-",
+                "状态机",
+                "链路",
+                "路径",
+                "旁路",
+                "入口",
+                "bypass",
+                "stage order",
+                "phase order",
+                "schema",
+                "template",
+                "错误码",
+                "优先级",
+                "priority",
+                "来源",
+                "source",
+                "cli_override",
             )
+            for check in structural_checks:
+                if not isinstance(check, dict):
+                    continue
+                text = " ".join(
+                    _clean_text(check.get(key))
+                    for key in ("scenario", "given", "when", "then", "raw_text")
+                )
+                if any(LLMRunner._text_contains_keyword(text, marker) for marker in strong_markers):
+                    return True
+            return False
+
+        def _classify_structural_governance_theme(
+            feat_title: str,
+            structural_checks: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            combined_text = " ".join(
+                _clean_text(item.get(key))
+                for item in structural_checks
+                if isinstance(item, dict)
+                for key in ("scenario", "given", "when", "then", "raw_text")
+            )
+            combined_text = f"{feat_title} {combined_text}".strip()
+
+            if any(
+                LLMRunner._text_contains_keyword(combined_text, marker)
+                for marker in (
+                    "优先级",
+                    "priority",
+                    "来源",
+                    "source",
+                    "executor",
+                    "执行器",
+                    "cli_override",
+                    "config_file",
+                    "default",
+                )
+            ):
+                return {
+                    "title": "执行器配置优先级与验证规则规范",
+                    "objective": "冻结执行器类型选择、优先级判定、来源追踪与错误处理边界，作为实现任务的前置规范基线",
+                    "description": "在正式实现前冻结执行器配置规范，覆盖执行器类型白名单、CLI/环境变量/配置文件/默认值的优先级规则、来源追踪字段和错误信息模板，避免结构性规则散落在实现代码中。",
+                    "responsible_role": "executor-config-governance-owner",
+                    "milestone_name": "配置规范冻结",
+                    "milestone_acceptance": "执行器类型、优先级规则和错误处理边界已冻结",
+                }
+
+            if any(
+                LLMRunner._text_contains_keyword(combined_text, marker)
+                for marker in ("入口", "链路", "路径", "旁路", "bypass", "状态机")
+            ):
+                return {
+                    "title": "执行入口链路规则与状态机规范",
+                    "objective": "冻结执行入口链路规则、状态机边界和错误处理约束，作为实现任务的前置规范基线",
+                    "description": "在正式实现前冻结执行入口规范，覆盖路径校验边界、状态转换约束、旁路阻断规则和错误码映射，避免结构性规则直接埋入实现代码。",
+                    "responsible_role": "workflow-governance-owner",
+                    "milestone_name": "规则规范冻结",
+                    "milestone_acceptance": "执行链路规则、状态机和错误码边界已冻结",
+                }
+
+            return {
+                "title": f"{feat_title or '结构性规则'}规范冻结任务",
+                "objective": "冻结结构性规则、约束边界和模板契约，作为实现任务的前置规范基线",
+                "description": "在正式实现前冻结结构性规则，覆盖关键约束、契约边界、模板要求和错误处理基线，避免规范含义在实现过程中漂移。",
+                "responsible_role": "governance-owner",
+                "milestone_name": "规范冻结",
+                "milestone_acceptance": "结构性规则和契约边界已冻结",
+            }
 
         def _remap_acceptance_mapping(
             mappings: Any,
@@ -3291,6 +3372,8 @@ class LLMRunner(StepRunnerBase):
                 return True
             if task_kind in {"governance", "specification", "template"}:
                 return True
+            if task_kind == "implementation":
+                return False
 
             combined = " ".join(
                 [
@@ -3309,7 +3392,8 @@ class LLMRunner(StepRunnerBase):
                 "状态机",
                 "规则定义",
                 "规则集",
-                "规范",
+                "规范文档",
+                "规范冻结",
             )
             return any(LLMRunner._text_contains_keyword(combined, keyword) for keyword in structural_keywords)
 
@@ -3320,13 +3404,14 @@ class LLMRunner(StepRunnerBase):
                 return
 
             primary_feat = _clean_text(source_feats[0]) or "FEAT-001"
+            feat_title = _load_formal_feat_title(primary_feat)
             formal_checks = _load_formal_acceptance_checks_for_feat(primary_feat)
             structural_checks = [
                 check for check in formal_checks if LLMRunner._is_structural_acceptance_check(check)
             ]
             if not structural_checks:
                 return
-            if not _is_governance_feat_scope(primary_feat):
+            if not _requires_structural_governance_task(structural_checks):
                 return
             if any(_task_is_structural(task_spec) for task_spec in task_specs if isinstance(task_spec, dict)):
                 return
@@ -3344,21 +3429,22 @@ class LLMRunner(StepRunnerBase):
             if not mapped_checks:
                 return
 
+            governance_theme = _classify_structural_governance_theme(feat_title, structural_checks)
             governance_task = {
                 "task_id": structural_task_id,
-                "title": "QA 执行入口链路规则与状态机规范",
-                "objective": "定义 RELEASE -> PLAN -> TASK 链路校验规则、状态机边界和错误码映射，作为实现任务的先决规范",
-                "description": "在正式实现前冻结执行入口规则集，覆盖 RULE-001~RULE-006、路径校验边界、状态转换约束、错误码映射和审计字段契约，避免结构性规则直接埋入实现代码。",
+                "title": governance_theme["title"],
+                "objective": governance_theme["objective"],
+                "description": governance_theme["description"],
                 "source_feat": primary_feat,
                 "workstream": "governance-spec",
                 "task_kind": "governance",
-                "responsible_role": "qa-execution-governance-owner",
+                "responsible_role": governance_theme["responsible_role"],
                 "acceptance_criteria_mapping": mapped_checks,
                 "prerequisites": [],
                 "dependencies": [],
                 "definition_of_done": [
-                    "链路规则和状态机规范文档已冻结",
-                    "错误码与规则映射表已定义",
+                    "结构性规则和契约边界文档已冻结",
+                    "规范任务已覆盖相关结构性 Acceptance Checks",
                     "实现任务已明确引用该规范任务作为前置依赖",
                 ],
                 "priority": "P0",
@@ -3407,9 +3493,9 @@ class LLMRunner(StepRunnerBase):
                     0,
                     {
                         "id": "M0-Governance-Baseline",
-                        "name": "规则规范冻结",
+                        "name": governance_theme["milestone_name"],
                         "task_ids": [structural_task_id],
-                        "acceptance_criteria": "执行链路规则、状态机和错误码边界已冻结",
+                        "acceptance_criteria": governance_theme["milestone_acceptance"],
                     },
                 )
 
@@ -3422,11 +3508,11 @@ class LLMRunner(StepRunnerBase):
             resource_allocation = normalized_business.get("resource_allocation")
             if isinstance(resource_allocation, dict):
                 resource_allocation.setdefault(
-                    "qa-execution-governance-owner",
+                    governance_theme["responsible_role"],
                     {"tasks": []},
                 )
-                if structural_task_id not in resource_allocation["qa-execution-governance-owner"]["tasks"]:
-                    resource_allocation["qa-execution-governance-owner"]["tasks"].insert(0, structural_task_id)
+                if structural_task_id not in resource_allocation[governance_theme["responsible_role"]]["tasks"]:
+                    resource_allocation[governance_theme["responsible_role"]]["tasks"].insert(0, structural_task_id)
 
         def _format_string_list_section(heading: str, values: Any) -> List[str]:
             if not isinstance(values, list) or not values:
@@ -3880,9 +3966,29 @@ class LLMRunner(StepRunnerBase):
         _ensure_structural_governance_task(normalized_business)
         planning_metadata = normalized_business.get("planning_metadata")
         if isinstance(planning_metadata, dict):
+            task_directory = _clean_text(planning_metadata.get("task_directory"))
+            primary_feat = next(
+                (
+                    _clean_text(item)
+                    for item in source_feat_ids
+                    if isinstance(item, str) and _clean_text(item)
+                ),
+                "",
+            )
+            if not primary_feat and isinstance(normalized_business.get("task_specs"), list):
+                primary_feat = next(
+                    (
+                        _clean_text(item.get("source_feat"))
+                        for item in normalized_business.get("task_specs") or []
+                        if isinstance(item, dict) and _clean_text(item.get("source_feat"))
+                    ),
+                    "",
+                )
+            if not task_directory or "<FEAT-ID>" in task_directory:
+                task_directory = f"spec/tasks/{primary_feat or 'FEAT-001'}"
             normalized_business["planning_metadata"] = {
                 **planning_metadata,
-                "task_directory": "spec/tasks/<FEAT-ID>",
+                "task_directory": task_directory,
             }
 
         normalized_structured = LLMRunner._ensure_structured_envelope(
@@ -4327,7 +4433,7 @@ class LLMRunner(StepRunnerBase):
             structured_payload=structured_payload,
         )
         repaired_input = dict(input_data)
-        if executor_type in ("codex", "claude_code"):
+        if executor_type in ("codex", "claude_code", "kimi"):
             repaired_input["goal"] = repair_prompt
             repaired_input["context_files"] = []
             repaired_input["write_scope"] = []
@@ -4378,7 +4484,7 @@ class LLMRunner(StepRunnerBase):
         if not isinstance(repaired_output, dict):
             return None
 
-        if executor_type in ("codex", "claude_code"):
+        if executor_type in ("codex", "claude_code", "kimi"):
             repaired_business_output, repaired_structured_payload = ClaudeCodeRunner._extract_business_output_for_validation(
                 step=step,
                 workflow_id=workflow_id,
@@ -4544,6 +4650,207 @@ class LLMRunner(StepRunnerBase):
                 "Delivery plan review subject_refs must exactly match the planned FEAT ID(s): "
                 + ", ".join(sorted(expected))
             )
+        return None
+
+    @classmethod
+    def _load_task_plan_business_output(cls, instance_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not isinstance(instance_data, dict):
+            return None
+        step_outputs = instance_data.get("step_outputs")
+        if not isinstance(step_outputs, dict):
+            return None
+        task_planning = step_outputs.get("task_planning")
+        if not isinstance(task_planning, dict):
+            return None
+        business_output = task_planning.get("business_output")
+        if isinstance(business_output, dict):
+            return business_output
+        generated_text = task_planning.get("generated_text")
+        if isinstance(generated_text, str) and generated_text.strip():
+            parsed = cls._parse_structured_output_if_possible(generated_text)
+            if isinstance(parsed, dict):
+                nested = parsed.get("business_output")
+                if isinstance(nested, dict):
+                    return nested
+                return parsed
+        return None
+
+    @staticmethod
+    def _review_clean_text(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    @classmethod
+    def _delivery_plan_has_persisted_tasks(
+        cls,
+        *,
+        project_root: str,
+        task_plan: Optional[Dict[str, Any]],
+    ) -> bool:
+        if not isinstance(task_plan, dict):
+            return False
+        planning_metadata = task_plan.get("planning_metadata")
+        task_directory = ""
+        if isinstance(planning_metadata, dict):
+            task_directory = cls._review_clean_text(planning_metadata.get("task_directory"))
+        if not task_directory:
+            source_feats = task_plan.get("source_feats") if isinstance(task_plan.get("source_feats"), list) else []
+            primary_feat = next(
+                (
+                    cls._review_clean_text(item)
+                    for item in source_feats
+                    if isinstance(item, str) and cls._review_clean_text(item)
+                ),
+                "",
+            )
+            task_directory = f"spec/tasks/{primary_feat or 'FEAT-001'}"
+        task_dir_path = Path(project_root) / task_directory
+        task_specs = task_plan.get("task_specs") if isinstance(task_plan.get("task_specs"), list) else []
+        if not task_dir_path.exists() or not task_specs:
+            return False
+        for task_spec in task_specs:
+            if not isinstance(task_spec, dict):
+                continue
+            task_id = cls._review_clean_text(task_spec.get("task_id"))
+            if not task_id:
+                continue
+            if not list(task_dir_path.glob(f"{task_id}__*.md")):
+                return False
+        return True
+
+    @classmethod
+    def _delivery_plan_has_structural_spec_coverage(
+        cls,
+        *,
+        project_root: str,
+        task_plan: Optional[Dict[str, Any]],
+    ) -> bool:
+        if not isinstance(task_plan, dict):
+            return False
+        source_feats = task_plan.get("source_feats") if isinstance(task_plan.get("source_feats"), list) else []
+        primary_feat = next(
+            (
+                cls._review_clean_text(item)
+                for item in source_feats
+                if isinstance(item, str) and cls._review_clean_text(item)
+            ),
+            "",
+        )
+        if not primary_feat:
+            return False
+        formal_checks = cls._load_feat_acceptance_checks(project_root, primary_feat)
+        structural_ids = {
+            str(item.get("id")).strip()
+            for item in formal_checks
+            if isinstance(item, dict)
+            and str(item.get("id") or "").strip()
+            and cls._is_structural_acceptance_check(item)
+        }
+        if not structural_ids:
+            return False
+        task_specs = task_plan.get("task_specs") if isinstance(task_plan.get("task_specs"), list) else []
+        covered_ids: set[str] = set()
+        for task_spec in task_specs:
+            if not isinstance(task_spec, dict):
+                continue
+            task_kind = _clean_text(task_spec.get("task_kind")).lower()
+            if task_kind not in {"governance", "specification", "template"}:
+                continue
+            mappings = task_spec.get("acceptance_criteria_mapping")
+            if not isinstance(mappings, list):
+                continue
+            for mapping in mappings:
+                if not isinstance(mapping, dict):
+                    continue
+                ac_id = cls._review_clean_text(mapping.get("ac"))
+                if ac_id in structural_ids:
+                    covered_ids.add(ac_id)
+        return structural_ids.issubset(covered_ids)
+
+    @classmethod
+    def _contains_delivery_plan_false_positive(cls, text: str) -> bool:
+        lowered = text.strip().lower()
+        if not lowered:
+            return False
+        positive_patterns = [
+            r"\bexists\b",
+            r"\bdefined\b",
+            r"\bcovers\b",
+            r"\bconsistent\b",
+            r"\bcan be derived\b",
+            r"\bhas \d+\b",
+            r"\bverified\b",
+            r"\bavailable\b",
+            r"存在",
+            r"已定义",
+            r"一致",
+            r"可推导",
+            r"可得",
+            r"已覆盖",
+            r"已落盘",
+        ]
+        return any(re.search(pattern, lowered) for pattern in positive_patterns)
+
+    @classmethod
+    def _validate_delivery_plan_review_semantics(
+        cls,
+        *,
+        project_root: str,
+        review_payload: Any,
+        instance_data: Optional[Dict[str, Any]],
+    ) -> Optional[str]:
+        if not isinstance(review_payload, dict):
+            return "Delivery plan review output is not a structured object"
+
+        if review_payload.get("review_type") != "delivery_plan_review":
+            return "Delivery plan review output must set review_type=delivery_plan_review"
+
+        summary = review_payload.get("summary")
+        if not isinstance(summary, str) or not summary.strip():
+            return "Delivery plan review output must include a non-empty summary"
+
+        decision = review_payload.get("decision")
+        if decision not in {"pass", "revise", "reject"}:
+            return "Delivery plan review output decision must be one of: pass, revise, reject"
+
+        for field_name in ("findings", "risks", "recommendations"):
+            value = review_payload.get(field_name)
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                return f"Delivery plan review output field '{field_name}' must be a string array"
+
+        findings = [item.strip() for item in review_payload.get("findings") or [] if isinstance(item, str) and item.strip()]
+        if decision == "pass":
+            if findings:
+                return "Delivery plan review output with decision=pass must not include findings"
+            if cls._contains_feat_review_negative_signal(summary):
+                return "Delivery plan review summary conflicts with decision=pass"
+
+        if decision in {"revise", "reject"} and not findings:
+            return f"Delivery plan review output with decision={decision} must include at least one finding"
+
+        task_plan = cls._load_task_plan_business_output(instance_data)
+        if decision == "revise":
+            if findings and all(cls._contains_delivery_plan_false_positive(item) for item in findings):
+                return "Delivery plan review findings contain no blocking issues"
+
+            all_review_text = "\n".join(
+                findings
+                + [item.strip() for item in review_payload.get("risks") or [] if isinstance(item, str)]
+                + [item.strip() for item in review_payload.get("recommendations") or [] if isinstance(item, str)]
+            )
+            if re.search(r"落盘|persist|persistence|unverified", all_review_text, re.IGNORECASE):
+                if cls._delivery_plan_has_persisted_tasks(project_root=project_root, task_plan=task_plan):
+                    return "Delivery plan review incorrectly reports TASK persistence as unverified"
+            if re.search(r"spec/template coverage|规范任务|模板任务|specification", all_review_text, re.IGNORECASE):
+                if cls._delivery_plan_has_structural_spec_coverage(project_root=project_root, task_plan=task_plan):
+                    return "Delivery plan review incorrectly reports missing structural specification coverage"
+
+            return "Delivery plan review requires revision before freeze"
+
+        if decision == "reject":
+            return "Delivery plan review rejected the generated delivery plan"
+
         return None
 
     @staticmethod
@@ -5804,7 +6111,7 @@ class ClaudeCodeRunner(StepRunnerBase):
         if success_criteria.get("require_new_commit"):
             head_before = self._git_head(workspace)
 
-        if executor_type in ("qwen", "kimi", "llm"):
+        if executor_type in ("qwen", "llm"):
             input_data = self._build_llm_alias_input_data(agent_ctx=agent_ctx)
         else:
             input_data = self._build_claude_code_input_data(
@@ -5837,7 +6144,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             input_data["token_context"] = ctx.token_manager.encode_token_for_context(step_token)
 
         # Evidence 目录仅适用于 code-style 执行器
-        if executor_type not in ("qwen", "kimi", "llm"):
+        if executor_type not in ("qwen", "llm"):
             run_id = instance.data.get("run_id", workflow_id)
             evidence_base = str(
                 Path(workspace) / ".workflow" / "claude-code" / f"{run_id}-{step.id}"

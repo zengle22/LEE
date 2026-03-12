@@ -95,12 +95,10 @@ def test_executor_factory_qwen_executor_defaults_to_qwen_profile(monkeypatch):
 
 
 def test_executor_factory_kimi_executor_defaults_to_kimi_profile(monkeypatch):
-    monkeypatch.delenv("LLM_PROFILE", raising=False)
-
     executor = ExecutorFactory.create("kimi")
 
     assert isinstance(executor, KimiExecutor)
-    assert executor._executor.profile == "kimi"
+    assert executor._kimi_binary == "kimi-cli"
 
 
 @pytest.mark.asyncio
