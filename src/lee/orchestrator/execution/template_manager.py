@@ -816,7 +816,7 @@ class TemplateManager:
 
         def resolve_executor_type(kind: str) -> Optional[str]:
             if kind == "agent":
-                return self.config.executor.default_type
+                return "llm"
             if kind == "claude_code":
                 return "claude_code"
             if kind == "patch_apply":
@@ -1170,8 +1170,10 @@ class TemplateManager:
         executor_type = step_data.get("executor")
         if not executor_type:
             if kind == "agent":
-                # v3.5: 从配置读取默认执行器类型
-                executor_type = self.config.executor.default_type
+                # Agent steps are semantic LLM tasks by default.
+                # Global executor.default_type is for generic/coding workflow steps,
+                # and must not silently convert agents into code executors.
+                executor_type = "llm"
             elif kind == "claude_code":
                 executor_type = "claude_code"  # Claude Code 执行器
             elif kind == "patch_apply":

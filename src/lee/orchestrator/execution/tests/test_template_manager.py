@@ -3,7 +3,7 @@ from pathlib import Path
 from lee.orchestrator.execution.template_manager import TemplateManager
 
 
-def test_l3_template_uses_project_default_executor(tmp_path: Path) -> None:
+def test_l3_template_uses_llm_executor_for_agent_steps(tmp_path: Path) -> None:
     project_root = tmp_path / "project"
     template_root = project_root / "spec-global"
     template_root.mkdir(parents=True)
@@ -33,7 +33,7 @@ def test_l3_template_uses_project_default_executor(tmp_path: Path) -> None:
     template = manager.get_template(str(template_path))
 
     assert template is not None
-    assert template.steps[0].executor_type == "claude_code"
+    assert template.steps[0].executor_type == "llm"
 
 
 def test_l3_template_preserves_step_inputs(tmp_path: Path) -> None:
