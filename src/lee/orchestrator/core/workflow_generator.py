@@ -80,7 +80,7 @@ class L2InstanceConfig:
     # Required identification
     id: str                              # Instance ID (e.g., "instance.dev.feature_timing_v1")
     name: str                            # Instance name
-    template_id: str = "template.dev.feature_l2"  # L2 template to use
+    template_id: str = "template.dev.feature_delivery_l2"  # L2 template to use
 
     # Context information
     project: str = ""
@@ -567,15 +567,15 @@ class WorkflowGenerator:
         warnings = []
 
         # Load L2 template
-        template_path = Path("spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
+        template_path = Path("spec-global/departments/dev/workflows/templates/feature-delivery-l2-template.yaml")
         if not template_path.exists():
             # Try relative to project root
-            template_path = Path(self.template_path).parent.parent.parent.parent / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates" / "feature-l2-template.yaml"
+            template_path = Path(self.template_path).parent.parent.parent.parent / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates" / "feature-delivery-l2-template.yaml"
 
         if not template_path.exists():
             return GenerationResult(
                 success=False,
-                errors=["L2 template not found: feature-l2-template.yaml"]
+                errors=["L2 template not found: feature-delivery-l2-template.yaml"]
             )
 
         try:

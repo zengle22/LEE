@@ -58,10 +58,10 @@ class TestL2InstanceGeneration:
             module_version="v1",
             prd_path="specs/test.md",
             repos=[{"id": "fe-repo", "type": "frontend"}],
-            phase_complexities={"plan": "S", "frontend_dev": "L"}
+            phase_complexities={"tech_design": "S", "frontend_dev": "L"}
         )
         assert config.id == "instance.dev.test_feature"
-        assert config.phase_complexities["plan"] == "S"
+        assert config.phase_complexities["tech_design"] == "S"
         assert config.phase_complexities["frontend_dev"] == "L"
 
     def test_generate_l2_instance(self, tmp_path):
@@ -71,7 +71,7 @@ class TestL2InstanceGeneration:
             pytest.skip("Template path not found")
 
         generator = WorkflowGenerator(
-            template_path=str(template_path / "feature-l2-template.yaml")
+            template_path=str(template_path / "feature-delivery-l2-template.yaml")
         )
 
         config = L2InstanceConfig(
@@ -89,7 +89,7 @@ class TestL2InstanceGeneration:
         assert output_path.exists()
         assert result.generated_workflow is not None
         assert result.generated_workflow["kind"] == "l2_workflow_instance"
-        assert len(result.generated_workflow["phases"]) == 5  # 5 phases in template
+        assert len(result.generated_workflow["phases"]) == 7  # 7 phases in canonical template
 
 
 class TestL3InstanceGeneration:
@@ -241,7 +241,7 @@ class TestOrchestratorL2Methods:
         l2_instance = WorkflowInstance(
             id="l2-test",
             level=WorkflowLevel.DEPARTMENT,
-            template_id="template.dev.feature_l2",
+            template_id="template.dev.feature_delivery_l2",
             status=WorkflowStatus.PENDING,
             data=l2_data,
         )
@@ -267,19 +267,19 @@ class TestOrchestratorL2Methods:
         data = {
             "kind": "l2_workflow_instance",
             "phases": [
-                {"id": "plan", "complexity": "S"},
+                {"id": "tech_design", "complexity": "S"},
                 {"id": "frontend_dev", "complexity": "L"},
             ]
         }
         instance = WorkflowInstance(
             id="l2-test",
             level=WorkflowLevel.DEPARTMENT,
-            template_id="template.dev.feature_l2",
+            template_id="template.dev.feature_delivery_l2",
             status=WorkflowStatus.PENDING,
             data=data,
         )
 
-        assert orchestrator._get_phase_complexity(instance, "plan") == Complexity.S
+        assert orchestrator._get_phase_complexity(instance, "tech_design") == Complexity.S
         assert orchestrator._get_phase_complexity(instance, "frontend_dev") == Complexity.L
         # Non-existent phase defaults to M
         assert orchestrator._get_phase_complexity(instance, "backend_dev") == Complexity.M
@@ -291,22 +291,22 @@ class TestOrchestratorL2Methods:
         data = {
             "kind": "l2_workflow_instance",
             "phases": [
-                {"id": "plan", "status": "completed"},
-                {"id": "frontend_dev", "status": "pending"},
+                {"id": "tech_design", "status": "completed"},
+                {"id": "contract_design", "status": "pending"},
                 {"id": "backend_dev", "status": "pending"},
             ]
         }
         instance = WorkflowInstance(
             id="l2-test",
             level=WorkflowLevel.DEPARTMENT,
-            template_id="template.dev.feature_l2",
+            template_id="template.dev.feature_delivery_l2",
             status=WorkflowStatus.PENDING,
             data=data,
         )
 
         phase = orchestrator._get_next_pending_phase(instance)
         assert phase is not None
-        assert phase["id"] == "frontend_dev"
+        assert phase["id"] == "contract_design"
 
     def test_get_repo_id_for_phase(self, orchestrator):
         """Test repo ID selection for phase."""
@@ -343,10 +343,10 @@ class TestYamlTemplates:
 
     def test_l2_template_exists(self):
         """Test L2 template file exists."""
-        template_path = Path("spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
+        template_path = Path("spec-global/departments/dev/workflows/templates/feature-delivery-l2-template.yaml")
         if not template_path.exists():
             # Try absolute path
-            template_path = Path("/Users/zengle/git/ai/lee/spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
+            template_path = Path("/Users/zengle/git/ai/lee/spec-global/departments/dev/workflows/templates/feature-delivery-l2-template.yaml")
 
         assert template_path.exists(), "L2 template file not found"
 
@@ -357,7 +357,7 @@ class TestYamlTemplates:
 
         assert data["kind"] == "l2_workflow_template"
         assert "phases" in data
-        assert len(data["phases"]) == 5
+        assert len(data["phases"]) == 7
 
     def test_l3_template_exists(self):
         """Test L3 template file exists."""
