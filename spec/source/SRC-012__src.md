@@ -23,7 +23,7 @@ frozen_at: '2026-03-12T17:38:43.889524'
 
 # Goal
 
-在 LEE 工作流执行框架内，建立 Kimi 执行器的标准接入与配置能力，使其成为可显式选择、可配置为默认、可追溯、可复用的执行能力选项，支撑中文场景下的需求分析与代码执行任务，同时严格遵循现有架构复用原则。
+在 LEE 工作流执行框架内，建立 Kimi CLI 执行器的标准接入与配置能力，使其成为可显式选择、可配置为默认、可追溯、可复用的通用 coding executor，并以本地 `kimi-cli --print` 调用方式替换 `claude_code` 的使用场景，同时严格遵循现有架构复用原则。
 
 # User Value
 
@@ -34,8 +34,9 @@ frozen_at: '2026-03-12T17:38:43.889524'
 # Inputs
 
 - 原始需求：ADR-014 接入 Kimi 执行器原始需求说明
-- 工作流实例中的 `executor` / `llm_profile` 配置
-- 现有 LEE 执行器工厂、Runner、CLI 与 workflow wiring
+- 工作流实例中的 `executor` 配置
+- 本地 `kimi-cli` 可执行文件与调用参数约定
+- 现有 LEE 执行器工厂、code runner、CLI 与 workflow wiring
 
 # Processing
 
@@ -43,11 +44,12 @@ frozen_at: '2026-03-12T17:38:43.889524'
 - 约束接入方案必须复用现有 canonical executor 架构
 - 明确 CLI 支持 `--executor kimi` 命令入口
 - 定义配置支持切换默认 coding executor 的能力
-- 确保现有业务 workflow 模板零变更复用
+- 明确 Kimi 必须通过本地 CLI 调用接入，而不是作为 OpenAI 兼容 API profile 接入
+- 明确 coding 类步骤继续复用现有 workflow 模板，但运行时路径参考 `claude_code` 执行链路
 
 # Outputs
 
-- 可显式选择的 Kimi 执行能力（`--executor kimi`）
+- 可显式选择的 Kimi CLI 执行能力（`--executor kimi`）
 - 可配置化的默认执行器切换能力
 - 标准化的配置入口与运行约束
 - 可供后续 `src_to_epic` 使用的正式 SRC 文档
@@ -58,13 +60,16 @@ frozen_at: '2026-03-12T17:38:43.889524'
 - 配置支持切换默认 coding executor 且生效
 - 不创建平行 workflow 或平行执行链
 - 现有 coding 步骤模板无需修改
+- Kimi 执行路径通过本地 `kimi-cli --print` 调用实现，而不是通过 Moonshot/OpenAI 兼容 API
 - raw-to-src 仅产出 SRC，不越界产出 EPIC / FEAT / TASK
 - 文档明确接入点、配置点、验收边界和非目标
 
 # Constraints
 
 - 必须复用现有 canonical executor 架构（C-ARCH-01）
-- 必须复用现有 Runner 与 workflow wiring
+- 必须复用现有 workflow wiring
+- coding 执行路径必须参考 `claude_code` 同类实现，不得退化为 `llm/qwen/kimi profile` 路由
+- 必须通过本地 `kimi-cli --print` 调用 Kimi，而不是直接调用远端 Kimi API
 - 不创建平行 workflow（C-ARCH-02）
 - 兼容现有 `qwen` 等别名模式（C-ARCH-03）
 - 必须保留来源追溯性
@@ -82,7 +87,7 @@ frozen_at: '2026-03-12T17:38:43.889524'
 
 | 目标 | 类型 | 价值驱动 | 成功标志 |
 |------|------|----------|----------|
-| 执行器能力补齐 | 能力扩展 | 消除用户选择受限痛点 | `kimi` 被系统识别和路由 |
+| 执行器能力补齐 | 能力扩展 | 消除用户选择受限痛点 | `kimi` 被系统识别、通过 CLI 路由并调用本地 `kimi-cli --print` |
 | 配置化默认执行器切换 | 体验优化 | 降低用户切换成本 | 配置修改后自动使用 Kimi |
 | 现有工作流零侵入复用 | 兼容性保证 | 保护现有投资 | 不新增平行工作流 |
 
@@ -98,9 +103,9 @@ frozen_at: '2026-03-12T17:38:43.889524'
 
 | 用户角色 | 核心诉求 | 关键场景 | 验收标准 |
 |---------|---------|---------|---------|
-| CLI 使用者 | 显式指定执行器 | `lee run <wf> --executor kimi` | 命令行参数正确解析路由 |
-| 编码任务执行者 | 使用 Kimi 完成代码实现 | 任何 coding step 执行时 | 输出格式兼容现有 executor |
-| 系统维护者 | 复用现有架构 | 新增/修改 executor 配置时 | 无新增平行链路，路由逻辑一致 |
+| CLI 使用者 | 显式指定执行器 | `lee run <wf> --executor kimi` | 命令行参数正确解析路由并落到 Kimi CLI |
+| 编码任务执行者 | 使用 Kimi 完成代码实现 | 任何 coding step 执行时 | 通过本地 `kimi-cli --print` 产出兼容现有 executor 的输出 |
+| 系统维护者 | 复用现有架构 | 新增/修改 executor 配置时 | 无新增业务 workflow，执行链路与 `claude_code` 同类治理 |
 
 # Traceability
 

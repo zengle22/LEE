@@ -18,34 +18,36 @@ frozen_at: '2026-03-12T22:32:02.122761'
 
 # Goal
 
-将 Kimi 执行器作为标准执行器接入 LEE 框架，通过 canonical executor 架构实现与现有 Runner 和 workflow wiring 的集成
+将 Kimi CLI 执行器作为标准 coding executor 接入 LEE 框架，通过 canonical executor 架构实现与现有 code runner 和 workflow wiring 的集成
 # User Value
 
-Kimi 执行器作为标准执行器接入 LEE 框架，复用现有 Runner 和 workflow wiring，保证执行链路一致性，无需为 Kimi 单独维护执行链路
+Kimi CLI 执行器作为标准 coding executor 接入 LEE 框架，沿用 `claude_code` 同类执行治理方式并复用现有 workflow wiring，保证执行链路一致性，无需为 Kimi 单独维护业务 workflow
 # Inputs
 
-- Kimi 执行器配置参数（API 端点、认证信息等）
-- 标准 executor 接口契约定义
+- 本地 `kimi-cli` 可执行文件、命令参数与环境变量约定
+- 标准 code executor 接口契约定义
 - 任务执行上下文（task context、workspace 等）
 - 日志与追踪系统接口
 # Processing
 
-- 实现标准 executor 接口（与现有执行器接口契约一致）
+- 实现标准 code executor 接口（与 `claude_code` 同类执行器契约一致）
 - 在 executor 工厂中注册 Kimi 执行器，支持别名解析
 - 通过统一工厂创建执行器实例，复用实例化逻辑
-- 集成 canonical executor 架构，复用现有 Runner 进行任务调度
+- 参考 `ClaudeCodeRunner` 所在执行链路实现 Kimi 的 runner/executor 接线
+- 通过本地 `kimi-cli --print` 调用完成任务执行
 - 复用 workflow wiring 进行流程编排
 # Outputs
 
-- Kimi 执行器实例（实现标准 executor 接口）
+- Kimi CLI 执行器实例（实现标准 code executor 接口）
 - 执行器工厂注册记录
 - 任务执行结果（符合 executor 接口输出规范）
 - 执行日志与追踪数据
 # Acceptance
 
-- Kimi 执行器实现标准 executor 接口（与现有执行器接口契约一致）
+- Kimi CLI 执行器实现标准 code executor 接口（与 `claude_code` 同类契约一致）
 - 集成 canonical executor 架构，通过统一的 executor 工厂创建
-- 复用现有 Runner 进行任务调度，复用 workflow wiring 进行流程编排
+- 运行时通过本地 `kimi-cli --print` 调用 Kimi，而不是通过 Moonshot/OpenAI 兼容 API profile
+- coding 步骤复用现有 workflow wiring 进行流程编排
 - 兼容现有 qwen 等执行器的别名注册模式
 - 执行器输出可被现有日志和追踪系统正确捕获
 # Acceptance Checks
@@ -53,25 +55,25 @@ Kimi 执行器作为标准执行器接入 LEE 框架，复用现有 Runner 和 w
 ## AC-012-003-01
 
 - Scenario: 标准接口实现验证
-- Given: 定义了标准 executor 接口（含 execute、initialize、dispose 等方法）
+- Given: 定义了标准 code executor 接口与 CLI 调用约束
 - When: Kimi 执行器实现类被加载
-- Then: 完整实现接口中定义的所有方法，通过接口兼容性检查
+- Then: 完整实现接口中定义的行为，并具备 `kimi-cli --print` 调用能力
 - Trace Hints: TECH, TASK, TESTSET
 
 ## AC-012-003-02
 
 - Scenario: Executor 工厂注册
-- Given: executor 工厂已支持 qwen 等执行器注册
+- Given: executor 工厂已支持 `claude_code`、`codex` 等 code executor 注册
 - When: 系统初始化时注册 Kimi 执行器
 - Then: Kimi 执行器通过工厂可被正确实例化，支持别名 "kimi" 解析
 - Trace Hints: TECH, TASK
 
 ## AC-012-003-03
 
-- Scenario: Runner 复用验证
-- Given: 现有 Runner 已实现任务调度能力
+- Scenario: Code runner 接线验证
+- Given: 现有 `ClaudeCodeRunner` 已实现 code step 的任务调度与治理约束
 - When: Kimi 执行器执行任务
-- Then: 复用相同 Runner 实例进行调度，无新增 Runner 实现
+- Then: Kimi 走与 `claude_code` 同类的 code runner/executor 轨道，不走 LangGraph/LLM profile 轨道
 - Trace Hints: TECH, TASK, TESTSET
 
 ## AC-012-003-04
@@ -96,7 +98,8 @@ Kimi 执行器作为标准执行器接入 LEE 框架，复用现有 Runner 和 w
 - FEAT-012-002
 # Non Goals
 
-- 不创建新的 Runner 或 workflow 引擎
+- 不修改现有业务 workflow 模板
+- 不将 Kimi 作为 `llm/qwen` profile 或 Moonshot API 直连接入
 - 不修改现有 coding 步骤模板
-- 不实现 Kimi API 的具体调用逻辑（本 FEAT 仅关注集成适配层）
+- 不要求复用 LangGraph Runner
 - 不涉及执行器的性能优化
