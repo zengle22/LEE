@@ -138,6 +138,30 @@ def test_merge_forbidden_read_paths_includes_default_blacklist():
     ]
 
 
+def test_normalize_ssot_contract_payload_sanitizes_output_key():
+    normalized = LLMRunner._normalize_ssot_contract_payload(
+        {
+            "contract_version": "0.9",
+            "run_id": 123,
+            "outputs": [
+                {
+                    "key": "ui-prototype",
+                    "identity_kind": "ssot",
+                    "ssot_type": "ui",
+                    "title": "UI Prototype",
+                    "parent": "FEAT-084",
+                    "contract_path": "ignored.md",
+                }
+            ],
+        }
+    )
+
+    assert normalized["contract_version"] == "1.0"
+    assert normalized["run_id"] == "123"
+    assert normalized["outputs"][0]["key"] == "ui_prototype"
+    assert "contract_path" not in normalized["outputs"][0]
+
+
 def test_collect_authoritative_context_files_from_epic_freeze():
     step = SimpleNamespace(
         inputs=[
@@ -163,8 +187,94 @@ def test_collect_authoritative_context_files_from_epic_freeze():
     ]
 
 
+def test_synthesize_single_ssot_payload_backfills_design_parent_from_feat_freeze_ref():
+    step = SimpleNamespace(id="tech_design", name="TECH 设计", agent_id="agent.dev.tech_architect")
+    business_output = {
+        "metadata": {
+            "contract_id": "FTA-20260312-080",
+            "source_feat": "FEAT-080",
+        }
+    }
+    structured_payload = {
+        "business_output": business_output,
+        "ssot_output_contract": {
+            "contract_version": "1.0",
+            "run_id": "wf-old",
+            "outputs": [
+                {
+                    "key": "tech_spec",
+                    "identity_kind": "ssot",
+                    "ssot_type": "tech",
+                    "title": "tech_design",
+                    "content": "architecture: frozen\n",
+                }
+            ],
+        },
+    }
+
+    _, normalized_structured = LLMRunner._synthesize_single_ssot_payload(
+        step=step,
+        workflow_id="wf-new",
+        business_output=business_output,
+        structured_payload=structured_payload,
+        instance_data={"params": {"feat_freeze_ref": {"artifact_id": "FEAT-080"}}},
+    )
+
+    output = normalized_structured["ssot_output_contract"]["outputs"][0]
+    assert normalized_structured["ssot_output_contract"]["run_id"] == "wf-old"
+    assert output["parent"] == "FEAT-080"
+    assert output["implements"] == ["FEAT-080"]
+    assert output["ssot_type"] == "tech"
+
+
+def test_synthesize_single_ssot_payload_rewrites_placeholder_design_parent():
+    step = SimpleNamespace(id="ui_design", name="UI 设计", agent_id="agent.design.ui_designer")
+    business_output = {"metadata": {"feat_reference": "FEAT-082"}}
+    structured_payload = {
+        "business_output": business_output,
+        "ssot_output_contract": {
+            "contract_version": "1.0",
+            "run_id": "wf-ui",
+            "outputs": [
+                {
+                    "key": "frozen-ui-prototype",
+                    "identity_kind": "ssot",
+                    "ssot_type": "ui",
+                    "title": "FEAT-082 UI 原型",
+                    "parent": "feat",
+                    "implements": ["FEAT-082"],
+                    "content": "design_specs: {}\n",
+                }
+            ],
+        },
+    }
+
+    _, normalized_structured = LLMRunner._synthesize_single_ssot_payload(
+        step=step,
+        workflow_id="wf-ui",
+        business_output=business_output,
+        structured_payload=structured_payload,
+        instance_data={"params": {"feat_freeze_ref": {"artifact_id": "FEAT-082"}}},
+    )
+
+    output = normalized_structured["ssot_output_contract"]["outputs"][0]
+    assert output["parent"] == "FEAT-082"
+
+
 def test_claude_code_runner_exposes_pm_task_drift_keywords():
     assert ClaudeCodeRunner.PM_TASK_DRIFT_KEYWORDS == LLMRunner.PM_TASK_DRIFT_KEYWORDS
+
+
+def test_resolve_step_timeout_seconds_prefers_executor_timeout():
+    timeout = LLMRunner._resolve_step_timeout_seconds({"timeout_seconds": 3600})
+
+    assert timeout == 3630
+
+
+def test_resolve_step_timeout_seconds_falls_back_to_default():
+    timeout = LLMRunner._resolve_step_timeout_seconds({})
+
+    assert timeout == 300
 
 
 def test_merge_context_files_prefers_deduplicated_authoritative_inputs():
@@ -508,6 +618,50 @@ def test_normalize_prd_writer_feat_payload_rebuilds_feat_specs_from_feature_brea
     ]
     assert len(feat_spec["acceptance_checks"]) == 2
     assert normalized_structured["ssot_output_contract"]["outputs"][0]["properties"]["feat_id"] == "feat-adr012-001-raw-intake"
+
+
+def test_normalize_prd_writer_feat_payload_preserves_noncanonical_feat_ids_without_project_root():
+    step = SimpleNamespace(id="feat_spec_generation", agent_id="agent.product.prd_writer")
+    business_output = {
+        "epic_ref": "EPIC-999",
+        "feat_specs": [
+            {
+                "feat_id": "feat-raw-symbolic-id",
+                "title": "Symbolic FEAT",
+                "goal": "Preserve symbolic IDs before formal materialization",
+                "user_value": "Avoid premature ID allocation",
+                "inputs": ["EPIC-999#scope"],
+                "processing": ["Normalize"],
+                "outputs": ["Bundle"],
+                "acceptance_criteria": ["ID should stay symbolic in bundle normalization"],
+                "acceptance_checks": [
+                    {
+                        "id": "AC-001",
+                        "scenario": "bundle normalization",
+                        "given": "no project root is derivable",
+                        "when": "normalizing feat specs",
+                        "then": "symbolic feat id is preserved",
+                        "trace_hints": ["TECH"],
+                    }
+                ],
+                "dependencies": [],
+                "non_goals": [],
+                "source_refs": ["EPIC-999#scope"],
+                "ssot": {"identity_kind": "ssot", "ssot_type": "FEAT", "parent": "EPIC-999"},
+            }
+        ],
+    }
+
+    normalized_business, normalized_structured = LLMRunner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-test",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+        instance_data=None,
+    )
+
+    assert normalized_business["feat_specs"][0]["feat_id"] == "feat-raw-symbolic-id"
+    assert normalized_structured["ssot_output_contract"]["outputs"][0]["properties"]["feat_id"] == "feat-raw-symbolic-id"
 
 
 def test_normalize_prd_writer_feat_payload_rebuilds_feat_specs_from_feats_shape():
@@ -1006,7 +1160,10 @@ def test_extract_business_output_for_validation_prefers_task_plan_file_over_empt
         written_files=[str(task_plan_path)],
     )
 
-    assert business_output["metadata"]["epic_id"] == "EPIC-012"
+    assert business_output["parent_epic"] == "EPIC-012"
+    assert business_output["source_feats"] == ["FEAT-012-001"]
+    assert business_output["task_specs"][0]["task_id"] == "T-001"
+    assert business_output["task_specs"][0]["source_feat"] == "FEAT-012-001"
 
 
 def test_extract_business_output_for_validation_prefers_feat_breakdown_file_over_generic_summary(tmp_path):

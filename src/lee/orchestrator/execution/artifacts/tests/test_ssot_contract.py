@@ -103,3 +103,31 @@ def test_materialize_full_chain_and_non_ssot(materializer):
     assert outputs["tc"].artifact.absolute_path.exists()
     validator = materializer.manager.registry
     assert validator.get(outputs["feat"].artifact.id).properties["parent_id"] == outputs["epic"].artifact.id
+
+
+def test_materialize_task_preserves_formal_task_id(materializer):
+    contract = {
+        "contract_version": "1.0",
+        "run_id": "run-003",
+        "outputs": [
+            {
+                "key": "task_runtime",
+                "identity_kind": "ssot",
+                "ssot_type": "task",
+                "title": "Feature Delivery Core Runtime",
+                "parent": "FEAT-SRC-009-001",
+                "properties": {
+                    "task_id": "TASK-SRC-009-001-001",
+                    "workstream": "workflow-runtime",
+                },
+                "source_refs": ["FEAT-SRC-009-001#delivery"],
+                "verifies": ["FEAT-SRC-009-001"],
+            }
+        ],
+    }
+
+    outputs = materializer.materialize(contract)
+
+    task = outputs["task_runtime"].artifact
+    assert task.id == "TASK-SRC-009-001-001"
+    assert task.absolute_path.name.startswith("TASK-SRC-009-001-001__")

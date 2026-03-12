@@ -20,7 +20,9 @@ sys.path.insert(0, src_dir)
 
 from lee.orchestrator.execution.executors import (
     BaseExecutor,
+    KimiExecutor,
     LLMExecutor,
+    QwenExecutor,
     ShellExecutor,
     ExecutorFactory,
 )
@@ -81,6 +83,24 @@ def test_executor_factory_uses_config_default_profile(tmp_path, monkeypatch):
 
     assert isinstance(executor, LLMExecutor)
     assert executor._executor.profile == "sample_profile"
+
+
+def test_executor_factory_qwen_executor_defaults_to_qwen_profile(monkeypatch):
+    monkeypatch.delenv("LLM_PROFILE", raising=False)
+
+    executor = ExecutorFactory.create("qwen")
+
+    assert isinstance(executor, QwenExecutor)
+    assert executor._executor.profile == "qwen"
+
+
+def test_executor_factory_kimi_executor_defaults_to_kimi_profile(monkeypatch):
+    monkeypatch.delenv("LLM_PROFILE", raising=False)
+
+    executor = ExecutorFactory.create("kimi")
+
+    assert isinstance(executor, KimiExecutor)
+    assert executor._executor.profile == "kimi"
 
 
 @pytest.mark.asyncio

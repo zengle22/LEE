@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 import json
 import sqlite3
+import io
 
 from click.testing import CliRunner
 import yaml
@@ -225,6 +226,59 @@ def test_run_falls_back_to_spec_path_for_non_object_spec(monkeypatch, tmp_path: 
     assert params["spec"] == str(spec_file.resolve())
 
 
+def test_run_loads_markdown_spec_into_raw_requirement_for_product_main(monkeypatch, tmp_path: Path) -> None:
+    template = tmp_path / "workflow.yaml"
+    template.write_text("kind: l2_workflow_template\nversion: '1.0'\n", encoding="utf-8")
+    spec_file = tmp_path / "adr.md"
+    spec_file.write_text("# ADR-011\n需求链一致性测试体系建设\n", encoding="utf-8")
+    rendered = tmp_path / "rendered.yaml"
+    rendered.write_text("kind: l2_workflow_template\nid: x\nversion: '1.0'\nphases: []\n", encoding="utf-8")
+
+    captured_create_payload: List[Dict[str, Any]] = []
+
+    monkeypatch.setattr(
+        run_module,
+        "_load_registry",
+        lambda: {
+            "workflows": {
+                "product.main": {
+                    "path": str(template),
+                    "load_spec_as_params": True,
+                    "required_params": [],
+                    "optional_params": ["raw_requirement"],
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
+    monkeypatch.setattr(
+        run_module,
+        "_run_until_settled_with_gates",
+        lambda *_a, **_k: {"status": "running", "completed_steps": 0, "blocked_at": None},
+    )
+    monkeypatch.setattr(run_module, "_print_summary", lambda *_a, **_k: None)
+
+    def fake_pm_workflow(action: str, **kwargs):
+        if action == "create":
+            captured_create_payload.append(kwargs)
+            return {"workflow_id": "wf_department_001"}
+        raise AssertionError(f"unexpected pm_workflow action: {action}")
+
+    monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_module.run,
+        ["product.main", "--project-dir", str(tmp_path), "--skip-plan", "--spec", str(spec_file)],
+    )
+
+    assert result.exit_code == 0, result.output
+    params = captured_create_payload[0]["data"]["params"]
+    assert params["raw_requirement"] == "# ADR-011\n需求链一致性测试体系建设\n"
+    assert "spec" not in params
+
+
 def test_run_uses_instance_without_existing_workflow_selection(monkeypatch, tmp_path: Path) -> None:
     template = tmp_path / "workflow.yaml"
     template.write_text("kind: workflow\nversion: '1.0'\n", encoding="utf-8")
@@ -369,6 +423,8 @@ def test_run_bootstraps_l2_template_as_department_workflow(monkeypatch, tmp_path
                 "    level: task",
                 "    depends_on: []",
                 "    default_complexity: M",
+                "    output_map:",
+                "      source_freeze: $child_data.step_outputs.source_freeze",
             ]
         ),
         encoding="utf-8",
@@ -427,9 +483,13 @@ def test_run_bootstraps_l2_template_as_department_workflow(monkeypatch, tmp_path
             "depends_on": [],
             "workflow": "workflow.product.task.src_to_epic",
             "level": "task",
+            "output_map": {
+                "source_freeze": "$child_data.step_outputs.source_freeze",
+            },
             "l3_instance_ids": [],
         }
     ]
+    assert create_data["executor_override"] == "claude_code"
 
 
 def test_list_conflicting_workflows_matches_scope_and_legacy_rows(tmp_path: Path) -> None:
@@ -490,10 +550,133 @@ def test_list_conflicting_workflows_matches_scope_and_legacy_rows(tmp_path: Path
     finally:
         conn.close()
 
-    conflicts = run_module._list_conflicting_workflows(
-        tmp_path,
-        "product.epic-to-feat",
-        "epic:EPIC-123",
+
+def test_run_accepts_qwen_executor_override(monkeypatch, tmp_path: Path) -> None:
+    from click.testing import CliRunner
+    from lee.cli.commands import run as run_module
+
+    template = tmp_path / "workflow.yaml"
+    rendered = tmp_path / "rendered.yaml"
+    template.write_text("kind: l2_workflow_template\nphases: []\n", encoding="utf-8")
+    rendered.write_text("kind: l2_workflow_template\nphases: []\n", encoding="utf-8")
+
+    captured_create_payload = []
+
+    monkeypatch.setattr(
+        run_module,
+        "_load_registry",
+        lambda: {
+            "workflows": {
+                "product.main": {
+                    "path": str(template),
+                    "required_params": [],
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        run_module,
+        "_run_until_settled_with_gates",
+        lambda *_a, **_k: {"status": "running", "completed_steps": 0, "blocked_at": None},
+    )
+    monkeypatch.setattr(run_module, "_print_summary", lambda *_a, **_k: None)
+
+    def fake_pm_workflow(action: str, **kwargs):
+        if action == "create":
+            captured_create_payload.append(kwargs)
+            return {"workflow_id": "wf_department_demo_002"}
+        raise AssertionError(f"unexpected pm_workflow action: {action}")
+
+    monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_module.run,
+        ["product.main", "--project-dir", str(tmp_path), "--skip-plan", "--executor", "qwen"],
     )
 
-    assert [item["id"] for item in conflicts] == ["wf_legacy", "wf_same_scope"]
+    assert result.exit_code == 0, result.output
+    create_data = captured_create_payload[0]["data"]
+    assert create_data["executor_override"] == "qwen"
+
+
+def test_run_accepts_kimi_executor_override(monkeypatch, tmp_path: Path) -> None:
+    from click.testing import CliRunner
+    from lee.cli.commands import run as run_module
+
+    template = tmp_path / "workflow.yaml"
+    rendered = tmp_path / "rendered.yaml"
+    template.write_text("kind: l2_workflow_template\nphases: []\n", encoding="utf-8")
+    rendered.write_text("kind: l2_workflow_template\nphases: []\n", encoding="utf-8")
+
+    captured_create_payload = []
+
+    monkeypatch.setattr(
+        run_module,
+        "_load_registry",
+        lambda: {
+            "workflows": {
+                "product.main": {
+                    "path": str(template),
+                    "required_params": [],
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        run_module,
+        "_run_until_settled_with_gates",
+        lambda *_a, **_k: {"status": "running", "completed_steps": 0, "blocked_at": None},
+    )
+    monkeypatch.setattr(run_module, "_print_summary", lambda *_a, **_k: None)
+
+    def fake_pm_workflow(action: str, **kwargs):
+        if action == "create":
+            captured_create_payload.append(kwargs)
+            return {"workflow_id": "wf_department_demo_003"}
+        raise AssertionError(f"unexpected pm_workflow action: {action}")
+
+    monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_module.run,
+        ["product.main", "--project-dir", str(tmp_path), "--skip-plan", "--executor", "kimi"],
+    )
+
+    assert result.exit_code == 0, result.output
+    create_data = captured_create_payload[0]["data"]
+    assert create_data["executor_override"] == "kimi"
+
+
+def test_select_existing_workflow_action_uses_noninteractive_stdin_command(monkeypatch) -> None:
+    class _FakeStdin(io.StringIO):
+        def isatty(self) -> bool:
+            return False
+
+    monkeypatch.setattr(run_module.click, "get_text_stream", lambda _name: _FakeStdin("restart\n"))
+
+    action, workflow_id = run_module._select_existing_workflow_action(
+        existing=[
+            {
+                "id": "wf_department_old",
+                "status": "running",
+                "current_step": None,
+                "created_at": "2026-03-12T19:00:00",
+                "concurrency_scope": "project:E:/ai/LEE:workflow:product.main",
+            }
+        ],
+        scope_info=run_module.ConcurrencyScopeInfo(
+            workflow_key="product.main",
+            concurrency_scope="project:E:/ai/LEE:workflow:product.main",
+            concurrency_key="product.main::project:E:/ai/LEE:workflow:product.main",
+            scope_source="fallback:project+workflow_key",
+        ),
+    )
+
+    assert action == "restart"
+    assert workflow_id == "wf_department_old"

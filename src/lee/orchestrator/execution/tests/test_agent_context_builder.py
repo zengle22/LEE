@@ -137,6 +137,93 @@ async def test_default_prompt_includes_upstream_step_outputs(builder):
     assert "authoritative derived inputs" in prompt
 
 
+@pytest.mark.asyncio
+async def test_upstream_step_outputs_drop_executor_wrapper_noise(builder):
+    step = SimpleNamespace(
+        id="source_review",
+        agent_id="agent.analysis.source_review",
+        input=[{"source": "normalized_src", "required": True}],
+        depends_on=["source_normalization"],
+        outputs=[],
+    )
+    workflow_context = {
+        "data": {
+            "step_outputs": {
+                "source_normalization": {
+                    "status": "success",
+                    "generated_text": "very long prose",
+                    "debug_log_path": "/tmp/debug.log",
+                    "prompt_user_path": "/tmp/prompt.user.txt",
+                    "business_output": {
+                        "metadata": {"src_id": "SRC-001"},
+                        "core_goal": {"primary_statement": "build requirement chain tests"},
+                    },
+                }
+            }
+        }
+    }
+    agent_spec = {"_raw_data": {"description": "Review normalized SRC only."}}
+
+    prompt = await builder._build_user_prompt(
+        agent_spec,
+        context_files={},
+        workflow_context=workflow_context,
+        step=step,
+    )
+
+    assert "SRC-001" in prompt
+    assert "generated_text" not in prompt
+    assert "debug_log_path" not in prompt
+    assert "prompt_user_path" not in prompt
+
+
+def test_sanitize_prompt_payload_can_fall_back_to_generated_text_by_default(builder):
+    sanitized = builder._sanitize_prompt_payload(
+        {
+            "status": "success",
+            "generated_text": "ADR-011 raw analysis summary with requirement-chain testing focus",
+            "structured_payload": {"status": "success"},
+            "debug_log_path": "/tmp/debug.log",
+        }
+    )
+
+    assert sanitized["generated_text"].startswith("ADR-011 raw analysis summary")
+    assert "debug_log_path" not in sanitized
+
+
+@pytest.mark.asyncio
+async def test_upstream_step_outputs_skip_generated_text_only_payloads(builder):
+    step = SimpleNamespace(
+        id="task_planning",
+        agent_id="agent.product.pm_planner",
+        input=[{"source": "tech_specs", "required": True}],
+        depends_on=["tech_design"],
+        outputs=[],
+    )
+    workflow_context = {
+        "data": {
+            "step_outputs": {
+                "tech_design": {
+                    "status": "success",
+                    "generated_text": "SQLite plus cache layer summary that should not leak downstream",
+                    "debug_log_path": "/tmp/debug.log",
+                }
+            }
+        }
+    }
+    agent_spec = {"_raw_data": {"description": "Plan tasks from FEAT and TECH only."}}
+
+    prompt = await builder._build_user_prompt(
+        agent_spec,
+        context_files={},
+        workflow_context=workflow_context,
+        step=step,
+    )
+
+    assert "## Upstream Step Outputs" not in prompt
+    assert "SQLite plus cache layer" not in prompt
+
+
 def test_collect_step_inputs_accepts_freeze_ref_alias(builder):
     step = SimpleNamespace(
         id="feat_boundary_design",
@@ -157,6 +244,40 @@ def test_collect_step_inputs_accepts_freeze_ref_alias(builder):
     resolved = builder._collect_step_inputs(step, workflow_context)
 
     assert resolved["epic_freeze"]["artifact_id"] == "EPIC-001"
+
+
+def test_collect_step_inputs_sanitizes_gate_frozen_inputs(builder):
+    step = SimpleNamespace(
+        id="delivery_plan_validation",
+        inputs=[{"source": "feat_freeze", "required": True}],
+        depends_on=[],
+    )
+    workflow_context = {
+        "data": {
+            "params": {
+                "feat_freeze": {
+                    "gate_approved": True,
+                    "business_output": {
+                        "epic_ref": "EPIC-030",
+                    },
+                    "frozen_inputs": {
+                        "feat_specs": {
+                            "ssot_materialized": {
+                                "feat_001": {
+                                    "path": "spec/requirements/features/FEAT-159__hexinceshiyinqing.md"
+                                }
+                            }
+                        }
+                    },
+                }
+            }
+        }
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["feat_freeze"]["business_output"]["epic_ref"] == "EPIC-030"
+    assert "frozen_inputs" not in resolved["feat_freeze"]
 
 
 @pytest.mark.asyncio
@@ -248,6 +369,111 @@ def test_get_step_input_definition_prefers_structured_inputs_over_runtime_input(
 
     assert isinstance(resolved, list)
     assert resolved[0]["source"] == "external"
+
+
+def test_collect_step_inputs_resolves_specs_from_declared_output_symbols(tmp_path):
+    rendered_workflow = tmp_path / ".workflow" / "rendered" / "workflow-symbols.yaml"
+    rendered_workflow.parent.mkdir(parents=True, exist_ok=True)
+    rendered_workflow.write_text(
+        """
+stages:
+  - id: flow
+    steps:
+      - id: ui_design
+        outputs:
+          - symbol: ui_specs
+      - id: tech_design
+        outputs:
+          - symbol: tech_specs
+      - id: task_planning
+        depends_on: [ui_design, tech_design]
+        inputs:
+          - source: ui_specs
+          - source: tech_specs
+""".strip(),
+        encoding="utf-8",
+    )
+
+    builder = AgentContextBuilder(agent_loader=None, project_root=str(tmp_path))
+    step = SimpleNamespace(
+        id="task_planning",
+        inputs=[
+            {"source": "ui_specs", "required": False},
+            {"source": "tech_specs", "required": True},
+        ],
+        depends_on=["ui_design", "tech_design"],
+    )
+    workflow_context = {
+        "template_id": str(rendered_workflow),
+        "data": {
+            "step_outputs": {
+                "ui_design": {
+                    "business_output": {
+                        "applicable": False,
+                        "skip_reason": "ui not needed",
+                    }
+                },
+                "tech_design": {
+                    "business_output": {
+                        "metadata": {"tech_id": "TECH-SRC-009"},
+                        "system_overview": {"description": "dev workflow architecture"},
+                    }
+                },
+            }
+        },
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["ui_specs"]["skip_reason"] == "ui not needed"
+    assert resolved["tech_specs"]["metadata"]["tech_id"] == "TECH-SRC-009"
+
+
+def test_collect_step_inputs_resolves_specs_from_structured_payload_symbols(tmp_path):
+    rendered_workflow = tmp_path / ".workflow" / "rendered" / "workflow-symbols.yaml"
+    rendered_workflow.parent.mkdir(parents=True, exist_ok=True)
+    rendered_workflow.write_text(
+        """
+stages:
+  - id: flow
+    steps:
+      - id: tech_design
+        outputs:
+          - symbol: tech_specs
+      - id: task_planning
+        depends_on: [tech_design]
+        inputs:
+          - source: tech_specs
+""".strip(),
+        encoding="utf-8",
+    )
+
+    builder = AgentContextBuilder(agent_loader=None, project_root=str(tmp_path))
+    step = SimpleNamespace(
+        id="task_planning",
+        inputs=[{"source": "tech_specs", "required": True}],
+        depends_on=["tech_design"],
+    )
+    workflow_context = {
+        "template_id": str(rendered_workflow),
+        "data": {
+            "step_outputs": {
+                "tech_design": {
+                    "status": "success",
+                    "generated_text": "noisy summary mentioning unrelated infra",
+                    "structured_payload": {
+                        "metadata": {"feat_id": "FEAT-143", "tech_id": "TECH-FEAT-143-001"},
+                        "system_overview": {"description": "entry routing and validation"},
+                    },
+                }
+            }
+        },
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["tech_specs"]["metadata"]["feat_id"] == "FEAT-143"
+    assert "generated_text" not in resolved["tech_specs"]
 
 
 def test_agent_loader_scans_spec_global_by_agent_id(tmp_path):

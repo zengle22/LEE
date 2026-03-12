@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
 
 from lee.orchestrator.storage.models import Complexity, Point, WorkflowLevel, WorkflowStatus
+from lee.orchestrator.storage.models import WorkflowInstance, Step
 from lee.orchestrator.storage.sqlite_store import SQLiteStore
 from lee.orchestrator.execution.orchestrator import Orchestrator
 from lee.orchestrator.core.workflow_generator import (
@@ -214,6 +215,69 @@ class TestP1FailureHandling:
         outputs = await orch._collect_l3_outputs([])
         assert outputs["l3_count"] == 0
         assert outputs["l3_outputs"] == {}
+
+
+class TestL2SubworkflowHandoff:
+    """Test L2 subworkflow output handoff into parent params."""
+
+    @pytest.mark.asyncio
+    async def test_backfill_subworkflow_output_updates_parent_params(self):
+        parent = WorkflowInstance(
+            id="wf-parent",
+            level=WorkflowLevel.DEPARTMENT,
+            template_id="workflow.product.product_main_pipeline",
+            status=WorkflowStatus.RUNNING,
+            data={
+                "params": {
+                    "raw_requirement": "ADR-011",
+                }
+            },
+        )
+        child = WorkflowInstance(
+            id="wf-child",
+            level=WorkflowLevel.TASK,
+            template_id="workflow.product.task.raw_to_src",
+            status=WorkflowStatus.COMPLETED,
+            data={
+                "run_id": "RUN-child",
+                "step_outputs": {
+                    "source_freeze": {
+                        "paths": [
+                            "output/design-frozen/{project}-src-freeze.yaml",
+                            "E:/ai/LEE/output/design-frozen/LEE-src-freeze.yaml",
+                        ]
+                    }
+                },
+            },
+        )
+
+        store = Mock()
+        store.get_workflow = AsyncMock(return_value=parent)
+        store.get_task_executions = AsyncMock(return_value=[])
+        store.update_workflow_data = AsyncMock()
+
+        orch = Orchestrator(store=store, project_root=str(Path.cwd()))
+
+        step = Step(
+            id="raw_to_src",
+            kind="subworkflow",
+            config={
+                "output_map": {
+                    "source_freeze": "$child_data.step_outputs.source_freeze",
+                }
+            },
+        )
+
+        result = await orch._backfill_subworkflow_output("wf-parent", step, child)
+
+        assert result["child_workflow_id"] == "wf-child"
+        updated_data = store.update_workflow_data.await_args.args[1]
+        assert updated_data["params"]["source_freeze"] == {
+            "paths": [
+                "output/design-frozen/{project}-src-freeze.yaml",
+                "E:/ai/LEE/output/design-frozen/LEE-src-freeze.yaml",
+            ]
+        }
 
 
 class TestP2SplitCaching:

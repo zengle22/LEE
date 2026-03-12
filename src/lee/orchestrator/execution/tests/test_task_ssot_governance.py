@@ -2,7 +2,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -11,6 +11,7 @@ from lee.orchestrator.execution.artifacts.ssot_contract import SSOTContractMater
 from lee.orchestrator.execution.artifacts.ssot_service import SSOTValidator
 from lee.orchestrator.execution.artifacts.types import ArtifactStatus, SSOTType
 from lee.orchestrator.execution.gate_operations import GateOperationsMixin
+from lee.orchestrator.storage.models import GateApproval, GateStatus
 
 
 class _GateHarness(GateOperationsMixin):
@@ -166,6 +167,34 @@ def test_ssot_contract_allows_external_source_refs():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def test_gate_materialized_src_uses_problem_statement_as_title_slug():
+    temp_dir = Path(tempfile.mkdtemp())
+    try:
+        manager = ArtifactManager(project_root=temp_dir)
+        harness = _GateHarness()
+
+        published = harness._materialize_src_candidate(
+            {
+                "src_structure": {
+                    "title": "SRC",
+                    "problem_statement": "QA Department SSOT Alignment and Workflow Reframe",
+                },
+                "governance_refs": {
+                    "source_refs": ["ADR-012"],
+                },
+                "ssot_identity": {
+                    "ssot_type": "SRC",
+                },
+            },
+            manager,
+        )
+
+        assert published["artifact_id"].startswith("SRC-")
+        assert published["path"].endswith("qa-department-ssot-alignment-and-workflow-reframe.md")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 @pytest.mark.asyncio
 async def test_gate_publish_epic_freeze_to_canonical_spec_directory():
     temp_dir = Path(tempfile.mkdtemp())
@@ -218,3 +247,130 @@ async def test_gate_publish_epic_freeze_to_canonical_spec_directory():
         assert updated_data["step_outputs"]["epic_freeze"]["epic_freeze_ref"]["artifact_id"].startswith("EPIC-")
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.mark.asyncio
+async def test_approve_gate_embeds_frozen_business_payload_for_downstream_handoff():
+    harness = _GateHarness()
+    instance = SimpleNamespace(
+        template_id="workflow.product.task.raw_to_src",
+        data={
+            "completed_steps": ["source_normalization", "source_review"],
+            "params": {},
+            "step_outputs": {
+                "source_normalization": {
+                    "generated_text": "very large prose that should not leak downstream",
+                    "debug_log_path": "/tmp/debug.log",
+                    "business_output": {
+                        "source_id": "SRC-013",
+                        "title": "需求链一致性测试体系建设",
+                        "problem_statement": "将需求链从文档审阅对象转为可测试系统",
+                        "target_user": ["governance_owner", "workflow_maintainer"],
+                        "business_motivation": "替代人工目检，建立稳定回归能力",
+                        "constraints": ["Programmatic Rules First", "L0/L1/L2 成本控制"],
+                        "ssot": {
+                            "identity_kind": "ssot",
+                            "ssot_type": "SRC",
+                            "derived_from": "ADR-011",
+                        },
+                    }
+                }
+            },
+        },
+    )
+    gate_approval = GateApproval(
+        workflow_id="wf-src-001",
+        gate_id="gate_wf_src_001_source_freeze",
+        step_id="source_freeze",
+        status=GateStatus.PENDING,
+    )
+
+    harness.template_manager = SimpleNamespace(get_template=lambda _template_id: None)
+    harness.gate_engine = SimpleNamespace(evaluate_gate=lambda gate_ir, context: None)
+    harness.event_log = SimpleNamespace(log_gate_approved=lambda **kwargs: None)
+    harness.state_machine = SimpleNamespace(
+        _resolve_step_inputs_for_freeze=lambda step_id, inst: ["normalized_src"],
+        complete_step=AsyncMock(return_value={"status": "success"}),
+    )
+    harness.store = SimpleNamespace(
+        get_workflow=AsyncMock(return_value=instance),
+        get_gate_approval=AsyncMock(return_value=gate_approval),
+        update_gate_approval=AsyncMock(
+            return_value=GateApproval(
+                workflow_id="wf-src-001",
+                gate_id="gate_wf_src_001_source_freeze",
+                step_id="source_freeze",
+                status=GateStatus.APPROVED,
+                approver="codex",
+                comments="approve",
+            )
+        ),
+        update_workflow_status=AsyncMock(),
+    )
+    harness._check_workflow_completion = AsyncMock()
+    harness._freeze_gate_targets = AsyncMock()
+
+    await harness.approve_gate(
+        workflow_id="wf-src-001",
+        gate_id="gate_wf_src_001_source_freeze",
+        approver="codex",
+        comments="approve",
+    )
+
+    gate_output = harness.state_machine.complete_step.await_args.args[2]
+    assert gate_output["source_id"] == "SRC-013"
+    assert gate_output["title"] == "需求链一致性测试体系建设"
+    assert gate_output["freeze_meta"]["status"] == "frozen"
+    assert gate_output["freeze_meta"]["frozen_by"] == "codex"
+    assert gate_output["frozen_inputs"]["normalized_src"]["business_output"]["source_id"] == "SRC-013"
+    assert "generated_text" not in gate_output["frozen_inputs"]["normalized_src"]
+    assert "debug_log_path" not in gate_output["frozen_inputs"]["normalized_src"]
+
+
+def test_declared_output_payload_extracts_business_output_from_gate_payload(tmp_path):
+    from lee.orchestrator.execution.state_machine import WorkflowStateMachine
+
+    machine = WorkflowStateMachine(store=MagicMock(), template_manager=MagicMock())
+    instance = SimpleNamespace(data={"params": {}})
+
+    payload = machine._build_declared_output_payload(
+        step_id="source_freeze",
+        output={
+            "gate_approved": True,
+            "approver": "codex",
+            "comments": "",
+            "frozen_at": "2026-03-12T20:00:00",
+            "step_id": "source_freeze",
+            "title": "Kimi Executor 接入与配置能力",
+            "source_id": "SRC-012",
+            "freeze_meta": {"status": "frozen"},
+        },
+        instance=instance,
+        step_output_map={},
+    )
+
+    assert payload["business_output"] == {
+        "title": "Kimi Executor 接入与配置能力",
+        "source_id": "SRC-012",
+    }
+    assert payload["gate_output"]["gate_approved"] is True
+
+
+def test_gate_payload_coerces_business_output_from_workspace_artifacts(tmp_path):
+    business_output_path = tmp_path / "business_output.yaml"
+    business_output_path.write_text(
+        "title: Kimi Executor 接入与配置能力\nsource_id: SRC-012\n",
+        encoding="utf-8",
+    )
+
+    payload = GateOperationsMixin._coerce_gate_business_payload(
+        {
+            "status": "success",
+            "workspace_artifacts": [str(business_output_path)],
+        }
+    )
+
+    assert payload == {
+        "title": "Kimi Executor 接入与配置能力",
+        "source_id": "SRC-012",
+    }

@@ -258,7 +258,37 @@ class TestArtifactManager:
         assert frozen.status == ArtifactStatus.FROZEN
         assert frozen.frozen_at is not None
         assert frozen.path.startswith("frozen/")
-        assert frozen.absolute_path.exists()
+
+    def test_create_ssot_rerun_replaces_existing_checked_in_file(self, manager):
+        """测试同一 formal_id 重跑时覆盖旧文件而不是生成重复文件"""
+        first = manager.create_ssot(
+            ssot_type=SSOTType.TASK,
+            formal_id="TASK-FEAT-SRC-009-001-001",
+            parent_id="FEAT-SRC-009-001",
+            title="旧标题",
+            content="# First\n",
+            run_id="test-run-001",
+        )
+
+        second = manager.create_ssot(
+            ssot_type=SSOTType.TASK,
+            formal_id="TASK-FEAT-SRC-009-001-001",
+            parent_id="FEAT-SRC-009-001",
+            title="新标题",
+            content="# Second\n",
+            run_id="test-run-002",
+        )
+
+        task_dir = manager.project_root / "spec" / "tasks" / "FEAT-SRC-009-001"
+        matching_files = sorted(task_dir.glob("TASK-FEAT-SRC-009-001-001__*.md"))
+
+        assert len(matching_files) == 1
+        assert matching_files[0] == second.absolute_path
+        assert not first.absolute_path.exists()
+        assert second.absolute_path.read_text(encoding="utf-8").startswith("---\n")
+        assert manager.registry.get("TASK-FEAT-SRC-009-001-001").path == (
+            second.absolute_path.relative_to(manager.project_root).as_posix()
+        )
 
     def test_freeze_already_frozen_idempotent(self, manager):
         """测试冻结已冻结的产出物是幂等的"""
