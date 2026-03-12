@@ -228,6 +228,70 @@ def test_claude_code_runner_collects_authoritative_context_files():
     ]
 
 
+def test_source_normalization_synthesizes_src_source_refs_from_metadata(runner):
+    step = SimpleNamespace(id="source_normalization", agent_id="agent.analysis.product_goal", config={})
+    business_output = {
+        "metadata": {
+            "source_ref": "ADR-007",
+        },
+        "normalized_content": {
+            "title": "QA workflow reframe",
+        },
+    }
+
+    _, payload = runner._synthesize_single_ssot_payload(
+        step=step,
+        workflow_id="wf-src-001",
+        business_output=business_output,
+        structured_payload={},
+    )
+
+    outputs = payload["ssot_output_contract"]["outputs"]
+    assert outputs[0]["source_refs"] == ["ADR-007"]
+
+
+def test_epic_designer_synthesizes_epic_source_refs_and_derived_from(runner):
+    step = SimpleNamespace(id="epic_design", agent_id="agent.product.epic_designer", config={})
+    business_output = {
+        "title": "QA Department SSOT Alignment and Workflow Reframe",
+        "source_refs": ["SRC-007", "PD-SRC-007"],
+        "ssot": {
+            "derived_from": "SRC-007",
+        },
+    }
+
+    _, payload = runner._synthesize_single_ssot_payload(
+        step=step,
+        workflow_id="wf-epic-001",
+        business_output=business_output,
+        structured_payload={},
+    )
+
+    output = payload["ssot_output_contract"]["outputs"][0]
+    assert output["source_refs"] == ["SRC-007"]
+    assert output["derived_from"] == "SRC-007"
+
+
+def test_epic_designer_falls_back_to_derived_from_for_source_refs(runner):
+    step = SimpleNamespace(id="epic_design", agent_id="agent.product.epic_designer", config={})
+    business_output = {
+        "title": "QA Department SSOT Alignment and Workflow Reframe",
+        "ssot": {
+            "derived_from": "SRC-007",
+        },
+    }
+
+    _, payload = runner._synthesize_single_ssot_payload(
+        step=step,
+        workflow_id="wf-epic-002",
+        business_output=business_output,
+        structured_payload={},
+    )
+
+    output = payload["ssot_output_contract"]["outputs"][0]
+    assert output["source_refs"] == ["SRC-007#scope"]
+
+
 def test_governance_preflight_accepts_acceptance_brief_anchor(temp_project_root, runner):
     briefs_dir = temp_project_root / ".project" / "governance" / "ACCEPTANCE_BRIEFS"
     briefs_dir.mkdir(parents=True, exist_ok=True)

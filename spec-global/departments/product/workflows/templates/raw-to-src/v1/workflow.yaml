@@ -1,0 +1,160 @@
+# Product Raw to SRC Template v1.0
+# 产品部门 L3 模板 - 从任意原始输入归一化并冻结为 SRC
+
+kind: l3_workflow_template
+version: "1.0"
+id: workflow.product.task.raw_to_src
+name: Product Raw to SRC
+description: >
+  将任意原始输入收敛为正式 SRC 并完成冻结。
+  该流程只负责源归一化和冻结，不承担 EPIC 语义建模。
+  该文件是 checked-in workflow template，运行时实例由 Python runtime 动态生成。
+owner: product-ai
+tags: [product, workflow, l3, ssot, src]
+
+roles:
+  agents:
+    - agent.analysis.product_goal
+    - agent.review.requirement_reviewer
+    - agent.governance.approval_reviewer
+  skills: []
+  gates:
+    - gate.product.src_freeze
+
+overview:
+  input_types:
+    - type: raw_requirement
+      description: 原始需求描述
+    - type: business_opportunity
+      description: 商业机会或其冻结视图
+
+  output:
+    type: source_freeze
+    ssot_type: SRC
+    description: 冻结后的 SRC 主对象或其冻结视图
+    preferred_ref: source_freeze_ref
+
+stages:
+  - id: raw_to_src_flow
+    name: "Raw to SRC Flow"
+    kind: stage
+    description: "从原始输入收敛、评审并冻结 SRC"
+    depends_on: []
+    steps:
+      - id: raw_input_intake
+        name: 原始输入接入
+        kind: agent
+        agent_id: agent.analysis.product_goal
+        mandatory: true
+        depends_on: []
+        description: >
+          接收一句话、文章、客户反馈、会议结论或商业机会输入，
+          保存原始内容和来源引用，形成待归一化输入对象。
+        inputs:
+          - source: external
+            type: [raw_requirement, business_opportunity]
+            required: true
+        outputs:
+          - symbol: raw_source_input
+            contract: departments/product/contracts/raw-source-input-contract/v1/schema.json
+            freeze: false
+      - id: source_normalization
+        name: 来源归一化
+        kind: agent
+        agent_id: agent.analysis.product_goal
+        mandatory: true
+        depends_on: [raw_input_intake]
+        description: >
+          将原始输入归一化为可审阅的 SRC candidate，
+          提炼问题陈述、目标用户、触发场景、业务动因和关键约束。
+        inputs:
+          - source: raw_source_input
+            required: true
+        outputs:
+          - symbol: normalized_src
+            contract: departments/product/contracts/source-freeze-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: SRC
+      - id: source_review
+        name: SRC 对齐评审
+        kind: agent
+        agent_id: agent.review.requirement_reviewer
+        mandatory: true
+        depends_on: [source_normalization]
+        description: >
+          校验 SRC candidate 是否已具备足够稳定的问题定义和来源可追溯性，
+          可作为后续下游流程的正式输入。
+        inputs:
+          - source: normalized_src
+            required: true
+        outputs:
+          - symbol: source_review_report
+            contract: departments/product/contracts/product-review-contract/v1/schema.json
+            freeze: false
+      - id: source_freeze
+        name: SRC 冻结
+        kind: gate
+        mandatory: true
+        depends_on: [source_review]
+        description: >
+          由产品负责人冻结正式 SRC。
+          冻结后，下游流程只能引用该 SRC 版本，不允许直接回到原始输入。
+        inputs:
+          - source: normalized_src
+            required: true
+          - source: source_review_report
+            required: true
+        outputs:
+          - path: output/design-frozen/{project}-src-freeze.yaml
+            required: true
+            freeze: true
+            contract: departments/product/contracts/source-freeze-contract/v1/schema.json
+            ssot:
+              identity_kind: ssot
+              ssot_type: SRC
+              derived_from: normalized_src
+        gate_rules:
+          reviewers:
+            - role: product_owner
+          approval_criteria:
+            - label: "来源可追溯"
+              criteria: "原始输入来源和引用关系明确"
+              required: true
+            - label: "问题定义稳定"
+              criteria: "问题陈述、目标用户、业务动因和关键约束完整"
+              required: true
+            - label: "可独立复用"
+              criteria: "SRC 已具备独立 replay、单测和复用条件"
+              required: true
+        config:
+          gate:
+            type: human_approval
+            gate_id: gate.product.src_freeze
+    step_order:
+      - raw_input_intake
+      - source_normalization
+      - source_review
+      - source_freeze
+
+stage_order:
+  - raw_to_src_flow
+
+constraints:
+  src_only_boundary: |
+    该流程只负责 raw -> SRC。
+    不得在本流程中生成 EPIC、FEAT 或 TASK。
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+  context_fields:
+    - raw_requirement
+    - business_opportunity
+    - source_freeze_ref
+  output_fields:
+    - source_freeze

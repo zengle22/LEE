@@ -2238,6 +2238,37 @@ class LLMRunner(StepRunnerBase):
         return filtered
 
     @staticmethod
+    def _derive_source_refs_from_business_output(
+        business_output: Any,
+        *,
+        allowed_prefixes: Optional[List[str]] = None,
+    ) -> List[str]:
+        if not isinstance(business_output, dict):
+            return []
+
+        candidates: List[Any] = []
+        metadata = business_output.get("metadata")
+        if isinstance(metadata, dict):
+            candidates.extend([metadata.get("source_refs"), metadata.get("source_ref")])
+
+        normalized_content = business_output.get("normalized_content")
+        if isinstance(normalized_content, dict):
+            candidates.extend([normalized_content.get("source_refs"), normalized_content.get("source_ref")])
+
+        candidates.extend([business_output.get("source_refs"), business_output.get("source_ref")])
+
+        prefixes = {prefix.upper() for prefix in (allowed_prefixes or []) if isinstance(prefix, str)}
+        derived_refs: List[str] = []
+        for value in candidates:
+            for ref in LLMRunner._filter_materializable_refs(value):
+                ref_root = ref.split("#", 1)[0].upper()
+                if prefixes and not any(ref_root.startswith(f"{prefix}-") for prefix in prefixes):
+                    continue
+                if ref not in derived_refs:
+                    derived_refs.append(ref)
+        return derived_refs
+
+    @staticmethod
     def _resolve_changed_file_paths(
         *,
         workspace: str,
@@ -2920,22 +2951,33 @@ class LLMRunner(StepRunnerBase):
         agent_id = getattr(step, "agent_id", "") or ""
         step_id = getattr(step, "id", "") or ""
         if agent_id == "agent.product.epic_designer":
+            source_refs = LLMRunner._derive_source_refs_from_business_output(
+                business_output,
+                allowed_prefixes=["SRC"],
+            )
+            ssot_meta = business_output.get("ssot") if isinstance(business_output.get("ssot"), dict) else {}
+            derived_from = ssot_meta.get("derived_from")
+            if not source_refs and isinstance(derived_from, str) and LLMRunner._is_literal_ssot_ref(derived_from):
+                source_refs = [f"{derived_from}#scope"]
             payload = LLMRunner._ensure_structured_envelope(
                 business_output=business_output,
                 structured_payload=structured_payload,
             )
+            epic_output = {
+                "key": "epic",
+                "identity_kind": "ssot",
+                "ssot_type": "epic",
+                "title": str(business_output.get("title") or "EPIC").strip() or "EPIC",
+                "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
+            }
+            if source_refs:
+                epic_output["source_refs"] = source_refs
+            if isinstance(derived_from, str) and derived_from.strip():
+                epic_output["derived_from"] = derived_from.strip()
             payload["ssot_output_contract"] = {
                 "contract_version": "1.0",
                 "run_id": workflow_id,
-                "outputs": [
-                    {
-                        "key": "epic",
-                        "identity_kind": "ssot",
-                        "ssot_type": "epic",
-                        "title": str(business_output.get("title") or "EPIC").strip() or "EPIC",
-                        "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
-                    }
-                ],
+                "outputs": [epic_output],
             }
             return business_output, payload
 
@@ -2949,26 +2991,28 @@ class LLMRunner(StepRunnerBase):
                 business_output=business_output,
                 structured_payload=structured_payload,
             )
+            source_refs = LLMRunner._derive_source_refs_from_business_output(business_output)
+            src_output = {
+                "key": "src",
+                "identity_kind": "ssot",
+                "ssot_type": "src",
+                "title": (
+                    str(
+                        business_output.get("title")
+                        or normalized_content.get("title")
+                        or business_output.get("src_id")
+                        or "SRC"
+                    ).strip()
+                    or "SRC"
+                ),
+                "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
+            }
+            if source_refs:
+                src_output["source_refs"] = source_refs
             payload["ssot_output_contract"] = {
                 "contract_version": "1.0",
                 "run_id": workflow_id,
-                "outputs": [
-                    {
-                        "key": "src",
-                        "identity_kind": "ssot",
-                        "ssot_type": "src",
-                        "title": (
-                            str(
-                                business_output.get("title")
-                                or normalized_content.get("title")
-                                or business_output.get("src_id")
-                                or "SRC"
-                            ).strip()
-                            or "SRC"
-                        ),
-                        "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
-                    }
-                ],
+                "outputs": [src_output],
             }
             return business_output, payload
 
