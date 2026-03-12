@@ -89,8 +89,8 @@ frozen_at: '2026-03-11T16:07:19.716191'
 - Trace Hints: UI, TASK
 # Dependencies
 
-- FEAT-004-001
-- FEAT-004-002
+- FEAT-085
+- FEAT-086
 # Non Goals
 
 - 不支持跨机器/跨实例的会话恢复

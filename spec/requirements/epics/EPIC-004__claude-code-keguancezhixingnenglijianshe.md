@@ -5,8 +5,10 @@ title: Claude Code 可观测执行能力建设
 status: frozen
 version: v1
 parent_id: null
-derived_from_ids: []
+derived_from_ids:
+- SRC-004
 source_refs:
+- SRC-004
 - ADR-004
 owner: product
 tags:

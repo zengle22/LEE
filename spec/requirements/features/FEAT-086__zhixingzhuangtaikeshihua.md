@@ -89,7 +89,7 @@ frozen_at: '2026-03-11T16:07:19.709616'
 - Trace Hints: UI, TECH, TESTSET
 # Dependencies
 
-- FEAT-004-001
+- FEAT-085
 # Non Goals
 
 - 不涉及 Gate 三分类逻辑
