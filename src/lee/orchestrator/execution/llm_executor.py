@@ -161,11 +161,23 @@ class LLMConfig:
         return resolved
 
     def get_default_profile(self) -> str:
-        """读取配置文件中的 default_profile，未配置时回退到 default。"""
+        """读取可用的默认 profile，坏配置会自动回退到首个可用项。"""
         configured = self.configs.get("default_profile")
         if isinstance(configured, str) and configured.strip():
-            return configured.strip()
+            candidate = configured.strip()
+            if self._has_usable_api_key(self.get_config(candidate)):
+                return candidate
+
+        for candidate in ("deepseek", "qwen", "default"):
+            if self._has_usable_api_key(self.get_config(candidate)):
+                return candidate
+
         return "default"
+
+    @staticmethod
+    def _has_usable_api_key(config: Dict[str, Any]) -> bool:
+        api_key = str(config.get("api_key") or "").strip()
+        return bool(api_key) and not (api_key.startswith("${") and api_key.endswith("}"))
 
 
 class LLMExecutor:
@@ -177,19 +189,19 @@ class LLMExecutor:
     配置文件: flowcore/engines/llm/config.yaml
     """
 
-    def __init__(self, profile: str = "antigravity", config_path: Optional[str] = None,
+    def __init__(self, profile: Optional[str] = None, config_path: Optional[str] = None,
                  fallback_providers: Optional[List[str]] = None):
         """
         初始化 LLM 执行器
 
         Args:
-            profile: 配置文件名称（default, antigravity, zhipu, agent.prd, agent.dev）
+            profile: 配置文件名称（未指定时读取 config/llm_config.yaml 的 default_profile）
             config_path: 配置文件路径
             fallback_providers: 备用 provider 列表，当主 provider 失败时自动切换
         """
         self.config_manager = LLMConfig(config_path)
-        self.profile = profile
-        self.config = self.config_manager.get_config(profile)
+        self.profile = (profile or os.getenv("LLM_PROFILE") or self.config_manager.get_default_profile()).strip()
+        self.config = self.config_manager.get_config(self.profile)
 
         # 加载全局 fallback 配置
         self._fallback_providers = fallback_providers or self._load_fallback_providers()

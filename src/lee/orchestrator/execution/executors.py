@@ -76,7 +76,7 @@ class LLMExecutor(BaseExecutor):
     配置文件: flowcore/engines/llm/config.yaml
     """
 
-    def __init__(self, profile: str = "antigravity", config_path: str = None,
+    def __init__(self, profile: str = None, config_path: str = None,
                  fallback_providers: list = None, **kwargs):
         self._executor = RealLLMExecutor(
             profile=profile,

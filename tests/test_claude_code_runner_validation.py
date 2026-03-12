@@ -1104,6 +1104,74 @@ async def test_materialize_ssot_outputs_without_agent_schema_uses_default_contra
     assert (tmp_path / "spec" / "source").exists()
 
 
+@pytest.mark.asyncio
+async def test_materialize_ssot_outputs_falls_back_to_workspace_formal_markdown_for_tech_design(tmp_path):
+    runner = LLMRunner()
+    workspace_file = (
+        tmp_path
+        / ".workflow"
+        / "workspace"
+        / "wf-tech"
+        / "tech_design"
+        / "FEAT-081__frozen-technical-architecture.md"
+    )
+    workspace_file.parent.mkdir(parents=True, exist_ok=True)
+    workspace_file.write_text(
+        "\n".join(
+            [
+                "---",
+                "id: TECH-FEAT-081-001",
+                "ssot_type: tech",
+                "title: FEAT-081 Workflow-First CLI 技术架构",
+                "status: active",
+                "version: v1",
+                "parent_id: FEAT-081",
+                "derived_from_ids:",
+                "  - ADR-006",
+                "source_refs:",
+                "  - FEAT-081#scope",
+                "properties:",
+                "  contract_key: tech_spec",
+                "  identity_kind: ssot",
+                "---",
+                "",
+                "# FEAT-081 Workflow-First CLI 技术架构",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    agent_loader = MagicMock()
+    agent_loader.load.return_value = SimpleNamespace(contracts={}, spec_path=None)
+    ctx = RunnerContext(
+        store=MagicMock(),
+        state_machine=MagicMock(),
+        event_log=MagicMock(),
+        evidence_collector=MagicMock(),
+        verifier_engine=MagicMock(),
+        executor_factory=MagicMock(),
+        agent_context_builder=SimpleNamespace(agent_loader=agent_loader),
+        contract_discovery=MagicMock(),
+        file_output_handler=SimpleNamespace(project_root=tmp_path),
+        token_manager=MagicMock(),
+        project_root=str(tmp_path),
+    )
+    step = SimpleNamespace(id="tech_design", agent_id="agent.dev.tech_architect", config={})
+
+    result = await runner._materialize_ssot_outputs(
+        ctx=ctx,
+        step=step,
+        workflow_id="wf-tech",
+        generated_text="",
+        structured_payload=None,
+        written_files=[str(workspace_file)],
+    )
+
+    assert result is not None
+    assert result["outputs"]["tech_spec"]["id"] == "TECH-FEAT-081-001"
+    assert list((tmp_path / "spec" / "tech").glob("TECH-FEAT-081-001__*.md"))
+
+
 def test_extract_business_output_for_validation_prefers_generated_text_over_wrapper():
     step = SimpleNamespace(id="feat_spec_generation", agent_id="agent.product.prd_writer", outputs=[])
     output = {

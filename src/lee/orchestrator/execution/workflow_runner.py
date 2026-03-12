@@ -11,6 +11,7 @@ Workflow Runner - Plan → Instance → Execute 流程控制器
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 from lee.orchestrator.core.template_engine import TemplateEngine
 from lee.orchestrator.core.template_resolver import TemplateResolver
 from lee.orchestrator.core.instance_generator import InstanceGenerator
+from lee.orchestrator.config_loader import load_config
 from lee.orchestrator.execution.plan_agent import PlanAgent, PlanConfig, create_plan
 from lee.orchestrator.execution.llm_executor import LLMExecutor
 from lee.orchestrator.execution.review_gate import ReviewGate, check_review_gate
@@ -47,6 +49,7 @@ class WorkflowRunConfig:
     instance_id: Optional[str] = None  # 指定从 Instance 运行
     auto_approve: bool = False  # 自动批准（测试用，生产环境应为 False）
     ssot_root_id: Optional[str] = None  # SSOT Root ID (任务立项 ID)
+    executor_override: Optional[str] = None  # CLI 显式指定执行器
 
 
 @dataclass
@@ -70,6 +73,7 @@ class WorkflowRunner:
 
     def __init__(self, config: WorkflowRunConfig):
         self.config = config
+        self.project_config = load_config(str(config.project_root))
         self.plan_agent: Optional[PlanAgent] = None
         self.instance_generator: Optional[InstanceGenerator] = None
 
@@ -103,6 +107,15 @@ class WorkflowRunner:
         # 1. 加载和渲染模板
         template = await self._load_template()
 
+        if self._should_bypass_plan(template):
+            workflow_id = await self._create_workflow(self.config.template_path)
+            return WorkflowRunResult(
+                workflow_id=workflow_id,
+                instance_path=self.config.template_path,
+                plan_summary="Bypassed PlanAgent for phase-based workflow template.",
+                success=True,
+            )
+
         # 2. 调用 Plan Agent
         plan_config = PlanConfig(
             mode=self.config.plan_mode,
@@ -110,7 +123,7 @@ class WorkflowRunner:
             review_criteria=["complexity == high", "gate_count > 0"]
         )
 
-        llm = LLMExecutor()
+        llm = self._create_plan_executor()
         plan_result = await create_plan(
             template=template,
             params=self.config.params,
@@ -148,13 +161,18 @@ class WorkflowRunner:
             phase_id=self.config.params.get("phase_id", ""),
             tier="l2"
         )
+        instance_path = (
+            self.instance_generator.instances_dir
+            / "l2"
+            / f"{instance_meta.workflow_id}-v{instance_meta.version}.yaml"
+        )
 
         # 5. 创建工作流实例
-        workflow_id = await self._create_workflow(instance_meta.instance_path)
+        workflow_id = await self._create_workflow(instance_path)
 
         return WorkflowRunResult(
             workflow_id=workflow_id,
-            instance_path=instance_meta.instance_path,
+            instance_path=instance_path,
             plan_summary=plan_result.summary,
             success=True
         )
@@ -335,7 +353,12 @@ class WorkflowRunner:
             "scope_source": scope_info.scope_source,
             **extra_data,
         }
-        result = pm_workflow(
+        if self.config.ssot_root_id:
+            workflow_data["ssot_root_id"] = self.config.ssot_root_id
+        if self.config.executor_override:
+            workflow_data["executor_override"] = self.config.executor_override
+        result = await asyncio.to_thread(
+            pm_workflow,
             "create",
             project_dir=str(self.config.project_root),
             level=workflow_level.value,
@@ -391,6 +414,18 @@ class WorkflowRunner:
 
         return WorkflowLevel.TASK, {}
 
+    def _create_plan_executor(self) -> LLMExecutor:
+        """Create the plan-stage LLM executor without relying on deprecated antigravity defaults."""
+        return LLMExecutor(profile=os.getenv("LLM_PROFILE") or None)
+
+    @staticmethod
+    def _should_bypass_plan(template: Dict[str, Any]) -> bool:
+        """PlanAgent 目前仅适配 step-based template；phase-based L2 模板直接走原生编排。"""
+        kind = str(template.get("kind") or "").strip()
+        phases = template.get("phases")
+        steps = template.get("steps")
+        return kind in {"l2_workflow_template", "l2_workflow_instance"} and isinstance(phases, list) and not steps
+
 
 async def run_workflow(
     workflow_key: str,
@@ -400,7 +435,8 @@ async def run_workflow(
     plan_mode: str = "suggest",
     skip_plan: bool = False,
     instance_id: Optional[str] = None,
-    ssot_root_id: Optional[str] = None
+    ssot_root_id: Optional[str] = None,
+    executor_override: Optional[str] = None,
 ) -> WorkflowRunResult:
     """
     便捷函数：运行工作流
@@ -426,7 +462,8 @@ async def run_workflow(
         plan_mode=plan_mode,
         skip_plan=skip_plan,
         instance_id=instance_id,
-        ssot_root_id=ssot_root_id
+        ssot_root_id=ssot_root_id,
+        executor_override=executor_override,
     )
 
     runner = WorkflowRunner(config)

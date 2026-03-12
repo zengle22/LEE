@@ -2,6 +2,8 @@
 Claude Code executor unit tests.
 """
 
+import os
+
 from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor
 
 
@@ -51,3 +53,24 @@ class TestClaudeCodeExecutor:
         )
 
         assert status == "success"
+
+    def test_default_model_uses_supported_claude_sonnet_version(self):
+        previous = os.environ.pop("CLAUDE_CODE_MODEL", None)
+        try:
+            executor = ClaudeCodeExecutor()
+            assert executor._model == "sonnet"
+        finally:
+            if previous is not None:
+                os.environ["CLAUDE_CODE_MODEL"] = previous
+
+    def test_legacy_env_model_alias_normalizes_to_supported_sonnet(self):
+        previous = os.environ.get("CLAUDE_CODE_MODEL")
+        try:
+            os.environ["CLAUDE_CODE_MODEL"] = "claude-sonnet-4-6"
+            executor = ClaudeCodeExecutor()
+            assert executor._model == "sonnet"
+        finally:
+            if previous is None:
+                os.environ.pop("CLAUDE_CODE_MODEL", None)
+            else:
+                os.environ["CLAUDE_CODE_MODEL"] = previous

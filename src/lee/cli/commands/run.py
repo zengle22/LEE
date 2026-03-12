@@ -965,7 +965,8 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
                 plan_mode=plan_mode,
                 skip_plan=False,
                 instance_id=instance,
-                ssot_root_id=ssot_root_id
+                ssot_root_id=ssot_root_id,
+                executor_override=executor,
             ))
 
             if not result.success:

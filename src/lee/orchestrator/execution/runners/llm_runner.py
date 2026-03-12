@@ -1299,6 +1299,7 @@ class LLMRunner(StepRunnerBase):
                 workflow_id=workflow_id,
                 generated_text=generated_text,
                 structured_payload=structured_payload,
+                written_files=written_files,
             )
             if ssot_materialized:
                 materialized_files = ssot_materialized.get("materialized_files", [])
@@ -1416,6 +1417,7 @@ class LLMRunner(StepRunnerBase):
         workflow_id: str,
         generated_text: str,
         structured_payload: Optional[Any] = None,
+        written_files: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         If the agent spec declares ssot_output_schema, validate and materialize it.
@@ -1432,7 +1434,12 @@ class LLMRunner(StepRunnerBase):
             generated_text=generated_text,
         )
         if not schema_ref and contract_data is None:
-            return None
+            return self._materialize_workspace_formal_ssot_markdown(
+                ctx=ctx,
+                step=step,
+                workflow_id=workflow_id,
+                written_files=written_files,
+            )
         if contract_data is None:
             try:
                 contract_data = self._parse_structured_output(generated_text)
@@ -1441,14 +1448,24 @@ class LLMRunner(StepRunnerBase):
                 if strict:
                     raise
                 print(f"[SSOTContract] Warning: Step {step.id} structured output parse failed: {exc}")
-                return None
+                return self._materialize_workspace_formal_ssot_markdown(
+                    ctx=ctx,
+                    step=step,
+                    workflow_id=workflow_id,
+                    written_files=written_files,
+                )
 
         if contract_data is None:
             strict = (step.config or {}).get("strict_output_validation", False)
             if strict:
                 raise ValueError("SSOT output schema declared but no ssot_output_contract found")
             print(f"[SSOTContract] Warning: Step {step.id} missing ssot_output_contract payload")
-            return None
+            return self._materialize_workspace_formal_ssot_markdown(
+                ctx=ctx,
+                step=step,
+                workflow_id=workflow_id,
+                written_files=written_files,
+            )
 
         if schema_ref:
             schema_path = self._resolve_contract_path(
@@ -1475,7 +1492,12 @@ class LLMRunner(StepRunnerBase):
             if strict:
                 raise
             print(f"[SSOTContract] Warning: Step {step.id} SSOT materialization failed: {exc}")
-            return None
+            return self._materialize_workspace_formal_ssot_markdown(
+                ctx=ctx,
+                step=step,
+                workflow_id=workflow_id,
+                written_files=written_files,
+            )
 
         materialized_summary = {}
         materialized_files: List[str] = []
@@ -1492,6 +1514,98 @@ class LLMRunner(StepRunnerBase):
 
         return {
             "schema_path": schema_path,
+            "outputs": materialized_summary,
+            "materialized_files": materialized_files,
+        }
+
+    @staticmethod
+    def _materialize_workspace_formal_ssot_markdown(
+        ctx: RunnerContext,
+        step,
+        workflow_id: str,
+        written_files: Optional[List[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        if getattr(step, "id", "") not in {"ui_design", "tech_design"}:
+            return None
+
+        candidate_paths = [Path(path) for path in (written_files or []) if isinstance(path, str) and path.strip()]
+        if not candidate_paths:
+            return None
+
+        try:
+            from lee.orchestrator.execution.artifacts import ArtifactManager
+            from lee.orchestrator.execution.artifacts.ssot_files import parse_front_matter
+            from lee.orchestrator.execution.artifacts.types import ArtifactStatus, SSOTType
+        except Exception:
+            return None
+
+        manager = ArtifactManager(project_root=Path(ctx.project_root or ".").resolve())
+        materialized_summary: Dict[str, Any] = {}
+        materialized_files: List[str] = []
+
+        for path in candidate_paths:
+            if not path.exists() or path.suffix.lower() != ".md":
+                continue
+            try:
+                front_matter, _body = parse_front_matter(path)
+            except Exception:
+                continue
+
+            artifact_id = front_matter.get("id")
+            ssot_type_value = front_matter.get("ssot_type")
+            title = front_matter.get("title")
+            if not isinstance(artifact_id, str) or not artifact_id.strip():
+                continue
+            if not isinstance(ssot_type_value, str) or not ssot_type_value.strip():
+                continue
+            try:
+                ssot_type = SSOTType(ssot_type_value.strip().lower())
+            except Exception:
+                continue
+
+            try:
+                status = ArtifactStatus(str(front_matter.get("status", "active")).upper())
+            except Exception:
+                status = ArtifactStatus.ACTIVE
+
+            derived_from_ids = front_matter.get("derived_from_ids")
+            source_refs = front_matter.get("source_refs")
+            owner = front_matter.get("owner")
+            tags = front_matter.get("tags")
+            version = front_matter.get("version")
+            properties = front_matter.get("properties")
+
+            artifact = manager.create_ssot(
+                ssot_type=ssot_type,
+                title=str(title or artifact_id).strip() or artifact_id.strip(),
+                content=path,
+                run_id=workflow_id,
+                formal_id=artifact_id.strip(),
+                parent_id=front_matter.get("parent_id"),
+                derived_from=derived_from_ids if isinstance(derived_from_ids, list) else [],
+                source_refs=source_refs if isinstance(source_refs, list) else [],
+                owner=owner if isinstance(owner, str) else None,
+                tags=tags if isinstance(tags, list) else [],
+                status=status,
+                version=str(version or "v1"),
+                properties=properties if isinstance(properties, dict) else {},
+            )
+
+            output_key = "ui_prototype" if ssot_type == SSOTType.UI else "tech_spec"
+            materialized_summary[output_key] = {
+                "id": artifact.id,
+                "identity_kind": "ssot",
+                "path": artifact.path,
+                "path_root": artifact.path_root,
+                "parent_id": artifact.properties.get("parent_id"),
+            }
+            materialized_files.append(str(artifact.absolute_path))
+
+        if not materialized_summary:
+            return None
+
+        return {
+            "schema_path": None,
             "outputs": materialized_summary,
             "materialized_files": materialized_files,
         }
@@ -5794,6 +5908,9 @@ class ClaudeCodeRunner(StepRunnerBase):
     _build_schema_repair_input = staticmethod(LLMRunner._build_schema_repair_input)
     _build_schema_repair_prompt = staticmethod(LLMRunner._build_schema_repair_prompt)
     _complete_non_ui_design_step = LLMRunner._complete_non_ui_design_step
+    _materialize_workspace_formal_ssot_markdown = staticmethod(
+        LLMRunner._materialize_workspace_formal_ssot_markdown
+    )
     _extract_feat_freeze_path = staticmethod(LLMRunner._extract_feat_freeze_path)
     _load_feat_bundle_payload = classmethod(LLMRunner._load_feat_bundle_payload.__func__)
     _load_yaml_frontmatter = staticmethod(LLMRunner._load_yaml_frontmatter)

@@ -459,6 +459,8 @@ def _create_config(project_root: Path, force: bool = False) -> None:
         "spec_root": "builtin",  # 使用 builtin 表示包内默认
         "executor": {
             "default_type": "claude_code",
+            "coding_executor": "claude_code",
+            "coding_fallback": "kimi",
         },
     }
 

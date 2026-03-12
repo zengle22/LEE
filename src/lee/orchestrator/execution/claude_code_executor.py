@@ -75,7 +75,11 @@ class ClaudeCodeExecutor(BaseExecutor):
     DEFAULT_STRICT_MCP_CONFIG = True
     DEFAULT_ALLOWED_COMMANDS = ["cat", "ls", "find", "grep"]
     DEFAULT_HEARTBEAT_SECONDS = 5
-    DEFAULT_MODEL = "claude-sonnet-4-6"
+    DEFAULT_MODEL = "sonnet"
+    LEGACY_MODEL_ALIASES = {
+        "claude-sonnet-4-6": "sonnet",
+        "claude-sonnet-4.6": "sonnet",
+    }
     DEFAULT_MAX_BASH_CALLS = 60
     DEFAULT_RESUME_ON_RETRY = True
     BASH_PRE_TOOL_HOOK_PATTERN = re.compile(
@@ -90,7 +94,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             **kwargs: 额外参数（保留扩展性）
         """
         self._claude_binary = os.getenv("CLAUDE_CODE_BINARY", "claude")
-        self._model = (
+        self._model = self._normalize_model_name(
             kwargs.get("model")
             or os.getenv("CLAUDE_CODE_MODEL", "").strip()
             or self.DEFAULT_MODEL
@@ -170,7 +174,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         stop_conditions = input_data.get("stop_conditions", {})
         system_prompt_extra = input_data.get("system_prompt_extra", "")
         evidence_base = input_data.get("evidence_base", "")
-        model = str(input_data.get("model") or self._model or "").strip()
+        model = self._normalize_model_name(input_data.get("model") or self._model or "")
         max_bash_calls = self._coerce_non_negative_int(
             input_data.get("max_bash_calls"),
             self.DEFAULT_MAX_BASH_CALLS,
@@ -721,6 +725,20 @@ class ClaudeCodeExecutor(BaseExecutor):
                 extra[var] = val
 
         return extra
+
+    @classmethod
+    def _normalize_model_name(cls, model: Any) -> str:
+        normalized = str(model or "").strip()
+        if not normalized:
+            return cls.DEFAULT_MODEL
+        rewritten = cls.LEGACY_MODEL_ALIASES.get(normalized.lower(), normalized)
+        if rewritten != normalized:
+            logger.warning(
+                "Normalizing unsupported Claude model alias '%s' -> '%s'",
+                normalized,
+                rewritten,
+            )
+        return rewritten
 
     def _setup_sandbox_home(self, project_root: str) -> Optional[str]:
         """

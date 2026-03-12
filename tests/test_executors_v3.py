@@ -85,6 +85,64 @@ def test_executor_factory_uses_config_default_profile(tmp_path, monkeypatch):
     assert executor._executor.profile == "sample_profile"
 
 
+def test_llm_config_default_profile_skips_unusable_configured_profile(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "llm_config.yaml").write_text(
+        "\n".join(
+            [
+                "default_profile: broken_profile",
+                "broken_profile:",
+                "  type: llm",
+                "  provider: openai",
+                "  base_url: https://example.invalid/v1",
+                "  api_key: ${BROKEN_API_KEY}",
+                "  model: broken-model",
+                "deepseek:",
+                "  type: llm",
+                "  provider: deepseek",
+                "  base_url: https://api.deepseek.com",
+                "  api_key: deepseek-key",
+                "  model: deepseek-chat",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("BROKEN_API_KEY", raising=False)
+
+    config = LLMConfig()
+
+    assert config.get_default_profile() == "deepseek"
+
+
+def test_llm_executor_uses_config_default_profile_when_unspecified(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "llm_config.yaml").write_text(
+        "\n".join(
+            [
+                "default_profile: sample_profile",
+                "sample_profile:",
+                "  type: llm",
+                "  provider: openai",
+                "  base_url: https://example.invalid/v1",
+                "  api_key: sample-key",
+                "  model: sample-model",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("LLM_PROFILE", raising=False)
+
+    executor = LLMExecutor()
+
+    assert executor._executor.profile == "sample_profile"
+
+
 def test_executor_factory_qwen_executor_defaults_to_qwen_profile(monkeypatch):
     monkeypatch.delenv("LLM_PROFILE", raising=False)
 
