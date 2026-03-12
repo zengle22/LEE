@@ -1835,7 +1835,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             point=point,
             parent_l2_id=workflow_id,
             parent_phase_id=phase_id,
-            repo_id=repo_id
+            repo_id=repo_id,
+            l3_template_id=phase_info.get("l3_template_id"),
         )
 
         # Update phase with L3 reference
@@ -1943,7 +1944,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     point=point,
                     parent_l2_id=workflow_id,
                     parent_phase_id=phase_id,
-                    repo_id=repo_id
+                    repo_id=repo_id,
+                    l3_template_id=phase_info.get("l3_template_id"),
                 )
                 spawn_tasks.append(task)
 
@@ -2287,9 +2289,9 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         if not repos:
             raise ValueError(f"No repos configured for phase {phase_id}")
 
-        # Simple mapping for P0
-        frontend_phases = {"frontend_dev", "integration"}
-        backend_phases = {"backend_dev", "api_align"}
+        frontend_phases = {"frontend_dev"}
+        backend_phases = {"backend_dev", "api_align", "contract_design"}
+        shared_phases = {"tech_design", "integration", "evidence_pack", "smoke_gate"}
 
         for repo in repos:
             repo_id = repo.get("id", "")
@@ -2298,6 +2300,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             if phase_id in frontend_phases and repo_type == "frontend":
                 return repo_id
             elif phase_id in backend_phases and repo_type == "backend":
+                return repo_id
+            elif phase_id in shared_phases and repo_type in {"backend", "frontend"}:
                 return repo_id
 
         # Fallback to first repo with warning
@@ -2315,9 +2319,13 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         layer_map = {
             "plan": "ui",
             "api_align": "api",
+            "tech_design": "service",
+            "contract_design": "api",
             "frontend_dev": "ui",
             "backend_dev": "service",
-            "integration": "ui",
+            "integration": "api",
+            "evidence_pack": "service",
+            "smoke_gate": "ui",
         }
         return layer_map.get(phase_id, "ui")
 
@@ -2351,12 +2359,49 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # Fallback to first repo with warning
         return repos[0].get("id", "")
 
+    def _resolve_l3_template_path(self, l3_template_id: str) -> Path:
+        """Resolve a canonical L3 template ID to an on-disk template path."""
+        template_roots = []
+        if self.project_root:
+            project_root_path = Path(self.project_root)
+            template_roots.extend([
+                project_root_path / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+                project_root_path / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+            ])
+        else:
+            template_roots.extend([
+                Path("lee/spec-global/departments/dev/workflows/templates"),
+                Path("spec-global/departments/dev/workflows/templates"),
+            ])
+
+        template_file_map = {
+            "template.dev.task_l3_v3": "l3/task-l3-v3-template.yaml",
+            "template.dev.tech_design_l3": "tech-design-l3-template.yaml",
+            "template.dev.feature_contract_l3": "feature-contract-l3-template.yaml",
+            "template.dev.feature_fe_l3": "feature-fe-l3-template.yaml",
+            "template.dev.feature_be_l3": "feature-be-l3-template.yaml",
+            "template.dev.feature_integration_l3": "feature-integration-l3-template.yaml",
+            "template.dev.evidence_pack_l3": "evidence-pack-l3-template.yaml",
+        }
+        relative_path = template_file_map.get(l3_template_id)
+        if relative_path is None:
+            raise FileNotFoundError(f"Unsupported L3 template ID: {l3_template_id}")
+
+        for template_root in template_roots:
+            candidate = template_root / relative_path
+            if candidate.exists():
+                return candidate
+
+        search_roots = ", ".join(str(root / relative_path) for root in template_roots)
+        raise FileNotFoundError(f"L3 template {l3_template_id} not found under: {search_roots}")
+
     async def _spawn_l3_for_point(
         self,
         point: Point,
         parent_l2_id: str,
         parent_phase_id: str,
-        repo_id: str
+        repo_id: str,
+        l3_template_id: Optional[str] = None,
     ) -> str:
         """Generate and spawn L3 instance for a single point.
 
@@ -2383,39 +2428,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             parent_l2_id=parent_l2_id,
             parent_phase_id=parent_phase_id,
             repo_id=repo_id,
-            prd_path=context.get("prd_path", "")
+            prd_path=context.get("prd_path", ""),
+            template_id=l3_template_id or "template.dev.task_l3_v3",
         )
 
-        # Find L3 template path across supported framework layouts
-        template_roots = []
-        if self.project_root:
-            project_root_path = Path(self.project_root)
-            template_roots.extend([
-                project_root_path / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates",
-                project_root_path / "spec-global" / "departments" / "dev" / "workflows" / "templates",
-            ])
-        else:
-            template_roots.extend([
-                Path("lee/spec-global/departments/dev/workflows/templates"),
-                Path("spec-global/departments/dev/workflows/templates"),
-            ])
-
-        l3_template_path = None
-        for template_base in template_roots:
-            v3_candidate = template_base / "l3" / "task-l3-v3-template.yaml"
-            if v3_candidate.exists():
-                l3_template_path = v3_candidate
-                break
-
-            legacy_candidate = template_base / "task-l3-template.yaml"
-            if legacy_candidate.exists():
-                l3_template_path = legacy_candidate
-                break
-
-        if l3_template_path is None:
-            search_roots = ", ".join(str(root) for root in template_roots)
-            raise FileNotFoundError(f"L3 template not found under: {search_roots}")
-
+        l3_template_id = config.template_id
+        l3_template_path = self._resolve_l3_template_path(l3_template_id)
         generator = WorkflowGenerator(template_path=str(l3_template_path))
 
         # Instance files go to runtime directory (.workflow/instances/l3/), NOT in framework directory
@@ -2429,9 +2447,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         if not result.success:
             raise RuntimeError(f"Failed to generate L3 instance: {result.errors}")
 
-        # Spawn L3 workflow using existing spawn_workflow
-        # v3: Use the L3 v3 template_id
-        l3_template_id = "template.dev.task_l3_v3"
+        # Spawn L3 workflow using the phase-resolved template ID.
         l3_instance = await self.spawn_workflow(
             parent_id=parent_l2_id,
             level=WorkflowLevel.TASK,
@@ -2445,6 +2461,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 "point_complexity": point.estimated_complexity.value,
                 "parent_phase_id": parent_phase_id,
                 "repo_id": repo_id,
+                "l3_template_id": l3_template_id,
                 "step_index": 0,  # Current step in L3 flow
             }
         )

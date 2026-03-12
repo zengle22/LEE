@@ -90,6 +90,10 @@ class TestL2InstanceGeneration:
         assert result.generated_workflow is not None
         assert result.generated_workflow["kind"] == "l2_workflow_instance"
         assert len(result.generated_workflow["phases"]) == 7  # 7 phases in canonical template
+        phases = {phase["id"]: phase for phase in result.generated_workflow["phases"]}
+        assert phases["tech_design"]["l3_template_id"] == "template.dev.tech_design_l3"
+        assert phases["contract_design"]["gate_id"] == "gate.dev.contract_freeze_gate"
+        assert phases["smoke_gate"]["gate_id"] == "gate.dev.smoke_gate"
 
 
 class TestL3InstanceGeneration:
@@ -318,12 +322,17 @@ class TestOrchestratorL2Methods:
         assert orchestrator._get_repo_id_for_phase("frontend_dev", repos) == "fe-repo"
         assert orchestrator._get_repo_id_for_phase("backend_dev", repos) == "be-repo"
         assert orchestrator._get_repo_id_for_phase("api_align", repos) == "be-repo"
+        assert orchestrator._get_repo_id_for_phase("tech_design", repos) == "fe-repo"
+        assert orchestrator._get_repo_id_for_phase("contract_design", repos) == "be-repo"
 
     def test_get_layer_for_phase(self, orchestrator):
         """Test layer mapping for phase."""
         assert orchestrator._get_layer_for_phase("frontend_dev") == "ui"
         assert orchestrator._get_layer_for_phase("backend_dev") == "service"
         assert orchestrator._get_layer_for_phase("api_align") == "api"
+        assert orchestrator._get_layer_for_phase("tech_design") == "service"
+        assert orchestrator._get_layer_for_phase("contract_design") == "api"
+        assert orchestrator._get_layer_for_phase("evidence_pack") == "service"
 
     def test_get_repo_id_for_layer(self, orchestrator):
         """Test repo ID selection for layer."""
@@ -362,6 +371,8 @@ class TestYamlTemplates:
     def test_l3_template_exists(self):
         """Test L3 template file exists."""
         template_candidates = [
+            Path("spec-global/departments/dev/workflows/templates/tech-design-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/evidence-pack-l3-template.yaml"),
             Path("spec-global/departments/dev/workflows/templates/l3/task-l3-v3-template.yaml"),
             Path("spec-global/departments/dev/workflows/templates/task-l3-template.yaml"),
             Path("spec-global/departments/dev/workflows/templates/feature-fe-l3-template.yaml"),

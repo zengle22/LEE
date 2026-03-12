@@ -39,6 +39,7 @@ phases:
     depends_on: [tech_design]
     spawns_l3: true
     l3_template_id: template.dev.feature_contract_l3
+    gate_id: gate.dev.contract_freeze_gate
 
   - id: frontend_dev
     name: "Frontend Development"
@@ -78,6 +79,7 @@ phases:
     default_complexity: S
     depends_on: [evidence_pack]
     spawns_l3: false
+    gate_id: gate.dev.smoke_gate
 
 execution_strategies:
   S:

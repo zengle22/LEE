@@ -1,0 +1,67 @@
+kind: l3_workflow_template
+version: "1.0"
+id: template.dev.evidence_pack_l3
+name: Evidence Pack L3 Template
+description: |
+  Canonical L3 workflow for collecting, reviewing, and packaging delivery
+  evidence before the smoke gate closes the feature workflow.
+owner: development
+tags: [template, dev, evidence, l3, canonical, adr-008]
+
+steps:
+  - id: collect_evidence
+    name: Collect Evidence
+    kind: agent
+    description: Gather implementation refs, integration outputs, and review evidence.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on: []
+    outputs:
+      - evidence_index_ref
+      - verification_inputs
+
+  - id: audit_evidence
+    name: Audit Evidence
+    kind: agent
+    description: Review evidence completeness against the acceptance and governance baseline.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on: [collect_evidence]
+    outputs:
+      - verification_summary_ref
+      - coverage_gap_ref
+
+  - id: package_evidence
+    name: Package Evidence
+    kind: agent
+    description: Produce the formal evidence pack passed to the smoke gate.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on: [audit_evidence]
+    outputs:
+      - evidence_pack_ref
+      - delivery_candidate_ref
+
+  - id: review_package
+    name: Review Evidence Pack
+    kind: agent
+    description: Perform a final review on the packaged evidence before gate handoff.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on: [package_evidence]
+    outputs:
+      - pack_review_ref
+      - smoke_gate_inputs
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - parent_phase_id
+    - repo_id
+  output_fields:
+    - evidence_index_ref
+    - verification_summary_ref
+    - evidence_pack_ref
+    - delivery_candidate_ref
+    - pack_review_ref

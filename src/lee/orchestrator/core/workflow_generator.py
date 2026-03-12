@@ -615,14 +615,18 @@ class WorkflowGenerator:
             if complexity is None:
                 complexity = phase_template.get("default_complexity", "M")
 
-            instance["phases"].append({
+            phase_instance = {
                 "id": phase_id,
                 "name": phase_template.get("name", ""),
                 "description": phase_template.get("description", ""),
                 "complexity": complexity,
                 "status": "pending",
                 "l3_instance_ids": [],
-            })
+            }
+            for field_name in ("depends_on", "spawns_l3", "l3_template_id", "gate_id"):
+                if field_name in phase_template:
+                    phase_instance[field_name] = phase_template[field_name]
+            instance["phases"].append(phase_instance)
 
         # Add metadata
         if config.metadata:
@@ -688,6 +692,7 @@ class WorkflowGenerator:
             )
 
         # Build instance from template
+        template_steps = template.get("steps") or template.get("stages") or []
         point = config.point
         instance = {
             "kind": "l3_workflow_instance",
@@ -717,7 +722,7 @@ class WorkflowGenerator:
                 "depends_on": point.depends_on,
             },
             # Steps from template
-            "steps": template.get("steps", []),
+            "steps": template_steps,
         }
 
         # Add metadata
@@ -737,7 +742,7 @@ class WorkflowGenerator:
             workflow_path=str(output_path) if output_path else None,
             warnings=warnings,
             generated_workflow=instance,
-            step_count=len(instance["steps"])
+            step_count=len(template_steps)
         )
 
 
