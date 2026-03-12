@@ -1497,6 +1497,161 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 return phase
         return {}
 
+    async def _update_l2_phase(
+        self,
+        workflow_id: str,
+        phase_id: str,
+        *,
+        status: Optional[str] = None,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Update one L2 phase payload and persist the workflow data."""
+        instance = await self.store.get_workflow(workflow_id)
+        if not instance:
+            return {}
+
+        phases = instance.data.get("phases", [])
+        updated_phase: Dict[str, Any] = {}
+        for phase in phases:
+            if phase.get("id") != phase_id:
+                continue
+            if status is not None:
+                phase["status"] = status
+            if extra:
+                phase.update(extra)
+            updated_phase = dict(phase)
+            break
+
+        await self.store.update_workflow_data(workflow_id, instance.data)
+        return updated_phase
+
+    async def _run_l2_phase_subworkflow(
+        self,
+        workflow_id: str,
+        phase_id: str,
+        phase_info: Dict[str, Any],
+    ) -> StepResult:
+        """Execute an L2 phase by delegating to its explicit subworkflow."""
+        parent = await self.store.get_workflow(workflow_id)
+        if not parent:
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Parent workflow not found: {workflow_id}",
+            )
+
+        subworkflow_ref = phase_info.get("workflow")
+        if not isinstance(subworkflow_ref, str) or not subworkflow_ref.strip():
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Phase {phase_id} missing workflow ref",
+            )
+
+        parent_data = dict(parent.data or {})
+        subworkflow_children = dict(parent_data.get("subworkflow_children", {}))
+        child_workflow_id = subworkflow_children.get(phase_id)
+        child = await self.store.get_workflow(child_workflow_id) if child_workflow_id else None
+
+        await self._update_l2_phase(workflow_id, phase_id, status="running")
+
+        if not child:
+            requested_level = phase_info.get("level")
+            child_level = self._resolve_subworkflow_level(requested_level, parent.level)
+            child_data = {
+                "params": dict(parent_data.get("params", {})),
+                "parent_workflow_id": parent.id,
+                "parent_step_id": phase_id,
+                "parent_template_id": parent.template_id,
+                "parent_run_id": parent_data.get("run_id"),
+            }
+            executor_override = parent_data.get("executor_override")
+            if executor_override:
+                child_data["executor_override"] = executor_override
+            llm_profile = parent_data.get("llm_profile") or os.getenv("LLM_PROFILE")
+            if llm_profile:
+                child_data["llm_profile"] = llm_profile
+
+            child = await self.spawn_workflow(
+                parent_id=workflow_id,
+                level=child_level,
+                template_id=subworkflow_ref,
+                data=child_data,
+            )
+
+            subworkflow_children[phase_id] = child.id
+            parent_data["subworkflow_children"] = subworkflow_children
+            await self.store.update_workflow_data(workflow_id, parent_data)
+
+        if child.status in (WorkflowStatus.PENDING, WorkflowStatus.RUNNING):
+            await self.run_until_blocked(child.id, max_steps=20)
+            child = await self.store.get_workflow(child.id)
+
+        if not child:
+            await self._update_l2_phase(workflow_id, phase_id, status="failed")
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Child workflow disappeared for phase {phase_id}",
+            )
+
+        if child.status == WorkflowStatus.COMPLETED:
+            step = Step(
+                id=phase_id,
+                kind="subworkflow",
+                config={
+                    "subworkflow_ref": subworkflow_ref,
+                    "subworkflow_level": phase_info.get("level"),
+                },
+            )
+            backfill_output = await self._backfill_subworkflow_output(workflow_id, step, child)
+            await self._update_l2_phase(
+                workflow_id,
+                phase_id,
+                status="completed",
+                extra={"last_output": backfill_output, "child_workflow_id": child.id},
+            )
+            return StepResult(
+                status="success",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Phase {phase_id} completed via subworkflow {child.id}",
+                output=backfill_output,
+            )
+
+        if child.status == WorkflowStatus.FAILED:
+            error_message = child.data.get("error", "Child workflow failed")
+            await self._update_l2_phase(
+                workflow_id,
+                phase_id,
+                status="failed",
+                extra={"error": error_message, "child_workflow_id": child.id},
+            )
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Subworkflow {child.id} failed: {error_message}",
+            )
+
+        await self._update_l2_phase(
+            workflow_id,
+            phase_id,
+            status="pending",
+            extra={"child_workflow_id": child.id},
+        )
+        return StepResult(
+            status="blocked",
+            blocked_reason="subworkflow_blocked",
+            step_id=phase_id,
+            workflow_id=workflow_id,
+            message=f"Subworkflow {child.id} waiting (status={child.status.value})",
+            output={"child_workflow_id": child.id, "child_status": child.status.value},
+        )
+
     def _get_next_pending_phase(
         self,
         instance: WorkflowInstance
@@ -1589,6 +1744,11 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         Returns:
             StepResult from phase execution
         """
+        instance = await self.store.get_workflow(workflow_id)
+        phase_info = self._get_phase_info(instance, phase_id) if instance else {}
+        if phase_info.get("workflow"):
+            return await self._run_l2_phase_subworkflow(workflow_id, phase_id, phase_info)
+
         if complexity == Complexity.S:
             return await self._execute_complexity_s(workflow_id, phase_id)
         elif complexity == Complexity.M:

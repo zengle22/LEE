@@ -978,6 +978,9 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             "scope_source": scope_info.scope_source,
             **workflow_bootstrap,
         }
+        llm_profile = os.getenv("LLM_PROFILE")
+        if llm_profile:
+            workflow_data["llm_profile"] = llm_profile
         if executor:
             workflow_data["executor_override"] = executor
             click.echo(f"Executor override: {executor}")

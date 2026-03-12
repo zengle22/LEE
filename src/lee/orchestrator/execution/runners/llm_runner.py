@@ -38,6 +38,8 @@ class LLMRunner(StepRunnerBase):
         "output/",
         "evidence/",
         ".workflow/claude-code/",
+        "pytest-temp/",
+        ".codex-worktrees/",
     ]
     FEAT_TOPIC_FAMILIES = {
         "governance": [
@@ -4259,6 +4261,7 @@ class ClaudeCodeRunner(StepRunnerBase):
 
     DEFAULT_CLAUDE_CODE_FORBIDDEN_READ_PATHS = LLMRunner.DEFAULT_CLAUDE_CODE_FORBIDDEN_READ_PATHS
     FEAT_TOPIC_FAMILIES = LLMRunner.FEAT_TOPIC_FAMILIES
+    PM_TASK_DRIFT_KEYWORDS = LLMRunner.PM_TASK_DRIFT_KEYWORDS
     FEAT_UI_KEYWORDS = LLMRunner.FEAT_UI_KEYWORDS
     FEAT_UI_NEGATION_PATTERNS = LLMRunner.FEAT_UI_NEGATION_PATTERNS
     _attempt_schema_repair = LLMRunner._attempt_schema_repair
