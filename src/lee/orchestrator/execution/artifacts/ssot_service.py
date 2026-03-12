@@ -1,10 +1,11 @@
 """
 SSOT Service - SSOT 真理链服务层
 
-提供 SSOT 真理链校验、影响分析等服务。
+提供 SSOT 真理链校验、影响分析与内部 formalize 编排。
 CLI 和 Gate 共用此服务层。
 """
 
+from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Set
 from pathlib import Path
 
@@ -528,6 +529,22 @@ class SSOTService:
             result["testplan_id"] = testplan.id
 
         return result
+
+    def formalize(self, artifact_ids: List[str]) -> Dict[str, object]:
+        """
+        对一批 SSOT 对象执行正式 ID 定版与引用重写。
+        """
+        replacements = self.manager.formalize_ssot_ids(artifact_ids)
+        grouped: Dict[str, List[str]] = defaultdict(list)
+
+        for old_id, new_id in replacements.items():
+            grouped[new_id.split("-", 1)[0]].append(new_id)
+
+        return {
+            "replacements": replacements,
+            "grouped_ids": dict(grouped),
+            "count": len(replacements),
+        }
 
     def render_view(self, view_name: str, release_id: Optional[str] = None) -> Dict[str, object]:
         """

@@ -692,12 +692,27 @@ class GateOperationsMixin:
 
         content = "\n".join(content_lines)
 
+        src_root_id = None
+        parent_id = None
+        for ref in source_refs:
+            ref_root = ref.split("#", 1)[0].strip()
+            if ref_root.startswith("SRC-"):
+                src_root_id = ref_root
+                parent_id = ref_root
+                break
+        if parent_id is None and isinstance(derived_from, str) and derived_from.startswith("SRC-"):
+            parent_id = derived_from
+            src_root_id = derived_from
+        properties = {"src_root_id": src_root_id} if src_root_id else None
+
         metadata = manager.create_ssot(
             ssot_type=SSOTType.EPIC,
             title=title,
             content=content,
             run_id=derived_from or "gate-materialize",
-            parent_id=None,
+            parent_id=parent_id,
+            source_refs=source_refs,
+            properties=properties,
         )
 
         # 冻结为正式EPIC

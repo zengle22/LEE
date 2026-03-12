@@ -310,10 +310,15 @@ class WorkflowStateMachine(IStateMachine):
             # 提取输出路径（支持 OutputSpec dataclass, dict, str）
             output_paths = []
             for out in step_outputs:
+                output_type = getattr(out, "type", None)
+                if output_type == "symbol":
+                    continue
                 if hasattr(out, 'path'):
                     # OutputSpec dataclass
                     output_paths.append(out.path)
                 elif isinstance(out, dict) and out.get("path"):
+                    if out.get("type") == "symbol":
+                        continue
                     output_paths.append(out["path"])
                 elif isinstance(out, str):
                     output_paths.append(out)
@@ -329,6 +334,11 @@ class WorkflowStateMachine(IStateMachine):
 
         if step_output_entry:
             step_outputs_map[step_id] = step_output_entry
+        self._register_symbol_output_aliases(
+            step_outputs_map=step_outputs_map,
+            output=output,
+            step_outputs=step_outputs or [],
+        )
 
         # P0-3: 优先使用原子性更新；旧 store 接口回退为两步更新。
         updated_data = {
@@ -365,6 +375,30 @@ class WorkflowStateMachine(IStateMachine):
 
         return result
 
+    @staticmethod
+    def _register_symbol_output_aliases(
+        *,
+        step_outputs_map: Dict[str, Any],
+        output: Dict[str, Any],
+        step_outputs: List[Any],
+    ) -> None:
+        if not isinstance(step_outputs_map, dict) or not step_outputs:
+            return
+
+        alias_payload = output if isinstance(output, dict) else {"value": output}
+        aliases: List[str] = []
+        for output_spec in step_outputs:
+            output_type = getattr(output_spec, "type", None)
+            output_symbol = getattr(output_spec, "symbol", None)
+            output_path = getattr(output_spec, "path", None)
+            if isinstance(output_symbol, str) and output_symbol.strip():
+                aliases.append(output_symbol.strip())
+            elif output_type == "symbol" and isinstance(output_path, str) and output_path.strip():
+                aliases.append(output_path.strip())
+
+        for alias in aliases:
+            step_outputs_map[alias] = alias_payload
+
     def _materialize_declared_outputs(
         self,
         *,
@@ -382,7 +416,8 @@ class WorkflowStateMachine(IStateMachine):
 
         for output_spec in step_outputs:
             raw_path = getattr(output_spec, "path", None)
-            if not raw_path:
+            output_type = getattr(output_spec, "type", None)
+            if output_type == "symbol" or not raw_path:
                 continue
             rendered_path = self._render_output_path(raw_path, instance)
             target_path = Path(rendered_path)

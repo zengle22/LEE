@@ -8,6 +8,7 @@ name: Product SRC to EPIC
 description: >
   将冻结后的 SRC 收敛为产品建设层的 EPIC。
   适用于多个 FEAT 共享同一业务目标、边界和优先级的场景。
+  EPIC 的正式身份必须在对应 SRC 作用域内完成准备和定版。
   该文件是 checked-in workflow template，运行时实例由 Python runtime 动态生成。
 owner: product-ai
 tags: [product, workflow, l3, ssot, epic]
@@ -77,30 +78,75 @@ stages:
               identity_kind: ssot
               ssot_type: EPIC
               source_refs: [external]
+      - id: epic_identity_prepare
+        name: EPIC 身份准备
+        kind: agent
+        agent_id: agent.governance.approval_reviewer
+        mandatory: true
+        depends_on: [epic_design]
+        description: >
+          在非 main 分支上为 EPIC candidate 建立 provisional identity，
+          并绑定 source_freeze 提供的 src_root_id，形成稳定的评审输入。
+        inputs:
+          - source: epic_candidate
+            required: true
+          - source: external
+            type: [source_freeze]
+            required: true
+        outputs:
+          - symbol: epic_scoped_candidate
+            contract: departments/product/contracts/epic-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: EPIC
+              source_refs: [external]
       - id: epic_review
         name: EPIC 对齐评审
         kind: agent
         agent_id: agent.review.requirement_reviewer
         mandatory: true
-        depends_on: [epic_design]
+        depends_on: [epic_identity_prepare]
         description: >
           校验 EPIC 是否满足 SSOT 规则、价值边界和拆分合理性。
         inputs:
-          - source: epic_candidate
+          - source: epic_scoped_candidate
             required: true
         outputs:
           - symbol: epic_review_report
             contract: departments/product/contracts/product-review-contract/v1/schema.json
             freeze: false
+      - id: epic_identity_formalize
+        name: EPIC 身份定版
+        kind: agent
+        agent_id: agent.governance.approval_reviewer
+        mandatory: true
+        depends_on: [epic_review]
+        description: >
+          在 EPIC freeze 前，将 provisional EPIC 定版为 SRC scoped 正式身份，
+          并完成同批次内的引用重写。
+        inputs:
+          - source: epic_scoped_candidate
+            required: true
+          - source: epic_review_report
+            required: true
+        outputs:
+          - symbol: epic_formalized_candidate
+            contract: departments/product/contracts/epic-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: EPIC
+              source_refs: [external]
       - id: epic_freeze
         name: EPIC 冻结
         kind: gate
         mandatory: true
-        depends_on: [epic_review]
+        depends_on: [epic_identity_formalize]
         description: >
           由产品负责人冻结 EPIC，确认业务目标、范围边界与拆分原则。
         inputs:
-          - source: epic_candidate
+          - source: epic_formalized_candidate
             required: true
           - source: epic_review_report
             required: true
@@ -132,7 +178,9 @@ stages:
     step_order:
       - problem_alignment
       - epic_design
+      - epic_identity_prepare
       - epic_review
+      - epic_identity_formalize
       - epic_freeze
 
 stage_order:
@@ -142,6 +190,10 @@ constraints:
   frozen_src_only: |
     src_to_epic 只接受已冻结 SRC 或其 canonical ref。
     不得在本流程中直接接收 raw requirement。
+
+  src_scoped_epic_rule: |
+    EPIC 必须绑定 source_freeze 提供的 src_root_id。
+    freeze 前必须完成 EPIC 的 SRC 作用域 identity formalize。
 
   epic_rule_binding: |
     若范围只包含单一可交付功能，不得创建 EPIC，
@@ -155,6 +207,7 @@ instance_schema:
     - status
   context_fields:
     - source_freeze_ref
+    - src_root_id
     - epic_freeze_ref
   output_fields:
     - epic_freeze
@@ -164,7 +217,9 @@ state_machine:
     - INIT: "初始化"
     - PROBLEM_ALIGNMENT: "问题空间对齐"
     - EPIC_DESIGN: "EPIC 设计"
+    - EPIC_IDENTITY_PREPARE: "EPIC 身份准备"
     - EPIC_REVIEW: "EPIC 评审"
+    - EPIC_IDENTITY_FORMALIZE: "EPIC 身份定版"
     - EPIC_FREEZE: "EPIC 冻结"
     - COMPLETED: "完成"
     - FAILED: "失败"
@@ -178,15 +233,25 @@ state_machine:
       - to: FAILED
         trigger: problem_alignment_failed
     EPIC_DESIGN:
-      - to: EPIC_REVIEW
+      - to: EPIC_IDENTITY_PREPARE
         trigger: epic_design_completed
       - to: FAILED
         trigger: epic_design_failed
+    EPIC_IDENTITY_PREPARE:
+      - to: EPIC_REVIEW
+        trigger: epic_identity_prepare_completed
+      - to: FAILED
+        trigger: epic_identity_prepare_failed
     EPIC_REVIEW:
-      - to: EPIC_FREEZE
+      - to: EPIC_IDENTITY_FORMALIZE
         trigger: epic_review_completed
       - to: FAILED
         trigger: epic_review_failed
+    EPIC_IDENTITY_FORMALIZE:
+      - to: EPIC_FREEZE
+        trigger: epic_identity_formalize_completed
+      - to: FAILED
+        trigger: epic_identity_formalize_failed
     EPIC_FREEZE:
       - to: COMPLETED
         trigger: epic_freeze_completed

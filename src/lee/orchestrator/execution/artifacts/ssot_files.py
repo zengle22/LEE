@@ -11,6 +11,10 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 import yaml
 
+from .placement import resolve_ssot_relative_dir
+from .types import SSOTType
+from .id_parser import parse_src_root
+
 
 def parse_front_matter(path: Path) -> Tuple[Dict[str, Any], str]:
     """
@@ -80,6 +84,28 @@ def lint_ssot_front_matter(project_root: Path) -> List[str]:
         artifact_id = front_matter.get("id")
         if artifact_id:
             seen_ids.setdefault(str(artifact_id), []).append(path)
+
+        ssot_type_value = front_matter.get("ssot_type")
+        if artifact_id and ssot_type_value:
+            try:
+                ssot_type = SSOTType(str(ssot_type_value))
+            except ValueError:
+                ssot_type = None
+            if ssot_type is not None:
+                properties = front_matter.get("properties") or {}
+                requires_scoped_placement = bool(properties.get("src_root_id")) or bool(parse_src_root(str(artifact_id)))
+                expected_dir = resolve_ssot_relative_dir(
+                    ssot_type,
+                    parent_id=front_matter.get("parent_id"),
+                    source_refs=front_matter.get("source_refs") if requires_scoped_placement else None,
+                    artifact_id=str(artifact_id),
+                    properties=properties,
+                )
+                actual_dir = path.relative_to(project_root).parent.as_posix()
+                if actual_dir != expected_dir.as_posix():
+                    errors.append(
+                        f"{path}: expected placement {expected_dir.as_posix()} for {artifact_id}, got {actual_dir}"
+                    )
 
     for artifact_id, paths in sorted(seen_ids.items()):
         if len(paths) > 1:

@@ -8,6 +8,7 @@ name: Product Raw to SRC
 description: >
   将任意原始输入收敛为正式 SRC 并完成冻结。
   该流程只负责源归一化和冻结，不承担 EPIC 语义建模。
+  同时负责建立下游需求链共用的 `src_root_id` 作用域上下文。
   该文件是 checked-in workflow template，运行时实例由 Python runtime 动态生成。
 owner: product-ai
 tags: [product, workflow, l3, ssot, src]
@@ -101,6 +102,7 @@ stages:
         description: >
           由产品负责人冻结正式 SRC。
           冻结后，下游流程只能引用该 SRC 版本，不允许直接回到原始输入。
+          该步骤同时产出 `src_root_id`，作为后续 EPIC / FEAT / TECH / TASK 的根作用域。
         inputs:
           - source: normalized_src
             required: true
@@ -146,6 +148,10 @@ constraints:
     该流程只负责 raw -> SRC。
     不得在本流程中生成 EPIC、FEAT 或 TASK。
 
+  src_root_scope_required: |
+    source_freeze 完成后必须产出稳定的 src_root_id。
+    下游需求链对象必须通过该作用域建立目录路由和正式身份。
+
 instance_schema:
   required_fields:
     - id
@@ -156,5 +162,7 @@ instance_schema:
     - raw_requirement
     - business_opportunity
     - source_freeze_ref
+    - src_root_id
   output_fields:
     - source_freeze
+    - src_root_id
