@@ -719,6 +719,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # v1.5: 新增 orchestrator_cli 和 compliance_gate 类型
         # v3.5: on_failure 策略包裹
         try:
+            run_id = instance.data.get("run_id", workflow_id)
+
             # 构建步骤执行器
             async def _dispatch_step() -> StepResult:
                 if step_to_execute.kind in ("workflow_spawn", "subworkflow"):
@@ -756,7 +758,6 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
                     # v3.5: worktree 强制隔离
                     if getattr(step_to_execute, "repo_scope", None):
-                        run_id = instance.data.get("run_id", workflow_id)
                         repo_id = step_to_execute.repo_scope
                         
                         # 并行安全：检查是否有其他活跃 run 使用同一 repo
@@ -778,7 +779,6 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     patch_bundle = None
                     if getattr(step_to_execute, "repo_scope", None):
                         try:
-                            run_id = instance.data.get("run_id", workflow_id)
                             repo_id = step_to_execute.repo_scope
                             # 收集 patch 三件套
                             patch_bundle = self.patch_collector.collect(
