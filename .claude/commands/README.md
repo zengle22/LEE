@@ -84,6 +84,18 @@ PM workflow management tools.
 - Run workflow steps
 - Execute next step
 
+### `/lee-safe-code`
+Apply the synchronized LEE safe coding guardrail for Claude Code coding tasks.
+
+**File**: `lee-safe-code.md`
+
+**Features**:
+- Search-first canonical-path coding workflow
+- Anti-duplication and integration guardrails
+- Test-bar preservation requirements
+- Structured candidate result package before completion claims
+- Independent supervisor-style PASS/REJECT/ESCALATE_TO_HUMAN closure decision
+
 ## Creating New Commands
 
 To create a new slash command:

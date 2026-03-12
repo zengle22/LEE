@@ -47,7 +47,6 @@ yarn-debug.log*
 evidence/
 
 # Claude Code
-.claude/
 .mcp/
 
 # Demo and examples
