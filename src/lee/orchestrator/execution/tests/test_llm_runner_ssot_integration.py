@@ -1473,6 +1473,415 @@ properties: {}
     )
 
 
+def test_validate_pm_planner_task_semantics_accepts_repo_scoped_governance_tasks(temp_project_root, runner):
+    features_dir = temp_project_root / "spec" / "requirements" / "features"
+    features_dir.mkdir(parents=True, exist_ok=True)
+    (features_dir / "FEAT-002__raw-to-src.md").write_text(
+        """---
+id: FEAT-002
+ssot_type: feat
+title: raw_to_src workflow 定义
+status: draft
+version: v1
+parent_id: EPIC-001
+derived_from_ids: []
+source_refs: []
+owner: codex
+tags: []
+properties: {}
+---
+
+# Goal
+
+新增 workflow 模板并补齐 src freeze 边界。
+""",
+        encoding="utf-8",
+    )
+    (features_dir / "FEAT-003__docs.md").write_text(
+        """---
+id: FEAT-003
+ssot_type: feat
+title: 调用文档迁移
+status: draft
+version: v1
+parent_id: EPIC-001
+derived_from_ids: []
+source_refs: []
+owner: codex
+tags: []
+properties: {}
+---
+
+# Goal
+
+更新 registry、run spec 和调用文档。
+""",
+        encoding="utf-8",
+    )
+
+    error = runner._validate_pm_planner_task_semantics(
+        project_root=str(temp_project_root),
+        business_output={
+            "parent_epic": "EPIC-001",
+            "source_feats": ["FEAT-002", "FEAT-003"],
+            "task_specs": [
+                {
+                    "task_id": "TASK-FEAT-002-001",
+                    "title": "新增 raw_to_src workflow 模板",
+                    "objective": "在 spec-global 中新增 raw_to_src 模板并接入 registry",
+                    "description": "修改 workflow 模板和 registry。",
+                    "source_feat": "FEAT-002",
+                    "workstream": "governance-spec",
+                    "responsible_role": "workflow-spec-owner",
+                    "acceptance_criteria_mapping": [{"feat": "FEAT-002", "ac": "AC-001", "description": "模板定义完成"}],
+                    "definition_of_done": ["workflow 模板写入 spec-global", "相关测试更新"],
+                    "rollback_strategy": {"mode": "revert", "restore_targets": ["spec-global/departments/product/workflows"]},
+                },
+                {
+                    "task_id": "TASK-FEAT-003-001",
+                    "title": "更新 run spec 与调用文档",
+                    "objective": "补齐 run spec 和调用文档迁移说明",
+                    "description": "修改 docs 和 spec 文档。",
+                    "source_feat": "FEAT-003",
+                    "workstream": "governance-docs",
+                    "responsible_role": "technical-writer",
+                    "acceptance_criteria_mapping": [{"feat": "FEAT-003", "ac": "AC-001", "description": "文档更新完成"}],
+                    "definition_of_done": ["docs 更新完成"],
+                    "rollback_strategy": {"mode": "revert", "restore_targets": ["docs", "spec"]},
+                },
+            ],
+        },
+    )
+
+    assert error is None
+
+
+def test_validate_pm_planner_task_semantics_rejects_infra_drift_for_governance_feats(temp_project_root, runner):
+    features_dir = temp_project_root / "spec" / "requirements" / "features"
+    features_dir.mkdir(parents=True, exist_ok=True)
+    (features_dir / "FEAT-002__pipeline.md").write_text(
+        """---
+id: FEAT-002
+ssot_type: feat
+title: product-main-pipeline 四段重构
+status: draft
+version: v1
+parent_id: EPIC-001
+derived_from_ids: []
+source_refs: []
+owner: codex
+tags: []
+properties: {}
+---
+
+# Goal
+
+调整 workflow pipeline、freeze gate 和 registry。
+""",
+        encoding="utf-8",
+    )
+
+    error = runner._validate_pm_planner_task_semantics(
+        project_root=str(temp_project_root),
+        business_output={
+            "parent_epic": "EPIC-001",
+            "source_feats": ["FEAT-002"],
+            "task_specs": [
+                {
+                    "task_id": "TASK-FEAT-002-001",
+                    "title": "实现 PostgreSQL 数据模型",
+                    "objective": "为 pipeline 增加 PostgreSQL 数据表",
+                    "description": "新增数据库 schema migration。",
+                    "source_feat": "FEAT-002",
+                },
+                {
+                    "task_id": "TASK-FEAT-002-002",
+                    "title": "实现 API Gateway",
+                    "objective": "新增 gateway 鉴权和 JWT 令牌",
+                    "description": "接入 rate limiting 和 access token。",
+                    "source_feat": "FEAT-002",
+                },
+            ],
+        },
+    )
+
+    assert error is not None
+    assert error.startswith("TASK bundle semantics drift from source FEAT scope:")
+    assert "api gateway" in error
+    assert "jwt" in error
+    assert "postgresql" in error
+    assert "schema migration" in error
+    assert "source_feats=['FEAT-002']" in error
+
+
+def test_validate_pm_planner_task_semantics_rejects_overscoped_governance_bundle(temp_project_root, runner):
+    features_dir = temp_project_root / "spec" / "requirements" / "features"
+    features_dir.mkdir(parents=True, exist_ok=True)
+    for feat_id in ("FEAT-002", "FEAT-003", "FEAT-004"):
+        (features_dir / f"{feat_id}__workflow.md").write_text(
+            f"""---
+id: {feat_id}
+ssot_type: feat
+title: workflow 治理改造
+status: draft
+version: v1
+parent_id: EPIC-001
+derived_from_ids: []
+source_refs: []
+owner: codex
+tags: []
+properties: {{}}
+---
+
+# Goal
+
+调整 workflow、gate 和文档。
+""",
+            encoding="utf-8",
+        )
+
+    error = runner._validate_pm_planner_task_semantics(
+        project_root=str(temp_project_root),
+        business_output={
+            "parent_epic": "EPIC-001",
+            "source_feats": ["FEAT-002", "FEAT-003", "FEAT-004"],
+            "task_specs": [
+                {"task_id": f"TASK-{index:03d}", "title": f"workflow task {index}", "source_feat": "FEAT-002"}
+                for index in range(1, 10)
+            ],
+        },
+    )
+
+    assert error == (
+        "TASK bundle overscoped for workflow/governance FEATs: "
+        "task_count=9, max_expected=8, source_feats=['FEAT-002', 'FEAT-003', 'FEAT-004']"
+    )
+
+
+def test_validate_pm_planner_task_semantics_rejects_ui_drift_for_non_ui_feats(temp_project_root, runner):
+    features_dir = temp_project_root / "spec" / "requirements" / "features"
+    features_dir.mkdir(parents=True, exist_ok=True)
+    (features_dir / "FEAT-002__workflow.md").write_text(
+        """---
+id: FEAT-002
+ssot_type: feat
+title: raw_to_src workflow 定义
+status: draft
+version: v1
+parent_id: EPIC-001
+derived_from_ids: []
+source_refs: []
+owner: codex
+tags: []
+properties: {}
+---
+
+# Goal
+
+拆分 raw_to_src workflow 与 SRC freeze gate。
+""",
+        encoding="utf-8",
+    )
+
+    error = runner._validate_pm_planner_task_semantics(
+        project_root=str(temp_project_root),
+        business_output={
+            "parent_epic": "EPIC-001",
+            "source_feats": ["FEAT-002"],
+            "task_specs": [
+                {
+                    "task_id": "TASK-FEAT-002-001",
+                    "title": "实现 SRC 管理界面",
+                    "objective": "为 workflow 拆分新增管理 UI 和操作页面",
+                    "description": "补齐页面、组件和交互流程。",
+                    "source_feat": "FEAT-002",
+                },
+            ],
+        },
+    )
+
+    assert error is not None
+    assert error.startswith("TASK bundle semantics drift from source FEAT scope:")
+    assert "ui" in error.lower()
+    assert "管理界面" in error
+
+
+def test_feat_bundle_requires_ui_detects_non_ui_bundle(tmp_path, runner):
+    feat_freeze = tmp_path / "feat-freeze.yaml"
+    feat_freeze.write_text(
+        """
+epic_ref: EPIC-001
+feat_specs:
+  - feat_specifications:
+      - feat_id: FEAT-002
+        title: raw_to_src workflow 定义
+        requirement:
+          description: 拆分 raw_to_src workflow 与 freeze gate，不涉及前端页面。
+        acceptance_criteria:
+          - description: workflow registry 完成迁移
+      - feat_id: FEAT-003
+        title: src_to_epic workflow 收窄
+        requirement:
+          description: 限制 src_to_epic 只接收 frozen SRC。
+""".strip(),
+        encoding="utf-8",
+    )
+
+    required = runner._feat_bundle_requires_ui(
+        {"params": {"feat_freeze": str(feat_freeze)}}
+    )
+
+    assert required is False
+
+
+def test_feat_bundle_requires_ui_detects_ui_bundle(tmp_path, runner):
+    feat_freeze = tmp_path / "feat-freeze.yaml"
+    feat_freeze.write_text(
+        """
+epic_ref: EPIC-001
+feat_specs:
+  - feat_specifications:
+      - feat_id: FEAT-010
+        title: 用户设置页
+        requirement:
+          description: 新增设置页面、组件布局和交互流程。
+        acceptance_criteria:
+          - description: 页面包含保存按钮和表单校验
+""".strip(),
+        encoding="utf-8",
+    )
+
+    required = runner._feat_bundle_requires_ui(
+        {"params": {"feat_freeze": str(feat_freeze)}}
+    )
+
+    assert required is True
+
+
+def test_build_pm_planner_bundle_from_legacy_task_planning_specs(tmp_path, runner):
+    legacy_path = tmp_path / "task-planning-specs.yaml"
+    legacy_path.write_text(
+        """# Task Planning Specifications
+task_planning_specs:
+  version: "1.0.0"
+  epic_id: EPIC-012
+
+  - task_id: TASK-012-001
+    title: "Implement RawToSRCService"
+    related_feature: FEAT-012-001
+    implementation_scope:
+      description: |
+        Implement raw_to_src workflow runtime changes.
+      acceptance_criteria:
+        - raw_to_src template exists
+        - SRC freeze handoff works
+
+  - task_id: TASK-012-002
+    title: "Update Migration Guide"
+    related_features:
+      - FEAT-012-006
+    implementation_scope:
+      description: |
+        Update migration guide and registry docs.
+      acceptance_criteria:
+        - migration guide updated
+""",
+        encoding="utf-8",
+    )
+
+    bundle = runner._build_pm_planner_bundle_from_written_files([str(legacy_path)])
+
+    assert bundle is not None
+    assert bundle["metadata"]["epic_id"] == "EPIC-012"
+    assert bundle["task_hierarchy"][0]["tasks"][0]["related_feat"] == "FEAT-012-001"
+    assert bundle["task_hierarchy"][0]["tasks"][1]["related_feat"] == "FEAT-012-006"
+
+
+def test_build_pm_planner_bundle_from_task_plan_yaml(tmp_path, runner):
+    task_plan_path = tmp_path / "task-plan.yaml"
+    task_plan_path.write_text(
+        """
+metadata:
+  epic_id: EPIC-012
+overview:
+  groups:
+    - group_id: G1
+      name: 基础能力
+      tasks: [T-001]
+tasks:
+  - task_id: T-001
+    title: 实现 raw_to_src 核心服务
+    feat_ref: FEAT-012-001
+    assignee_role: backend_developer
+    priority: high
+    story_points: 3
+    description: 实现 workflow 运行时主逻辑。
+    acceptance_criteria:
+      - raw_to_src workflow 可执行
+    dependencies:
+      upstream: []
+""".strip(),
+        encoding="utf-8",
+    )
+
+    bundle = runner._build_pm_planner_bundle_from_written_files([str(task_plan_path)])
+
+    assert bundle is not None
+    assert bundle["metadata"]["epic_id"] == "EPIC-012"
+    assert bundle["tasks"][0]["feat_ref"] == "FEAT-012-001"
+
+
+def test_normalize_pm_planner_payload_converts_task_plan_yaml_tasks(tmp_path, runner):
+    feat_freeze = tmp_path / "feat-freeze.yaml"
+    feat_freeze.write_text(
+        """
+epic_ref: EPIC-012
+feat_specs:
+  - feat_specifications:
+      - feat_id: FEAT-012-001
+        title: raw_to_src L3 Workflow 定义
+""".strip(),
+        encoding="utf-8",
+    )
+
+    step = SimpleNamespace(agent_id="agent.product.pm_planner")
+    business_output = {
+        "metadata": {"epic_id": "EPIC-012"},
+        "overview": {
+            "groups": [
+                {"group_id": "G1", "name": "基础能力", "tasks": ["T-001"]},
+            ]
+        },
+        "tasks": [
+            {
+                "task_id": "T-001",
+                "title": "实现 raw_to_src 核心服务",
+                "feat_ref": "FEAT-012-001",
+                "assignee_role": "backend_developer",
+                "priority": "high",
+                "story_points": 3,
+                "description": "实现 workflow 运行时主逻辑。",
+                "acceptance_criteria": ["raw_to_src workflow 可执行"],
+                "dependencies": {"upstream": []},
+            }
+        ],
+    }
+
+    normalized_business, normalized_structured = runner._normalize_pm_planner_task_payload(
+        step,
+        "wf-001",
+        business_output,
+        {"business_output": business_output},
+        instance_data={"params": {"feat_freeze": str(feat_freeze)}},
+    )
+
+    assert normalized_business["parent_epic"] == "EPIC-012"
+    assert normalized_business["task_specs"][0]["title"] == "实现 raw_to_src 核心服务"
+    assert normalized_business["task_specs"][0]["source_feat"] == "FEAT-012-001"
+    assert normalized_business["task_specs"][0]["milestone"] == "G1"
+    assert normalized_structured["ssot_output_contract"]["outputs"]
+
+
 def test_normalize_prd_writer_feat_payload_repairs_fixed_contract_fields(runner):
     step = SimpleNamespace(agent_id="agent.product.prd_writer")
     business_output = {
@@ -1638,6 +2047,74 @@ def test_normalize_prd_writer_feat_bundle_payload_rebuilds_invalid_contract_keys
     assert [item["key"] for item in outputs] == ["feat_001", "feat_002"]
     assert all(item["ssot_type"] == "feat" for item in outputs)
     assert all(item["parent"] == "EPIC-004" for item in outputs)
+
+
+def test_normalize_pm_planner_payload_builds_task_markdown_content(runner):
+    step = SimpleNamespace(agent_id="agent.product.pm_planner")
+    business_output = {
+        "parent_epic": "EPIC-004",
+        "source_feats": ["FEAT-085"],
+        "task_specs": [
+            {
+                "task_id": "TASK-FEAT-085-001",
+                "title": "流式输出引擎实现",
+                "objective": "实现流式输出引擎",
+                "description": "建立 stdout/stderr 流式输出管道",
+                "source_feat": "FEAT-085",
+                "workstream": "cli-execution-runtime",
+                "task_kind": "implementation",
+                "responsible_role": "cli-runtime-engineer",
+                "acceptance_criteria_mapping": [
+                    {
+                        "feat": "FEAT-085",
+                        "ac": "AC-00401-001",
+                        "description": "首字节输出延迟 <= 500ms",
+                    }
+                ],
+                "dependencies": ["TASK-FEAT-000-001"],
+                "definition_of_done": ["核心类实现完成"],
+                "priority": "P0",
+                "milestone": "M1",
+                "estimated_effort": "3 days",
+                "lifecycle_status": "draft",
+                "observability": {
+                    "execution_unit": "task",
+                    "log_scope": "streaming-execution",
+                    "audit_fields": ["run_id"],
+                },
+                "evidence_requirements": {
+                    "required_refs": ["TECH-FEAT-085"],
+                    "review_required": True,
+                },
+                "rollback_strategy": {
+                    "mode": "revert",
+                    "restore_targets": ["src/lee/executor/streaming"],
+                },
+                "ssot": {
+                    "identity_kind": "ssot",
+                    "ssot_type": "TASK",
+                    "parent": "FEAT-085",
+                    "derived_from": "FEAT-085#delivery",
+                },
+            }
+        ],
+    }
+
+    normalized_business, normalized_structured = runner._normalize_pm_planner_task_payload(
+        step=step,
+        workflow_id="wf-task-004",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+    )
+
+    assert normalized_business["task_specs"][0]["source_feat"] == "FEAT-085"
+    outputs = normalized_structured["ssot_output_contract"]["outputs"]
+    assert len(outputs) == 1
+    assert outputs[0]["parent"] == "FEAT-085"
+    assert outputs[0]["source_refs"] == ["FEAT-085#delivery"]
+    assert "# Objective" in outputs[0]["content"]
+    assert "## Acceptance Mapping" in outputs[0]["content"]
+    assert "## Definition Of Done" in outputs[0]["content"]
 
 
 def test_claude_code_validation_prefers_written_business_file(temp_project_root):
