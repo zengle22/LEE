@@ -33,6 +33,7 @@ def test_workflow_registry_contains_product_templates() -> None:
     workflows = registry["workflows"]
 
     assert "product.main" in workflows
+    assert "product.raw-to-src" in workflows
     assert "product.src-to-epic" in workflows
     assert "product.epic-to-feat" in workflows
     assert "product.feat-to-delivery-prep" in workflows
@@ -42,10 +43,100 @@ def test_workflow_registry_contains_product_templates() -> None:
     )
     assert workflows["product.main"]["kind"] == "l2_workflow_template"
     assert workflows["product.main"]["load_spec_as_params"] is True
+    assert workflows["product.raw-to-src"]["path"] == (
+        "spec-global/departments/product/workflows/templates/raw-to-src/v1/workflow.yaml"
+    )
+    assert workflows["product.raw-to-src"]["load_spec_as_params"] is True
+    assert "raw_requirement" in workflows["product.raw-to-src"]["optional_params"]
+    assert "business_opportunity_freeze" in workflows["product.raw-to-src"]["optional_params"]
+    assert workflows["product.src-to-epic"]["description"] == "Product L3 - frozen SRC to EPIC"
+    assert "src" in workflows["product.src-to-epic"]["optional_params"]
+    assert "source_freeze" in workflows["product.src-to-epic"]["optional_params"]
+    assert "source_freeze_ref" in workflows["product.src-to-epic"]["optional_params"]
     assert workflows["product.epic-to-feat"]["load_spec_as_params"] is True
     assert workflows["product.feat-to-delivery-prep"]["load_spec_as_params"] is True
     assert workflows["product.epic-to-feat"]["required_params"] == ["epic_freeze"]
     assert workflows["product.feat-to-delivery-prep"]["required_params"] == ["feat_freeze"]
+
+
+def test_product_main_pipeline_template_uses_four_stage_chain() -> None:
+    template_path = (
+        Path(__file__).resolve().parents[1]
+        / "spec-global"
+        / "departments"
+        / "product"
+        / "workflows"
+        / "templates"
+        / "product-main-pipeline"
+        / "v1"
+        / "workflow.yaml"
+    )
+    doc = yaml.safe_load(template_path.read_text(encoding="utf-8"))
+    phases = doc["phases"]
+
+    assert [phase["id"] for phase in phases] == [
+        "raw_to_src",
+        "src_to_epic",
+        "epic_to_feat",
+        "feat_to_delivery_prep",
+    ]
+    assert phases[0]["workflow"] == "workflow.product.task.raw_to_src"
+    assert phases[1]["depends_on"] == ["raw_to_src"]
+
+
+def test_product_pipeline_handoff_contracts_are_aligned() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    main_doc = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "product"
+            / "workflows"
+            / "templates"
+            / "product-main-pipeline"
+            / "v1"
+            / "workflow.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    raw_doc = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "product"
+            / "workflows"
+            / "templates"
+            / "raw-to-src"
+            / "v1"
+            / "workflow.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    src_doc = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "product"
+            / "workflows"
+            / "templates"
+            / "src-to-epic"
+            / "v1"
+            / "workflow.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    main_input_types = {item["type"] for item in main_doc["overview"]["input_types"]}
+    raw_input_types = {item["type"] for item in raw_doc["overview"]["input_types"]}
+    raw_external_types = set(raw_doc["stages"][0]["steps"][0]["inputs"][0]["type"])
+    src_input_types = {item["type"] for item in src_doc["overview"]["input_types"]}
+    src_external_types = set(src_doc["stages"][0]["steps"][0]["inputs"][0]["type"])
+
+    assert "business_opportunity_freeze" in main_input_types
+    assert "business_opportunity_freeze" in raw_input_types
+    assert "business_opportunity_freeze" in raw_external_types
+    assert {"src", "source_freeze"}.issubset(src_input_types)
+    assert {"src", "source_freeze"}.issubset(src_external_types)
 
 
 def test_workflow_registry_updates_qa_test_set_production_inputs() -> None:

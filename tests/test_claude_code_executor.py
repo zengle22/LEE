@@ -661,7 +661,7 @@ class TestSystemPrompt:
             workspace="/my/project",
             allowed_commands=["cat"],
             write_scope=["spec/**"],
-            forbidden_read_paths=["output/", "evidence/", ".workflow/claude-code/"],
+            forbidden_read_paths=["output/", "evidence/", ".workflow/claude-code/", "pytest-temp/", ".codex-worktrees/"],
             max_iterations=5,
             max_bash_calls=0,
             stop_conditions={},
@@ -671,6 +671,8 @@ class TestSystemPrompt:
         assert "output/" in prompt
         assert "evidence/" in prompt
         assert ".workflow/claude-code/" in prompt
+        assert "pytest-temp/" in prompt
+        assert ".codex-worktrees/" in prompt
         assert "不要扫描仓库寻找相似的 EPIC、FEAT、SRC、ADR" in prompt
 
     def test_scan_bash_calls_from_debug_log(self, tmp_path):

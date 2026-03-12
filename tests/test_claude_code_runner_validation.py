@@ -132,6 +132,8 @@ def test_merge_forbidden_read_paths_includes_default_blacklist():
         "output/",
         "evidence/",
         ".workflow/claude-code/",
+        "pytest-temp/",
+        ".codex-worktrees/",
         "custom-history/",
     ]
 
@@ -159,6 +161,10 @@ def test_collect_authoritative_context_files_from_epic_freeze():
     assert context_files == [
         "spec/requirements/epics/EPIC-003__lee-cli-workflow-first-zhilirukouzhonggou.md"
     ]
+
+
+def test_claude_code_runner_exposes_pm_task_drift_keywords():
+    assert ClaudeCodeRunner.PM_TASK_DRIFT_KEYWORDS == LLMRunner.PM_TASK_DRIFT_KEYWORDS
 
 
 def test_merge_context_files_prefers_deduplicated_authoritative_inputs():

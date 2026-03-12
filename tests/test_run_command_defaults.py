@@ -404,6 +404,7 @@ def test_run_bootstraps_l2_template_as_department_workflow(monkeypatch, tmp_path
         raise AssertionError(f"unexpected pm_workflow action: {action}")
 
     monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+    monkeypatch.setenv("LLM_PROFILE", "qwen")
 
     runner = CliRunner()
     result = runner.invoke(
@@ -415,6 +416,7 @@ def test_run_bootstraps_l2_template_as_department_workflow(monkeypatch, tmp_path
     assert captured_create_payload[0]["level"] == "department"
     create_data = captured_create_payload[0]["data"]
     assert create_data["kind"] == "l2_workflow_instance"
+    assert create_data["llm_profile"] == "qwen"
     assert create_data["phases"] == [
         {
             "id": "src_to_epic",
