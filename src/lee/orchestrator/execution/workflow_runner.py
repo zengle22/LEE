@@ -13,7 +13,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import yaml
 
@@ -26,6 +26,7 @@ from lee.orchestrator.execution.plan_agent import PlanAgent, PlanConfig, create_
 from lee.orchestrator.execution.llm_executor import LLMExecutor
 from lee.orchestrator.execution.review_gate import ReviewGate, check_review_gate
 from lee.orchestrator.execution.concurrency_scope import derive_concurrency_scope
+from lee.orchestrator.storage.models import WorkflowLevel
 
 
 def _get_pm_workflow():
@@ -319,30 +320,76 @@ class WorkflowRunner:
     async def _create_workflow(self, instance_path: Path) -> str:
         """创建工作流实例"""
         pm_workflow = _get_pm_workflow()
+        workflow_level, extra_data = self._derive_workflow_creation_metadata(instance_path)
         scope_info = derive_concurrency_scope(
             self.config.workflow_key,
             self.config.params,
             self.config.project_root,
         )
+        workflow_data = {
+            "params": self.config.params,
+            "workflow_key": self.config.workflow_key,
+            "instance_path": str(instance_path),
+            "concurrency_scope": scope_info.concurrency_scope,
+            "concurrency_key": scope_info.concurrency_key,
+            "scope_source": scope_info.scope_source,
+            **extra_data,
+        }
         result = pm_workflow(
             "create",
             project_dir=str(self.config.project_root),
-            level="task",
+            level=workflow_level.value,
             template_id=str(instance_path),
-            data={
-                "params": self.config.params,
-                "workflow_key": self.config.workflow_key,
-                "instance_path": str(instance_path),
-                "concurrency_scope": scope_info.concurrency_scope,
-                "concurrency_key": scope_info.concurrency_key,
-                "scope_source": scope_info.scope_source,
-            }
+            data=workflow_data,
         )
 
         if "error" in result:
             raise Exception(result.get("error"))
 
         return result.get("workflow_id", "")
+
+    def _derive_workflow_creation_metadata(self, instance_path: Path) -> Tuple[WorkflowLevel, Dict[str, Any]]:
+        """Infer workflow level and bootstrap data from the source YAML."""
+        try:
+            with open(instance_path, encoding="utf-8") as f:
+                doc = yaml.safe_load(f) or {}
+        except Exception:
+            return WorkflowLevel.TASK, {}
+
+        kind = str(doc.get("kind") or "").strip()
+        if kind == "l2_workflow_instance":
+            phases = doc.get("phases") if isinstance(doc.get("phases"), list) else []
+            return WorkflowLevel.DEPARTMENT, {
+                "kind": "l2_workflow_instance",
+                "context": doc.get("context", {}),
+                "phases": phases,
+                "pma_splits": doc.get("pma_splits", []),
+            }
+
+        if kind == "l2_workflow_template":
+            phases = []
+            for phase in doc.get("phases", []) if isinstance(doc.get("phases"), list) else []:
+                if not isinstance(phase, dict):
+                    continue
+                phases.append({
+                    "id": phase.get("id", ""),
+                    "name": phase.get("name", ""),
+                    "description": phase.get("description", ""),
+                    "complexity": phase.get("default_complexity", "M"),
+                    "status": "pending",
+                    "depends_on": phase.get("depends_on", []),
+                    "workflow": phase.get("workflow"),
+                    "level": phase.get("level"),
+                    "l3_instance_ids": [],
+                })
+            return WorkflowLevel.DEPARTMENT, {
+                "kind": "l2_workflow_instance",
+                "context": {},
+                "phases": phases,
+                "pma_splits": [],
+            }
+
+        return WorkflowLevel.TASK, {}
 
 
 async def run_workflow(

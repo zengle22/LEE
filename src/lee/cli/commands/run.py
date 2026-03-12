@@ -10,7 +10,7 @@ import time
 import hashlib
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 import click
 import yaml
@@ -21,6 +21,7 @@ from lee.orchestrator.core.template_engine import TemplateEngine
 from lee.orchestrator.execution.error_hints import diagnose_executor_error
 from lee.orchestrator.execution.artifacts import ArtifactManager, ManifestManager
 from lee.orchestrator.execution.artifacts.types import ArtifactType, GovernanceKind
+from lee.orchestrator.storage.models import WorkflowLevel
 from lee.orchestrator.execution.concurrency_scope import (
     ConcurrencyScopeInfo,
     derive_concurrency_scope,
@@ -152,6 +153,50 @@ def _render_workflow_template(template_path: Path, params: Dict[str, Any], proje
     out_path = out_dir / f"{template_path.stem}-{stamp}.yaml"
     out_path.write_text(rendered, encoding="utf-8")
     return out_path
+
+
+def _derive_workflow_creation_metadata(rendered_path: Path) -> Tuple[WorkflowLevel, Dict[str, Any]]:
+    try:
+        doc = yaml.safe_load(rendered_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return WorkflowLevel.TASK, {}
+
+    kind = str(doc.get("kind") or "").strip()
+    if kind == "l2_workflow_instance":
+        phases = doc.get("phases") if isinstance(doc.get("phases"), list) else []
+        return WorkflowLevel.DEPARTMENT, {
+            "kind": "l2_workflow_instance",
+            "context": doc.get("context", {}),
+            "phases": phases,
+            "pma_splits": doc.get("pma_splits", []),
+        }
+
+    if kind == "l2_workflow_template":
+        phases = []
+        for phase in doc.get("phases", []) if isinstance(doc.get("phases"), list) else []:
+            if not isinstance(phase, dict):
+                continue
+            phases.append(
+                {
+                    "id": phase.get("id", ""),
+                    "name": phase.get("name", ""),
+                    "description": phase.get("description", ""),
+                    "complexity": phase.get("default_complexity", "M"),
+                    "status": "pending",
+                    "depends_on": phase.get("depends_on", []),
+                    "workflow": phase.get("workflow"),
+                    "level": phase.get("level"),
+                    "l3_instance_ids": [],
+                }
+            )
+        return WorkflowLevel.DEPARTMENT, {
+            "kind": "l2_workflow_instance",
+            "context": {},
+            "phases": phases,
+            "pma_splits": [],
+        }
+
+    return WorkflowLevel.TASK, {}
 
 
 def _load_directory_context(project_dir: Path) -> Dict[str, Any]:
@@ -921,7 +966,9 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         # 原有逻辑: 直接执行
         rendered_path = _render_workflow_template(template_path, params, project_root)
 
-        # Create workflow instance (L3 task)
+        workflow_level, workflow_bootstrap = _derive_workflow_creation_metadata(rendered_path)
+
+        # Create workflow instance
         # 如果指定了 executor override，将其加入 data 中传递给 workflow
         workflow_data: Dict[str, Any] = {
             "params": params,
@@ -929,6 +976,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             "concurrency_scope": scope_info.concurrency_scope,
             "concurrency_key": scope_info.concurrency_key,
             "scope_source": scope_info.scope_source,
+            **workflow_bootstrap,
         }
         if executor:
             workflow_data["executor_override"] = executor
@@ -937,7 +985,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         create_result = pm_workflow(
             "create",
             project_dir=str(project_root),
-            level="task",
+            level=workflow_level.value,
             template_id=str(rendered_path),
             data=workflow_data,
         )

@@ -352,6 +352,84 @@ def test_run_uses_epic_scope_for_epic_to_feat(monkeypatch, tmp_path: Path) -> No
     assert create_data["scope_source"] == "params.epic_freeze.artifact_id"
 
 
+def test_run_bootstraps_l2_template_as_department_workflow(monkeypatch, tmp_path: Path) -> None:
+    template = tmp_path / "workflow.yaml"
+    template.write_text("kind: l2_workflow_template\nversion: '1.0'\n", encoding="utf-8")
+    rendered = tmp_path / "rendered.yaml"
+    rendered.write_text(
+        "\n".join(
+            [
+                "kind: l2_workflow_template",
+                "version: '1.0'",
+                "id: workflow.product.product_main_pipeline",
+                "phases:",
+                "  - id: src_to_epic",
+                "    name: SRC to EPIC",
+                "    workflow: workflow.product.task.src_to_epic",
+                "    level: task",
+                "    depends_on: []",
+                "    default_complexity: M",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    captured_create_payload: List[Dict[str, Any]] = []
+
+    monkeypatch.setattr(
+        run_module,
+        "_load_registry",
+        lambda: {
+            "workflows": {
+                "product.main": {
+                    "path": str(template),
+                    "required_params": [],
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        run_module,
+        "_run_until_settled_with_gates",
+        lambda *_a, **_k: {"status": "running", "completed_steps": 0, "blocked_at": None},
+    )
+    monkeypatch.setattr(run_module, "_print_summary", lambda *_a, **_k: None)
+
+    def fake_pm_workflow(action: str, **kwargs):
+        if action == "create":
+            captured_create_payload.append(kwargs)
+            return {"workflow_id": "wf_department_demo_001"}
+        raise AssertionError(f"unexpected pm_workflow action: {action}")
+
+    monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_module.run,
+        ["product.main", "--project-dir", str(tmp_path), "--skip-plan"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured_create_payload[0]["level"] == "department"
+    create_data = captured_create_payload[0]["data"]
+    assert create_data["kind"] == "l2_workflow_instance"
+    assert create_data["phases"] == [
+        {
+            "id": "src_to_epic",
+            "name": "SRC to EPIC",
+            "description": "",
+            "complexity": "M",
+            "status": "pending",
+            "depends_on": [],
+            "workflow": "workflow.product.task.src_to_epic",
+            "level": "task",
+            "l3_instance_ids": [],
+        }
+    ]
+
+
 def test_list_conflicting_workflows_matches_scope_and_legacy_rows(tmp_path: Path) -> None:
     db_path = tmp_path / ".workflow" / "orchestrator.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)

@@ -35,3 +35,62 @@ async def test_workflow_runner_create_workflow_includes_concurrency_metadata(tmp
     assert data["concurrency_scope"] == "epic:EPIC-321"
     assert data["concurrency_key"] == "product.epic-to-feat::epic:EPIC-321"
     assert data["scope_source"] == "params.epic_freeze.artifact_id"
+
+
+@pytest.mark.asyncio
+async def test_workflow_runner_create_workflow_bootstraps_l2_instance(tmp_path: Path, monkeypatch) -> None:
+    template = tmp_path / "product-main.yaml"
+    template.write_text(
+        "\n".join(
+            [
+                "kind: l2_workflow_template",
+                "version: '1.0'",
+                "phases:",
+                "  - id: src_to_epic",
+                "    name: SRC to EPIC",
+                "    workflow: workflow.product.task.src_to_epic",
+                "    level: task",
+                "    depends_on: []",
+                "    default_complexity: M",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    captured = {}
+
+    def fake_pm_workflow(action: str, **kwargs):
+        captured["action"] = action
+        captured["kwargs"] = kwargs
+        return {"workflow_id": "wf_department_demo_001"}
+
+    config = WorkflowRunConfig(
+        workflow_key="product.main",
+        template_path=template,
+        params={"raw_requirement": "ADR-011"},
+        project_root=tmp_path,
+        skip_plan=True,
+    )
+    runner = WorkflowRunner(config)
+    monkeypatch.setattr("lee.orchestrator.execution.workflow_runner._get_pm_workflow", lambda: fake_pm_workflow)
+
+    workflow_id = await runner._create_workflow(template)
+
+    assert workflow_id == "wf_department_demo_001"
+    assert captured["action"] == "create"
+    assert captured["kwargs"]["level"] == "department"
+    data = captured["kwargs"]["data"]
+    assert data["kind"] == "l2_workflow_instance"
+    assert data["phases"] == [
+        {
+            "id": "src_to_epic",
+            "name": "SRC to EPIC",
+            "description": "",
+            "complexity": "M",
+            "status": "pending",
+            "depends_on": [],
+            "workflow": "workflow.product.task.src_to_epic",
+            "level": "task",
+            "l3_instance_ids": [],
+        }
+    ]
