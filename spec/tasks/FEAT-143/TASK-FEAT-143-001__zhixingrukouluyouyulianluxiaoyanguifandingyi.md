@@ -17,7 +17,7 @@ properties:
 
 # Objective
 
-定义 QA 执行入口规范、路由契约和链路校验结构，确保 RELEASE->PLAN->TASK 执行路径的结构约束可审计、可实施
+定义 QA 执行入口规范、路由契约和链路校验结构，确保 RELEASE→PLAN→TASK 执行路径的结构约束可审计、可实施
 
 # Description
 
@@ -25,7 +25,7 @@ properties:
 
 ## Acceptance Mapping
 - FEAT-143 / AC-003-001: 执行入口唯一性验证：定义 task_ref 有效性和归属 testplan 的校验规则
-- FEAT-143 / AC-003-002: 执行路径完整性校验：定义 RELEASE->PLAN->TASK 链路完整性验证规则
+- FEAT-143 / AC-003-002: 执行路径完整性校验：定义 RELEASE→PLAN→TASK 链路完整性验证规则
 - FEAT-143 / AC-003-003: 旁路执行入口阻断：定义旁路检测规则结构和阻断响应规范
 - FEAT-143 / AC-003-004: 执行入口审计：定义 SSOT 三轴绑定审计模型和日志结构
 
@@ -44,11 +44,8 @@ audit_fields:
 ```yaml
 required_refs:
 - FEAT-143
-- FTA-20260312-001
+- FTA-FEAT-143-001
 review_required: true
-reviewers:
-- qa-entry-architect
-- workflow-runtime-owner
 ```
 
 ## Rollback Strategy
@@ -56,7 +53,8 @@ reviewers:
 mode: version_revert
 restore_targets:
 - spec/qa/execution-entry/
-backup_branch: feat-143-spec-backup
+preconditions:
+- 备份当前规范文档版本
 ```
 
 ## Definition Of Done
@@ -64,5 +62,5 @@ backup_branch: feat-143-spec-backup
 - 链路校验接口契约已定义并文档化
 - 旁路检测规则结构已规范定义
 - SSOT 三轴绑定审计模型已建立
-- 与 FEAT-QA-SSOT-001 的数据模型接口对齐完成
+- 与 FTA-FEAT-143-001 的数据模型接口对齐完成
 - 规范文档已提交至 spec/qa/execution-entry/ 目录
