@@ -42,6 +42,33 @@ class AgentContextBuilder:
     负责将 workflow 步骤和上下文文件转换为 LLM 可执行的 prompt
     """
 
+    _PROMPT_WRAPPER_NOISE_KEYS = {
+        "changed_files",
+        "commands_run",
+        "test_results",
+        "diff_summary",
+        "evidence_bundle_path",
+        "conversation_log_path",
+        "debug_log_path",
+        "prompt_system_path",
+        "prompt_user_path",
+        "generated_text",
+        "raw_output",
+        "error",
+        "iterations_used",
+        "stdout",
+        "stdout_tail",
+        "token_usage",
+        "cost_usd",
+        "tokens_used",
+        "duration_seconds",
+        "result_text",
+        "stop_reason",
+        "attempts",
+        "thread_id",
+    }
+    _PROMPT_FALLBACK_TEXT_LIMIT = 2400
+
     def __init__(
         self,
         agent_loader,
@@ -703,14 +730,18 @@ Verification items:
             )
 
             if value is None and isinstance(source, str) and source.endswith("_specs"):
-                base_name = source[:-1] if source.endswith("s") else source
-                for step_id, output in step_outputs.items():
+                alias_step_ids = self._resolve_symbol_step_aliases(
+                    workflow_context=workflow_context,
+                    source=source,
+                )
+                for step_id in alias_step_ids:
+                    output = step_outputs.get(step_id)
                     if not isinstance(output, dict):
                         continue
-                    if "business_output" in output:
-                        value = output["business_output"]
-                        if step and step_id in getattr(step, "depends_on", []):
-                            break
+                    extracted = self._extract_authoritative_step_payload(output)
+                    if extracted is not None:
+                        value = extracted
+                        break
 
             resolved[source] = value if value is not None else {"source": source, "required": item.get("required", True)}
 
@@ -738,11 +769,11 @@ Verification items:
         candidate_keys = [source, *self._freeze_source_aliases(source)]
         for key in candidate_keys:
             if key in data:
-                return data[key]
+                return self._sanitize_prompt_payload(data[key])
             if key in params:
-                return params[key]
+                return self._sanitize_prompt_payload(params[key])
             if key in step_outputs:
-                return step_outputs[key]
+                return self._sanitize_prompt_payload(step_outputs[key])
 
         if source == "external" and isinstance(item, dict):
             raw_types = item.get("type", [])
@@ -752,10 +783,51 @@ Verification items:
                 if not isinstance(type_name, str):
                     continue
                 if type_name in data:
-                    return data[type_name]
+                    return self._sanitize_prompt_payload(data[type_name])
                 if type_name in params:
-                    return params[type_name]
+                    return self._sanitize_prompt_payload(params[type_name])
         return None
+
+    def _resolve_symbol_step_aliases(
+        self,
+        *,
+        workflow_context: Dict[str, Any],
+        source: str,
+    ) -> List[str]:
+        if not isinstance(source, str) or not source.strip():
+            return []
+
+        template_ref = workflow_context.get("template_id") if isinstance(workflow_context, dict) else None
+        if not isinstance(template_ref, str) or not template_ref.strip():
+            return []
+
+        template_path = Path(template_ref)
+        if not template_path.exists():
+            candidate = self.project_root / template_ref
+            if candidate.exists():
+                template_path = candidate
+            else:
+                return []
+
+        try:
+            raw_doc = yaml.safe_load(template_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return []
+
+        aliases: List[str] = []
+        for stage in raw_doc.get("stages", []) if isinstance(raw_doc.get("stages"), list) else []:
+            if not isinstance(stage, dict):
+                continue
+            for step in stage.get("steps", []) if isinstance(stage.get("steps"), list) else []:
+                if not isinstance(step, dict):
+                    continue
+                step_id = step.get("id")
+                if not step_id:
+                    continue
+                for output in step.get("outputs", []) if isinstance(step.get("outputs"), list) else []:
+                    if isinstance(output, dict) and output.get("symbol") == source:
+                        aliases.append(step_id)
+        return aliases
 
     @staticmethod
     def _get_step_input_definition(step) -> Any:
@@ -795,8 +867,102 @@ Verification items:
         for step_id in step.depends_on:
             output = step_outputs.get(step_id)
             if output is not None:
-                upstream[step_id] = output
+                sanitized = self._sanitize_prompt_payload(output, allow_generated_text_fallback=False)
+                if self._payload_has_signal(sanitized):
+                    upstream[step_id] = sanitized
         return upstream
+
+    @classmethod
+    def _sanitize_prompt_payload(
+        cls,
+        value: Any,
+        *,
+        allow_generated_text_fallback: bool = True,
+    ) -> Any:
+        if isinstance(value, list):
+            return [
+                cls._sanitize_prompt_payload(
+                    item,
+                    allow_generated_text_fallback=allow_generated_text_fallback,
+                )
+                for item in value
+            ]
+        if not isinstance(value, dict):
+            return value
+
+        # Prefer canonical payload sections over executor wrapper metadata, but keep a
+        # trimmed generated_text fallback when the structured sections carry no domain content.
+        if any(key in value for key in ("business_output", "structured_payload", "ssot_output_contract")):
+            sanitized: Dict[str, Any] = {}
+            for key in ("business_output", "structured_payload", "ssot_output_contract", "freeze_meta", "outputs"):
+                item = value.get(key)
+                if item is not None:
+                    cleaned = cls._sanitize_prompt_payload(
+                        item,
+                        allow_generated_text_fallback=allow_generated_text_fallback,
+                    )
+                    if cls._payload_has_signal(cleaned):
+                        sanitized[key] = cleaned
+            if sanitized:
+                return sanitized
+            generated_text = value.get("generated_text")
+            if (
+                allow_generated_text_fallback
+                and isinstance(generated_text, str)
+                and generated_text.strip()
+            ):
+                return {
+                    "generated_text": generated_text[: cls._PROMPT_FALLBACK_TEXT_LIMIT].rstrip()
+                }
+
+        sanitized_dict: Dict[str, Any] = {}
+        for key, item in value.items():
+            if key in cls._PROMPT_WRAPPER_NOISE_KEYS:
+                continue
+            sanitized_dict[key] = cls._sanitize_prompt_payload(
+                item,
+                allow_generated_text_fallback=allow_generated_text_fallback,
+            )
+        return sanitized_dict
+
+    @classmethod
+    def _extract_authoritative_step_payload(cls, output: Dict[str, Any]) -> Any:
+        if not isinstance(output, dict):
+            return None
+
+        for key in ("business_output", "structured_payload", "ssot_output_contract"):
+            value = output.get(key)
+            if value is None:
+                continue
+            cleaned = cls._sanitize_prompt_payload(value, allow_generated_text_fallback=False)
+            if cls._payload_has_signal(cleaned):
+                return cleaned
+
+        cleaned_output = cls._sanitize_prompt_payload(output, allow_generated_text_fallback=False)
+        if cls._payload_has_signal(cleaned_output):
+            return cleaned_output
+        return None
+
+    @classmethod
+    def _payload_has_signal(cls, value: Any) -> bool:
+        if isinstance(value, dict):
+            if not value:
+                return False
+            non_signal_keys = {"status", "paths", "workspace_artifacts"}
+            for key, item in value.items():
+                if key in non_signal_keys:
+                    if isinstance(item, (dict, list)) and cls._payload_has_signal(item):
+                        return True
+                    continue
+                if cls._payload_has_signal(item):
+                    return True
+                return True
+            return False
+        if isinstance(value, list):
+            return any(cls._payload_has_signal(item) for item in value)
+        if isinstance(value, str):
+            return bool(value.strip())
+        return value is not None
 
     def _append_prompt_kv_pairs(
         self,
