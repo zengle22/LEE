@@ -41,21 +41,21 @@ phases:
     l3_template_id: template.dev.feature_contract_l3
     gate_id: gate.dev.contract_freeze_gate
 
-  - id: frontend_dev
-    name: "Frontend Development"
-    description: "Frontend implementation constrained by TECH and frozen contract"
-    default_complexity: L
-    depends_on: [contract_design]
-    spawns_l3: true
-    l3_template_id: template.dev.feature_fe_l3
-
   - id: backend_dev
     name: "Backend Development"
     description: "Backend implementation constrained by TECH and frozen contract"
     default_complexity: L
-    depends_on: [frontend_dev]
+    depends_on: [contract_design]
     spawns_l3: true
     l3_template_id: template.dev.feature_be_l3
+
+  - id: frontend_dev
+    name: "Frontend Development"
+    description: "Frontend implementation constrained by TECH and frozen contract"
+    default_complexity: L
+    depends_on: [backend_dev]
+    spawns_l3: true
+    l3_template_id: template.dev.feature_fe_l3
 
   - id: integration
     name: "Integration"
@@ -155,17 +155,17 @@ phase_data_flow:
       outputs:
         - tech_spec_ref
     - from: contract_design
-      to: frontend_dev
-      outputs:
-        - tech_spec_ref
-        - contract_freeze_ref
-    - from: frontend_dev
       to: backend_dev
       outputs:
         - tech_spec_ref
         - contract_freeze_ref
-        - fe_artifact_ref
     - from: backend_dev
+      to: frontend_dev
+      outputs:
+        - tech_spec_ref
+        - contract_freeze_ref
+        - be_artifact_ref
+    - from: frontend_dev
       to: integration
       outputs:
         - tech_spec_ref

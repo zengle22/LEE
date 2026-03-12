@@ -605,6 +605,7 @@ class WorkflowGenerator:
             },
             "phases": [],
             "pma_splits": [],  # Will be populated during execution
+            "lifecycle_state": "Ready",
         }
 
         # Add phases with complexity settings

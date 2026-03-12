@@ -54,24 +54,26 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ### Dev 部门
 
-#### 1. Development Pipeline（研发流水线）
+#### 1. Feature Delivery L2（研发主流程）
 
-**ID**: `workflow.dev.development_pipeline`
-**路径**: `departments/dev/workflows/development-pipeline/v1/workflow.yaml`
-**版本**: 1.2
+**ID**: `template.dev.feature_delivery_l2`
+**路径**: `departments/dev/workflows/templates/feature-delivery-l2-template.yaml`
+**版本**: 3.0
 
 **阶段**: 7 个
-- `s3_0`: 项目初始化
-- `s3_1`: 研发规划
-- `s3_2`: 研发调度执行
-- `s3_3`: 集成
-- `s3_4`: E2E 测试 + 安全扫描
-- `s3_5`: 交付门禁
-- `s3_6`: 复盘与知识沉淀
+- `tech_design`
+- `contract_design`
+- `backend_dev`
+- `frontend_dev`
+- `integration`
+- `evidence_pack`
+- `smoke_gate`
 
-**Human Gates**: 4 个
+**Gates**: `gate.dev.contract_freeze_gate`, `gate.dev.smoke_gate`
 
-**用途**: Stage 3 研发阶段的主流程
+**用途**: Dev 部门当前 canonical Feature 主入口
+
+**备注**: checked-in 文件为 template，运行时 instance 动态生成。
 
 ---
 
@@ -239,16 +241,20 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 **Human Gates**: 3 个
 
-**用途**: 最小执行单元，Phase 级别的完整开发循环
+**用途**: 历史参考流程
+
+**状态**: Deprecated，不再作为 Dev 部门新任务入口
 
 ---
 
-#### 2. Dev Retest（Dev 代码修复流程）
+#### 2. Bugfix Delivery（代码修复流程）
 
-**ID**: `workflow.dev.dev_retest`
-**路径**: `departments/dev/workflows/dev-retest/v1/workflow.yaml`
+**ID**: `template.dev.bug_fix_l3`
+**路径**: `departments/dev/workflows/templates/bug-fix-l3-template.yaml`
 
-**用途**: Dev 部门的代码修复流程
+**用途**: 当前保留的缺陷修复模板
+
+**状态**: Transitional，后续应继续收口到独立 canonical bugfix L2
 
 ---
 

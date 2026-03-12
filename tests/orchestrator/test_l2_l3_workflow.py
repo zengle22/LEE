@@ -90,10 +90,22 @@ class TestL2InstanceGeneration:
         assert result.generated_workflow is not None
         assert result.generated_workflow["kind"] == "l2_workflow_instance"
         assert len(result.generated_workflow["phases"]) == 7  # 7 phases in canonical template
+        assert result.generated_workflow["lifecycle_state"] == "Ready"
+        assert [phase["id"] for phase in result.generated_workflow["phases"]] == [
+            "tech_design",
+            "contract_design",
+            "backend_dev",
+            "frontend_dev",
+            "integration",
+            "evidence_pack",
+            "smoke_gate",
+        ]
         phases = {phase["id"]: phase for phase in result.generated_workflow["phases"]}
         assert phases["tech_design"]["l3_template_id"] == "template.dev.tech_design_l3"
         assert phases["contract_design"]["gate_id"] == "gate.dev.contract_freeze_gate"
         assert phases["smoke_gate"]["gate_id"] == "gate.dev.smoke_gate"
+        assert phases["backend_dev"]["depends_on"] == ["contract_design"]
+        assert phases["frontend_dev"]["depends_on"] == ["backend_dev"]
 
 
 class TestL3InstanceGeneration:
@@ -346,6 +358,28 @@ class TestOrchestratorL2Methods:
         assert orchestrator._get_repo_id_for_layer("api", repos) == "be-repo"
         assert orchestrator._get_repo_id_for_layer("service", repos) == "be-repo"
 
+    def test_derive_l2_lifecycle_state(self, orchestrator):
+        """Test canonical L2 lifecycle state derivation."""
+        ready = {"phases": [{"id": "tech_design", "status": "pending"}]}
+        in_progress = {"phases": [{"id": "tech_design", "status": "running"}]}
+        evidence = {
+            "phases": [
+                {"id": "evidence_pack", "status": "completed"},
+                {"id": "smoke_gate", "status": "pending"},
+            ]
+        }
+        closed = {
+            "phases": [
+                {"id": "evidence_pack", "status": "completed"},
+                {"id": "smoke_gate", "status": "completed"},
+            ]
+        }
+
+        assert orchestrator._derive_l2_lifecycle_state(ready) == "Ready"
+        assert orchestrator._derive_l2_lifecycle_state(in_progress) == "In Progress"
+        assert orchestrator._derive_l2_lifecycle_state(evidence) == "Evidence Pack Produced"
+        assert orchestrator._derive_l2_lifecycle_state(closed) == "Closed"
+
 
 class TestYamlTemplates:
     """Tests for YAML template files."""
@@ -389,6 +423,36 @@ class TestYamlTemplates:
         assert "steps" in data or "stages" in data
         items = data.get("steps") or data.get("stages") or []
         assert len(items) >= 4
+
+    def test_feature_delivery_template_contract_and_evidence_hooks(self):
+        """Test canonical L2 template declares required input contract and evidence closure."""
+        import yaml
+
+        template_path = Path("spec-global/departments/dev/workflows/templates/feature-delivery-l2-template.yaml")
+        if not template_path.exists():
+            pytest.skip("Feature delivery L2 template not found")
+
+        with open(template_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["shared_input_contract"]["required_fields"] == [
+            "formal_ssot_id",
+            "source_refs",
+            "governing_adrs",
+            "repo_context",
+        ]
+        assert data["status_hooks"]["states"] == [
+            "Ready",
+            "In Progress",
+            "Evidence Pack Produced",
+            "Closed",
+        ]
+        evidence_handoff = next(
+            handoff for handoff in data["phase_data_flow"]["handoffs"]
+            if handoff["from"] == "evidence_pack"
+        )
+        assert evidence_handoff["to"] == "smoke_gate"
+        assert evidence_handoff["outputs"] == ["evidence_pack_ref"]
 
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""

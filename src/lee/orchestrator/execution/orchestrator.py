@@ -602,6 +602,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 )
             else:
                 # All phases completed
+                instance.data["lifecycle_state"] = "Closed"
+                await self.store.update_workflow_data(workflow_id, instance.data)
                 await self.store.update_workflow_status(
                     workflow_id, WorkflowStatus.COMPLETED,
                     completed_at=datetime.now()
@@ -1523,8 +1525,24 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             updated_phase = dict(phase)
             break
 
+        instance.data["lifecycle_state"] = self._derive_l2_lifecycle_state(instance.data)
         await self.store.update_workflow_data(workflow_id, instance.data)
         return updated_phase
+
+    def _derive_l2_lifecycle_state(self, workflow_data: Dict[str, Any]) -> str:
+        """Derive canonical L2 lifecycle state from phase progression."""
+        phases = workflow_data.get("phases", [])
+        if not phases:
+            return "Ready"
+
+        phase_status = {phase.get("id"): phase.get("status") for phase in phases}
+        if phase_status.get("smoke_gate") == "completed":
+            return "Closed"
+        if phase_status.get("evidence_pack") == "completed":
+            return "Evidence Pack Produced"
+        if any(status in {"running", "completed", "blocked"} for status in phase_status.values()):
+            return "In Progress"
+        return "Ready"
 
     async def _run_l2_phase_subworkflow(
         self,
