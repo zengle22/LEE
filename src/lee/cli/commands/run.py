@@ -15,12 +15,6 @@ from typing import Dict, Any, List, Optional, Tuple
 import click
 import yaml
 
-from lee.cli.commands.live_progress import (
-    WorkflowLiveOutputFollower,
-    format_execution_boundary_summary,
-    get_execution_boundary_summaries,
-    get_running_live_executions,
-)
 from lee.cli.commands.workflow_registry import load_workflow_registry, resolve_workflow_template_path
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
@@ -511,15 +505,12 @@ def _get_progress_snapshot(project_root: Path, workflow_id: str) -> Optional[Dic
             (workflow_id,),
         )
         grouped = {k: v for k, v in cursor.fetchall()}
-        live_executions = get_running_live_executions(project_root, workflow_id)
         return {
             "status": status,
             "current_step": current_step,
             "completed": grouped.get("completed", 0),
             "running": grouped.get("running", 0),
             "failed": grouped.get("failed", 0),
-            "live_execution_states": [state.state for state in live_executions],
-            "live_execution_steps": [state.step_name for state in live_executions],
         }
     finally:
         conn.close()
@@ -539,20 +530,10 @@ def _start_progress_monitor(
         last_signature: Optional[tuple[Any, ...]] = None
         last_emit_at = 0.0
         heartbeat_seconds = 15.0
-        live_follower = WorkflowLiveOutputFollower(project_root, workflow_id)
-        announced_boundary_steps: set[str] = set()
         while not stop_event.wait(interval_seconds):
             snapshot = _get_progress_snapshot(project_root, workflow_id)
             if snapshot is None:
                 continue
-            for line in live_follower.poll_messages():
-                click.echo(line)
-            for summary in get_execution_boundary_summaries(project_root, workflow_id):
-                if summary.step_name in announced_boundary_steps:
-                    continue
-                for line in format_execution_boundary_summary(summary, project_root):
-                    click.echo(line)
-                announced_boundary_steps.add(summary.step_name)
             now = time.monotonic()
             signature = (
                 snapshot["status"],
@@ -560,7 +541,6 @@ def _start_progress_monitor(
                 snapshot["completed"],
                 snapshot["running"],
                 snapshot["failed"],
-                tuple(snapshot.get("live_execution_states") or []),
             )
             should_emit = signature != last_signature
             is_heartbeat = False

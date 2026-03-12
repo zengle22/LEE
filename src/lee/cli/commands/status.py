@@ -9,10 +9,6 @@ from typing import Optional
 
 import click
 
-from lee.cli.commands.live_progress import (
-    format_execution_boundary_summary,
-    get_execution_boundary_summaries,
-)
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.execution.error_hints import diagnose_executor_error
 
@@ -54,7 +50,6 @@ def status(workflow_id: Optional[str], project_dir: str, timeout: int) -> None:
         raise click.ClickException(result["error"])
 
     if workflow_id:
-        project_root = Path(project_dir).resolve()
         click.echo(f"Workflow: {result.get('workflow_id')}")
         click.echo(f"Level: {result.get('level')}")
         click.echo(f"Status: {result.get('status')}")
@@ -102,12 +97,6 @@ def status(workflow_id: Optional[str], project_dir: str, timeout: int) -> None:
             click.echo("\nReady Steps:")
             for step in result["ready_steps"]:
                 click.echo(f"  - {step.get('id')} ({step.get('kind')})")
-
-        summaries = get_execution_boundary_summaries(project_root, workflow_id)
-        if summaries:
-            click.echo("\nExecution Boundaries:")
-            for line in format_execution_boundary_summary(summaries[0], project_root):
-                click.echo(f"  {line}" if not line.startswith("执行边界:") else line)
     else:
         click.echo(f"Total: {result.get('total')}")
         for wf in result.get("workflows", []):
