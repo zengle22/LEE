@@ -35,18 +35,20 @@ frozen_at: '2026-03-12T21:06:30.784042'
 - 集成测试执行CLI
 - 配置结果报告输出
 - 设置失败处理逻辑
+- 提供可选的容器化运行模板
 # Outputs
 
 - GitHub Actions工作流模板
 - GitLab CI配置示例
 - CLI工具包
 - 集成文档
+- 可选 Docker 运行模板
 # Acceptance
 
 - 提供官方GitHub Actions工作流模板
 - 提供.gitlab-ci.yml配置示例
 - 提供CLI工具供Jenkins等CI系统调用
-- 支持Docker镜像方式运行
+- 可选支持Docker镜像方式运行
 - 返回标准退出码（0=通过，非0=失败）
 # Acceptance Checks
 

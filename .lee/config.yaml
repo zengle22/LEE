@@ -1,4 +1,6 @@
 executor:
+  coding_executor: claude_code
+  coding_fallback: kimi
   default_type: claude_code
 project:
   name: LEE
