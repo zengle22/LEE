@@ -2,16 +2,21 @@
 id: SRC-001
 ssot_type: src
 title: CLI 命令分层与 SSOT 物化边界治理需求
-status: draft
+status: frozen
 version: v1
-parent_id:
+parent_id: null
 derived_from_ids: []
 source_refs:
-  - ADR-006
+- ADR-006
 owner: governance
-tags: [cli, governance, workflow, ssot]
+tags:
+- cli
+- governance
+- workflow
+- ssot
 properties:
   source_kind: governance_requirement
+frozen_at: '2026-03-12T19:38:58.370126'
 ---
 # Background
 
