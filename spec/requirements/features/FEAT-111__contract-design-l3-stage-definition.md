@@ -1,0 +1,90 @@
+---
+id: FEAT-111
+ssot_type: feat
+title: Contract Design L3 Stage Definition
+status: frozen
+version: v1
+parent_id: EPIC-SRC-009
+derived_from_ids: []
+source_refs:
+- EPIC-SRC-009#scope
+owner: null
+tags: []
+properties:
+  contract_key: feat_004
+  identity_kind: ssot
+frozen_at: '2026-03-12T17:47:40.491884'
+---
+
+# Goal
+
+定义 Contract Design L3 阶段规范，确保前后端契约在实现前冻结
+# User Value
+
+Feature 交付流程获得标准化的协议设计阶段，确保前后端契约在实现前冻结，减少集成阶段返工
+# Inputs
+
+- Inputs defined by EPIC scope
+# Processing
+
+- 解析 TECH spec 中的接口需求
+- 设计 API Contract
+- 定义 Schema 规范
+- 生成 Mock 数据
+- 执行 Contract review
+# Outputs
+
+- API Contract 文档
+- Schema 定义
+- Mock 数据
+- Contract review 记录
+- 阶段完成证据
+# Acceptance
+
+- Contract Design L3 阶段定义冻结
+- 包含输入规范（TECH spec）
+- 包含输出物（API Contract + Schema + Mock）
+- 包含完成标准（Contract review passed）
+- 包含阶段流转条件
+# Acceptance Checks
+
+## AC-SRC-009-004-01
+
+- Scenario: Contract Design 阶段定义完整性
+- Given: Contract Design L3 阶段设计完成
+- When: 提交阶段定义文档评审
+- Then: 文档包含输入规范、输出物、完成标准、流转条件
+- Trace Hints: TASK, TESTSET, TECH
+
+## AC-SRC-009-004-02
+
+- Scenario: API Contract 产出规范
+- Given: 示例 FEAT 进入 Contract Design 阶段
+- When: 执行 Contract Design 流程
+- Then: 产出标准化的 API Contract 文档
+- Trace Hints: TECH, TASK
+
+## AC-SRC-009-004-03
+
+- Scenario: Schema 与 Mock 产出
+- Given: API Contract 设计完成
+- When: 进入 Schema 定义阶段
+- Then: 产出 Schema 定义和 Mock 数据
+- Trace Hints: TECH, TASK
+
+## AC-SRC-009-004-04
+
+- Scenario: Contract 可被下游消费
+- Given: Contract Design 阶段完成
+- When: Backend/Frontend 阶段启动
+- Then: 能够正确解析和使用 Contract 产出物
+- Trace Hints: TECH, TASK, TESTSET
+# Dependencies
+
+- EPIC-SRC-009
+- FEAT-SRC-009-003
+# Non Goals
+
+- 不实现 Contract 自动生成工具
+- 不修改现有 API 规范
+- 不强制定义跨服务契约
