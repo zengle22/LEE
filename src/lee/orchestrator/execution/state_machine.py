@@ -441,6 +441,10 @@ class WorkflowStateMachine(IStateMachine):
                 payload["business_output"] = output["business_output"]
             elif isinstance(output.get("structured_payload"), dict):
                 payload["business_output"] = output["structured_payload"]
+            else:
+                gate_business_payload = self._extract_gate_business_payload(output)
+                if gate_business_payload is not None:
+                    payload["business_output"] = gate_business_payload
             payload["gate_output"] = output
 
         step_inputs = self._resolve_step_inputs_for_freeze(step_id, instance)
@@ -457,6 +461,29 @@ class WorkflowStateMachine(IStateMachine):
         payload.setdefault("frozen_at", datetime.now().isoformat())
         payload.setdefault("step_id", step_id)
         return payload
+
+    @staticmethod
+    def _extract_gate_business_payload(output: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if not isinstance(output, dict) or "gate_approved" not in output:
+            return None
+
+        noise_keys = {
+            "gate_approved",
+            "approver",
+            "comments",
+            "frozen_at",
+            "step_id",
+            "frozen_inputs",
+            "freeze_meta",
+            "gate_evaluation",
+            "rules_overridden",
+        }
+        business_payload = {
+            key: value
+            for key, value in output.items()
+            if key not in noise_keys
+        }
+        return business_payload or None
 
     def _resolve_step_inputs_for_freeze(self, step_id: str, instance) -> List[str]:
         if not self.template_manager:

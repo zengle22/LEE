@@ -28,6 +28,7 @@ v3.1 重构：
 import uuid
 import json
 import hashlib
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -1605,6 +1606,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 config={
                     "subworkflow_ref": subworkflow_ref,
                     "subworkflow_level": phase_info.get("level"),
+                    "output_map": phase_info.get("output_map", {}),
                 },
             )
             backfill_output = await self._backfill_subworkflow_output(workflow_id, step, child)
