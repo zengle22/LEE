@@ -125,6 +125,34 @@ def _load_spec_option(spec_path: str) -> Dict[str, Any]:
     return {"spec": str(path)}
 
 
+def _load_spec_option_for_workflow(spec_path: str, entry: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Resolve --spec into workflow params with workflow-specific adaptation.
+
+    For text specs such as ADR/Markdown, product raw-input workflows expect the
+    content itself rather than only the path. If the workflow opts into
+    `load_spec_as_params` and declares `raw_requirement`, inject the file text
+    into that param.
+    """
+    path = Path(spec_path).resolve()
+    if not path.exists():
+        raise click.ClickException(f"Spec file not found: {path}")
+
+    if path.suffix.lower() in {".json", ".yaml", ".yml"}:
+        loaded = _load_spec_option_as_params(str(path))
+        if isinstance(loaded, dict):
+            return loaded
+        return {"spec": str(path)}
+
+    if entry.get("load_spec_as_params"):
+        candidate_params = set(entry.get("required_params", []) or [])
+        candidate_params.update(entry.get("optional_params", []) or [])
+        if "raw_requirement" in candidate_params:
+            return {"raw_requirement": path.read_text(encoding="utf-8")}
+
+    return {"spec": str(path)}
+
+
 def _render_workflow_template(template_path: Path, params: Dict[str, Any], project_dir: Path) -> Path:
     with open(template_path, encoding="utf-8") as f:
         content = f.read()
@@ -186,6 +214,7 @@ def _derive_workflow_creation_metadata(rendered_path: Path) -> Tuple[WorkflowLev
                     "depends_on": phase.get("depends_on", []),
                     "workflow": phase.get("workflow"),
                     "level": phase.get("level"),
+                    "output_map": phase.get("output_map", {}),
                     "l3_instance_ids": [],
                 }
             )
@@ -452,7 +481,8 @@ def _select_existing_workflow_action(
             f"concurrency_scope={item.get('concurrency_scope') or '-'}"
         )
 
-    if click.get_text_stream("stdin").isatty():
+    stdin = click.get_text_stream("stdin")
+    if stdin.isatty():
         action = click.prompt(
             "\n请选择操作",
             type=click.Choice(["continue", "restart"], case_sensitive=False),
@@ -460,12 +490,17 @@ def _select_existing_workflow_action(
             show_choices=True,
         ).lower()
     else:
-        # 非交互场景无法提问，默认 continue 防止重复创建。
-        action = "continue"
-        click.echo("非交互模式：默认继续旧流程（continue）。")
+        supplied = (stdin.read() or "").strip().lower()
+        if supplied in {"continue", "restart"}:
+            action = supplied
+            click.echo(f"非交互模式：使用 stdin 指令 {action}。")
+        else:
+            # 非交互场景无法提问，默认 continue 防止重复创建。
+            action = "continue"
+            click.echo("非交互模式：默认继续旧流程（continue）。")
 
     selected_workflow_id = existing[0]["id"]
-    if action == "continue" and len(existing) > 1 and click.get_text_stream("stdin").isatty():
+    if action == "continue" and len(existing) > 1 and stdin.isatty():
         selected_workflow_id = click.prompt(
             "选择要继续的 workflow_id",
             type=click.Choice([item["id"] for item in existing], case_sensitive=True),
@@ -786,7 +821,7 @@ def _release_project_run_lock(lock_fp) -> None:
 @click.option("--project-dir", default=".", help="项目目录")
 @click.option("--max-steps", default=10, show_default=True, help="最大执行步数")
 @click.option("--executor", default="claude_code", show_default=True, help="强制指定执行器类型（覆盖 spec 中的配置）", type=click.Choice([
-    "llm", "shell", "claude_code", "codex", "langgraph"
+    "llm", "qwen", "kimi", "shell", "claude_code", "codex", "langgraph"
 ]))
 @click.option("--plan-only", is_flag=True, help="只生成 Plan，不执行")
 @click.option("--skip-plan", is_flag=True, help="跳过 Plan，直接执行")
@@ -811,7 +846,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
 
     params: Dict[str, Any] = {}
     if spec:
-        params.update(_load_spec_option(spec))
+        params.update(_load_spec_option_for_workflow(spec, entry))
     if env:
         params["env"] = env
     if version:
