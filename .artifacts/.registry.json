@@ -1,6 +1,6 @@
 {
   "version": "2.1.0",
-  "last_rebuilt": "2026-03-12T16:17:37.782939",
+  "last_rebuilt": "2026-03-12T16:49:13.241233",
   "artifacts": {
     "ART-00003": {
       "id": "ART-00003",
@@ -6880,7 +6880,7 @@
       "id": "ADR-006",
       "type": "DOCUMENT",
       "category": "ssot_object",
-      "status": "DRAFT",
+      "status": "FROZEN",
       "path": "spec/adr/ADR-006__cli-minglingfencyussot-wuhuabianjie.md",
       "path_root": ".",
       "external_path": null,
@@ -6908,7 +6908,7 @@
       "size_bytes": null,
       "content_hash": null,
       "created_at": "2026-03-10T23:55:13.169631",
-      "updated_at": "2026-03-11T00:35:11.304410",
+      "updated_at": "2026-03-12T16:44:14.941386",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -7648,6 +7648,46 @@
       "content_hash": null,
       "created_at": "2026-03-12T16:02:53.611814",
       "updated_at": "2026-03-12T16:02:53.612319",
+      "frozen_at": null,
+      "archived_at": null,
+      "properties": {
+        "contract_key": "src",
+        "identity_kind": "ssot",
+        "ssot_type": "src",
+        "parent_id": null,
+        "source_refs": [],
+        "version": "v1",
+        "derived_from_ids": []
+      }
+    },
+    "SRC-009": {
+      "id": "SRC-009",
+      "type": "DOCUMENT",
+      "category": "ssot_object",
+      "status": "FROZEN",
+      "path": "spec/source/SRC-009__dev-department-ssot-alignment-normalized-goal-anal.md",
+      "path_root": ".",
+      "external_path": null,
+      "adopt_mode": null,
+      "run_id": "",
+      "workflow_id": null,
+      "department": null,
+      "depends_on": [],
+      "derived_from": null,
+      "consumed_by": [],
+      "implements": [],
+      "verifies": [],
+      "supersedes": null,
+      "governance_kind": "knowledge",
+      "git_sha": null,
+      "git_repo_path": null,
+      "title": "Dev Department SSOT Alignment - Normalized Goal Analysis",
+      "description": "",
+      "tags": [],
+      "size_bytes": null,
+      "content_hash": null,
+      "created_at": "2026-03-12T16:38:48.652518",
+      "updated_at": "2026-03-12T16:44:14.947497",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
@@ -11970,7 +12010,7 @@
       "id": "EPIC-009",
       "type": "DOCUMENT",
       "category": "ssot_object",
-      "status": "ACTIVE",
+      "status": "ARCHIVED",
       "path": "spec/requirements/epics/EPIC-009__qa-department-ssot-alignment-and-workflow-reframe.md",
       "path_root": ".",
       "external_path": null,
@@ -11992,13 +12032,15 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-12T16:05:58.636648",
-      "updated_at": "2026-03-12T16:05:58.636648",
+      "created_at": "2026-03-12T16:47:39.094392",
+      "updated_at": "2026-03-12T16:47:39.094392",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "manual_materialization": true,
         "materialized_from_workflow": "wf_task_734ed71c",
+        "superseded_by": "EPIC-011",
+        "superseded_reason": "Replaced by canonical frozen EPIC with formal source linkage.",
         "ssot_type": "epic",
         "parent_id": null,
         "source_refs": [
@@ -12014,7 +12056,7 @@
       "id": "EPIC-010",
       "type": "DOCUMENT",
       "category": "ssot_object",
-      "status": "FROZEN",
+      "status": "ARCHIVED",
       "path": "spec/requirements/epics/EPIC-010__qabumenssotduiqiyugongzuoliuzhonggou-jianlisanzhou.md",
       "path_root": ".",
       "external_path": null,
@@ -12036,11 +12078,13 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-12T16:09:06.159280",
-      "updated_at": "2026-03-12T16:09:06.173781",
+      "created_at": "2026-03-12T16:48:39.395780",
+      "updated_at": "2026-03-12T16:48:39.395780",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
+        "superseded_by": "EPIC-011",
+        "superseded_reason": "Duplicate QA EPIC missing canonical derived_from_ids and source_refs.",
         "ssot_type": "epic",
         "parent_id": null,
         "source_refs": [],
@@ -14073,18 +14117,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-12T00:12:23.153832",
-      "updated_at": "2026-03-12T00:13:22.001326",
+      "created_at": "2026-03-12T16:46:23.308459",
+      "updated_at": "2026-03-12T16:46:23.308459",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat_001",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-QA-SSOT-UPGRADE",
-        "source_refs": [
-          "EPIC-QA-SSOT-UPGRADE#scope"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -14115,18 +14157,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-12T00:12:23.162448",
-      "updated_at": "2026-03-12T00:13:22.011509",
+      "created_at": "2026-03-12T16:46:37.396633",
+      "updated_at": "2026-03-12T16:46:37.398178",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat_002",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-QA-SSOT-UPGRADE",
-        "source_refs": [
-          "EPIC-QA-SSOT-UPGRADE#scope"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
@@ -14157,18 +14197,16 @@
       "tags": [],
       "size_bytes": null,
       "content_hash": null,
-      "created_at": "2026-03-12T00:12:23.171287",
-      "updated_at": "2026-03-12T00:13:22.019768",
+      "created_at": "2026-03-12T16:46:37.453658",
+      "updated_at": "2026-03-12T16:46:37.453658",
       "frozen_at": null,
       "archived_at": null,
       "properties": {
         "contract_key": "feat_003",
         "identity_kind": "ssot",
         "ssot_type": "feat",
-        "parent_id": "EPIC-QA-SSOT-UPGRADE",
-        "source_refs": [
-          "EPIC-QA-SSOT-UPGRADE#scope"
-        ],
+        "parent_id": null,
+        "source_refs": [],
         "version": "v1",
         "derived_from_ids": []
       }
