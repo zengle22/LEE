@@ -88,6 +88,32 @@ class LLMExecutor(BaseExecutor):
         return await self._executor.execute(input_data)
 
 
+class QwenExecutor(LLMExecutor):
+    """Qwen 执行器别名，复用通用 LLMExecutor 并默认绑定 qwen profile。"""
+
+    def __init__(self, profile: str = "qwen", config_path: str = None,
+                 fallback_providers: list = None, **kwargs):
+        super().__init__(
+            profile=profile or "qwen",
+            config_path=config_path,
+            fallback_providers=fallback_providers,
+            **kwargs,
+        )
+
+
+class KimiExecutor(LLMExecutor):
+    """Kimi 执行器别名，复用通用 LLMExecutor 并默认绑定 kimi profile。"""
+
+    def __init__(self, profile: str = "kimi", config_path: str = None,
+                 fallback_providers: list = None, **kwargs):
+        super().__init__(
+            profile=profile or "kimi",
+            config_path=config_path,
+            fallback_providers=fallback_providers,
+            **kwargs,
+        )
+
+
 class ShellExecutor(BaseExecutor):
     """
     Shell 命令执行器
@@ -194,6 +220,8 @@ class ExecutorFactory:
 
     _executors = {
         "llm": LLMExecutor,
+        "qwen": QwenExecutor,
+        "kimi": KimiExecutor,
         "shell": ShellExecutor,
         "metagpt": MetaGPTExecutor,
         "claude_code": ClaudeCodeExecutor,
@@ -224,15 +252,20 @@ class ExecutorFactory:
         if executor_class is None:
             raise ValueError(f"Unknown executor type: {executor_type}")
 
-        if executor_type == "llm":
+        if executor_type in ("llm", "qwen", "kimi"):
             use_mock = os.getenv("LEE_LLM_MOCK", "").lower() in ("1", "true", "yes") \
                 or os.getenv("LEE_DEMO_MODE", "").lower() in ("1", "true", "yes")
             if use_mock:
                 return MockLLMExecutor(agent_id=kwargs.get("agent_id", ""))
 
             if "profile" not in kwargs:
-                default_profile = LLMConfig(kwargs.get("config_path")).get_default_profile()
-                kwargs["profile"] = os.getenv("LLM_PROFILE", default_profile)
+                if executor_type == "qwen":
+                    kwargs["profile"] = "qwen"
+                elif executor_type == "kimi":
+                    kwargs["profile"] = "kimi"
+                else:
+                    default_profile = LLMConfig(kwargs.get("config_path")).get_default_profile()
+                    kwargs["profile"] = os.getenv("LLM_PROFILE", default_profile)
 
             try:
                 return executor_class(**kwargs)

@@ -1213,6 +1213,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             "test_results": {},
             "iterations_used": data.get("num_turns", 1),
             "error": None,
+            "stop_reason": data.get("stop_reason", ""),
             # 额外元数据
             "cost_usd": data.get("total_cost_usd", 0),
             "session_id": data.get("session_id", ""),
@@ -1302,6 +1303,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             "test_results": {},
             "iterations_used": 1,
             "error": None,
+            "stop_reason": "",
         }
 
         changed_files_set = set()
@@ -1314,6 +1316,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             # result 类型消息（最终结果）
             if msg_type == "result":
                 parsed["iterations_used"] = msg.get("num_turns", 1)
+                parsed["stop_reason"] = msg.get("stop_reason", "") or parsed.get("stop_reason", "")
                 result_text = msg.get("result", "")
                 if result_text:
                     result_texts.append(result_text)
@@ -1533,6 +1536,11 @@ class ClaudeCodeExecutor(BaseExecutor):
             action = stop_conditions.get("on_test_fail", "fail")
             if action == "stop_needs_human":
                 return "needs_human"
+            return "fail"
+
+        stop_reason = str(parsed.get("stop_reason") or "").strip().lower()
+        result_text = str(parsed.get("result_text") or "").strip()
+        if stop_reason == "tool_use" and not result_text:
             return "fail"
 
         return "success"
