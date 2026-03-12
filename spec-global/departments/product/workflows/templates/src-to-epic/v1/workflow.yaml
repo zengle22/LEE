@@ -24,6 +24,9 @@ roles:
 
 overview:
   input_types:
+    - type: src
+      description: canonical SRC 主对象
+      ssot_type: SRC
     - type: source_freeze
       description: 已冻结的 SRC 或其冻结视图
       ssot_type: SRC
@@ -51,7 +54,7 @@ stages:
           将冻结后的 SRC 翻译为问题空间，明确边界、非目标和关键约束。
         inputs:
           - source: external
-            type: [source_freeze]
+            type: [src, source_freeze]
             required: true
         outputs:
           - symbol: problem_definition
@@ -154,6 +157,7 @@ instance_schema:
     - name
     - status
   context_fields:
+    - source_freeze
     - source_freeze_ref
     - epic_freeze_ref
   output_fields:

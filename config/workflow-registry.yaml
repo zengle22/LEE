@@ -135,6 +135,7 @@ workflows:
     optional_params:
       - raw_requirement
       - business_opportunity
+      - business_opportunity_freeze
 
   product.src-to-epic:
     path: spec-global/departments/product/workflows/templates/src-to-epic/v1/workflow.yaml
@@ -143,6 +144,7 @@ workflows:
     load_spec_as_params: true
     required_params: []
     optional_params:
+      - src
       - source_freeze
       - source_freeze_ref
 

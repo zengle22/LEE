@@ -41,6 +41,16 @@ def _extract_artifact_id(value: Any) -> str | None:
     return None
 
 
+def _extract_path_token(value: Any) -> str | None:
+    if isinstance(value, Mapping):
+        path_value = value.get("path")
+        if isinstance(path_value, str) and path_value.strip():
+            path_text = path_value.strip()
+            stem = Path(path_text).stem
+            return stem or path_text
+    return None
+
+
 def derive_concurrency_scope(
     workflow_key: str,
     params: Mapping[str, Any] | None,
@@ -49,7 +59,25 @@ def derive_concurrency_scope(
     params = params or {}
 
     if workflow_key == "product.src-to-epic":
-        return _project_scope(project_root, workflow_key, fallback=False)
+        artifact_id = _extract_artifact_id(params.get("source_freeze"))
+        if artifact_id:
+            concurrency_scope = f"src:{artifact_id}"
+            return ConcurrencyScopeInfo(
+                workflow_key=workflow_key,
+                concurrency_scope=concurrency_scope,
+                concurrency_key=workflow_conflict_key(workflow_key, concurrency_scope),
+                scope_source="params.source_freeze.artifact_id",
+            )
+        path_token = _extract_path_token(params.get("source_freeze"))
+        if path_token:
+            concurrency_scope = f"src_path:{path_token}"
+            return ConcurrencyScopeInfo(
+                workflow_key=workflow_key,
+                concurrency_scope=concurrency_scope,
+                concurrency_key=workflow_conflict_key(workflow_key, concurrency_scope),
+                scope_source="params.source_freeze.path",
+            )
+        return _project_scope(project_root, workflow_key, fallback=True)
 
     if workflow_key == "product.epic-to-feat":
         artifact_id = _extract_artifact_id(params.get("epic_freeze"))

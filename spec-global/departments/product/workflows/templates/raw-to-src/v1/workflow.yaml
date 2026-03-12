@@ -26,7 +26,9 @@ overview:
     - type: raw_requirement
       description: 原始需求描述
     - type: business_opportunity
-      description: 商业机会或其冻结视图
+      description: 商业机会对象
+    - type: business_opportunity_freeze
+      description: 上游策略部门冻结后的商业机会视图
 
   output:
     type: source_freeze
@@ -52,7 +54,7 @@ stages:
           保存原始内容和来源引用，形成待归一化输入对象。
         inputs:
           - source: external
-            type: [raw_requirement, business_opportunity]
+            type: [raw_requirement, business_opportunity, business_opportunity_freeze]
             required: true
         outputs:
           - symbol: raw_source_input
@@ -155,6 +157,7 @@ instance_schema:
   context_fields:
     - raw_requirement
     - business_opportunity
+    - business_opportunity_freeze
     - source_freeze_ref
   output_fields:
     - source_freeze
