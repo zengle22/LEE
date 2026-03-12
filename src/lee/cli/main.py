@@ -76,7 +76,7 @@ def _should_lock(argv: list[str]) -> bool:
         return False
 
     # 独立的 approve 命令（与 gates approve 功能重复）
-    if first == "approve":
+    if first in {"approve", "resume"}:
         return False
 
     # `lee run` 使用 workflow-scope 互斥，不再使用项目级 CLI 锁
@@ -204,6 +204,7 @@ def _register_commands() -> None:
     from lee.cli.commands.run import run
     from lee.cli.commands.status import status
     from lee.cli.commands.approve import approve
+    from lee.cli.commands.resume import resume
     from lee.cli.commands.init import init
     from lee.cli.commands.demo import demo
     from lee.cli.commands.qa import qa
@@ -229,6 +230,7 @@ def _register_commands() -> None:
     cli.add_command(run)
     cli.add_command(status)
     cli.add_command(approve)
+    cli.add_command(resume)
     cli.add_command(init)
     cli.add_command(demo)
     cli.add_command(qa)

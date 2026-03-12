@@ -7,6 +7,13 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from lee.cli.commands.live_progress import (
+    WorkflowLiveOutputFollower,
+    format_execution_boundary_summary,
+    get_execution_boundary_summaries,
+    get_running_live_executions,
+)
+
 
 @click.command()
 @click.argument("workflow_id", required=False)
@@ -110,6 +117,8 @@ def _watch_workflow(db_path: Path, workflow_id: str, interval: int) -> None:
     try:
         last_status = None
         last_completed = 0
+        live_follower = WorkflowLiveOutputFollower(db_path.parent.parent, workflow_id)
+        announced_boundary_steps: set[str] = set()
 
         while True:
             try:
@@ -140,6 +149,8 @@ def _watch_workflow(db_path: Path, workflow_id: str, interval: int) -> None:
                 completed = sum(1 for s in steps if s[1] == "completed")
                 running = [s for s in steps if s[1] == "running"]
                 failed = [s for s in steps if s[1] == "failed"]
+                live_states = get_running_live_executions(db_path.parent.parent, workflow_id)
+                boundary_summaries = get_execution_boundary_summaries(db_path.parent.parent, workflow_id)
 
                 # 只在有变化时更新显示
                 if status != last_status or completed != last_completed:
@@ -166,9 +177,32 @@ def _watch_workflow(db_path: Path, workflow_id: str, interval: int) -> None:
                         click.echo("\n正在执行:")
                         for step in running:
                             click.echo(f"  ⚙️  {step[0]}")
+                    if live_states:
+                        click.echo("\n实时执行状态:")
+                        for live_state in live_states:
+                            metrics = []
+                            if live_state.elapsed_seconds is not None:
+                                metrics.append(f"elapsed={live_state.elapsed_seconds}s")
+                            if live_state.silent_for_seconds is not None:
+                                metrics.append(f"silent_for={live_state.silent_for_seconds}s")
+                            metric_suffix = f" ({', '.join(metrics)})" if metrics else ""
+                            click.echo(
+                                f"  📡 {live_state.step_name} [{live_state.executor_type}] "
+                                f"{live_state.state}{metric_suffix}"
+                            )
+                    for summary in boundary_summaries:
+                        if summary.step_name in announced_boundary_steps:
+                            continue
+                        click.echo("\n执行边界摘要:")
+                        for line in format_execution_boundary_summary(summary, db_path.parent.parent):
+                            click.echo(f"  {line}" if not line.startswith("执行边界:") else line)
+                        announced_boundary_steps.add(summary.step_name)
 
                     last_status = status
                     last_completed = completed
+
+                for line in live_follower.poll_messages():
+                    click.echo(line)
 
                 conn.close()
 
