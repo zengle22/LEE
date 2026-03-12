@@ -12,7 +12,8 @@ LEE Orchestrator v3.0 - 统一存储层（SQLite）
 import aiosqlite
 import json
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from enum import Enum
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
@@ -48,6 +49,20 @@ class SQLiteStore:
         self.db_path = db_path
         self._conn: Optional[aiosqlite.Connection] = None
         self._transaction_depth: int = 0
+
+    @staticmethod
+    def _json_default(value: Any) -> Any:
+        """Make workflow payloads safe for SQLite JSON storage."""
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, Enum):
+            return value.value
+        return str(value)
+
+    def _json_dumps(self, value: Any) -> str:
+        return json.dumps(value, default=self._json_default, ensure_ascii=False)
 
     async def connect(self):
         """建立数据库连接并创建表结构"""
@@ -294,7 +309,7 @@ class SQLiteStore:
             instance.template_id,
             instance.status.value,
             instance.current_step,
-            json.dumps(instance.data),
+            self._json_dumps(instance.data),
             instance.created_at.isoformat(),
             instance.updated_at.isoformat(),
             instance.completed_at.isoformat() if instance.completed_at else None,
@@ -360,7 +375,7 @@ class SQLiteStore:
             SET data = ?, updated_at = ?
             WHERE id = ?
         """, (
-            json.dumps(data),
+            self._json_dumps(data),
             updated_at.isoformat(),
             workflow_id,
         ))
@@ -391,7 +406,7 @@ class SQLiteStore:
                 updated_at = ?
             WHERE id = ?
         """, (
-            json.dumps(data),
+            self._json_dumps(data),
             status.value,
             updated_at.isoformat(),
             workflow_id,
@@ -508,8 +523,8 @@ class SQLiteStore:
             execution.workflow_id,
             execution.step_name,
             execution.executor_type,
-            json.dumps(execution.input_data),
-            json.dumps(execution.output_data) if execution.output_data else None,
+            self._json_dumps(execution.input_data),
+            self._json_dumps(execution.output_data) if execution.output_data else None,
             execution.status.value,
             execution.error_message,
             execution.started_at.isoformat() if execution.started_at else None,
@@ -546,7 +561,7 @@ class SQLiteStore:
 
         if output_data is not None:
             set_clauses.append("output_data = ?")
-            params.append(json.dumps(output_data))
+            params.append(self._json_dumps(output_data))
 
         if error_message is not None:
             set_clauses.append("error_message = ?")
@@ -864,8 +879,8 @@ class SQLiteStore:
                 gate.comments,
                 gate.created_at.isoformat(),
                 gate.decided_at.isoformat() if gate.decided_at else None,
-                json.dumps(gate.approval_criteria),
-                json.dumps(gate.reviewers),
+                self._json_dumps(gate.approval_criteria),
+                self._json_dumps(gate.reviewers),
                 gate.version,
                 gate.default_reject_action,
                 gate.default_reject_target,
@@ -891,8 +906,8 @@ class SQLiteStore:
                     gate.comments,
                     gate.created_at.isoformat(),
                     gate.decided_at.isoformat() if gate.decided_at else None,
-                    json.dumps(gate.approval_criteria),
-                    json.dumps(gate.reviewers),
+                    self._json_dumps(gate.approval_criteria),
+                    self._json_dumps(gate.reviewers),
                 ))
             else:
                 raise
@@ -1078,14 +1093,14 @@ class SQLiteStore:
                         UPDATE gate_approvals
                         SET structured_feedback = ?
                         WHERE workflow_id = ? AND gate_id = ?
-                    """, (json.dumps(structured_feedback), workflow_id, gate_id))
+                    """, (self._json_dumps(structured_feedback), workflow_id, gate_id))
 
                 if issues is not None:
                     await self._conn.execute("""
                         UPDATE gate_approvals
                         SET issues = ?
                         WHERE workflow_id = ? AND gate_id = ?
-                    """, (json.dumps(issues), workflow_id, gate_id))
+                    """, (self._json_dumps(issues), workflow_id, gate_id))
 
             except aiosqlite.OperationalError:
                 # 新列可能不存在，忽略
