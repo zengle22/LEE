@@ -4,10 +4,9 @@ ssot_type: feat
 title: 测试追溯链路贯通
 status: frozen
 version: v1
-parent_id: EPIC-QA-SSOT-UPGRADE
+parent_id: null
 derived_from_ids: []
-source_refs:
-- EPIC-QA-SSOT-UPGRADE#scope
+source_refs: []
 owner: null
 tags: []
 properties:
