@@ -6,10 +6,14 @@ LEE Orchestrator v3.1 - 门禁操作 Mixin
 
 from __future__ import annotations
 
+import json
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import yaml
 
 from lee.orchestrator.execution.artifacts.types import SSOTType
 from lee.orchestrator.storage.models import StepResult
@@ -20,6 +24,24 @@ logger = logging.getLogger(__name__)
 
 class GateOperationsMixin:
     """门禁操作 Mixin — approve / reject / pending gates"""
+
+    _GATE_WRAPPER_NOISE_KEYS = {
+        "changed_files",
+        "commands_run",
+        "test_results",
+        "diff_summary",
+        "evidence_bundle_path",
+        "conversation_log_path",
+        "debug_log_path",
+        "prompt_system_path",
+        "prompt_user_path",
+        "generated_text",
+        "raw_output",
+        "error",
+        "iterations_used",
+        "stdout",
+        "stdout_tail",
+    }
 
     async def approve_gate(
         self,
@@ -102,8 +124,13 @@ class GateOperationsMixin:
             approval_id=f"{workflow_id}_{gate_id}",
         )
 
-        # 构建输出（包含规则评估结果）
-        gate_output = {"gate_approved": True, "approver": approver, "comments": comments}
+        # 构建输出（冻结对象 + 审批元数据），避免下游只拿到空壳 gate meta。
+        gate_output = self._build_gate_output_payload(
+            instance=instance,
+            gate_step_id=gate_approval.step_id,
+            approver=approver,
+            comments=comments,
+        )
         if gate_evaluation:
             gate_output["gate_evaluation"] = gate_evaluation.to_dict()
             gate_output["rules_overridden"] = rules_overridden
@@ -127,6 +154,232 @@ class GateOperationsMixin:
             message=f"Gate {gate_id} approved by {approver}",
             output=gate_output,
         )
+
+    def _build_gate_output_payload(
+        self,
+        *,
+        instance,
+        gate_step_id: str,
+        approver: str,
+        comments: str,
+    ) -> Dict[str, Any]:
+        """Build a gate step output that carries the frozen object, not only gate metadata."""
+        gate_output: Dict[str, Any] = {
+            "gate_approved": True,
+            "approver": approver,
+            "comments": comments,
+            "frozen_at": datetime.now().isoformat(),
+            "step_id": gate_step_id,
+        }
+
+        frozen_inputs = self._resolve_gate_frozen_inputs(instance, gate_step_id)
+        if frozen_inputs:
+            primary_payload = self._extract_primary_frozen_payload(frozen_inputs)
+            if isinstance(primary_payload, dict):
+                gate_output.update(primary_payload)
+            gate_output["frozen_inputs"] = frozen_inputs
+
+        freeze_meta = gate_output.get("freeze_meta")
+        if not isinstance(freeze_meta, dict):
+            freeze_meta = {}
+        freeze_meta.setdefault("status", "frozen")
+        freeze_meta.setdefault("frozen_at", gate_output["frozen_at"])
+        freeze_meta.setdefault("frozen_by", approver)
+        gate_output["freeze_meta"] = freeze_meta
+
+        return gate_output
+
+    def _resolve_gate_frozen_inputs(self, instance, gate_step_id: str) -> Dict[str, Any]:
+        """Resolve the gate's upstream inputs so they can be embedded into the frozen output."""
+        instance_data = getattr(instance, "data", {}) or {}
+        step_outputs = instance_data.get("step_outputs", {}) or {}
+        params = instance_data.get("params", {}) or {}
+
+        sources: List[str] = []
+        try:
+            resolved = self.state_machine._resolve_step_inputs_for_freeze(gate_step_id, instance)
+            if isinstance(resolved, list):
+                sources.extend(resolved)
+        except Exception:
+            pass
+
+        frozen_inputs: Dict[str, Any] = {}
+        for source in sources:
+            candidate_keys = [
+                source,
+                *self._freeze_source_aliases(source),
+                *self._resolve_symbol_step_aliases(instance, source),
+            ]
+            for key in candidate_keys:
+                if key in step_outputs:
+                    frozen_inputs[source] = self._sanitize_gate_payload(step_outputs[key])
+                    break
+                if key in params:
+                    frozen_inputs[source] = self._sanitize_gate_payload(params[key])
+                    break
+
+        if not frozen_inputs:
+            for source, step_id in self._preferred_gate_step_output_aliases(gate_step_id):
+                if step_id in step_outputs:
+                    frozen_inputs[source] = self._sanitize_gate_payload(step_outputs[step_id])
+        return frozen_inputs
+
+    def _extract_primary_frozen_payload(self, frozen_inputs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Choose the main frozen business payload from gate inputs."""
+        priority_sources = (
+            "normalized_src",
+            "source_freeze",
+            "src",
+            "epic_candidate",
+            "epic_freeze",
+            "feat_candidate",
+            "feat_freeze",
+        )
+
+        for source in priority_sources:
+            payload = self._coerce_gate_business_payload(frozen_inputs.get(source))
+            if payload:
+                return payload
+
+        for payload in frozen_inputs.values():
+            normalized = self._coerce_gate_business_payload(payload)
+            if normalized:
+                return normalized
+        return None
+
+    @staticmethod
+    def _preferred_gate_step_output_aliases(gate_step_id: str) -> List[tuple[str, str]]:
+        """Fallback producer-step aliases for canonical product freeze gates."""
+        alias_map = {
+            "source_freeze": [
+                ("normalized_src", "source_normalization"),
+                ("source_review_report", "source_review"),
+            ],
+            "epic_freeze": [
+                ("epic_candidate", "epic_design"),
+                ("epic_review_report", "epic_review"),
+            ],
+            "feat_freeze": [
+                ("feat_specs", "feat_spec_generation"),
+                ("feat_review_report", "feat_review"),
+            ],
+            "delivery_prep_freeze": [
+                ("ui_specs", "ui_design"),
+                ("tech_specs", "tech_design"),
+                ("task_plan", "task_planning"),
+                ("delivery_plan_review", "delivery_plan_validation"),
+            ],
+        }
+        return alias_map.get(gate_step_id, [])
+
+    def _resolve_symbol_step_aliases(self, instance, source: str) -> List[str]:
+        """Resolve output symbol names back to producing step ids from the raw workflow YAML."""
+        if not isinstance(source, str):
+            return []
+
+        template_ref = getattr(instance, "template_id", None)
+        if not template_ref:
+            return []
+
+        template_path = Path(str(template_ref))
+        if not template_path.exists():
+            template_manager = getattr(self, "template_manager", None)
+            if template_manager and hasattr(template_manager, "_find_template_file"):
+                try:
+                    candidate = template_manager._find_template_file(str(template_ref))
+                except Exception:
+                    candidate = None
+                if candidate:
+                    template_path = Path(candidate)
+        if not template_path.exists():
+            return []
+
+        try:
+            raw_doc = yaml.safe_load(template_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return []
+
+        aliases: List[str] = []
+        for stage in raw_doc.get("stages", []) if isinstance(raw_doc.get("stages"), list) else []:
+            if not isinstance(stage, dict):
+                continue
+            for step in stage.get("steps", []) if isinstance(stage.get("steps"), list) else []:
+                if not isinstance(step, dict):
+                    continue
+                step_id = step.get("id")
+                if not step_id:
+                    continue
+                for output in step.get("outputs", []) if isinstance(step.get("outputs"), list) else []:
+                    if isinstance(output, dict) and output.get("symbol") == source:
+                        aliases.append(step_id)
+        return aliases
+
+    @staticmethod
+    def _coerce_gate_business_payload(payload: Any) -> Optional[Dict[str, Any]]:
+        """Normalize agent/gate payloads into a dict suitable for downstream frozen-object handoff."""
+        if not isinstance(payload, dict):
+            return None
+        if isinstance(payload.get("business_output"), dict):
+            return GateOperationsMixin._sanitize_gate_payload(payload["business_output"])
+        if isinstance(payload.get("structured_payload"), dict):
+            structured_payload = GateOperationsMixin._sanitize_gate_payload(payload["structured_payload"])
+            if isinstance(structured_payload.get("business_output"), dict):
+                return GateOperationsMixin._sanitize_gate_payload(structured_payload["business_output"])
+        file_payload = GateOperationsMixin._load_gate_business_payload_from_artifacts(payload)
+        if isinstance(file_payload, dict):
+            return GateOperationsMixin._sanitize_gate_payload(file_payload)
+        return GateOperationsMixin._sanitize_gate_payload(payload)
+
+    @staticmethod
+    def _load_gate_business_payload_from_artifacts(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        candidate_paths: List[str] = []
+        for key in ("workspace_artifacts", "written_files", "paths"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                candidate_paths.extend(str(item) for item in value if isinstance(item, (str, Path)))
+
+        preferred = [
+            path for path in candidate_paths
+            if path.endswith(("business_output.yaml", "business_output.yml", "business_output.json"))
+        ]
+        for path_text in preferred + candidate_paths:
+            path = Path(path_text)
+            if not path.exists() or not path.is_file():
+                continue
+            try:
+                raw = path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            try:
+                loaded = json.loads(raw) if path.suffix.lower() == ".json" else yaml.safe_load(raw)
+            except Exception:
+                continue
+            if isinstance(loaded, dict) and isinstance(loaded.get("business_output"), dict):
+                return loaded["business_output"]
+            if isinstance(loaded, dict):
+                return loaded
+        return None
+
+    @classmethod
+    def _sanitize_gate_payload(cls, payload: Any) -> Any:
+        """Drop executor wrapper noise before passing frozen payloads downstream."""
+        if isinstance(payload, list):
+            return [cls._sanitize_gate_payload(item) for item in payload]
+        if not isinstance(payload, dict):
+            return payload
+
+        sanitized: Dict[str, Any] = {}
+        for key, value in payload.items():
+            if key in cls._GATE_WRAPPER_NOISE_KEYS:
+                continue
+            if key == "business_output" and isinstance(value, dict):
+                sanitized[key] = cls._sanitize_gate_payload(value)
+                continue
+            if key == "structured_payload" and isinstance(value, dict):
+                sanitized[key] = cls._sanitize_gate_payload(value)
+                continue
+            sanitized[key] = cls._sanitize_gate_payload(value)
+        return sanitized
 
     async def reject_gate(
         self,
@@ -628,7 +881,14 @@ class GateOperationsMixin:
         """将SRC候选物化为规范SRC文件"""
         src_structure = payload.get("src_structure", {}) or {}
         governance_refs = payload.get("governance_refs", {}) or {}
-        title = str(src_structure.get("title") or "Untitled SRC")
+        title = str(src_structure.get("title") or "").strip()
+        if not title or title.upper() in {"SRC", "UNTITLED SRC"}:
+            title = (
+                str(src_structure.get("problem_statement") or "").strip()
+                or str(src_structure.get("summary") or "").strip()
+                or str((governance_refs.get("source_refs") or [None])[0] or "").strip()
+                or "Untitled SRC"
+            )
         derived_ref = (
             ((payload.get("ssot_identity") or {}).get("derived_from"))
             or ((governance_refs.get("source_refs") or [None])[0])

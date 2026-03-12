@@ -91,6 +91,27 @@ def derive_concurrency_scope(
             )
         return _project_scope(project_root, workflow_key, fallback=True)
 
+    if workflow_key == "product.feat-to-delivery-prep":
+        artifact_id = _extract_artifact_id(params.get("feat_freeze_ref"))
+        if artifact_id:
+            concurrency_scope = f"feat:{artifact_id}"
+            return ConcurrencyScopeInfo(
+                workflow_key=workflow_key,
+                concurrency_scope=concurrency_scope,
+                concurrency_key=workflow_conflict_key(workflow_key, concurrency_scope),
+                scope_source="params.feat_freeze_ref.artifact_id",
+            )
+        feat_value = params.get("feat_freeze")
+        if isinstance(feat_value, str) and feat_value.strip():
+            concurrency_scope = f"feat:{feat_value.strip()}"
+            return ConcurrencyScopeInfo(
+                workflow_key=workflow_key,
+                concurrency_scope=concurrency_scope,
+                concurrency_key=workflow_conflict_key(workflow_key, concurrency_scope),
+                scope_source="params.feat_freeze",
+            )
+        return _project_scope(project_root, workflow_key, fallback=True)
+
     return _project_scope(project_root, workflow_key, fallback=True)
 
 
