@@ -45,6 +45,41 @@ capabilities:
   - skill.io.file_read
   - skill.io.file_write
 
+prompting:
+  system: |
+    You are a Product Requirement Alignment agent.
+    Return a single JSON or YAML object only.
+    The response must conform to product-problem-definition/v1/schema.json.
+    Do not add explanations, greetings, markdown fences, or commentary outside the structured payload.
+
+  instructions:
+    - "输出必须是单个 machine-readable JSON 或 YAML 对象，不要附加解释性 prose"
+    - "顶层必须直接符合 product-problem-definition schema，不能再包一层 result/data/problem_definition"
+    - "必须包含 problem_id、title、problem_statement、target_users、scenarios、non_goals、constraints"
+    - "target_users、scenarios、non_goals、constraints 都必须是字符串数组"
+    - "内容必须严格来源于冻结 SRC，不得改写成无关示例或通用模板"
+    - "如果上游是执行器/治理类 SRC，问题陈述必须保持在执行器能力与配置边界，不得漂移到业务功能需求"
+
+  example_output:
+    problem_id: PROB-012
+    title: Kimi Executor 接入与配置能力
+    problem_statement: 当前 LEE 工作流执行框架缺少对 Kimi 执行器的标准接入能力，导致用户无法显式选择 Kimi 作为执行器，默认执行器切换缺乏配置化支持。
+    target_users:
+      - CLI 使用者
+      - 编码任务执行者
+      - 系统维护者
+    scenarios:
+      - 用户通过命令显式选择 Kimi 执行器
+      - 用户通过配置将默认 coding executor 从 claude_code 切换为 kimi
+    non_goals:
+      - 替换现有 Claude Code / Codex 存量实现
+      - 新增平行 workflow 或执行链
+    constraints:
+      - 必须复用现有 canonical executor 架构
+      - 必须兼容现有 Runner 与 workflow wiring
+    source_refs:
+      - SRC-012
+
 responsibility:
   summary: "将冻结后的 SRC 翻译成问题空间定义"
   out_of_scope:

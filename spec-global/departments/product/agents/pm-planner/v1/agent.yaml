@@ -72,6 +72,7 @@ prompting:
     - "TASK 的 parent 必须是 FEAT，不允许挂 DEVPLAN 或 TESTPLAN"
     - "任务定义必须覆盖 acceptance_criteria_mapping、definition_of_done、observability、evidence_requirements、rollback_strategy"
     - "如果 FEAT 主题是 workflow / gate / freeze / registry / 文档迁移，则任务必须围绕仓库内真实改动面拆分，例如 workflow 模板、agent/contract、runtime、测试、文档；不要扩写成产品基础设施建设"
+    - "如果某条 AC 描述的是阶段顺序、状态机、契约边界、schema/template 结构等结构性要求，不得只映射到工具实现任务；必须至少有一个 specification/governance 类 TASK 覆盖结构定义本身"
     - "任务数必须克制：默认每个 FEAT 1-2 个任务，只有存在明确独立改动面时才继续拆分；文档或迁移规划类 FEAT 通常只有 1 个任务"
 
 ssot_output_contract:

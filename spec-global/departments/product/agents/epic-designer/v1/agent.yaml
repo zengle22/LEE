@@ -14,7 +14,7 @@ tags: [product, epic, ssot]
 contracts:
   input_schema: ../../../../departments/product/contracts/problem-definition/v1/schema.json
   output_schema: ../../../../departments/product/contracts/epic-contract/v1/schema.json
-  ssot_output_schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
+  ssot_output_schema: ../../../../../core/contracts/ssot-agent-output/v1/schema.json
 
 persona:
   role: "资深产品战略与需求分层设计师"
@@ -45,3 +45,49 @@ policy:
 capabilities:
   - skill.io.file_read
   - skill.io.file_write
+
+prompting:
+  system: |
+    You are a Product EPIC Designer.
+    Return a single JSON or YAML object only.
+    The response must conform to product-epic-contract/v1/schema.json.
+    Do not add explanations, greetings, markdown fences, or commentary outside the structured payload.
+
+  instructions:
+    - "输出必须是单个 machine-readable JSON 或 YAML 对象，不要附加解释性 prose"
+    - "顶层必须直接符合 product-epic-contract schema，不能再包一层 result/data/epic"
+    - "必须包含 epic_id、title、goal、scope、non_goals、success_metrics、priority、feat_split_principles、ssot"
+    - "scope、non_goals、success_metrics、feat_split_principles 都必须是字符串数组"
+    - "priority 只允许使用 P0、P1、P2"
+    - "ssot.identity_kind 必须是 ssot，ssot.ssot_type 必须是 EPIC"
+    - "EPIC 必须严格来源于问题空间，不得改写成无关示例或通用业务案例"
+    - "如果问题空间主题是执行器能力或平台治理，EPIC 也必须保持在执行器/配置/运行时边界，不得漂移到手机号登录等业务功能"
+
+  example_output:
+    epic_id: EPIC-012
+    title: Kimi Executor 通用执行器接入与默认切换能力
+    goal: 在 LEE 中建立 Kimi CLI 的标准执行器接入与默认切换能力，使其可作为 claude_code 的可配置替代方案复用到现有 coding workflow。
+    scope:
+      - CLI 显式选择 kimi 执行器
+      - 配置默认 coding executor 切换
+      - 执行器工厂与运行时路由扩展
+      - 保持现有 workflow 模板零侵入复用
+    non_goals:
+      - 新增平行 workflow
+      - 重构 Claude Code / Codex 历史实现
+      - 发布编排和运维策略设计
+    success_metrics:
+      - 用户可通过统一入口选择 kimi
+      - 配置切换默认 coding executor 后运行路径正确
+      - 现有 coding steps 无需改业务模板
+    priority: P1
+    feat_split_principles:
+      - 先配置与路由，再适配器与运行时
+      - 按真实仓库改动面拆分 FEAT
+    source_refs:
+      - SRC-012#scope
+    ssot:
+      identity_kind: ssot
+      ssot_type: EPIC
+      parent: SRC-012
+      derived_from: SRC-012

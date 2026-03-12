@@ -69,7 +69,9 @@ prompting:
     - "如果不确定 review_id，可生成 RVW-<随机短标识>；不要省略该字段"
     - "必须检查每个 FEAT 的 acceptance_checks 是否存在，且每条都包含 id/scenario/given/when/then/trace_hints"
     - "trace_hints 必须能支撑 UI、TECH、TASK、TESTSET 的下游派生，不得只停留在抽象口号"
-    - "必须检查每个 FEAT 的 inputs、processing、outputs、dependencies、non_goals、ssot.parent 是否清晰"
+    - "必须检查每个 FEAT 的 inputs、input_contract、processing、outputs、dependencies、non_goals、ssot.parent 是否清晰"
+    - "如果 inputs 含有占位值，例如 Inputs defined by EPIC scope、same as epic、TBD，则 decision=revise"
+    - "如果 input_contract 缺少 required_artifacts、required_fields、consumption_rules 任一项，或 required_fields 仍然是抽象口号，则 decision=revise"
     - "如果 bundle 中任一 FEAT 仍像提纲，或不能直接指导后续研发与测试准备，则 decision=revise"
     - "禁止输出代码块、标题、解释段落、表格或额外包裹层"
 

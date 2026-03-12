@@ -20,7 +20,7 @@ tags: [design, interaction, ui]
 contracts:
   input_schema: contracts/frozen-module-requirement-contract/v1/schema.json
   output_schema: contracts/frozen-ui-prototype-contract/v1/schema.json
-  ssot_output_schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
+  ssot_output_schema: ../../../../../core/contracts/ssot-agent-output/v1/schema.json
 
 # ============================================
 # 角色定义
@@ -133,7 +133,7 @@ output_requirements:
 
 ssot_output_contract:
   description: "当纳入正式 SSOT 链时，UI Designer 应输出挂在 FEAT 下的 UI 对象声明。"
-  schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
+  schema: ../../../../../core/contracts/ssot-agent-output/v1/schema.json
   integration_pattern:
     mode: envelope
     business_field: business_output
