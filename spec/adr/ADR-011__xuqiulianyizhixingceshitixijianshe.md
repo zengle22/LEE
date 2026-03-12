@@ -2,29 +2,30 @@
 id: ADR-011
 ssot_type: adr
 title: 需求链一致性测试体系建设
-status: draft
+status: frozen
 version: v1
 parent_id: null
 derived_from_ids:
-  - id: ADR-001
-    version: v1
-  - id: ADR-003
-    version: v1
-  - id: ADR-007
-    version: v1
-  - id: ADR-008
-    version: v1
+- id: ADR-001
+  version: v1
+- id: ADR-003
+  version: v1
+- id: ADR-007
+  version: v1
+- id: ADR-008
+  version: v1
 source_refs: []
 owner: governance
 tags:
-  - governance
-  - ssot
-  - testing
-  - requirements
-  - workflow
+- governance
+- ssot
+- testing
+- requirements
+- workflow
 properties:
   adr_kind: governance_design
   decision_scope: requirement_chain_consistency_testing
+frozen_at: '2026-03-12T20:26:53.595672'
 ---
 
 # 需求链一致性测试体系建设
@@ -420,3 +421,25 @@ report.json / scorecard.md
 5. CI 接入策略
 
 在这些下游对象形成前，本 ADR 作为治理方向和约束，不直接替代实现 spec。
+
+## 15. Canonical Downstream Materialization
+
+截至 2026-03-12，ADR-011 约束下的正式产品 SSOT 链路以以下对象为准：
+
+- `SRC-016`
+- `EPIC-030`
+- `FEAT-159` 至 `FEAT-168`
+- `TASK-FEAT-159-*` 至 `TASK-FEAT-168-*`
+
+其中：
+
+- `ADR-011` 是治理决策，不直接充当 `EPIC` 的 source object
+- `SRC-016` 是当前 canonical 源对象
+
+同日产生的更早试跑对象（如 `SRC-013` 至 `SRC-015`、`EPIC-019` 至 `EPIC-021`、`FEAT-151` 至 `FEAT-158`）仅保留为归档痕迹，不再作为当前 canonical 链路使用。
+
+同时明确：
+
+- 该能力当前属于治理、引擎、CLI、CI 集成类能力
+- 当前 canonical 交付面不要求单独 UI 设计文档
+- 若后续引入面向人工操作的控制台、评分卡页面或配置界面，再单独派生 `UI` 对象
