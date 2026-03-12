@@ -199,7 +199,13 @@ def find_l3_templates(paths: List[Path]) -> List[Path]:
     
     for path in paths:
         if path.is_file() and path.suffix in ('.yaml', '.yml'):
-            templates.append(path)
+            # Check if it's actually an L3 template
+            try:
+                data = load_yaml_file(path)
+                if data and data.get('kind') == 'l3_workflow_template':
+                    templates.append(path)
+            except Exception:
+                pass
         elif path.is_dir():
             # Search recursively for workflow templates
             for yaml_file in path.rglob("*.yaml"):
