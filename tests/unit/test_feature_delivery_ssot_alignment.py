@@ -132,6 +132,16 @@ def test_early_feature_delivery_feat_matches_canonical_parallel_contract():
     assert "Contract Design → Backend Development / Frontend Development 并行 → Integration → Evidence Pack" in text
 
 
+def test_alternate_feature_delivery_feat_matches_canonical_parallel_contract():
+    feat_119 = Path("spec/requirements/features/FEAT-119__feature-delivery-l2-workflow-definition.md")
+    text = feat_119.read_text(encoding="utf-8")
+
+    assert "governing_adrs" in text
+    assert "repo_frontend" in text
+    assert "repo_backend" in text
+    assert "Contract Design → Backend / Frontend 并行 → Integration → Evidence Pack" in text
+
+
 def test_early_bugfix_feat_matches_canonical_bugfix_contract():
     feat_109 = Path("spec/requirements/features/FEAT-109__bugfix-delivery-l2-workflow-definition.md")
     text = feat_109.read_text(encoding="utf-8")
