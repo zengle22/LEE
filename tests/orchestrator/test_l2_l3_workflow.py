@@ -110,7 +110,8 @@ class TestL2InstanceGeneration:
         assert phases["contract_design"]["gate_id"] == "gate.dev.contract_freeze_gate"
         assert phases["smoke_gate"]["gate_id"] == "gate.dev.smoke_gate"
         assert phases["backend_dev"]["depends_on"] == ["contract_design"]
-        assert phases["frontend_dev"]["depends_on"] == ["backend_dev"]
+        assert phases["frontend_dev"]["depends_on"] == ["contract_design"]
+        assert phases["integration"]["depends_on"] == ["backend_dev", "frontend_dev"]
 
 
 class TestL3InstanceGeneration:
@@ -492,6 +493,17 @@ class TestYamlTemplates:
             handoff for handoff in data["phase_data_flow"]["handoffs"]
             if handoff["from"] == "evidence_pack"
         )
+        frontend_handoff = next(
+            handoff for handoff in data["phase_data_flow"]["handoffs"]
+            if handoff["from"] == "contract_design" and handoff["to"] == "frontend_dev"
+        )
+        integration_deps = {
+            phase["id"]: phase["depends_on"]
+            for phase in data["phases"]
+        }
+        assert integration_deps["frontend_dev"] == ["contract_design"]
+        assert integration_deps["integration"] == ["backend_dev", "frontend_dev"]
+        assert frontend_handoff["outputs"] == ["tech_spec_ref", "contract_freeze_ref"]
         assert evidence_handoff["to"] == "smoke_gate"
         assert evidence_handoff["outputs"] == ["evidence_pack_ref"]
 

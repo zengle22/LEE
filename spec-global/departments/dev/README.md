@@ -24,8 +24,7 @@ Dev 部门当前只保留两个主入口：
 
 1. `tech_design`
 2. `contract_design`
-3. `backend_dev`
-4. `frontend_dev`
+3. `backend_dev` / `frontend_dev` 并行
 5. `integration`
 6. `evidence_pack`
 7. `smoke_gate`
@@ -33,6 +32,7 @@ Dev 部门当前只保留两个主入口：
 治理规则：
 
 - `formal_ssot_id`、`source_refs`、`governing_adrs`、`repo_context` 是共享输入契约
+- `repo_frontend`、`repo_backend` 必须显式提供，不能靠运行时猜测
 - `contract_design` 绑定 `gate.dev.contract_freeze_gate`
 - `smoke_gate` 绑定 `gate.dev.smoke_gate`
 - 生命周期状态按 `Ready -> In Progress -> Evidence Pack Produced -> Closed` 收口

@@ -55,7 +55,7 @@ phases:
     name: "Frontend Development"
     description: "Frontend implementation constrained by TECH and frozen contract"
     default_complexity: L
-    depends_on: [backend_dev]
+    depends_on: [contract_design]
     spawns_l3: true
     l3_template_id: template.dev.feature_fe_l3
 
@@ -63,7 +63,7 @@ phases:
     name: "Integration"
     description: "Cross-surface verification after frontend and backend outputs exist"
     default_complexity: L
-    depends_on: [backend_dev]
+    depends_on: [backend_dev, frontend_dev]
     spawns_l3: true
     l3_template_id: template.dev.feature_integration_l3
 
@@ -167,19 +167,19 @@ phase_data_flow:
       outputs:
         - tech_spec_ref
         - contract_freeze_ref
-    - from: backend_dev
+    - from: contract_design
       to: frontend_dev
       outputs:
         - tech_spec_ref
         - contract_freeze_ref
+    - from: backend_dev
+      to: integration
+      outputs:
         - be_artifact_ref
     - from: frontend_dev
       to: integration
       outputs:
-        - tech_spec_ref
-        - contract_freeze_ref
         - fe_artifact_ref
-        - be_artifact_ref
     - from: integration
       to: evidence_pack
       outputs:
