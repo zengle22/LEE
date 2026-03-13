@@ -746,6 +746,20 @@ class TestYamlTemplates:
             "contract_usage_verification_ref",
         ]
 
+    def test_frontend_utdd_guide_declares_loop_and_threshold(self):
+        """Test frontend UTDD guide fixes the canonical loop and 80% threshold."""
+        guide_path = Path("spec-global/departments/dev/docs/frontend-utdd-execution-guide.md")
+        if not guide_path.exists():
+            pytest.skip("Frontend UTDD guide not found")
+
+        content = guide_path.read_text(encoding="utf-8")
+
+        assert "write_ut" in content
+        assert "implement_ui" in content
+        assert "refactor_ui" in content
+        assert ">=80%" in content
+        assert "code review check required" in content
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
