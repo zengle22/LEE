@@ -52,6 +52,21 @@ Dev 部门当前只保留两个主入口：
 - `template.dev.bugfix_verification_l3`
 - `template.dev.bugfix_evidence_pack_l3`
 
+### Contract Design L3
+
+`template.dev.feature_contract_l3` 是 `contract_design` 阶段的唯一现役 L3 模板。
+
+它的 canonical 约束是：
+
+- 输入锚点必须包含 `formal_ssot_id`、`source_refs`、`governing_adrs`、`tech_spec_ref`
+- 任务族必须覆盖 `api_contract_design`、`data_contract_design`、`event_contract_design`
+- 评审产物必须输出 `contract_review_ref`
+- 冻结阶段必须通过 `gate.dev.contract_freeze_gate`
+- 下游 Backend/Frontend 只允许消费 `contract_freeze_ref`，不得消费草稿契约
+
+使用说明见：
+`docs/contract-design-l3-usage-guide.md`
+
 ## Bugfix Delivery L2
 
 当前现役阶段顺序为：

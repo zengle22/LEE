@@ -239,6 +239,27 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ### Dev 部门
 
+#### 0. Feature Contract Design L3（契约设计子流程）
+
+**ID**: `template.dev.feature_contract_l3`
+**路径**: `departments/dev/workflows/templates/feature-contract-l3-template.yaml`
+**版本**: 2.0
+
+**步骤**: 5 个
+- `api_contract_design`
+- `data_contract_design`
+- `event_contract_design`
+- `contract_self_review`
+- `contract_freeze`
+
+**Gate**: `gate.dev.contract_freeze_gate`
+
+**用途**: Dev 部门 `contract_design` 阶段的唯一现役 L3，实现 TECH 到冻结契约的结构收口。
+
+**备注**: Backend / Frontend 下游只允许消费 `contract_freeze_ref`。
+
+---
+
 #### 1. Phase OpenSpec Flow（Phase 内 OpenSpec 子流程）
 
 **ID**: `workflow.dev.phase_openspec_flow`

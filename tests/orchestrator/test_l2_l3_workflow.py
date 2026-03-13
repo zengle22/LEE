@@ -624,6 +624,21 @@ class TestYamlTemplates:
         assert "TC-CD-004" in content
         assert "template.dev.feature_contract_l3" in content
 
+    def test_contract_design_docs_register_canonical_entry(self):
+        """Test Dev docs expose feature_contract_l3 as the canonical Contract Design entry."""
+        readme = Path("spec-global/departments/dev/README.md").read_text(encoding="utf-8")
+        workflows = Path("spec-global/WORKFLOWS.md").read_text(encoding="utf-8")
+        agents = Path("spec-global/departments/dev/AGENTS.md").read_text(encoding="utf-8")
+        usage = Path("spec-global/departments/dev/docs/contract-design-l3-usage-guide.md").read_text(encoding="utf-8")
+
+        assert "template.dev.feature_contract_l3" in readme
+        assert "gate.dev.contract_freeze_gate" in readme
+        assert "Feature Contract Design L3" in workflows
+        assert "template.dev.feature_contract_l3" in workflows
+        assert "Canonical Workflow Bindings" in agents
+        assert "contract_designer" in agents
+        assert "contract_freeze_ref" in usage
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
