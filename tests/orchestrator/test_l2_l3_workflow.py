@@ -665,6 +665,29 @@ class TestYamlTemplates:
             "coverage_report_ref",
         ]
 
+    def test_feature_backend_l3_template_declares_utdd_loop(self):
+        """Test backend L3 template uses the canonical UTDD sequence and coverage outputs."""
+        import yaml
+
+        template_path = Path("spec-global/departments/dev/workflows/templates/feature-be-l3-template.yaml")
+        if not template_path.exists():
+            pytest.skip("Feature backend L3 template not found")
+
+        with open(template_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["id"] == "template.dev.feature_be_l3"
+        assert data["contracts"]["stage_definition"] == "../../stages/l3-backend-development.yaml"
+        assert [step["id"] for step in data["steps"]] == [
+            "write_ut",
+            "implement_backend",
+            "refactor_backend",
+            "coverage_gate",
+            "publish_backend",
+        ]
+        assert "contract_freeze_ref" in data["instance_schema"]["required_fields"]
+        assert "coverage_report_ref" in data["instance_schema"]["output_fields"]
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")

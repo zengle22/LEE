@@ -1,119 +1,92 @@
-# Migrated by lint_l3_templates.py on 2026-03-05T16:41:22.388874
 kind: l3_workflow_template
-version: '1.0'
+version: "2.0"
 id: template.dev.feature_be_l3
 name: Feature Backend Development L3 Template
-description: 'L3 template for backend implementation following frozen contract.
-
-
-  This template defines the workflow for implementing backend code
-
-  that strictly adheres to the frozen API contract.
-
-
-  Key Design:
-
-  - Stage 1: Implement DTO structs from contract
-
-  - Stage 2: Implement API handlers
-
-  - Stage 3: Self-check against contract
-
-  - Stage 4: Code diff output
-
-  '
+description: |
+  Canonical L3 backend workflow for implementing backend behavior under TECH and
+  frozen contract constraints with an explicit UTDD loop.
 owner: development
-tags:
-- template
-- dev
-- feature
-- backend
-- l3
-- contract-first
-stages:
-- id: dto_implementation
-  name: DTO Implementation
-  kind: stage
-  description: Implement DTO structs from frozen contract
-  agent_id: agent.dev.go_backend_engineer
-  config:
-    implementation_facing: true
-    strict_governance: true
-    acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
-    formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
-    governed_module: path-manager
-  mandatory: true
-  depends_on: []
-  outputs:
-  - dto_files
-  - model_files
-- id: handler_implementation
-  name: API Handler Implementation
-  kind: stage
-  description: Implement API handlers and business logic
-  agent_id: agent.dev.go_backend_engineer
-  config:
-    implementation_facing: true
-    strict_governance: true
-    acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
-    formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
-    governed_module: workflow-runtime
-  mandatory: true
-  depends_on:
-  - dto_implementation
-  outputs:
-  - handler_files
-  - service_files
-- id: selfcheck
-  name: Contract Self-Check
-  kind: stage
-  description: Verify response matches contract schema
-  agent_id: agent.dev.code_self_reviewer
-  config:
-    implementation_facing: true
-    strict_governance: true
-    acceptance_brief_id: "{{ params.acceptance_brief_id | default('') }}"
-    formal_ssot_id: "{{ params.ssot_root_id | default('') }}"
-  mandatory: true
-  depends_on:
-  - handler_implementation
-  outputs:
-  - selfcheck_result
-  - contract_violations
-- id: code_output
-  name: Code Diff Output
-  kind: stage
-  description: Generate code diff for review
-  skill_id: skill.git.diff
-  mandatory: true
-  depends_on:
-  - selfcheck
-  outputs:
-  - code_diff_path
-contract_binding:
-  description: Backend must follow frozen contract
-  response_structure:
-    rule: Response must match contract schema exactly
-    violation_action: flag_contract_violation
-  no_extra_fields:
-    rule: No extra fields beyond contract definition
-    violation_action: flag_contract_violation
-  type_consistency:
-    rule: Field types must match contract
-    violation_action: flag_contract_violation
+tags: [template, dev, feature, backend, l3, canonical, adr-008, utdd]
+
+contracts:
+  stage_definition: ../../stages/l3-backend-development.yaml
+
+steps:
+  - id: write_ut
+    name: Write or Update Unit Tests
+    kind: agent
+    description: Encode expected backend behavior as unit tests before implementation changes.
+    agent_id: agent.dev.go_backend_engineer
+    mandatory: true
+    depends_on: []
+    outputs:
+      - unit_test_ref
+      - test_scope_ref
+
+  - id: implement_backend
+    name: Implement Backend Logic
+    kind: agent
+    description: Implement backend code until the frozen contract and UT expectations are satisfied.
+    agent_id: agent.dev.go_backend_engineer
+    mandatory: true
+    depends_on: [write_ut]
+    outputs:
+      - be_artifact_ref
+      - implementation_notes
+
+  - id: refactor_backend
+    name: Refactor Backend
+    kind: agent
+    description: Refactor implementation while preserving passing tests and contract alignment.
+    agent_id: agent.dev.go_backend_engineer
+    mandatory: true
+    depends_on: [implement_backend]
+    outputs:
+      - refactor_report_ref
+      - contract_verification_ref
+
+  - id: coverage_gate
+    name: Coverage Gate
+    kind: agent
+    description: Check that backend unit-test coverage meets the required threshold.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on: [refactor_backend]
+    outputs:
+      - coverage_report_ref
+      - coverage_gate_result
+
+  - id: publish_backend
+    name: Publish Backend Handoff
+    kind: agent
+    description: Publish backend handoff artifacts for frontend and integration phases.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on: [coverage_gate]
+    outputs:
+      - be_handoff_package_ref
+      - handoff_notes
+
 instance_schema:
   required_fields:
-  - id
-  - template_id
-  - name
-  - status
-  - phase_id
-  context_fields:
-  - api_contract
-  - feature_spec
-  - repo_backend
-  - feature_point_id
+    - id
+    - template_id
+    - parent_phase_id
+    - formal_ssot_id
+    - source_refs
+    - governing_adrs
+    - tech_spec_ref
+    - contract_freeze_ref
+    - repo_backend
+  optional_fields:
+    - acceptance_brief_ref
+    - repo_context
+    - decision_constraints
   output_fields:
-  - code_diff_path
-  - selfcheck_status
-  - contract_violations
+    - unit_test_ref
+    - be_artifact_ref
+    - refactor_report_ref
+    - contract_verification_ref
+    - coverage_report_ref
+    - coverage_gate_result
+    - be_handoff_package_ref
