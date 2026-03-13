@@ -719,6 +719,33 @@ class TestYamlTemplates:
         assert "Feature Backend Development L3" in workflows
         assert "coverage_gate" in workflows
 
+    def test_frontend_stage_definition_declares_contract_boundary_and_evidence_handoff(self):
+        """Test frontend stage definition freezes canonical inputs, UTDD loop, and evidence handoff."""
+        import yaml
+
+        stage_path = Path("spec-global/departments/dev/stages/l3-frontend-development.yaml")
+        if not stage_path.exists():
+            pytest.skip("Frontend stage definition not found")
+
+        with open(stage_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["status"] == "frozen"
+        assert "contract_freeze_ref" in data["input_contract"]["required_fields"]
+        assert "repo_frontend" in data["input_contract"]["required_fields"]
+        assert [stage["id"] for stage in data["utdd_cycle"]["stages"]] == [
+            "write_ut",
+            "implement_ui",
+            "refactor_ui",
+        ]
+        assert data["completion_criteria"]["coverage_threshold"] == ">=80%"
+        assert data["handoff_rules"]["evidence_pack"]["required_inputs"] == [
+            "fe_artifact_ref",
+            "unit_test_ref",
+            "coverage_report_ref",
+            "contract_usage_verification_ref",
+        ]
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
