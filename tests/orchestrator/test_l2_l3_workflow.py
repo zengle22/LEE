@@ -454,6 +454,35 @@ class TestYamlTemplates:
         assert evidence_handoff["to"] == "smoke_gate"
         assert evidence_handoff["outputs"] == ["evidence_pack_ref"]
 
+    def test_bugfix_delivery_template_exists_and_structure(self):
+        """Test canonical bugfix L2 template exists and declares required structure."""
+        import yaml
+
+        template_path = Path("spec-global/departments/dev/workflows/templates/bugfix-delivery-l2-template.yaml")
+        if not template_path.exists():
+            pytest.skip("Bugfix delivery L2 template not found")
+
+        with open(template_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["kind"] == "l2_workflow_template"
+        assert data["id"] == "template.dev.bugfix_delivery_l2"
+        assert [phase["id"] for phase in data["phases"]] == [
+            "triage",
+            "root_cause",
+            "fix_design",
+            "fix_implementation",
+            "verification",
+            "evidence_pack",
+            "merge_or_reject",
+        ]
+        assert data["shared_input_contract"]["required_fields"] == [
+            "bug_ssot_id",
+            "severity",
+            "reproduction_evidence",
+        ]
+        assert data["granularity_control"]["default_mode"] == "single_bug"
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
