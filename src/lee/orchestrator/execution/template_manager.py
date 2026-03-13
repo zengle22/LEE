@@ -845,30 +845,11 @@ class TemplateManager:
                     # 解析 agent_id（支持 agent_id 或 run 字段）
                     agent_id = step_data.get("agent_id") or step_data.get("run", "")
 
-                    # 解析 outputs（内联解析，参考 _dict_to_step 中的逻辑）
-                    from lee.orchestrator.storage.models import OutputSpec
-                    outputs = []
-                    for output_item in step_data.get("outputs", []):
-                        if isinstance(output_item, str):
-                            path = output_item
-                            output_type = "dir" if path.endswith("/") else "file"
-                            outputs.append(OutputSpec(
-                                type=output_type,
-                                path=path,
-                                format=self._infer_format(path),
-                                required=True,
-                                description="",
-                            ))
-                        elif isinstance(output_item, dict):
-                            path = output_item.get("path", "")
-                            output_type = output_item.get("type") or ("dir" if path.endswith("/") else "file")
-                            outputs.append(OutputSpec(
-                                type=output_type,
-                                path=path,
-                                format=output_item.get("format") or self._infer_format(path),
-                                required=output_item.get("required", True),
-                                description=output_item.get("description", ""),
-                            ))
+                    outputs = [
+                        parsed
+                        for parsed in (self._parse_output_spec(output_item) for output_item in step_data.get("outputs", []))
+                        if parsed is not None
+                    ]
 
                     steps.append(Step(
                         id=step_id,
@@ -904,30 +885,11 @@ class TemplateManager:
                 # 解析 agent_id（支持 agent_id 或 run 字段）
                 agent_id = step_data.get("agent_id") or step_data.get("run", "")
 
-                # 解析 outputs（内联解析）
-                from lee.orchestrator.storage.models import OutputSpec
-                outputs = []
-                for output_item in step_data.get("outputs", []):
-                    if isinstance(output_item, str):
-                        path = output_item
-                        output_type = "dir" if path.endswith("/") else "file"
-                        outputs.append(OutputSpec(
-                            type=output_type,
-                            path=path,
-                            format=self._infer_format(path),
-                            required=True,
-                            description="",
-                        ))
-                    elif isinstance(output_item, dict):
-                        path = output_item.get("path", "")
-                        output_type = output_item.get("type") or ("dir" if path.endswith("/") else "file")
-                        outputs.append(OutputSpec(
-                            type=output_type,
-                            path=path,
-                            format=output_item.get("format") or self._infer_format(path),
-                            required=output_item.get("required", True),
-                            description=output_item.get("description", ""),
-                        ))
+                outputs = [
+                    parsed
+                    for parsed in (self._parse_output_spec(output_item) for output_item in step_data.get("outputs", []))
+                    if parsed is not None
+                ]
 
                 steps.append(Step(
                     id=step_id,
@@ -966,6 +928,41 @@ class TemplateManager:
                 "execution_order": doc.get("execution_order", [s.id for s in steps]),
                 "stages": doc.get("stages", []),
             },
+        )
+
+    def _parse_output_spec(self, output_item: Any):
+        from lee.orchestrator.storage.models import OutputSpec
+
+        if isinstance(output_item, str):
+            path = output_item
+            output_type = "dir" if path.endswith("/") else "file"
+            return OutputSpec(
+                type=output_type,
+                path=path,
+                format=self._infer_format(path),
+                required=True,
+                description="",
+            )
+
+        if not isinstance(output_item, dict):
+            return None
+
+        symbol = output_item.get("symbol")
+        path = output_item.get("path") or symbol or ""
+        output_type = output_item.get("type")
+        if not output_type:
+            output_type = "symbol" if symbol else ("dir" if path.endswith("/") else "file")
+
+        return OutputSpec(
+            type=output_type,
+            path=path,
+            format=output_item.get("format") or self._infer_format(path),
+            required=output_item.get("required", True),
+            description=output_item.get("description", ""),
+            symbol=symbol,
+            contract=output_item.get("contract"),
+            freeze=bool(output_item.get("freeze", False)),
+            ssot=output_item.get("ssot") if isinstance(output_item.get("ssot"), dict) else None,
         )
 
     def _parse_spec_global_format(

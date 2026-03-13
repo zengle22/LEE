@@ -2,7 +2,7 @@
 id: SRC-035
 ssot_type: src
 title: reverse-epic-feat-l3 对齐现行 SSOT 链逆向升级
-status: active
+status: frozen
 version: v1
 parent_id: null
 derived_from_ids: []
@@ -12,6 +12,7 @@ tags: []
 properties:
   contract_key: src
   identity_kind: ssot
+frozen_at: '2026-03-13T21:24:35.974594'
 ---
 
 source_id: SRC-DRAFT

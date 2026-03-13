@@ -6,7 +6,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import yaml
 
+from lee.orchestrator.execution.artifacts import ArtifactManager, SSOTType
 from lee.orchestrator.execution.runners.base import RunnerContext, StepRunnerBase
 from lee.orchestrator.execution.runners.llm_runner import ClaudeCodeRunner, LLMRunner
 from lee.orchestrator.storage.models import StepResult
@@ -248,11 +250,10 @@ async def test_materialize_ssot_outputs_from_agent_contract(runner, ctx, temp_pr
     )
 
     assert result is not None
-    assert result["outputs"]["epic"]["id"] == "EPIC-001"
-    assert result["outputs"]["feat"]["parent_id"] == "EPIC-001"
+    assert result["outputs"]["epic"]["id"] == "EPIC-SRC-001-001"
+    assert result["outputs"]["feat"]["parent_id"] == "EPIC-SRC-001-001"
     assert len(result["materialized_files"]) == 2
-    assert (temp_project_root / "spec" / "requirements" / "epics").exists()
-    assert (temp_project_root / "spec" / "requirements" / "features").exists()
+    assert (temp_project_root / "spec" / "requirements" / "SRC-001").exists()
 
 
 @pytest.mark.asyncio
@@ -273,16 +274,18 @@ async def test_materialize_ssot_outputs_from_envelope_payload(runner, ctx, temp_
   "ssot_output_contract": {
     "contract_version": "1.0",
     "run_id": "run-ssot-002",
-    "outputs": [
-      {
-        "key": "feat",
-        "identity_kind": "ssot",
-        "ssot_type": "feat",
-        "title": "用户注册"
+        "outputs": [
+          {
+            "key": "feat",
+            "identity_kind": "ssot",
+            "ssot_type": "feat",
+            "title": "用户注册",
+            "parent": "EPIC-SRC-001-001",
+            "source_refs": ["EPIC-SRC-001-001#scope", "SRC-001#scope"]
+          }
+        ]
       }
-    ]
-  }
-}
+    }
 """.strip()
 
     structured_payload = runner._parse_structured_output_if_possible(generated_text)
@@ -299,9 +302,9 @@ async def test_materialize_ssot_outputs_from_envelope_payload(runner, ctx, temp_
     )
 
     assert result is not None
-    assert result["outputs"]["feat"]["id"] == "FEAT-001"
+    assert result["outputs"]["feat"]["id"] == "FEAT-SRC-001-001"
     assert len(result["materialized_files"]) == 1
-    assert (temp_project_root / "spec" / "requirements" / "features").exists()
+    assert (temp_project_root / "spec" / "requirements" / "SRC-001").exists()
 
 
 def test_governance_preflight_requires_anchor_when_no_formal_ssot(temp_project_root, runner):
@@ -4061,6 +4064,175 @@ def test_normalize_prd_writer_feat_payload_repairs_fixed_contract_fields(runner)
     assert normalized_structured["ssot_output_contract"]["outputs"][0]["identity_kind"] == "ssot"
     assert normalized_structured["ssot_output_contract"]["outputs"][0]["ssot_type"] == "feat"
     assert normalized_structured["ssot_output_contract"]["outputs"][0]["parent"] == "EPIC-001"
+
+
+@pytest.mark.asyncio
+async def test_identity_formalize_step_uses_internal_formalize_handler(runner, ctx, temp_project_root):
+    manager = ArtifactManager(project_root=temp_project_root)
+    src = manager.create_ssot(
+        ssot_type=SSOTType.SRC,
+        title="身份定版来源",
+        content="# Source\n",
+        run_id="run-formalize-src",
+    )
+
+    legacy_epic = temp_project_root / "spec/requirements/epics/EPIC-001__shenfendingbanshishi.md"
+    legacy_feat = temp_project_root / "spec/requirements/features/FEAT-001__shenfendingbanfeat.md"
+    legacy_epic.parent.mkdir(parents=True, exist_ok=True)
+    legacy_feat.parent.mkdir(parents=True, exist_ok=True)
+    legacy_epic.write_text(
+        "---\n{}\n---\n\n# Epic\n".format(
+            yaml.safe_dump(
+                {
+                    "id": "EPIC-001",
+                    "ssot_type": "epic",
+                    "title": "身份定版史诗",
+                    "status": "draft",
+                    "version": "v1",
+                    "parent_id": src.id,
+                    "source_refs": [src.id],
+                    "properties": {},
+                },
+                allow_unicode=True,
+                sort_keys=False,
+            ).strip()
+        ),
+        encoding="utf-8",
+    )
+    legacy_feat.write_text(
+        "---\n{}\n---\n\n# Feature\nSee EPIC-001\n".format(
+            yaml.safe_dump(
+                {
+                    "id": "FEAT-001",
+                    "ssot_type": "feat",
+                    "title": "身份定版能力",
+                    "status": "draft",
+                    "version": "v1",
+                    "parent_id": "EPIC-001",
+                    "source_refs": [f"{src.id}#scope", "EPIC-001"],
+                    "properties": {},
+                },
+                allow_unicode=True,
+                sort_keys=False,
+            ).strip()
+        ),
+        encoding="utf-8",
+    )
+    manager.rebuild_ssot_registry()
+
+    step = SimpleNamespace(
+        id="feat_identity_formalize",
+        agent_id="agent.governance.approval_reviewer",
+        executor_type="claude_code",
+        inputs=[{"source": "feat_scoped_specs"}],
+        config={},
+    )
+    instance = SimpleNamespace(
+        template_id="workflow.product.task.epic_to_feat",
+        data={
+            "project_name": "identity-formalize-demo",
+            "step_outputs": {
+                "feat_scoped_specs": {
+                    "ssot_materialized": {
+                        "epic": {"id": "EPIC-001"},
+                        "feat": {"id": "FEAT-001", "parent_id": "EPIC-001"},
+                    }
+                }
+            },
+        },
+    )
+    ctx.store.get_workflow = AsyncMock(return_value=instance)
+    ctx.state_machine.complete_step = AsyncMock(
+        return_value=StepResult(
+            status="success",
+            step_id=step.id,
+            workflow_id="wf-identity-001",
+            message="formalize ok",
+        )
+    )
+    ctx.agent_context_builder.build = AsyncMock(side_effect=AssertionError("identity_formalize should not build agent context"))
+
+    result = await runner.execute("wf-identity-001", step, ctx)
+
+    assert result.status == "success"
+    formalize_result = result.output["formalize_result"]
+    assert formalize_result["replacements"]["EPIC-001"] == "EPIC-SRC-001-001"
+    assert formalize_result["replacements"]["FEAT-001"] == "FEAT-SRC-001-001"
+    ctx.state_machine.complete_step.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_identity_prepare_step_enriches_payload_without_agent_call(runner, ctx, temp_project_root):
+    manager = ArtifactManager(project_root=temp_project_root)
+    src = manager.create_ssot(
+        ssot_type=SSOTType.SRC,
+        title="身份准备来源",
+        content="# Source\n",
+        run_id="run-prepare-src",
+    )
+    epic = manager.create_ssot(
+        ssot_type=SSOTType.EPIC,
+        title="身份准备史诗",
+        content="# Epic\n",
+        run_id="run-prepare-epic",
+        parent_id=src.id,
+        source_refs=[src.id],
+    )
+    feat = manager.create_ssot(
+        ssot_type=SSOTType.FEAT,
+        title="身份准备能力",
+        content="# Feature\n",
+        run_id="run-prepare-feat",
+        parent_id=epic.id,
+        source_refs=[f"{src.id}#scope", epic.id],
+    )
+
+    step = SimpleNamespace(
+        id="feat_identity_prepare",
+        agent_id="agent.governance.approval_reviewer",
+        executor_type="claude_code",
+        inputs=[{"source": "feat_specs"}],
+        config={},
+    )
+    instance = SimpleNamespace(
+        template_id="workflow.product.task.epic_to_feat",
+        data={
+            "project_name": "identity-prepare-demo",
+            "params": {
+                "src_root_id": src.id,
+            },
+            "step_outputs": {
+                "feat_specs": {
+                    "ssot_materialized": {
+                        "feat": {"id": feat.id, "parent_id": epic.id},
+                    },
+                    "outputs": {
+                        "feat": {"id": feat.id},
+                    },
+                }
+            },
+        },
+    )
+    ctx.store.get_workflow = AsyncMock(return_value=instance)
+    ctx.state_machine.complete_step = AsyncMock(
+        return_value=StepResult(
+            status="success",
+            step_id=step.id,
+            workflow_id="wf-identity-prepare-001",
+            message="prepare ok",
+        )
+    )
+    ctx.agent_context_builder.build = AsyncMock(side_effect=AssertionError("identity_prepare should not build agent context"))
+
+    result = await runner.execute("wf-identity-prepare-001", step, ctx)
+
+    assert result.status == "success"
+    prepare_result = result.output["identity_prepare_result"]
+    assert prepare_result["src_root_id"] == src.id
+    assert prepare_result["mode"] == "provisional"
+    assert feat.id in prepare_result["artifact_ids"]
+    assert result.output["identity_context"]["src_root_id"] == src.id
+    ctx.state_machine.complete_step.assert_awaited_once()
 
 
 def test_normalize_prd_writer_feat_bundle_payload_repairs_nested_feat_fields(runner):

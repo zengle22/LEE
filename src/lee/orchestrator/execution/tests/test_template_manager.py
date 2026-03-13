@@ -72,3 +72,48 @@ def test_l3_template_preserves_step_inputs(tmp_path: Path) -> None:
     assert getattr(template.steps[0], "inputs", []) == [
         {"source": "external", "type": ["business_opportunity"]}
     ]
+
+
+def test_l3_template_parses_symbol_outputs(tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    template_root = project_root / "spec-global"
+    template_root.mkdir(parents=True)
+    (project_root / ".lee").mkdir()
+    (project_root / ".lee" / "config.yaml").write_text(
+        "executor:\n"
+        "  default_type: claude_code\n",
+        encoding="utf-8",
+    )
+
+    template_path = template_root / "workflow.yaml"
+    template_path.write_text(
+        "kind: l3_workflow_template\n"
+        "id: workflow.product.task.epic_to_feat\n"
+        "name: Product EPIC to FEAT\n"
+        "description: test\n"
+        "stages:\n"
+        "  - id: flow\n"
+        "    steps:\n"
+        "      - id: feat_identity_prepare\n"
+        "        kind: agent\n"
+        "        agent_id: agent.governance.approval_reviewer\n"
+        "        outputs:\n"
+        "          - symbol: feat_scoped_specs\n"
+        "            contract: departments/product/contracts/feat-bundle-contract/v1/schema.json\n"
+        "            freeze: false\n"
+        "            ssot:\n"
+        "              identity_kind: ssot\n"
+        "              ssot_type: FEAT\n",
+        encoding="utf-8",
+    )
+
+    manager = TemplateManager(template_dir=str(template_root), project_root=str(project_root))
+    template = manager.get_template(str(template_path))
+
+    assert template is not None
+    output_spec = template.steps[0].outputs[0]
+    assert output_spec.type == "symbol"
+    assert output_spec.path == "feat_scoped_specs"
+    assert output_spec.symbol == "feat_scoped_specs"
+    assert output_spec.contract == "departments/product/contracts/feat-bundle-contract/v1/schema.json"
+    assert output_spec.ssot == {"identity_kind": "ssot", "ssot_type": "FEAT"}

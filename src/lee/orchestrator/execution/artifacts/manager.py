@@ -15,10 +15,11 @@ import re
 import yaml
 
 from .models import ArtifactMetadata, RunManifest
-from .placement import resolve_ssot_relative_dir
+from .placement import resolve_ssot_relative_dir, resolve_src_root_id
 from .registry import ArtifactRegistry
 from .types import ArtifactType, ArtifactStatus, AdoptMode, GovernanceKind, ArtifactCategoryRegistry, SSOTType
 from .id_generator import SSOTIDGenerator
+from .id_parser import parse_id
 
 # Windows 兼容性：fcntl 不可用
 if sys.platform != "win32":
@@ -76,7 +77,7 @@ class ArtifactManager:
         """Resolve a metadata path_root against the manager project root."""
         base_path = Path(path_root or ".artifacts")
         if not base_path.is_absolute():
-            base_path = Path.cwd() / base_path
+            base_path = self.project_root / base_path
         return base_path.resolve()
 
     def _resolve_metadata_path(self, metadata: ArtifactMetadata) -> Path:
@@ -879,6 +880,12 @@ class ArtifactManager:
         # 生成 slug
         slug = generator.generate_slug(title)
 
+        src_root_id = resolve_src_root_id(
+            parent_id=parent_id,
+            source_refs=source_refs,
+            properties=properties,
+        )
+
         # 生成完整 ID
         generation_suffix = None
         if ssot_type == SSOTType.RELEASE:
@@ -888,17 +895,34 @@ class ArtifactManager:
         elif ssot_type == SSOTType.REPORT and parent_id and str(parent_id).startswith("REL-"):
             generation_suffix = (properties or {}).get("report_kind")
 
+<<<<<<< HEAD
         artifact_id = (formal_id or "").strip() or generator.generate_id(
             ssot_type,
             parent_id,
             generation_suffix,
+=======
+        artifact_id = generator.generate_id(
+            ssot_type,
+            parent_id,
+            generation_suffix,
+            src_root_id=src_root_id,
+>>>>>>> codex/src-scoped-identity-impl
         )
 
         # 生成文件名
         filename = f"{artifact_id}__{slug}.md"
 
         # 正式 SSOT 主文件落在项目内容目录，而不是 .artifacts/ssot/
-        relative_dir = resolve_ssot_relative_dir(ssot_type, parent_id=parent_id)
+        effective_properties = dict(properties or {})
+        if src_root_id:
+            effective_properties.setdefault("src_root_id", src_root_id)
+        relative_dir = resolve_ssot_relative_dir(
+            ssot_type,
+            parent_id=parent_id,
+            source_refs=source_refs,
+            artifact_id=artifact_id,
+            properties=effective_properties,
+        )
         artifact_dir = self.project_root / relative_dir
         artifact_dir.mkdir(parents=True, exist_ok=True)
         artifact_path = artifact_dir / filename
@@ -922,7 +946,7 @@ class ArtifactManager:
             "source_refs": source_refs or [],
             "owner": owner,
             "tags": tags or [],
-            "properties": properties or {},
+            "properties": effective_properties,
         }
 
         # 写入内容
@@ -964,7 +988,7 @@ class ArtifactManager:
             tags=tags or [],
             size_bytes=size_bytes,
             content_hash=content_hash,
-            properties=properties or {},
+            properties=effective_properties,
         )
 
         # 添加 SSOT 扩展字段 (作为 properties 存储)
@@ -985,6 +1009,7 @@ class ArtifactManager:
 
         return metadata
 
+<<<<<<< HEAD
     def _cleanup_existing_ssot_paths(
         self,
         artifact_id: str,
@@ -1009,6 +1034,165 @@ class ArtifactManager:
                 continue
             if existing_path.exists():
                 existing_path.unlink()
+=======
+    def formalize_ssot_ids(self, artifact_ids: List[str]) -> Dict[str, str]:
+        """
+        批量将现有 SSOT 对象重写为正式 ID，并同步文件名、front matter 与引用。
+
+        当前最小实现覆盖 requirement 链上的独立型与直连 FEAT 的子对象，
+        供 workflow identity formalize 阶段复用。
+        """
+        if not artifact_ids:
+            return {}
+
+        artifacts: Dict[str, ArtifactMetadata] = {}
+        for artifact_id in artifact_ids:
+            metadata = self.get_ssot(artifact_id)
+            if not metadata:
+                raise KeyError(f"SSOT artifact {artifact_id} not found")
+            artifacts[artifact_id] = metadata
+
+        ordered_ids = self._sort_ssot_ids_for_formalize(artifacts)
+        generator = SSOTIDGenerator(self.root_path)
+        replacements: Dict[str, str] = {}
+
+        for artifact_id in ordered_ids:
+            metadata = artifacts[artifact_id]
+            ssot_type = SSOTType(metadata.properties["ssot_type"])
+            old_parent_id = metadata.properties.get("parent_id")
+            new_parent_id = replacements.get(old_parent_id, old_parent_id)
+            old_source_refs = list(metadata.properties.get("source_refs", []))
+            new_source_refs = self._replace_refs_in_list(old_source_refs, replacements)
+            properties = dict(metadata.properties or {})
+            properties = self._replace_nested_refs(properties, replacements)
+
+            src_root_id = resolve_src_root_id(
+                parent_id=new_parent_id,
+                source_refs=new_source_refs,
+                properties=properties,
+            )
+            if src_root_id:
+                properties["src_root_id"] = src_root_id
+
+            parsed = parse_id(artifact_id)
+            suffix = parsed.suffix if parsed.is_valid and parsed.suffix else None
+
+            if self._is_scoped_identity_stable(ssot_type, artifact_id):
+                new_id = artifact_id
+            else:
+                new_id = generator.generate_id(
+                    ssot_type,
+                    parent_id=new_parent_id,
+                    suffix=suffix,
+                    src_root_id=src_root_id,
+                )
+
+            replacements[artifact_id] = new_id
+
+        for artifact_id in ordered_ids:
+            metadata = artifacts[artifact_id]
+            self._rewrite_ssot_artifact(metadata, replacements)
+
+        self.rebuild_ssot_registry()
+        return replacements
+
+    def _sort_ssot_ids_for_formalize(self, artifacts: Dict[str, ArtifactMetadata]) -> List[str]:
+        cache: Dict[str, int] = {}
+
+        def depth(artifact_id: str) -> int:
+            if artifact_id in cache:
+                return cache[artifact_id]
+
+            parent_id = artifacts[artifact_id].properties.get("parent_id")
+            if parent_id in artifacts:
+                cache[artifact_id] = depth(parent_id) + 1
+            else:
+                cache[artifact_id] = 0
+            return cache[artifact_id]
+
+        return sorted(artifacts.keys(), key=lambda artifact_id: (depth(artifact_id), artifact_id))
+
+    def _is_scoped_identity_stable(self, ssot_type: SSOTType, artifact_id: str) -> bool:
+        if ssot_type in (SSOTType.SRC, SSOTType.ADR, SSOTType.RELEASE, SSOTType.DEVPLAN, SSOTType.TESTPLAN):
+            return True
+        parsed_src_root = resolve_src_root_id(parent_id=artifact_id)
+        return bool(parsed_src_root)
+
+    def _parse_front_matter_document(self, artifact_path: Path) -> tuple[dict, str]:
+        raw_text = artifact_path.read_text(encoding="utf-8")
+        match = re.match(r"^---\s*\n(.*?)\n---\s*\n?", raw_text, re.DOTALL)
+        if not match:
+            raise ValueError(f"{artifact_path} missing front matter")
+
+        front_matter = yaml.safe_load(match.group(1)) or {}
+        if not isinstance(front_matter, dict):
+            raise ValueError(f"{artifact_path} front matter must be a mapping")
+        body = raw_text[match.end():]
+        return front_matter, body
+
+    def _replace_nested_refs(self, value, replacements: Dict[str, str]):
+        if isinstance(value, str):
+            return self._replace_text_refs(value, replacements)
+        if isinstance(value, list):
+            return [self._replace_nested_refs(item, replacements) for item in value]
+        if isinstance(value, dict):
+            return {key: self._replace_nested_refs(item, replacements) for key, item in value.items()}
+        return value
+
+    def _replace_refs_in_list(self, values: List[str], replacements: Dict[str, str]) -> List[str]:
+        return [self._replace_text_refs(value, replacements) for value in values]
+
+    def _replace_text_refs(self, text: str, replacements: Dict[str, str]) -> str:
+        updated = text
+        for old_id, new_id in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+            updated = updated.replace(f"{old_id}#", f"{new_id}#")
+            updated = updated.replace(old_id, new_id)
+        return updated
+
+    def _rewrite_ssot_artifact(self, metadata: ArtifactMetadata, replacements: Dict[str, str]) -> None:
+        old_id = metadata.id
+        new_id = replacements.get(old_id, old_id)
+        artifact_path = self._resolve_metadata_path(metadata)
+        front_matter, body = self._parse_front_matter_document(artifact_path)
+
+        front_matter = self._replace_nested_refs(front_matter, replacements)
+        properties = dict(front_matter.get("properties") or {})
+        ssot_type = SSOTType(front_matter["ssot_type"])
+        parent_id = front_matter.get("parent_id")
+        source_refs = list(front_matter.get("source_refs") or [])
+        properties["ssot_type"] = ssot_type.value
+        properties["parent_id"] = parent_id
+        properties["source_refs"] = source_refs
+
+        relative_dir = resolve_ssot_relative_dir(
+            ssot_type,
+            parent_id=parent_id,
+            source_refs=source_refs,
+            artifact_id=new_id,
+            properties=properties,
+        )
+        current_name = artifact_path.name
+        slug = current_name.split("__", 1)[1] if "__" in current_name else f"{new_id.lower()}.md"
+        new_path = self.project_root / relative_dir / f"{new_id}__{slug}"
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+
+        front_matter["id"] = new_id
+        front_matter.setdefault("properties", {})
+        front_matter["properties"]["placement_dir"] = relative_dir.as_posix()
+        if resolve_src_root_id(parent_id=parent_id, source_refs=source_refs, properties=front_matter["properties"]):
+            front_matter["properties"]["src_root_id"] = resolve_src_root_id(
+                parent_id=parent_id,
+                source_refs=source_refs,
+                properties=front_matter["properties"],
+            )
+        file_text = "---\n{}\n---\n{}".format(
+            yaml.safe_dump(front_matter, allow_unicode=True, sort_keys=False).strip(),
+            self._replace_text_refs(body, replacements),
+        )
+        new_path.write_text(file_text, encoding="utf-8")
+        if new_path != artifact_path and artifact_path.exists():
+            artifact_path.unlink()
+>>>>>>> codex/src-scoped-identity-impl
 
     def get_ssot(self, artifact_id: str) -> Optional[ArtifactMetadata]:
         """

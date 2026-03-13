@@ -21,6 +21,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from lee.orchestrator.execution.artifacts import ArtifactManager
+from lee.orchestrator.execution.artifacts.ssot_service import SSOTService
+from lee.orchestrator.execution.artifacts.placement import resolve_src_root_id
 from lee.orchestrator.storage.models import (
     TaskExecution,
     TaskExecutionStatus,
@@ -182,6 +185,254 @@ class LLMRunner(StepRunnerBase):
 
     def can_handle(self, step_kind: str) -> bool:
         return step_kind in ("agent", "llm")
+
+    @staticmethod
+    def _is_identity_formalize_step(step) -> bool:
+        step_id = str(getattr(step, "id", "") or "")
+        return step_id.endswith("_identity_formalize")
+
+    @staticmethod
+    def _is_identity_prepare_step(step) -> bool:
+        step_id = str(getattr(step, "id", "") or "")
+        return step_id.endswith("_identity_prepare")
+
+    @classmethod
+    def _resolve_step_input_sources(cls, step) -> List[str]:
+        resolved: List[str] = []
+        for item in getattr(step, "inputs", []) or []:
+            if isinstance(item, dict):
+                source = item.get("source")
+            else:
+                source = getattr(item, "source", None)
+            if isinstance(source, str) and source.strip():
+                resolved.append(source.strip())
+        return resolved
+
+    @classmethod
+    def _collect_payload_artifact_ids(cls, payload: Any, collected: List[str]) -> None:
+        if isinstance(payload, dict):
+            candidate_id = payload.get("id")
+            if cls._is_literal_ssot_ref(candidate_id):
+                collected.append(str(candidate_id))
+            for value in payload.values():
+                if isinstance(value, (dict, list)):
+                    cls._collect_payload_artifact_ids(value, collected)
+        elif isinstance(payload, list):
+            for item in payload:
+                cls._collect_payload_artifact_ids(item, collected)
+        elif cls._is_literal_ssot_ref(payload):
+            collected.append(str(payload))
+
+    @classmethod
+    def _replace_text_refs(cls, text: str, replacements: Dict[str, str]) -> str:
+        updated = text
+        for old_id, new_id in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+            updated = updated.replace(f"{old_id}#", f"{new_id}#")
+            updated = updated.replace(old_id, new_id)
+        return updated
+
+    @classmethod
+    def _rewrite_payload_refs(cls, payload: Any, replacements: Dict[str, str]) -> Any:
+        if isinstance(payload, str):
+            return cls._replace_text_refs(payload, replacements)
+        if isinstance(payload, list):
+            return [cls._rewrite_payload_refs(item, replacements) for item in payload]
+        if isinstance(payload, dict):
+            return {key: cls._rewrite_payload_refs(value, replacements) for key, value in payload.items()}
+        return payload
+
+    @classmethod
+    def _extract_src_root_from_payload(
+        cls,
+        payload: Any,
+        manager: ArtifactManager,
+        fallback: Optional[str] = None,
+    ) -> Optional[str]:
+        if isinstance(payload, dict):
+            properties = payload.get("properties") if isinstance(payload.get("properties"), dict) else {}
+            source_refs = payload.get("source_refs") if isinstance(payload.get("source_refs"), list) else []
+            parent_id = payload.get("parent_id") if isinstance(payload.get("parent_id"), str) else None
+            artifact_id = payload.get("id") if isinstance(payload.get("id"), str) else None
+            src_root_id = resolve_src_root_id(
+                parent_id=parent_id or artifact_id,
+                source_refs=source_refs,
+                properties=properties,
+            )
+            if src_root_id:
+                return src_root_id
+            if artifact_id:
+                metadata = manager.get_ssot(artifact_id)
+                if metadata:
+                    resolved = resolve_src_root_id(
+                        parent_id=metadata.properties.get("parent_id") or metadata.id,
+                        source_refs=metadata.properties.get("source_refs", []),
+                        properties=metadata.properties,
+                    )
+                    if resolved:
+                        return resolved
+            for value in payload.values():
+                if isinstance(value, (dict, list)):
+                    resolved = cls._extract_src_root_from_payload(value, manager, fallback=fallback)
+                    if resolved:
+                        return resolved
+        elif isinstance(payload, list):
+            for item in payload:
+                resolved = cls._extract_src_root_from_payload(item, manager, fallback=fallback)
+                if resolved:
+                    return resolved
+        elif isinstance(payload, str):
+            resolved = resolve_src_root_id(parent_id=payload, source_refs=[payload], properties={})
+            if resolved:
+                return resolved
+        return fallback
+
+    @classmethod
+    def _inject_identity_prepare_context(
+        cls,
+        payload: Any,
+        *,
+        src_root_id: Optional[str],
+        mode: str,
+    ) -> Any:
+        if isinstance(payload, dict):
+            rewritten = {key: cls._inject_identity_prepare_context(value, src_root_id=src_root_id, mode=mode) for key, value in payload.items()}
+            if "id" in rewritten or "source_refs" in rewritten or "ssot_materialized" in rewritten:
+                identity_context = dict(rewritten.get("identity_context", {}) or {})
+                identity_context.setdefault("mode", mode)
+                if src_root_id:
+                    identity_context.setdefault("src_root_id", src_root_id)
+                rewritten["identity_context"] = identity_context
+            if "properties" in rewritten and isinstance(rewritten["properties"], dict) and src_root_id:
+                rewritten["properties"].setdefault("src_root_id", src_root_id)
+            return rewritten
+        if isinstance(payload, list):
+            return [cls._inject_identity_prepare_context(item, src_root_id=src_root_id, mode=mode) for item in payload]
+        return payload
+
+    async def _execute_identity_prepare_step(
+        self,
+        workflow_id: str,
+        step,
+        ctx: RunnerContext,
+        instance,
+    ) -> StepResult:
+        project_root = Path(ctx.project_root or ".").resolve()
+        manager = ArtifactManager(project_root=project_root)
+
+        instance_data = getattr(instance, "data", {}) or {}
+        step_outputs = instance_data.get("step_outputs", {}) if isinstance(instance_data, dict) else {}
+        params = instance_data.get("params", {}) if isinstance(instance_data, dict) else {}
+        input_sources = self._resolve_step_input_sources(step)
+
+        payloads: List[Any] = []
+        for source in input_sources:
+            if source in step_outputs:
+                payloads.append(step_outputs[source])
+                continue
+            aliased = f"{source}_ref" if not source.endswith("_ref") else source[:-4]
+            if aliased in step_outputs:
+                payloads.append(step_outputs[aliased])
+                continue
+            if source in params:
+                payloads.append(params[source])
+                continue
+            if aliased in params:
+                payloads.append(params[aliased])
+
+        fallback_src_root = params.get("src_root_id") if isinstance(params.get("src_root_id"), str) else None
+        src_root_id = None
+        for payload in payloads:
+            src_root_id = self._extract_src_root_from_payload(payload, manager, fallback=fallback_src_root)
+            if src_root_id:
+                break
+
+        primary_payload = payloads[0] if payloads else {}
+        rewritten_payload = self._inject_identity_prepare_context(
+            primary_payload,
+            src_root_id=src_root_id,
+            mode="provisional",
+        )
+        artifact_ids: List[str] = []
+        self._collect_payload_artifact_ids(primary_payload, artifact_ids)
+        if isinstance(rewritten_payload, dict):
+            rewritten_payload["identity_prepare_result"] = {
+                "src_root_id": src_root_id,
+                "mode": "provisional",
+                "artifact_ids": list(dict.fromkeys(artifact_ids)),
+            }
+        else:
+            rewritten_payload = {
+                "identity_prepare_result": {
+                    "src_root_id": src_root_id,
+                    "mode": "provisional",
+                    "artifact_ids": list(dict.fromkeys(artifact_ids)),
+                }
+            }
+
+        await ctx.state_machine.complete_step(workflow_id, step.id, rewritten_payload)
+        return StepResult(
+            status="success",
+            step_id=step.id,
+            workflow_id=workflow_id,
+            message=f"Identity prepare completed with src_root_id={src_root_id or 'unknown'}",
+            output=rewritten_payload,
+        )
+
+    async def _execute_identity_formalize_step(
+        self,
+        workflow_id: str,
+        step,
+        ctx: RunnerContext,
+        instance,
+    ) -> StepResult:
+        project_root = Path(ctx.project_root or ".").resolve()
+        manager = ArtifactManager(project_root=project_root)
+        service = SSOTService(manager)
+
+        instance_data = getattr(instance, "data", {}) or {}
+        step_outputs = instance_data.get("step_outputs", {}) if isinstance(instance_data, dict) else {}
+        input_sources = self._resolve_step_input_sources(step)
+
+        payloads: List[Any] = []
+        for source in input_sources:
+            if source in step_outputs:
+                payloads.append(step_outputs[source])
+                continue
+            aliased = f"{source}_ref" if not source.endswith("_ref") else source[:-4]
+            if aliased in step_outputs:
+                payloads.append(step_outputs[aliased])
+
+        artifact_ids: List[str] = []
+        for payload in payloads:
+            self._collect_payload_artifact_ids(payload, artifact_ids)
+        deduped_ids: List[str] = []
+        for artifact_id in artifact_ids:
+            if artifact_id not in deduped_ids:
+                deduped_ids.append(artifact_id)
+
+        result = service.formalize(deduped_ids)
+        replacements = result["replacements"]
+
+        primary_payload = payloads[0] if payloads else {}
+        rewritten_payload = self._rewrite_payload_refs(primary_payload, replacements)
+        if isinstance(rewritten_payload, dict):
+            rewritten_payload["formalize_result"] = result
+            if "outputs" not in rewritten_payload and result.get("grouped_ids"):
+                rewritten_payload["outputs"] = result["grouped_ids"]
+        else:
+            rewritten_payload = {
+                "formalize_result": result,
+                "outputs": result.get("grouped_ids", {}),
+            }
+
+        await ctx.state_machine.complete_step(workflow_id, step.id, rewritten_payload)
+        return StepResult(
+            status="success",
+            step_id=step.id,
+            workflow_id=workflow_id,
+            message=f"Identity formalize completed for {result['count']} artifacts",
+            output=rewritten_payload,
+        )
 
     @staticmethod
     def _extract_feat_freeze_path(instance_data: Any) -> Optional[str]:
@@ -896,6 +1147,22 @@ class LLMRunner(StepRunnerBase):
             "project_name": instance.data.get("project_name", "ai-marathon-coach"),
             "data": instance.data,
         }
+
+        if self._is_identity_prepare_step(step):
+            return await self._execute_identity_prepare_step(
+                workflow_id=workflow_id,
+                step=step,
+                ctx=ctx,
+                instance=instance,
+            )
+
+        if self._is_identity_formalize_step(step):
+            return await self._execute_identity_formalize_step(
+                workflow_id=workflow_id,
+                step=step,
+                ctx=ctx,
+                instance=instance,
+            )
 
         # v3.1: 注入已发现的契约路径到工作流上下文
         try:
@@ -3301,8 +3568,13 @@ class LLMRunner(StepRunnerBase):
                     normalized_item["parent"] = actual_epic_ref
                     normalized_item["source_refs"] = [f"{actual_epic_ref}#scope"]
                 else:
+<<<<<<< HEAD
                     parent_ref = normalized_item.get("parent")
                     if not LLMRunner._is_literal_ssot_ref(parent_ref):
+=======
+                    parent = normalized_item.get("parent")
+                    if not LLMRunner._is_literal_ssot_ref(parent):
+>>>>>>> codex/src-scoped-identity-impl
                         normalized_item.pop("parent", None)
                     filtered_refs = LLMRunner._filter_materializable_refs(normalized_item.get("source_refs"))
                     if filtered_refs:

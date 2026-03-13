@@ -155,6 +155,10 @@ class OutputSpec:
     format: str  # yaml | json | markdown | text
     required: bool = True
     description: str = ""
+    symbol: Optional[str] = None
+    contract: Optional[str] = None
+    freeze: bool = False
+    ssot: Optional[Dict[str, Any]] = None
 
 
 @dataclass

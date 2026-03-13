@@ -7,12 +7,19 @@ id: workflow.product.product_main_pipeline
 name: Product Main Pipeline
 description: >
   产品部门新的 L2 主编排模板。
+<<<<<<< HEAD
   负责将上游 SRC 输入串联为 EPIC、FEAT，以及研发准备包。
   在全套 SSOT 生成完成后，必须先执行 requirement chain validation，
   再进入最终完成态与下游 handoff。
   该文件定义的是 checked-in workflow template，不是运行时 workflow instance。
   实际执行实例由 Python runtime 根据模板动态生成。
   该模板本身不承载全部细节，而是调度 5 条 L3 子模板。
+=======
+  负责将上游输入先收敛为 SRC，再串联为 EPIC、FEAT，以及研发准备包。
+  该文件定义的是 checked-in workflow template，不是运行时 workflow instance。
+  实际执行实例由 Python runtime 根据模板动态生成。
+  该模板本身不承载全部细节，而是调度 4 条 L3 子模板。
+>>>>>>> codex/src-scoped-identity-impl
 owner: product-ai
 tags: [product, workflow, l2, ssot, canonical]
 
@@ -30,6 +37,8 @@ overview:
       contract: departments/stg/contracts/business_opportunity/v1/schema.yaml
 
   output_types:
+    - type: source_freeze
+      description: 冻结后的 SRC 主对象或其冻结视图
     - type: epic_freeze_bundle
       description: 冻结后的 EPIC 集合
     - type: feat_freeze_bundle
@@ -45,17 +54,23 @@ phases:
     level: task
     workflow: workflow.product.task.raw_to_src
     depends_on: []
+<<<<<<< HEAD
     output_map:
       source_freeze: "$child_data.step_outputs.source_freeze"
+=======
+>>>>>>> codex/src-scoped-identity-impl
 
   - id: src_to_epic
     name: SRC to EPIC
     level: task
     workflow: workflow.product.task.src_to_epic
     depends_on: [raw_to_src]
+<<<<<<< HEAD
     output_map:
       epic_freeze: "$child_data.step_outputs.epic_freeze"
       epic_freeze_ref: "$child_data.step_outputs.epic_freeze.epic_freeze_ref"
+=======
+>>>>>>> codex/src-scoped-identity-impl
 
   - id: epic_to_feat
     name: EPIC to FEAT
@@ -98,9 +113,14 @@ constraints:
 
   ssot_chain_binding: |
     主链必须遵循：
+<<<<<<< HEAD
     SRC -> EPIC -> FEAT -> UI / TECH / TASK
     并确保在最终 handoff 前已完成 requirement chain validation，
     TESTSET 可由 QA 基于 FEAT 派生。
+=======
+    raw input -> SRC -> EPIC -> FEAT -> UI / TECH / TASK
+    并确保 TESTSET 可由 QA 基于 FEAT 派生。
+>>>>>>> codex/src-scoped-identity-impl
 
   no_direct_prd_centric_design: |
     不再以 PRD 文档作为唯一中心对象。
@@ -115,7 +135,9 @@ instance_schema:
   context_fields:
     - raw_requirement
     - business_opportunity_freeze
+    - source_freeze_ref
   output_fields:
+    - source_freeze
     - epic_freeze_bundle
     - feat_freeze_bundle
     - delivery_prep_bundle
@@ -123,7 +145,11 @@ instance_schema:
 state_machine:
   states:
     - INIT: "初始化"
+<<<<<<< HEAD
     - RAW_TO_SRC: "原始输入到 SRC"
+=======
+    - RAW_TO_SRC: "Raw 到 SRC"
+>>>>>>> codex/src-scoped-identity-impl
     - SRC_TO_EPIC: "SRC 到 EPIC"
     - EPIC_TO_FEAT: "EPIC 到 FEAT"
     - FEAT_TO_DELIVERY_PREP: "FEAT 到研发准备"
