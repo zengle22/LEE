@@ -121,3 +121,21 @@ def test_legacy_feature_delivery_feat_matches_canonical_repo_extensions():
     assert "repo_frontend" in text
     assert "repo_backend" in text
     assert "Contract → Backend / Frontend 并行 → Integration → Evidence Pack" in text
+
+
+def test_early_feature_delivery_feat_matches_canonical_parallel_contract():
+    feat_108 = Path("spec/requirements/features/FEAT-108__feature-delivery-l2-workflow-definition.md")
+    text = feat_108.read_text(encoding="utf-8")
+
+    assert "repo_frontend" in text
+    assert "repo_backend" in text
+    assert "Contract Design → Backend Development / Frontend Development 并行 → Integration → Evidence Pack" in text
+
+
+def test_early_bugfix_feat_matches_canonical_bugfix_contract():
+    feat_109 = Path("spec/requirements/features/FEAT-109__bugfix-delivery-l2-workflow-definition.md")
+    text = feat_109.read_text(encoding="utf-8")
+
+    assert "bug_ssot_id" in text
+    assert "batch_approval_record" in text
+    assert "Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence" in text

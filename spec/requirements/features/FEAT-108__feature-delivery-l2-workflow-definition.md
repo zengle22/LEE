@@ -27,9 +27,9 @@ Dev 团队获得标准化的 Feature 交付主入口，实现从 FEAT 到 Eviden
 - Inputs defined by EPIC scope
 # Processing
 
-- 校验输入完整性（formal_ssot_id, source_refs, governing_adrs, repo_context）
+- 校验输入完整性（formal_ssot_id, source_refs, governing_adrs, repo_context, repo_frontend, repo_backend）
 - 初始化 L2 编排上下文
-- 按顺序编排 L3 阶段：Contract Design → Backend Development → Frontend Development → Integration → Evidence Pack
+- 按顺序编排 L3 阶段：Contract Design → Backend Development / Frontend Development 并行 → Integration → Evidence Pack
 - 协调各阶段数据流转
 - 汇总各阶段产出物生成 Evidence Pack
 # Outputs
@@ -41,7 +41,7 @@ Dev 团队获得标准化的 Feature 交付主入口，实现从 FEAT 到 Eviden
 
 - Feature Delivery L2 工作流定义文档冻结
 - 包含触发条件（FEAT frozen）
-- 包含阶段编排（Contract→BE→FE→Integration→Evidence）
+- 包含阶段编排（Contract→BE/FE 并行→Integration→Evidence）
 - 包含输出物清单（TECH spec + Implementation + Evidence Pack）
 - 通过示例 FEAT 走通完整 L2 编排流程
 # Acceptance Checks
@@ -59,7 +59,7 @@ Dev 团队获得标准化的 Feature 交付主入口，实现从 FEAT 到 Eviden
 - Scenario: 示例 FEAT 完整编排验证
 - Given: 提供一个冻结状态的示例 FEAT
 - When: 执行 Feature Delivery L2 工作流
-- Then: 成功走完 Contract→BE→FE→Integration→Evidence 全阶段
+- Then: 成功走完 Contract→BE/FE 并行→Integration→Evidence 全阶段，且 integration 仅在前后端产物齐备后启动
 - Trace Hints: TASK, TECH, TESTSET
 
 ## AC-SRC-009-001-03
