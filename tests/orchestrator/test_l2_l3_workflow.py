@@ -685,6 +685,10 @@ class TestYamlTemplates:
             "coverage_gate",
             "publish_backend",
         ]
+        assert data["steps"][3]["config"] == {
+            "coverage_threshold": 80,
+            "coverage_retry_target": "write_ut",
+        }
         assert "contract_freeze_ref" in data["instance_schema"]["required_fields"]
         assert "coverage_report_ref" in data["instance_schema"]["output_fields"]
 

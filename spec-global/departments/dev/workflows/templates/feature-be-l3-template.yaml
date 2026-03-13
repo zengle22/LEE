@@ -50,6 +50,9 @@ steps:
     kind: agent
     description: Check that backend unit-test coverage meets the required threshold.
     agent_id: agent.dev.code_self_reviewer
+    config:
+      coverage_threshold: 80
+      coverage_retry_target: write_ut
     mandatory: true
     depends_on: [refactor_backend]
     outputs:

@@ -435,6 +435,54 @@ class LLMRunner(StepRunnerBase):
                 continue
         return None
 
+    @staticmethod
+    def _parse_coverage_percentage(value: Any) -> Optional[float]:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            text = value.strip().rstrip("%")
+            try:
+                return float(text)
+            except ValueError:
+                return None
+        return None
+
+    @classmethod
+    def _evaluate_backend_coverage_gate(
+        cls,
+        step,
+        business_output: Any,
+    ) -> Optional[Dict[str, Any]]:
+        step_config = getattr(step, "config", {}) or {}
+        threshold = step_config.get("coverage_threshold")
+        retry_target = step_config.get("coverage_retry_target")
+        if threshold is None or not isinstance(business_output, dict):
+            return None
+
+        actual = cls._parse_coverage_percentage(
+            business_output.get("coverage_actual")
+            or business_output.get("coverage")
+            or business_output.get("coverage_percent")
+        )
+        if actual is None:
+            return {
+                "passed": False,
+                "message": "Coverage gate output missing numeric coverage_actual.",
+                "retry_target": retry_target,
+            }
+
+        passed = actual >= float(threshold)
+        return {
+            "passed": passed,
+            "actual": actual,
+            "threshold": float(threshold),
+            "message": (
+                f"Coverage gate failed: actual {actual:.1f}% < required {float(threshold):.1f}%."
+                if not passed else None
+            ),
+            "retry_target": retry_target,
+        }
+
     async def _complete_non_ui_design_step(
         self,
         *,
@@ -1226,6 +1274,27 @@ class LLMRunner(StepRunnerBase):
                     step_id=step.id,
                     workflow_id=workflow_id,
                     message=feat_review_subject_error,
+                )
+
+            coverage_gate = self._evaluate_backend_coverage_gate(step, business_output)
+            if coverage_gate and not coverage_gate["passed"]:
+                retry_target = coverage_gate.get("retry_target") or "write_ut"
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    output_data={
+                        "generated_text": generated_text,
+                        "business_output": business_output,
+                        "coverage_gate": coverage_gate,
+                    },
+                    error_message=coverage_gate["message"],
+                    completed_at=datetime.now(),
+                )
+                return await ctx.state_machine.rewind_to(
+                    workflow_id,
+                    retry_target,
+                    mode="retry",
+                    reason=coverage_gate["message"],
                 )
 
             semantic_error = None
@@ -6503,6 +6572,28 @@ class ClaudeCodeRunner(StepRunnerBase):
                         )
                 else:
                     print(f"[OutputValidation] Warning: Step {step.id} output schema validation failed (soft mode)")
+
+            coverage_gate = self._evaluate_backend_coverage_gate(step, business_output)
+            if coverage_gate and not coverage_gate["passed"]:
+                retry_target = coverage_gate.get("retry_target") or "write_ut"
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    output_data={
+                        "raw_output": output.get("raw_output", "") or json.dumps(output),
+                        "business_output": business_output,
+                        "structured_payload": structured_payload,
+                        "coverage_gate": coverage_gate,
+                    },
+                    error_message=coverage_gate["message"],
+                    completed_at=datetime.now(),
+                )
+                return await ctx.state_machine.rewind_to(
+                    workflow_id,
+                    retry_target,
+                    mode="retry",
+                    reason=coverage_gate["message"],
+                )
 
             semantic_error = None
             agent_id = getattr(step, "agent_id", "")
