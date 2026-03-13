@@ -519,6 +519,7 @@ class LLMRunner(StepRunnerBase):
                 "workspace": workspace,
                 "context_files": context_files,
                 "write_scope": code_config.get("write_scope", []),
+                "read_only": bool(code_config.get("read_only", False)),
                 "forbidden_read_paths": self._merge_forbidden_read_paths(
                     code_config.get("forbidden_read_paths")
                 ),
@@ -1847,6 +1848,9 @@ class LLMRunner(StepRunnerBase):
 
         generated_text = feat_spec_output.get("generated_text", "")
         feat_payload: Any = None
+        direct_business_output = feat_spec_output.get("business_output")
+        if isinstance(direct_business_output, dict):
+            feat_payload = direct_business_output
         try:
             parsed_output = StepRunnerBase._parse_structured_output(generated_text)
         except Exception:
@@ -1963,6 +1967,11 @@ class LLMRunner(StepRunnerBase):
             if isinstance(alternate_candidates, list):
                 raw_candidates = alternate_candidates
                 normalized_business["feat_candidates"] = alternate_candidates
+        if not isinstance(raw_candidates, list):
+            alternate_candidates = normalized_business.get("feat_breakdown")
+            if isinstance(alternate_candidates, list):
+                raw_candidates = alternate_candidates
+                normalized_business["feat_candidates"] = alternate_candidates
         if not str(normalized_business.get("breakdown_id") or "").strip():
             normalized_business["breakdown_id"] = f"FEAT-BREAKDOWN-{actual_epic_ref}"
         if not isinstance(raw_candidates, list):
@@ -1981,7 +1990,16 @@ class LLMRunner(StepRunnerBase):
             for item in raw_candidates:
                 if not isinstance(item, dict):
                     continue
-                normalized_item = dict(item)
+                nested_business_output = (
+                    item.get("business_output")
+                    if isinstance(item.get("business_output"), dict)
+                    else {}
+                )
+                normalized_item = {
+                    **nested_business_output,
+                    **dict(item),
+                }
+                normalized_item.pop("business_output", None)
 
                 title = str(
                     normalized_item.get("title")
@@ -2177,6 +2195,18 @@ class LLMRunner(StepRunnerBase):
             fallback_text = goal or title or "Feature is independently acceptable"
             return [fallback_text]
 
+        allowed_trace_hints = {"UI", "TECH", "TASK", "TESTSET"}
+
+        def _normalize_trace_hints(value: Any) -> List[str]:
+            if not isinstance(value, list):
+                return ["TECH"]
+            normalized_hints: List[str] = []
+            for hint in value:
+                cleaned_hint = _clean_text(hint).upper()
+                if cleaned_hint in allowed_trace_hints and cleaned_hint not in normalized_hints:
+                    normalized_hints.append(cleaned_hint)
+            return normalized_hints or ["TECH"]
+
         def _build_acceptance_checks(
             feat_item: Dict[str, Any],
             acceptance_criteria: List[str],
@@ -2203,9 +2233,7 @@ class LLMRunner(StepRunnerBase):
                     normalized_item.setdefault("given", "")
                     normalized_item.setdefault("when", "")
                     normalized_item.setdefault("then", "")
-                    trace_hints = normalized_item.get("trace_hints")
-                    if not isinstance(trace_hints, list) or not trace_hints:
-                        normalized_item["trace_hints"] = ["TECH"]
+                    normalized_item["trace_hints"] = _normalize_trace_hints(normalized_item.get("trace_hints"))
                     normalized_checks.append(normalized_item)
             if normalized_checks:
                 return normalized_checks
@@ -2437,16 +2465,21 @@ class LLMRunner(StepRunnerBase):
             if not feat_specs:
                 return feat_specs
             source_anchor = f"{epic_ref}#scope" if epic_ref else "EPIC#scope"
+            reverse_scope_manifest = "REVERSE-SCOPE-MANIFEST"
+            repo_evidence_manifest = "REPO-EVIDENCE-MANIFEST"
+            canonical_path_rules = "CANONICAL-SSOT-PATH-RULES-v1"
+            review_contract_artifact = "REVERSE-REVIEW-CONTRACT"
+            trace_index_artifact = "REVERSE-TRACE-INDEX"
             templates = [
                 {
                     "title": "Reverse Pack 主链升级与 formal object 边界固化",
                     "goal": "升级 core.reverse-epic-feat，使其从 repo evidence 逆向产出 SRC/EPIC/FEAT，并明确 formal object 只直物化这三类对象。",
                     "user_value": "产品和治理侧可以得到与现行 SSOT 主链一致的 reverse pack，而不是停留在 EPIC/FEAT-only 输出。",
-                    "inputs": [source_anchor, "ADR-016 decision constraints", "repo evidence manifest"],
+                    "inputs": [source_anchor, "ADR-016", repo_evidence_manifest],
                     "input_contract": {
-                        "required_artifacts": [source_anchor, "core.reverse-epic-feat workflow template", "repo evidence manifest"],
-                        "required_fields": ["source_id", "epic_id", "feat_ids", "materialization_boundary"],
-                        "optional_fields": ["decision_refs", "evidence_refs"],
+                        "required_artifacts": [source_anchor, "core.reverse-epic-feat", repo_evidence_manifest],
+                        "required_fields": ["source_id", "epic_id", "feat_ids", "formal_object_types"],
+                        "optional_fields": ["adr_refs", "evidence_refs"],
                         "consumption_rules": [
                             "Preserve reverse workflow key and canonical SSOT path mapping",
                             "Materialize only SRC / EPIC / FEAT as formal objects",
@@ -2476,12 +2509,7 @@ class LLMRunner(StepRunnerBase):
                             "given": "core.reverse-epic-feat 基于同一 repo evidence 运行",
                             "when": "执行 reverse pack 物化",
                             "then": "仅生成 SRC / EPIC / FEAT 正式对象，不生成 UI / TECH / TASK / TESTSET formal freeze",
-                            "trace_hints": [
-                                "core.reverse-epic-feat",
-                                "spec/source",
-                                "spec/requirements/epics",
-                                "spec/requirements/features",
-                            ],
+                            "trace_hints": ["TASK", "TECH", "TESTSET"],
                         },
                         {
                             "id": "AC-REV-02",
@@ -2489,12 +2517,7 @@ class LLMRunner(StepRunnerBase):
                             "given": "reverse pack 已生成",
                             "when": "检查 source_refs 与 derived_from 关系",
                             "then": "SRC、EPIC、FEAT 都能追溯到同一条 reverse evidence 与 ADR 约束",
-                            "trace_hints": [
-                                "source_refs",
-                                "derived_from",
-                                "reverse evidence manifest",
-                                "ADR-016",
-                            ],
+                            "trace_hints": ["TASK", "TECH", "TESTSET"],
                         },
                     ],
                     "non_goals": [
@@ -2506,10 +2529,10 @@ class LLMRunner(StepRunnerBase):
                     "title": "Delivery Prep 与 QA Handoff 种子视图生成",
                     "goal": "在 FEAT 之后补齐 UI / TECH / TASK / TESTSET seed，以及 TC / REPORT / BUG / EVI 的 trace / evidence views 与 handoff index。",
                     "user_value": "研发与 QA 可以基于 reverse pack 获得下游准备材料，但不会越权生成新的 formal freeze 对象。",
-                    "inputs": [source_anchor, "formal FEAT bundle", "canonical SSOT directory rules"],
+                    "inputs": [source_anchor, "FEAT-FREEZE-BUNDLE", canonical_path_rules],
                     "input_contract": {
-                        "required_artifacts": [source_anchor, "feat_freeze bundle", "canonical SSOT directory rules"],
-                        "required_fields": ["feat_id", "delivery_seed_targets", "qa_seed_targets", "canonical_paths"],
+                        "required_artifacts": [source_anchor, "FEAT-FREEZE-BUNDLE", canonical_path_rules],
+                        "required_fields": ["feat_id", "delivery_seed_targets", "qa_seed_targets", "canonical_path_rules"],
                         "optional_fields": ["handoff_refs", "trace_view_refs"],
                         "consumption_rules": [
                             "Generate only seed, view, handoff, or index outputs for downstream objects",
@@ -2540,12 +2563,7 @@ class LLMRunner(StepRunnerBase):
                             "given": "formal FEAT bundle 已冻结",
                             "when": "运行 reverse delivery prep step",
                             "then": "生成 UI / TECH / TASK seeds，且输出只落 seed 或 handoff/index",
-                            "trace_hints": [
-                                "workflow.product.task.feat_to_delivery_prep",
-                                "UI seed",
-                                "TECH seed",
-                                "TASK seed",
-                            ],
+                            "trace_hints": ["UI", "TECH", "TASK"],
                         },
                         {
                             "id": "AC-SEED-02",
@@ -2553,13 +2571,7 @@ class LLMRunner(StepRunnerBase):
                             "given": "formal FEAT bundle 已冻结",
                             "when": "运行 reverse QA handoff generation",
                             "then": "生成 TESTSET seed 与 TC / REPORT / BUG / EVI trace/evidence views，不产生 formal freeze",
-                            "trace_hints": [
-                                "TESTSET seed",
-                                "TC trace view",
-                                "REPORT evidence view",
-                                "BUG evidence view",
-                                "EVI index",
-                            ],
+                            "trace_hints": ["TESTSET", "TASK", "TECH"],
                         },
                     ],
                     "non_goals": [
@@ -2571,10 +2583,10 @@ class LLMRunner(StepRunnerBase):
                     "title": "Review Contract、Manifest 与 Trace 治理对齐",
                     "goal": "补齐 reverse workflow 的 review contract、manifest 和 traceability 约束，使整条 SSOT 链可审查、可追溯、可验证。",
                     "user_value": "治理审查员可以按完整 SSOT 链检查 reverse 结果，避免只审 EPIC/FEAT 导致链路失真。",
-                    "inputs": [source_anchor, "reverse pack outputs", "review and manifest contracts"],
+                    "inputs": [source_anchor, reverse_scope_manifest, review_contract_artifact],
                     "input_contract": {
-                        "required_artifacts": [source_anchor, "reverse scope manifest", "review contracts", "trace index"],
-                        "required_fields": ["subject_refs", "formal_seed_view_boundary", "evidence_links", "handoff_refs"],
+                        "required_artifacts": [source_anchor, reverse_scope_manifest, review_contract_artifact, trace_index_artifact],
+                        "required_fields": ["subject_refs", "formal_output_refs", "seed_output_refs", "handoff_refs"],
                         "optional_fields": ["governance_notes", "review_findings"],
                         "consumption_rules": [
                             "Review contract must cover SRC / EPIC / FEAT plus downstream seeds and views",
@@ -2605,12 +2617,7 @@ class LLMRunner(StepRunnerBase):
                             "given": "reverse workflow 产出了 formal object、seeds、views 和 handoff",
                             "when": "执行 review contract 校验",
                             "then": "review subject_refs 覆盖 SRC / EPIC / FEAT 及其对应 seeds/views/handoff",
-                            "trace_hints": [
-                                "feat_review",
-                                "delivery_plan_review",
-                                "subject_refs",
-                                "reverse scope manifest",
-                            ],
+                            "trace_hints": ["TASK", "TECH", "TESTSET"],
                         },
                         {
                             "id": "AC-GOV-02",
@@ -2618,12 +2625,7 @@ class LLMRunner(StepRunnerBase):
                             "given": "manifest 和 trace index 已生成",
                             "when": "审查 formal / seed / view / handoff 边界",
                             "then": "manifest 分类与 trace 链接一致，且 repo evidence 可追溯到下游 seeds/views",
-                            "trace_hints": [
-                                "manifest",
-                                "trace index",
-                                "repo evidence",
-                                "handoff index",
-                            ],
+                            "trace_hints": ["TASK", "TECH", "TESTSET"],
                         },
                     ],
                     "non_goals": [
@@ -3231,11 +3233,13 @@ class LLMRunner(StepRunnerBase):
                                 rewritten_checks.append(
                                     {
                                         **item,
-                                        "trace_hints": [
-                                            feat_id_alias_map.get(_clean_text(hint), _clean_text(hint))
-                                            for hint in trace_hints
-                                            if _clean_text(hint)
-                                        ] if isinstance(trace_hints, list) else trace_hints,
+                                        "trace_hints": _normalize_trace_hints(
+                                            [
+                                                feat_id_alias_map.get(_clean_text(hint), _clean_text(hint))
+                                                for hint in trace_hints
+                                                if _clean_text(hint)
+                                            ] if isinstance(trace_hints, list) else trace_hints
+                                        ),
                                     }
                                 )
                             normalized_item["acceptance_checks"] = rewritten_checks
@@ -5091,6 +5095,23 @@ class LLMRunner(StepRunnerBase):
             )
             if expected_subject_refs and not normalized_business.get("subject_refs"):
                 normalized_business["subject_refs"] = expected_subject_refs
+        elif review_type == "feat_review":
+            expected_subject_refs = LLMRunner._expected_feat_review_subject_refs(
+                instance_data or {},
+            )
+            actual_subject_refs = normalized_business.get("subject_refs")
+            actual_subject_ref_set = {
+                str(item).strip()
+                for item in actual_subject_refs
+                if isinstance(actual_subject_refs, list) and str(item).strip()
+            }
+            expected_subject_ref_set = {
+                str(item).strip()
+                for item in expected_subject_refs
+                if isinstance(item, str) and item.strip()
+            }
+            if expected_subject_ref_set and not expected_subject_ref_set.issubset(actual_subject_ref_set):
+                normalized_business["subject_refs"] = expected_subject_refs
 
         if normalized_business.get("decision") not in {"pass", "revise", "reject"}:
             candidate = (
@@ -5806,6 +5827,10 @@ class LLMRunner(StepRunnerBase):
             r"\baligns?\b",
             r"\btraceable\b",
             r"\bconcrete\b",
+            r"\bspecific\b",
+            r"\bcomplies?\b",
+            r"\bcover(s|age)?\b",
+            r"\bclear\b",
             r"\bexplicitly support\b",
             r"\bno unauthorized\b",
             r"满足",
@@ -5815,6 +5840,9 @@ class LLMRunner(StepRunnerBase):
             r"可追溯",
             r"清晰",
             r"合规",
+            r"具体",
+            r"覆盖",
+            r"明确",
             r"支持下游",
             r"无未经授权",
         ]
@@ -7186,6 +7214,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             ),
             "context_files": context_files,
             "write_scope": claude_config.get("write_scope", []),
+            "read_only": bool(claude_config.get("read_only", False)),
             "forbidden_read_paths": cls._merge_forbidden_read_paths(
                 claude_config.get("forbidden_read_paths")
             ),

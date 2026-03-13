@@ -336,8 +336,9 @@ def test_claude_code_runner_merges_forbidden_read_paths():
         "output/",
         "evidence/",
         ".workflow/claude-code/",
-        ".tmp/",
         "pytest-temp/",
+        ".codex-worktrees/",
+        ".tmp/",
     ]
 
 
@@ -414,6 +415,67 @@ def test_feat_review_sanitizer_drops_positive_findings_when_decision_is_pass():
             "findings": [
                 "Input contracts define concrete required_fields without abstract slogans",
                 "Trace_hints explicitly support downstream artifact generation (TASK/TESTSET/TECH)",
+            ],
+            "risks": [],
+            "recommendations": [],
+        },
+        structured_payload={},
+        instance_data=None,
+    )
+
+    assert normalized["decision"] == "pass"
+    assert normalized["findings"] == []
+
+
+def test_feat_review_normalizer_backfills_missing_expected_subject_refs():
+    normalized, _ = LLMRunner._normalize_product_review_payload(
+        step=SimpleNamespace(id="feat_review", agent_id="agent.product.feat_reviewer", config={}),
+        business_output={
+            "review_type": "feat_review",
+            "decision": "revise",
+            "subject_refs": ["FEAT-REV-001", "FEAT-REV-002", "FEAT-REV-003"],
+            "summary": "需要补齐剩余 FEAT 的 review coverage。",
+            "findings": ["FEAT-REV-004 未覆盖到 subject_refs。"],
+            "risks": [],
+            "recommendations": [],
+        },
+        structured_payload={},
+        instance_data={
+            "step_outputs": {
+                "feat_spec_generation": {
+                    "business_output": {
+                        "feat_specs": [
+                            {"feat_id": "FEAT-REV-001", "title": "A"},
+                            {"feat_id": "FEAT-REV-002", "title": "B"},
+                            {"feat_id": "FEAT-REV-003", "title": "C"},
+                            {"feat_id": "FEAT-REV-004", "title": "D"},
+                        ]
+                    }
+                }
+            }
+        },
+    )
+
+    assert normalized["subject_refs"] == [
+        "FEAT-REV-001",
+        "FEAT-REV-002",
+        "FEAT-REV-003",
+        "FEAT-REV-004",
+    ]
+
+
+def test_feat_review_sanitizer_treats_positive_compliance_findings_as_non_blocking():
+    normalized, _ = LLMRunner._normalize_product_review_payload(
+        step=SimpleNamespace(id="feat_review", agent_id="agent.product.feat_reviewer", config={}),
+        business_output={
+            "review_type": "feat_review",
+            "decision": "pass",
+            "subject_refs": ["FEAT-REV-FORMAL-OBJ", "FEAT-REV-NON-FORMAL-OBJ", "FEAT-REV-PATH-ALIGN"],
+            "summary": "All FEATs meet acceptance-driven standards.",
+            "findings": [
+                "FEAT-REV-FORMAL-OBJ input_contract required_fields are specific data identifiers",
+                "FEAT-REV-NON-FORMAL-OBJ trace_hints cover UI/TECH/TASK/TESTSET downstream needs",
+                "FEAT-REV-PATH-ALIGN acceptance_checks structure complies with verification requirements",
             ],
             "risks": [],
             "recommendations": [],
@@ -647,6 +709,28 @@ def test_prd_writer_rewrites_reverse_ssot_upgrade_feats(runner):
                     "identity_kind": "ssot",
                 },
             },
+            {
+                "feat_id": "FEAT-SRC-DRAFT-001-03",
+                "title": "治理追溯与评审契约补齐",
+                "goal": "旧目标3",
+                "user_value": "旧用户价值3",
+                "inputs": ["EPIC-071#scope"],
+                "processing": ["旧处理3"],
+                "outputs": ["旧输出3"],
+                "acceptance_criteria": ["旧验收3"],
+                "acceptance_checks": [],
+                "dependencies": ["FEAT-SRC-DRAFT-001-02"],
+                "non_goals": [],
+                "priority": "P1",
+                "delivery_slice": "mvp",
+                "lifecycle_status": "draft",
+                "ssot": {
+                    "ssot_type": "FEAT",
+                    "parent": "EPIC-071",
+                    "derived_from": "EPIC-071",
+                    "identity_kind": "ssot",
+                },
+            },
         ],
     }
 
@@ -676,8 +760,111 @@ def test_prd_writer_rewrites_reverse_ssot_upgrade_feats(runner):
     feat_specs = normalized["feat_specs"]
     assert "Reverse Pack 主链升级" in feat_specs[0]["title"]
     assert "SRC reverse pack" in "\n".join(feat_specs[0]["outputs"])
+    assert feat_specs[0]["input_contract"]["required_fields"] == [
+        "source_id",
+        "epic_id",
+        "feat_ids",
+        "formal_object_types",
+    ]
+    assert feat_specs[0]["input_contract"]["required_artifacts"] == [
+        "EPIC-071#scope",
+        "core.reverse-epic-feat",
+        "REPO-EVIDENCE-MANIFEST",
+    ]
+    assert feat_specs[0]["acceptance_checks"][0]["trace_hints"] == ["TASK", "TECH", "TESTSET"]
     assert "种子视图生成" in feat_specs[1]["title"]
     assert feat_specs[1]["dependencies"] == [feat_specs[0]["feat_id"]]
+    assert feat_specs[1]["input_contract"]["required_fields"] == [
+        "feat_id",
+        "delivery_seed_targets",
+        "qa_seed_targets",
+        "canonical_path_rules",
+    ]
+    assert feat_specs[1]["input_contract"]["required_artifacts"] == [
+        "EPIC-071#scope",
+        "FEAT-FREEZE-BUNDLE",
+        "CANONICAL-SSOT-PATH-RULES-v1",
+    ]
+    assert feat_specs[2]["input_contract"]["required_fields"] == [
+        "subject_refs",
+        "formal_output_refs",
+        "seed_output_refs",
+        "handoff_refs",
+    ]
+
+
+def test_prd_writer_rewrites_reverse_ssot_trace_hints_to_allowed_enums(runner):
+    step = SimpleNamespace(
+        id="feat_spec_generation",
+        agent_id="agent.product.prd_writer",
+        config={
+            "output_contract": "departments/product/contracts/feat-bundle-contract/v1/schema.json",
+        },
+    )
+    business_output = {
+        "epic_ref": "EPIC-071",
+        "feat_specs": [
+            {
+                "feat_id": "FEAT-SRC-DRAFT-001-01",
+                "title": "SSOT 目录路径对齐与治理边界固化",
+                "goal": "旧目标",
+                "user_value": "旧用户价值",
+                "inputs": ["EPIC-071#scope"],
+                "processing": ["旧处理"],
+                "outputs": ["旧输出"],
+                "acceptance_criteria": ["旧验收"],
+                "acceptance_checks": [
+                    {
+                        "id": "AC-001",
+                        "scenario": "旧校验",
+                        "given": "旧前置",
+                        "when": "旧触发",
+                        "then": "旧结果",
+                        "trace_hints": ["repo evidence", "manifest", "TASK"],
+                    }
+                ],
+                "dependencies": [],
+                "non_goals": [],
+                "priority": "P1",
+                "delivery_slice": "mvp",
+                "lifecycle_status": "draft",
+                "ssot": {
+                    "ssot_type": "FEAT",
+                    "parent": "EPIC-071",
+                    "derived_from": "EPIC-071",
+                    "identity_kind": "ssot",
+                },
+            }
+        ],
+    }
+
+    normalized, _ = LLMRunner._normalize_prd_writer_feat_payload(
+        step,
+        "wf-reverse-ssot",
+        business_output,
+        {"business_output": business_output},
+        instance_data={
+            "params": {
+                "raw_requirement": "保留 core.reverse-epic-feat 作为 workflow key，升级为面向现行 SSOT 链的逆向工作流，补齐 seed/view/handoff/trace。",
+                "epic_freeze": {
+                    "artifact_id": "EPIC-071",
+                    "title": "reverse-epic-feat-l3 对齐现行 SSOT 链逆向升级",
+                    "goal": "实现 reverse workflow 对现行 SSOT 文档链的完整承接与逆向升级",
+                    "scope": [
+                        "repo evidence -> SRC reverse pack -> EPIC -> FEAT -> delivery prep seeds -> QA handoff seeds -> evidence/trace views"
+                    ],
+                    "non_goals": [
+                        "不直接 freeze UI / TECH / TASK / TESTSET / TC / REPORT / BUG / EVI"
+                    ],
+                },
+            }
+        },
+    )
+
+    for feat_spec in normalized["feat_specs"]:
+        for check in feat_spec["acceptance_checks"]:
+            assert set(check["trace_hints"]).issubset({"UI", "TECH", "TASK", "TESTSET"})
+            assert check["trace_hints"]
 
 
 def test_epic_designer_synthesizes_epic_source_refs_and_derived_from(runner):
@@ -1368,6 +1555,26 @@ def test_claude_code_input_defaults_silence_timeout_to_executor_default(temp_pro
     )
 
     assert input_data["silence_timeout_seconds"] == ClaudeCodeRunner.DEFAULT_SILENCE_TIMEOUT_SECONDS
+
+
+def test_claude_code_input_propagates_read_only_flag(temp_project_root):
+    agent_ctx = SimpleNamespace(
+        system_prompt="system rules",
+        user_prompt="validate chain",
+        temperature=0.2,
+        max_tokens=1200,
+    )
+
+    input_data = ClaudeCodeRunner._build_claude_code_input_data(
+        agent_ctx=agent_ctx,
+        claude_config={"read_only": True},
+        workspace=str(temp_project_root),
+        workflow_id="wf-claude-001",
+        step_id="requirement_chain_review",
+        context_files=[],
+    )
+
+    assert input_data["read_only"] is True
 
 
 @pytest.mark.asyncio
@@ -5136,6 +5343,52 @@ def test_requirement_decomposer_maps_feats_alias_to_feat_breakdown():
     assert normalized["feat_candidates"][0]["title"] == "SSOT 对象映射规则定义"
     assert normalized["feat_candidates"][0]["user_value"] == "SSOT 对象映射规则定义"
     assert envelope["business_output"]["feat_candidates"][0]["acceptance_boundary"] == "规则文档存在且通过治理审查。"
+
+
+def test_requirement_decomposer_flattens_feat_breakdown_business_output():
+    step = SimpleNamespace(
+        id="feat_boundary_design",
+        agent_id="agent.product.requirement_decomposer",
+        config={},
+    )
+    business_output = {
+        "epic_id": "EPIC-SRC-DRAFT-REV-001",
+        "feat_breakdown": [
+            {
+                "feat_id": "FEAT-SSOT-PATH-001",
+                "title": "外层标题占位",
+                "acceptance_boundary": "外层边界",
+                "business_output": {
+                    "feat_id": "FEAT-SSOT-PATH-001",
+                    "title": "SSOT 目录路径映射规则实现",
+                    "goal": "实现 reverse workflow 输出路径到 canonical SSOT 目录的映射逻辑",
+                    "acceptance_boundary": "路径映射规则可以独立验收",
+                    "priority": "P1",
+                },
+            }
+        ],
+    }
+
+    normalized, envelope = LLMRunner._normalize_requirement_decomposer_payload(
+        step,
+        business_output,
+        {"business_output": business_output},
+        instance_data={
+            "params": {
+                "epic_freeze": {
+                    "artifact_id": "EPIC-SRC-DRAFT-REV-001",
+                    "path": "spec/requirements/epics/EPIC-SRC-DRAFT-REV-001.md",
+                }
+            }
+        },
+    )
+
+    candidate = normalized["feat_candidates"][0]
+    assert normalized["epic_ref"] == "EPIC-SRC-DRAFT-REV-001"
+    assert candidate["title"] == "外层标题占位"
+    assert candidate["goal"] == "实现 reverse workflow 输出路径到 canonical SSOT 目录的映射逻辑"
+    assert candidate["user_value"] == "实现 reverse workflow 输出路径到 canonical SSOT 目录的映射逻辑"
+    assert envelope["business_output"]["feat_candidates"][0]["user_value"] == candidate["user_value"]
 
 
 def test_prd_writer_normalizes_empty_inputs_and_consumption_rules():
