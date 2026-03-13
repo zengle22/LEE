@@ -24,95 +24,122 @@ properties:
   materialized_from: batch-tech-src-009-20260312
 ---
 
-# Summary
+# Goal
 
-TECH 桥接对象技术架构
+设计 TECH 对象作为需求轴收敛成交付轴的正式桥接层，建立 `FEAT -> TECH -> Implementation`
+的稳定翻译路径。
 
-## Goal Alignment
+## Inputs
 
-- 上游 FEAT：`FEAT-SRC-009-003`
-- 目标：设计 TECH 对象作为需求轴收敛成交付轴的正式桥接层，建立 FEAT→TECH→Implementation 的稳定翻译路径
-- 用户价值：建立需求轴收敛成交付轴的正式桥接层，提供 FEAT→TECH→Implementation 的稳定翻译路径，确保需求到技术实现的完整追溯
-- 决策基线：`ADR-008`
+- upstream FEAT: `FEAT-SRC-009-003`
+- source refs: `FEAT-SRC-009-003`, `EPIC-SRC-009#scope`, `ADR-008`
+- governing ADRs: `ADR-008`
 
-## Tech Stack
+## Architecture Decisions
 
-| Layer | Technology | Reasoning |
-| --- | --- | --- |
-| `schema` | TECH SSOT Schema | 定义 TECH 作为 FEAT 到交付轴的正式桥接对象。 |
-| `mapping` | FEAT -> TECH Projection Rules | 把目标、输入、处理、输出、验收约束映射为技术实现边界。 |
-| `review` | Tech Review Checklist | 以 checklist 管理架构、依赖、风险与回滚边界。 |
-| `publication` | Checked-in TECH Materialization | TECH 正式落到 spec/tech 并进入 registry。 |
+### D-001
+- decision: 以独立 TECH contract 约束桥接对象结构，而不是把技术设计散落在自由 prose 中。
+- reason: 保证 FEAT 到交付轴的翻译路径可验证、可审计。
+- impact:
+  - schema
+  - validation
+  - traceability
 
-## Core Components
+### D-002
+- decision: 将 FEAT→TECH 映射规则和 TECH→Implementation 交付规则独立文档化。
+- reason: 避免下游阶段各自解释 FEAT，造成技术路径漂移。
+- impact:
+  - contract_design
+  - backend_dev
+  - frontend_dev
+  - integration
 
-### TechSchemaDefinition
-- 职责：维护字段、必填项和验证约束。
-- 依赖：SchemaRegistry
+### D-003
+- decision: 在冻结前引入专门的 TECH review checklist。
+- reason: 保证 TECH 文档在冻结前具备结构完整性和评审可操作性。
+- impact:
+  - review
+  - freeze
 
-### FeatToTechMapper
-- 职责：把 FEAT 文档结构映射成 TECH 决策对象。
-- 依赖：FrontMatterParser, ContractNormalizer
+## Feat Mapping
 
-### TechReviewChecklist
-- 职责：沉淀架构评审项和放行条件。
-- 依赖：ADRRefs
+### Goal Mapping
 
-## Input To Delivery Mapping
+- FEAT clause: 设计 TECH 对象作为需求轴到交付轴的桥接层
+  TECH response: 定义独立 TECH schema、映射规则、交付规则与评审 checklist
 
-### FEAT Processing Projection
-- 设计 TECH 对象 Schema（字段、类型、验证规则）
-- 定义 TECH 与 FEAT 的映射规则
-- 定义 TECH 与 Implementation 的交付规则
-- 设计 TECH 设计评审 checklist
-- 创建示例 TECH 文档模板
+### Acceptance Mapping
 
-### Expected Deliverables
-- TECH 对象 Schema 定义文档
-- FEAT→TECH 映射规则文档
-- TECH→Implementation 交付规则文档
-- TECH 设计评审 checklist
-- 示例 TECH 文档模板
+- acceptance_id: `AC-003-001`
+  implementation_unit: `tech-contract-schema`
+  evidence_ref: `spec/contracts/tech-contract/v1/schema.json`
+- acceptance_id: `AC-003-002`
+  implementation_unit: `tech-document-template-and-example`
+  evidence_ref: `spec/templates/tech-template.md`
+- acceptance_id: `AC-003-003`
+  implementation_unit: `feat-to-tech-mapping-rules`
+  evidence_ref: `spec/contracts/tech-contract/v1/mapping-rules.md`
+- acceptance_id: `AC-003-004`
+  implementation_unit: `tech-review-checklist`
+  evidence_ref: `spec/contracts/tech-contract/v1/review-checklist.md`
 
-### Acceptance Alignment
-- TECH 对象 Schema 文档已冻结
-- Schema 包含完整的字段定义、类型和验证规则
-- FEAT→TECH 映射规则文档化
-- TECH→Implementation 交付规则文档化
-- TECH 设计评审 checklist 可用
-- 示例 TECH 文档模板提供
-- 不包含 TECH 自动生成工具实现
+## Implementation Rules
 
-## Implementation Constraints
+### Required Inputs
 
-- 所有实现必须以 `FEAT-SRC-009-003` 为上游事实源。
-- 新增逻辑不得回流到 deprecated 或 broken 路径。
-- 输出必须可被下游 TASK、Integration 或 Evidence Pack 审计。
-- TECH 只定义技术结构、依赖、风险和交付边界，不替代实现代码。
+- `formal_ssot_id`
+- `source_refs`
+- `governing_adrs`
+- `feat_boundary_spec`
 
-## Risks And Fallback
+### Required Outputs
 
-- `R-001` TECH 退化成自由 prose，失去桥接价值
-  处理：保留结构化 metadata、决策、组件、风险和交付边界章节。
-- `R-002` FEAT 与 TECH 映射不稳定
-  处理：把映射规则写成显式 schema 与 review checklist。
+- `tech_spec_ref`
+- `delivery_handoff_refs`
+- `validation_rules`
 
-## Review Checklist
+### Forbidden Shortcuts
 
-- 技术选型是否支撑 FEAT 目标而非引入新的平级入口。
-- 输入契约和输出边界是否可被下游 workflow 直接消费。
-- 风险、fallback 和删除条件是否清晰且可执行。
-- 是否保留对 `FEAT-SRC-009-003` 和 `ADR-008` 的可追溯引用。
+- 直接从 FEAT prose 进入实现阶段
+- 用 implementation notes 代替 TECH bridge object
+- 跳过 FEAT acceptance mapping
 
-## Out Of Scope
+## Delivery Handoffs
 
-- 实现 TECH 自动生成工具
-- 修改 FEAT 定义方式
-- 实现代码生成
+- from: `TECH`
+  to: `contract_design`
+  artifacts:
+    - `tech_spec_ref`
+- from: `TECH`
+  to: `backend_dev`
+  artifacts:
+    - `implementation_rules`
+- from: `TECH`
+  to: `frontend_dev`
+  artifacts:
+    - `implementation_rules`
+- from: `TECH`
+  to: `integration`
+  artifacts:
+    - `delivery_handoff_refs`
 
-## Metadata
+## Risk Management
 
-- TECH ID：`TECH-FEAT-SRC-009-003-001`
-- Parent FEAT：`FEAT-SRC-009-003`
-- Source Refs：`FEAT-SRC-009-003`, `EPIC-SRC-009#scope`, `ADR-008`
-- Materialized By：`batch-tech-src-009-20260312`
+- risk_id: `R-001`
+  description: TECH 退化成自由 prose，失去桥接价值
+  mitigation: 以 schema、mapping rules、delivery rules 和 checklist 共同约束
+- risk_id: `R-002`
+  description: FEAT 与 TECH 映射不稳定
+  mitigation: 所有 acceptance checks 必须进入 feat mapping
+
+## Validation Rules
+
+- rule: `all_feat_acceptance_mapped`
+  description: 每个 FEAT acceptance check 必须有对应 implementation unit
+  severity: blocker
+- rule: `no_bypass_tech_to_implementation`
+  description: 不允许绕过 TECH 直接作为实现阶段的主输入
+  severity: blocker
+- rule: `delivery_handoffs_explicit`
+  description: Contract/Backend/Frontend/Integration 四段 handoff 必须显式存在
+  severity: major
