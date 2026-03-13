@@ -588,6 +588,9 @@ class WorkflowGenerator:
             )
 
         # Build instance from template
+        repo_frontend = next((repo.get("id", "") for repo in config.repos if repo.get("type") == "frontend"), "")
+        repo_backend = next((repo.get("id", "") for repo in config.repos if repo.get("type") == "backend"), "")
+
         instance = {
             "kind": "l2_workflow_instance",
             "version": template.get("version", "1.0"),
@@ -602,6 +605,8 @@ class WorkflowGenerator:
                 "module_version": config.module_version,
                 "prd_path": config.prd_path,
                 "repos": config.repos,
+                "repo_frontend": repo_frontend,
+                "repo_backend": repo_backend,
             },
             "phases": [],
             "pma_splits": [],  # Will be populated during execution

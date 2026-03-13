@@ -98,6 +98,8 @@ shared_input_contract:
     - source_refs
     - governing_adrs
     - repo_context
+    - repo_frontend
+    - repo_backend
   optional_fields:
     - task_refs
     - acceptance_brief_ref
@@ -115,6 +117,8 @@ shared_input_contract:
       description: "governing_adrs constrain execution but do not replace business source"
     - rule: repo_context_execution_only
       description: "repo_context is execution context and must not replace SSOT business input"
+    - rule: repo_ids_required_for_impl
+      description: "repo_frontend and repo_backend must be explicit so FE/BE child workflows can bind to concrete repos"
 
 l3_input_schema:
   description: "Shared data propagated from L2 into L3 phases"
@@ -123,6 +127,8 @@ l3_input_schema:
     - source_refs
     - governing_adrs
     - repo_context
+    - repo_frontend
+    - repo_backend
   optional_fields:
     - task_refs
     - acceptance_brief_ref
@@ -228,6 +234,8 @@ instance_schema:
     - source_refs
     - governing_adrs
     - repo_context
+    - repo_frontend
+    - repo_backend
     - task_refs
     - acceptance_brief_ref
   phase_fields:

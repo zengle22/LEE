@@ -79,7 +79,10 @@ class TestL2InstanceGeneration:
             name="Test L2 Instance",
             project="Test",
             module="test",
-            repos=[],
+            repos=[
+                {"id": "fe-repo", "type": "frontend"},
+                {"id": "be-repo", "type": "backend"},
+            ],
         )
 
         output_path = tmp_path / "test-l2-instance.yaml"
@@ -91,6 +94,8 @@ class TestL2InstanceGeneration:
         assert result.generated_workflow["kind"] == "l2_workflow_instance"
         assert len(result.generated_workflow["phases"]) == 7  # 7 phases in canonical template
         assert result.generated_workflow["lifecycle_state"] == "Ready"
+        assert result.generated_workflow["context"]["repo_frontend"] == "fe-repo"
+        assert result.generated_workflow["context"]["repo_backend"] == "be-repo"
         assert [phase["id"] for phase in result.generated_workflow["phases"]] == [
             "tech_design",
             "contract_design",
@@ -472,7 +477,11 @@ class TestYamlTemplates:
             "source_refs",
             "governing_adrs",
             "repo_context",
+            "repo_frontend",
+            "repo_backend",
         ]
+        assert "repo_frontend" in data["l3_input_schema"]["required_fields"]
+        assert "repo_backend" in data["l3_input_schema"]["required_fields"]
         assert data["status_hooks"]["states"] == [
             "Ready",
             "In Progress",
