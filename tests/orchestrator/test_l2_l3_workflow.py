@@ -760,6 +760,36 @@ class TestYamlTemplates:
         assert ">=80%" in content
         assert "code review check required" in content
 
+    def test_feature_frontend_l3_template_declares_utdd_loop_and_runtime_inputs(self):
+        """Test frontend L3 template uses canonical UTDD steps and runtime-facing env inputs."""
+        import yaml
+
+        template_path = Path("spec-global/departments/dev/workflows/templates/feature-fe-l3-template.yaml")
+        if not template_path.exists():
+            pytest.skip("Feature frontend L3 template not found")
+
+        with open(template_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["id"] == "template.dev.feature_fe_l3"
+        assert data["contracts"]["stage_definition"] == "../../stages/l3-frontend-development.yaml"
+        assert data["contracts"]["utdd_guide"] == "../../docs/frontend-utdd-execution-guide.md"
+        assert [step["id"] for step in data["steps"]] == [
+            "write_ut",
+            "implement_ui",
+            "refactor_ui",
+            "coverage_gate",
+            "publish_frontend",
+        ]
+        assert data["steps"][3]["config"] == {
+            "coverage_threshold": 80,
+            "coverage_retry_target": "write_ut",
+        }
+        assert "env_ref" in data["instance_schema"]["optional_fields"]
+        assert "base_url" in data["instance_schema"]["optional_fields"]
+        assert "runtime_config_ref" in data["instance_schema"]["optional_fields"]
+        assert "fe_artifact_ref" in data["instance_schema"]["output_fields"]
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
