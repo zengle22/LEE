@@ -2,12 +2,14 @@
 id: TECH-FEAT-081-001
 ssot_type: tech
 title: FEAT-081 Workflow-First CLI 技术架构
-status: active
+status: frozen
 version: v1
 parent_id: FEAT-081
-derived_from_ids: []
+derived_from_ids:
+- ADR-006
 source_refs:
-- FEAT-081
+- FEAT-081#scope
+- FEAT-081#acceptance
 - ADR-006
 - UI-FEAT-081-001
 - TASK-FEAT-081-001

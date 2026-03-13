@@ -1,18 +1,27 @@
 ---
 id: TECH-FEAT-084-001
 ssot_type: tech
-title: tech_design
-status: active
+title: Workflow Template 与 Runtime Instance 边界定义 - 技术架构
+status: frozen
 version: v1
 parent_id: FEAT-084
-derived_from_ids: []
-source_refs: []
-owner: null
-tags: []
+derived_from_ids:
+- ADR-009
+source_refs:
+- FEAT-084#scope
+- FEAT-084#acceptance
+owner: dev
+tags:
+- tech
+- workflow
+- template
+- runtime
 properties:
   contract_key: tech_spec
   identity_kind: ssot
 ---
+
+# Workflow Template 与 Runtime Instance 边界定义 - 技术架构
 
 contract_type: frozen-technical-architecture
 contract_version: '1.0'

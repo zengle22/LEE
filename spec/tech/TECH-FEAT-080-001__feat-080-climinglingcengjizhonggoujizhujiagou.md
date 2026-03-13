@@ -2,17 +2,26 @@
 id: TECH-FEAT-080-001
 ssot_type: tech
 title: FEAT-080 CLI命令层级重构技术架构
-status: active
+status: frozen
 version: v1
 parent_id: FEAT-080
-derived_from_ids: []
-source_refs: []
-owner: null
-tags: []
+derived_from_ids:
+- ADR-006
+source_refs:
+- FEAT-080#scope
+- FEAT-080#acceptance
+owner: dev
+tags:
+- tech
+- cli
+- governance
+- workflow-first
 properties:
   contract_key: tech_spec
   identity_kind: ssot
 ---
+
+# FEAT-080 CLI命令层级重构技术架构
 
 contract_type: frozen-technical-architecture
 contract_version: '1.0'

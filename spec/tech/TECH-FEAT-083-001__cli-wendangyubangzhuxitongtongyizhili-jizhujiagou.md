@@ -2,17 +2,26 @@
 id: TECH-FEAT-083-001
 ssot_type: tech
 title: CLI 文档与帮助系统统一治理 - 技术架构
-status: active
+status: frozen
 version: v1
 parent_id: FEAT-083
-derived_from_ids: []
-source_refs: []
-owner: null
-tags: []
+derived_from_ids:
+- ADR-006
+source_refs:
+- FEAT-083#scope
+- FEAT-083#acceptance
+owner: dev
+tags:
+- tech
+- cli
+- docs
+- workflow-first
 properties:
   contract_key: tech_spec
   identity_kind: ssot
 ---
+
+# CLI 文档与帮助系统统一治理 - 技术架构
 
 contract_type: frozen-technical-architecture
 contract_version: v1
