@@ -2,6 +2,9 @@
 # Phase 内 OpenSpec 子流程 - L1 级研发流程
 # STATUS: deprecated
 # NOTE: 保留为历史参考，不再作为 Dev 部门 canonical 主入口
+# lifecycle_status: deprecated
+# replacement: template.dev.feature_delivery_l2
+# migration_deadline: 2026-06-30
 #
 # v1.5 变更: 强化防跳过/防绕过机制
 #   - 新增 enforcement 配置节，强制所有步骤执行

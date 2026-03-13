@@ -1,6 +1,10 @@
 # Migrated by lint_l3_templates.py on 2026-03-05T16:41:22.369772
 # STATUS: deprecated
 # NOTE: 保留历史参考，不再作为 Dev 部门推荐 Bugfix 主入口
+# lifecycle_status: deprecated
+# replacement: template.dev.bugfix_delivery_l2
+# migration_deadline: 2026-06-30
+
 kind: l3_workflow_template
 version: '1.0'
 id: template.dev.bug_fix
