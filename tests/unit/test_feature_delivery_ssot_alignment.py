@@ -139,3 +139,33 @@ def test_early_bugfix_feat_matches_canonical_bugfix_contract():
     assert "bug_ssot_id" in text
     assert "batch_approval_record" in text
     assert "Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence" in text
+
+
+def test_bugfix_main_lineage_matches_canonical_stage_model():
+    feat_src = Path("spec/requirements/features/FEAT-SRC-009-002__bugfix-delivery-l2-gongzuoliudingyi.md")
+    tech = Path("spec/tech/TECH-FEAT-SRC-009-002-001__bugfix-delivery-l2-gongzuoliudingyi-frozenjizhujia.md")
+    task = Path(
+        "spec/tasks/FEAT-SRC-009-002/"
+        "TASK-FEAT-SRC-009-002-001__bugfix-l2-gongzuoliuguifanyujiegoudingyi.md"
+    )
+    feat_text = feat_src.read_text(encoding="utf-8")
+    tech_text = tech.read_text(encoding="utf-8")
+    task_text = task.read_text(encoding="utf-8")
+
+    assert "batch_approval_record" in feat_text
+    assert "Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack" in feat_text
+    assert "Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack" in tech_text
+    assert "输入规范五字段定义" in task_text
+
+
+def test_legacy_bugfix_feature_specs_match_canonical_stage_model():
+    feat_120 = Path("spec/requirements/features/FEAT-120__bugfix-delivery-l2-workflow-definition.md")
+    feat_131 = Path("spec/requirements/features/FEAT-131__bugfix-delivery-l2-gongzuoliudingyi.md")
+    task_130 = Path("spec/tasks/FEAT-130/TASK-FEAT-130-001__feature-bugfix-delivery-l2-gongzuoliumobanshixian.md")
+    feat_120_text = feat_120.read_text(encoding="utf-8")
+    feat_131_text = feat_131.read_text(encoding="utf-8")
+    task_130_text = task_130.read_text(encoding="utf-8")
+
+    assert "Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence" in feat_120_text
+    assert "batch_approval_record" in feat_131_text
+    assert "Bugfix Delivery L2: Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack" in task_130_text

@@ -61,8 +61,8 @@ Bugfix Delivery L2 主链技术架构
 ## Input To Delivery Mapping
 
 ### FEAT Processing Projection
-- 校验输入完整性（bug_ssot_id, severity, reproduction_evidence）
-- 定义 L3 阶段编排顺序（Triage → Fix → Verification → Evidence Pack）
+- 校验输入完整性（bug_ssot_id, severity, reproduction_evidence, batch_mode, batch_approval_record）
+- 定义 L3 阶段编排顺序（Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack）
 - 定义 Bugfix 状态机
 - 集成 Bugfix 粒度控制规则与 batch 例外审批机制
 - 设计与上游 BUG 源的契约接口
@@ -79,7 +79,7 @@ Bugfix Delivery L2 主链技术架构
 ### Acceptance Alignment
 - Bugfix Delivery L2 工作流定义文档已冻结并通过评审
 - 输入规范包含 bug_ssot_id, severity, reproduction_evidence 字段定义
-- L3 阶段编排顺序明确定义为 Triage → Fix → Verification → Evidence Pack
+- L3 阶段编排顺序明确定义为 Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack
 - 状态机定义完整
 - Bugfix 粒度控制规则已集成，默认单 bug 与五同失败后的审批例外路径都已文档化
 - 与上游 BUG 源的契约接口文档化

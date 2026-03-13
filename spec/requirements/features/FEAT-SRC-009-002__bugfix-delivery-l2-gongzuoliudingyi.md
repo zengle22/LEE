@@ -48,6 +48,8 @@ Dev 部门获得从 BUG 到 Evidence Pack 的完整 Bugfix 交付主链，实现
 - {'bug_ssot_id': 'BUG 的正式 SSOT ID'}
 - {'severity': 'BUG 严重程度分级'}
 - {'reproduction_evidence': '复现证据'}
+- {'batch_mode': '是否尝试 batch 修复'}
+- {'batch_approval_record': '五同不满足时的审批例外记录（可选）'}
 # Input Contract
 
 required_artifacts:
@@ -63,10 +65,10 @@ consumption_rules:
 - reproduction_evidence 必须可验证
 # Processing
 
-- 校验输入完整性（bug_ssot_id, severity, reproduction_evidence）
-- 定义 L3 阶段编排顺序（Triage → Fix → Verification → Evidence Pack）
+- 校验输入完整性（bug_ssot_id, severity, reproduction_evidence, batch_mode, batch_approval_record）
+- 定义 L3 阶段编排顺序（Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack）
 - 定义 Bugfix 状态机
-- 集成 Bugfix 粒度控制规则
+- 集成 Bugfix 粒度控制规则与 batch 例外审批机制
 - 设计与上游 BUG 源的契约接口
 - 设计与下游 Evidence Pack 的契约接口
 # Outputs
@@ -81,9 +83,9 @@ consumption_rules:
 
 - Bugfix Delivery L2 工作流定义文档已冻结并通过评审
 - 输入规范包含 bug_ssot_id, severity, reproduction_evidence 字段定义
-- L3 阶段编排顺序明确定义为 Triage → Fix → Verification → Evidence Pack
+- L3 阶段编排顺序明确定义为 Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack
 - 状态机定义完整
-- Bugfix 粒度控制规则已集成
+- Bugfix 粒度控制规则已集成，默认单 bug 与五同失败后的审批例外路径都已文档化
 - 与上游 BUG 源的契约接口文档化
 - 与下游 Evidence Pack 的契约接口文档化
 - 不包含 L3 阶段具体实现逻辑
@@ -109,7 +111,7 @@ consumption_rules:
   scenario: Bugfix L3 阶段编排定义
   given: Bugfix L2 框架包含阶段编排定义
   when: 检查阶段编排章节
-  then: 明确定义 Triage → Fix → Verification → Evidence Pack 顺序
+  then: 明确定义 Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack 顺序
   trace_hints:
   - TECH
 - id: AC-002-004

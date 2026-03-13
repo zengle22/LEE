@@ -22,8 +22,8 @@ properties:
 # Description
 
 基于 TECH-EPIC-SRC-009 架构设计，实现两个核心 L2 工作流模板：
-1. Feature Delivery L2: Contract → Backend → Frontend → Integration → Evidence Pack
-2. Bugfix Delivery L2: Triage → Fix → Verification → Evidence Pack
+1. Feature Delivery L2: Contract → Backend / Frontend 并行 → Integration → Evidence Pack
+2. Bugfix Delivery L2: Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack
 包含状态机定义、阶段编排、输入输出契约接口。
 
 ## Acceptance Mapping

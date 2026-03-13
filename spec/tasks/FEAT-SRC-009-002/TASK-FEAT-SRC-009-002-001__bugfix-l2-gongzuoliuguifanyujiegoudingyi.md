@@ -22,12 +22,12 @@ frozen_at: '2026-03-13T00:38:12.841361'
 
 # Description
 
-基于 FEAT-SRC-009-002 和 ADR-008，建立 Bugfix Delivery L2 工作流的正式规范文档，明确：(1) 输入规范三字段定义 (bug_ssot_id, severity, reproduction_evidence)；(2)L3 阶段编排顺序 Triage→Root Cause→Fix Design→Fix Implementation→Verification→Evidence Pack；(3) 状态机定义；(4) 粒度控制规则 (默认单 bug，五同原则 batch 例外)；(5) 与上游 BUG 源和下游 Evidence Pack 的契约接口定义。输出为冻结状态的 L2 工作流定义文档。
+基于 FEAT-SRC-009-002 和 ADR-008，建立 Bugfix Delivery L2 工作流的正式规范文档，明确：(1) 输入规范五字段定义 (bug_ssot_id, severity, reproduction_evidence, batch_mode, batch_approval_record)；(2)L3 阶段编排顺序 Triage→Root Cause→Fix Design→Fix Implementation→Verification→Evidence Pack；(3) 状态机定义；(4) 粒度控制规则 (默认单 bug，五同原则 batch 例外)；(5) 与上游 BUG 源和下游 Evidence Pack 的契约接口定义。输出为冻结状态的 L2 工作流定义文档。
 
 ## Acceptance Mapping
 - FEAT-SRC-009-002 / AC-002-001: Bugfix L2 工作流定义文档已冻结并通过评审
-- FEAT-SRC-009-002 / AC-002-002: 输入规范包含 bug_ssot_id, severity, reproduction_evidence 完整定义
-- FEAT-SRC-009-002 / AC-002-003: L3 阶段编排顺序明确定义为 Triage → Fix → Verification → Evidence Pack
+- FEAT-SRC-009-002 / AC-002-002: 输入规范包含 bug_ssot_id, severity, reproduction_evidence, batch_mode, batch_approval_record 完整定义
+- FEAT-SRC-009-002 / AC-002-003: L3 阶段编排顺序明确定义为 Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack
 - FEAT-SRC-009-002 / AC-002-004: 粒度控制规则已集成默认规则和五同原则 batch 例外机制
 
 ## Prerequisites
@@ -67,7 +67,7 @@ preconditions:
 
 ## Definition Of Done
 - Bugfix L2 工作流定义文档已创建并标记为 frozen 状态
-- 输入规范三字段定义完整并通过评审
+- 输入规范五字段定义完整并通过评审
 - L3 阶段编排顺序明确定义并通过评审
 - 状态机定义完整并通过评审
 - 粒度控制规则文档化 (默认单 bug + 五同 batch 例外)
