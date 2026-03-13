@@ -22,11 +22,11 @@ frozen_at: '2026-03-13T00:06:13.724684'
 
 # Description
 
-基于TASK-FEAT-SRC-009-001-001定义的规范，实现template.dev.feature_delivery_l2工作流模板，包括：(1)模板YAML结构定义；(2)阶段编排逻辑实现；(3)输入参数绑定；(4)阶段间数据传递机制；(5)状态转换钩子定义。模板必须支持TECH→Contract→FE/BE→Integration→Evidence顺序编排，并阻止绕过TECH或证据收口的路径。
+基于TASK-FEAT-SRC-009-001-001定义的规范，实现template.dev.feature_delivery_l2工作流模板，包括：(1)模板YAML结构定义；(2)阶段编排逻辑实现；(3)输入参数绑定；(4)阶段间数据传递机制；(5)状态转换钩子定义。模板必须支持TECH→Contract→Backend/Frontend并行→Integration→Evidence顺序编排，并阻止绕过TECH或证据收口的路径。
 
 ## Acceptance Mapping
 - FEAT-SRC-009-001 / AC-001-001: L2工作流模板实现并通过验证
-- FEAT-SRC-009-001 / AC-001-003: 模板正确实现Contract→Backend→Frontend→Integration→Evidence Pack阶段编排
+- FEAT-SRC-009-001 / AC-001-003: 模板正确实现Contract→Backend/Frontend并行→Integration→Evidence Pack阶段编排
 
 ## Prerequisites
 - TASK-FEAT-SRC-009-001-001完成
@@ -64,8 +64,8 @@ preconditions:
 
 ## Definition Of Done
 - feature-delivery-l2-template.yaml模板文件已创建
-- 模板包含完整的阶段编排定义(tech_design→contract_design→frontend_dev→backend_dev→integration→evidence_pack→smoke_gate)
-- 输入参数绑定完整(formal_ssot_id, source_refs, governing_adrs, repo_context)
+- 模板包含完整的阶段编排定义(tech_design→contract_design→backend_dev/frontend_dev并行→integration→evidence_pack→smoke_gate)
+- 输入参数绑定完整(formal_ssot_id, source_refs, governing_adrs, repo_context, repo_frontend, repo_backend)
 - 阶段间数据传递机制已定义
 - 状态转换钩子已配置
 - 模板通过语法和结构验证

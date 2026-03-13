@@ -29,7 +29,7 @@ scope:
 - Evidence Pack 收口机制：作为证据轴正式收口对象，确保所有交付可审计、可追踪
 - L3 阶段家族补齐：Contract Design、Backend Development、Frontend Development、Integration、Evidence Pack 等阶段定义
 - 旧路径降级治理：phase-openspec-flow 等旧路径标记为 deprecated，README/WORKFLOWS 更新指向新主入口
-- 共享输入规范落地：所有 Dev workflow 统一遵守输入规范（formal_ssot_id, source_refs, governing_adrs, repo_context）
+- 共享输入规范落地：所有 Dev workflow 统一遵守共享输入规范，并在 Feature Delivery L2 中显式声明 formal_ssot_id、source_refs、governing_adrs、repo_context、repo_frontend、repo_backend
 - Bugfix 粒度控制规则：默认 1 bug → 1 bugfix workflow instance，五同原则 batch 例外机制
 non_goals:
 - 修改需求轴上游（FEAT 定义方式）——仅消费 FEAT，不改变其产生机制
