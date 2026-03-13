@@ -116,6 +116,9 @@ Dev 部门当前只保留两个主入口：
 - 只有满足五同原则时才允许 `batch_mode`
 - `merge_or_reject` 前必须完成 `evidence_pack`
 
+粒度控制规范见：
+`governance/bugfix-granularity-control-spec.yaml`
+
 ## Deprecated / Draft
 
 以下资产不再作为新任务入口：
