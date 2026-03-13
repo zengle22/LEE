@@ -479,6 +479,34 @@ def test_source_normalization_derives_meaningful_src_title_from_problem_statemen
     assert output["title"] == "QA Department SSOT Alignment and Workflow Reframe"
 
 
+def test_source_normalization_repairs_prose_output_from_raw_requirement(runner):
+    step = SimpleNamespace(id="source_normalization", agent_id="agent.analysis.product_goal", config={})
+    business_output, structured_payload = runner._normalize_business_payload(
+        step=step,
+        workflow_id="wf-src-003",
+        business_output="# waiting for input",
+        structured_payload={},
+        instance_data={
+            "params": {
+                "raw_requirement": """
+当前问题：
+1. 现有 reverse workflow 只产出 EPIC/FEAT，缺少 SRC。
+目标：
+1. 保留 core.reverse-epic-feat 作为 workflow key，但升级其 canonical 语义。
+约束：
+1. 不新增平行 workflow key。
+2. formal object 只直接物化 SRC / EPIC / FEAT。
+""".strip()
+            }
+        },
+    )
+
+    assert "reverse-epic-feat" in business_output["title"]
+    assert "缺少 SRC" in business_output["problem_statement"]
+    assert business_output["ssot"]["ssot_type"] == "SRC"
+    assert structured_payload["business_output"]["freeze_meta"]["status"] == "draft"
+
+
 def test_epic_designer_synthesizes_epic_source_refs_and_derived_from(runner):
     step = SimpleNamespace(id="epic_design", agent_id="agent.product.epic_designer", config={})
     business_output = {

@@ -3169,6 +3169,103 @@ class LLMRunner(StepRunnerBase):
         return "SRC"
 
     @staticmethod
+    def _normalize_source_freeze_payload(
+        step,
+        business_output: Any,
+        structured_payload: Any,
+        instance_data: Optional[Dict[str, Any]] = None,
+    ) -> tuple[Any, Any]:
+        if getattr(step, "id", "") != "source_normalization":
+            return business_output, structured_payload
+
+        required_fields = {
+            "source_id",
+            "title",
+            "problem_statement",
+            "target_user",
+            "business_motivation",
+            "constraints",
+            "freeze_meta",
+            "ssot",
+        }
+        if isinstance(business_output, dict) and required_fields.issubset(business_output.keys()):
+            return business_output, structured_payload
+
+        params = instance_data.get("params") if isinstance(instance_data, dict) else {}
+        params = params if isinstance(params, dict) else {}
+        step_outputs = instance_data.get("step_outputs") if isinstance(instance_data, dict) else {}
+        step_outputs = step_outputs if isinstance(step_outputs, dict) else {}
+
+        raw_requirement = str(params.get("raw_requirement") or "").strip()
+        raw_intake = step_outputs.get("raw_input_intake") if isinstance(step_outputs.get("raw_input_intake"), dict) else {}
+        raw_intake_text = str(raw_intake.get("generated_text") or "").strip()
+        seed_text = raw_requirement or raw_intake_text or (
+            business_output if isinstance(business_output, str) else ""
+        )
+        seed_lines = [line.strip() for line in seed_text.splitlines() if line.strip()]
+
+        def _extract_numbered_block(label: str) -> List[str]:
+            match = re.search(
+                rf"{re.escape(label)}[:：]\s*(.*?)(?=\n\s*[^\n]+[:：]\s*$|\n\s*\d+\.\s|\Z)",
+                seed_text,
+                flags=re.S,
+            )
+            if not match:
+                return []
+            items: List[str] = []
+            for line in match.group(1).splitlines():
+                normalized = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
+                if normalized:
+                    items.append(normalized)
+            return items
+
+        title_line = next((line for line in seed_lines if "reverse-epic-feat" in line or "SSOT" in line), "")
+        title = re.sub(r"^[#*\-\s]+", "", title_line).strip(" 。:：") or "reverse-epic-feat-l3 对齐现行 SSOT 链逆向升级"
+        problem_statement = " ".join(_extract_numbered_block("当前问题")) or (
+            raw_requirement[:400].strip() if raw_requirement else "当前 reverse workflow 无法完整承接现行 SSOT 文档链。"
+        )
+        business_motivation = " ".join(_extract_numbered_block("目标")) or problem_statement
+        constraints = _extract_numbered_block("约束") or [
+            "不新增平行 workflow key",
+            "formal object 只直接物化 SRC / EPIC / FEAT",
+            "UI / TECH / TASK / TESTSET / TC / REPORT / BUG / EVI 默认只产 seed、view、handoff/index",
+            "输出路径必须对齐当前 canonical SSOT 目录",
+        ]
+        target_users = []
+        if "产品经理" in raw_intake_text or "Product Manager" in raw_intake_text:
+            target_users.append("产品经理")
+        if "架构" in raw_intake_text or "开发" in raw_intake_text:
+            target_users.extend(["架构师", "研发工程师"])
+        if "QA" in raw_intake_text or "测试" in raw_intake_text:
+            target_users.append("QA 工程师")
+        if "审查" in raw_intake_text or "Reviewer" in raw_intake_text:
+            target_users.append("治理审查员")
+        if not target_users:
+            target_users = ["产品经理", "研发工程师", "QA 工程师", "治理审查员"]
+
+        adr_refs = sorted(set(re.findall(r"ADR-\d+", seed_text, flags=re.I)))
+        synthesized = {
+            "source_id": "SRC-DRAFT",
+            "title": title,
+            "problem_statement": problem_statement,
+            "target_user": list(dict.fromkeys(target_users)),
+            "trigger_context": title,
+            "business_motivation": business_motivation,
+            "constraints": constraints,
+            "source_refs": [ref.upper() for ref in adr_refs],
+            "freeze_meta": {"status": "draft"},
+            "ssot": {
+                "identity_kind": "ssot",
+                "ssot_type": "SRC",
+            },
+        }
+        payload = LLMRunner._ensure_structured_envelope(
+            business_output=synthesized,
+            structured_payload=structured_payload,
+        )
+        return synthesized, payload
+
+    @staticmethod
     def _resolve_changed_file_paths(
         *,
         workspace: str,
@@ -4498,6 +4595,12 @@ class LLMRunner(StepRunnerBase):
         structured_payload: Any,
         instance_data: Optional[Dict[str, Any]] = None,
     ) -> tuple[Any, Any]:
+        business_output, structured_payload = LLMRunner._normalize_source_freeze_payload(
+            step=step,
+            business_output=business_output,
+            structured_payload=structured_payload,
+            instance_data=instance_data,
+        )
         business_output, structured_payload = LLMRunner._normalize_requirement_decomposer_payload(
             step=step,
             business_output=business_output,

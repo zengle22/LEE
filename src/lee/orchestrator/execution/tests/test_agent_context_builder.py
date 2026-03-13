@@ -246,6 +246,29 @@ def test_collect_step_inputs_accepts_freeze_ref_alias(builder):
     assert resolved["epic_freeze"]["artifact_id"] == "EPIC-001"
 
 
+def test_collect_step_inputs_falls_back_to_single_dependency_symbol_output(builder):
+    step = SimpleNamespace(
+        id="source_normalization",
+        inputs=[{"source": "raw_source_input", "required": True}],
+        depends_on=["raw_input_intake"],
+        outputs=[],
+    )
+    workflow_context = {
+        "template_id": "workflow.product.task.raw_to_src",
+        "data": {
+            "step_outputs": {
+                "raw_input_intake": {
+                    "generated_text": "Reverse workflow SSOT chain upgrade analysis",
+                }
+            }
+        },
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["raw_source_input"]["generated_text"].startswith("Reverse workflow SSOT chain")
+
+
 def test_collect_step_inputs_sanitizes_gate_frozen_inputs(builder):
     step = SimpleNamespace(
         id="delivery_plan_validation",

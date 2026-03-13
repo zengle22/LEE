@@ -729,16 +729,26 @@ Verification items:
                 step_outputs=step_outputs,
             )
 
-            if value is None and isinstance(source, str) and source.endswith("_specs"):
+            if value is None and isinstance(source, str):
                 alias_step_ids = self._resolve_symbol_step_aliases(
                     workflow_context=workflow_context,
                     source=source,
+                    step=step,
+                    step_outputs=step_outputs,
                 )
                 for step_id in alias_step_ids:
                     output = step_outputs.get(step_id)
                     if not isinstance(output, dict):
                         continue
                     extracted = self._extract_authoritative_step_payload(output)
+                    if extracted is None:
+                        extracted = self._sanitize_prompt_payload(output)
+                    if not self._payload_has_signal(extracted):
+                        generated_text = output.get("generated_text")
+                        if isinstance(generated_text, str) and generated_text.strip():
+                            extracted = {
+                                "generated_text": generated_text[: self._PROMPT_FALLBACK_TEXT_LIMIT].rstrip()
+                            }
                     if extracted is not None:
                         value = extracted
                         break
@@ -793,6 +803,8 @@ Verification items:
         *,
         workflow_context: Dict[str, Any],
         source: str,
+        step=None,
+        step_outputs: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
         if not isinstance(source, str) or not source.strip():
             return []
@@ -807,26 +819,37 @@ Verification items:
             if candidate.exists():
                 template_path = candidate
             else:
-                return []
-
-        try:
-            raw_doc = yaml.safe_load(template_path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            return []
+                template_path = None
 
         aliases: List[str] = []
-        for stage in raw_doc.get("stages", []) if isinstance(raw_doc.get("stages"), list) else []:
-            if not isinstance(stage, dict):
-                continue
-            for step in stage.get("steps", []) if isinstance(stage.get("steps"), list) else []:
-                if not isinstance(step, dict):
+        if template_path is not None:
+            try:
+                raw_doc = yaml.safe_load(template_path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                raw_doc = {}
+
+            for stage in raw_doc.get("stages", []) if isinstance(raw_doc.get("stages"), list) else []:
+                if not isinstance(stage, dict):
                     continue
-                step_id = step.get("id")
-                if not step_id:
-                    continue
-                for output in step.get("outputs", []) if isinstance(step.get("outputs"), list) else []:
-                    if isinstance(output, dict) and output.get("symbol") == source:
-                        aliases.append(step_id)
+                for step_def in stage.get("steps", []) if isinstance(stage.get("steps"), list) else []:
+                    if not isinstance(step_def, dict):
+                        continue
+                    step_id = step_def.get("id")
+                    if not step_id:
+                        continue
+                    for output in step_def.get("outputs", []) if isinstance(step_def.get("outputs"), list) else []:
+                        if isinstance(output, dict) and output.get("symbol") == source:
+                            aliases.append(step_id)
+
+        if aliases:
+            return aliases
+
+        depends_on = getattr(step, "depends_on", None)
+        if isinstance(depends_on, list) and len(depends_on) == 1:
+            candidate_step = depends_on[0]
+            if isinstance(candidate_step, str) and candidate_step.strip():
+                if not isinstance(step_outputs, dict) or candidate_step in step_outputs:
+                    return [candidate_step]
         return aliases
 
     @staticmethod
