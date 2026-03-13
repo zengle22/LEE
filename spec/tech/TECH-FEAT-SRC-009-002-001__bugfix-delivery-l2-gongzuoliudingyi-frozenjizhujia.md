@@ -41,13 +41,13 @@ Bugfix Delivery L2 主链技术架构
 | --- | --- | --- |
 | `bug_intake` | BUG SSOT Intake | 以 bug_ssot_id、severity、reproduction_evidence 作为唯一事实输入。 |
 | `workflow_definition` | Checked-in YAML Workflow Template | 定义 triage -> root_cause -> fix_design -> fix_implementation -> verification -> evidence_pack 主链。 |
-| `policy_control` | Granularity Policy Engine | 默认单 bug，满足同根因/同模块/同发布窗口时才允许 batch。 |
+| `policy_control` | Granularity Policy Engine | 默认单 bug；五同原则全部满足时允许标准 batch，未满足时仅在存在已审批 `batch_approval_record` 的情况下允许例外 batch。 |
 | `evidence_trace` | Evidence Pack Traceability | 把修复、验证、回归证据收口到 bugfix evidence。 |
 
 ## Core Components
 
 ### BugfixDeliveryTemplate
-- 职责：编排标准 bugfix 流程并挂接 batch_mode 判断。
+- 职责：编排标准 bugfix 流程并挂接 batch_mode 判断，以及 `batch_approval_record` 例外审批通道。
 - 依赖：GranularityPolicyEvaluator
 
 ### BugEvidenceResolver
@@ -64,7 +64,7 @@ Bugfix Delivery L2 主链技术架构
 - 校验输入完整性（bug_ssot_id, severity, reproduction_evidence）
 - 定义 L3 阶段编排顺序（Triage → Fix → Verification → Evidence Pack）
 - 定义 Bugfix 状态机
-- 集成 Bugfix 粒度控制规则
+- 集成 Bugfix 粒度控制规则与 batch 例外审批机制
 - 设计与上游 BUG 源的契约接口
 - 设计与下游 Evidence Pack 的契约接口
 
@@ -81,7 +81,7 @@ Bugfix Delivery L2 主链技术架构
 - 输入规范包含 bug_ssot_id, severity, reproduction_evidence 字段定义
 - L3 阶段编排顺序明确定义为 Triage → Fix → Verification → Evidence Pack
 - 状态机定义完整
-- Bugfix 粒度控制规则已集成
+- Bugfix 粒度控制规则已集成，默认单 bug 与五同失败后的审批例外路径都已文档化
 - 与上游 BUG 源的契约接口文档化
 - 与下游 Evidence Pack 的契约接口文档化
 - 不包含 L3 阶段具体实现逻辑
@@ -96,7 +96,7 @@ Bugfix Delivery L2 主链技术架构
 ## Risks And Fallback
 
 - `R-001` 多 bug 混装导致根因和证据失真
-  处理：默认单 bug；batch 只在规则满足时开放。
+  处理：默认单 bug；batch 仅在五同通过时直接开放，五同不满足时必须依赖已审批 `batch_approval_record`。
 - `R-002` BUG 复现证据质量不足
   处理：把 reproduction_evidence 作为硬输入契约字段，不满足时直接拒绝进入 L2。
 

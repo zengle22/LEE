@@ -59,3 +59,37 @@ def test_feature_delivery_followup_tasks_match_canonical_l2_contract():
     assert "repo_frontend, repo_backend" in impl_text
     assert "Contract→Backend/Frontend并行→Integration→Evidence Pack" in governance_text
     assert "repo_frontend, repo_backend" in governance_text
+
+
+def test_bugfix_tech_doc_matches_exception_approval_contract():
+    tech_doc = Path(
+        "spec/tech/TECH-FEAT-SRC-009-002-001__bugfix-delivery-l2-gongzuoliudingyi-frozenjizhujia.md"
+    )
+    text = tech_doc.read_text(encoding="utf-8")
+
+    assert "batch_approval_record" in text
+    assert "五同失败后的审批例外" in text or "审批例外路径" in text
+
+
+def test_bugfix_followup_tasks_match_exception_approval_contract():
+    template_task = Path(
+        "spec/tasks/FEAT-SRC-009-002/"
+        "TASK-FEAT-SRC-009-002-002__bugfix-l2-gongzuoliumobanshixian.md"
+    )
+    policy_task = Path(
+        "spec/tasks/FEAT-SRC-009-002/"
+        "TASK-FEAT-SRC-009-002-004__bugfix-lidukongzhicelveyuzhuangtaijishixian.md"
+    )
+    governance_task = Path(
+        "spec/tasks/FEAT-SRC-009-002/"
+        "TASK-FEAT-SRC-009-002-005__yanzhengceshiyuwendangzhili.md"
+    )
+    template_text = template_task.read_text(encoding="utf-8")
+    policy_text = policy_task.read_text(encoding="utf-8")
+    governance_text = governance_task.read_text(encoding="utf-8")
+
+    assert "batch_approval_record" in template_text
+    assert "审批例外" in template_text
+    assert "batch_approval_record" in policy_text
+    assert "审批例外路径" in policy_text
+    assert "审批例外 batch 模式" in governance_text
