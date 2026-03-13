@@ -161,6 +161,18 @@ def test_integration_feat_matches_canonical_input_boundary():
     assert "contract/mock 模式或 environment-backed 模式" in text
 
 
+def test_evidence_pack_feat_matches_canonical_handoff_contract():
+    feat_126 = Path("spec/requirements/features/FEAT-126__evidence-pack-stage-definition-closing-mechanism.md")
+    text = feat_126.read_text(encoding="utf-8")
+
+    assert "integration_outputs" in text
+    assert "verification_results" in text
+    assert "verification_summary_ref" in text
+    assert "delivery_candidate_ref" in text
+    assert "audit_declaration_ref" in text
+    assert "smoke_gate_inputs" in text
+
+
 def test_early_bugfix_feat_matches_canonical_bugfix_contract():
     feat_109 = Path("spec/requirements/features/FEAT-109__bugfix-delivery-l2-workflow-definition.md")
     text = feat_109.read_text(encoding="utf-8")
