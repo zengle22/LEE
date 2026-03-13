@@ -32576,6 +32576,49 @@
         "placement_dir": "spec/tasks/FEAT-143",
         "derived_from_ids": []
       }
+    },
+    "SRC-028": {
+      "id": "SRC-028",
+      "type": "DOCUMENT",
+      "category": "ssot_object",
+      "status": "FROZEN",
+      "path": "spec/source/SRC-028__reverse-epic-feat-l3-duiqixianxing-ssot-liannixian.md",
+      "path_root": ".",
+      "external_path": null,
+      "adopt_mode": null,
+      "run_id": "wf_task_24e85fc3",
+      "workflow_id": null,
+      "department": null,
+      "depends_on": [],
+      "derived_from": null,
+      "consumed_by": [],
+      "implements": [],
+      "verifies": [],
+      "supersedes": null,
+      "governance_kind": "transfer",
+      "git_sha": null,
+      "git_repo_path": null,
+      "title": "reverse-epic-feat-l3 对齐现行 SSOT 链逆向升级",
+      "description": "",
+      "tags": [],
+      "size_bytes": 1033,
+      "content_hash": "0138cf591396e4dc919a17afe3d2bbb0f7527eff9d43c398e69411bb82c8170a",
+      "created_at": "2026-03-13T13:08:53.502507",
+      "updated_at": "2026-03-13T13:10:35.032524",
+      "frozen_at": "2026-03-13T13:10:35.032520",
+      "archived_at": null,
+      "properties": {
+        "contract_key": "src",
+        "identity_kind": "ssot",
+        "ssot_type": "src",
+        "parent_id": null,
+        "source_refs": [],
+        "related_ids": [],
+        "owner": null,
+        "version": "v1",
+        "placement_dir": "spec/source",
+        "derived_from_ids": []
+      }
     }
   }
 }
