@@ -2069,16 +2069,59 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             "l3_count": len(l3_ids),
             "l3_outputs": {},
         }
+        aggregated_handoffs: Dict[str, Any] = {}
 
         for l3_id in l3_ids:
             l3_instance = await self.store.get_workflow(l3_id)
             if l3_instance:
+                handoff_refs = self._extract_l3_handoff_refs(l3_instance.data)
+                aggregated_handoffs.update(handoff_refs)
                 outputs["l3_outputs"][l3_id] = {
                     "status": l3_instance.status.value,
                     "data": l3_instance.data,
+                    "handoff_refs": handoff_refs,
                 }
 
+        if aggregated_handoffs:
+            outputs["handoff_refs"] = aggregated_handoffs
+
         return outputs
+
+    @staticmethod
+    def _extract_l3_handoff_refs(instance_data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Extract canonical handoff refs from an L3 instance payload."""
+        if not isinstance(instance_data, dict):
+            return {}
+
+        handoff_keys = (
+            "tech_spec_ref",
+            "decision_refs",
+            "api_contract_ref",
+            "data_contract_ref",
+            "event_contract_ref",
+            "contract_review_ref",
+            "contract_freeze_ref",
+            "contract_hash",
+            "be_artifact_ref",
+            "fe_artifact_ref",
+            "integration_report_ref",
+            "evidence_pack_ref",
+            "smoke_gate_inputs",
+            "merge_or_reject_input",
+        )
+
+        collected: Dict[str, Any] = {}
+        step_outputs = instance_data.get("step_outputs", {}) or {}
+
+        for key in handoff_keys:
+            if key in instance_data:
+                collected[key] = instance_data[key]
+                continue
+            for step_payload in step_outputs.values():
+                if isinstance(step_payload, dict) and key in step_payload:
+                    collected[key] = step_payload[key]
+                    break
+        return collected
 
     # ============ L2/L3 Progress Tracking (P2) ============
 

@@ -380,6 +380,32 @@ class TestOrchestratorL2Methods:
         assert orchestrator._derive_l2_lifecycle_state(evidence) == "Evidence Pack Produced"
         assert orchestrator._derive_l2_lifecycle_state(closed) == "Closed"
 
+    def test_extract_l3_handoff_refs_collects_contract_outputs(self, orchestrator):
+        """Test runtime handoff extraction preserves canonical contract refs for downstream phases."""
+        instance_data = {
+            "step_outputs": {
+                "api_contract_design": {"api_contract_ref": "CONTRACT-API-001"},
+                "data_contract_design": {"data_contract_ref": "CONTRACT-DATA-001"},
+                "event_contract_design": {"event_contract_ref": "CONTRACT-EVENT-001"},
+                "contract_self_review": {"contract_review_ref": "REPORT-REVIEW-001"},
+                "contract_freeze": {
+                    "contract_freeze_ref": "CONTRACT-FREEZE-001",
+                    "contract_hash": "sha256:test",
+                },
+            }
+        }
+
+        refs = orchestrator._extract_l3_handoff_refs(instance_data)
+
+        assert refs == {
+            "api_contract_ref": "CONTRACT-API-001",
+            "data_contract_ref": "CONTRACT-DATA-001",
+            "event_contract_ref": "CONTRACT-EVENT-001",
+            "contract_review_ref": "REPORT-REVIEW-001",
+            "contract_freeze_ref": "CONTRACT-FREEZE-001",
+            "contract_hash": "sha256:test",
+        }
+
 
 class TestYamlTemplates:
     """Tests for YAML template files."""
