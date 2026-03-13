@@ -639,6 +639,32 @@ class TestYamlTemplates:
         assert "contract_designer" in agents
         assert "contract_freeze_ref" in usage
 
+    def test_backend_stage_definition_declares_utdd_and_coverage_rules(self):
+        """Test backend stage definition freezes UTDD loop, 80% coverage, and integration handoff."""
+        import yaml
+
+        stage_path = Path("spec-global/departments/dev/stages/l3-backend-development.yaml")
+        if not stage_path.exists():
+            pytest.skip("Backend stage definition not found")
+
+        with open(stage_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["status"] == "frozen"
+        assert [stage["id"] for stage in data["utdd_cycle"]["stages"]] == [
+            "write_ut",
+            "implement_logic",
+            "refactor",
+        ]
+        assert data["completion_criteria"]["coverage_threshold"] == ">=80%"
+        assert data["handoff_rules"]["integration"]["required_inputs"] == [
+            "tech_spec_ref",
+            "contract_freeze_ref",
+            "be_artifact_ref",
+            "unit_test_ref",
+            "coverage_report_ref",
+        ]
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")

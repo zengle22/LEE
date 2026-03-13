@@ -1,0 +1,78 @@
+kind: stage_definition
+version: "1.0"
+id: stage.dev.l3_backend_development
+name: L3 Backend Development Stage
+status: frozen
+owner: development
+governing_adrs:
+  - ADR-008
+business_source:
+  - FEAT-SRC-009-006
+tech_source:
+  - TECH-FEAT-SRC-009-006
+
+purpose: >
+  Canonical L3 backend development stage definition for implementing backend
+  behavior under TECH and frozen contract constraints.
+
+input_contract:
+  required_fields:
+    - formal_ssot_id
+    - source_refs
+    - governing_adrs
+    - tech_spec_ref
+    - contract_freeze_ref
+    - repo_backend
+  optional_fields:
+    - acceptance_brief_ref
+    - repo_context
+    - decision_constraints
+  rules:
+    - rule: no_backend_without_frozen_contract
+      description: Backend implementation must not start before contract freeze completes.
+    - rule: tech_and_contract_joint_truth
+      description: TECH defines design scope and frozen contract defines structural truth.
+
+utdd_cycle:
+  stages:
+    - id: write_ut
+      description: Add or update unit tests that capture the intended backend behavior.
+    - id: implement_logic
+      description: Implement backend code until the UTDD target passes.
+    - id: refactor
+      description: Refactor implementation while preserving passing tests and contract alignment.
+  invariants:
+    - tests_define_behavior_first
+    - implementation_must_preserve_contract_shape
+    - refactor_must_not_reduce_coverage
+
+outputs:
+  required:
+    - be_artifact_ref
+    - unit_test_ref
+    - coverage_report_ref
+    - contract_verification_ref
+  optional:
+    - rollback_request
+
+completion_criteria:
+  coverage_threshold: ">=80%"
+  required_conditions:
+    - unit tests pass
+    - coverage threshold is met
+    - no unresolved contract violation remains
+    - backend handoff package is published
+
+handoff_rules:
+  frontend_dev:
+    provides_context:
+      - contract_freeze_ref
+      - contract_hash
+      - be_artifact_ref
+  integration:
+    required_inputs:
+      - tech_spec_ref
+      - contract_freeze_ref
+      - be_artifact_ref
+      - unit_test_ref
+      - coverage_report_ref
