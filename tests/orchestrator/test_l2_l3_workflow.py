@@ -537,6 +537,23 @@ class TestYamlTemplates:
         assert "verification_results" in bugfix_data["instance_schema"]["required_fields"]
         assert "merge_or_reject_input" in bugfix_data["instance_schema"]["output_fields"]
 
+    def test_contract_design_stage_definition_covers_three_contract_families(self):
+        """Test contract design stage definition locks canonical inputs, outputs, and handoff rules."""
+        definition_path = Path("spec/workflow/definitions/contract-design-stage-definition.md")
+        if not definition_path.exists():
+            pytest.skip("Contract design stage definition not found")
+
+        content = definition_path.read_text(encoding="utf-8")
+
+        assert "State: frozen" in content
+        assert "`tech_spec_ref`" in content
+        assert "api_contract_design" in content
+        assert "data_contract_design" in content
+        assert "event_contract_design" in content
+        assert "`contract_freeze_ref`" in content
+        assert "Backend implementation consumes" in content
+        assert "Frontend implementation consumes" in content
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
