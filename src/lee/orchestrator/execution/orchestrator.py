@@ -601,6 +601,21 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     workflow_id, phase_id, complexity
                 )
             else:
+                failed_phase = self._get_failed_phase(instance)
+                if failed_phase:
+                    failed_phase_id = failed_phase.get("id") or "<unknown-phase>"
+                    failed_reason = failed_phase.get("error") or "L2 phase failed"
+                    await self.store.update_workflow_status(
+                        workflow_id,
+                        WorkflowStatus.FAILED,
+                        completed_at=datetime.now(),
+                    )
+                    return StepResult(
+                        status="failed",
+                        step_id=failed_phase_id,
+                        workflow_id=workflow_id,
+                        message=f"L2 phase {failed_phase_id} failed: {failed_reason}",
+                    )
                 # All phases completed
                 await self.store.update_workflow_status(
                     workflow_id, WorkflowStatus.COMPLETED,
@@ -1729,6 +1744,17 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     ready_phases.append(phase)
 
         return ready_phases
+
+    def _get_failed_phase(
+        self,
+        instance: WorkflowInstance,
+    ) -> Optional[Dict[str, Any]]:
+        """Return the first failed L2 phase, if any."""
+        phases = instance.data.get("phases", [])
+        for phase in phases:
+            if phase.get("status") == "failed":
+                return phase
+        return None
 
     async def _execute_l2_phase_with_complexity(
         self,
