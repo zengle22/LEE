@@ -5846,8 +5846,20 @@ class LLMRunner(StepRunnerBase):
             r"支持下游",
             r"无未经授权",
         ]
+        reverse_ssot_false_positive_patterns = [
+            r"trace_hints.*generic category names",
+            r"trace_hints.*specific derivation paths",
+            r"required_fields.*technical schema keys",
+            r"required_fields.*without business validation rules",
+            r"processing steps.*technical actions rather than product behavior outcomes",
+            r"trace_hints.*缺.*testset",
+            r"boundary_classification.*without schema reference",
+            r"canonical-ssot-path-rules.*without specific artifact version id",
+        ]
         if cls._contains_feat_review_negative_signal(lowered):
             return False
+        if any(re.search(pattern, lowered) for pattern in reverse_ssot_false_positive_patterns):
+            return True
         return any(re.search(pattern, lowered) for pattern in positive_patterns)
 
     @classmethod

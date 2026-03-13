@@ -488,6 +488,30 @@ def test_feat_review_sanitizer_treats_positive_compliance_findings_as_non_blocki
     assert normalized["findings"] == []
 
 
+def test_feat_review_sanitizer_drops_reverse_ssot_contract_conflict_findings():
+    normalized, _ = LLMRunner._normalize_product_review_payload(
+        step=SimpleNamespace(id="feat_review", agent_id="agent.product.feat_reviewer", config={}),
+        business_output={
+            "review_type": "feat_review",
+            "decision": "revise",
+            "subject_refs": ["FEAT-EPIC-141-001", "FEAT-EPIC-141-002", "FEAT-EPIC-141-003"],
+            "summary": "FEAT bundle fails acceptance readiness due to abstract trace_hints and generic input_contract fields that cannot guide downstream derivation.",
+            "findings": [
+                "All FEATs use generic category names (UI, TECH, TASK) in acceptance_checks trace_hints instead of specific derivation paths",
+                "input_contract required_fields list technical schema keys without business validation rules or data constraints",
+                "FEAT-EPIC-141-001 processing steps describe technical actions rather than product behavior outcomes",
+            ],
+            "risks": [],
+            "recommendations": [],
+        },
+        structured_payload={},
+        instance_data=None,
+    )
+
+    assert normalized["decision"] == "pass"
+    assert normalized["findings"] == []
+
+
 def test_claude_code_runner_skips_nested_materialized_paths_in_frozen_inputs():
     step = SimpleNamespace(
         inputs=[
