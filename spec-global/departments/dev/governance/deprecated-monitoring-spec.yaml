@@ -1,0 +1,26 @@
+kind: governance_spec
+version: "1.0"
+id: dev.deprecated_monitoring_spec
+status: frozen
+owner: development
+governing_adrs:
+  - ADR-008
+
+metrics:
+  - id: reference_count
+    description: count of code or doc references to deprecated paths
+  - id: workflow_instance_count
+    description: count of workflow instances started from deprecated paths
+  - id: last_seen_at
+    description: most recent observed usage timestamp
+
+alerts:
+  stale_reference_threshold: 1
+  workflow_instance_threshold: 0
+  report_frequency: weekly
+  escalation_target: tech_lead
+
+integration_points:
+  - spec-global/departments/dev/README.md
+  - spec-global/WORKFLOWS.md
+  - .workflow/workspace
