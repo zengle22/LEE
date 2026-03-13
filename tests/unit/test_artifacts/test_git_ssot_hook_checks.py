@@ -1,4 +1,9 @@
-from scripts.git_ssot_hook_checks import collect_release_ids, is_ssot_related_path
+from scripts.git_ssot_hook_checks import (
+    collect_release_ids,
+    is_formal_ssot_markdown_path,
+    is_ssot_related_path,
+    run_ssot_lint,
+)
 
 
 def test_is_ssot_related_path_detects_formal_ssot_and_runtime_paths():
@@ -33,5 +38,29 @@ def test_collect_release_ids_reads_release_front_matter(tmp_path):
     hook_checks.REPO_ROOT = tmp_path
     try:
         assert collect_release_ids(["spec/delivery/releases/REL-1.4.0__march.md"]) == ["REL-1.4.0"]
+    finally:
+        hook_checks.REPO_ROOT = original_root
+
+
+def test_is_formal_ssot_markdown_path_only_matches_managed_markdown():
+    assert is_formal_ssot_markdown_path("spec/requirements/features/FEAT-001__demo.md")
+    assert is_formal_ssot_markdown_path("tests/bugs/BUG-FEAT-001-001__bug.md")
+    assert not is_formal_ssot_markdown_path("src/lee/orchestrator/execution/artifacts/ssot_service.py")
+    assert not is_formal_ssot_markdown_path(".github/workflows/pr-check.yml")
+
+
+def test_run_ssot_lint_with_non_markdown_paths_skips_repo_wide_debt(tmp_path):
+    repo_root = tmp_path
+    (repo_root / "src").mkdir(parents=True, exist_ok=True)
+    (repo_root / ".artifacts").mkdir(parents=True, exist_ok=True)
+
+    from scripts import git_ssot_hook_checks as hook_checks
+
+    original_root = hook_checks.REPO_ROOT
+    hook_checks.REPO_ROOT = repo_root
+    try:
+        ok, errors = run_ssot_lint(["src/lee/orchestrator/execution/artifacts/ssot_service.py"])
+        assert ok is True
+        assert errors == []
     finally:
         hook_checks.REPO_ROOT = original_root

@@ -42,6 +42,15 @@ def is_ssot_related_path(file_path: str) -> bool:
     return False
 
 
+def is_formal_ssot_markdown_path(file_path: str) -> bool:
+    path = Path(file_path)
+    normalized = path.as_posix()
+    return (
+        path.suffix.lower() == ".md"
+        and normalized.startswith(("spec/", "tests/", "docs/reports/"))
+    )
+
+
 def collect_release_ids(paths: Iterable[str]) -> List[str]:
     release_ids = []
     for file_path in paths:
@@ -57,15 +66,39 @@ def collect_release_ids(paths: Iterable[str]) -> List[str]:
     return sorted(set(release_ids))
 
 
-def run_ssot_lint() -> tuple[bool, List[str]]:
+def run_ssot_lint(paths: Sequence[str] | None = None) -> tuple[bool, List[str]]:
     manager = ArtifactManager(project_root=REPO_ROOT, root_path=REPO_ROOT / ".artifacts")
     manager.rebuild_ssot_registry()
-    errors: List[str] = lint_ssot_front_matter(REPO_ROOT)
+    selected_paths = [
+        (REPO_ROOT / file_path)
+        for file_path in (paths or [])
+        if is_formal_ssot_markdown_path(file_path) and (REPO_ROOT / file_path).exists()
+    ]
+    if paths is not None and not selected_paths:
+        return True, []
+
+    errors: List[str] = lint_ssot_front_matter(
+        REPO_ROOT,
+        paths=selected_paths if paths is not None else None,
+    )
 
     validator = SSOTValidator(manager.registry)
-    for artifact in manager.registry.get_ssot_artifacts():
-        result = validator.validate_p0(artifact.id)
-        errors.extend(f"{artifact.id}: {err}" for err in result.errors)
+    artifact_ids: List[str] = []
+    if paths is None:
+        artifact_ids = [artifact.id for artifact in manager.registry.get_ssot_artifacts()]
+    else:
+        for path in selected_paths:
+            try:
+                front_matter, _ = parse_front_matter(path)
+            except Exception:
+                continue
+            artifact_id = front_matter.get("id")
+            if artifact_id:
+                artifact_ids.append(str(artifact_id))
+
+    for artifact_id in sorted(set(artifact_ids)):
+        result = validator.validate_p0(artifact_id)
+        errors.extend(f"{artifact_id}: {err}" for err in result.errors)
 
     return len(errors) == 0, errors
 

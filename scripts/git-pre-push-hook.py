@@ -156,7 +156,7 @@ def main():
     ssot_related = [file_path for file_path in changed_files if is_ssot_related_path(file_path)]
     if ssot_related:
         print("🔍 运行 SSOT lint (Pre-push Hook)...")
-        lint_ok, lint_errors = run_ssot_lint()
+        lint_ok, lint_errors = run_ssot_lint(ssot_related)
         if not lint_ok:
             print("❌ SSOT lint 失败")
             for err in lint_errors:

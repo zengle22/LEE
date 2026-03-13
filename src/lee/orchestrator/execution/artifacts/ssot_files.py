@@ -57,12 +57,13 @@ def is_formal_ssot_file(path: Path) -> bool:
     return bool(front_matter.get("ssot_type"))
 
 
-def lint_ssot_front_matter(project_root: Path) -> List[str]:
+def lint_ssot_front_matter(project_root: Path, paths: Iterable[Path] | None = None) -> List[str]:
     """Validate formal SSOT markdown files only."""
     errors: List[str] = []
     required_fields = {"id", "ssot_type", "title", "status", "version"}
     seen_ids: Dict[str, List[Path]] = {}
-    for path in iter_ssot_markdown_files(project_root):
+    candidates = list(paths) if paths is not None else list(iter_ssot_markdown_files(project_root))
+    for path in candidates:
         if not is_formal_ssot_file(path):
             continue
         try:
