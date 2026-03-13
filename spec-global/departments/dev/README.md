@@ -67,6 +67,20 @@ Dev 部门当前只保留两个主入口：
 使用说明见：
 `docs/contract-design-l3-usage-guide.md`
 
+### Backend Development L3
+
+`template.dev.feature_be_l3` 是 `backend_dev` 阶段的唯一现役 L3 模板。
+
+它的 canonical 约束是：
+
+- 输入锚点必须包含 `tech_spec_ref`、`contract_freeze_ref`、`repo_backend`
+- 执行顺序必须是 `write_ut -> implement_backend -> refactor_backend -> coverage_gate -> publish_backend`
+- `coverage_gate` 的最低阈值固定为 `80%`
+- 低于阈值时运行时必须回退到 `write_ut`
+- Frontend / Integration 只能消费发布后的 backend handoff 产物
+
+旧的“DTO Implementation / API Handler Implementation / Self-Check / Code Diff Output”阶段叙事已被 canonical UTDD 模板取代，不再作为推荐入口说明。
+
 ## Bugfix Delivery L2
 
 当前现役阶段顺序为：

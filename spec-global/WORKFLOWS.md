@@ -260,6 +260,27 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ---
 
+#### 0.1. Feature Backend Development L3（后端开发子流程）
+
+**ID**: `template.dev.feature_be_l3`
+**路径**: `departments/dev/workflows/templates/feature-be-l3-template.yaml`
+**版本**: 2.0
+
+**步骤**: 5 个
+- `write_ut`
+- `implement_backend`
+- `refactor_backend`
+- `coverage_gate`
+- `publish_backend`
+
+**用途**: Dev 部门 `backend_dev` 阶段的唯一现役 L3，实现后端 UTDD、覆盖率门禁和 handoff 发布。
+
+**状态**: Canonical
+
+**备注**: 旧的 DTO/Handler 分段叙事不再作为推荐入口。
+
+---
+
 #### 1. Phase OpenSpec Flow（Phase 内 OpenSpec 子流程）
 
 **ID**: `workflow.dev.phase_openspec_flow`

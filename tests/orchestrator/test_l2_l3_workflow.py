@@ -708,6 +708,17 @@ class TestYamlTemplates:
         assert ">=80%" in content
         assert "coverage gate" in content.lower()
 
+    def test_backend_docs_register_canonical_utdd_entry(self):
+        """Test Dev docs expose the backend UTDD path and deprecate the legacy stage narrative."""
+        readme = Path("spec-global/departments/dev/README.md").read_text(encoding="utf-8")
+        workflows = Path("spec-global/WORKFLOWS.md").read_text(encoding="utf-8")
+
+        assert "template.dev.feature_be_l3" in readme
+        assert "write_ut -> implement_backend -> refactor_backend -> coverage_gate -> publish_backend" in readme
+        assert "DTO Implementation / API Handler Implementation / Self-Check / Code Diff Output" in readme
+        assert "Feature Backend Development L3" in workflows
+        assert "coverage_gate" in workflows
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
