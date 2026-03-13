@@ -142,6 +142,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             allowed_commands = list(self.DEFAULT_ALLOWED_COMMANDS)
 
         write_scope = input_data.get("write_scope") or []
+        read_only = bool(input_data.get("read_only", False))
         forbidden_read_paths = input_data.get("forbidden_read_paths") or []
         max_iterations = self._coerce_positive_int(
             input_data.get("max_iterations"),
@@ -192,6 +193,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             workspace=workspace,
             allowed_commands=allowed_commands,
             write_scope=write_scope,
+            read_only=read_only,
             forbidden_read_paths=forbidden_read_paths,
             max_iterations=max_iterations,
             max_bash_calls=max_bash_calls,
@@ -257,6 +259,7 @@ class ClaudeCodeExecutor(BaseExecutor):
                 live_log_path=conversation_live_log_path,
                 max_bash_calls=max_bash_calls,
                 resume_on_retry=resume_on_retry,
+                read_only=read_only,
             )
         except asyncio.TimeoutError as e:
             detail = str(e).strip()
@@ -464,6 +467,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         workspace: str,
         allowed_commands: List[str],
         write_scope: List[str],
+        read_only: bool,
         forbidden_read_paths: List[str],
         max_iterations: int,
         max_bash_calls: int,
@@ -480,7 +484,9 @@ class ClaudeCodeExecutor(BaseExecutor):
         if max_bash_calls > 0:
             constraints.append(f"Bash 工具调用上限: {max_bash_calls}")
 
-        if write_scope:
+        if read_only:
+            constraints.append("只读模式: 禁止使用 Write/Edit/MultiEdit 修改任何文件")
+        elif write_scope:
             constraints.append(
                 f"允许写入的路径: {', '.join(write_scope)}"
             )
@@ -565,6 +571,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         live_log_path: str = "",
         max_bash_calls: int = DEFAULT_MAX_BASH_CALLS,
         resume_on_retry: bool = DEFAULT_RESUME_ON_RETRY,
+        read_only: bool = False,
     ) -> str:
         """
         调用 claude CLI (v2.x)
@@ -602,9 +609,10 @@ class ClaudeCodeExecutor(BaseExecutor):
 
         # 构建工具白名单
         # claude CLI --allowedTools 接受空格/逗号分隔的工具名
-        allowed_tools = ["Read", "Write", "Edit", "MultiEdit"]
-        if allowed_commands:
-            allowed_tools.append("Bash")
+        allowed_tools = self._build_allowed_tools(
+            allowed_commands=allowed_commands,
+            read_only=read_only,
+        )
 
         base_cmd.extend(["--allowedTools", ",".join(allowed_tools)])
 
@@ -1452,6 +1460,17 @@ class ClaudeCodeExecutor(BaseExecutor):
                     return None
 
         return None
+
+    @staticmethod
+    def _build_allowed_tools(
+        *, allowed_commands: List[str], read_only: bool
+    ) -> List[str]:
+        allowed_tools = ["Read"]
+        if not read_only:
+            allowed_tools.extend(["Write", "Edit", "MultiEdit"])
+        if allowed_commands:
+            allowed_tools.append("Bash")
+        return allowed_tools
 
     async def _collect_diff_summary(
         self, workspace: str

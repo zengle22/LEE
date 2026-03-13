@@ -3,7 +3,6 @@ Claude Code executor unit tests.
 """
 
 import os
-
 from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor
 
 
@@ -74,3 +73,36 @@ class TestClaudeCodeExecutor:
                 os.environ.pop("CLAUDE_CODE_MODEL", None)
             else:
                 os.environ["CLAUDE_CODE_MODEL"] = previous
+
+    def test_build_system_prompt_marks_read_only_mode(self):
+        prompt = self.executor._build_system_prompt(
+            goal="validate requirement chain",
+            workspace="E:\\ai\\LEE",
+            allowed_commands=["cat", "ls"],
+            write_scope=[],
+            read_only=True,
+            forbidden_read_paths=["output/"],
+            max_iterations=3,
+            max_bash_calls=10,
+            stop_conditions={},
+            system_prompt_extra="",
+        )
+
+        assert "只读模式" in prompt
+        assert "禁止使用 Write/Edit/MultiEdit" in prompt
+
+    def test_build_allowed_tools_uses_read_only_toolset(self):
+        allowed_tools = self.executor._build_allowed_tools(
+            allowed_commands=["cat"],
+            read_only=True,
+        )
+
+        assert allowed_tools == ["Read", "Bash"]
+
+    def test_build_allowed_tools_keeps_write_tools_when_not_read_only(self):
+        allowed_tools = self.executor._build_allowed_tools(
+            allowed_commands=["cat"],
+            read_only=False,
+        )
+
+        assert allowed_tools == ["Read", "Write", "Edit", "MultiEdit", "Bash"]
