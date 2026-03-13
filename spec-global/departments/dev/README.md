@@ -81,6 +81,19 @@ Dev 部门当前只保留两个主入口：
 
 旧的“DTO Implementation / API Handler Implementation / Self-Check / Code Diff Output”阶段叙事已被 canonical UTDD 模板取代，不再作为推荐入口说明。
 
+### Frontend Development L3
+
+`template.dev.feature_fe_l3` 是 `frontend_dev` 阶段的唯一现役 L3 模板。
+
+它的 canonical 约束是：
+
+- 输入锚点必须包含 `tech_spec_ref`、`contract_freeze_ref`、`repo_frontend`
+- 执行顺序必须是 `write_ut -> implement_ui -> refactor_ui -> coverage_gate -> publish_frontend`
+- 运行时可以携带 `env_ref`、`base_url`、`runtime_config_ref`
+- Evidence handoff 至少包含 `fe_artifact_ref`、`unit_test_ref`、`coverage_report_ref`、`contract_usage_verification_ref`
+
+旧的“Type Generation / UI Implementation / Self-Check / Code Diff Output”阶段叙事已被 canonical UTDD 模板取代，不再作为推荐入口说明。
+
 ## Bugfix Delivery L2
 
 当前现役阶段顺序为：

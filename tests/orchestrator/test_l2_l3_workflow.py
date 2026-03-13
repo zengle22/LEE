@@ -804,6 +804,17 @@ class TestYamlTemplates:
         assert "contract_usage_verification_ref" in content
         assert "template.dev.evidence_pack_l3" in content
 
+    def test_frontend_docs_register_canonical_utdd_entry(self):
+        """Test Dev docs expose the frontend UTDD path and deprecate the legacy stage narrative."""
+        readme = Path("spec-global/departments/dev/README.md").read_text(encoding="utf-8")
+        workflows = Path("spec-global/WORKFLOWS.md").read_text(encoding="utf-8")
+
+        assert "template.dev.feature_fe_l3" in readme
+        assert "write_ut -> implement_ui -> refactor_ui -> coverage_gate -> publish_frontend" in readme
+        assert "Type Generation / UI Implementation / Self-Check / Code Diff Output" in readme
+        assert "Feature Frontend Development L3" in workflows
+        assert "publish_frontend" in workflows
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
