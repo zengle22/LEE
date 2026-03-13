@@ -93,3 +93,31 @@ def test_bugfix_followup_tasks_match_exception_approval_contract():
     assert "batch_approval_record" in policy_text
     assert "审批例外路径" in policy_text
     assert "审批例外 batch 模式" in governance_text
+
+
+def test_shared_input_lineage_documents_feature_repo_extensions():
+    feat_117 = Path(
+        "spec/requirements/features/FEAT-117__shared-input-specification-implementation.md"
+    )
+    feat_128 = Path(
+        "spec/requirements/features/FEAT-128__shared-input-specification-implementation.md"
+    )
+    task_140 = Path(
+        "spec/tasks/FEAT-140/TASK-FEAT-140-001__gongxiangshuruguifanyuzhiliguizeshixian.md"
+    )
+    feat_117_text = feat_117.read_text(encoding="utf-8")
+    feat_128_text = feat_128.read_text(encoding="utf-8")
+    task_140_text = task_140.read_text(encoding="utf-8")
+
+    assert "repo_frontend, repo_backend" in feat_117_text
+    assert "repo_frontend, repo_backend" in feat_128_text
+    assert "repo_frontend, repo_backend" in task_140_text
+
+
+def test_legacy_feature_delivery_feat_matches_canonical_repo_extensions():
+    feat_130 = Path("spec/requirements/features/FEAT-130__feature-delivery-l2-gongzuoliudingyi.md")
+    text = feat_130.read_text(encoding="utf-8")
+
+    assert "repo_frontend" in text
+    assert "repo_backend" in text
+    assert "Contract → Backend / Frontend 并行 → Integration → Evidence Pack" in text
