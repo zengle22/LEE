@@ -228,7 +228,7 @@ constitution:
     - id: no_fix_without_triage
       rule: "Fix implementation must not start before triage and root cause complete"
     - id: no_batch_without_five_same
-      rule: "Batch mode is forbidden unless the five-same rule passes"
+      rule: "Batch mode is forbidden unless the five-same rule passes, or an approved batch_approval_record is present"
     - id: evidence_required_for_merge
       rule: "Workflow must not close without evidence_pack"
 
@@ -248,6 +248,7 @@ instance_schema:
     - repo_context
     - test_case_refs
     - batch_mode
+    - batch_approval_record
   phase_fields:
     - id
     - complexity

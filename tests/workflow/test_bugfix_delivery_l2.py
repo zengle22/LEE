@@ -35,6 +35,7 @@ def test_bugfix_delivery_l2_input_contract():
         "reproduction_evidence",
     ]
     assert "batch_approval_record" in data["shared_input_contract"]["optional_fields"]
+    assert "batch_approval_record" in data["instance_schema"]["context_fields"]
 
 
 def test_bugfix_delivery_l2_granularity_policy():
@@ -103,3 +104,10 @@ def test_bugfix_delivery_l2_contract_interfaces():
     assert "batch_approval_record" in second["outputs"]
     assert last["from"] == "evidence_pack"
     assert last["to"] == "merge_or_reject"
+
+
+def test_bugfix_delivery_l2_constitution_allows_approved_batch_exception():
+    data = _load_bugfix_template()
+    principles = {item["id"]: item["rule"] for item in data["constitution"]["principles"]}
+
+    assert "approved batch_approval_record" in principles["no_batch_without_five_same"]
