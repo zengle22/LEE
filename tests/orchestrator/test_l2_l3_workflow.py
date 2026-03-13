@@ -915,6 +915,23 @@ class TestYamlTemplates:
         assert "template.dev.feature_delivery_l2" in guide
         assert "template.dev.bugfix_delivery_l2" in guide
 
+    def test_shared_input_schema_contract_declares_four_required_fields(self):
+        """Test shared-input contract fixes the four canonical fields and branch rule."""
+        import json
+
+        schema_path = Path("spec/contracts/shared-input-schema/v1/schema.json")
+        if not schema_path.exists():
+            pytest.skip("Shared input schema not found")
+
+        data = json.loads(schema_path.read_text(encoding="utf-8"))
+        assert data["required"] == [
+            "formal_ssot_id",
+            "source_refs",
+            "governing_adrs",
+            "repo_context",
+        ]
+        assert data["properties"]["repo_context"]["required"] == ["repo_id", "branch"]
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
