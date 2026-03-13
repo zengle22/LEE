@@ -8,6 +8,7 @@ description: |
 owner: development
 tags: [template, dev, evidence, l3, canonical, adr-008]
 contracts:
+  stage_definition: ../../stages/l3-evidence-pack.yaml
   input_schema: ../../contracts/evidence-pack/v1/schema.json
   integration_spec: ../../contracts/evidence-pack/v1/integration-spec.md
 

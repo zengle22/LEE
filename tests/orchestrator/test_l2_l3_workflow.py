@@ -867,6 +867,26 @@ class TestYamlTemplates:
         assert data["contracts"]["reporter_handoff_spec"] == "../../docs/integration-reporter-handoff-spec.md"
         assert data["contracts"]["threshold_rules"] == "../../docs/integration-threshold-rules.md"
 
+    def test_evidence_pack_stage_definition_declares_collection_validation_packaging(self):
+        """Test evidence-pack stage definition freezes task family, outputs, and audit closure."""
+        import yaml
+
+        stage_path = Path("spec-global/departments/dev/stages/l3-evidence-pack.yaml")
+        if not stage_path.exists():
+            pytest.skip("Evidence pack stage definition not found")
+
+        with open(stage_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["status"] == "frozen"
+        assert data["task_family"]["required_tasks"] == [
+            "evidence_collection",
+            "evidence_validation",
+            "evidence_packaging",
+        ]
+        assert "audit_declaration_ref" in data["outputs"]["required"]
+        assert "smoke_gate_inputs" in data["outputs"]["optional"]
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
