@@ -142,6 +142,25 @@ def test_alternate_feature_delivery_feat_matches_canonical_parallel_contract():
     assert "Contract Design → Backend / Frontend 并行 → Integration → Evidence Pack" in text
 
 
+def test_contract_design_feat_matches_canonical_freeze_handoff():
+    feat_111 = Path("spec/requirements/features/FEAT-111__contract-design-l3-stage-definition.md")
+    text = feat_111.read_text(encoding="utf-8")
+
+    assert "contract_freeze_ref" in text
+    assert "Contract freeze completed" in text
+    assert "唯一结构真相源" in text
+
+
+def test_integration_feat_matches_canonical_input_boundary():
+    feat_114 = Path("spec/requirements/features/FEAT-114__integration-l3-stage-definition.md")
+    text = feat_114.read_text(encoding="utf-8")
+
+    assert "tech_spec_ref" in text
+    assert "contract_freeze_ref" in text
+    assert "env_ref/base_url/runtime_config_ref" in text
+    assert "contract/mock 模式或 environment-backed 模式" in text
+
+
 def test_early_bugfix_feat_matches_canonical_bugfix_contract():
     feat_109 = Path("spec/requirements/features/FEAT-109__bugfix-delivery-l2-workflow-definition.md")
     text = feat_109.read_text(encoding="utf-8")

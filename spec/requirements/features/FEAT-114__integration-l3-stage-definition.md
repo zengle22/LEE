@@ -27,9 +27,9 @@ Feature 交付流程获得标准化的集成验证阶段，确保前后端协同
 - Inputs defined by EPIC scope
 # Processing
 
-- 整合 Backend 和 Frontend 实现
-- 执行 Integration tests
-- 执行 E2E tests
+- 整合 Backend 和 Frontend 实现，并绑定 tech_spec_ref 与 contract_freeze_ref
+- 按 contract/mock 模式或 environment-backed 模式执行 Integration tests
+- 在存在 env_ref/base_url/runtime_config_ref 时执行 E2E tests
 - 采集 Performance baseline
 - 验证 Acceptance criteria
 # Outputs
@@ -42,7 +42,7 @@ Feature 交付流程获得标准化的集成验证阶段，确保前后端协同
 # Acceptance
 
 - Integration L3 阶段定义冻结
-- 包含输入规范（Backend + Frontend implementations）
+- 包含输入规范（tech_spec_ref + contract_freeze_ref + Backend/Frontend artifacts + 可选环境输入）
 - 包含输出物（Integration test report + E2E test results + Performance baseline）
 - 包含完成标准（All tests passed + Acceptance criteria met）
 - 包含阶段流转条件
@@ -61,13 +61,13 @@ Feature 交付流程获得标准化的集成验证阶段，确保前后端协同
 - Scenario: Integration Test 通过验证
 - Given: 前后端实现就绪
 - When: 执行 Integration tests
-- Then: 所有集成测试通过并生成报告
+- Then: 基于 tech_spec_ref、contract_freeze_ref 和 FE/BE artifacts 完成集成测试并生成报告
 - Trace Hints: TESTSET, TECH
 
 ## AC-SRC-009-007-03
 
 - Scenario: E2E Test 通过验证
-- Given: Integration tests 通过
+- Given: Integration tests 通过且存在环境输入（env_ref/base_url/runtime_config_ref）
 - When: 执行 E2E tests
 - Then: 所有端到端测试通过并生成报告
 - Trace Hints: TESTSET, UI
