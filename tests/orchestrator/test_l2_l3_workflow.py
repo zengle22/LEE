@@ -865,6 +865,7 @@ class TestYamlTemplates:
         assert data["contracts"]["planner_verifier_spec"] == "../../docs/integration-planner-and-verifier-spec.md"
         assert data["contracts"]["routing_spec"] == "../../docs/structural-issue-routing-spec.md"
         assert data["contracts"]["reporter_handoff_spec"] == "../../docs/integration-reporter-handoff-spec.md"
+        assert data["contracts"]["threshold_rules"] == "../../docs/integration-threshold-rules.md"
 
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""

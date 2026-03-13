@@ -18,6 +18,7 @@ contracts:
   planner_verifier_spec: ../../docs/integration-planner-and-verifier-spec.md
   routing_spec: ../../docs/structural-issue-routing-spec.md
   reporter_handoff_spec: ../../docs/integration-reporter-handoff-spec.md
+  threshold_rules: ../../docs/integration-threshold-rules.md
 steps:
 - id: integration_planning
   name: Integration Planning
