@@ -2,29 +2,30 @@
 id: ADR-016
 ssot_type: adr
 title: reverse-epic-feat-l3 与现行 SSOT 链对齐升级
-status: draft
+status: frozen
 version: v1
 parent_id: null
 derived_from_ids:
-  - id: ADR-001
-    version: v1
-  - id: ADR-003
-    version: v1
-  - id: ADR-006
-    version: v1
-  - id: ADR-012
-    version: v1
+- id: ADR-001
+  version: v1
+- id: ADR-003
+  version: v1
+- id: ADR-006
+  version: v1
+- id: ADR-012
+  version: v1
 source_refs: []
 owner: governance
 tags:
-  - ssot
-  - reverse-ssot
-  - workflow
-  - core
-  - governance
+- ssot
+- reverse-ssot
+- workflow
+- core
+- governance
 properties:
   adr_kind: workflow_design
   decision_scope: core_reverse_ssot_chain_upgrade
+frozen_at: '2026-03-13T21:45:57.853155'
 ---
 
 # reverse-epic-feat-l3 与现行 SSOT 链对齐升级
