@@ -2732,6 +2732,11 @@ class LLMRunner(StepRunnerBase):
         ) -> List[Dict[str, Any]]:
             if not feat_specs:
                 return feat_specs
+            epic_token = re.sub(r"[^A-Za-z0-9]+", "-", _clean_text(epic_ref).upper()).strip("-") or "EPIC"
+
+            def _canonical_reverse_feat_id(index: int) -> str:
+                return f"FEAT-{epic_token}-{index:03d}"
+
             source_anchor = f"{epic_ref}#scope" if epic_ref else "EPIC#scope"
             reverse_scope_manifest = "REVERSE-SCOPE-MANIFEST"
             repo_evidence_manifest = "REPO-EVIDENCE-MANIFEST"
@@ -2902,6 +2907,14 @@ class LLMRunner(StepRunnerBase):
                     ],
                 },
             ]
+            feat_id_alias_map: Dict[str, str] = {}
+            for index, feat_item in enumerate(feat_specs[: len(templates)], start=1):
+                if not isinstance(feat_item, dict):
+                    continue
+                current_id = _clean_text(feat_item.get("feat_id") or feat_item.get("id"))
+                canonical_id = _canonical_reverse_feat_id(index)
+                if current_id:
+                    feat_id_alias_map[current_id] = canonical_id
             rewritten_specs: List[Dict[str, Any]] = []
             for index, feat_item in enumerate(feat_specs[: len(templates)]):
                 if not isinstance(feat_item, dict):
@@ -2909,10 +2922,15 @@ class LLMRunner(StepRunnerBase):
                 template = templates[min(index, len(templates) - 1)]
                 rewritten_item = dict(feat_item)
                 rewritten_item.update(template)
+                current_feat_id = _clean_text(rewritten_item.get("feat_id") or rewritten_item.get("id"))
+                rewritten_item["feat_id"] = feat_id_alias_map.get(
+                    current_feat_id,
+                    _canonical_reverse_feat_id(index + 1),
+                )
                 rewritten_item["dependencies"] = (
                     []
                     if index == 0
-                    else [str(rewritten_specs[-1].get("feat_id") or "").strip()]
+                    else [_clean_text(rewritten_specs[-1].get("feat_id"))]
                 )
                 rewritten_item["source_refs"] = [source_anchor]
                 rewritten_item["priority"] = "P1"

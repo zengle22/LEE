@@ -894,6 +894,126 @@ def test_prd_writer_rewrites_reverse_ssot_trace_hints_to_allowed_enums(runner):
             assert check["trace_hints"]
 
 
+def test_prd_writer_rewrites_reverse_ssot_feat_ids_to_actual_epic_namespace():
+    step = SimpleNamespace(
+        id="feat_spec_generation",
+        agent_id="agent.product.prd_writer",
+        config={
+            "output_contract": "departments/product/contracts/feat-bundle-contract/v1/schema.json",
+        },
+    )
+    business_output = {
+        "epic_ref": "EPIC-SRC-DRAFT-REV-001",
+        "feat_specs": [
+            {
+                "feat_id": "EPIC-SRC-DRAFT-REV-001-F01",
+                "title": "旧 reverse feat 1",
+                "goal": "旧目标1",
+                "user_value": "旧价值1",
+                "inputs": ["EPIC-SRC-DRAFT-REV-001#scope"],
+                "processing": ["旧处理1"],
+                "outputs": ["旧输出1"],
+                "acceptance_criteria": ["旧验收1"],
+                "acceptance_checks": [],
+                "dependencies": [],
+                "non_goals": [],
+                "priority": "P1",
+                "delivery_slice": "mvp",
+                "lifecycle_status": "draft",
+                "ssot": {
+                    "ssot_type": "FEAT",
+                    "parent": "EPIC-SRC-DRAFT-REV-001",
+                    "derived_from": "EPIC-SRC-DRAFT-REV-001",
+                    "identity_kind": "ssot",
+                },
+            },
+            {
+                "feat_id": "EPIC-SRC-DRAFT-REV-001-F02",
+                "title": "旧 reverse feat 2",
+                "goal": "旧目标2",
+                "user_value": "旧价值2",
+                "inputs": ["EPIC-SRC-DRAFT-REV-001#scope"],
+                "processing": ["旧处理2"],
+                "outputs": ["旧输出2"],
+                "acceptance_criteria": ["旧验收2"],
+                "acceptance_checks": [],
+                "dependencies": ["EPIC-SRC-DRAFT-REV-001-F01"],
+                "non_goals": [],
+                "priority": "P1",
+                "delivery_slice": "mvp",
+                "lifecycle_status": "draft",
+                "ssot": {
+                    "ssot_type": "FEAT",
+                    "parent": "EPIC-SRC-DRAFT-REV-001",
+                    "derived_from": "EPIC-SRC-DRAFT-REV-001",
+                    "identity_kind": "ssot",
+                },
+            },
+            {
+                "feat_id": "EPIC-SRC-DRAFT-REV-001-F03",
+                "title": "旧 reverse feat 3",
+                "goal": "旧目标3",
+                "user_value": "旧价值3",
+                "inputs": ["EPIC-SRC-DRAFT-REV-001#scope"],
+                "processing": ["旧处理3"],
+                "outputs": ["旧输出3"],
+                "acceptance_criteria": ["旧验收3"],
+                "acceptance_checks": [],
+                "dependencies": ["EPIC-SRC-DRAFT-REV-001-F02"],
+                "non_goals": [],
+                "priority": "P1",
+                "delivery_slice": "mvp",
+                "lifecycle_status": "draft",
+                "ssot": {
+                    "ssot_type": "FEAT",
+                    "parent": "EPIC-SRC-DRAFT-REV-001",
+                    "derived_from": "EPIC-SRC-DRAFT-REV-001",
+                    "identity_kind": "ssot",
+                },
+            },
+        ],
+    }
+
+    normalized, structured = LLMRunner._normalize_prd_writer_feat_payload(
+        step,
+        "wf-reverse-id-rewrite",
+        business_output,
+        {"business_output": business_output},
+        instance_data={
+            "params": {
+                "raw_requirement": "保留 core.reverse-epic-feat 作为 workflow key，升级为面向现行 SSOT 链的逆向工作流，补齐 seed/view/handoff/trace。",
+                "epic_freeze": {
+                    "artifact_id": "EPIC-148",
+                    "title": "reverse-epic-feat-l3 对齐现行 SSOT 链逆向升级",
+                    "goal": "实现 reverse workflow 对现行 SSOT 文档链的完整承接与逆向升级",
+                    "scope": [
+                        "repo evidence -> SRC reverse pack -> EPIC -> FEAT -> delivery prep seeds -> QA handoff seeds -> evidence/trace views"
+                    ],
+                    "non_goals": [
+                        "不直接 freeze UI / TECH / TASK / TESTSET / TC / REPORT / BUG / EVI"
+                    ],
+                },
+            }
+        },
+    )
+
+    feat_specs = normalized["feat_specs"]
+    assert normalized["epic_ref"] == "EPIC-148"
+    assert [item["feat_id"] for item in feat_specs] == [
+        "FEAT-EPIC-148-001",
+        "FEAT-EPIC-148-002",
+        "FEAT-EPIC-148-003",
+    ]
+    assert feat_specs[1]["dependencies"] == ["FEAT-EPIC-148-001"]
+    assert feat_specs[2]["dependencies"] == ["FEAT-EPIC-148-002"]
+    outputs = structured["ssot_output_contract"]["outputs"]
+    assert [item["properties"]["formal_id"] for item in outputs] == [
+        "FEAT-EPIC-148-001",
+        "FEAT-EPIC-148-002",
+        "FEAT-EPIC-148-003",
+    ]
+
+
 def test_epic_designer_synthesizes_epic_source_refs_and_derived_from(runner):
     step = SimpleNamespace(id="epic_design", agent_id="agent.product.epic_designer", config={})
     business_output = {
