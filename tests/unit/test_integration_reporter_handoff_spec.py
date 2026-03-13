@@ -7,6 +7,8 @@ def test_integration_reporter_handoff_spec_declares_four_required_refs():
 
     content = spec_path.read_text(encoding="utf-8")
 
+    assert "integration_outputs" in content
+    assert "verification_results" in content
     assert "integration_report_ref" in content
     assert "integration_test_result_ref" in content
     assert "issue_resolution_ref" in content

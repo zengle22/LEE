@@ -10,6 +10,8 @@
 
 The reporter must publish:
 
+- `integration_outputs`
+- `verification_results`
 - `integration_report_ref`
 - `integration_test_result_ref`
 - `issue_resolution_ref`
@@ -38,3 +40,5 @@ The Evidence Pack handoff is allowed only when:
 2. `integration_test_result_ref`
 3. `issue_resolution_ref`
 4. `structural_issue_ref`
+5. `integration_outputs`
+6. `verification_results`

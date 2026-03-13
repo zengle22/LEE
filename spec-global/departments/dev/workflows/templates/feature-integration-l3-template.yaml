@@ -64,6 +64,8 @@ steps:
   depends_on:
   - structural_issue_routing
   outputs:
+  - integration_outputs
+  - verification_results
   - integration_report_ref
 instance_schema:
   required_fields:
@@ -84,6 +86,8 @@ instance_schema:
   - seed_data_ref
   - runtime_config_ref
   output_fields:
+  - integration_outputs
+  - verification_results
   - integration_plan_ref
   - integration_test_result_ref
   - threshold_summary_ref

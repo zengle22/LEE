@@ -183,6 +183,8 @@ phase_data_flow:
     - from: integration
       to: evidence_pack
       outputs:
+        - integration_outputs
+        - verification_results
         - integration_report_ref
     - from: evidence_pack
       to: smoke_gate

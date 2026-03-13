@@ -859,6 +859,8 @@ class TestYamlTemplates:
         ]
         assert data["completion_criteria"]["pass_rate_threshold"] == ">=95%"
         assert data["handoff_rules"]["evidence_pack"]["required_inputs"] == [
+            "integration_outputs",
+            "verification_results",
             "integration_report_ref",
             "integration_test_result_ref",
             "issue_resolution_ref",
@@ -887,6 +889,16 @@ class TestYamlTemplates:
         assert data["contracts"]["routing_spec"] == "../../docs/structural-issue-routing-spec.md"
         assert data["contracts"]["reporter_handoff_spec"] == "../../docs/integration-reporter-handoff-spec.md"
         assert data["contracts"]["threshold_rules"] == "../../docs/integration-threshold-rules.md"
+        assert data["steps"][-1]["outputs"] == [
+            "integration_outputs",
+            "verification_results",
+            "integration_report_ref",
+        ]
+        assert data["instance_schema"]["output_fields"][:3] == [
+            "integration_outputs",
+            "verification_results",
+            "integration_plan_ref",
+        ]
 
     def test_evidence_pack_stage_definition_declares_collection_validation_packaging(self):
         """Test evidence-pack stage definition freezes task family, outputs, and audit closure."""

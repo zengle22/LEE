@@ -46,6 +46,8 @@ outputs:
     - integration_test_result_ref
     - integration_report_ref
     - issue_resolution_ref
+    - integration_outputs
+    - verification_results
   optional:
     - structural_issue_ref
     - rollback_request_ref
@@ -60,6 +62,8 @@ completion_criteria:
 handoff_rules:
   evidence_pack:
     required_inputs:
+      - integration_outputs
+      - verification_results
       - integration_report_ref
       - integration_test_result_ref
       - issue_resolution_ref
