@@ -403,6 +403,29 @@ business_output:
     assert refs == ["FEAT-101"]
 
 
+def test_feat_review_sanitizer_drops_positive_findings_when_decision_is_pass():
+    normalized, _ = LLMRunner._normalize_product_review_payload(
+        step=SimpleNamespace(id="feat_review", agent_id="agent.product.feat_reviewer", config={}),
+        business_output={
+            "review_type": "feat_review",
+            "decision": "pass",
+            "subject_refs": ["FEAT-101"],
+            "summary": "All FEAT specs satisfy independence and downstream derivability requirements.",
+            "findings": [
+                "Input contracts define concrete required_fields without abstract slogans",
+                "Trace_hints explicitly support downstream artifact generation (TASK/TESTSET/TECH)",
+            ],
+            "risks": [],
+            "recommendations": [],
+        },
+        structured_payload={},
+        instance_data=None,
+    )
+
+    assert normalized["decision"] == "pass"
+    assert normalized["findings"] == []
+
+
 def test_claude_code_runner_skips_nested_materialized_paths_in_frozen_inputs():
     step = SimpleNamespace(
         inputs=[
@@ -505,6 +528,156 @@ def test_source_normalization_repairs_prose_output_from_raw_requirement(runner):
     assert "缺少 SRC" in business_output["problem_statement"]
     assert business_output["ssot"]["ssot_type"] == "SRC"
     assert structured_payload["business_output"]["freeze_meta"]["status"] == "draft"
+
+
+def test_source_normalization_sanitizes_placeholder_constraints_from_structured_src(runner):
+    step = SimpleNamespace(id="source_normalization", agent_id="agent.analysis.product_goal", config={})
+    business_output, structured_payload = runner._normalize_business_payload(
+        step=step,
+        workflow_id="wf-src-004",
+        business_output={
+            "source_id": "SRC-DRAFT",
+            "title": "reverse-epic-feat-l3 对齐现行 SSOT 链逆向升级",
+            "problem_statement": "当前 reverse workflow 无法完整承接现行 SSOT 文档链。",
+            "target_user": ["产品经理", "研发工程师"],
+            "business_motivation": "需要补齐整条 SSOT 链逆向输出。",
+            "constraints": [
+                "不新增平行 workflow key",
+                "* *[待补充：预算上限、商业模式限制、合作伙伴依赖]*",
+                "## 6. 下一步建议 (Next Steps for SRC)",
+                "输出路径必须对齐当前 canonical SSOT 目录",
+                "*工作区路径参考：** `.workflow/workspace/...`",
+            ],
+            "freeze_meta": {"status": "draft"},
+            "ssot": {"identity_kind": "ssot", "ssot_type": "SRC"},
+        },
+        structured_payload={},
+        instance_data={"params": {}},
+    )
+
+    assert business_output["constraints"] == [
+        "不新增平行 workflow key",
+        "输出路径必须对齐当前 canonical SSOT 目录",
+    ]
+    assert structured_payload["business_output"]["constraints"] == business_output["constraints"]
+
+
+def test_source_normalization_constraints_fall_back_when_only_non_governance_text_survives(runner):
+    step = SimpleNamespace(id="source_normalization", agent_id="agent.analysis.product_goal", config={})
+    business_output, _ = runner._normalize_business_payload(
+        step=step,
+        workflow_id="wf-src-005",
+        business_output={
+            "source_id": "SRC-DRAFT",
+            "title": "reverse-epic-feat-l3 对齐现行 SSOT 链逆向升级",
+            "problem_statement": "当前 reverse workflow 无法完整承接现行 SSOT 文档链。",
+            "target_user": ["产品经理"],
+            "business_motivation": "需要补齐整条 SSOT 链逆向输出。",
+            "constraints": [
+                "**内容边界**:",
+                "✅ **包含**: 核心目标、业务动因、目标用户、关键约束、成功指标。",
+            ],
+            "freeze_meta": {"status": "draft"},
+            "ssot": {"identity_kind": "ssot", "ssot_type": "SRC"},
+        },
+        structured_payload={},
+        instance_data={"params": {}},
+    )
+
+    assert business_output["constraints"] == [
+        "不新增平行 workflow key",
+        "formal object 只直接物化 SRC / EPIC / FEAT",
+        "UI / TECH / TASK / TESTSET / TC / REPORT / BUG / EVI 默认只产 seed、view、handoff/index",
+        "输出路径必须对齐当前 canonical SSOT 目录",
+    ]
+
+
+def test_prd_writer_rewrites_reverse_ssot_upgrade_feats(runner):
+    step = SimpleNamespace(
+        id="feat_spec_generation",
+        agent_id="agent.product.prd_writer",
+        config={
+            "output_contract": "departments/product/contracts/feat-bundle-contract/v1/schema.json",
+        },
+    )
+    business_output = {
+        "epic_ref": "EPIC-071",
+        "feat_specs": [
+            {
+                "feat_id": "FEAT-SRC-DRAFT-001-01",
+                "title": "SSOT 目录路径对齐与治理边界固化",
+                "goal": "旧目标",
+                "user_value": "旧用户价值",
+                "inputs": ["EPIC-071#scope"],
+                "processing": ["旧处理"],
+                "outputs": ["旧输出"],
+                "acceptance_criteria": ["旧验收"],
+                "acceptance_checks": [],
+                "dependencies": [],
+                "non_goals": [],
+                "priority": "P1",
+                "delivery_slice": "mvp",
+                "lifecycle_status": "draft",
+                "ssot": {
+                    "ssot_type": "FEAT",
+                    "parent": "EPIC-071",
+                    "derived_from": "EPIC-071",
+                    "identity_kind": "ssot",
+                },
+            },
+            {
+                "feat_id": "FEAT-SRC-DRAFT-001-02",
+                "title": "形式化对象物化逻辑实现 (SRC/EPIC/FEAT)",
+                "goal": "旧目标2",
+                "user_value": "旧用户价值2",
+                "inputs": ["EPIC-071#scope"],
+                "processing": ["旧处理2"],
+                "outputs": ["旧输出2"],
+                "acceptance_criteria": ["旧验收2"],
+                "acceptance_checks": [],
+                "dependencies": ["FEAT-SRC-DRAFT-001-01"],
+                "non_goals": [],
+                "priority": "P1",
+                "delivery_slice": "mvp",
+                "lifecycle_status": "draft",
+                "ssot": {
+                    "ssot_type": "FEAT",
+                    "parent": "EPIC-071",
+                    "derived_from": "EPIC-071",
+                    "identity_kind": "ssot",
+                },
+            },
+        ],
+    }
+
+    normalized, _ = LLMRunner._normalize_prd_writer_feat_payload(
+        step,
+        "wf-reverse-ssot",
+        business_output,
+        {"business_output": business_output},
+        instance_data={
+            "params": {
+                "raw_requirement": "保留 core.reverse-epic-feat 作为 workflow key，升级为面向现行 SSOT 链的逆向工作流，补齐 seed/view/handoff/trace。",
+                "epic_freeze": {
+                    "artifact_id": "EPIC-071",
+                    "title": "reverse-epic-feat-l3 对齐现行 SSOT 链逆向升级",
+                    "goal": "实现 reverse workflow 对现行 SSOT 文档链的完整承接与逆向升级",
+                    "scope": [
+                        "repo evidence -> SRC reverse pack -> EPIC -> FEAT -> delivery prep seeds -> QA handoff seeds -> evidence/trace views"
+                    ],
+                    "non_goals": [
+                        "不直接 freeze UI / TECH / TASK / TESTSET / TC / REPORT / BUG / EVI"
+                    ],
+                },
+            }
+        },
+    )
+
+    feat_specs = normalized["feat_specs"]
+    assert "Reverse Pack 主链升级" in feat_specs[0]["title"]
+    assert "SRC reverse pack" in "\n".join(feat_specs[0]["outputs"])
+    assert "种子视图生成" in feat_specs[1]["title"]
+    assert feat_specs[1]["dependencies"] == [feat_specs[0]["feat_id"]]
 
 
 def test_epic_designer_synthesizes_epic_source_refs_and_derived_from(runner):
@@ -3706,6 +3879,42 @@ def test_normalize_prd_writer_feat_bundle_payload_repairs_nested_feat_fields(run
     assert normalized_structured["ssot_output_contract"]["outputs"][0]["key"] == "feat"
 
 
+def test_normalize_prd_writer_feat_bundle_strips_non_contract_derived_expectations(runner):
+    step = SimpleNamespace(agent_id="agent.product.prd_writer")
+    business_output = {
+        "epic_ref": "EPIC-001",
+        "feat_specs": [
+            {
+                "feat_id": "FEAT-901",
+                "title": "逆向链路治理收口",
+                "derived_object_expectations": {
+                    "task_required": True,
+                    "testset_required": True,
+                    "testset_owner": "qa",
+                    "qa_seed_required": True,
+                    "ui_required": True,
+                    "tech_required": True,
+                },
+            }
+        ],
+    }
+
+    normalized_business, _ = runner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-task-002",
+        business_output=business_output,
+        structured_payload={},
+    )
+
+    derived = normalized_business["feat_specs"][0]["derived_object_expectations"]
+    assert derived == {
+        "task_required": True,
+        "testset_required": True,
+        "testset_owner": "qa",
+        "qa_seed_required": True,
+    }
+
+
 def test_normalize_prd_writer_feat_bundle_payload_maps_user_story_shape(runner):
     step = SimpleNamespace(agent_id="agent.product.prd_writer")
     business_output = {
@@ -4232,6 +4441,95 @@ def test_pm_planner_normalization_enriches_validation_dependencies_and_dependenc
         "depends_on": ["TASK-FEAT-143-002"],
     }
     assert "审计一致性" in normalized_business["risk_mitigation"][0]["mitigation"]
+
+
+def test_build_pm_planner_bundle_from_task_markdowns_recovers_source_feats(temp_project_root, runner):
+    task_dir = temp_project_root / "spec" / "tasks" / "FEAT-143"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    task_one = task_dir / "TASK-FEAT-143-001__entry-spec.md"
+    task_two = task_dir / "TASK-FEAT-143-002__runtime.md"
+    task_one.write_text(
+        "\n".join(
+            [
+                "---",
+                "id: TASK-FEAT-143-001",
+                "ssot_type: task",
+                "title: 执行入口规范定义",
+                "status: draft",
+                "version: v1",
+                "parent_id: FEAT-143",
+                "source_refs:",
+                "- FEAT-143#delivery",
+                "properties:",
+                "  identity_kind: ssot",
+                "---",
+                "",
+                "# 执行入口规范定义",
+                "",
+                "## Objective",
+                "定义执行入口规范",
+                "",
+                "## Description",
+                "沉淀执行入口规范与契约。",
+                "",
+                "## Acceptance Mapping",
+                "- FEAT-143 / AC-003-001: 明确 task_ref 入口规则",
+                "",
+                "## Definition Of Done",
+                "- TASK 文件已冻结",
+                "",
+                "## Outputs",
+                "- spec/tech/FEAT-143/entry-spec.md",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    task_two.write_text(
+        "\n".join(
+            [
+                "---",
+                "id: TASK-FEAT-143-002",
+                "ssot_type: task",
+                "title: EntryRouter 实现",
+                "status: draft",
+                "version: v1",
+                "parent_id: FEAT-143",
+                "source_refs:",
+                "- FEAT-143#delivery",
+                "properties:",
+                "  identity_kind: ssot",
+                "---",
+                "",
+                "# EntryRouter 实现",
+                "",
+                "## Objective",
+                "实现运行时入口路由。",
+                "",
+                "## Description",
+                "实现 EntryRouter。",
+                "",
+                "## Dependencies",
+                "- TASK-FEAT-143-001（规范定义）",
+                "",
+                "## Definition Of Done",
+                "- TASK 文件已冻结",
+                "",
+                "## Outputs",
+                "- src/lee/qa/entry_router.py",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = runner._build_pm_planner_bundle_from_written_files([str(task_one), str(task_two)])
+
+    assert bundle["source_feats"] == ["FEAT-143"]
+    assert bundle["planning_metadata"]["task_directory"] == "spec/tasks/FEAT-143"
+    assert len(bundle["task_specs"]) == 2
+    assert bundle["dependency_graph"]["dependency_matrix"][1] == {
+        "task_id": "TASK-FEAT-143-002",
+        "depends_on": ["TASK-FEAT-143-001"],
+    }
 
 
 def test_pm_planner_normalization_preserves_concrete_task_directory_and_injects_governance_task(
@@ -4802,6 +5100,42 @@ def test_requirement_decomposer_maps_features_list_to_feat_breakdown():
     assert normalized["feat_candidates"][0]["title"] == "执行器配置通道扩展"
     assert normalized["feat_candidates"][0]["user_value"] == "执行器配置通道扩展"
     assert envelope["business_output"]["feat_candidates"][0]["title"] == "执行器配置通道扩展"
+
+
+def test_requirement_decomposer_maps_feats_alias_to_feat_breakdown():
+    step = SimpleNamespace(
+        id="feat_boundary_design",
+        agent_id="agent.product.requirement_decomposer",
+        config={},
+    )
+    business_output = {
+        "feats": [
+            {
+                "feat_id": "FEAT-092-01",
+                "title": "SSOT 对象映射规则定义",
+                "acceptance_boundary": "规则文档存在且通过治理审查。",
+            }
+        ]
+    }
+
+    normalized, envelope = LLMRunner._normalize_requirement_decomposer_payload(
+        step,
+        business_output,
+        {"business_output": business_output},
+        instance_data={
+            "params": {
+                "epic_freeze": {
+                    "artifact_id": "EPIC-092",
+                    "path": "spec/requirements/epics/EPIC-092.md",
+                }
+            }
+        },
+    )
+
+    assert normalized["epic_ref"] == "EPIC-092"
+    assert normalized["feat_candidates"][0]["title"] == "SSOT 对象映射规则定义"
+    assert normalized["feat_candidates"][0]["user_value"] == "SSOT 对象映射规则定义"
+    assert envelope["business_output"]["feat_candidates"][0]["acceptance_boundary"] == "规则文档存在且通过治理审查。"
 
 
 def test_prd_writer_normalizes_empty_inputs_and_consumption_rules():
