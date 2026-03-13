@@ -42,12 +42,12 @@ Feature Delivery L2 主链技术架构
 | `workflow_definition` | Checked-in YAML Workflow Template | 用 checked-in 模板定义 L2 主链，确保阶段顺序、输入输出和 gate 约束可审计。 |
 | `orchestration_runtime` | Declarative Orchestrator Runtime | 复用现有 workflow runtime 执行阶段编排、状态推进和 symbol 解析。 |
 | `state_model` | Finite State Machine | 以 Ready / In Progress / Evidence Pack Produced / Closed 管理生命周期。 |
-| `contract_binding` | SSOT + Contract Schema | formal_ssot_id/source_refs/governing_adrs/repo_context 进入统一契约校验链。 |
+| `contract_binding` | SSOT + Contract Schema | formal_ssot_id/source_refs/governing_adrs/repo_context/repo_frontend/repo_backend 进入统一契约校验链。 |
 
 ## Core Components
 
 ### FeatureDeliveryTemplate
-- 职责：定义 tech_design -> contract_design -> frontend_dev -> backend_dev -> integration -> evidence_pack -> smoke_gate 主链。
+- 职责：定义 tech_design -> contract_design -> backend_dev / frontend_dev 并行 -> integration -> evidence_pack -> smoke_gate 主链。
 - 依赖：WorkflowRuntime, ContractSchemaValidator
 
 ### DeliveryStateMachine
@@ -61,8 +61,8 @@ Feature Delivery L2 主链技术架构
 ## Input To Delivery Mapping
 
 ### FEAT Processing Projection
-- 校验输入完整性（formal_ssot_id, source_refs, governing_adrs, repo_context）
-- 定义 L3 阶段编排顺序（Contract → Backend → Frontend → Integration → Evidence Pack）
+- 校验输入完整性（formal_ssot_id, source_refs, governing_adrs, repo_context, repo_frontend, repo_backend）
+- 定义 L3 阶段编排顺序（Contract → Backend / Frontend 并行 → Integration → Evidence Pack）
 - 定义状态机（Ready → In Progress → Evidence Pack Produced → Closed）
 - 设计与上游 FEAT 的契约接口
 - 设计与下游 Evidence Pack 的契约接口
@@ -78,8 +78,8 @@ Feature Delivery L2 主链技术架构
 
 ### Acceptance Alignment
 - L2 工作流定义文档已冻结并通过评审
-- 输入规范包含 formal_ssot_id, source_refs, governing_adrs, repo_context 四个字段定义
-- L3 阶段编排顺序明确定义为 Contract → Backend → Frontend → Integration → Evidence Pack
+- 输入规范包含 formal_ssot_id, source_refs, governing_adrs, repo_context, repo_frontend, repo_backend 六个字段定义
+- L3 阶段编排顺序明确定义为 Contract → Backend / Frontend 并行 → Integration → Evidence Pack
 - 状态机包含 Ready → In Progress → Evidence Pack Produced → Closed 四个状态
 - 与上游 FEAT 的契约接口文档化
 - 与下游 Evidence Pack 的契约接口文档化

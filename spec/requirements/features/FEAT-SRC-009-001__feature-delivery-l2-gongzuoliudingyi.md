@@ -32,10 +32,13 @@ properties:
     - source_refs
     - governing_adrs
     - repo_context
+    - repo_frontend
+    - repo_backend
     consumption_rules:
     - 上游 FEAT 必须处于 frozen 状态方可进入 L2
     - ADR 必须明确影响范围和技术决策
     - repo_context 必须包含有效的代码库路径
+    - repo_frontend 和 repo_backend 必须显式指向当前交付使用的代码库
 ---
 
 # Goal
@@ -50,6 +53,8 @@ Dev 部门获得从 FEAT 到 Evidence Pack 的完整 Feature 交付主链，实�
 - {'source_refs': '需求来源引用列表'}
 - {'governing_adrs': '影响范围声明的 ADR 引用'}
 - {'repo_context': '代码库路径和分支规则'}
+- {'repo_frontend': '前端代码库路径或标识'}
+- {'repo_backend': '后端代码库路径或标识'}
 # Input Contract
 
 required_artifacts:
@@ -60,14 +65,17 @@ required_fields:
 - source_refs
 - governing_adrs
 - repo_context
+- repo_frontend
+- repo_backend
 consumption_rules:
 - 上游 FEAT 必须处于 frozen 状态方可进入 L2
 - ADR 必须明确影响范围和技术决策
 - repo_context 必须包含有效的代码库路径
+- repo_frontend 和 repo_backend 必须显式指向当前交付使用的代码库
 # Processing
 
-- 校验输入完整性（formal_ssot_id, source_refs, governing_adrs, repo_context）
-- 定义 L3 阶段编排顺序（Contract → Backend → Frontend → Integration → Evidence Pack）
+- 校验输入完整性（formal_ssot_id, source_refs, governing_adrs, repo_context, repo_frontend, repo_backend）
+- 定义 L3 阶段编排顺序（Contract → Backend / Frontend 并行 → Integration → Evidence Pack）
 - 定义状态机（Ready → In Progress → Evidence Pack Produced → Closed）
 - 设计与上游 FEAT 的契约接口
 - 设计与下游 Evidence Pack 的契约接口
@@ -83,8 +91,8 @@ consumption_rules:
 # Acceptance
 
 - L2 工作流定义文档已冻结并通过评审
-- 输入规范包含 formal_ssot_id, source_refs, governing_adrs, repo_context 四个字段定义
-- L3 阶段编排顺序明确定义为 Contract → Backend → Frontend → Integration → Evidence Pack
+- 输入规范包含 formal_ssot_id, source_refs, governing_adrs, repo_context, repo_frontend, repo_backend 六个字段定义
+- L3 阶段编排顺序明确定义为 Contract → Backend / Frontend 并行 → Integration → Evidence Pack
 - 状态机包含 Ready → In Progress → Evidence Pack Produced → Closed 四个状态
 - 与上游 FEAT 的契约接口文档化
 - 与下游 Evidence Pack 的契约接口文档化
@@ -103,7 +111,7 @@ consumption_rules:
   scenario: 输入规范完整性验证
   given: L2 工作流定义文档已冻结
   when: 检查输入规范章节
-  then: 包含 formal_ssot_id, source_refs, governing_adrs, repo_context 完整定义
+  then: 包含 formal_ssot_id, source_refs, governing_adrs, repo_context, repo_frontend, repo_backend 完整定义
   trace_hints:
   - TECH
   - TESTSET
@@ -111,7 +119,7 @@ consumption_rules:
   scenario: L3 阶段编排顺序定义
   given: L2 框架包含阶段编排定义
   when: 检查阶段编排章节
-  then: 明确定义 Contract → Backend → Frontend → Integration → Evidence Pack 顺序
+  then: 明确定义 Contract → Backend / Frontend 并行 → Integration → Evidence Pack 顺序
   trace_hints:
   - TECH
 - id: AC-001-004
