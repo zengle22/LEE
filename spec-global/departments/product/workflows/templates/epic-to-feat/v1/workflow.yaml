@@ -95,6 +95,8 @@ stages:
           implementation_facing: false
           output_contract: departments/product/contracts/product-review-contract/v1/schema.json
           strict_output_validation: true
+          claude_code:
+            read_only: true
         mandatory: true
         depends_on: [feat_spec_generation]
         description: >

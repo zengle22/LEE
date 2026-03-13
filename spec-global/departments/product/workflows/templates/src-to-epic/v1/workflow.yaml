@@ -101,6 +101,8 @@ stages:
             freeze: false
         config:
           strict_output_validation: true
+          claude_code:
+            read_only: true
       - id: epic_freeze
         name: EPIC 冻结
         kind: gate

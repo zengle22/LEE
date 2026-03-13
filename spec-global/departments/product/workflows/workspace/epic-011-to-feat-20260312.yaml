@@ -1,6 +1,0 @@
-project: qa-ssot-alignment
-epic_freeze_ref: E:\ai\LEE\spec\requirements\epics\EPIC-011__qabumenssotduiqiyugongzuoliuzhonggou-jianlisanzhou.md
-epic_freeze:
-  artifact_id: EPIC-QA-SSOT-UPGRADE
-  path: .workflow/workspace/wf_task_3f88d5d4/epic_design/EPIC-QA-SSOT-UPGRADE.json
-  resolved_path: E:\ai\LEE\.workflow\workspace\wf_task_3f88d5d4\epic_design\EPIC-QA-SSOT-UPGRADE.json

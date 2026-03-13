@@ -64,6 +64,9 @@ stages:
           - symbol: requirement_chain_test_report
             contract: departments/product/contracts/product-review-contract/v1/schema.json
             freeze: false
+        config:
+          claude_code:
+            read_only: true
       - id: requirement_chain_review
         name: 需求链校验评审
         kind: agent
@@ -84,6 +87,9 @@ stages:
           - symbol: requirement_chain_review
             contract: departments/product/contracts/product-review-contract/v1/schema.json
             freeze: false
+        config:
+          claude_code:
+            read_only: true
       - id: requirement_chain_validation_gate
         name: 需求链验证门禁
         kind: gate

@@ -4,10 +4,10 @@ ssot_type: feat
 title: Delivery Prep 与 QA Handoff 种子视图生成
 status: active
 version: v1
-parent_id: EPIC-078
+parent_id: EPIC-134
 derived_from_ids: []
 source_refs:
-- EPIC-078#scope
+- EPIC-134#scope
 owner: null
 tags: []
 properties:
@@ -23,9 +23,9 @@ properties:
 研发与 QA 可以基于 reverse pack 获得下游准备材料，但不会越权生成新的 formal freeze 对象。
 # Inputs
 
-- EPIC-078#scope
-- formal FEAT bundle
-- canonical SSOT directory rules
+- EPIC-134#scope
+- FEAT-FREEZE-BUNDLE
+- CANONICAL-SSOT-PATH-RULES
 # Processing
 
 - 基于 FEAT 派生 delivery prep seeds
@@ -44,29 +44,21 @@ properties:
 - 下游输出路径与现行 canonical SSOT 目录保持一致
 # Acceptance Checks
 
-## AC-02-01
+## AC-SEED-01
 
-- Scenario: 状态变更触发快照
-- Given: 工作流状态发生变更
-- When: 事件发布到总线
-- Then: 系统自动创建 SSOT 快照并关联版本
-- Trace Hints: TASK, TESTSET, TECH
+- Scenario: delivery prep seed 生成
+- Given: formal FEAT bundle 已冻结
+- When: 运行 reverse delivery prep step
+- Then: 生成 UI / TECH / TASK seeds，且输出只落 seed 或 handoff/index
+- Trace Hints: UI, TECH, TASK
 
-## AC-02-02
+## AC-SEED-02
 
-- Scenario: 快照可检索
-- Given: 快照已创建
-- When: 查询特定版本快照
-- Then: 系统返回正确的快照内容
-- Trace Hints: TASK, TESTSET, TECH
-
-## AC-02-03
-
-- Scenario: 回滚一致性
-- Given: 状态发生回滚
-- When: 恢复至前一版本
-- Then: 快照版本链保持连续且一致
-- Trace Hints: TASK, TESTSET, TECH
+- Scenario: QA handoff seed 与 evidence view 生成
+- Given: formal FEAT bundle 已冻结
+- When: 运行 reverse QA handoff generation
+- Then: 生成 TESTSET seed 与 TC / REPORT / BUG / EVI trace/evidence views，不产生 formal freeze
+- Trace Hints: TESTSET, TASK, TECH
 # Dependencies
 
 - FEAT-SRC-DRAFT-REV-001-01
