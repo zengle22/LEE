@@ -21,13 +21,13 @@ properties:
 
 # Description
 
-基于 FTA-FEAT-171-001 架构设计，实现 MOD-NORMALIZER 模块。定义 NormalizedExecutionResult Pydantic 模型，实现各执行器专用的归一化适配器，统一包含执行状态、输出内容、元数据、追溯信息。同时实现 MOD-LOGGER 模块的基础日志记录功能。
+基于 TECH-FEAT-171-001 技术方案，实现结果归一化层。统一吸收 `qwen` 的 `json` / `stream-json` 输出事件，归并为与 `claude_code`、`codex` 一致的执行状态、输出内容、元数据与追溯信息，并补齐日志记录功能。
 
 ## Acceptance Mapping
 - FEAT-171 / AC-002: 执行结果格式与其他执行器一致，符合统一规范
 
 ## Prerequisites
-- FTA-FEAT-171-001 架构已冻结
+- TECH-FEAT-171-001 技术方案已冻结
 - TASK-FEAT-171-001 完成或接口已定义
 
 ## Dependencies
@@ -48,7 +48,6 @@ audit_fields:
 ```yaml
 required_refs:
 - TECH-FEAT-171-001
-- FTA-FEAT-171-001
 review_required: true
 test_coverage_threshold: 80
 ```
@@ -57,8 +56,8 @@ test_coverage_threshold: 80
 ```yaml
 mode: revert
 restore_targets:
-- src/lee/runner/normalizer/
-- src/lee/runner/logger/
+- src/lee/orchestrator/execution/runners/llm_runner.py
+- src/lee/orchestrator/execution/trace.py
 ```
 
 ## Definition Of Done
