@@ -1,8 +1,8 @@
 ---
 id: TASK-FEAT-169-003
 ssot_type: task
-title: CLI 集成与配置透传实现
-status: active
+title: CLI 命令集成与配置透传
+status: frozen
 version: v1
 parent_id: FEAT-169
 derived_from_ids: []
@@ -13,27 +13,25 @@ tags: []
 properties:
   contract_key: task_feat_169_003
   identity_kind: ssot
+frozen_at: '2026-03-13T01:36:39.475010'
 ---
 
 # Objective
 
-在 CLI run 命令中集成执行器配置并在 workflow_data 中透传
+在 run 命令中集成执行器配置解析并在 workflow_data 中透传
 
 # Description
 
-修改 src/lee/cli/commands/run.py 实现 --executor 参数解析和 ExecutorTypeResolver 集成，扩展 config_loader.py 实现配置文件 executor 字段验证，在 workflow_data 中透传 executor_config
+修改 src/lee/cli/commands/run.py 集成 --executor CLI 参数解析，注入 ConfigResolver 进行配置解析和验证，验证失败时抛出 click.ClickException 阻止 workflow 启动，在 workflow_data 中设置 executor_override 和 executor_selection_source 字段透传到 Orchestrator 层
 
 ## Acceptance Mapping
 - FEAT-169 / AC-001: CLI 指定 --executor=qwen 时配置层正确识别
-- FEAT-169 / AC-002: 配置文件设置 executor: qwen 时配置层正确识别
 - FEAT-169 / AC-003: 执行器来源优先级判定 CLI > 配置文件 > 默认设置
 
 ## Prerequisites
-- 执行器配置优先级与验证规则规范
 - TASK-FEAT-169-002
 
 ## Dependencies
-- TASK-FEAT-169-000
 - TASK-FEAT-169-002
 
 ## Observability
@@ -49,7 +47,7 @@ audit_fields:
 ## Evidence Requirements
 ```yaml
 required_refs:
-- FTA-FEAT-169-20260312
+- FTA-FEAT-169-20260313
 - FEAT-169-UI
 review_required: true
 ```
@@ -59,12 +57,12 @@ review_required: true
 mode: revert
 restore_targets:
 - src/lee/cli/commands/run.py
-- src/lee/orchestrator/config_loader.py
 ```
 
 ## Definition Of Done
 - run.py 支持 --executor 参数
-- run.py 集成 ExecutorTypeResolver
-- config_loader.py 支持 executor 字段验证
-- workflow_data 包含 executor_config 透传结构
-- CLI 输出符合交互原则(优先级透明、错误即时反馈)
+- ConfigResolver 正确集成到 run 命令
+- 验证失败时抛出 ClickException 并显示错误信息
+- workflow_data 包含 executor_override 字段
+- workflow_data 包含 executor_selection_source 字段
+- --verbose 模式输出配置追溯信息
