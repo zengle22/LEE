@@ -542,3 +542,45 @@ class TestBugFixes:
         payload = yaml.safe_load(frozen_path.read_text(encoding="utf-8"))
         assert payload["frozen_inputs"]["epic_freeze_ref"]["artifact_id"] == "EPIC-001"
         assert payload["frozen_inputs"]["feat_review"]["decision"] == "pass"
+
+    @pytest.mark.asyncio
+    async def test_complete_step_registers_symbol_output_aliases(self, tmp_path):
+        rendered_dir = tmp_path / ".workflow" / "rendered"
+        rendered_dir.mkdir(parents=True, exist_ok=True)
+        template_path = rendered_dir / "workflow-test.yaml"
+        template_path.write_text("id: dummy\n", encoding="utf-8")
+
+        mock_instance = MagicMock()
+        mock_instance.template_id = str(template_path)
+        mock_instance.status = WorkflowStatus.RUNNING
+        mock_instance.data = {
+            "completed_steps": [],
+            "step_outputs": {},
+            "params": {"project": "demo"},
+        }
+        self.mock_store.get_workflow.return_value = mock_instance
+
+        step_info = MagicMock()
+        step_info.outputs = [
+            OutputSpec(
+                type="symbol",
+                path="feat_scoped_specs",
+                format="yaml",
+                symbol="feat_scoped_specs",
+            )
+        ]
+        step_info.input = [{"source": "feat_specs"}]
+
+        template = MagicMock()
+        template.get_step_info.return_value = step_info
+        template_manager = MagicMock()
+        template_manager.get_template.return_value = template
+
+        state_machine = WorkflowStateMachine(self.mock_store, template_manager=template_manager)
+        payload = {"ssot_materialized": {"feat": {"id": "FEAT-SRC-001-001"}}}
+        await state_machine.complete_step("workflow-789", "feat_identity_prepare", payload)
+
+        updated_data = self.mock_store.update_workflow_data_and_clear_current_step.await_args.args[1]
+        assert updated_data["step_outputs"]["feat_identity_prepare"] == payload
+        assert updated_data["step_outputs"]["feat_scoped_specs"] == payload
+        assert not (tmp_path / "feat_scoped_specs").exists()

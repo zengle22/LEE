@@ -8,6 +8,7 @@ name: Product EPIC to FEAT
 description: >
   将冻结后的 EPIC 拆解为多个可独立验收的 FEAT。
   FEAT 是最小可独立验收能力单元，也是 UI / TECH / TASK / TESTSET 的直接父节点。
+  FEAT 的正式身份必须在所属 SRC 作用域内完成准备和定版。
   该文件是 checked-in workflow template，运行时实例由 Python runtime 动态生成。
 owner: product-ai
 tags: [product, workflow, l3, ssot, feat]
@@ -87,6 +88,28 @@ stages:
               identity_kind: ssot
               ssot_type: FEAT
               parent: EPIC
+      - id: feat_identity_prepare
+        name: FEAT 身份准备
+        kind: agent
+        agent_id: agent.governance.approval_reviewer
+        mandatory: true
+        depends_on: [feat_spec_generation]
+        description: >
+          在非 main 分支上为每个 FEAT candidate 建立 provisional identity，
+          并继承 EPIC freeze 提供的 src_root_id 和父作用域上下文。
+        inputs:
+          - source: feat_specs
+            required: true
+          - source: epic_freeze
+            required: true
+        outputs:
+          - symbol: feat_scoped_specs
+            contract: departments/product/contracts/feat-bundle-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: FEAT
+              parent: EPIC
       - id: feat_review
         name: FEAT 可实施性评审
         kind: agent
@@ -98,27 +121,49 @@ stages:
           claude_code:
             read_only: true
         mandatory: true
-        depends_on: [feat_spec_generation]
+        depends_on: [feat_identity_prepare]
         description: >
           校验 FEAT 是否满足独立验收、边界明确、依赖透明、可派生 TASK / TESTSET 和优先级清晰。
           验收项不仅要保留兼容 AC 列表，还必须提供结构化 acceptance_checks 供下游追溯。
           若 acceptance_checks 缺失，或不能映射到 UI / TECH / TASK / TESTSET，则不得通过评审。
         inputs:
-          - source: feat_specs
+          - source: feat_scoped_specs
             required: true
         outputs:
           - symbol: feat_review_report
             contract: departments/product/contracts/product-review-contract/v1/schema.json
             freeze: false
+      - id: feat_identity_formalize
+        name: FEAT 身份定版
+        kind: agent
+        agent_id: agent.governance.approval_reviewer
+        mandatory: true
+        depends_on: [feat_review]
+        description: >
+          在 FEAT freeze 前，将 provisional FEAT 批量定版为 SRC scoped 正式身份，
+          并完成同批次内的引用和目录路由重写。
+        inputs:
+          - source: feat_scoped_specs
+            required: true
+          - source: feat_review_report
+            required: true
+        outputs:
+          - symbol: feat_formalized_specs
+            contract: departments/product/contracts/feat-bundle-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: FEAT
+              parent: EPIC
       - id: feat_freeze
         name: FEAT 冻结
         kind: gate
         mandatory: true
-        depends_on: [feat_review]
+        depends_on: [feat_identity_formalize]
         description: >
           由产品负责人冻结 FEAT 集合，形成后续 UI / TECH / TASK 的唯一输入基线。
         inputs:
-          - source: feat_specs
+          - source: feat_formalized_specs
             required: true
           - source: feat_review_report
             required: true
@@ -162,7 +207,9 @@ stages:
     step_order:
       - feat_boundary_design
       - feat_spec_generation
+      - feat_identity_prepare
       - feat_review
+      - feat_identity_formalize
       - feat_freeze
 
 stage_order:
@@ -173,6 +220,10 @@ constraints:
     UI / TECH / TASK 不允许直接挂在 EPIC 下。
     必须先有 FEAT freeze。
 
+  src_scoped_feat_rule: |
+    FEAT 必须继承 EPIC freeze 对应的 src_root_id。
+    freeze 前必须完成 FEAT 的 SRC 作用域 identity formalize。
+
 instance_schema:
   required_fields:
     - id
@@ -182,6 +233,7 @@ instance_schema:
   context_fields:
     - epic_freeze
     - epic_freeze_ref
+    - src_root_id
     - feat_freeze_ref
   output_fields:
     - feat_breakdown
@@ -193,7 +245,43 @@ state_machine:
     - INIT: "初始化"
     - FEAT_BOUNDARY_DESIGN: "FEAT 边界拆解"
     - FEAT_SPEC_GENERATION: "FEAT 规格生成"
+    - FEAT_IDENTITY_PREPARE: "FEAT 身份准备"
     - FEAT_REVIEW: "FEAT 评审"
+    - FEAT_IDENTITY_FORMALIZE: "FEAT 身份定版"
     - FEAT_FREEZE: "FEAT 冻结"
     - COMPLETED: "完成"
     - FAILED: "失败"
+  transitions:
+    INIT:
+      - to: FEAT_BOUNDARY_DESIGN
+        trigger: workflow_started
+    FEAT_BOUNDARY_DESIGN:
+      - to: FEAT_SPEC_GENERATION
+        trigger: feat_boundary_design_completed
+      - to: FAILED
+        trigger: feat_boundary_design_failed
+    FEAT_SPEC_GENERATION:
+      - to: FEAT_IDENTITY_PREPARE
+        trigger: feat_spec_generation_completed
+      - to: FAILED
+        trigger: feat_spec_generation_failed
+    FEAT_IDENTITY_PREPARE:
+      - to: FEAT_REVIEW
+        trigger: feat_identity_prepare_completed
+      - to: FAILED
+        trigger: feat_identity_prepare_failed
+    FEAT_REVIEW:
+      - to: FEAT_IDENTITY_FORMALIZE
+        trigger: feat_review_completed
+      - to: FAILED
+        trigger: feat_review_failed
+    FEAT_IDENTITY_FORMALIZE:
+      - to: FEAT_FREEZE
+        trigger: feat_identity_formalize_completed
+      - to: FAILED
+        trigger: feat_identity_formalize_failed
+    FEAT_FREEZE:
+      - to: COMPLETED
+        trigger: feat_freeze_completed
+      - to: FAILED
+        trigger: feat_freeze_failed

@@ -19,6 +19,15 @@ The core control is simple:
 - An independent supervisor gate such as `$lee-supervisor-gate` or the repository's gate-review path must return `PASS` before the task can be treated as complete.
 - `REJECT` and `ESCALATE_TO_HUMAN` both block completion.
 
+The generating agent must also respect these mandatory limits for newly added or materially rewritten content:
+
+- code file limit: 500 lines
+- document limit: 1000 lines
+- function limit: 100 lines
+- `if`/`for` nesting limit: 3 levels
+
+Historical legacy debt may remain as-is unless the task explicitly includes refactoring it, but new work must comply. If an exception is unavoidable, route it to human special approval instead of assuming the supervisor can waive it.
+
 ## Claude Code Compatibility
 
 - Repository entrypoint remains `lee-safe-code` for backward compatibility.
@@ -51,6 +60,9 @@ The core control is simple:
 
 8. Respect the active LEE workflow path.
    Prefer the current active project path, phase directory, `.workflow` state, and `openspec` outputs. Do not edit `legacy/` mirrors, archived evidence, or historical phase copies unless the user explicitly asks for a backfill or migration.
+
+9. Keep new content within hard size and complexity limits.
+   Newly added code files must stay within 500 lines, newly added documents within 1000 lines, newly added or materially rewritten functions within 100 lines, and newly added `if`/`for` logic within 3 nesting levels. If that cannot be achieved, stop and require human special approval.
 
 ## LEE-Specific Interpretation
 
@@ -104,6 +116,7 @@ If the task is high-risk, say so in the request and require explicit attention t
 - Wire the implementation into the actual execution path, not just helper code.
 - Keep workflow-linked artifacts aligned with the implementation when the task requires phase deliverables.
 - Add tests alongside the behavior change.
+- Split new code or docs before they exceed the hard limits.
 
 ### 3. Before Completion
 
@@ -113,6 +126,7 @@ If the task is high-risk, say so in the request and require explicit attention t
 - Verify tests cover the new or fixed behavior.
 - Verify no existing tests were relaxed to manufacture a pass.
 - Perform a brief self-review for duplication, edge cases, and error handling.
+- Verify that new files, new documents, new functions, and newly added branch nesting still satisfy the hard limits.
 - Do not use completion language such as "done", "fixed", "completed", or "ready to merge" before the supervisor gate passes.
 - Hand the candidate result package to an independent supervisor review before using completion language.
 
@@ -202,6 +216,15 @@ The supervisor must audit these five areas:
 
 5. Unverified-risk disclosure.
    List what still has not been verified, what requires human confirmation, and the most likely risk that would be missed if the task were closed now.
+
+The supervisor must also enforce these mandatory hard standards for new or materially rewritten content:
+
+- code file must not exceed 500 lines
+- document must not exceed 1000 lines
+- function must not exceed 100 lines
+- `if`/`for` nesting must not exceed 3 levels
+
+If a candidate cannot satisfy these limits, it must not pass without explicit human special approval.
 
 The supervisor may return only one of these decisions:
 

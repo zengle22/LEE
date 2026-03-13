@@ -24,9 +24,11 @@ Use this command when the task involves any of the following:
 2. Reuse existing modules and integration points instead of creating parallel implementations.
 3. Update runtime wiring, workflow/spec references, exports, config, and tests when the task requires them.
 4. Preserve the test bar. Do not weaken assertions, remove coverage, or alter pass criteria just to get green results.
-5. Produce a structured candidate result package before any completion claim.
-6. Run an explicitly separate supervisor-style review pass after implementation.
-7. Treat the task as complete only if that review returns `PASS`.
+5. Keep newly added or materially rewritten content within hard limits: code file <= 500 lines, document <= 1000 lines, function <= 100 lines, and `if`/`for` nesting <= 3 levels.
+6. If those limits cannot be met, stop and require explicit human special approval instead of assuming an AI waiver.
+7. Produce a structured candidate result package before any completion claim.
+8. Run an explicitly separate supervisor-style review pass after implementation.
+9. Treat the task as complete only if that review returns `PASS`.
 
 ## Required Output Shape
 
@@ -107,5 +109,7 @@ The final decision may only be:
 - `PASS`
 - `REJECT`
 - `ESCALATE_TO_HUMAN`
+
+New-code hard-standard violations block `PASS`. Legacy debt may remain, but new violations require remediation or explicit human special approval.
 
 `REJECT` and `ESCALATE_TO_HUMAN` both block completion.

@@ -311,6 +311,23 @@ def sync_registry():
     click.echo(f"✅ registry synced from SSOT files: {count} artifacts")
 
 
+@ssot.command("formalize")
+@click.option("--id", "artifact_ids", multiple=True, required=True, help="待定版的 SSOT ID，可重复")
+def formalize_ssot(artifact_ids: tuple[str, ...]):
+    """内部命令：批量定版 SSOT ID 并重写引用。"""
+    manager = ArtifactManager()
+    service = SSOTService(manager)
+
+    try:
+        result = service.formalize(list(artifact_ids))
+    except (ValueError, KeyError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"✅ formalized {result['count']} artifacts")
+    for old_id, new_id in result["replacements"].items():
+        click.echo(f"   {old_id} -> {new_id}")
+
+
 @ssot.command("lint")
 @click.option("--changed-only", is_flag=True, help="保留接口，当前仍执行全量扫描")
 def lint_ssot(changed_only: bool):

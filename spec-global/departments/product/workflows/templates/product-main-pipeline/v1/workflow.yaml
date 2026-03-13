@@ -7,7 +7,7 @@ id: workflow.product.product_main_pipeline
 name: Product Main Pipeline
 description: >
   产品部门新的 L2 主编排模板。
-  负责将上游 SRC 输入串联为 EPIC、FEAT，以及研发准备包。
+  负责将上游输入先收敛为 SRC，再串联为 EPIC、FEAT，以及研发准备包。
   在全套 SSOT 生成完成后，必须先执行 requirement chain validation，
   再进入最终完成态与下游 handoff。
   该文件定义的是 checked-in workflow template，不是运行时 workflow instance。
@@ -30,6 +30,8 @@ overview:
       contract: departments/stg/contracts/business_opportunity/v1/schema.yaml
 
   output_types:
+    - type: source_freeze
+      description: 冻结后的 SRC 主对象或其冻结视图
     - type: epic_freeze_bundle
       description: 冻结后的 EPIC 集合
     - type: feat_freeze_bundle
@@ -98,7 +100,7 @@ constraints:
 
   ssot_chain_binding: |
     主链必须遵循：
-    SRC -> EPIC -> FEAT -> UI / TECH / TASK
+    raw input -> SRC -> EPIC -> FEAT -> UI / TECH / TASK
     并确保在最终 handoff 前已完成 requirement chain validation，
     TESTSET 可由 QA 基于 FEAT 派生。
 
@@ -115,7 +117,9 @@ instance_schema:
   context_fields:
     - raw_requirement
     - business_opportunity_freeze
+    - source_freeze_ref
   output_fields:
+    - source_freeze
     - epic_freeze_bundle
     - feat_freeze_bundle
     - delivery_prep_bundle
@@ -123,7 +127,8 @@ instance_schema:
 state_machine:
   states:
     - INIT: "初始化"
-    - RAW_TO_SRC: "原始输入到 SRC"
+    - RAW_TO_SRC: "Raw 到 SRC"
+    - RAW_TO_SRC: "Raw 到 SRC"
     - SRC_TO_EPIC: "SRC 到 EPIC"
     - EPIC_TO_FEAT: "EPIC 到 FEAT"
     - FEAT_TO_DELIVERY_PREP: "FEAT 到研发准备"
