@@ -844,6 +844,28 @@ class TestYamlTemplates:
             "structural_issue_ref",
         ]
 
+    def test_feature_integration_l3_template_declares_planner_router_reporter_chain(self):
+        """Test integration template uses the canonical planner/execution/router/reporter chain."""
+        import yaml
+
+        template_path = Path("spec-global/departments/dev/workflows/templates/feature-integration-l3-template.yaml")
+        if not template_path.exists():
+            pytest.skip("Feature integration L3 template not found")
+
+        with open(template_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["id"] == "template.dev.feature_integration_l3"
+        assert [step["id"] for step in data["steps"]] == [
+            "integration_planning",
+            "integration_execution",
+            "structural_issue_routing",
+            "integration_reporting",
+        ]
+        assert data["contracts"]["planner_verifier_spec"] == "../../docs/integration-planner-and-verifier-spec.md"
+        assert data["contracts"]["routing_spec"] == "../../docs/structural-issue-routing-spec.md"
+        assert data["contracts"]["reporter_handoff_spec"] == "../../docs/integration-reporter-handoff-spec.md"
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
