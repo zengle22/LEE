@@ -83,10 +83,8 @@ stages:
               identity_kind: ssot
               ssot_type: EPIC
               source_refs: [external]
-<<<<<<< HEAD
         config:
           strict_output_validation: true
-=======
       - id: epic_identity_prepare
         name: EPIC 身份准备
         kind: agent
@@ -110,7 +108,6 @@ stages:
               identity_kind: ssot
               ssot_type: EPIC
               source_refs: [external]
->>>>>>> codex/src-scoped-identity-impl
       - id: epic_review
         name: EPIC 对齐评审
         kind: agent
@@ -126,12 +123,10 @@ stages:
           - symbol: epic_review_report
             contract: departments/product/contracts/product-review-contract/v1/schema.json
             freeze: false
-<<<<<<< HEAD
         config:
           strict_output_validation: true
           claude_code:
             read_only: true
-=======
       - id: epic_identity_formalize
         name: EPIC 身份定版
         kind: agent
@@ -154,7 +149,6 @@ stages:
               identity_kind: ssot
               ssot_type: EPIC
               source_refs: [external]
->>>>>>> codex/src-scoped-identity-impl
       - id: epic_freeze
         name: EPIC 冻结
         kind: gate

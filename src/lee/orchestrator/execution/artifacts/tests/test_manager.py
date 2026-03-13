@@ -280,7 +280,7 @@ class TestArtifactManager:
             run_id="test-run-002",
         )
 
-        task_dir = manager.project_root / "spec" / "tasks" / "FEAT-SRC-009-001"
+        task_dir = manager.project_root / "spec" / "tasks" / "SRC-009" / "FEAT-SRC-009-001"
         matching_files = sorted(task_dir.glob("TASK-FEAT-SRC-009-001-001__*.md"))
 
         assert len(matching_files) == 1

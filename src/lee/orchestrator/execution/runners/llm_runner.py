@@ -2008,7 +2008,8 @@ class LLMRunner(StepRunnerBase):
                     output["parent"] = candidates[0]
             if isinstance(output.get("parent"), str) and output["parent"].upper().startswith("FEAT-"):
                 verifies = []
-                for value in output.get("verifies", []) or []:
+                raw_verifies = raw_output.get("verifies", []) if isinstance(raw_output, dict) else []
+                for value in raw_verifies or output.get("verifies", []) or []:
                     if isinstance(value, str) and value.lower() == "feat":
                         verifies.append(output["parent"])
                     else:
@@ -3568,13 +3569,8 @@ class LLMRunner(StepRunnerBase):
                     normalized_item["parent"] = actual_epic_ref
                     normalized_item["source_refs"] = [f"{actual_epic_ref}#scope"]
                 else:
-<<<<<<< HEAD
-                    parent_ref = normalized_item.get("parent")
-                    if not LLMRunner._is_literal_ssot_ref(parent_ref):
-=======
                     parent = normalized_item.get("parent")
                     if not LLMRunner._is_literal_ssot_ref(parent):
->>>>>>> codex/src-scoped-identity-impl
                         normalized_item.pop("parent", None)
                     filtered_refs = LLMRunner._filter_materializable_refs(normalized_item.get("source_refs"))
                     if filtered_refs:
@@ -5181,7 +5177,8 @@ class LLMRunner(StepRunnerBase):
                 allowed_prefixes=["SRC"],
             )
             ssot_meta = business_output.get("ssot") if isinstance(business_output.get("ssot"), dict) else {}
-            derived_from = ssot_meta.get("derived_from")
+            raw_derived_from = ssot_meta.get("derived_from")
+            derived_from = raw_derived_from
             source_problem = ssot_meta.get("source_problem")
             canonical_source_ref = LLMRunner._resolve_source_ref_from_instance_data(instance_data)
             if not source_refs and isinstance(source_problem, str) and LLMRunner._is_literal_ssot_ref(source_problem):
@@ -5213,7 +5210,10 @@ class LLMRunner(StepRunnerBase):
             if source_refs:
                 epic_output["source_refs"] = source_refs
             if isinstance(derived_from, str) and derived_from.strip():
-                epic_output["derived_from"] = derived_from.strip()
+                if isinstance(raw_derived_from, str) and LLMRunner._is_literal_ssot_ref(raw_derived_from):
+                    epic_output["derived_from"] = [derived_from.strip()]
+                else:
+                    epic_output["derived_from"] = derived_from.strip()
             if isinstance(formal_epic_id, str) and formal_epic_id.strip():
                 epic_output["properties"] = {"formal_id": formal_epic_id.strip()}
             payload["ssot_output_contract"] = {

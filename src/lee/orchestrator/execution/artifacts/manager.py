@@ -67,6 +67,8 @@ class ArtifactManager:
         Convert a concrete base path into the serialized path_root form.
         """
         resolved = base_path.resolve()
+        if resolved == self.project_root.resolve():
+            return "." if self.project_root.resolve() == Path.cwd().resolve() else str(resolved)
         try:
             relative_to_cwd = resolved.relative_to(Path.cwd())
             return relative_to_cwd.as_posix()
@@ -895,18 +897,11 @@ class ArtifactManager:
         elif ssot_type == SSOTType.REPORT and parent_id and str(parent_id).startswith("REL-"):
             generation_suffix = (properties or {}).get("report_kind")
 
-<<<<<<< HEAD
         artifact_id = (formal_id or "").strip() or generator.generate_id(
             ssot_type,
             parent_id,
             generation_suffix,
-=======
-        artifact_id = generator.generate_id(
-            ssot_type,
-            parent_id,
-            generation_suffix,
             src_root_id=src_root_id,
->>>>>>> codex/src-scoped-identity-impl
         )
 
         # 生成文件名
@@ -1009,7 +1004,6 @@ class ArtifactManager:
 
         return metadata
 
-<<<<<<< HEAD
     def _cleanup_existing_ssot_paths(
         self,
         artifact_id: str,
@@ -1034,7 +1028,7 @@ class ArtifactManager:
                 continue
             if existing_path.exists():
                 existing_path.unlink()
-=======
+
     def formalize_ssot_ids(self, artifact_ids: List[str]) -> Dict[str, str]:
         """
         批量将现有 SSOT 对象重写为正式 ID，并同步文件名、front matter 与引用。
@@ -1192,7 +1186,6 @@ class ArtifactManager:
         new_path.write_text(file_text, encoding="utf-8")
         if new_path != artifact_path and artifact_path.exists():
             artifact_path.unlink()
->>>>>>> codex/src-scoped-identity-impl
 
     def get_ssot(self, artifact_id: str) -> Optional[ArtifactMetadata]:
         """
