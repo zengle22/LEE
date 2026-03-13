@@ -129,6 +129,9 @@ Dev 部门当前只保留两个主入口：
   状态：`deprecated`
   说明：保留历史参考，不再作为 Bugfix 主入口；Bugfix 统一收口到 `bugfix-delivery-l2-template.yaml`
 
+迁移指南：
+`docs/deprecated-path-migration-guide.md`
+
 ## 维护规则
 
 - 修改现役 Dev workflow 时，优先更新 canonical 模板，不要新建平级实现

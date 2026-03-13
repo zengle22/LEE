@@ -329,6 +329,8 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 **状态**: Deprecated，不再作为 Dev 部门新任务入口
 
+**迁移**: 参见 `departments/dev/docs/deprecated-path-migration-guide.md`
+
 ---
 
 #### 2. Bugfix Delivery（代码修复流程）
@@ -339,6 +341,8 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 **用途**: 当前保留的缺陷修复模板
 
 **状态**: Deprecated，新的缺陷修复任务统一收口到 `template.dev.bugfix_delivery_l2`
+
+**迁移**: 参见 `departments/dev/docs/deprecated-path-migration-guide.md`
 
 ---
 

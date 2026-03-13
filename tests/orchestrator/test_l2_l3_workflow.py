@@ -904,6 +904,17 @@ class TestYamlTemplates:
         assert paths["spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml"]["replacement"] == "template.dev.bugfix_delivery_l2"
         assert data["marking_rules"]["workflow_header_notice"]["required"] is True
 
+    def test_deprecated_path_migration_docs_point_to_canonical_l2_entries(self):
+        """Test deprecated migration docs point users to canonical feature/bugfix L2 entries."""
+        readme = Path("spec-global/departments/dev/README.md").read_text(encoding="utf-8")
+        workflows = Path("spec-global/WORKFLOWS.md").read_text(encoding="utf-8")
+        guide = Path("spec-global/departments/dev/docs/deprecated-path-migration-guide.md").read_text(encoding="utf-8")
+
+        assert "deprecated-path-migration-guide.md" in readme
+        assert "deprecated-path-migration-guide.md" in workflows
+        assert "template.dev.feature_delivery_l2" in guide
+        assert "template.dev.bugfix_delivery_l2" in guide
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
