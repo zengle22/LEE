@@ -59,7 +59,7 @@ frozen_at: '2026-03-12T22:26:15.239944'
 # Dependencies
 
 - EPIC-022
-- FEAT-022-001
+- FEAT-169
 # Non Goals
 
 - 不替换现有执行器

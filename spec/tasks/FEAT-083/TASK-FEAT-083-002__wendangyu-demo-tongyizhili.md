@@ -22,7 +22,7 @@ frozen_at: '2026-03-12T19:26:45.197825'
 
 # Description
 
-重构 README.md Getting Started 章节，更新 docs/guides/user/ 用户指南，修改 demo.py 使用 lee ssot create 等新命令，更新测试文件命名和描述
+重构 README.md Getting Started 章节，更新 docs/guides/user/ 用户指南，修改 demo.py 使用 lee adr new / lee epic new / lee feat new 等 workflow-first 命令，更新测试文件命名和描述
 
 ## Acceptance Mapping
 - FEAT-083 / AC-004-002: 文档站点 Getting Started 章节优先展示 workflow-first 入口

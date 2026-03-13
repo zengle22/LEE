@@ -2,17 +2,18 @@
 id: EPIC-003
 ssot_type: epic
 title: LEE CLI Workflow-First 治理入口重构
-status: draft
+status: frozen
 version: v1
 parent_id: null
 derived_from_ids:
   - SRC-001
 source_refs:
-  - SRC-001
+  - SRC-001#scope
   - ADR-006
-owner: codex
+owner: product
 tags: [cli, workflow, governance, ssot]
 properties: {}
+frozen_at: '2026-03-13T01:20:00'
 ---
 
 # Problem

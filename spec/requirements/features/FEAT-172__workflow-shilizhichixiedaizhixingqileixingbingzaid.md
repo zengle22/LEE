@@ -60,7 +60,8 @@ Workflow 实例能够携带执行器类型并隔离运行
 # Dependencies
 
 - EPIC-022
-- FEAT-022-003
+- FEAT-169
+- FEAT-171
 # Non Goals
 
 - 不替换现有执行器

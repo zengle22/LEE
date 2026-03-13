@@ -30,7 +30,8 @@ properties:
 - Runner 对 `qwen cli` 的执行调度、结果归一化与日志追溯支持
 - workflow instance / CLI / 配置文件的执行器选择能力
 - 多执行器并存场景下的上下文传递与隔离
-- 中文需求归一化场景下的可用性验证
+- `qwen cli` 无头模式的自动化调用适配
+- 中文任务、文档生成与结构化评审等通用场景下的可用性验证
 
 ## 非目标
 
@@ -67,6 +68,7 @@ properties:
 - Runner 能接收 `qwen cli` 执行器实例并执行任务
 - 执行结果格式与其他执行器保持一致
 - 保留完整执行日志与来源追溯信息
+- `qwen cli` 的无头执行方式与 `claude --print` 的调用差异被适配为统一 Runner 输入输出
 
 ### Workflow 多执行器并存
 
@@ -74,10 +76,10 @@ properties:
 - 执行器切换不破坏 workflow 状态连续性
 - 多执行器实例可在同一 workflow 中隔离运行
 
-### 中文需求归一化验证
+### 通用场景可用性验证
 
-- `qwen cli` 可解析中文原始需求
-- 归一化输出符合 `SRC` / 中间契约规范
+- `qwen cli` 可处理中文原始需求、结构化文档生成与评审类任务
+- 归一化输出符合既有 SSOT / review / task contract 规范
 - 质量不低于现有主流执行器在同类输入上的可用水平
 
 ## 约束与风险
@@ -85,6 +87,7 @@ properties:
 - 必须复用现有执行器工厂、Runner 与 workflow wiring
 - 必须保留来源追溯性
 - `qwen cli` 接口若与现有抽象不兼容，需要在工厂或执行器层引入适配器
+- `qwen cli` 当前无头模式基于 `-p/--prompt` 与 `--output-format json|stream-json`，不能假定与 `claude --print` 参数完全同构
 - 若中文处理效果不稳定，需要保留可回退到其他执行器的配置能力
 
 ## 追溯

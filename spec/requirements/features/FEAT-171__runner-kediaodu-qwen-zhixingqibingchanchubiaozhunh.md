@@ -62,7 +62,7 @@ Runner 能够调度 qwen 执行器并产出标准化结果
 # Dependencies
 
 - EPIC-022
-- FEAT-022-002
+- FEAT-170
 # Non Goals
 
 - 不替换现有执行器
