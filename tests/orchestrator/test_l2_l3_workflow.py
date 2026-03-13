@@ -608,6 +608,22 @@ class TestYamlTemplates:
             "contract_hash",
         ]
 
+    def test_contract_design_testset_tracks_acceptance_coverage(self):
+        """Test Contract Design TestSet formalizes all acceptance checks for the stage."""
+        testset_path = Path("spec/testing/testsets/TESTSET-FEAT-SRC-009-005-001__contract-design-stage-testset.md")
+        if not testset_path.exists():
+            pytest.skip("Contract design TestSet not found")
+
+        content = testset_path.read_text(encoding="utf-8")
+
+        assert "id: TESTSET-FEAT-SRC-009-005-001" in content
+        assert "status: frozen" in content
+        assert "TC-CD-001" in content
+        assert "TC-CD-002" in content
+        assert "TC-CD-003" in content
+        assert "TC-CD-004" in content
+        assert "template.dev.feature_contract_l3" in content
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
