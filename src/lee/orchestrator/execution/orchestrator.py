@@ -2400,6 +2400,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             "template.dev.feature_be_l3": "feature-be-l3-template.yaml",
             "template.dev.feature_integration_l3": "feature-integration-l3-template.yaml",
             "template.dev.evidence_pack_l3": "evidence-pack-l3-template.yaml",
+            "template.dev.bugfix_triage_l3": "bugfix-triage-l3-template.yaml",
+            "template.dev.bugfix_root_cause_l3": "bugfix-root-cause-l3-template.yaml",
+            "template.dev.bugfix_fix_design_l3": "bugfix-fix-design-l3-template.yaml",
+            "template.dev.bugfix_fix_impl_l3": "bugfix-fix-impl-l3-template.yaml",
+            "template.dev.bugfix_verification_l3": "bugfix-verification-l3-template.yaml",
+            "template.dev.bugfix_evidence_pack_l3": "bugfix-evidence-pack-l3-template.yaml",
         }
         relative_path = template_file_map.get(l3_template_id)
         if relative_path is None:

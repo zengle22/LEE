@@ -1,0 +1,61 @@
+kind: l3_workflow_template
+version: "1.0"
+id: template.dev.bugfix_evidence_pack_l3
+name: Bugfix Evidence Pack L3 Template
+description: |
+  Canonical L3 workflow for assembling the evidence package before merge or reject.
+owner: development
+tags: [template, dev, bugfix, evidence-pack, l3, canonical]
+
+steps:
+  - id: collect_bugfix_evidence
+    name: Collect Bugfix Evidence
+    kind: agent
+    description: Gather fix, verification, and review references for closure.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on: []
+    outputs:
+      - evidence_index_ref
+
+  - id: audit_bugfix_evidence
+    name: Audit Bugfix Evidence
+    kind: agent
+    description: Audit the evidence package against bugfix acceptance.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on: [collect_bugfix_evidence]
+    outputs:
+      - evidence_audit_ref
+      - coverage_gap_ref
+
+  - id: package_bugfix_evidence
+    name: Package Bugfix Evidence
+    kind: agent
+    description: Produce the formal bugfix evidence pack.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on: [audit_bugfix_evidence]
+    outputs:
+      - evidence_pack_ref
+      - closure_summary_ref
+
+  - id: review_evidence_pack
+    name: Review Evidence Pack
+    kind: agent
+    description: Final review before merge or reject decision.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on: [package_bugfix_evidence]
+    outputs:
+      - evidence_pack_review_ref
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - parent_phase_id
+  output_fields:
+    - evidence_pack_ref
+    - closure_summary_ref
+    - evidence_pack_review_ref

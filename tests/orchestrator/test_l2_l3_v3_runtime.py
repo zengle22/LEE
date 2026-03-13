@@ -480,6 +480,45 @@ steps:
         assert instance_data["template_id"] == "template.dev.tech_design_l3"
         assert instance_data["steps"][0]["id"] == "analyze_feature"
 
+    @pytest.mark.asyncio
+    async def test_resolve_bugfix_l3_template_path(self, setup_orchestrator, tmp_path):
+        """Test bugfix L3 template IDs resolve to checked-in template files."""
+        orch, store = setup_orchestrator
+
+        framework_dir = tmp_path / "spec-global" / "departments" / "dev" / "workflows" / "templates"
+        framework_dir.mkdir(parents=True, exist_ok=True)
+        template_file = framework_dir / "bugfix-triage-l3-template.yaml"
+        template_file.write_text("""
+kind: l3_workflow_template
+version: "1.0"
+id: template.dev.bugfix_triage_l3
+steps:
+  - id: validate_bug_input
+    name: "Validate"
+    kind: agent
+    mandatory: true
+    depends_on: []
+  - id: classify_bug_path
+    name: "Classify"
+    kind: agent
+    mandatory: true
+    depends_on: ["validate_bug_input"]
+  - id: review_batch_eligibility
+    name: "Gate"
+    kind: stage
+    mandatory: true
+    depends_on: ["classify_bug_path"]
+  - id: publish_triage
+    name: "Publish"
+    kind: agent
+    mandatory: true
+    depends_on: ["review_batch_eligibility"]
+""")
+
+        orch.project_root = str(tmp_path)
+        resolved = orch._resolve_l3_template_path("template.dev.bugfix_triage_l3")
+        assert resolved.name == "bugfix-triage-l3-template.yaml"
+
 
 class TestL3V3Template:
     """Tests for L3 v3 template loading and structure."""

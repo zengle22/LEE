@@ -407,6 +407,12 @@ class TestYamlTemplates:
         template_candidates = [
             Path("spec-global/departments/dev/workflows/templates/tech-design-l3-template.yaml"),
             Path("spec-global/departments/dev/workflows/templates/evidence-pack-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/bugfix-triage-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/bugfix-root-cause-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/bugfix-fix-design-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/bugfix-fix-impl-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/bugfix-verification-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/bugfix-evidence-pack-l3-template.yaml"),
             Path("spec-global/departments/dev/workflows/templates/l3/task-l3-v3-template.yaml"),
             Path("spec-global/departments/dev/workflows/templates/task-l3-template.yaml"),
             Path("spec-global/departments/dev/workflows/templates/feature-fe-l3-template.yaml"),
@@ -482,6 +488,29 @@ class TestYamlTemplates:
             "reproduction_evidence",
         ]
         assert data["granularity_control"]["default_mode"] == "single_bug"
+
+    def test_bugfix_l3_templates_exist_and_bind_agents(self):
+        """Test canonical bugfix L3 template family exists and binds to active agents/gates."""
+        import yaml
+
+        expected = {
+            "bugfix-triage-l3-template.yaml": ("template.dev.bugfix_triage_l3", "agent.dev.bug_triage"),
+            "bugfix-root-cause-l3-template.yaml": ("template.dev.bugfix_root_cause_l3", "agent.dev.bug_root_cause_analyst"),
+            "bugfix-fix-design-l3-template.yaml": ("template.dev.bugfix_fix_design_l3", "agent.dev.bug_fix_planner"),
+            "bugfix-fix-impl-l3-template.yaml": ("template.dev.bugfix_fix_impl_l3", "agent.dev.bug_fix_implementer"),
+            "bugfix-verification-l3-template.yaml": ("template.dev.bugfix_verification_l3", "agent.dev.bug_fix_verifier"),
+            "bugfix-evidence-pack-l3-template.yaml": ("template.dev.bugfix_evidence_pack_l3", "agent.dev.bug_fix_verifier"),
+        }
+
+        for filename, (template_id, agent_id) in expected.items():
+            path = Path("spec-global/departments/dev/workflows/templates") / filename
+            assert path.exists(), f"{filename} not found"
+            with open(path, encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            assert data["id"] == template_id
+            steps = data["steps"]
+            assert len(steps) >= 4
+            assert any(step.get("agent_id") == agent_id for step in steps)
 
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
