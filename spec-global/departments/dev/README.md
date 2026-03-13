@@ -15,6 +15,9 @@ Dev 部门当前只保留两个主入口：
 其中，**Feature 主入口的 canonical 模板** 为：
 `workflows/templates/feature-delivery-l2-template.yaml`
 
+**Bugfix 主入口的 canonical 模板** 为：
+`workflows/templates/bugfix-delivery-l2-template.yaml`
+
 ## Feature Delivery L2
 
 当前现役阶段顺序为：
@@ -42,6 +45,31 @@ Dev 部门当前只保留两个主入口：
 - `template.dev.feature_be_l3`
 - `template.dev.feature_integration_l3`
 - `template.dev.evidence_pack_l3`
+- `template.dev.bugfix_triage_l3`
+- `template.dev.bugfix_root_cause_l3`
+- `template.dev.bugfix_fix_design_l3`
+- `template.dev.bugfix_fix_impl_l3`
+- `template.dev.bugfix_verification_l3`
+- `template.dev.bugfix_evidence_pack_l3`
+
+## Bugfix Delivery L2
+
+当前现役阶段顺序为：
+
+1. `triage`
+2. `root_cause`
+3. `fix_design`
+4. `fix_implementation`
+5. `verification`
+6. `evidence_pack`
+7. `merge_or_reject`
+
+治理规则：
+
+- `bug_ssot_id`、`severity`、`reproduction_evidence` 是共享输入契约
+- 默认 `1 bug -> 1 workflow instance`
+- 只有满足五同原则时才允许 `batch_mode`
+- `merge_or_reject` 前必须完成 `evidence_pack`
 
 ## Deprecated / Draft
 
@@ -54,6 +82,10 @@ Dev 部门当前只保留两个主入口：
 - 旧 `feature-l2-template.yaml`
   状态：`compat`
   说明：保留兼容窗口，但新功能统一收口到 `feature-delivery-l2-template.yaml`
+
+- 旧 `bug-fix-l3-template.yaml`
+  状态：`deprecated`
+  说明：保留历史参考，不再作为 Bugfix 主入口；Bugfix 统一收口到 `bugfix-delivery-l2-template.yaml`
 
 ## 维护规则
 

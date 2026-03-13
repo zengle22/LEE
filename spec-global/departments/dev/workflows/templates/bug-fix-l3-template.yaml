@@ -1,4 +1,6 @@
 # Migrated by lint_l3_templates.py on 2026-03-05T16:41:22.369772
+# STATUS: deprecated
+# NOTE: 保留历史参考，不再作为 Dev 部门推荐 Bugfix 主入口
 kind: l3_workflow_template
 version: '1.0'
 id: template.dev.bug_fix
@@ -20,6 +22,7 @@ description: 'L3 template for single bug fix workflow.
 
   '
 owner: development
+status: deprecated
 tags:
 - template
 - dev

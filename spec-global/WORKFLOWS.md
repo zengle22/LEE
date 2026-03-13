@@ -77,6 +77,27 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ---
 
+#### 2. Bugfix Delivery L2（缺陷修复主流程）
+
+**ID**: `template.dev.bugfix_delivery_l2`
+**路径**: `departments/dev/workflows/templates/bugfix-delivery-l2-template.yaml`
+**版本**: 3.0
+
+**阶段**: 7 个
+- `triage`
+- `root_cause`
+- `fix_design`
+- `fix_implementation`
+- `verification`
+- `evidence_pack`
+- `merge_or_reject`
+
+**用途**: Dev 部门当前 canonical Bugfix 主入口
+
+**备注**: checked-in 文件为 template，运行时 instance 动态生成。
+
+---
+
 ### QA 部门
 
 #### 2. Testing Pipeline（测试流水线）
@@ -254,7 +275,7 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 **用途**: 当前保留的缺陷修复模板
 
-**状态**: Transitional，后续应继续收口到独立 canonical bugfix L2
+**状态**: Deprecated，新的缺陷修复任务统一收口到 `template.dev.bugfix_delivery_l2`
 
 ---
 
