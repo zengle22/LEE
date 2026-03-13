@@ -2,7 +2,7 @@
 id: TECH-FEAT-SRC-009-002-001
 ssot_type: tech
 title: Bugfix Delivery L2 工作流定义 - Frozen技术架构
-status: active
+status: frozen
 version: v1
 parent_id: FEAT-SRC-009-002
 derived_from_ids:
@@ -22,6 +22,7 @@ properties:
   contract_key: tech_spec
   identity_kind: ssot
   materialized_from: batch-tech-src-009-20260312
+frozen_at: '2026-03-13T00:38:12.900277'
 ---
 
 # Summary
