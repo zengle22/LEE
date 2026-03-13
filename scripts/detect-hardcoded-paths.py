@@ -199,7 +199,7 @@ def main():
         elif p.is_file():
             findings = detect_hardcoded_paths(p.parent)
             all_findings.extend(
-                (Path(p.name) / f.relative_to(p.parent), ln, content)
+                (p.name if f.name == p.name else p.parent / f, ln, content)
                 for f, ln, content in findings
                 if f.name == p.name
             )
