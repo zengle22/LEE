@@ -815,6 +815,35 @@ class TestYamlTemplates:
         assert "Feature Frontend Development L3" in workflows
         assert "publish_frontend" in workflows
 
+    def test_integration_stage_definition_declares_inputs_tasks_and_evidence_handoff(self):
+        """Test integration stage definition freezes canonical inputs, task family, and evidence handoff."""
+        import yaml
+
+        stage_path = Path("spec-global/departments/dev/stages/l3-integration.yaml")
+        if not stage_path.exists():
+            pytest.skip("Integration stage definition not found")
+
+        with open(stage_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["status"] == "frozen"
+        assert data["input_contract"]["required_fields"][-2:] == [
+            "fe_artifact_ref",
+            "be_artifact_ref",
+        ]
+        assert data["task_family"]["required_tasks"] == [
+            "environment_preparation",
+            "integration_execution",
+            "issue_resolution",
+        ]
+        assert data["completion_criteria"]["pass_rate_threshold"] == ">=95%"
+        assert data["handoff_rules"]["evidence_pack"]["required_inputs"] == [
+            "integration_report_ref",
+            "integration_test_result_ref",
+            "issue_resolution_ref",
+            "structural_issue_ref",
+        ]
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
