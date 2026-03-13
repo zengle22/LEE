@@ -4,10 +4,11 @@ ssot_type: feat
 title: QA 执行入口规范化
 status: frozen
 version: v1
-parent_id: EPIC-QA-SSOT-UPGRADE
-derived_from_ids: []
+parent_id: EPIC-011
+derived_from_ids:
+- EPIC-011
 source_refs:
-- EPIC-QA-SSOT-UPGRADE#scope
+- EPIC-011#范围
 owner: null
 tags: []
 properties:
@@ -24,8 +25,8 @@ frozen_at: '2026-03-12T20:16:11.841230'
 消除分散执行入口导致的追溯断裂风险，确保所有测试执行行为可被 SSOT 主链完整追踪和审计
 # Inputs
 
-- FEAT-QA-SSOT-001 输出的改造后 TESTPLAN/TASK 对象
-- EPIC-QA-SSOT-UPGRADE 定义的入口约束（CR-003, CR-007）
+- FEAT-142 输出的改造后 TESTPLAN/TASK 对象
+- EPIC-011 定义的 QA 执行入口与链路约束
 - 现有 QA 执行入口清单
 - SSOT 执行路径规范
 # Processing
@@ -82,8 +83,8 @@ frozen_at: '2026-03-12T20:16:11.841230'
 - Trace Hints: TECH, TASK
 # Dependencies
 
-- EPIC-QA-SSOT-UPGRADE
-- FEAT-QA-SSOT-001
+- EPIC-011
+- FEAT-142
 # Non Goals
 
 - 不修改测试执行引擎内部逻辑

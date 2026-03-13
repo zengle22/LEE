@@ -26,7 +26,7 @@ frozen_at: '2026-03-13T13:08:01.918922'
 
 ## Acceptance Mapping
 - FEAT-143 / AC-003-001: lee qa execute 命令仅接受有效 task_ref 参数
-- FEAT-143 / AC-003-003: 旁路执行请求被阻断并显示 ERR-BYPASS 错误码
+- FEAT-143 / AC-003-003: 旁路执行请求被阻断并显示 QA-ENTRY-011 错误码
 - FEAT-143 / AC-003-004: lee qa audit log 命令可查询审计日志
 
 ## Prerequisites

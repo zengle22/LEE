@@ -32,7 +32,7 @@ frozen_at: '2026-03-13T13:08:01.881607'
 
 ## Dependencies
 - {'task_id': 'TASK-FEAT-143-001', 'relation': 'requires_specification'}
-- {'task_id': 'TASK-FEAT-143-002', 'relation': 'parallel_implementation'}
+- {'task_id': 'TASK-FEAT-143-002', 'relation': 'requires_entry_router'}
 
 ## Observability
 ```yaml
@@ -65,5 +65,5 @@ restore_targets:
 - 渐进式校验 (task→plan→release) 已实现
 - LRU 缓存策略已配置 (60s TTL)
 - Registry 降级策略已实现
-- 错误码 ERR-CHAIN-001~004 已注册
+- 错误码 QA-ENTRY-003~010 已注册
 - TASK 文件已冻结
