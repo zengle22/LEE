@@ -60,6 +60,11 @@ def ctx(temp_project_root):
     )
 
 
+def test_claude_code_runner_exposes_workspace_formal_ssot_materializer():
+    runner = ClaudeCodeRunner()
+    assert callable(runner._materialize_workspace_formal_ssot_markdown)
+
+
 @pytest.mark.asyncio
 async def test_llm_runner_prefers_instance_llm_profile_over_config_default(runner, ctx):
     step = SimpleNamespace(
@@ -376,6 +381,26 @@ def test_claude_code_runner_authoritative_context_skip_keys_alias_matches_llm_ru
         ClaudeCodeRunner.AUTHORITATIVE_CONTEXT_SKIP_KEYS
         == LLMRunner.AUTHORITATIVE_CONTEXT_SKIP_KEYS
     )
+
+
+def test_expected_feat_review_subject_refs_supports_class_level_call():
+    refs = LLMRunner._expected_feat_review_subject_refs(
+        {
+            "step_outputs": {
+                "feat_spec_generation": {
+                    "generated_text": """
+business_output:
+  epic_ref: EPIC-001
+  feat_specs:
+    - feat_id: FEAT-101
+      title: Demo
+""".strip()
+                }
+            }
+        }
+    )
+
+    assert refs == ["FEAT-101"]
 
 
 def test_claude_code_runner_skips_nested_materialized_paths_in_frozen_inputs():
@@ -1233,6 +1258,77 @@ async def test_claude_code_runner_builds_code_prompt_for_kimi_override(temp_proj
     assert execution.input_data["allowed_commands"] == ["Get-ChildItem"]
     assert "prompt" not in execution.input_data
     assert "system_message" not in execution.input_data
+
+
+@pytest.mark.asyncio
+async def test_claude_code_runner_fails_delivery_plan_reviewer_on_free_text_output(temp_project_root, ctx):
+    runner = ClaudeCodeRunner()
+    step = SimpleNamespace(
+        id="delivery_plan_validation",
+        agent_id="agent.product.delivery_plan_reviewer",
+        executor_type="claude_code",
+        config={"claude_code": {}},
+        outputs=[],
+    )
+    instance = SimpleNamespace(
+        data={
+            "run_id": "run-review-001",
+            "project_root": str(temp_project_root),
+            "step_outputs": {
+                "task_planning": {
+                    "business_output": {
+                        "source_feats": ["FEAT-143"],
+                        "planning_metadata": {"task_directory": "spec/tasks/FEAT-143"},
+                        "task_specs": [
+                            {
+                                "task_id": "TASK-FEAT-143-001",
+                                "source_feat": "FEAT-143",
+                                "task_kind": "specification",
+                                "acceptance_criteria_mapping": [
+                                    {"feat": "FEAT-143", "ac": "AC-003-001"},
+                                ],
+                            }
+                        ],
+                    }
+                }
+            },
+        },
+        template_id="workflow.product.task.feat_to_delivery_prep",
+    )
+    ctx.store.get_workflow = AsyncMock(return_value=instance)
+    ctx.store.create_task_execution = AsyncMock()
+    ctx.store.update_task_execution = AsyncMock()
+    ctx.state_machine.fail_step = AsyncMock()
+    ctx.contract_discovery.get_workflow_inputs.return_value = None
+    ctx.agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="system rules",
+            user_prompt="review delivery plan",
+            temperature=0.2,
+            max_tokens=1024,
+        )
+    )
+    ctx.token_manager.issue_token.return_value = None
+    ctx.resolve_workdir = MagicMock(return_value=str(temp_project_root))
+
+    executor = MagicMock()
+    executor.execute = AsyncMock(
+        return_value={
+            "status": "success",
+            "raw_output": "现在我已经收集了所有需要的信息。评审结论：pass",
+            "generated_text": "现在我已经收集了所有需要的信息。评审结论：pass",
+            "changed_files": [],
+            "commands_run": [],
+            "test_results": {"passed": 0, "failed": 0},
+        }
+    )
+    ctx.executor_factory.create.return_value = executor
+
+    result = await runner.execute("wf-review-001", step, ctx)
+
+    assert result.status == "failed"
+    assert "Delivery plan review output" in result.message
+    ctx.state_machine.fail_step.assert_awaited_once()
 
 
 def test_extract_declared_output_values_reads_scalar_files(temp_project_root, runner):
@@ -2513,6 +2609,268 @@ def test_validate_delivery_plan_review_semantics_rejects_false_unverified_persis
     }
 
 
+def test_normalize_delivery_plan_review_sanitizes_false_positive_findings_to_pass(
+    temp_project_root, runner
+):
+    features_dir = temp_project_root / "spec" / "requirements" / "features"
+    features_dir.mkdir(parents=True, exist_ok=True)
+    (features_dir / "FEAT-143__qa-entry.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "id: FEAT-143",
+                "title: QA 执行入口规范化",
+                "parent_id: EPIC-QA-SSOT-UPGRADE",
+                "---",
+                "",
+                "## AC-003-001",
+                "- Scenario: 执行入口唯一性验证",
+                "- Then: 仅允许通过 TASK 触发执行",
+                "",
+                "## AC-003-002",
+                "- Scenario: 执行路径完整性校验",
+                "- Then: 系统验证 RELEASE->PLAN->TASK 链路完整且有效",
+                "",
+                "## AC-003-003",
+                "- Scenario: 旁路执行入口阻断验证",
+                "- Then: 系统拒绝旁路请求并返回入口规范错误",
+                "",
+                "## AC-003-004",
+                "- Scenario: 执行入口审计验证",
+                "- Then: 日志中包含每次执行的入口来源、路径链、时间戳、操作用户",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    task_dir = temp_project_root / "spec" / "tasks" / "FEAT-143"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    for task_id in ("TASK-FEAT-143-001", "TASK-FEAT-143-002"):
+        (task_dir / f"{task_id}__demo.md").write_text("# task", encoding="utf-8")
+
+    step = SimpleNamespace(agent_id="agent.product.delivery_plan_reviewer")
+    business_output = {
+        "review_type": "delivery_plan_review",
+        "subject_refs": ["FEAT-143"],
+        "summary": "delivery review completed",
+        "decision": "revise",
+        "findings": [
+            "TASK-FEAT-143-001 至 TASK-FEAT-143-005 均具备 objective、description、acceptance_criteria_mapping、definition_of_done、observability、evidence_requirements、rollback_strategy 字段",
+            "所有 TASK 均挂在 FEAT-143 下，task_directory 与落盘路径 spec/tasks/FEAT-143/ 一致",
+            "FEAT-143 的结构性 AC（阶段顺序、状态机、契约边界）主要映射到实现任务，缺乏独立的规范或模板任务来固化契约边界",
+            "task_plan.ssot_output_contract.outputs indicate task content generation but actual file persistence status unverified",
+        ],
+        "risks": [],
+        "recommendations": [],
+    }
+    structured_payload = {"business_output": dict(business_output)}
+    instance_data = {
+        "project_root": str(temp_project_root),
+        "step_outputs": {
+            "task_planning": {
+                "business_output": {
+                    "source_feats": ["FEAT-143"],
+                    "planning_metadata": {"task_directory": "spec/tasks/FEAT-143"},
+                    "task_specs": [
+                        {
+                            "task_id": "TASK-FEAT-143-001",
+                            "source_feat": "FEAT-143",
+                            "task_kind": "specification",
+                            "acceptance_criteria_mapping": [
+                                {"feat": "FEAT-143", "ac": "AC-003-001"},
+                                {"feat": "FEAT-143", "ac": "AC-003-002"},
+                                {"feat": "FEAT-143", "ac": "AC-003-003"},
+                                {"feat": "FEAT-143", "ac": "AC-003-004"},
+                            ],
+                        },
+                        {
+                            "task_id": "TASK-FEAT-143-002",
+                            "source_feat": "FEAT-143",
+                            "task_kind": "implementation",
+                        },
+                    ],
+                }
+            }
+        },
+    }
+
+    normalized_business, _ = runner._normalize_product_review_payload(
+        step=step,
+        business_output=business_output,
+        structured_payload=structured_payload,
+        instance_data=instance_data,
+    )
+
+    assert normalized_business["findings"] == []
+    assert normalized_business["decision"] == "pass"
+    assert normalized_business["summary"] == "delivery review completed"
+
+
+def test_normalize_delivery_plan_review_backfills_summary_when_empty(temp_project_root, runner):
+    step = SimpleNamespace(agent_id="agent.product.delivery_plan_reviewer")
+    business_output = {
+        "review_type": "delivery_plan_review",
+        "subject_refs": ["FEAT-143"],
+        "summary": "",
+        "decision": "pass",
+        "findings": ["FEAT-143 的结构性 AC 已映射到规范定义任务 TASK-001"],
+        "risks": [],
+        "recommendations": [],
+    }
+    structured_payload = {"business_output": dict(business_output)}
+    instance_data = {
+        "project_root": str(temp_project_root),
+        "step_outputs": {
+            "task_planning": {
+                "business_output": {
+                    "source_feats": ["FEAT-143"],
+                    "planning_metadata": {"task_directory": "spec/tasks/FEAT-143"},
+                    "task_specs": [
+                        {
+                            "task_id": "TASK-FEAT-143-001",
+                            "source_feat": "FEAT-143",
+                            "task_kind": "specification",
+                            "acceptance_criteria_mapping": [
+                                {"feat": "FEAT-143", "ac": "AC-003-001"},
+                            ],
+                        }
+                    ],
+                }
+            }
+        },
+    }
+
+    normalized_business, _ = runner._normalize_product_review_payload(
+        step=step,
+        business_output=business_output,
+        structured_payload=structured_payload,
+        instance_data=instance_data,
+    )
+
+    assert normalized_business["findings"] == []
+    assert normalized_business["summary"] == "Delivery plan review pass for FEAT-143"
+
+
+def test_normalize_delivery_plan_review_drops_false_persistence_risks_and_recommendations(
+    temp_project_root, runner
+):
+    task_dir = temp_project_root / "spec" / "tasks" / "FEAT-143"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    for task_id in ("TASK-FEAT-143-001", "TASK-FEAT-143-002"):
+        (task_dir / f"{task_id}__demo.md").write_text("# task", encoding="utf-8")
+
+    step = SimpleNamespace(agent_id="agent.product.delivery_plan_reviewer")
+    business_output = {
+        "review_type": "delivery_plan_review",
+        "subject_refs": ["FEAT-143"],
+        "summary": "",
+        "decision": "revise",
+        "findings": [],
+        "risks": [
+            "TASK 文件未落盘可能导致交付追踪断裂",
+            "critical_path 未完整反映 TASK-005 对 TASK-003/004 的依赖关系",
+        ],
+        "recommendations": [
+            "立即将 2 个 TASK 文件冻结并写入 spec/requirements/tasks/FEAT-143/ 目录",
+            "在 dependency_graph 中补充说明 TASK-003/004 对 critical_path 的间接影响",
+        ],
+    }
+    structured_payload = {"business_output": dict(business_output)}
+    instance_data = {
+        "project_root": str(temp_project_root),
+        "step_outputs": {
+            "task_planning": {
+                "business_output": {
+                    "source_feats": ["FEAT-143"],
+                    "planning_metadata": {"task_directory": "spec/tasks/FEAT-143"},
+                    "task_specs": [
+                        {"task_id": "TASK-FEAT-143-001", "source_feat": "FEAT-143", "task_kind": "specification"},
+                        {"task_id": "TASK-FEAT-143-002", "source_feat": "FEAT-143", "task_kind": "implementation"},
+                    ],
+                }
+            }
+        },
+    }
+
+    normalized_business, _ = runner._normalize_product_review_payload(
+        step=step,
+        business_output=business_output,
+        structured_payload=structured_payload,
+        instance_data=instance_data,
+    )
+
+    assert normalized_business["risks"] == [
+        "critical_path 未完整反映 TASK-005 对 TASK-003/004 的依赖关系"
+    ]
+    assert normalized_business["recommendations"] == [
+        "在 dependency_graph 中补充说明 TASK-003/004 对 critical_path 的间接影响"
+    ]
+
+
+def test_normalize_delivery_plan_review_drops_false_path_and_dual_coverage_findings(
+    temp_project_root, runner
+):
+    task_dir = temp_project_root / "spec" / "tasks" / "FEAT-143"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    for task_id in ("TASK-FEAT-143-001", "TASK-FEAT-143-002"):
+        (task_dir / f"{task_id}__demo.md").write_text("# task", encoding="utf-8")
+
+    step = SimpleNamespace(agent_id="agent.product.delivery_plan_reviewer")
+    business_output = {
+        "review_type": "delivery_plan_review",
+        "subject_refs": ["FEAT-143"],
+        "summary": "",
+        "decision": "revise",
+        "findings": [
+            "FEAT-143 的结构性 AC 同时映射到 specification 任务和 implementation 任务，存在规范与实现双重覆盖",
+            "TASK-FEAT-143-001 的 definition_of_done 未声明具体的落盘文件路径",
+        ],
+        "risks": [
+            "TASK-FEAT-143-001 的 definition_of_done 未声明具体的落盘文件路径",
+        ],
+        "recommendations": [
+            "为每个 TASK 的 definition_of_done 添加具体的落盘文件路径声明",
+        ],
+    }
+    structured_payload = {"business_output": dict(business_output)}
+    instance_data = {
+        "project_root": str(temp_project_root),
+        "step_outputs": {
+            "task_planning": {
+                "business_output": {
+                    "source_feats": ["FEAT-143"],
+                    "planning_metadata": {"task_directory": "spec/tasks/FEAT-143"},
+                    "task_specs": [
+                        {
+                            "task_id": "TASK-FEAT-143-001",
+                            "source_feat": "FEAT-143",
+                            "task_kind": "specification",
+                            "acceptance_criteria_mapping": [{"feat": "FEAT-143", "ac": "AC-003-001"}],
+                        },
+                        {
+                            "task_id": "TASK-FEAT-143-002",
+                            "source_feat": "FEAT-143",
+                            "task_kind": "implementation",
+                            "acceptance_criteria_mapping": [{"feat": "FEAT-143", "ac": "AC-003-001"}],
+                        },
+                    ],
+                }
+            }
+        },
+    }
+
+    normalized_business, _ = runner._normalize_product_review_payload(
+        step=step,
+        business_output=business_output,
+        structured_payload=structured_payload,
+        instance_data=instance_data,
+    )
+
+    assert normalized_business["decision"] == "pass"
+    assert normalized_business["findings"] == []
+    assert normalized_business["risks"] == []
+    assert normalized_business["recommendations"] == []
+
+
 def test_validate_feat_bundle_epic_semantics_accepts_governance_bundle(temp_project_root, runner):
     epic_path = temp_project_root / "spec" / "requirements" / "epics" / "EPIC-001__workflow-first.md"
     epic_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3658,6 +4016,196 @@ def test_normalize_pm_planner_payload_writes_extended_task_sections_and_director
     assert "## Rollback Strategy" in output["content"]
 
 
+def test_normalize_pm_planner_payload_rewrites_requirements_tasks_directory(runner):
+    step = SimpleNamespace(agent_id="agent.product.pm_planner")
+    business_output = {
+        "parent_epic": "EPIC-030",
+        "source_feats": ["FEAT-159"],
+        "planning_metadata": {
+            "project_profile": "qa_chain_testing",
+            "task_directory": "spec/requirements/tasks/FEAT-159",
+        },
+        "task_specs": [
+            {
+                "task_id": "TASK-FEAT-159-001",
+                "title": "核心测试引擎-测试器调度框架",
+                "objective": "实现测试器调度框架",
+                "description": "支持动态注册与并发执行",
+                "source_feat": "FEAT-159",
+                "workstream": "chain-testing-engine",
+                "task_kind": "implementation",
+                "responsible_role": "testing-engine-owner",
+                "acceptance_criteria_mapping": [
+                    {"feat": "FEAT-159", "ac": "AC-001-001", "description": "测试器可调度"}
+                ],
+                "prerequisites": ["FEAT-159 frozen"],
+                "dependencies": ["TASK-FEAT-159-000"],
+                "definition_of_done": ["单测通过", "文档补齐"],
+                "estimated_effort": "2 days",
+                "observability": {
+                    "execution_unit": "task",
+                    "log_scope": "task-execution",
+                    "audit_fields": ["run_id", "changed_files"],
+                },
+                "evidence_requirements": {
+                    "required_refs": ["FEAT-159"],
+                    "review_required": True,
+                },
+                "rollback_strategy": {
+                    "mode": "revert",
+                    "restore_targets": ["src/chain_testing/engine"],
+                },
+                "ssot": {
+                    "identity_kind": "ssot",
+                    "ssot_type": "TASK",
+                    "parent": "FEAT-159",
+                    "derived_from": "FEAT-159#delivery",
+                },
+            }
+        ],
+    }
+
+    normalized_business, _ = runner._normalize_pm_planner_task_payload(
+        step=step,
+        workflow_id="wf-task-rewrite-dir",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+    )
+
+    assert normalized_business["planning_metadata"]["task_directory"] == "spec/tasks/FEAT-159"
+
+
+def test_normalize_pm_planner_payload_rewrites_legacy_task_paths_inside_task_specs(runner):
+    step = SimpleNamespace(agent_id="agent.product.pm_planner")
+    business_output = {
+        "parent_epic": "EPIC-030",
+        "source_feats": ["FEAT-159"],
+        "planning_metadata": {
+            "project_profile": "qa_chain_testing",
+            "task_directory": "spec/tasks/FEAT-159",
+        },
+        "task_specs": [
+            {
+                "task_id": "TASK-FEAT-159-001",
+                "title": "核心测试引擎-测试器调度框架",
+                "objective": "实现测试器调度框架",
+                "description": "支持动态注册与并发执行",
+                "source_feat": "FEAT-159",
+                "workstream": "chain-testing-engine",
+                "task_kind": "implementation",
+                "responsible_role": "testing-engine-owner",
+                "acceptance_criteria_mapping": [
+                    {"feat": "FEAT-159", "ac": "AC-001-001", "description": "测试器可调度"}
+                ],
+                "prerequisites": ["FEAT-159 frozen"],
+                "dependencies": ["TASK-FEAT-159-000"],
+                "definition_of_done": [
+                    "TASK 文件已冻结并写入 spec/requirements/tasks/FEAT-159/",
+                    "单测通过",
+                ],
+                "estimated_effort": "2 days",
+                "observability": {
+                    "execution_unit": "task",
+                    "log_scope": "task-execution",
+                    "audit_fields": ["run_id", "changed_files"],
+                },
+                "evidence_requirements": {
+                    "required_refs": ["FEAT-159"],
+                    "review_required": True,
+                },
+                "rollback_strategy": {
+                    "mode": "revert",
+                    "restore_targets": ["spec/requirements/tasks/FEAT-159/"],
+                },
+                "ssot": {
+                    "identity_kind": "ssot",
+                    "ssot_type": "TASK",
+                    "parent": "FEAT-159",
+                    "derived_from": "FEAT-159#delivery",
+                },
+            }
+        ],
+    }
+
+    normalized_business, _ = runner._normalize_pm_planner_task_payload(
+        step=step,
+        workflow_id="wf-task-rewrite-inner-paths",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+    )
+
+    task = normalized_business["task_specs"][0]
+    assert task["definition_of_done"][0] == "TASK 文件已冻结并写入 spec/tasks/FEAT-159"
+    assert task["rollback_strategy"]["restore_targets"] == ["spec/tasks/FEAT-159"]
+
+
+def test_pm_planner_normalization_enriches_validation_dependencies_and_dependency_matrix(runner):
+    step = SimpleNamespace(agent_id="agent.product.pm_planner")
+    business_output = {
+        "parent_epic": "EPIC-QA-SSOT-UPGRADE",
+        "source_feats": ["FEAT-143"],
+        "planning_metadata": {
+            "project_profile": "qa_execution_gateway",
+            "task_directory": "spec/tasks/FEAT-143",
+        },
+        "task_specs": [
+            {
+                "task_id": "TASK-FEAT-143-001",
+                "source_feat": "FEAT-143",
+                "task_kind": "specification",
+                "dependencies": [],
+                "prerequisites": [],
+            },
+            {
+                "task_id": "TASK-FEAT-143-002",
+                "source_feat": "FEAT-143",
+                "task_kind": "implementation",
+                "dependencies": ["TASK-FEAT-143-001"],
+                "prerequisites": ["TASK-FEAT-143-001"],
+            },
+            {
+                "task_id": "TASK-FEAT-143-006",
+                "source_feat": "FEAT-143",
+                "task_kind": "validation",
+                "dependencies": [],
+                "prerequisites": ["TASK-FEAT-143-002"],
+            },
+        ],
+        "dependency_graph": {
+            "critical_path": [
+                "TASK-FEAT-143-001",
+                "TASK-FEAT-143-002",
+                "TASK-FEAT-143-006",
+            ]
+        },
+        "risk_mitigation": [
+            {
+                "risk": "Registry 同步问题",
+                "mitigation": "验证前同步检查，失败降级到直接磁盘读取",
+            }
+        ],
+    }
+
+    normalized_business, _ = runner._normalize_pm_planner_task_payload(
+        step=step,
+        workflow_id="wf-task-dependency-matrix",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+    )
+
+    validation_task = next(
+        item for item in normalized_business["task_specs"] if item["task_id"] == "TASK-FEAT-143-006"
+    )
+    dependency_matrix = normalized_business["dependency_graph"]["dependency_matrix"]
+
+    assert validation_task["dependencies"] == ["TASK-FEAT-143-002"]
+    assert dependency_matrix[-1] == {
+        "task_id": "TASK-FEAT-143-006",
+        "depends_on": ["TASK-FEAT-143-002"],
+    }
+    assert "审计一致性" in normalized_business["risk_mitigation"][0]["mitigation"]
+
+
 def test_pm_planner_normalization_preserves_concrete_task_directory_and_injects_governance_task(
     temp_project_root, runner
 ):
@@ -3833,6 +4381,10 @@ def test_synthesize_single_ssot_payload_creates_tech_contract_from_written_markd
     assert outputs[0]["ssot_type"] == "tech"
     assert outputs[0]["parent"] == "FEAT-143"
     assert "# TECH-FEAT-143" in outputs[0]["content"]
+
+
+def test_claude_code_runner_exposes_workspace_ssot_materializer():
+    assert hasattr(ClaudeCodeRunner, "_materialize_workspace_formal_ssot_markdown")
 
 
 def test_claude_code_validation_prefers_written_business_file(temp_project_root):

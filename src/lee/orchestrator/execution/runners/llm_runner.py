@@ -1543,11 +1543,56 @@ class LLMRunner(StepRunnerBase):
         materialized_summary: Dict[str, Any] = {}
         materialized_files: List[str] = []
 
+        ssot_type_aliases = {
+            "frozen_technical_architecture": ("tech", "tech_spec"),
+            "frozen_ui_prototype": ("ui", "ui_prototype"),
+        }
+
         for path in candidate_paths:
-            if not path.exists() or path.suffix.lower() != ".md":
+            if not path.exists() or path.suffix.lower() not in {".md", ".yaml", ".yml"}:
+                continue
+            if path.suffix.lower() in {".yaml", ".yml"}:
+                if getattr(step, "id", "") != "tech_design":
+                    continue
+                feat_match = re.search(r"(FEAT-[A-Za-z0-9-]+)", path.stem, re.IGNORECASE)
+                parent_id = feat_match.group(1).upper() if feat_match else None
+                if not parent_id:
+                    continue
+                raw_text = path.read_text(encoding="utf-8").strip()
+                title_line = next(
+                    (
+                        line.lstrip("#").strip()
+                        for line in raw_text.splitlines()
+                        if line.strip().startswith("#")
+                    ),
+                    "",
+                )
+                artifact = manager.create_ssot(
+                    ssot_type=SSOTType.TECH,
+                    title=title_line or path.stem.replace("-", " "),
+                    content=raw_text,
+                    run_id=workflow_id,
+                    formal_id="",
+                    parent_id=parent_id,
+                    derived_from=[],
+                    source_refs=[f"{parent_id}#scope"],
+                    owner=None,
+                    tags=[],
+                    status=ArtifactStatus.FROZEN,
+                    version="v1",
+                    properties={"workspace_source": path.name, "identity_kind": "ssot"},
+                )
+                materialized_summary["tech_spec"] = {
+                    "id": artifact.id,
+                    "identity_kind": "ssot",
+                    "path": artifact.path,
+                    "path_root": artifact.path_root,
+                    "parent_id": artifact.properties.get("parent_id"),
+                }
+                materialized_files.append(str(artifact.absolute_path))
                 continue
             try:
-                front_matter, _body = parse_front_matter(path)
+                front_matter, body = parse_front_matter(path)
             except Exception:
                 continue
 
@@ -1558,8 +1603,12 @@ class LLMRunner(StepRunnerBase):
                 continue
             if not isinstance(ssot_type_value, str) or not ssot_type_value.strip():
                 continue
+            normalized_ssot_type_value, output_key = ssot_type_aliases.get(
+                ssot_type_value.strip().lower(),
+                (ssot_type_value.strip().lower(), None),
+            )
             try:
-                ssot_type = SSOTType(ssot_type_value.strip().lower())
+                ssot_type = SSOTType(normalized_ssot_type_value)
             except Exception:
                 continue
 
@@ -1567,6 +1616,12 @@ class LLMRunner(StepRunnerBase):
                 status = ArtifactStatus(str(front_matter.get("status", "active")).upper())
             except Exception:
                 status = ArtifactStatus.ACTIVE
+
+            formal_id = artifact_id.strip()
+            if ssot_type == SSOTType.TECH and not formal_id.startswith("TECH-"):
+                formal_id = ""
+            if ssot_type == SSOTType.UI and not formal_id.startswith("UI-"):
+                formal_id = ""
 
             derived_from_ids = front_matter.get("derived_from_ids")
             source_refs = front_matter.get("source_refs")
@@ -1578,9 +1633,9 @@ class LLMRunner(StepRunnerBase):
             artifact = manager.create_ssot(
                 ssot_type=ssot_type,
                 title=str(title or artifact_id).strip() or artifact_id.strip(),
-                content=path,
+                content=body,
                 run_id=workflow_id,
-                formal_id=artifact_id.strip(),
+                formal_id=formal_id,
                 parent_id=front_matter.get("parent_id"),
                 derived_from=derived_from_ids if isinstance(derived_from_ids, list) else [],
                 source_refs=source_refs if isinstance(source_refs, list) else [],
@@ -1591,7 +1646,7 @@ class LLMRunner(StepRunnerBase):
                 properties=properties if isinstance(properties, dict) else {},
             )
 
-            output_key = "ui_prototype" if ssot_type == SSOTType.UI else "tech_spec"
+            output_key = output_key or ("ui_prototype" if ssot_type == SSOTType.UI else "tech_spec")
             materialized_summary[output_key] = {
                 "id": artifact.id,
                 "identity_kind": "ssot",
@@ -1764,8 +1819,9 @@ class LLMRunner(StepRunnerBase):
             return True
         return False
 
+    @classmethod
     def _expected_feat_review_subject_refs(
-        self,
+        cls,
         instance_data: Dict[str, Any],
     ) -> List[str]:
         step_outputs = instance_data.get("step_outputs", {}) if isinstance(instance_data, dict) else {}
@@ -1803,7 +1859,10 @@ class LLMRunner(StepRunnerBase):
                 feat_payload = parsed_output
 
         if feat_payload is None:
-            feat_payload = self._extract_business_output_payload(None, generated_text)
+            fallback_payload = cls._parse_structured_output_if_possible(generated_text)
+            if isinstance(fallback_payload, dict):
+                nested_business = fallback_payload.get("business_output")
+                feat_payload = nested_business if isinstance(nested_business, dict) else fallback_payload
         if not isinstance(feat_payload, dict):
             return []
 
@@ -3511,6 +3570,29 @@ class LLMRunner(StepRunnerBase):
             )
             return any(LLMRunner._text_contains_keyword(combined, keyword) for keyword in structural_keywords)
 
+        def _normalize_task_path_refs(value: Any, feat_id: str) -> Any:
+            canonical_feat = feat_id or "FEAT-001"
+            canonical_dir = f"spec/tasks/{canonical_feat}"
+            legacy_variants = (
+                f"spec/requirements/tasks/{canonical_feat}/",
+                f"spec/requirements/tasks/{canonical_feat}",
+                "spec/requirements/tasks/<FEAT-ID>/",
+                "spec/requirements/tasks/<FEAT-ID>",
+            )
+            if isinstance(value, str):
+                normalized = value
+                for legacy in legacy_variants:
+                    normalized = normalized.replace(legacy, canonical_dir)
+                return normalized
+            if isinstance(value, list):
+                return [_normalize_task_path_refs(item, feat_id) for item in value]
+            if isinstance(value, dict):
+                return {
+                    key: _normalize_task_path_refs(item, feat_id)
+                    for key, item in value.items()
+                }
+            return value
+
         def _ensure_structural_governance_task(normalized_business: Dict[str, Any]) -> None:
             task_specs = normalized_business.get("task_specs")
             source_feats = normalized_business.get("source_feats")
@@ -3628,6 +3710,79 @@ class LLMRunner(StepRunnerBase):
                 if structural_task_id not in resource_allocation[governance_theme["responsible_role"]]["tasks"]:
                     resource_allocation[governance_theme["responsible_role"]]["tasks"].insert(0, structural_task_id)
 
+        def _enrich_delivery_plan_structure(normalized_business: Dict[str, Any]) -> None:
+            task_specs = normalized_business.get("task_specs")
+            if not isinstance(task_specs, list) or not task_specs:
+                return
+
+            task_index: Dict[str, Dict[str, Any]] = {}
+            for task_spec in task_specs:
+                if not isinstance(task_spec, dict):
+                    continue
+                task_id = _clean_text(task_spec.get("task_id"))
+                if task_id:
+                    task_index[task_id] = task_spec
+
+            for task_spec in task_specs:
+                if not isinstance(task_spec, dict):
+                    continue
+                task_kind = _clean_text(task_spec.get("task_kind")).lower()
+                task_id = _clean_text(task_spec.get("task_id"))
+                prerequisites = [
+                    item for item in _normalize_list(task_spec.get("prerequisites"))
+                    if item in task_index
+                ]
+                dependencies = [
+                    item for item in _normalize_list(task_spec.get("dependencies"))
+                    if item in task_index
+                ]
+                if task_kind == "validation" and not dependencies and prerequisites:
+                    dependencies = list(dict.fromkeys(prerequisites))
+                    task_spec["dependencies"] = dependencies
+                elif dependencies:
+                    task_spec["dependencies"] = list(dict.fromkeys(dependencies))
+                if prerequisites:
+                    task_spec["prerequisites"] = list(dict.fromkeys(prerequisites))
+
+            dependency_graph = normalized_business.get("dependency_graph")
+            if not isinstance(dependency_graph, dict):
+                dependency_graph = {}
+            dependency_matrix: List[Dict[str, Any]] = []
+            for task_spec in task_specs:
+                if not isinstance(task_spec, dict):
+                    continue
+                task_id = _clean_text(task_spec.get("task_id"))
+                if not task_id:
+                    continue
+                depends_on = [
+                    item for item in _normalize_list(task_spec.get("dependencies"))
+                    if item in task_index
+                ]
+                dependency_matrix.append(
+                    {
+                        "task_id": task_id,
+                        "depends_on": depends_on,
+                    }
+                )
+            dependency_graph["dependency_matrix"] = dependency_matrix
+            if not isinstance(dependency_graph.get("critical_path"), list):
+                dependency_graph["critical_path"] = [
+                    item.get("task_id") for item in dependency_matrix[:1] if isinstance(item, dict) and item.get("task_id")
+                ]
+            normalized_business["dependency_graph"] = dependency_graph
+
+            risk_mitigation = normalized_business.get("risk_mitigation")
+            if isinstance(risk_mitigation, list):
+                for risk in risk_mitigation:
+                    if not isinstance(risk, dict):
+                        continue
+                    mitigation = _clean_text(risk.get("mitigation"))
+                    if "直接磁盘读取" in mitigation and "审计一致性" not in mitigation:
+                        risk["mitigation"] = (
+                            mitigation.rstrip("。")
+                            + "，并要求在降级模式下继续写入审计事件与路径链校验结果，保证审计一致性。"
+                        )
+
         def _format_string_list_section(heading: str, values: Any) -> List[str]:
             if not isinstance(values, list) or not values:
                 return []
@@ -3708,6 +3863,7 @@ class LLMRunner(StepRunnerBase):
                         feat_id=canonical_source_feat,
                         formal_checks=formal_checks,
                     )
+                remapped_task = _normalize_task_path_refs(remapped_task, canonical_source_feat)
                 remapped_task_specs.append(remapped_task)
             normalized_business["task_specs"] = remapped_task_specs
         else:
@@ -4098,12 +4254,17 @@ class LLMRunner(StepRunnerBase):
                     ),
                     "",
                 )
-            if not task_directory or "<FEAT-ID>" in task_directory:
-                task_directory = f"spec/tasks/{primary_feat or 'FEAT-001'}"
+            canonical_task_directory = f"spec/tasks/{primary_feat or 'FEAT-001'}"
+            normalized_task_directory = task_directory.replace("\\", "/") if task_directory else ""
+            if normalized_task_directory.startswith("spec/requirements/tasks/"):
+                task_directory = canonical_task_directory
+            elif not task_directory or "<FEAT-ID>" in task_directory:
+                task_directory = canonical_task_directory
             normalized_business["planning_metadata"] = {
                 **planning_metadata,
                 "task_directory": task_directory,
             }
+        _enrich_delivery_plan_structure(normalized_business)
 
         normalized_structured = LLMRunner._ensure_structured_envelope(
             business_output=normalized_business,
@@ -4488,6 +4649,12 @@ class LLMRunner(StepRunnerBase):
             else:
                 normalized_business[field_name] = []
 
+        if review_type == "delivery_plan_review":
+            normalized_business = LLMRunner._sanitize_delivery_plan_review_payload(
+                review_payload=normalized_business,
+                instance_data=instance_data,
+            )
+
         normalized_structured = structured_payload
         if (
             isinstance(structured_payload, dict)
@@ -4868,7 +5035,7 @@ class LLMRunner(StepRunnerBase):
         for task_spec in task_specs:
             if not isinstance(task_spec, dict):
                 continue
-            task_kind = _clean_text(task_spec.get("task_kind")).lower()
+            task_kind = cls._review_clean_text(task_spec.get("task_kind")).lower()
             if task_kind not in {"governance", "specification", "template"}:
                 continue
             mappings = task_spec.get("acceptance_criteria_mapping")
@@ -4903,8 +5070,113 @@ class LLMRunner(StepRunnerBase):
             r"可得",
             r"已覆盖",
             r"已落盘",
+            r"均具备",
+            r"完整的",
+            r"字段$",
+            r"清晰",
+            r"完整$",
+            r"支持",
+            r"明确",
+            r"已正确映射",
+            r"已映射到",
+            r"一致$",
         ]
         return any(re.search(pattern, lowered) for pattern in positive_patterns)
+
+    @classmethod
+    def _sanitize_delivery_plan_review_payload(
+        cls,
+        *,
+        review_payload: Dict[str, Any],
+        instance_data: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        sanitized = dict(review_payload)
+        findings = [
+            item.strip()
+            for item in sanitized.get("findings") or []
+            if isinstance(item, str) and item.strip()
+        ]
+
+        task_plan = cls._load_task_plan_business_output(instance_data)
+        project_root = ""
+        if isinstance(instance_data, dict):
+            project_root = str(instance_data.get("project_root") or "").strip()
+        if not project_root:
+            project_root = str(Path.cwd())
+        has_persisted_tasks = cls._delivery_plan_has_persisted_tasks(
+            project_root=project_root,
+            task_plan=task_plan,
+        )
+        has_structural_spec_coverage = cls._delivery_plan_has_structural_spec_coverage(
+            project_root=project_root,
+            task_plan=task_plan,
+        )
+
+        filtered_findings: List[str] = []
+        for item in findings:
+            if cls._contains_delivery_plan_false_positive(item):
+                continue
+            if re.search(r"双重覆盖|同时映射到 specification.*implementation|规范与实现双重覆盖", item, re.IGNORECASE):
+                if has_structural_spec_coverage:
+                    continue
+            if re.search(r"落盘|persist|persistence|unverified", item, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", item, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", item, re.IGNORECASE):
+                if has_structural_spec_coverage:
+                    continue
+            filtered_findings.append(item)
+
+        sanitized["findings"] = filtered_findings
+        filtered_risks: List[str] = []
+        for item in sanitized.get("risks") or []:
+            if not isinstance(item, str) or not item.strip():
+                continue
+            text = item.strip()
+            if re.search(r"落盘|persist|persistence|未落盘|unverified", text, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", text, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", text, re.IGNORECASE):
+                if has_structural_spec_coverage:
+                    continue
+            filtered_risks.append(text)
+        sanitized["risks"] = filtered_risks
+
+        filtered_recommendations: List[str] = []
+        for item in sanitized.get("recommendations") or []:
+            if not isinstance(item, str) or not item.strip():
+                continue
+            text = item.strip()
+            if re.search(r"spec/requirements/tasks/|未落盘|write.*spec/requirements/tasks|persist", text, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            if re.search(r"definition_of_done|落盘文件路径", text, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            filtered_recommendations.append(text)
+        sanitized["recommendations"] = filtered_recommendations
+        if sanitized.get("decision") == "revise" and not filtered_findings:
+            summary = str(sanitized.get("summary") or "").strip()
+            if not cls._contains_feat_review_negative_signal(summary):
+                sanitized["decision"] = "pass"
+        if not str(sanitized.get("summary") or "").strip():
+            review_type = str(sanitized.get("review_type") or "").strip()
+            subject_refs = [
+                item.strip()
+                for item in sanitized.get("subject_refs") or []
+                if isinstance(item, str) and item.strip()
+            ]
+            subject_text = ", ".join(subject_refs) if subject_refs else "the planned FEATs"
+            decision = str(sanitized.get("decision") or "").strip() or "pass"
+            if review_type == "delivery_plan_review":
+                sanitized["summary"] = f"Delivery plan review {decision} for {subject_text}"
+        return sanitized
 
     @classmethod
     def _validate_delivery_plan_review_semantics(
@@ -4956,6 +5228,9 @@ class LLMRunner(StepRunnerBase):
             if re.search(r"落盘|persist|persistence|unverified", all_review_text, re.IGNORECASE):
                 if cls._delivery_plan_has_persisted_tasks(project_root=project_root, task_plan=task_plan):
                     return "Delivery plan review incorrectly reports TASK persistence as unverified"
+            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", all_review_text, re.IGNORECASE):
+                if cls._delivery_plan_has_persisted_tasks(project_root=project_root, task_plan=task_plan):
+                    return "Delivery plan review incorrectly requires explicit TASK file paths"
             if re.search(r"spec/template coverage|规范任务|模板任务|specification", all_review_text, re.IGNORECASE):
                 if cls._delivery_plan_has_structural_spec_coverage(project_root=project_root, task_plan=task_plan):
                     return "Delivery plan review incorrectly reports missing structural specification coverage"
@@ -5908,9 +6183,6 @@ class ClaudeCodeRunner(StepRunnerBase):
     _build_schema_repair_input = staticmethod(LLMRunner._build_schema_repair_input)
     _build_schema_repair_prompt = staticmethod(LLMRunner._build_schema_repair_prompt)
     _complete_non_ui_design_step = LLMRunner._complete_non_ui_design_step
-    _materialize_workspace_formal_ssot_markdown = staticmethod(
-        LLMRunner._materialize_workspace_formal_ssot_markdown
-    )
     _extract_feat_freeze_path = staticmethod(LLMRunner._extract_feat_freeze_path)
     _load_feat_bundle_payload = classmethod(LLMRunner._load_feat_bundle_payload.__func__)
     _load_yaml_frontmatter = staticmethod(LLMRunner._load_yaml_frontmatter)
@@ -5947,6 +6219,9 @@ class ClaudeCodeRunner(StepRunnerBase):
     _resolve_authoritative_input_value = classmethod(LLMRunner._resolve_authoritative_input_value.__func__)
     _extract_context_file_paths = classmethod(LLMRunner._extract_context_file_paths.__func__)
     _merge_forbidden_read_paths = classmethod(LLMRunner._merge_forbidden_read_paths.__func__)
+
+    def _materialize_workspace_formal_ssot_markdown(self, *args, **kwargs):
+        return LLMRunner._materialize_workspace_formal_ssot_markdown(*args, **kwargs)
 
     @staticmethod
     def _get_success_criteria(step) -> Dict[str, Any]:
@@ -6516,6 +6791,32 @@ class ClaudeCodeRunner(StepRunnerBase):
                     project_root=ctx.project_root,
                     business_output=business_output,
                 )
+            elif agent_id == "agent.product.feat_reviewer":
+                expected_subject_refs = LLMRunner._expected_feat_review_subject_refs(instance.data)
+                semantic_error = LLMRunner._validate_feat_review_subject_refs(
+                    business_output,
+                    expected_subject_refs,
+                )
+                if not semantic_error:
+                    semantic_error = LLMRunner._validate_feat_review_semantics(
+                        business_output,
+                        expected_subject_refs,
+                    )
+            elif agent_id == "agent.product.delivery_plan_reviewer":
+                expected_subject_refs = LLMRunner._expected_delivery_plan_subject_refs(
+                    instance.data,
+                    business_output if isinstance(business_output, dict) else None,
+                )
+                semantic_error = LLMRunner._validate_delivery_plan_review_subject_refs(
+                    business_output,
+                    expected_subject_refs,
+                )
+                if not semantic_error:
+                    semantic_error = LLMRunner._validate_delivery_plan_review_semantics(
+                        project_root=ctx.project_root,
+                        review_payload=business_output,
+                        instance_data=instance.data,
+                    )
             if semantic_error:
                 await ctx.state_machine.fail_step(workflow_id, step.id, semantic_error)
                 await ctx.store.update_task_execution(
@@ -6542,6 +6843,7 @@ class ClaudeCodeRunner(StepRunnerBase):
                 workflow_id=workflow_id,
                 generated_text=output.get("generated_text", "") or output.get("raw_output", ""),
                 structured_payload=structured_payload,
+                written_files=abs_changed if changed else [],
             )
             if ssot_materialized:
                 materialized_files = ssot_materialized.get("materialized_files", [])

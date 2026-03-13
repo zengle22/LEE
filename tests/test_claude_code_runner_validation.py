@@ -1113,17 +1113,17 @@ async def test_materialize_ssot_outputs_falls_back_to_workspace_formal_markdown_
         / "workspace"
         / "wf-tech"
         / "tech_design"
-        / "FEAT-081__frozen-technical-architecture.md"
+        / "FTA-FEAT-081-001__frozen-technical-architecture.md"
     )
     workspace_file.parent.mkdir(parents=True, exist_ok=True)
     workspace_file.write_text(
         "\n".join(
             [
                 "---",
-                "id: TECH-FEAT-081-001",
-                "ssot_type: tech",
+                "id: FTA-FEAT-081-001",
+                "ssot_type: frozen_technical_architecture",
                 "title: FEAT-081 Workflow-First CLI 技术架构",
-                "status: active",
+                "status: frozen",
                 "version: v1",
                 "parent_id: FEAT-081",
                 "derived_from_ids:",
@@ -1169,7 +1169,74 @@ async def test_materialize_ssot_outputs_falls_back_to_workspace_formal_markdown_
 
     assert result is not None
     assert result["outputs"]["tech_spec"]["id"] == "TECH-FEAT-081-001"
-    assert list((tmp_path / "spec" / "tech").glob("TECH-FEAT-081-001__*.md"))
+    generated_files = list((tmp_path / "spec" / "tech").glob("TECH-FEAT-081-001__*.md"))
+    assert generated_files
+    generated_text = generated_files[0].read_text(encoding="utf-8")
+    assert "id: TECH-FEAT-081-001" in generated_text
+    assert "ssot_type: tech" in generated_text
+
+
+@pytest.mark.asyncio
+async def test_materialize_ssot_outputs_falls_back_to_workspace_yaml_for_tech_design(tmp_path):
+    runner = LLMRunner()
+    workspace_file = (
+        tmp_path
+        / ".workflow"
+        / "workspace"
+        / "wf-tech"
+        / "tech_design"
+        / "FEAT-082-frozen-technical-architecture.yaml"
+    )
+    workspace_file.parent.mkdir(parents=True, exist_ok=True)
+    workspace_file.write_text(
+        "\n".join(
+            [
+                "# FEAT-082 Frozen Technical Architecture",
+                "# Formal Object 元数据自动继承机制",
+                "",
+                "## 1. 架构概述",
+                "",
+                "这里是技术架构正文。",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    agent_loader = MagicMock()
+    agent_loader.load.return_value = SimpleNamespace(contracts={}, spec_path=None)
+    ctx = RunnerContext(
+        store=MagicMock(),
+        state_machine=MagicMock(),
+        event_log=MagicMock(),
+        evidence_collector=MagicMock(),
+        verifier_engine=MagicMock(),
+        executor_factory=MagicMock(),
+        agent_context_builder=SimpleNamespace(agent_loader=agent_loader),
+        contract_discovery=MagicMock(),
+        file_output_handler=SimpleNamespace(project_root=tmp_path),
+        token_manager=MagicMock(),
+        project_root=str(tmp_path),
+    )
+    step = SimpleNamespace(id="tech_design", agent_id="agent.dev.tech_architect", config={})
+
+    result = await runner._materialize_ssot_outputs(
+        ctx=ctx,
+        step=step,
+        workflow_id="wf-tech",
+        generated_text="",
+        structured_payload=None,
+        written_files=[str(workspace_file)],
+    )
+
+    assert result is not None
+    tech_output = result["outputs"]["tech_spec"]
+    assert tech_output["id"].startswith("TECH-FEAT-082")
+    generated_files = list((tmp_path / "spec" / "tech").glob("TECH-FEAT-082-*__*.md"))
+    assert generated_files
+    generated_text = generated_files[0].read_text(encoding="utf-8")
+    assert "ssot_type: tech" in generated_text
+    assert "parent_id: FEAT-082" in generated_text
+    assert "# FEAT-082 Frozen Technical Architecture" in generated_text
 
 
 def test_extract_business_output_for_validation_prefers_generated_text_over_wrapper():
