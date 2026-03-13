@@ -212,10 +212,13 @@ class SSOTIDGenerator:
                 return f"{ssot_type.value.upper()}-{seq:03d}"
 
             src_scope = src_root_id or resolve_src_root_id(parent_id=parent_id)
-            if not src_scope:
-                raise ValueError(f"类型 {ssot_type.value} 需要 src_root_id 或可解析出 SRC parent")
-            seq = self._get_next_scoped_sequence(ssot_type, src_scope)
-            return f"{ssot_type.value.upper()}-{src_scope}-{seq:03d}"
+            if src_scope:
+                seq = self._get_next_scoped_sequence(ssot_type, src_scope)
+                return f"{ssot_type.value.upper()}-{src_scope}-{seq:03d}"
+
+            # 回退到旧版独立序号格式（不带 SRC 作用域）
+            seq = self.get_next_sequence(ssot_type)
+            return f"{ssot_type.value.upper()}-{seq:03d}"
 
         elif category == ObjectCategory.DIRECT_PARENT:
             # 直接父对象一致型
