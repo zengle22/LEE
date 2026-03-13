@@ -37,6 +37,9 @@ Dev 部门当前只保留两个主入口：
 - `smoke_gate` 绑定 `gate.dev.smoke_gate`
 - 生命周期状态按 `Ready -> In Progress -> Evidence Pack Produced -> Closed` 收口
 
+共享输入规范说明见：
+`docs/shared-input-spec.md`
+
 ## 现役 L3 模板
 
 - `template.dev.tech_design_l3`
