@@ -9,6 +9,7 @@ owner: development
 tags: [template, dev, feature, contract, l3, canonical, adr-008]
 
 contracts:
+  shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
   stage_definition: ../../../../../spec/workflow/definitions/contract-design-stage-definition.md
   freeze_gate: ../../gates/contract-freeze-gate/v1/gate.yaml
 

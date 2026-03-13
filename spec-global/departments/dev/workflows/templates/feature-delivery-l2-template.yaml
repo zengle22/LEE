@@ -22,6 +22,8 @@ description: |
 
 owner: development
 tags: [template, dev, feature, l2, canonical, adr-008]
+contracts:
+  shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
 
 phases:
   - id: tech_design

@@ -932,6 +932,27 @@ class TestYamlTemplates:
         ]
         assert data["properties"]["repo_context"]["required"] == ["repo_id", "branch"]
 
+    def test_canonical_dev_templates_reference_shared_input_schema(self):
+        """Test canonical Dev templates all reference the shared input schema contract."""
+        import yaml
+
+        template_paths = [
+            Path("spec-global/departments/dev/workflows/templates/feature-delivery-l2-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/bugfix-delivery-l2-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/tech-design-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/feature-contract-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/feature-be-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/feature-fe-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/feature-integration-l3-template.yaml"),
+            Path("spec-global/departments/dev/workflows/templates/evidence-pack-l3-template.yaml"),
+        ]
+        expected = "../../../../../spec/contracts/shared-input-schema/v1/schema.json"
+
+        for path in template_paths:
+            with open(path, encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            assert data["contracts"]["shared_input_schema"] == expected
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")

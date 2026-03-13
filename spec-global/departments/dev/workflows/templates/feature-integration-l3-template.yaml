@@ -14,6 +14,7 @@ tags:
 - l3
 - contract-first
 contracts:
+  shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
   stage_definition: ../../stages/l3-integration.yaml
   planner_verifier_spec: ../../docs/integration-planner-and-verifier-spec.md
   routing_spec: ../../docs/structural-issue-routing-spec.md

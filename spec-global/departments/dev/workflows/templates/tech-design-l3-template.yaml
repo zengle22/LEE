@@ -7,6 +7,8 @@ description: |
   downstream contract or implementation work begins.
 owner: development
 tags: [template, dev, tech, l3, canonical, adr-008]
+contracts:
+  shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
 
 steps:
   - id: analyze_feature

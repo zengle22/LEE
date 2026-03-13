@@ -9,6 +9,7 @@ owner: development
 tags: [template, dev, feature, backend, l3, canonical, adr-008, utdd]
 
 contracts:
+  shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
   stage_definition: ../../stages/l3-backend-development.yaml
 
 steps:
