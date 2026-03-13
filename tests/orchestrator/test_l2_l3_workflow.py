@@ -692,6 +692,22 @@ class TestYamlTemplates:
         assert "contract_freeze_ref" in data["instance_schema"]["required_fields"]
         assert "coverage_report_ref" in data["instance_schema"]["output_fields"]
 
+    def test_backend_stage_testset_tracks_utdd_coverage_and_handoff(self):
+        """Test backend stage TestSet formalizes UTDD, coverage, and handoff validation."""
+        testset_path = Path("spec/testing/testsets/TESTSET-FEAT-SRC-009-006-001__backend-development-stage-testset.md")
+        if not testset_path.exists():
+            pytest.skip("Backend stage TestSet not found")
+
+        content = testset_path.read_text(encoding="utf-8")
+
+        assert "id: TESTSET-FEAT-SRC-009-006-001" in content
+        assert "TC-BE-001" in content
+        assert "TC-BE-002" in content
+        assert "TC-BE-003" in content
+        assert "TC-BE-004" in content
+        assert ">=80%" in content
+        assert "coverage gate" in content.lower()
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
