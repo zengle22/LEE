@@ -790,6 +790,20 @@ class TestYamlTemplates:
         assert "runtime_config_ref" in data["instance_schema"]["optional_fields"]
         assert "fe_artifact_ref" in data["instance_schema"]["output_fields"]
 
+    def test_frontend_output_spec_aligns_with_evidence_handoff(self):
+        """Test frontend output spec declares canonical outputs and evidence handoff refs."""
+        spec_path = Path("spec-global/departments/dev/contracts/frontend-output-spec/v1/spec.md")
+        if not spec_path.exists():
+            pytest.skip("Frontend output spec not found")
+
+        content = spec_path.read_text(encoding="utf-8")
+
+        assert "fe_artifact_ref" in content
+        assert "unit_test_ref" in content
+        assert "coverage_report_ref" in content
+        assert "contract_usage_verification_ref" in content
+        assert "template.dev.evidence_pack_l3" in content
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")

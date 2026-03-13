@@ -11,6 +11,7 @@ tags: [template, dev, feature, frontend, l3, canonical, adr-008, utdd]
 contracts:
   stage_definition: ../../stages/l3-frontend-development.yaml
   utdd_guide: ../../docs/frontend-utdd-execution-guide.md
+  output_spec: ../../contracts/frontend-output-spec/v1/spec.md
 
 steps:
   - id: write_ut
