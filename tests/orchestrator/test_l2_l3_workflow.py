@@ -887,6 +887,23 @@ class TestYamlTemplates:
         assert "audit_declaration_ref" in data["outputs"]["required"]
         assert "smoke_gate_inputs" in data["outputs"]["optional"]
 
+    def test_deprecated_paths_spec_declares_canonical_replacements(self):
+        """Test deprecated-paths spec freezes legacy path inventory and replacement entries."""
+        import yaml
+
+        spec_path = Path("spec-global/departments/dev/governance/deprecated-paths-spec.yaml")
+        if not spec_path.exists():
+            pytest.skip("Deprecated paths spec not found")
+
+        with open(spec_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        paths = {entry["path"]: entry for entry in data["deprecated_paths"]}
+        assert "spec-global/departments/dev/workflows/phase-openspec-flow/v1/workflow.yaml" in paths
+        assert paths["spec-global/departments/dev/workflows/templates/feature-l2-template.yaml"]["status"] == "compat"
+        assert paths["spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml"]["replacement"] == "template.dev.bugfix_delivery_l2"
+        assert data["marking_rules"]["workflow_header_notice"]["required"] is True
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
