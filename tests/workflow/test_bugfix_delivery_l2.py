@@ -34,6 +34,7 @@ def test_bugfix_delivery_l2_input_contract():
         "severity",
         "reproduction_evidence",
     ]
+    assert "batch_approval_record" in data["shared_input_contract"]["optional_fields"]
 
 
 def test_bugfix_delivery_l2_granularity_policy():
@@ -54,6 +55,21 @@ def test_bugfix_delivery_l2_granularity_policy():
         },
     )
     assert batch.allowed is True
+
+    exception_batch = evaluator.evaluate(
+        bug_ids=["BUG-1", "BUG-2"],
+        batch_mode=True,
+        batch_context={
+            "same_module": True,
+            "same_root_cause_class": False,
+            "same_fix_strategy": True,
+            "same_verification_surface": True,
+            "same_release_window": True,
+        },
+        batch_approval_record={"decision": "approved", "request_id": "BAR-001"},
+    )
+    assert exception_batch.allowed is True
+    assert exception_batch.approval_record_used is True
 
 
 def test_bugfix_delivery_l2_state_machine_flow():
@@ -79,8 +95,11 @@ def test_bugfix_delivery_l2_contract_interfaces():
     handoffs = data["phase_data_flow"]["handoffs"]
 
     first = handoffs[0]
+    second = handoffs[1]
     last = handoffs[-1]
     assert first["from"] == "triage"
     assert first["to"] == "root_cause"
+    assert "granularity_decision_ref" in first["outputs"]
+    assert "batch_approval_record" in second["outputs"]
     assert last["from"] == "evidence_pack"
     assert last["to"] == "merge_or_reject"

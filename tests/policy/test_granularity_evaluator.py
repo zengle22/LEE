@@ -44,3 +44,27 @@ def test_batch_mode_requires_all_five_same_flags():
     assert rejected.allowed is False
     assert rejected.split_required is True
     assert rejected.checks["same_root_cause_class"] is False
+
+
+def test_batch_mode_can_continue_with_approved_exception_record():
+    evaluator = GranularityPolicyEvaluator()
+
+    decision = evaluator.evaluate(
+        bug_ids=["BUG-1", "BUG-2"],
+        batch_mode=True,
+        batch_context={
+            "same_module": True,
+            "same_root_cause_class": False,
+            "same_fix_strategy": True,
+            "same_verification_surface": True,
+            "same_release_window": True,
+        },
+        batch_approval_record={
+            "decision": "approved",
+            "request_id": "BAR-001",
+        },
+    )
+
+    assert decision.allowed is True
+    assert decision.reason == "batch_exception_approved"
+    assert decision.approval_record_used is True

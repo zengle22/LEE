@@ -101,6 +101,7 @@ shared_input_contract:
     - test_case_refs
     - batch_mode
     - batch_context
+    - batch_approval_record
   rules:
     - rule: frozen_bug_required
       description: "bug_ssot_id must reference a frozen BUG object"
@@ -110,6 +111,8 @@ shared_input_contract:
       description: "reproduction_evidence must be actionable and replayable"
     - rule: batch_requires_five_same
       description: "batch_mode is valid only when five-same rule passes"
+    - rule: batch_exception_requires_approval
+      description: "five-same failures may proceed only with an approved batch_approval_record"
 
 l3_input_schema:
   description: "Shared data propagated from L2 into bugfix L3 phases"
@@ -123,6 +126,7 @@ l3_input_schema:
     - test_case_refs
     - batch_mode
     - batch_context
+    - batch_approval_record
     - upstream_artifacts
 
 l3_output_schema:
@@ -133,7 +137,11 @@ l3_output_schema:
     - artifacts
   optional_fields:
     - triage_decision_ref
+    - granularity_decision_ref
     - root_cause_ref
+    - batch_approval_record
+    - verification_scope_ref
+    - rollback_strategy_ref
     - fix_design_ref
     - fix_artifact_ref
     - verification_report_ref
@@ -147,11 +155,15 @@ phase_data_flow:
       to: root_cause
       outputs:
         - triage_decision_ref
+        - granularity_decision_ref
     - from: root_cause
       to: fix_design
       outputs:
         - root_cause_ref
         - affected_scope_ref
+        - batch_approval_record
+        - verification_scope_ref
+        - rollback_strategy_ref
     - from: fix_design
       to: fix_implementation
       outputs:

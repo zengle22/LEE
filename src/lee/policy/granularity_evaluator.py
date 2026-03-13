@@ -15,6 +15,7 @@ class GranularityDecision:
     reason: str
     checks: Dict[str, bool] = field(default_factory=dict)
     split_required: bool = False
+    approval_record_used: bool = False
 
 
 class GranularityPolicyEvaluator:
@@ -34,6 +35,7 @@ class GranularityPolicyEvaluator:
         bug_ids: List[str],
         batch_mode: bool = False,
         batch_context: Dict[str, Any] | None = None,
+        batch_approval_record: Dict[str, Any] | None = None,
     ) -> GranularityDecision:
         """Evaluate bugfix granularity for a prospective workflow run."""
         batch_context = batch_context or {}
@@ -77,6 +79,17 @@ class GranularityPolicyEvaluator:
                 allowed=True,
                 reason="five_same_rule_passed",
                 checks=checks,
+            )
+
+        approval_record = batch_approval_record or {}
+        approval_decision = str(approval_record.get("decision", "")).lower()
+        if approval_decision == "approved":
+            return GranularityDecision(
+                mode="batch",
+                allowed=True,
+                reason="batch_exception_approved",
+                checks=checks,
+                approval_record_used=True,
             )
 
         return GranularityDecision(
