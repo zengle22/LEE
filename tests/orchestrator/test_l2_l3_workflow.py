@@ -554,6 +554,34 @@ class TestYamlTemplates:
         assert "Backend implementation consumes" in content
         assert "Frontend implementation consumes" in content
 
+    def test_feature_contract_l3_template_covers_api_data_event_and_freeze(self):
+        """Test canonical feature contract template binds the three contract families and freeze handoff."""
+        import yaml
+
+        template_path = Path("spec-global/departments/dev/workflows/templates/feature-contract-l3-template.yaml")
+        if not template_path.exists():
+            pytest.skip("Feature contract L3 template not found")
+
+        with open(template_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["id"] == "template.dev.feature_contract_l3"
+        assert data["contracts"]["stage_definition"] == "../../../../../spec/workflow/definitions/contract-design-stage-definition.md"
+        assert data["contracts"]["freeze_gate"] == "../../gates/contract-freeze-gate/v1/gate.yaml"
+        assert [step["id"] for step in data["steps"]] == [
+            "api_contract_design",
+            "data_contract_design",
+            "event_contract_design",
+            "contract_self_review",
+            "contract_freeze",
+        ]
+        assert data["instance_schema"]["required_fields"][-1] == "tech_spec_ref"
+        assert data["handoff_rules"]["backend_dev"]["required_inputs"] == [
+            "tech_spec_ref",
+            "contract_freeze_ref",
+            "contract_hash",
+        ]
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")
