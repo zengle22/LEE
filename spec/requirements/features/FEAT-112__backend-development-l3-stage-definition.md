@@ -27,24 +27,25 @@ Feature 交付流程获得标准化的后端实现阶段，确保后端开发按
 - Inputs defined by EPIC scope
 # Processing
 
-- 解析 Contract 和 TECH spec
+- 解析 Contract freeze、TECH spec 和 repo_backend
+- 先编写或更新 Unit tests（UTDD）
 - 执行 Backend implementation
-- 编写 Unit tests
-- 生成 API docs
-- 执行 Code review
+- 在测试通过后执行 Refactor
+- 执行 Coverage gate
+- 发布 be_handoff_package_ref 供下游消费
 # Outputs
 
 - Backend implementation artifacts
 - Unit test 结果
-- API 文档
-- Code review 记录
 - Contract compliance 验证报告
+- coverage_report_ref
+- be_handoff_package_ref
 # Acceptance
 
 - Backend Development L3 阶段定义冻结
-- 包含输入规范（Contract + TECH spec）
-- 包含输出物（Backend implementation + Unit tests + API docs）
-- 包含完成标准（UT passed + Code review + Contract compliance）
+- 包含输入规范（contract_freeze_ref + TECH spec + repo_backend）
+- 包含输出物（Backend implementation + Unit tests + coverage report + be_handoff_package_ref）
+- 包含完成标准（UT passed + Coverage gate passed + Contract compliance + handoff published）
 - 包含阶段流转条件
 # Acceptance Checks
 
@@ -66,18 +67,18 @@ Feature 交付流程获得标准化的后端实现阶段，确保后端开发按
 
 ## AC-SRC-009-005-03
 
-- Scenario: Code Review 完成
+- Scenario: Coverage Gate 完成
 - Given: UT 测试通过
-- When: 提交 Code review
-- Then: Code review 通过并记录评审意见
+- When: 执行 coverage gate
+- Then: coverage 达到阈值并生成 coverage_report_ref
 - Trace Hints: TASK, TESTSET
 
 ## AC-SRC-009-005-04
 
-- Scenario: Contract Compliance 验证
-- Given: Code review 通过
-- When: 执行 Contract compliance 检查
-- Then: 实现符合 Contract 定义
+- Scenario: Backend Handoff 发布
+- Given: Coverage gate 通过
+- When: 发布 backend handoff
+- Then: 生成 be_handoff_package_ref 并可供 integration/frontend 消费
 - Trace Hints: TESTSET, TECH
 # Dependencies
 

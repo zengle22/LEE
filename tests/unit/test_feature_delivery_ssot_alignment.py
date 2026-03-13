@@ -173,6 +173,26 @@ def test_evidence_pack_feat_matches_canonical_handoff_contract():
     assert "smoke_gate_inputs" in text
 
 
+def test_backend_feat_matches_canonical_utdd_and_handoff_contract():
+    feat_112 = Path("spec/requirements/features/FEAT-112__backend-development-l3-stage-definition.md")
+    text = feat_112.read_text(encoding="utf-8")
+
+    assert "repo_backend" in text
+    assert "UTDD" in text
+    assert "Coverage gate" in text
+    assert "be_handoff_package_ref" in text
+
+
+def test_frontend_feat_matches_canonical_utdd_and_handoff_contract():
+    feat_113 = Path("spec/requirements/features/FEAT-113__frontend-development-l3-stage-definition.md")
+    text = feat_113.read_text(encoding="utf-8")
+
+    assert "repo_frontend" in text
+    assert "UTDD" in text
+    assert "Coverage gate" in text
+    assert "fe_handoff_package_ref" in text
+
+
 def test_early_bugfix_feat_matches_canonical_bugfix_contract():
     feat_109 = Path("spec/requirements/features/FEAT-109__bugfix-delivery-l2-workflow-definition.md")
     text = feat_109.read_text(encoding="utf-8")
