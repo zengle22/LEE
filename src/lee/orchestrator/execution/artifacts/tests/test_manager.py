@@ -361,6 +361,57 @@ class TestArtifactManager:
         assert testset.path.startswith("spec/testing/testsets/")
         assert testset.properties["placement_dir"] == "spec/testing/testsets"
 
+    def test_create_ssot_writes_workflow_instance_id_front_matter(self, manager):
+        metadata = manager.create_ssot(
+            ssot_type=SSOTType.FEAT,
+            title="Workflow First CLI",
+            content="# FEAT\n",
+            run_id="wf_task_123",
+        )
+
+        text = metadata.absolute_path.read_text(encoding="utf-8")
+
+        assert "workflow_instance_id: wf_task_123" in text
+
+    def test_create_ssot_merges_workflow_instance_id_into_existing_front_matter(self, manager):
+        metadata = manager.create_ssot(
+            ssot_type=SSOTType.TECH,
+            title="Workflow First CLI Tech",
+            content="---\nid: FTA-FEAT-001-001\nssot_type: frozen_technical_architecture\ntitle: Legacy\n---\n\n# Body\n",
+            run_id="wf_task_456",
+            parent_id="FEAT-001",
+        )
+
+        text = metadata.absolute_path.read_text(encoding="utf-8")
+
+        assert "workflow_instance_id: wf_task_456" in text
+        assert "id: TECH-FEAT-001-001" in text
+
+    def test_create_ssot_infers_parent_and_lineage_from_source_ref(self, manager):
+        manager.create_ssot(
+            ssot_type=SSOTType.EPIC,
+            formal_id="EPIC-003",
+            title="Workflow First CLI",
+            content="# EPIC-003\n",
+            run_id="wf_task_parent",
+            source_refs=["SRC-001#scope"],
+            version="v2",
+        )
+
+        metadata = manager.create_ssot(
+            ssot_type=SSOTType.FEAT,
+            formal_id="FEAT-082",
+            title="Metadata Inheritance Engine",
+            content="# FEAT-082\n",
+            run_id="wf_task_child",
+            source_refs=["EPIC-003#scope"],
+        )
+
+        assert metadata.properties["parent_id"] == "EPIC-003"
+        assert metadata.properties["source_refs"] == ["EPIC-003#scope"]
+        assert metadata.properties["derived_from_ids"][0]["id"] == "EPIC-003"
+        assert metadata.properties["derived_from_ids"][0]["version"] == "v2"
+
     def test_list_ssot_by_parent_uses_parent_index(self, manager):
         """测试按父对象查询 SSOT 子对象"""
         feat = manager.create_ssot(

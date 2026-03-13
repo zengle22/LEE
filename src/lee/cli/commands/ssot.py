@@ -22,7 +22,7 @@ from lee.orchestrator.execution.artifacts.ssot_files import (
 
 @click.group()
 def ssot():
-    """SSOT 真理链管理命令"""
+    """SSOT 真理链管理命令（含内部维护能力）"""
     pass
 
 
@@ -66,7 +66,17 @@ def _parse_property_items(items: tuple[str, ...]) -> dict:
     return properties
 
 
-@ssot.command("create")
+def _ensure_ssot_create_authorized(internal: bool, admin: bool) -> None:
+    if internal or admin:
+        return
+    raise click.ClickException(
+        "`lee ssot create` is an internal materialization command. "
+        "Use workflow-first entrypoints instead: "
+        "`lee epic new ...`, `lee feat new ...`, or `lee run product.src-to-epic/...`."
+    )
+
+
+@ssot.command("create", hidden=True)
 @click.option(
     "--type",
     "ssot_type",
@@ -91,6 +101,8 @@ def _parse_property_items(items: tuple[str, ...]) -> dict:
 @click.option("--property", "property_items", multiple=True, help="扩展属性，格式 KEY=VALUE，可重复；VALUE 支持 JSON")
 @click.option("--release-version", help="RELEASE 类型必填，格式如 1.4.0")
 @click.option("--report-kind", help="REPORT 类型可选，用于 release 级报告 ID")
+@click.option("--internal", is_flag=True, help="确认这是内部维护用途。")
+@click.option("--admin", is_flag=True, help="确认这是管理员维护用途。")
 def create_ssot_object(
     ssot_type: str,
     title: str,
@@ -110,8 +122,11 @@ def create_ssot_object(
     property_items: tuple[str, ...],
     release_version: Optional[str],
     report_kind: Optional[str],
+    internal: bool,
+    admin: bool,
 ):
     """创建正式 SSOT 对象。"""
+    _ensure_ssot_create_authorized(internal, admin)
     manager = ArtifactManager()
     content = content_file.read_text(encoding="utf-8") if content_file else body
     properties = _parse_property_items(property_items)

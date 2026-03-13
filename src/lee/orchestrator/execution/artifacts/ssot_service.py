@@ -5,7 +5,7 @@ SSOT Service - SSOT 真理链服务层
 CLI 和 Gate 共用此服务层。
 """
 
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Any, Dict, List, Optional, Tuple, Set
 from pathlib import Path
 
 from .manager import ArtifactManager
@@ -363,6 +363,57 @@ class SSOTService:
         # 反转，从 root 到当前
         chain.reverse()
         return chain
+
+    def build_lineage_graph(self, artifact_id: str, max_depth: int = 4) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Build a lightweight lineage graph around one SSOT object.
+
+        The graph includes upstream refs and direct parent-child downstream links so
+        workflow/runtime callers can render traceability without re-parsing front matter.
+        """
+        artifact = self.manager.get(artifact_id)
+        if not artifact:
+            return {"nodes": [], "edges": []}
+
+        nodes: Dict[str, Dict[str, Any]] = {}
+        edges: List[Dict[str, Any]] = []
+        visited: Set[Tuple[str, int]] = set()
+
+        def ensure_node(item: ArtifactMetadata) -> None:
+            props = getattr(item, "properties", {}) or {}
+            nodes[item.id] = {
+                "id": item.id,
+                "title": getattr(item, "title", "") or item.id,
+                "ssot_type": props.get("ssot_type"),
+                "parent_id": props.get("parent_id"),
+                "source_refs": props.get("source_refs", []),
+                "derived_from_ids": props.get("derived_from_ids", []),
+            }
+
+        def walk_upstream(current: ArtifactMetadata, depth: int) -> None:
+            if depth > max_depth or (current.id, depth) in visited:
+                return
+            visited.add((current.id, depth))
+            ensure_node(current)
+            for relation, target_id in _extract_upstream_refs(current):
+                target = self.manager.get(target_id)
+                if not target:
+                    continue
+                ensure_node(target)
+                edges.append({"from": current.id, "to": target.id, "relation": relation})
+                walk_upstream(target, depth + 1)
+
+        walk_upstream(artifact, 0)
+
+        children = self.manager.registry.get_by_parent(artifact_id)
+        for child in children:
+            ensure_node(child)
+            edges.append({"from": child.id, "to": artifact_id, "relation": "parent_id"})
+
+        return {
+            "nodes": list(nodes.values()),
+            "edges": edges,
+        }
 
     def release_check(self, release_id: str) -> Dict[str, object]:
         """
@@ -913,7 +964,9 @@ class SSOTValidator:
                 result.add_error(f"类型 {ssot_type.value} 的 parent_id 必须是 RELEASE，当前为 {parent_prefix}")
             elif expected == "RELEASE|DEVPLAN|TESTPLAN|TASK|FEAT" and parent_prefix not in ("REL", "DEVPLAN", "TESTPLAN", "TASK", "FEAT"):
                 result.add_error(f"REPORT 对象的 parent_id 类型不合法，当前为 {parent_prefix}")
-            elif expected not in ("RELEASE", "RELEASE|DEVPLAN|TESTPLAN|TASK|FEAT") and parent_prefix != expected:
+            elif expected == "FEAT|DEVPLAN|TESTPLAN" and parent_prefix not in ("FEAT", "DEVPLAN", "TESTPLAN"):
+                result.add_error(f"类型 {ssot_type.value} 的 parent_id 必须是 FEAT/DEVPLAN/TESTPLAN，当前为 {parent_prefix}")
+            elif expected not in ("RELEASE", "RELEASE|DEVPLAN|TESTPLAN|TASK|FEAT", "FEAT|DEVPLAN|TESTPLAN") and parent_prefix != expected:
                 result.add_error(f"类型 {ssot_type.value} 的 parent_id 必须是 {expected}，当前为 {parent_prefix}")
 
     def _validate_tc_parent(self, artifact, result: ValidationResult) -> None:

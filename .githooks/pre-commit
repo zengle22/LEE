@@ -1,0 +1,17 @@
+#!/bin/bash
+# pre-commit hook - 本地路径与 SSOT 治理门禁
+# 安装方法: cp .githooks/pre-commit .git/hooks/pre-commit
+
+cd "$(git rev-parse --show-toplevel)"
+
+python scripts/git-pre-commit-hook.py
+exit_code=$?
+
+if [ $exit_code -ne 0 ]; then
+    echo ""
+    echo "💡 提示：可以使用 --no-verify 跳过 hooks（不推荐）"
+    echo "   git commit --no-verify"
+    exit $exit_code
+fi
+
+exit 0

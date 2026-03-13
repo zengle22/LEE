@@ -15,6 +15,7 @@ import re
 import yaml
 
 from .models import ArtifactMetadata, RunManifest
+from .metadata_inheritance import MetadataInheritanceEngine
 from .placement import resolve_ssot_relative_dir
 from .registry import ArtifactRegistry
 from .types import ArtifactType, ArtifactStatus, AdoptMode, GovernanceKind, ArtifactCategoryRegistry, SSOTType
@@ -873,6 +874,18 @@ class ArtifactManager:
         if not isinstance(ssot_type, SSOTType):
             ssot_type = SSOTType(ssot_type)
 
+        inheritance = MetadataInheritanceEngine(self.get).normalize(
+            ssot_type=ssot_type,
+            formal_id=formal_id,
+            parent_id=parent_id,
+            source_refs=source_refs,
+            derived_from_ids=derived_from,
+            version=version,
+        )
+        parent_id = inheritance.parent_id
+        source_refs = inheritance.source_refs
+        derived_from = inheritance.derived_from_ids
+
         # 生成 ID
         generator = SSOTIDGenerator(self.root_path)
 
@@ -917,6 +930,7 @@ class ArtifactManager:
             "title": title,
             "status": status.value.lower(),
             "version": version,
+            "workflow_instance_id": run_id,
             "parent_id": parent_id,
             "derived_from_ids": derived_from_ids,
             "source_refs": source_refs or [],
@@ -932,7 +946,26 @@ class ArtifactManager:
             raw_body = content.decode("utf-8") if isinstance(content, bytes) else str(content)
 
         if raw_body.startswith("---"):
-            file_text = raw_body
+            match = re.match(r"^---\n(.*?)\n---\n?", raw_body, re.DOTALL)
+            if match:
+                try:
+                    existing_front_matter = yaml.safe_load(match.group(1)) or {}
+                except yaml.YAMLError:
+                    existing_front_matter = {}
+                if not isinstance(existing_front_matter, dict):
+                    existing_front_matter = {}
+                body = raw_body[match.end():].lstrip("\r\n")
+                merged_front_matter = dict(existing_front_matter)
+                merged_front_matter.update(front_matter)
+                front_matter_yaml = yaml.safe_dump(
+                    merged_front_matter,
+                    allow_unicode=True,
+                    sort_keys=False,
+                ).strip()
+                file_text = f"---\n{front_matter_yaml}\n---\n\n{body}"
+            else:
+                front_matter_yaml = yaml.safe_dump(front_matter, allow_unicode=True, sort_keys=False).strip()
+                file_text = f"---\n{front_matter_yaml}\n---\n\n{raw_body}"
         else:
             front_matter_yaml = yaml.safe_dump(front_matter, allow_unicode=True, sort_keys=False).strip()
             file_text = f"---\n{front_matter_yaml}\n---\n\n{raw_body}"
@@ -976,6 +1009,7 @@ class ArtifactManager:
         metadata.properties["version"] = version
         metadata.properties["placement_dir"] = relative_dir.as_posix()
         metadata.properties["derived_from_ids"] = derived_from_ids
+        metadata.properties["workflow_instance_id"] = run_id
 
         # 注册/更新
         if existing_metadata is not None:
