@@ -2,7 +2,7 @@
 id: TASK-FEAT-143-005
 ssot_type: task
 title: CLI 命令集成与端到端验证
-status: active
+status: frozen
 version: v1
 parent_id: FEAT-143
 derived_from_ids: []
@@ -13,6 +13,7 @@ tags: []
 properties:
   contract_key: task_feat_143_005
   identity_kind: ssot
+frozen_at: '2026-03-13T13:08:01.918922'
 ---
 
 # Objective

@@ -2,7 +2,7 @@
 id: TASK-FEAT-143-004
 ssot_type: task
 title: AuditLogger 与审计存储层实现
-status: active
+status: frozen
 version: v1
 parent_id: FEAT-143
 derived_from_ids: []
@@ -13,6 +13,7 @@ tags: []
 properties:
   contract_key: task_feat_143_004
   identity_kind: ssot
+frozen_at: '2026-03-13T13:08:01.898838'
 ---
 
 # Objective

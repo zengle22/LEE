@@ -2,7 +2,7 @@
 id: UI-FEAT-143-018
 ssot_type: ui
 title: QA 执行入口规范化 - Frozen UI 原型
-status: active
+status: frozen
 version: v1
 parent_id: FEAT-143
 derived_from_ids: []
@@ -12,6 +12,7 @@ tags: []
 properties:
   contract_key: ui
   identity_kind: ssot
+frozen_at: '2026-03-13T13:08:01.825576'
 ---
 
 design_specs:
