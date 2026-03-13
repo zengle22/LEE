@@ -6,6 +6,9 @@ description: |
   Canonical L3 workflow for assembling the evidence package before merge or reject.
 owner: development
 tags: [template, dev, bugfix, evidence-pack, l3, canonical]
+contracts:
+  input_schema: ../../contracts/evidence-pack/v1/schema.json
+  integration_spec: ../../contracts/evidence-pack/v1/integration-spec.md
 
 steps:
   - id: collect_bugfix_evidence
@@ -55,7 +58,12 @@ instance_schema:
     - id
     - template_id
     - parent_phase_id
+    - bug_ssot_id
+    - severity
+    - reproduction_evidence
+    - verification_results
   output_fields:
     - evidence_pack_ref
     - closure_summary_ref
     - evidence_pack_review_ref
+    - merge_or_reject_input

@@ -512,6 +512,31 @@ class TestYamlTemplates:
             assert len(steps) >= 4
             assert any(step.get("agent_id") == agent_id for step in steps)
 
+    def test_evidence_pack_l3_templates_align_with_evidence_contract(self):
+        """Test feature and bugfix evidence pack L3 templates reference the canonical evidence contract."""
+        import yaml
+
+        feature_path = Path("spec-global/departments/dev/workflows/templates/evidence-pack-l3-template.yaml")
+        bugfix_path = Path("spec-global/departments/dev/workflows/templates/bugfix-evidence-pack-l3-template.yaml")
+
+        for path in (feature_path, bugfix_path):
+            with open(path, encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            assert data["contracts"]["input_schema"] == "../../contracts/evidence-pack/v1/schema.json"
+            assert data["contracts"]["integration_spec"] == "../../contracts/evidence-pack/v1/integration-spec.md"
+
+        with open(feature_path, encoding="utf-8") as f:
+            feature_data = yaml.safe_load(f)
+        assert "integration_outputs" in feature_data["instance_schema"]["required_fields"]
+        assert "verification_results" in feature_data["instance_schema"]["required_fields"]
+        assert "smoke_gate_inputs" in feature_data["instance_schema"]["output_fields"]
+
+        with open(bugfix_path, encoding="utf-8") as f:
+            bugfix_data = yaml.safe_load(f)
+        assert "bug_ssot_id" in bugfix_data["instance_schema"]["required_fields"]
+        assert "verification_results" in bugfix_data["instance_schema"]["required_fields"]
+        assert "merge_or_reject_input" in bugfix_data["instance_schema"]["output_fields"]
+
     def test_l2_example_instance_exists(self):
         """Test example L2 instance exists."""
         instance_path = Path("spec-global/departments/dev/workflows/instances/l2/feature-timing-v1.yaml")

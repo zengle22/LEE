@@ -7,6 +7,9 @@ description: |
   evidence before the smoke gate closes the feature workflow.
 owner: development
 tags: [template, dev, evidence, l3, canonical, adr-008]
+contracts:
+  input_schema: ../../contracts/evidence-pack/v1/schema.json
+  integration_spec: ../../contracts/evidence-pack/v1/integration-spec.md
 
 steps:
   - id: collect_evidence
@@ -59,9 +62,15 @@ instance_schema:
     - template_id
     - parent_phase_id
     - repo_id
+    - formal_ssot_id
+    - source_refs
+    - governing_adrs
+    - integration_outputs
+    - verification_results
   output_fields:
     - evidence_index_ref
     - verification_summary_ref
     - evidence_pack_ref
     - delivery_candidate_ref
     - pack_review_ref
+    - smoke_gate_inputs
