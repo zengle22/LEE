@@ -151,6 +151,15 @@ def test_contract_design_feat_matches_canonical_freeze_handoff():
     assert "唯一结构真相源" in text
 
 
+def test_alternate_contract_design_feat_matches_canonical_freeze_handoff():
+    feat_122 = Path("spec/requirements/features/FEAT-122__contract-design-l3-stage-definition.md")
+    text = feat_122.read_text(encoding="utf-8")
+
+    assert "contract_freeze_ref" in text
+    assert "Contract freeze completed" in text
+    assert "唯一结构真相源" in text
+
+
 def test_integration_feat_matches_canonical_input_boundary():
     feat_114 = Path("spec/requirements/features/FEAT-114__integration-l3-stage-definition.md")
     text = feat_114.read_text(encoding="utf-8")
@@ -159,6 +168,17 @@ def test_integration_feat_matches_canonical_input_boundary():
     assert "contract_freeze_ref" in text
     assert "env_ref/base_url/runtime_config_ref" in text
     assert "contract/mock 模式或 environment-backed 模式" in text
+
+
+def test_alternate_integration_feat_matches_canonical_input_boundary():
+    feat_125 = Path("spec/requirements/features/FEAT-125__integration-l3-stage-definition.md")
+    text = feat_125.read_text(encoding="utf-8")
+
+    assert "tech_spec_ref" in text
+    assert "contract_freeze_ref" in text
+    assert "integration_outputs" in text
+    assert "verification_results" in text
+    assert "env_ref、base_url、runtime_config_ref" in text
 
 
 def test_evidence_pack_feat_matches_canonical_handoff_contract():
