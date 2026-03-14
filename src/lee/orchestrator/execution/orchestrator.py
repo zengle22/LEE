@@ -1538,11 +1538,48 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         phase_status = {phase.get("id"): phase.get("status") for phase in phases}
         if phase_status.get("smoke_gate") == "completed":
             return "Closed"
+        if phase_status.get("merge_or_reject") == "completed":
+            return "Closed"
         if phase_status.get("evidence_pack") == "completed":
             return "Evidence Pack Produced"
         if any(status in {"running", "completed", "blocked"} for status in phase_status.values()):
             return "In Progress"
         return "Ready"
+
+    async def _merge_l2_phase_outputs(
+        self,
+        workflow_id: str,
+        phase_id: str,
+        output: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Merge canonical L3 handoff refs back into the parent L2 params/artifacts."""
+        instance = await self.store.get_workflow(workflow_id)
+        if not instance or not isinstance(output, dict):
+            return {}
+
+        parent_data = dict(instance.data or {})
+        params = dict(parent_data.get("params", {}) or {})
+        artifacts = dict(parent_data.get("artifacts", {}) or {})
+        phase_outputs = dict(parent_data.get("phase_outputs", {}) or {})
+
+        handoff_refs = dict(output.get("handoff_refs", {}) or {})
+        for key in self.L3_HANDOFF_KEYS:
+            value = output.get(key)
+            if value is not None:
+                handoff_refs.setdefault(key, value)
+
+        for key, value in handoff_refs.items():
+            params[key] = value
+            artifacts[key] = value
+
+        phase_outputs[phase_id] = output
+        parent_data["params"] = params
+        parent_data["artifacts"] = artifacts
+        parent_data["phase_outputs"] = phase_outputs
+        parent_data["last_output"] = {phase_id: output}
+
+        await self.store.update_workflow_data(workflow_id, parent_data)
+        return handoff_refs
 
     async def _run_l2_phase_subworkflow(
         self,
@@ -1793,24 +1830,145 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         Returns:
             StepResult indicating success/failure
         """
-        # P0: Mark phase as completed with a simple success result
-        # In full implementation, this would run phase-specific steps
         instance = await self.store.get_workflow(workflow_id)
+        if not instance:
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Workflow not found: {workflow_id}",
+            )
 
-        # Update phase status
-        phases = instance.data.get("phases", [])
-        for phase in phases:
-            if phase.get("id") == phase_id:
-                phase["status"] = "completed"
-                break
+        phase_info = self._get_phase_info(instance, phase_id)
+        direct_output = self._build_direct_phase_output(instance.data or {}, phase_id)
+        gate_id = self._resolve_direct_phase_gate_id(phase_id, phase_info)
+        if gate_id:
+            return await self._trigger_l2_phase_gate(
+                workflow_id=workflow_id,
+                phase_id=phase_id,
+                gate_id=gate_id,
+                output=direct_output,
+            )
 
-        await self.store.update_workflow_data(workflow_id, instance.data)
+        await self._merge_l2_phase_outputs(workflow_id, phase_id, direct_output)
+        await self._update_l2_phase(
+            workflow_id,
+            phase_id,
+            status="completed",
+            extra={"last_output": direct_output},
+        )
 
         return StepResult(
             status="success",
             step_id=phase_id,
             workflow_id=workflow_id,
-            message=f"Phase {phase_id} (complexity=S) executed directly"
+            message=f"Phase {phase_id} (complexity=S) executed directly",
+            output=direct_output,
+        )
+
+    @staticmethod
+    def _resolve_direct_phase_gate_id(phase_id: str, phase_info: Dict[str, Any]) -> Optional[str]:
+        gate_id = phase_info.get("gate_id")
+        if gate_id:
+            return gate_id
+        if phase_id == "merge_or_reject":
+            return "gate.dev.merge_approval"
+        return None
+
+    def _build_direct_phase_output(
+        self,
+        workflow_data: Dict[str, Any],
+        phase_id: str,
+    ) -> Dict[str, Any]:
+        params = dict(workflow_data.get("params", {}) or {})
+        if phase_id == "smoke_gate":
+            return {
+                "phase_id": phase_id,
+                "status": "passed",
+                "evidence_pack_ref": params.get("evidence_pack_ref"),
+                "smoke_gate_inputs": params.get("smoke_gate_inputs"),
+            }
+        if phase_id == "merge_or_reject":
+            merge_input = params.get("merge_or_reject_input")
+            return {
+                "phase_id": phase_id,
+                "status": "approved",
+                "evidence_pack_ref": params.get("evidence_pack_ref"),
+                "closure_summary_ref": params.get("closure_summary_ref"),
+                "merge_or_reject_input": merge_input,
+                "merge_decision_ref": self._derive_merge_decision_ref(merge_input),
+            }
+        return {"phase_id": phase_id, "status": "completed"}
+
+    @staticmethod
+    def _derive_merge_decision_ref(merge_input: Any) -> Optional[str]:
+        if isinstance(merge_input, str) and merge_input:
+            return merge_input
+        if isinstance(merge_input, dict):
+            for key in ("merge_decision_ref", "decision_ref", "ref", "id"):
+                value = merge_input.get(key)
+                if isinstance(value, str) and value:
+                    return value
+        return None
+
+    async def _trigger_l2_phase_gate(
+        self,
+        *,
+        workflow_id: str,
+        phase_id: str,
+        gate_id: str,
+        output: Dict[str, Any],
+    ) -> StepResult:
+        from lee.orchestrator.storage.models import GateApproval, GateStatus, WorkflowStatus
+
+        instance = await self.store.get_workflow(workflow_id)
+        if not instance:
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Workflow not found: {workflow_id}",
+            )
+
+        existing_gate = await self.store.get_gate_approval(workflow_id, gate_id)
+        if existing_gate and existing_gate.status == GateStatus.PENDING:
+            await self._update_l2_phase(workflow_id, phase_id, status="blocked")
+            return StepResult(
+                status="blocked",
+                blocked_reason="human_gate",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Waiting for human approval at gate: {gate_id}",
+                output=output,
+            )
+
+        gate_approval = GateApproval(
+            workflow_id=workflow_id,
+            gate_id=gate_id,
+            step_id=phase_id,
+            status=GateStatus.PENDING,
+        )
+        await self.store.create_gate_approval(gate_approval)
+        await self.store.update_workflow_status(workflow_id, WorkflowStatus.PAUSED)
+
+        phase_gate_outputs = dict((instance.data or {}).get("phase_gate_outputs", {}) or {})
+        phase_gate_outputs[phase_id] = output
+        instance.data["phase_gate_outputs"] = phase_gate_outputs
+        await self.store.update_workflow_data(workflow_id, instance.data)
+        await self._update_l2_phase(workflow_id, phase_id, status="blocked")
+        self.event_log.log_gate_triggered(
+            gate_id=gate_id,
+            step_id=phase_id,
+            gate_type="human",
+            blocking=True,
+        )
+        return StepResult(
+            status="blocked",
+            blocked_reason="human_gate",
+            step_id=phase_id,
+            workflow_id=workflow_id,
+            message=f"Waiting for human approval at gate: {gate_id}",
+            output=output,
         )
 
     async def _execute_complexity_m(
@@ -1868,12 +2026,37 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         # Wait for L3 completion
         await self._wait_for_l3_completion([l3_id])
+        l3_instance = await self.store.get_workflow(l3_id)
+        outputs = await self._collect_l3_outputs([l3_id])
+        if l3_instance and l3_instance.status == WorkflowStatus.FAILED:
+            await self._update_l2_phase(
+                workflow_id,
+                phase_id,
+                status="failed",
+                extra={"last_output": outputs, "l3_instance_ids": [l3_id]},
+            )
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Phase {phase_id} failed because L3 {l3_id} failed",
+                output=outputs,
+            )
+
+        await self._merge_l2_phase_outputs(workflow_id, phase_id, outputs)
+        await self._update_l2_phase(
+            workflow_id,
+            phase_id,
+            status="completed",
+            extra={"last_output": outputs, "l3_instance_ids": [l3_id]},
+        )
 
         return StepResult(
             status="success",
             step_id=phase_id,
             workflow_id=workflow_id,
-            message=f"Phase {phase_id} (complexity=M) spawned L3 {l3_id}"
+            message=f"Phase {phase_id} (complexity=M) spawned L3 {l3_id}",
+            output=outputs,
         )
 
     async def _execute_complexity_l(
@@ -2007,13 +2190,33 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         # Collect outputs from completed L3s
         outputs = await self._collect_l3_outputs(all_l3_ids)
+        failed_l3_ids = [
+            l3_id
+            for l3_id, payload in outputs.get("l3_outputs", {}).items()
+            if payload.get("status") == WorkflowStatus.FAILED.value
+        ]
+        await self._merge_l2_phase_outputs(workflow_id, phase_id, outputs)
+        await self._update_l2_phase(
+            workflow_id,
+            phase_id,
+            status="failed" if failed_points or failed_l3_ids else "completed",
+            extra={
+                "last_output": outputs,
+                "l3_instance_ids": all_l3_ids,
+                "failed_points": failed_points or None,
+                "failed_l3_ids": failed_l3_ids or None,
+            },
+        )
 
         return StepResult(
-            status="success" if not failed_points else "partial_success",
+            status="failed" if failed_points or failed_l3_ids else "success",
             step_id=phase_id,
             workflow_id=workflow_id,
             message=f"Phase {phase_id} (complexity=L) split into {len(all_l3_ids)} L3s" +
-                    (f", {len(failed_points)} failed" if failed_points else ""),
+                    (
+                        f", {len(failed_points) + len(failed_l3_ids)} failed"
+                        if failed_points or failed_l3_ids else ""
+                    ),
             output=outputs,
         )
 
@@ -2093,27 +2296,10 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         if not isinstance(instance_data, dict):
             return {}
 
-        handoff_keys = (
-            "tech_spec_ref",
-            "decision_refs",
-            "api_contract_ref",
-            "data_contract_ref",
-            "event_contract_ref",
-            "contract_review_ref",
-            "contract_freeze_ref",
-            "contract_hash",
-            "be_artifact_ref",
-            "fe_artifact_ref",
-            "integration_report_ref",
-            "evidence_pack_ref",
-            "smoke_gate_inputs",
-            "merge_or_reject_input",
-        )
-
         collected: Dict[str, Any] = {}
         step_outputs = instance_data.get("step_outputs", {}) or {}
 
-        for key in handoff_keys:
+        for key in Orchestrator.L3_HANDOFF_KEYS:
             if key in instance_data:
                 collected[key] = instance_data[key]
                 continue
@@ -2570,3 +2756,33 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 raise TimeoutError(f"L3 completion timeout after {max_wait_seconds}s")
 
             await asyncio.sleep(check_interval)
+    L3_HANDOFF_KEYS = (
+        "tech_spec_ref",
+        "decision_refs",
+        "api_contract_ref",
+        "data_contract_ref",
+        "event_contract_ref",
+        "contract_review_ref",
+        "contract_freeze_ref",
+        "contract_hash",
+        "be_artifact_ref",
+        "fe_artifact_ref",
+        "integration_outputs",
+        "verification_results",
+        "integration_report_ref",
+        "evidence_pack_ref",
+        "smoke_gate_inputs",
+        "merge_or_reject_input",
+        "triage_decision_ref",
+        "granularity_decision_ref",
+        "batch_approval_record",
+        "root_cause_ref",
+        "affected_scope_ref",
+        "verification_scope_ref",
+        "rollback_strategy_ref",
+        "fix_design_ref",
+        "fix_artifact_ref",
+        "verification_report_ref",
+        "closure_summary_ref",
+        "merge_decision_ref",
+    )

@@ -80,6 +80,7 @@ phases:
     default_complexity: S
     depends_on: [evidence_pack]
     spawns_l3: false
+    gate_id: gate.dev.merge_approval
 
 execution_strategies:
   S:

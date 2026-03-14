@@ -52,6 +52,7 @@ steps:
     depends_on: [package_bugfix_evidence]
     outputs:
       - evidence_pack_review_ref
+      - merge_or_reject_input
 
 instance_schema:
   required_fields:
@@ -61,7 +62,7 @@ instance_schema:
     - bug_ssot_id
     - severity
     - reproduction_evidence
-    - verification_results
+    - verification_report_ref
   output_fields:
     - evidence_pack_ref
     - closure_summary_ref

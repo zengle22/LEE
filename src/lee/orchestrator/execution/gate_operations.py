@@ -116,6 +116,25 @@ class GateOperationsMixin:
         # 恢复工作流状态
         await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
 
+        if self._is_l2_phase_gate(instance, gate_approval.step_id):
+            gate_output = await self._approve_l2_phase_gate(
+                workflow_id=workflow_id,
+                phase_id=gate_approval.step_id,
+                gate_id=gate_id,
+                approver=approver,
+                comments=comments,
+            )
+            if gate_evaluation:
+                gate_output["gate_evaluation"] = gate_evaluation.to_dict()
+                gate_output["rules_overridden"] = rules_overridden
+            return StepResult(
+                status="success",
+                step_id=gate_approval.step_id,
+                workflow_id=workflow_id,
+                message=f"Gate {gate_id} approved by {approver}",
+                output=gate_output,
+            )
+
         # v3.2: 记录门禁审批事件
         self.event_log.log_gate_approved(
             gate_id=gate_id,
@@ -154,6 +173,72 @@ class GateOperationsMixin:
             message=f"Gate {gate_id} approved by {approver}",
             output=gate_output,
         )
+
+    @staticmethod
+    def _is_l2_phase_gate(instance, step_id: str) -> bool:
+        instance_data = getattr(instance, "data", {}) or {}
+        phases = instance_data.get("phases", []) or []
+        return any(phase.get("id") == step_id for phase in phases)
+
+    async def _approve_l2_phase_gate(
+        self,
+        *,
+        workflow_id: str,
+        phase_id: str,
+        gate_id: str,
+        approver: str,
+        comments: str,
+    ) -> Dict[str, Any]:
+        instance = await self.store.get_workflow(workflow_id)
+        instance_data = dict(getattr(instance, "data", {}) or {})
+        phase_gate_outputs = dict(instance_data.get("phase_gate_outputs", {}) or {})
+        gate_output = dict(phase_gate_outputs.get(phase_id, {}) or {})
+        gate_output.update({
+            "gate_id": gate_id,
+            "gate_approved": True,
+            "approver": approver,
+            "comments": comments,
+            "approved_at": datetime.now().isoformat(),
+        })
+
+        if phase_id == "merge_or_reject" and "merge_decision_ref" not in gate_output:
+            merge_input = gate_output.get("merge_or_reject_input")
+            if isinstance(merge_input, str) and merge_input:
+                gate_output["merge_decision_ref"] = merge_input
+            else:
+                gate_output["merge_decision_ref"] = gate_id
+
+        await self._merge_l2_phase_outputs(workflow_id, phase_id, gate_output)
+        await self._update_l2_phase(
+            workflow_id,
+            phase_id,
+            status="completed",
+            extra={"last_output": gate_output},
+        )
+        instance = await self.store.get_workflow(workflow_id)
+        instance_data = dict(getattr(instance, "data", {}) or {})
+        phase_gate_outputs = dict(instance_data.get("phase_gate_outputs", {}) or {})
+        phase_gate_outputs.pop(phase_id, None)
+        instance_data["phase_gate_outputs"] = phase_gate_outputs
+        await self.store.update_workflow_data(workflow_id, instance_data)
+        self.event_log.log_gate_approved(
+            gate_id=gate_id,
+            step_id=phase_id,
+            approver=approver,
+            approval_id=f"{workflow_id}_{gate_id}",
+        )
+        instance = await self.store.get_workflow(workflow_id)
+        if instance and self._is_l2_instance(instance) and self._get_next_pending_phase(instance) is None:
+            instance.data["lifecycle_state"] = "Closed"
+            await self.store.update_workflow_data(workflow_id, instance.data)
+            from lee.orchestrator.storage.models import WorkflowStatus
+            await self.store.update_workflow_status(
+                workflow_id,
+                WorkflowStatus.COMPLETED,
+                completed_at=datetime.now(),
+            )
+        await self._check_workflow_completion(workflow_id)
+        return gate_output
 
     def _build_gate_output_payload(
         self,
