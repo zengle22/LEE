@@ -77,7 +77,7 @@ preconditions:
 - 测试用例集已创建 (test_bugfix_delivery_l2.py)
 - L2 模板结构验证测试通过
 - 阶段编排验证测试通过
-- 粒度控制策略测试通过 (单 bug 模式和五同 batch 模式)
+- 粒度控制策略测试通过 (单 bug 模式、五同 batch 模式、以及审批例外 batch 模式)
 - 状态机流转测试通过
 - 契约接口验证测试通过
 - README.md 已更新封禁旧的 bug-fix-l3-template 入口

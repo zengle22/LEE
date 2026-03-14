@@ -1,0 +1,30 @@
+kind: validation_checklist
+version: "1.0"
+id: bugfix_granularity_checklist
+status: frozen
+
+checks:
+  - id: default_single_bug_rule
+    field: bug_refs
+    rule: single_bug_by_default
+  - id: same_module
+    field: batch_context.same_module
+    rule: required_true_for_batch
+  - id: same_root_cause_class
+    field: batch_context.same_root_cause_class
+    rule: required_true_for_batch
+  - id: same_fix_strategy
+    field: batch_context.same_fix_strategy
+    rule: required_true_for_batch
+  - id: same_verification_surface
+    field: batch_context.same_verification_surface
+    rule: required_true_for_batch
+  - id: same_release_window
+    field: batch_context.same_release_window
+    rule: required_true_for_batch
+  - id: exception_approval_record
+    field: batch_approval_record
+    rule: required_when_five_same_fails
+  - id: rollback_strategy_defined
+    field: rollback_strategy_ref
+    rule: required_for_batch

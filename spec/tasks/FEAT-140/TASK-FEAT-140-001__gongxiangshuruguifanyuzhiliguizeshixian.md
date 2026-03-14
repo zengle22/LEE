@@ -22,7 +22,7 @@ properties:
 # Description
 
 实现 Dev workflow 共享的输入规范定义和治理规则：
-1. 共享输入规范: formal_ssot_id, source_refs, governing_adrs, repo_context
+1. 共享输入规范: 基础字段 formal_ssot_id, source_refs, governing_adrs, repo_context；并明确 Feature Delivery L2 扩展字段 repo_frontend, repo_backend
 2. 旧路径降级治理: deprecated 路径清单、标记规范、迁移指南
 3. Bugfix 粒度控制规则: 默认规则、五同原则、batch 审批流程
 
@@ -40,6 +40,7 @@ properties:
 
 ## Definition Of Done
 - 共享输入规范 Schema 已创建并冻结
+- 共享输入规范已文档化基础字段与 Feature Delivery L2 扩展字段
 - Deprecated 路径清单 YAML 已创建
 - 标记规范文档已创建
 - 迁移指南文档已创建

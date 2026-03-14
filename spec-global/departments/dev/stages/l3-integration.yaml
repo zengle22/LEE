@@ -1,0 +1,70 @@
+kind: stage_definition
+version: "1.0"
+id: stage.dev.l3_integration
+name: L3 Integration Stage
+status: frozen
+owner: development
+governing_adrs:
+  - ADR-008
+business_source:
+  - FEAT-SRC-009-008
+
+purpose: >
+  Canonical L3 integration stage definition for validating backend and frontend
+  outputs against the frozen contract and preparing evidence-axis handoff.
+
+input_contract:
+  required_fields:
+    - formal_ssot_id
+    - source_refs
+    - governing_adrs
+    - tech_spec_ref
+    - contract_freeze_ref
+    - fe_artifact_ref
+    - be_artifact_ref
+  optional_fields:
+    - env_ref
+    - base_url
+    - test_account_ref
+    - seed_data_ref
+    - runtime_config_ref
+  rules:
+    - rule: frozen_contract_required
+      description: Integration may only validate against the frozen contract package.
+    - rule: implementation_artifacts_required
+      description: Integration cannot start before both FE and BE handoff artifacts exist.
+
+task_family:
+  required_tasks:
+    - environment_preparation
+    - integration_execution
+    - issue_resolution
+
+outputs:
+  required:
+    - integration_plan_ref
+    - integration_test_result_ref
+    - integration_report_ref
+    - issue_resolution_ref
+    - integration_outputs
+    - verification_results
+  optional:
+    - structural_issue_ref
+    - rollback_request_ref
+
+completion_criteria:
+  pass_rate_threshold: ">=95%"
+  required_conditions:
+    - integration execution completed
+    - failures are classified as structural or implementation issues
+    - evidence handoff package is ready
+
+handoff_rules:
+  evidence_pack:
+    required_inputs:
+      - integration_outputs
+      - verification_results
+      - integration_report_ref
+      - integration_test_result_ref
+      - issue_resolution_ref
+      - structural_issue_ref

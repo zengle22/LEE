@@ -26,9 +26,9 @@ Dev 团队获得标准化的 Bugfix 交付主入口，实现从 BUG 到 Evidence
 - Inputs defined by EPIC scope
 # Processing
 
-- 校验输入完整性（formal_ssot_id, source_refs）
+- 校验输入完整性（bug_ssot_id, severity, reproduction_evidence, batch_mode, batch_approval_record）
 - 解析 BUG 描述并评估修复范围
-- 编排 Triage → Fix → Verify → Evidence 阶段
+- 编排 Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence 阶段
 - 管理阶段间依赖与流转条件
 - 收集各阶段产出物并聚合
 # Outputs
@@ -40,7 +40,7 @@ Dev 团队获得标准化的 Bugfix 交付主入口，实现从 BUG 到 Evidence
 
 - Bugfix Delivery L2 工作流定义文档冻结
 - 包含触发条件（BUG confirmed）
-- 包含阶段编排（Triage→Fix→Verify→Evidence）
+- 包含阶段编排（Triage→Root Cause→Fix Design→Fix Implementation→Verification→Evidence）
 - 包含输出物清单（Fix implementation + Test evidence + Evidence Pack）
 - 通过示例 BUG 走通完整 L2 编排流程
 # Acceptance Checks
@@ -58,7 +58,7 @@ Dev 团队获得标准化的 Bugfix 交付主入口，实现从 BUG 到 Evidence
 - Scenario: 示例 BUG 端到端流程验证
 - Given: 提供一个已确认的示例 BUG
 - When: 执行 Bugfix Delivery L2 工作流
-- Then: 成功走通 Triage→Fix→Verify→Evidence 全阶段
+- Then: 成功走通 Triage→Root Cause→Fix Design→Fix Implementation→Verification→Evidence 全阶段
 - Trace Hints: TASK, TESTSET, TECH
 
 ## AC-SRC-009-002-03

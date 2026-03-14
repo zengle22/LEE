@@ -31,18 +31,20 @@ Feature 交付流程获得标准化的协议设计阶段，确保前后端契约
 - 定义 Schema（数据模型、校验规则）
 - 生成 Mock 数据
 - 执行 Contract review
+- 执行 Contract freeze 并生成 contract_freeze_ref
 # Outputs
 
 - API Contract 文档
 - Schema 定义
 - Mock 数据
 - Contract review 记录
+- contract_freeze_ref
 # Acceptance
 
 - Contract Design L3 阶段定义冻结
 - 包含输入规范（TECH spec）
-- 包含输出物（API Contract + Schema + Mock）
-- 包含完成标准（Contract review passed）
+- 包含输出物（API Contract + Schema + Mock + contract_freeze_ref）
+- 包含完成标准（Contract review passed + Contract freeze completed）
 - 包含阶段流转条件
 # Acceptance Checks
 
@@ -67,7 +69,7 @@ Feature 交付流程获得标准化的协议设计阶段，确保前后端契约
 - Scenario: 产出物可被下游消费
 - Given: Contract Design 阶段完成
 - When: Backend/Frontend 阶段读取输入
-- Then: 可正确解析并使用 Contract、Schema、Mock
+- Then: Backend/Frontend 以 contract_freeze_ref 作为唯一结构真相源，可正确解析并使用 Contract、Schema、Mock
 - Trace Hints: TASK, TECH
 # Dependencies
 

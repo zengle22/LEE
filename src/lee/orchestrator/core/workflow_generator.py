@@ -80,7 +80,7 @@ class L2InstanceConfig:
     # Required identification
     id: str                              # Instance ID (e.g., "instance.dev.feature_timing_v1")
     name: str                            # Instance name
-    template_id: str = "template.dev.feature_l2"  # L2 template to use
+    template_id: str = "template.dev.feature_delivery_l2"  # L2 template to use
 
     # Context information
     project: str = ""
@@ -94,6 +94,7 @@ class L2InstanceConfig:
 
     # Additional metadata
     description: str = ""
+    shared_inputs: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -566,16 +567,27 @@ class WorkflowGenerator:
         errors = []
         warnings = []
 
-        # Load L2 template
-        template_path = Path("spec-global/departments/dev/workflows/templates/feature-l2-template.yaml")
+        # Load the configured L2 template rather than hard-coding the feature path.
+        template_path = Path(self.template_path)
         if not template_path.exists():
-            # Try relative to project root
-            template_path = Path(self.template_path).parent.parent.parent.parent / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates" / "feature-l2-template.yaml"
+            template_roots = [
+                Path("spec-global/departments/dev/workflows/templates"),
+                Path(self.template_path).parent.parent.parent.parent / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+            ]
+            template_file_map = {
+                "template.dev.feature_delivery_l2": "feature-delivery-l2-template.yaml",
+                "template.dev.bugfix_delivery_l2": "bugfix-delivery-l2-template.yaml",
+            }
+            relative_name = template_file_map.get(config.template_id, "feature-delivery-l2-template.yaml")
+            template_path = next(
+                (root / relative_name for root in template_roots if (root / relative_name).exists()),
+                template_roots[0] / relative_name,
+            )
 
         if not template_path.exists():
             return GenerationResult(
                 success=False,
-                errors=["L2 template not found: feature-l2-template.yaml"]
+                errors=[f"L2 template not found: {template_path.name}"]
             )
 
         try:
@@ -588,6 +600,35 @@ class WorkflowGenerator:
             )
 
         # Build instance from template
+        repo_frontend = next((repo.get("id", "") for repo in config.repos if repo.get("type") == "frontend"), "")
+        repo_backend = next((repo.get("id", "") for repo in config.repos if repo.get("type") == "backend"), "")
+
+        shared_inputs = dict(config.shared_inputs or {})
+        if repo_frontend and "repo_frontend" not in shared_inputs:
+            shared_inputs["repo_frontend"] = repo_frontend
+        if repo_backend and "repo_backend" not in shared_inputs:
+            shared_inputs["repo_backend"] = repo_backend
+        if config.repos and "repos" not in shared_inputs:
+            shared_inputs["repos"] = config.repos
+
+        context = {
+            "project": config.project,
+            "module": config.module,
+            "module_version": config.module_version,
+            "prd_path": config.prd_path,
+            "repos": config.repos,
+            "repo_frontend": repo_frontend,
+            "repo_backend": repo_backend,
+        }
+        context.update(shared_inputs)
+
+        params = dict(shared_inputs)
+        params.setdefault("project", config.project)
+        params.setdefault("module", config.module)
+        params.setdefault("module_version", config.module_version)
+        params.setdefault("prd_path", config.prd_path)
+        params.setdefault("repos", config.repos)
+
         instance = {
             "kind": "l2_workflow_instance",
             "version": template.get("version", "1.0"),
@@ -596,15 +637,11 @@ class WorkflowGenerator:
             "name": config.name,
             "description": config.description or template.get("description", ""),
             "status": "pending",
-            "context": {
-                "project": config.project,
-                "module": config.module,
-                "module_version": config.module_version,
-                "prd_path": config.prd_path,
-                "repos": config.repos,
-            },
+            "context": context,
+            "params": params,
             "phases": [],
             "pma_splits": [],  # Will be populated during execution
+            "lifecycle_state": "Ready",
         }
 
         # Add phases with complexity settings
@@ -615,14 +652,18 @@ class WorkflowGenerator:
             if complexity is None:
                 complexity = phase_template.get("default_complexity", "M")
 
-            instance["phases"].append({
+            phase_instance = {
                 "id": phase_id,
                 "name": phase_template.get("name", ""),
                 "description": phase_template.get("description", ""),
                 "complexity": complexity,
                 "status": "pending",
                 "l3_instance_ids": [],
-            })
+            }
+            for field_name in ("depends_on", "spawns_l3", "l3_template_id", "gate_id"):
+                if field_name in phase_template:
+                    phase_instance[field_name] = phase_template[field_name]
+            instance["phases"].append(phase_instance)
 
         # Add metadata
         if config.metadata:
@@ -688,6 +729,7 @@ class WorkflowGenerator:
             )
 
         # Build instance from template
+        template_steps = template.get("steps") or template.get("stages") or []
         point = config.point
         instance = {
             "kind": "l3_workflow_instance",
@@ -717,12 +759,17 @@ class WorkflowGenerator:
                 "depends_on": point.depends_on,
             },
             # Steps from template
-            "steps": template.get("steps", []),
+            "steps": template_steps,
         }
 
         # Add metadata
         if config.metadata:
-            instance["metadata"] = config.metadata
+            metadata = dict(config.metadata)
+            for key in ("params", "artifacts"):
+                if key in metadata:
+                    instance[key] = metadata.pop(key)
+            if metadata:
+                instance["metadata"] = metadata
 
         # Write output if path provided
         if output_path:
@@ -737,7 +784,7 @@ class WorkflowGenerator:
             workflow_path=str(output_path) if output_path else None,
             warnings=warnings,
             generated_workflow=instance,
-            step_count=len(instance["steps"])
+            step_count=len(template_steps)
         )
 
 

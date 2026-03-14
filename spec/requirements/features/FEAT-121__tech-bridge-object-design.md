@@ -27,7 +27,7 @@ properties:
 # Processing
 
 - 解析 FEAT 范围并提取技术需求
-- 定义 TECH 对象 schema（字段、类型、约束）
+- 定义 TECH 对象 schema（architecture_decisions、feat_mapping、implementation_rules、delivery_handoffs、validation_rules）
 - 建立 TECH 与 FEAT 的引用关系规则
 - 建立 TECH 与 Implementation 的关联规则
 - 定义 verification_criteria 结构
@@ -36,10 +36,11 @@ properties:
 - TECH 对象 schema 定义文档
 - 示例 TECH 对象（3 个不同复杂度）
 - TECH→Implementation 映射规则文档
+- TECH contract 结构对象（architecture_decisions、feat_mapping、implementation_rules、delivery_handoffs、validation_rules）
 # Acceptance
 
 - TECH 对象 schema 冻结
-- 包含字段定义（parent_feat_ref, tech_spec, implementation_refs, verification_criteria）
+- 包含字段定义（architecture_decisions, feat_mapping, implementation_rules, delivery_handoffs, validation_rules）
 - 包含与 FEAT 的引用关系规则
 - 包含与 Implementation 的关联规则
 - 通过 3 个不同复杂度的示例 FEAT 生成对应的 TECH 对象
@@ -50,7 +51,7 @@ properties:
 - Scenario: TECH 对象 schema 冻结
 - Given: EPIC-SRC-009-003 进入验收阶段
 - When: 评审 TECH 对象设计
-- Then: schema 包含所有必填字段及引用关系定义
+- Then: schema 包含 architecture_decisions、feat_mapping、implementation_rules、delivery_handoffs、validation_rules 及引用关系定义
 - Trace Hints: TASK, TECH
 
 ## AC-SRC-009-003-02

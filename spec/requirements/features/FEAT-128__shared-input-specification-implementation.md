@@ -26,7 +26,7 @@ properties:
 - Inputs defined by EPIC scope
 # Processing
 
-- 定义 schema（formal_ssot_id, source_refs, governing_adrs, repo_context 字段规范）
+- 定义 schema（基础字段 formal_ssot_id, source_refs, governing_adrs, repo_context，以及 Feature Delivery L2 扩展字段 repo_frontend, repo_backend）
 - 实现 L2 workflow 输入校验逻辑
 - 实现 L3 workflow 输入校验逻辑
 - 创建示例数据模板
@@ -41,7 +41,7 @@ properties:
 # Acceptance
 
 - 共享输入规范落地完成
-- 包含 schema 定义（formal_ssot_id, source_refs, governing_adrs, repo_context 字段规范）
+- 包含 schema 定义（基础字段 formal_ssot_id, source_refs, governing_adrs, repo_context，以及 Feature Delivery L2 扩展字段 repo_frontend, repo_backend）
 - 所有 L2/L3 workflow 输入校验逻辑实现
 - 示例数据模板发布
 - 所有新创建的 workflow 实例必须通过输入规范校验

@@ -2,6 +2,9 @@
 # 特性开发主工作流（L2 编排）
 #
 # 核心流程：协议冻结 → 前后端并行 → 连调验证 → 冒烟守门
+# lifecycle_status: compat
+# replacement: template.dev.feature_delivery_l2
+# migration_deadline: 2026-06-30
 
 kind: l2_workflow_template
 version: "2.1"

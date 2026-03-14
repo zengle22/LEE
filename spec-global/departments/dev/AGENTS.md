@@ -294,6 +294,12 @@ constitution:
 | UniApp Frontend Engineer | `agent.dev.uniapp_frontend_engineer` | 前端实现 |
 | Code Reviewer | `agent.dev.code_reviewer` | 代码审查 |
 
+### D. Canonical Workflow Bindings
+
+| Workflow | Canonical Agent/Gate Binding | 说明 |
+|------|------|------|
+| `template.dev.feature_contract_l3` | `agent.dev.contract_designer` + `gate.dev.contract_freeze_gate` | Contract Design 阶段唯一现役 L3 |
+
 ### C. 版本历史
 
 | 版本 | 日期 | 变更 |

@@ -1,0 +1,77 @@
+kind: workflow_input_contract
+version: "1.0"
+id: contract.workflow.dev.bugfix_input
+name: Bugfix Delivery Input Contract
+description: >
+  Canonical shared input contract for Bugfix Delivery L2.
+
+required_fields:
+  - name: bug_ssot_id
+    type: string
+    description: Formal upstream BUG identifier
+    rules:
+      - must_reference_frozen_bug
+      - must_be_single_bug_in_default_mode
+
+  - name: severity
+    type: enum
+    description: Severity classification for routing and review strictness
+    allowed_values: [P0, P1, P2]
+
+  - name: reproduction_evidence
+    type: object
+    description: Evidence package sufficient for reproduction or verification
+    required_fields:
+      - replay_steps
+      - evidence_refs
+    properties:
+      replay_steps:
+        type: array
+        items: string
+      evidence_refs:
+        type: array
+        items: string
+      environment:
+        type: string
+      notes:
+        type: string
+
+optional_fields:
+  - name: source_refs
+    type: array
+    items: string
+  - name: repo_context
+    type: object
+  - name: test_case_refs
+    type: array
+    items: string
+  - name: batch_context
+    type: object
+    properties:
+      candidate_bug_ids:
+        type: array
+        items: string
+      same_module:
+        type: boolean
+      same_root_cause_class:
+        type: boolean
+      same_fix_strategy:
+        type: boolean
+      same_verification_surface:
+        type: boolean
+      same_release_window:
+        type: boolean
+
+consumption_rules:
+  - rule: required_fields_must_exist
+    description: bug_ssot_id, severity, and reproduction_evidence are mandatory
+  - rule: reproduction_evidence_must_be_actionable
+    description: replay steps and evidence refs must support reproduction or verification
+  - rule: batch_requires_five_same
+    description: batch_context is valid only when all five-same flags are true
+
+output_handoffs:
+  upstream_bug_source:
+    receives: [bug_ssot_id, source_refs]
+  downstream_evidence_pack:
+    emits: [bug_ssot_id, severity, test_case_refs]

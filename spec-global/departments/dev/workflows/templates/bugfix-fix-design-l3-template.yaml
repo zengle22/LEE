@@ -1,0 +1,63 @@
+kind: l3_workflow_template
+version: "1.0"
+id: template.dev.bugfix_fix_design_l3
+name: Bugfix Fix Design L3 Template
+description: |
+  Canonical L3 workflow for preparing a constrained fix plan before coding.
+owner: development
+tags: [template, dev, bugfix, fix-design, l3, canonical]
+
+steps:
+  - id: design_fix_plan
+    name: Design Fix Plan
+    kind: agent
+    description: Create a remediation plan aligned with the root cause.
+    agent_id: agent.dev.bug_fix_planner
+    mandatory: true
+    depends_on: []
+    outputs:
+      - fix_design_ref
+      - risk_assessment_ref
+
+  - id: define_verification_scope
+    name: Define Verification Scope
+    kind: agent
+    description: Define rollback and verification boundary for the fix.
+    agent_id: agent.dev.bug_fix_planner
+    mandatory: true
+    depends_on: [design_fix_plan]
+    outputs:
+      - verification_scope_ref
+      - rollback_strategy_ref
+
+  - id: approve_fix_plan
+    name: Approve Fix Plan
+    kind: stage
+    description: Gate the fix plan before implementation starts.
+    gate_id: gate.dev.contract_freeze_gate
+    mandatory: true
+    depends_on: [define_verification_scope]
+    outputs:
+      - plan_gate_result_ref
+
+  - id: publish_fix_design
+    name: Publish Fix Design Package
+    kind: agent
+    description: Publish the approved bugfix design package.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on: [approve_fix_plan]
+    outputs:
+      - fix_design_package_ref
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - parent_phase_id
+  output_fields:
+    - fix_design_ref
+    - risk_assessment_ref
+    - verification_scope_ref
+    - rollback_strategy_ref
+    - fix_design_package_ref

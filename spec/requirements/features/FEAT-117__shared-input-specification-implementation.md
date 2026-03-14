@@ -29,10 +29,12 @@ frozen_at: '2026-03-12T17:47:40.542767'
 # Processing
 
 - 分析现有 workflow 输入
-- 设计共享输入 schema
+- 设计共享输入 schema（基础四字段 + 按 workflow 类型扩展字段）
 - 定义 formal_ssot_id 字段规范
 - 定义 source_refs 字段规范
 - 定义 governing_adrs 字段规范
+- 定义 repo_context 字段规范
+- 定义 Feature Delivery L2 的 repo_frontend / repo_backend 扩展字段规范
 # Outputs
 
 - 共享输入 schema 定义
@@ -40,10 +42,11 @@ frozen_at: '2026-03-12T17:47:40.542767'
 - source_refs 字段规范
 - governing_adrs 字段规范
 - repo_context 字段规范
+- repo_frontend / repo_backend 扩展字段规范
 # Acceptance
 
 - 共享输入规范落地完成
-- 包含 schema 定义（formal_ssot_id, source_refs, governing_adrs, repo_context 字段规范）
+- 包含 schema 定义（基础字段 formal_ssot_id, source_refs, governing_adrs, repo_context，以及 Feature Delivery L2 扩展字段 repo_frontend, repo_backend）
 - 包含所有 L2/L3 workflow 输入校验逻辑
 - 包含示例数据模板
 - 所有新创建的 workflow 实例必须通过输入规范校验

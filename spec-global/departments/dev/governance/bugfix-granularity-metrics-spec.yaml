@@ -1,0 +1,35 @@
+kind: governance_metrics_spec
+version: "1.0"
+id: bugfix_granularity_metrics_spec
+status: frozen
+
+scope:
+  workflow: template.dev.bugfix_delivery_l2
+  subject: bugfix workflow instances
+
+formula:
+  metric_id: bugfix_granularity_compliance_rate
+  numerator: workflow instances that follow single-bug default or carry an approved batch exception record
+  denominator: all closed bugfix workflow instances in the measurement window
+  expression: compliant_instances / closed_instances
+  target: ">= 0.95"
+
+data_sources:
+  - workflow_instance.status
+  - workflow_instance.context.batch_mode
+  - granularity_decision_ref
+  - batch_approval_record
+
+cadence:
+  aggregation_window: weekly
+  reporting_cutoff: every Friday 18:00 China Standard Time
+
+report_format:
+  required_fields:
+    - window_start
+    - window_end
+    - closed_instances
+    - compliant_instances
+    - non_compliant_instances
+    - exception_batches
+    - top_failure_reasons
