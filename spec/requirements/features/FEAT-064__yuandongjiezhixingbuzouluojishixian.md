@@ -1,8 +1,8 @@
 ---
-id: FEAT-LEE-SRC-FREEZE-20260313-001
+id: FEAT-064
 ssot_type: feat
 title: 源冻结执行步骤逻辑实现
-status: active
+status: frozen
 version: v1
 parent_id: EPIC-064
 derived_from_ids: []
@@ -13,6 +13,8 @@ tags: []
 properties:
   contract_key: feat_001
   identity_kind: ssot
+workflow_instance_id: wf_task_adr016_cleanup
+frozen_at: '2026-03-14T13:45:00'
 ---
 
 # Goal
@@ -58,9 +60,16 @@ properties:
 - When: 执行工件扫描逻辑
 - Then: 工件清单生成延迟小于 1 秒
 - Trace Hints: TESTSET, TECH
+
+# Delivery
+
+- `TASK-FEAT-064-001`：源冻结输入契约与路径治理收口
+- `TASK-FEAT-064-002`：source_freeze 运行时与 gate 接线实现
+- `TASK-FEAT-064-003`：ADR-016 验证重跑与交付证据收口
+
 # Dependencies
 
-- EPIC-LEE-SRC-FREEZE-20260313-001
+- EPIC-064
 # Non Goals
 
 - 校验工件内容合规性
