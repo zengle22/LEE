@@ -486,7 +486,14 @@ steps:
         with open(runtime_instance_path, encoding="utf-8") as f:
             instance_data = yaml.safe_load(f)
         assert instance_data["template_id"] == "template.dev.tech_design_l3"
-        assert instance_data["steps"][0]["id"] == "analyze_feature"
+        # Support both stages and legacy steps format
+        if "stages" in instance_data:
+            steps = []
+            for stage in instance_data["stages"]:
+                steps.extend(stage.get("steps", []))
+        else:
+            steps = instance_data["steps"]
+        assert steps[0]["id"] == "analyze_feature"
 
     @pytest.mark.asyncio
     async def test_resolve_bugfix_l3_template_path(self, setup_orchestrator, tmp_path):
