@@ -1869,18 +1869,18 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         for phase in phases:
             if phase.get("id") == phase_id:
                 phase["l3_instance_ids"] = [l3_id]
+                phase["status"] = "running"
                 break
 
         await self.store.update_workflow_data(workflow_id, instance.data)
 
-        # Wait for L3 completion
-        await self._wait_for_l3_completion([l3_id])
-
         return StepResult(
-            status="success",
+            status="blocked",
+            blocked_reason="waiting_for_l3_completion",
             step_id=phase_id,
             workflow_id=workflow_id,
-            message=f"Phase {phase_id} (complexity=M) spawned L3 {l3_id}"
+            message=f"Phase {phase_id} (complexity=M) spawned L3 {l3_id}",
+            output={"l3_instance_ids": [l3_id]},
         )
 
     async def _execute_complexity_l(
@@ -1993,6 +1993,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             if phase.get("id") == phase_id:
                 phase["l3_instance_ids"] = all_l3_ids
                 phase["l3_results"] = all_l3_results
+                phase["status"] = "running" if all_l3_ids else phase.get("status", "pending")
                 if failed_points:
                     phase["failed_points"] = failed_points
                 break
@@ -2008,19 +2009,18 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             logger = logging.getLogger(__name__)
             logger.warning(f"Phase {phase_id}: {len(failed_points)} points failed to spawn L3")
 
-        # Wait for all L3s to complete
-        await self._wait_for_l3_completion(all_l3_ids)
-
-        # Collect outputs from completed L3s
-        outputs = await self._collect_l3_outputs(all_l3_ids)
-
         return StepResult(
-            status="success" if not failed_points else "partial_success",
+            status="blocked" if all_l3_ids else "partial_success",
+            blocked_reason="waiting_for_l3_completion" if all_l3_ids else None,
             step_id=phase_id,
             workflow_id=workflow_id,
             message=f"Phase {phase_id} (complexity=L) split into {len(all_l3_ids)} L3s" +
                     (f", {len(failed_points)} failed" if failed_points else ""),
-            output=outputs,
+            output={
+                "l3_count": len(all_l3_ids),
+                "l3_results": all_l3_results,
+                "failed_points": failed_points,
+            },
         )
 
     def _group_points_by_dependency(self, points: List) -> List[List]:
@@ -2311,7 +2311,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             ValueError: If repos list is empty or no matching repo found
         """
         if not repos:
-            raise ValueError(f"No repos configured for phase {phase_id}")
+            import logging
+            logging.getLogger(__name__).warning(
+                "No repos configured for phase %s; falling back to empty repo context",
+                phase_id,
+            )
+            return ""
 
         # Simple mapping for P0
         frontend_phases = {"frontend_dev", "integration"}
@@ -2361,7 +2366,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             ValueError: If repos list is empty or no matching repo found
         """
         if not repos:
-            raise ValueError(f"No repos configured for layer {layer}")
+            import logging
+            logging.getLogger(__name__).warning(
+                "No repos configured for layer %s; falling back to empty repo context",
+                layer,
+            )
+            return ""
 
         # Map layers to repo types
         frontend_layers = {"ui", "state"}
@@ -2412,6 +2422,24 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             prd_path=context.get("prd_path", "")
         )
 
+        layer_template_candidates = []
+        if point.layer in {"ui", "state"}:
+            layer_template_candidates = [
+                ("feature-fe-l3-template.yaml", "template.dev.feature_fe_l3"),
+                ("feature-integration-l3-template.yaml", "template.dev.feature_integration_l3"),
+            ]
+        elif point.layer in {"api", "service"}:
+            layer_template_candidates = [
+                ("feature-be-l3-template.yaml", "template.dev.feature_be_l3"),
+                ("feature-integration-l3-template.yaml", "template.dev.feature_integration_l3"),
+            ]
+        else:
+            layer_template_candidates = [
+                ("feature-integration-l3-template.yaml", "template.dev.feature_integration_l3"),
+                ("feature-fe-l3-template.yaml", "template.dev.feature_fe_l3"),
+                ("feature-be-l3-template.yaml", "template.dev.feature_be_l3"),
+            ]
+
         # Find L3 template path across supported framework layouts
         template_roots = []
         if self.project_root:
@@ -2426,16 +2454,20 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 Path("spec-global/departments/dev/workflows/templates"),
             ])
 
+        source_repo_root = Path(__file__).resolve().parents[4]
+        template_roots.extend([
+            source_repo_root / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+            source_repo_root / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+        ])
+
         l3_template_path = None
         for template_base in template_roots:
-            v3_candidate = template_base / "l3" / "task-l3-v3-template.yaml"
-            if v3_candidate.exists():
-                l3_template_path = v3_candidate
-                break
-
-            legacy_candidate = template_base / "task-l3-template.yaml"
-            if legacy_candidate.exists():
-                l3_template_path = legacy_candidate
+            for filename, _template_id in layer_template_candidates:
+                candidate = template_base / filename
+                if candidate.exists():
+                    l3_template_path = candidate
+                    break
+            if l3_template_path is not None:
                 break
 
         if l3_template_path is None:
@@ -2455,13 +2487,11 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         if not result.success:
             raise RuntimeError(f"Failed to generate L3 instance: {result.errors}")
 
-        # Spawn L3 workflow using existing spawn_workflow
-        # v3: Use the L3 v3 template_id
-        l3_template_id = "template.dev.task_l3_v3"
+        # Spawn L3 workflow using the matched dev L3 template.
         l3_instance = await self.spawn_workflow(
             parent_id=parent_l2_id,
             level=WorkflowLevel.TASK,
-            template_id=l3_template_id,
+            template_id=str(l3_path),
             data={
                 "kind": "l3_workflow_instance",
                 "point_id": point.id,
