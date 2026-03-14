@@ -47,6 +47,6 @@ metadata:
   contract_id: FUIP-20260313-005
   frozen_at: '2026-03-13'
   feat_ref: FEAT-143
-  review_status: approved
+  review_status: pending_approval
   reviewer: Human Reviewer
   reviewed_at: '2026-03-13T12:00:00+08:00'

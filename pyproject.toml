@@ -68,7 +68,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
-pythonpath = "."
+pythonpath = [".", "src"]
 
 [tool.mypy]
 python_version = "3.8"

@@ -2,17 +2,18 @@
 id: SRC-007
 ssot_type: src
 title: QA department SSOT alignment and workflow reframe
-status: active
+status: frozen
 version: v1
 parent_id: null
 derived_from_ids: []
 source_refs:
-  - ADR-007
+- ADR-007
 owner: null
 tags: []
 properties:
   contract_key: src
   identity_kind: ssot
+frozen_at: '2026-03-13T21:46:36.105057'
 ---
 
 metadata:

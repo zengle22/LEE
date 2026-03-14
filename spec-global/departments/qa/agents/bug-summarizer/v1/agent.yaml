@@ -22,12 +22,24 @@ contracts:
   input_schema:
     type: object
     required:
+      - release_ref
+      - test_plan_id
+      - task_ref
       - bug_drafts
       - l3_results
     properties:
+      release_ref:
+        type: string
+        description: "Release ID"
+      test_plan_id:
+        type: string
+        description: "Test Plan ID"
+      task_ref:
+        type: string
+        description: "Task ID"
       bug_drafts:
         type: array
-        description: "所有 L3 产生的 Bug 草稿列表"
+        description: "所有 L3 产生的 canonical Bug 草稿/正式 Bug 产物列表"
         items:
           type: object
       l3_results:
@@ -89,6 +101,7 @@ prompting:
     3. Assign comprehensive priority and severity
     4. Link bugs to their source test sets and cases
     5. Prepare for human review
+    6. Preserve canonical delivery trace via release_ref / test_plan_id / task_ref
 
     Deduplication Criteria:
     - Similar title (80%+ similarity)
@@ -103,6 +116,8 @@ prompting:
     - Note which bugs were merged
 
   instructions:
+    - "保留 release_ref / test_plan_id / task_ref 的 canonical trace"
+    - "优先消费 spec/testing/bugs/ 下的 canonical Bug 产物，而不是旧 qa/bugs 目录"
     - "分析所有 Bug 草稿，识别重复项"
     - "按去重规则合并 Bug"
     - "保留所有证据引用和来源信息"

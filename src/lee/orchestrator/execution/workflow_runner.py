@@ -32,6 +32,50 @@ from lee.orchestrator.execution.concurrency_scope import derive_concurrency_scop
 from lee.orchestrator.storage.models import WorkflowLevel
 
 
+def derive_workflow_creation_metadata(instance_path: Path) -> Tuple[WorkflowLevel, Dict[str, Any]]:
+    """Infer workflow level and bootstrap data from a workflow template or instance YAML."""
+    try:
+        with open(instance_path, encoding="utf-8") as f:
+            doc = yaml.safe_load(f) or {}
+    except Exception:
+        return WorkflowLevel.TASK, {}
+
+    kind = str(doc.get("kind") or "").strip()
+    if kind == "l2_workflow_instance":
+        phases = doc.get("phases") if isinstance(doc.get("phases"), list) else []
+        return WorkflowLevel.DEPARTMENT, {
+            "kind": "l2_workflow_instance",
+            "context": doc.get("context", {}),
+            "phases": phases,
+            "pma_splits": doc.get("pma_splits", []),
+        }
+
+    if kind == "l2_workflow_template":
+        phases = []
+        for phase in doc.get("phases", []) if isinstance(doc.get("phases"), list) else []:
+            if not isinstance(phase, dict):
+                continue
+            phases.append({
+                "id": phase.get("id", ""),
+                "name": phase.get("name", ""),
+                "description": phase.get("description", ""),
+                "complexity": phase.get("default_complexity", "M"),
+                "status": "pending",
+                "depends_on": phase.get("depends_on", []),
+                "workflow": phase.get("workflow"),
+                "level": phase.get("level"),
+                "l3_instance_ids": [],
+            })
+        return WorkflowLevel.DEPARTMENT, {
+            "kind": "l2_workflow_instance",
+            "context": {},
+            "phases": phases,
+            "pma_splits": [],
+        }
+
+    return WorkflowLevel.TASK, {}
+
+
 def _get_pm_workflow():
     """Lazy import to avoid circular import"""
     from lee.orchestrator.api import pm_workflow
@@ -386,46 +430,7 @@ class WorkflowRunner:
 
     def _derive_workflow_creation_metadata(self, instance_path: Path) -> Tuple[WorkflowLevel, Dict[str, Any]]:
         """Infer workflow level and bootstrap data from the source YAML."""
-        try:
-            with open(instance_path, encoding="utf-8") as f:
-                doc = yaml.safe_load(f) or {}
-        except Exception:
-            return WorkflowLevel.TASK, {}
-
-        kind = str(doc.get("kind") or "").strip()
-        if kind == "l2_workflow_instance":
-            phases = doc.get("phases") if isinstance(doc.get("phases"), list) else []
-            return WorkflowLevel.DEPARTMENT, {
-                "kind": "l2_workflow_instance",
-                "context": doc.get("context", {}),
-                "phases": phases,
-                "pma_splits": doc.get("pma_splits", []),
-            }
-
-        if kind == "l2_workflow_template":
-            phases = []
-            for phase in doc.get("phases", []) if isinstance(doc.get("phases"), list) else []:
-                if not isinstance(phase, dict):
-                    continue
-                phases.append({
-                    "id": phase.get("id", ""),
-                    "name": phase.get("name", ""),
-                    "description": phase.get("description", ""),
-                    "complexity": phase.get("default_complexity", "M"),
-                    "status": "pending",
-                    "depends_on": phase.get("depends_on", []),
-                    "workflow": phase.get("workflow"),
-                    "level": phase.get("level"),
-                    "l3_instance_ids": [],
-                })
-            return WorkflowLevel.DEPARTMENT, {
-                "kind": "l2_workflow_instance",
-                "context": {},
-                "phases": phases,
-                "pma_splits": [],
-            }
-
-        return WorkflowLevel.TASK, {}
+        return derive_workflow_creation_metadata(instance_path)
 
     def _create_plan_executor(self) -> LLMExecutor:
         """Create the plan-stage LLM executor without relying on deprecated antigravity defaults."""

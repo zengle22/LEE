@@ -240,6 +240,9 @@ def show_test_set(test_set_id: str, project_dir: str) -> None:
 def run_test_set(test_set_id: str, test_run_id: str, build_version: str,
                  build_commit: str, environment: str, project_dir: str, max_steps: int) -> None:
     """直接运行 L3 Test Set (跳过 L2)"""
+    raise click.ClickException(
+        "`lee qa test-set run` 已被 FEAT-143 收紧。请先生成标准 TASK，再使用 `lee qa execute <TASK-TESTPLAN-REL-...>`。"
+    )
     import random
     import string
 

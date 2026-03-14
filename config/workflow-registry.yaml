@@ -95,7 +95,7 @@ workflows:
   qa.test-plan-execution:
     path: spec-global/departments/qa/workflows/templates/test-plan-l2-template.yaml
     kind: l2_workflow_template
-    description: "执行 Test Plan (L2) - 执行测试批次并汇总结果"
+    description: "执行 Test Plan (L2) - canonical RELEASE -> TESTPLAN -> TASK 入口"
     required_params:
       - test_plan_id
       - build_version
@@ -103,6 +103,9 @@ workflows:
     optional_params:
       - environment
       - target_test_sets
+      - release_ref
+      - task_ref
+      - base_url
 
   qa.test-set-execution:
     path: spec-global/departments/qa/workflows/templates/test-set-execute-l3-template.yaml

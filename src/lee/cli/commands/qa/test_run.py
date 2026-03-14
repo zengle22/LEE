@@ -20,6 +20,12 @@ from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
 
 
+def _raise_legacy_entry_blocked() -> None:
+    raise click.ClickException(
+        "`lee qa test-run start` 已被 FEAT-143 收紧。请改用 `lee qa execute <TASK-TESTPLAN-REL-...>`。"
+    )
+
+
 def _get_registry_path(project_dir: str = ".") -> Path:
     """获取 workflow registry 路径"""
     return get_workflow_registry_path()
@@ -79,12 +85,13 @@ def test_run():
 def start(test_plan_id: str, build: str, commit: str, env: str, base_url: str | None,
           project_dir: str, max_steps: int) -> None:
     """启动 Test Run"""
-    _start_test_run(test_plan_id, build, commit, env, base_url, project_dir, max_steps)
+    _raise_legacy_entry_blocked()
 
 
 def _start_test_run(test_plan_id: str, build: str, commit: str, env: str, base_url: str | None,
                     project_dir: str, max_steps: int) -> None:
     """启动 Test Run 的实际实现"""
+    _raise_legacy_entry_blocked()
     from lee.qa.runner.sut import resolve_sut_url
 
     registry = _load_registry(project_dir)
