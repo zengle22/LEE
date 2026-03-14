@@ -591,6 +591,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # v3.6: Check for L2 instance with complexity routing
         # If this is an L2 instance, route phases through complexity-based execution
         if self._is_l2_instance(instance):
+            instance = await self._reconcile_l2_subworkflow_phases(instance)
             # For L2 instances, phases act as steps
             # Find the first pending phase
             pending_phase = self._get_next_pending_phase(instance)
@@ -1755,6 +1756,101 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             if phase.get("status") == "failed":
                 return phase
         return None
+
+    async def _reconcile_l2_subworkflow_phases(
+        self,
+        instance: WorkflowInstance,
+    ) -> WorkflowInstance:
+        """Reconcile persisted L2 phase state with the latest child workflow state.
+
+        This lets a parent L2 workflow recover when a previously failed child
+        subworkflow is rerun to completion out-of-band.
+        """
+        if not self._is_l2_instance(instance):
+            return instance
+
+        phases = instance.data.get("phases", [])
+        if not isinstance(phases, list) or not phases:
+            return instance
+
+        parent_data = dict(instance.data or {})
+        subworkflow_children = parent_data.get("subworkflow_children")
+        if not isinstance(subworkflow_children, dict) or not subworkflow_children:
+            return instance
+
+        mutated = False
+        for phase in phases:
+            if not isinstance(phase, dict):
+                continue
+            phase_id = phase.get("id")
+            if not isinstance(phase_id, str) or not phase_id.strip():
+                continue
+
+            child_workflow_id = subworkflow_children.get(phase_id)
+            if not isinstance(child_workflow_id, str) or not child_workflow_id.strip():
+                continue
+
+            child = await self.store.get_workflow(child_workflow_id)
+            if not child:
+                continue
+
+            if child.status == WorkflowStatus.COMPLETED and phase.get("status") != "completed":
+                step = Step(
+                    id=phase_id,
+                    kind="subworkflow",
+                    config={
+                        "subworkflow_ref": phase.get("workflow"),
+                        "subworkflow_level": phase.get("level"),
+                        "output_map": phase.get("output_map", {}),
+                    },
+                )
+                backfill_output = await self._backfill_subworkflow_output(instance.id, step, child)
+                await self._update_l2_phase(
+                    instance.id,
+                    phase_id,
+                    status="completed",
+                    extra={"last_output": backfill_output, "child_workflow_id": child.id},
+                )
+                mutated = True
+                continue
+
+            if child.status == WorkflowStatus.FAILED and phase.get("status") != "failed":
+                error_message = child.data.get("error", "Child workflow failed")
+                await self._update_l2_phase(
+                    instance.id,
+                    phase_id,
+                    status="failed",
+                    extra={"error": error_message, "child_workflow_id": child.id},
+                )
+                mutated = True
+
+        if not mutated:
+            return instance
+
+        refreshed = await self.store.get_workflow(instance.id)
+        if not refreshed:
+            return instance
+
+        refreshed_failed_phase = self._get_failed_phase(refreshed)
+        refreshed_pending_phase = self._get_next_pending_phase(refreshed)
+        target_status = WorkflowStatus.RUNNING
+        completed_at = None
+        if refreshed_failed_phase:
+            target_status = WorkflowStatus.FAILED
+            completed_at = datetime.now()
+        elif refreshed_pending_phase is None:
+            target_status = WorkflowStatus.COMPLETED
+            completed_at = datetime.now()
+
+        if refreshed.status != target_status:
+            await self.store.update_workflow_status(
+                refreshed.id,
+                target_status,
+                completed_at=completed_at,
+            )
+            refreshed = await self.store.get_workflow(refreshed.id) or refreshed
+
+        return refreshed
 
     async def _execute_l2_phase_with_complexity(
         self,
