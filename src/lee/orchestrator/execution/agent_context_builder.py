@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
+from types import SimpleNamespace
 import yaml
 
 
@@ -729,7 +730,7 @@ Verification items:
                 step_outputs=step_outputs,
             )
 
-            if value is None and isinstance(source, str):
+            if (value is None or not self._payload_has_signal(value)) and isinstance(source, str):
                 alias_step_ids = self._resolve_symbol_step_aliases(
                     workflow_context=workflow_context,
                     source=source,
@@ -741,7 +742,16 @@ Verification items:
                     if not isinstance(output, dict):
                         continue
                     extracted = self._extract_authoritative_step_payload(output)
-                    if extracted is None:
+                    if not self._payload_has_signal(extracted):
+                        extracted = self._resolve_alias_step_fallback_payload(
+                            workflow_context=workflow_context,
+                            step_id=step_id,
+                            data=data,
+                            params=params,
+                            step_outputs=step_outputs,
+                            visited_steps=set(),
+                        )
+                    if extracted is None and value is None:
                         extracted = self._sanitize_prompt_payload(output)
                     if not self._payload_has_signal(extracted):
                         generated_text = output.get("generated_text")
@@ -756,6 +766,148 @@ Verification items:
             resolved[source] = value if value is not None else {"source": source, "required": item.get("required", True)}
 
         return resolved
+
+    def _resolve_alias_step_fallback_payload(
+        self,
+        *,
+        workflow_context: Dict[str, Any],
+        step_id: str,
+        data: Dict[str, Any],
+        params: Dict[str, Any],
+        step_outputs: Dict[str, Any],
+        visited_steps: Optional[set[str]] = None,
+    ) -> Any:
+        if not isinstance(step_id, str) or not step_id.strip():
+            return None
+
+        visited = set(visited_steps or set())
+        if step_id in visited:
+            return None
+        visited.add(step_id)
+
+        step_def = self._find_template_step_definition(workflow_context, step_id)
+        if not isinstance(step_def, dict):
+            return None
+
+        raw_inputs = step_def.get("inputs")
+        if not isinstance(raw_inputs, list):
+            raw_inputs = []
+
+        for item in raw_inputs:
+            if not isinstance(item, dict):
+                continue
+            source = item.get("source")
+            if not isinstance(source, str) or not source.strip():
+                continue
+
+            direct_value = self._resolve_workflow_input_source(
+                source=source,
+                item=item,
+                data=data,
+                params=params,
+                step_outputs=step_outputs,
+            )
+            if self._payload_has_signal(direct_value):
+                return direct_value
+
+            alias_step_ids = self._resolve_symbol_step_aliases(
+                workflow_context=workflow_context,
+                source=source,
+                step=SimpleNamespace(depends_on=step_def.get("depends_on", [])),
+                step_outputs=step_outputs,
+            )
+            for alias_step_id in alias_step_ids:
+                if alias_step_id in visited:
+                    continue
+                output = step_outputs.get(alias_step_id)
+                extracted = self._extract_authoritative_step_payload(output) if isinstance(output, dict) else None
+                if self._payload_has_signal(extracted):
+                    return extracted
+                fallback = self._resolve_alias_step_fallback_payload(
+                    workflow_context=workflow_context,
+                    step_id=alias_step_id,
+                    data=data,
+                    params=params,
+                    step_outputs=step_outputs,
+                    visited_steps=visited,
+                )
+                if self._payload_has_signal(fallback):
+                    return fallback
+        return None
+
+    def _find_template_step_definition(
+        self,
+        workflow_context: Dict[str, Any],
+        step_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        template_path = self._resolve_template_path(
+            workflow_context.get("template_id") if isinstance(workflow_context, dict) else None
+        )
+        if template_path is None:
+            return None
+
+        try:
+            raw_doc = yaml.safe_load(template_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return None
+
+        for stage in raw_doc.get("stages", []) if isinstance(raw_doc.get("stages"), list) else []:
+            if not isinstance(stage, dict):
+                continue
+            for step_def in stage.get("steps", []) if isinstance(stage.get("steps"), list) else []:
+                if isinstance(step_def, dict) and step_def.get("id") == step_id:
+                    return step_def
+        return None
+
+    def _resolve_template_path(self, template_ref: Any) -> Optional[Path]:
+        if not isinstance(template_ref, str) or not template_ref.strip():
+            return None
+
+        direct_path = Path(template_ref)
+        if direct_path.exists():
+            return direct_path
+
+        candidate = self.project_root / template_ref
+        if candidate.exists():
+            return candidate
+
+        registry_path = self.project_root / "config" / "workflow-registry.yaml"
+        if not registry_path.exists():
+            return None
+
+        try:
+            registry_doc = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return None
+
+        workflows = registry_doc.get("workflows")
+        if not isinstance(workflows, dict):
+            return None
+
+        entry = workflows.get(template_ref)
+        if not isinstance(entry, dict):
+            derived_keys = [template_ref]
+            match = template_ref.strip().lower()
+            import re
+            normalized = re.match(r"^workflow\.([^.]+)\.task\.(.+)$", match)
+            if normalized:
+                department = normalized.group(1)
+                workflow_name = normalized.group(2).replace("_", "-")
+                derived_keys.append(f"{department}.{workflow_name}")
+            for key in derived_keys:
+                candidate_entry = workflows.get(key)
+                if isinstance(candidate_entry, dict):
+                    entry = candidate_entry
+                    break
+        if not isinstance(entry, dict):
+            return None
+
+        raw_path = entry.get("path")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            return None
+
+        resolved = self.project_root / raw_path
+        return resolved if resolved.exists() else None
 
     @staticmethod
     def _freeze_source_aliases(source: str) -> List[str]:
@@ -809,17 +961,9 @@ Verification items:
         if not isinstance(source, str) or not source.strip():
             return []
 
-        template_ref = workflow_context.get("template_id") if isinstance(workflow_context, dict) else None
-        if not isinstance(template_ref, str) or not template_ref.strip():
-            return []
-
-        template_path = Path(template_ref)
-        if not template_path.exists():
-            candidate = self.project_root / template_ref
-            if candidate.exists():
-                template_path = candidate
-            else:
-                template_path = None
+        template_path = self._resolve_template_path(
+            workflow_context.get("template_id") if isinstance(workflow_context, dict) else None
+        )
 
         aliases: List[str] = []
         if template_path is not None:
@@ -971,7 +1115,22 @@ Verification items:
         if isinstance(value, dict):
             if not value:
                 return False
-            non_signal_keys = {"status", "paths", "workspace_artifacts"}
+            non_signal_keys = {
+                "status",
+                "paths",
+                "workspace_artifacts",
+                "model",
+                "provider",
+                "profile",
+                "input_tokens",
+                "output_tokens",
+                "tokens_used",
+                "duration_seconds",
+                "stop_reason",
+                "attempts",
+                "temperature",
+                "max_tokens",
+            }
             for key, item in value.items():
                 if key in non_signal_keys:
                     if isinstance(item, (dict, list)) and cls._payload_has_signal(item):
@@ -979,7 +1138,6 @@ Verification items:
                     continue
                 if cls._payload_has_signal(item):
                     return True
-                return True
             return False
         if isinstance(value, list):
             return any(cls._payload_has_signal(item) for item in value)
