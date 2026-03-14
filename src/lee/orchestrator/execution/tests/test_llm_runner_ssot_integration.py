@@ -156,6 +156,606 @@ async def test_llm_runner_qwen_executor_defaults_to_qwen_profile(runner, ctx):
 
 
 @pytest.mark.asyncio
+async def test_llm_runner_falls_back_from_qwen_for_chinese_unstructured_output(runner, ctx, monkeypatch):
+    step = SimpleNamespace(
+        id="source_normalization",
+        agent_id="agent.analysis.product_goal",
+        executor_type="llm",
+        config={},
+        outputs=[],
+    )
+
+    instance = SimpleNamespace(
+        data={"executor_override": "qwen", "run_id": "run-zh-001"},
+        template_id="workflow.product.task.raw_to_src",
+    )
+    ctx.store.get_workflow = AsyncMock(return_value=instance)
+    ctx.store.create_task_execution = AsyncMock()
+    ctx.store.update_task_execution = AsyncMock()
+    ctx.state_machine.fail_step = AsyncMock()
+    ctx.state_machine.complete_step = AsyncMock(
+        return_value=StepResult(status="success", step_id=step.id, workflow_id="wf-zh-001", message="ok")
+    )
+    ctx.contract_discovery.get_workflow_inputs.return_value = None
+    ctx.agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="你是产品分析助手",
+            user_prompt="请把这个原始需求整理成结构化结果",
+            temperature=0.2,
+            max_tokens=512,
+        )
+    )
+    ctx.token_manager.issue_token.return_value = None
+    ctx.llm_config_loader = MagicMock()
+    ctx.llm_config_loader.get_default_profile.return_value = "huawei_deepseek"
+    ctx.event_log.log_step_completed = MagicMock()
+    ctx.event_log._compute_hash = MagicMock(return_value="hash")
+    ctx.file_output_handler.handle = AsyncMock(return_value=[])
+    ctx.verifier_engine.run = AsyncMock(return_value=[])
+
+    qwen_executor = MagicMock()
+    qwen_executor.execute = AsyncMock(return_value={"status": "completed", "generated_text": "这是自由文本，没有结构化结果"})
+    kimi_executor = MagicMock()
+    kimi_executor.execute = AsyncMock(
+        return_value={
+            "status": "completed",
+            "generated_text": '{"business_output":{"summary":"结构化成功"}}',
+            "structured_payload": {"business_output": {"summary": "结构化成功"}},
+        }
+    )
+    ctx.executor_factory.create = MagicMock(side_effect=[qwen_executor, kimi_executor])
+    monkeypatch.setattr(LLMRunner, "_resolve_qwen_fallback_target", classmethod(lambda cls, project_root: "kimi"))
+
+    result = await runner.execute("wf-zh-001", step, ctx)
+
+    assert result.status == "success"
+    assert ctx.executor_factory.create.call_args_list[0].args[0] == "qwen"
+    assert ctx.executor_factory.create.call_args_list[1].args[0] == "kimi"
+
+
+@pytest.mark.asyncio
+async def test_llm_runner_repairs_qwen_unstructured_output_before_fallback(runner, ctx):
+    step = SimpleNamespace(
+        id="source_normalization",
+        agent_id="agent.analysis.product_goal",
+        executor_type="llm",
+        config={},
+        outputs=[],
+    )
+
+    instance = SimpleNamespace(
+        data={"executor_override": "qwen", "run_id": "run-qwen-repair-001"},
+        template_id="workflow.product.task.raw_to_src",
+    )
+    ctx.store.get_workflow = AsyncMock(return_value=instance)
+    ctx.store.create_task_execution = AsyncMock()
+    ctx.store.update_task_execution = AsyncMock()
+    ctx.state_machine.fail_step = AsyncMock()
+    ctx.state_machine.complete_step = AsyncMock(
+        return_value=StepResult(status="success", step_id=step.id, workflow_id="wf-qwen-repair-001", message="ok")
+    )
+    ctx.contract_discovery.get_workflow_inputs.return_value = None
+    ctx.agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="你是产品分析助手",
+            user_prompt="# Task\n请输出结构化结果\n\n## Output Contract\nReturn one machine-readable JSON object only.",
+            temperature=0.2,
+            max_tokens=512,
+        )
+    )
+    ctx.token_manager.issue_token.return_value = None
+    ctx.llm_config_loader = MagicMock()
+    ctx.llm_config_loader.get_default_profile.return_value = "huawei_deepseek"
+    ctx.event_log.log_step_completed = MagicMock()
+    ctx.event_log._compute_hash = MagicMock(return_value="hash")
+    ctx.file_output_handler.handle = AsyncMock(return_value=[])
+    ctx.verifier_engine.run = AsyncMock(return_value=[])
+
+    qwen_executor = MagicMock()
+    qwen_executor.execute = AsyncMock(
+        side_effect=[
+            {"status": "completed", "generated_text": "我是产品目标分析师，请告诉我你的需求。"},
+            {
+                "status": "completed",
+                "generated_text": '{"business_output":{"summary":"结构化成功"}}',
+                "structured_payload": {"business_output": {"summary": "结构化成功"}},
+            },
+        ]
+    )
+    ctx.executor_factory.create = MagicMock(return_value=qwen_executor)
+
+    result = await runner.execute("wf-qwen-repair-001", step, ctx)
+
+    assert result.status == "success"
+    ctx.executor_factory.create.assert_called_once_with(
+        "qwen",
+        profile="qwen",
+        agent_id="agent.analysis.product_goal",
+    )
+    assert qwen_executor.execute.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_llm_runner_repairs_qwen_contract_mismatch_before_fallback(runner, ctx, temp_project_root):
+    schema_path = temp_project_root / "product-goal.schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "required": ["contract_type", "requirement_overview"],
+                "properties": {
+                    "contract_type": {"type": "string"},
+                    "requirement_overview": {
+                        "type": "object",
+                        "required": ["description", "target_users"],
+                        "properties": {
+                            "description": {"type": "string"},
+                            "target_users": {"type": "string"},
+                        },
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    step = SimpleNamespace(
+        id="source_normalization",
+        agent_id="agent.analysis.product_goal",
+        executor_type="llm",
+        config={"output_contract": str(schema_path)},
+        outputs=[],
+    )
+    instance = SimpleNamespace(
+        data={"executor_override": "qwen_chat", "run_id": "run-qwen-contract-repair-001"},
+        template_id="workflow.product.task.raw_to_src",
+    )
+    ctx.store.get_workflow = AsyncMock(return_value=instance)
+    ctx.store.create_task_execution = AsyncMock()
+    ctx.store.update_task_execution = AsyncMock()
+    ctx.state_machine.fail_step = AsyncMock()
+    ctx.state_machine.complete_step = AsyncMock(
+        return_value=StepResult(status="success", step_id=step.id, workflow_id="wf-qwen-contract-repair-001", message="ok")
+    )
+    ctx.contract_discovery.get_workflow_inputs.return_value = None
+    ctx.agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="你是产品分析助手",
+            user_prompt="请输出 product goal contract",
+            temperature=0.2,
+            max_tokens=512,
+        )
+    )
+    ctx.token_manager.issue_token.return_value = None
+    ctx.llm_config_loader = MagicMock()
+    ctx.llm_config_loader.get_default_profile.return_value = "huawei_deepseek"
+    ctx.event_log.log_step_completed = MagicMock()
+    ctx.event_log._compute_hash = MagicMock(return_value="hash")
+    ctx.file_output_handler.handle = AsyncMock(return_value=[])
+    ctx.verifier_engine.run = AsyncMock(return_value=[])
+
+    qwen_executor = MagicMock()
+    qwen_executor.execute = AsyncMock(
+        side_effect=[
+            {
+                "status": "completed",
+                "generated_text": json.dumps(
+                    {
+                        "contract_type": "product-goal-contract",
+                        "requirement_overview": {"description": "待确认"},
+                    },
+                    ensure_ascii=False,
+                ),
+                "structured_payload": {
+                    "contract_type": "product-goal-contract",
+                    "requirement_overview": {"description": "待确认"},
+                },
+            },
+            {
+                "status": "completed",
+                "generated_text": json.dumps(
+                    {
+                        "contract_type": "product-goal-contract",
+                        "requirement_overview": {
+                            "description": "支持 qwen_chat 作为对话执行器。",
+                            "target_users": "LEE 工作流维护者",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                "structured_payload": {
+                    "contract_type": "product-goal-contract",
+                    "requirement_overview": {
+                        "description": "支持 qwen_chat 作为对话执行器。",
+                        "target_users": "LEE 工作流维护者",
+                    },
+                },
+            },
+        ]
+    )
+    ctx.executor_factory.create = MagicMock(return_value=qwen_executor)
+
+    result = await runner.execute("wf-qwen-contract-repair-001", step, ctx)
+
+    assert result.status == "success"
+    assert qwen_executor.execute.await_count == 2
+    completed_output = ctx.state_machine.complete_step.await_args.args[2]
+    assert completed_output["schema_repair_retry"] is True
+    assert completed_output["business_output"]["requirement_overview"]["target_users"] == "LEE 工作流维护者"
+
+
+@pytest.mark.asyncio
+async def test_llm_runner_falls_back_when_qwen_contract_repair_still_invalid(runner, ctx, temp_project_root, monkeypatch):
+    schema_path = temp_project_root / "product-goal.schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "required": ["contract_type", "requirement_overview"],
+                "properties": {
+                    "contract_type": {"type": "string"},
+                    "requirement_overview": {
+                        "type": "object",
+                        "required": ["description", "target_users"],
+                        "properties": {
+                            "description": {"type": "string"},
+                            "target_users": {"type": "string"},
+                        },
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    step = SimpleNamespace(
+        id="source_normalization",
+        agent_id="agent.analysis.product_goal",
+        executor_type="llm",
+        config={"output_contract": str(schema_path)},
+        outputs=[],
+    )
+    instance = SimpleNamespace(
+        data={"executor_override": "qwen_chat", "run_id": "run-qwen-contract-fallback-001"},
+        template_id="workflow.product.task.raw_to_src",
+    )
+    ctx.store.get_workflow = AsyncMock(return_value=instance)
+    ctx.store.create_task_execution = AsyncMock()
+    ctx.store.update_task_execution = AsyncMock()
+    ctx.state_machine.fail_step = AsyncMock()
+    ctx.state_machine.complete_step = AsyncMock(
+        return_value=StepResult(status="success", step_id=step.id, workflow_id="wf-qwen-contract-fallback-001", message="ok")
+    )
+    ctx.contract_discovery.get_workflow_inputs.return_value = None
+    ctx.agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="你是产品分析助手",
+            user_prompt="请输出 product goal contract",
+            temperature=0.2,
+            max_tokens=512,
+        )
+    )
+    ctx.token_manager.issue_token.return_value = None
+    ctx.llm_config_loader = MagicMock()
+    ctx.llm_config_loader.get_default_profile.return_value = "huawei_deepseek"
+    ctx.event_log.log_step_completed = MagicMock()
+    ctx.event_log._compute_hash = MagicMock(return_value="hash")
+    ctx.file_output_handler.handle = AsyncMock(return_value=[])
+    ctx.verifier_engine.run = AsyncMock(return_value=[])
+
+    qwen_executor = MagicMock()
+    qwen_executor.execute = AsyncMock(
+        side_effect=[
+            {
+                "status": "completed",
+                "generated_text": json.dumps(
+                    {
+                        "contract_type": "product-goal-contract",
+                        "requirement_overview": {"description": "待确认"},
+                    },
+                    ensure_ascii=False,
+                ),
+                "structured_payload": {
+                    "contract_type": "product-goal-contract",
+                    "requirement_overview": {"description": "待确认"},
+                },
+            },
+            {
+                "status": "completed",
+                "generated_text": json.dumps(
+                    {
+                        "contract_type": "product-goal-contract",
+                        "requirement_overview": {"description": "待确认"},
+                    },
+                    ensure_ascii=False,
+                ),
+                "structured_payload": {
+                    "contract_type": "product-goal-contract",
+                    "requirement_overview": {"description": "待确认"},
+                },
+            },
+        ]
+    )
+    kimi_executor = MagicMock()
+    kimi_executor.execute = AsyncMock(
+        return_value={
+            "status": "completed",
+            "generated_text": json.dumps(
+                {
+                    "contract_type": "product-goal-contract",
+                    "requirement_overview": {
+                        "description": "支持 qwen_chat 作为对话执行器。",
+                        "target_users": "LEE 工作流维护者",
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            "structured_payload": {
+                "contract_type": "product-goal-contract",
+                "requirement_overview": {
+                    "description": "支持 qwen_chat 作为对话执行器。",
+                    "target_users": "LEE 工作流维护者",
+                },
+            },
+        }
+    )
+    ctx.executor_factory.create = MagicMock(side_effect=[qwen_executor, kimi_executor])
+    monkeypatch.setattr(LLMRunner, "_resolve_qwen_fallback_target", classmethod(lambda cls, project_root: "kimi"))
+
+    result = await runner.execute("wf-qwen-contract-fallback-001", step, ctx)
+
+    assert result.status == "success"
+    assert qwen_executor.execute.await_count == 2
+    assert kimi_executor.execute.await_count == 1
+    completed_output = ctx.state_machine.complete_step.await_args.args[2]
+    assert completed_output["fallback_triggered"] is True
+    assert completed_output["fallback_reason"] == "qwen_contract_validation_failed"
+    assert completed_output["business_output"]["requirement_overview"]["target_users"] == "LEE 工作流维护者"
+
+
+@pytest.mark.asyncio
+async def test_llm_runner_repairs_plain_llm_contract_mismatch_without_qwen_fallback(runner, ctx, temp_project_root):
+    schema_path = temp_project_root / "product-goal.schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "required": ["contract_type", "requirement_overview"],
+                "properties": {
+                    "contract_type": {"type": "string"},
+                    "requirement_overview": {
+                        "type": "object",
+                        "required": ["description", "target_users"],
+                        "properties": {
+                            "description": {"type": "string"},
+                            "target_users": {"type": "string"},
+                        },
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    step = SimpleNamespace(
+        id="source_normalization",
+        agent_id="agent.analysis.product_goal",
+        executor_type="llm",
+        config={"output_contract": str(schema_path)},
+        outputs=[],
+    )
+    instance = SimpleNamespace(
+        data={"executor_override": "llm", "run_id": "run-llm-contract-repair-001"},
+        template_id="workflow.product.task.raw_to_src",
+    )
+    ctx.store.get_workflow = AsyncMock(return_value=instance)
+    ctx.store.create_task_execution = AsyncMock()
+    ctx.store.update_task_execution = AsyncMock()
+    ctx.state_machine.fail_step = AsyncMock()
+    ctx.state_machine.complete_step = AsyncMock(
+        return_value=StepResult(status="success", step_id=step.id, workflow_id="wf-llm-contract-repair-001", message="ok")
+    )
+    ctx.contract_discovery.get_workflow_inputs.return_value = None
+    ctx.agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="你是产品分析助手",
+            user_prompt="请输出 product goal contract",
+            temperature=0.2,
+            max_tokens=512,
+        )
+    )
+    ctx.token_manager.issue_token.return_value = None
+    ctx.llm_config_loader = MagicMock()
+    ctx.llm_config_loader.get_default_profile.return_value = "huawei_deepseek"
+    ctx.event_log.log_step_completed = MagicMock()
+    ctx.event_log._compute_hash = MagicMock(return_value="hash")
+    ctx.file_output_handler.handle = AsyncMock(return_value=[])
+    ctx.verifier_engine.run = AsyncMock(return_value=[])
+
+    llm_executor = MagicMock()
+    llm_executor.execute = AsyncMock(
+        side_effect=[
+            {
+                "status": "completed",
+                "generated_text": json.dumps(
+                    {
+                        "contract_type": "product-goal-contract",
+                        "requirement_overview": {"description": "待确认"},
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+            {
+                "status": "completed",
+                "generated_text": json.dumps(
+                    {
+                        "contract_type": "product-goal-contract",
+                        "requirement_overview": {
+                            "description": "支持 llm 执行器作为结构化后端。",
+                            "target_users": "LEE 工作流维护者",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ]
+    )
+    ctx.executor_factory.create = MagicMock(return_value=llm_executor)
+
+    result = await runner.execute("wf-llm-contract-repair-001", step, ctx)
+
+    assert result.status == "success"
+    assert llm_executor.execute.await_count == 2
+    completed_output = ctx.state_machine.complete_step.await_args.args[2]
+    assert completed_output["contract_repair_retry"] is True
+    assert "fallback_triggered" not in completed_output
+
+
+def test_qwen_fallback_target_ignores_coding_fallback_and_uses_non_coding_default(tmp_path):
+    config_dir = tmp_path / ".lee"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text(
+        "executor:\n  default_type: llm\n  coding_fallback: kimi\n",
+        encoding="utf-8",
+    )
+
+    assert LLMRunner._resolve_qwen_fallback_target(str(tmp_path)) == "llm"
+
+
+def test_qwen_fallback_target_disables_unsafe_coding_executor_default(tmp_path):
+    config_dir = tmp_path / ".lee"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text(
+        "executor:\n  default_type: kimi\n  coding_fallback: kimi\n",
+        encoding="utf-8",
+    )
+
+    assert LLMRunner._resolve_qwen_fallback_target(str(tmp_path)) is None
+
+
+@pytest.mark.asyncio
+async def test_llm_runner_qwen_fallback_to_llm_uses_default_non_qwen_profile(runner, ctx, temp_project_root, monkeypatch):
+    schema_path = temp_project_root / "product-goal.schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "required": ["contract_type", "requirement_overview"],
+                "properties": {
+                    "contract_type": {"type": "string"},
+                    "requirement_overview": {
+                        "type": "object",
+                        "required": ["description", "target_users"],
+                        "properties": {
+                            "description": {"type": "string"},
+                            "target_users": {"type": "string"},
+                        },
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    step = SimpleNamespace(
+        id="source_normalization",
+        agent_id="agent.analysis.product_goal",
+        executor_type="llm",
+        config={"output_contract": str(schema_path)},
+        outputs=[],
+    )
+    instance = SimpleNamespace(
+        data={"executor_override": "qwen_chat", "run_id": "run-qwen-llm-fallback-001"},
+        template_id="workflow.product.task.raw_to_src",
+    )
+    ctx.store.get_workflow = AsyncMock(return_value=instance)
+    ctx.store.create_task_execution = AsyncMock()
+    ctx.store.update_task_execution = AsyncMock()
+    ctx.state_machine.fail_step = AsyncMock()
+    ctx.state_machine.complete_step = AsyncMock(
+        return_value=StepResult(status="success", step_id=step.id, workflow_id="wf-qwen-llm-fallback-001", message="ok")
+    )
+    ctx.contract_discovery.get_workflow_inputs.return_value = None
+    ctx.agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="你是产品分析助手",
+            user_prompt="请输出 product goal contract",
+            temperature=0.2,
+            max_tokens=512,
+        )
+    )
+    ctx.token_manager.issue_token.return_value = None
+    ctx.llm_config_loader = MagicMock()
+    ctx.llm_config_loader.get_default_profile.return_value = "huawei_deepseek"
+    ctx.event_log.log_step_completed = MagicMock()
+    ctx.event_log._compute_hash = MagicMock(return_value="hash")
+    ctx.file_output_handler.handle = AsyncMock(return_value=[])
+    ctx.verifier_engine.run = AsyncMock(return_value=[])
+
+    qwen_executor = MagicMock()
+    qwen_executor.execute = AsyncMock(
+        side_effect=[
+            {
+                "status": "completed",
+                "generated_text": json.dumps(
+                    {
+                        "contract_type": "product-goal-contract",
+                        "requirement_overview": {"description": "待确认"},
+                    },
+                    ensure_ascii=False,
+                ),
+                "structured_payload": {
+                    "contract_type": "product-goal-contract",
+                    "requirement_overview": {"description": "待确认"},
+                },
+            },
+            {
+                "status": "completed",
+                "generated_text": json.dumps(
+                    {
+                        "contract_type": "product-goal-contract",
+                        "requirement_overview": {"description": "待确认"},
+                    },
+                    ensure_ascii=False,
+                ),
+                "structured_payload": {
+                    "contract_type": "product-goal-contract",
+                    "requirement_overview": {"description": "待确认"},
+                },
+            },
+        ]
+    )
+    llm_executor = MagicMock()
+    llm_executor.execute = AsyncMock(
+        return_value={
+            "status": "completed",
+            "generated_text": json.dumps(
+                {
+                    "contract_type": "product-goal-contract",
+                    "requirement_overview": {
+                        "description": "支持 qwen_chat 作为备用对话执行器。",
+                        "target_users": "LEE 工作流维护者",
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            "structured_payload": {
+                "contract_type": "product-goal-contract",
+                "requirement_overview": {
+                    "description": "支持 qwen_chat 作为备用对话执行器。",
+                    "target_users": "LEE 工作流维护者",
+                },
+            },
+        }
+    )
+    ctx.executor_factory.create = MagicMock(side_effect=[qwen_executor, llm_executor])
+    monkeypatch.setattr(LLMRunner, "_resolve_qwen_fallback_target", classmethod(lambda cls, project_root: "llm"))
+
+    result = await runner.execute("wf-qwen-llm-fallback-001", step, ctx)
+
+    assert result.status == "success"
+    assert ctx.executor_factory.create.call_args_list[0].kwargs["profile"] == "qwen"
+    assert ctx.executor_factory.create.call_args_list[1].args[0] == "llm"
+    assert ctx.executor_factory.create.call_args_list[1].kwargs["profile"] == "huawei_deepseek"
+
+
+@pytest.mark.asyncio
 async def test_llm_runner_bridges_agent_step_to_kimi_code_executor(runner, ctx, temp_project_root):
     step = SimpleNamespace(
         id="source_normalization",
@@ -1149,6 +1749,37 @@ def test_build_executor_input_bridges_agent_step_to_kimi(temp_project_root, runn
     assert input_data["token_context"] == "encoded-token"
 
 
+def test_build_executor_input_adapts_qwen_prompt_for_structured_output(runner, ctx):
+    instance = SimpleNamespace(data={"run_id": "run-001"})
+    step = SimpleNamespace(
+        id="raw_input_intake",
+        agent_id="agent.analysis.product_goal",
+        config={},
+    )
+    agent_ctx = SimpleNamespace(
+        system_prompt="Role: 产品目标分析师",
+        user_prompt="# Task\n分析需求\n\n## Output Contract\nReturn one machine-readable JSON object only.",
+        temperature=0.2,
+        max_tokens=1200,
+    )
+    ctx.token_manager.encode_token_for_context.return_value = "encoded-token"
+
+    input_data = runner._build_executor_input(
+        executor_type="qwen",
+        step=step,
+        ctx=ctx,
+        instance=instance,
+        workflow_id="wf-001",
+        agent_ctx=agent_ctx,
+        step_token="raw-token",
+    )
+
+    assert "workflow step" in input_data["system_message"]
+    assert "Output exactly one machine-readable JSON or YAML object." in input_data["prompt"]
+    assert "Do not introduce yourself" in input_data["prompt"]
+    assert input_data["token_context"] == "encoded-token"
+
+
 def test_claude_code_input_defaults_silence_timeout_to_executor_default(temp_project_root):
     agent_ctx = SimpleNamespace(
         system_prompt="system rules",
@@ -1170,7 +1801,7 @@ def test_claude_code_input_defaults_silence_timeout_to_executor_default(temp_pro
 
 
 @pytest.mark.asyncio
-async def test_claude_code_runner_builds_llm_prompt_for_qwen_override(temp_project_root, ctx):
+async def test_claude_code_runner_rejects_qwen_override_for_code_steps(temp_project_root, ctx):
     runner = ClaudeCodeRunner()
     step = SimpleNamespace(
         id="feat_boundary_design",
@@ -1202,15 +1833,18 @@ async def test_claude_code_runner_builds_llm_prompt_for_qwen_override(temp_proje
     executor.execute = AsyncMock(return_value={"status": "failed", "error": "boom"})
     ctx.executor_factory.create.return_value = executor
 
+    ctx.resolve_workdir = MagicMock(return_value=str(temp_project_root))
+
     result = await runner.execute("wf-qwen-001", step, ctx)
 
     assert result.status == "failed"
     execution = ctx.store.create_task_execution.await_args.args[0]
-    assert execution.executor_type == "qwen"
-    assert execution.input_data["prompt"] == "拆解 EPIC"
-    assert execution.input_data["system_message"] == "system rules"
-    assert "goal" not in execution.input_data
-    assert "workspace" not in execution.input_data
+    assert execution.executor_type == "claude_code"
+    assert execution.input_data["goal"] == "拆解 EPIC"
+    assert execution.input_data["workspace"] == str(temp_project_root)
+    assert execution.input_data["system_prompt_extra"] == "system rules"
+    assert "prompt" not in execution.input_data
+    assert "system_message" not in execution.input_data
 
 
 @pytest.mark.asyncio

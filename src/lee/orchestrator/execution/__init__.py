@@ -9,6 +9,7 @@ from lee.orchestrator.execution.gate_api import GateAPI
 from lee.orchestrator.execution.executors import ExecutorFactory, BaseExecutor
 from lee.orchestrator.execution.langgraph_executor import LangGraphExecutor, register_langgraph_executor
 from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor, register_claude_code_executor
+from lee.orchestrator.execution.qwen_executor import QwenExecutor, register_qwen_executor
 
 # Plan 和 Instance（新增）
 from lee.orchestrator.execution.plan_agent import PlanAgent, PlanConfig, PlanResult, create_plan
@@ -46,6 +47,8 @@ __all__ = [
     "register_langgraph_executor",
     "ClaudeCodeExecutor",
     "register_claude_code_executor",
+    "QwenExecutor",
+    "register_qwen_executor",
     # Plan 和 Instance
     "PlanAgent",
     "PlanConfig",
@@ -91,3 +94,4 @@ __all__ = [
 # 自动注册执行器
 register_langgraph_executor()
 register_claude_code_executor()
+register_qwen_executor()

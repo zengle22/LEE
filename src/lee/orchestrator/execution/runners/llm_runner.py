@@ -21,6 +21,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from lee.orchestrator.config import is_coding_executor_type, normalize_executor_type_name
+from lee.orchestrator.config_loader import load_config
 from lee.orchestrator.storage.models import (
     TaskExecution,
     TaskExecutionStatus,
@@ -167,6 +169,422 @@ class LLMRunner(StepRunnerBase):
         "written_files",
         "outputs",
     }
+
+    @staticmethod
+    def _is_qwen_chat_executor(executor_type: Any) -> bool:
+        return str(executor_type or "").strip().lower() in {"qwen", "qwen_chat"}
+
+    @staticmethod
+    def _is_coding_executor(executor_type: Any) -> bool:
+        return str(executor_type or "").strip().lower() in {"claude_code", "codex", "kimi"}
+
+    @staticmethod
+    def _contains_cjk(text: Any) -> bool:
+        if not isinstance(text, str):
+            return False
+        return re.search(r"[\u3400-\u9fff]", text) is not None
+
+    @staticmethod
+    def _extract_markdown_section(text: Any, heading: str) -> str:
+        source = str(text or "")
+        if not source.strip() or not heading:
+            return ""
+        pattern = re.compile(
+            rf"(?ms)^##\s+{re.escape(heading)}\s*\n(.*?)(?=^##\s+|\Z)"
+        )
+        match = pattern.search(source)
+        return match.group(1).strip() if match else ""
+
+    @staticmethod
+    def _truncate_text(text: Any, limit: int) -> str:
+        value = str(text or "").strip()
+        if len(value) <= limit:
+            return value
+        return value[: max(0, limit - 4)].rstrip() + "\n..."
+
+    @classmethod
+    def _adapt_qwen_structured_prompt(cls, prompt: Any) -> str:
+        source = str(prompt or "").strip()
+        if not source:
+            return source
+
+        sections: List[str] = []
+        task_match = re.search(r"(?ms)^#\s+Task\s*\n(.*?)(?=^##\s+|\Z)", source)
+        task_body = task_match.group(1).strip() if task_match else ""
+        if task_body:
+            sections.append("## Task\n" + cls._truncate_text(task_body, 800))
+
+        for heading, limit in (
+            ("Responsibility", 400),
+            ("Input Data", 1800),
+            ("Upstream Step Outputs", 1800),
+            ("Output Contract", 2200),
+            ("Instructions", 800),
+        ):
+            body = cls._extract_markdown_section(source, heading)
+            if body:
+                sections.append(f"## {heading}\n{cls._truncate_text(body, limit)}")
+
+        compact_body = "\n\n".join(sections) if sections else cls._truncate_text(source, 3200)
+        return "\n".join(
+            [
+                "Return the required result now.",
+                "Rules:",
+                "- Output exactly one machine-readable JSON or YAML object.",
+                "- Do not introduce yourself, list capabilities, ask what the user needs, or add commentary.",
+                "- Do not use Markdown code fences unless the prompt explicitly requires file sections.",
+                "- If the input is incomplete, preserve uncertainty inside the structured payload instead of asking follow-up questions.",
+                "",
+                compact_body,
+            ]
+        ).strip()
+
+    @classmethod
+    def _adapt_qwen_input_data(cls, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        adapted = dict(input_data)
+        system_message = str(adapted.get("system_message") or "").strip()
+        strict_system = "\n".join(
+            [
+                "You are executing a workflow step and must return the requested structured payload immediately.",
+                "Never answer with greetings, capability descriptions, or clarification questions.",
+                "Prefer strict JSON output when possible.",
+            ]
+        )
+        adapted["system_message"] = (
+            f"{system_message}\n\n{strict_system}".strip()
+            if system_message
+            else strict_system
+        )
+        adapted["prompt"] = cls._adapt_qwen_structured_prompt(adapted.get("prompt"))
+        return adapted
+
+    @classmethod
+    def _build_qwen_repair_input(
+        cls,
+        *,
+        input_data: Dict[str, Any],
+        llm_output: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        original_prompt = str(input_data.get("prompt") or "")
+        previous_answer = cls._truncate_text(llm_output.get("generated_text") or "", 2400)
+        repair_prompt = "\n".join(
+            [
+                "Your previous answer did not satisfy the required structured output contract.",
+                "Return exactly one machine-readable JSON or YAML object now.",
+                "Do not ask for clarification. Do not introduce yourself. Do not describe capabilities.",
+                "Do not use Markdown code fences.",
+                "",
+                "## Original Task",
+                cls._adapt_qwen_structured_prompt(original_prompt),
+                "",
+                "## Previous Invalid Answer",
+                previous_answer or "<empty>",
+            ]
+        ).strip()
+        repaired = dict(input_data)
+        repaired["prompt"] = repair_prompt
+        return repaired
+
+    @classmethod
+    async def _retry_same_executor_output(
+        cls,
+        *,
+        executor: Any,
+        input_data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        retry_executor = AsyncRetryExecutor(policy=DEFAULT_RETRY_POLICY)
+        retry_result = await retry_executor.execute(executor.execute, input_data)
+        if not retry_result.success:
+            return None
+        repaired_output = retry_result.result or {}
+        if repaired_output.get("status") == "failed":
+            return None
+        return repaired_output
+
+    @classmethod
+    def _resolve_qwen_fallback_target(cls, project_root: Optional[str]) -> Optional[str]:
+        try:
+            config = load_config(project_root or ".")
+        except Exception:
+            return None
+        candidate = normalize_executor_type_name(getattr(config.executor, "default_type", None))
+        if not candidate or cls._is_qwen_chat_executor(candidate) or is_coding_executor_type(candidate):
+            return None
+        return candidate
+
+    @classmethod
+    def _resolve_code_executor_type(
+        cls,
+        *,
+        instance_data: Optional[Dict[str, Any]],
+        project_root: Optional[str],
+    ) -> str:
+        override = ""
+        if isinstance(instance_data, dict):
+            override = str(instance_data.get("executor_override") or "").strip().lower()
+        if cls._is_coding_executor(override):
+            return override
+        try:
+            config = load_config(project_root or ".")
+        except Exception:
+            return "claude_code"
+        configured = str(getattr(config.executor, "coding_executor", "") or "").strip().lower()
+        if cls._is_coding_executor(configured):
+            return configured
+        return "claude_code"
+
+    @classmethod
+    async def _execute_fallback_executor(
+        cls,
+        *,
+        fallback_executor_type: str,
+        selected_profile: str,
+        step,
+        ctx: RunnerContext,
+        input_data: Dict[str, Any],
+        workflow_id: str,
+        execution_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        fallback_profile = cls._resolve_fallback_profile(
+            fallback_executor_type=fallback_executor_type,
+            selected_profile=selected_profile,
+            ctx=ctx,
+        )
+        if fallback_executor_type == "llm" and not fallback_profile:
+            return None
+        fallback_executor = ctx.executor_factory.create(
+            fallback_executor_type,
+            profile=fallback_profile,
+            agent_id=step.agent_id or "",
+        )
+        retry_executor = AsyncRetryExecutor(policy=DEFAULT_RETRY_POLICY)
+        fallback_retry_result = await retry_executor.execute(fallback_executor.execute, input_data)
+        if not fallback_retry_result.success:
+            return None
+        fallback_output = fallback_retry_result.result or {}
+        if fallback_output.get("status") == "failed":
+            return None
+        return fallback_output
+
+    @classmethod
+    def _resolve_fallback_profile(
+        cls,
+        *,
+        fallback_executor_type: str,
+        selected_profile: str,
+        ctx: RunnerContext,
+    ) -> Optional[str]:
+        if fallback_executor_type == "kimi":
+            return "kimi"
+        if fallback_executor_type == "llm":
+            default_profile = (
+                ctx.llm_config_loader.get_default_profile()
+                if hasattr(ctx, "llm_config_loader")
+                else None
+            )
+            normalized = str(default_profile or "").strip().lower()
+            if normalized in {"qwen", "qwen_chat"}:
+                return None
+            return default_profile or None
+        return os.getenv("LLM_PROFILE") or selected_profile
+
+    @classmethod
+    async def _maybe_fallback_qwen_output(
+        cls,
+        *,
+        executor_type: str,
+        executor: Any,
+        step,
+        ctx: RunnerContext,
+        instance,
+        workflow_id: str,
+        execution_id: str,
+        input_data: Dict[str, Any],
+        llm_output: Dict[str, Any],
+        selected_profile: str,
+    ) -> Dict[str, Any]:
+        if not cls._is_qwen_chat_executor(executor_type):
+            return llm_output
+
+        source_prompt = "\n".join(
+            part for part in [
+                str(input_data.get("prompt") or ""),
+                str(input_data.get("goal") or ""),
+                str(input_data.get("system_message") or ""),
+            ]
+            if part
+        )
+        if not cls._contains_cjk(source_prompt):
+            return llm_output
+
+        generated_text = str(llm_output.get("generated_text") or "").strip()
+        structured_payload = llm_output.get("structured_payload")
+        should_fallback = (
+            llm_output.get("status") == "failed"
+            or not generated_text
+            or not isinstance(structured_payload, dict)
+        )
+        if should_fallback:
+            repaired_output = await cls._retry_same_executor_output(
+                executor=executor,
+                input_data=cls._build_qwen_repair_input(
+                    input_data=input_data,
+                    llm_output=llm_output,
+                ),
+            )
+            if repaired_output:
+                repaired_text = str(repaired_output.get("generated_text") or "").strip()
+                repaired_payload = repaired_output.get("structured_payload")
+                if not isinstance(repaired_payload, dict):
+                    repaired_payload = cls._parse_structured_output_if_possible(repaired_text)
+                    if isinstance(repaired_payload, dict):
+                        repaired_output = dict(repaired_output)
+                        repaired_output["structured_payload"] = repaired_payload
+                if repaired_text and isinstance(repaired_payload, dict):
+                    repaired_output["qwen_repair_retry"] = True
+                    repaired_output["qwen_initial_output"] = {
+                        "status": llm_output.get("status"),
+                        "generated_text": generated_text,
+                        "error": llm_output.get("error"),
+                    }
+                    return repaired_output
+        if not should_fallback:
+            return llm_output
+
+        fallback_target = cls._resolve_qwen_fallback_target(ctx.project_root)
+        if not fallback_target:
+            return llm_output
+
+        fallback_reason = "qwen_quality_regression"
+        fallback_output = await cls._execute_fallback_executor(
+            fallback_executor_type=fallback_target,
+            selected_profile=selected_profile,
+            step=step,
+            ctx=ctx,
+            input_data=input_data,
+            workflow_id=workflow_id,
+            execution_id=execution_id,
+        )
+        if not fallback_output:
+            return llm_output
+
+        fallback_output["fallback_triggered"] = True
+        fallback_output["fallback_from"] = "qwen_chat"
+        fallback_output["fallback_to"] = fallback_target
+        fallback_output["fallback_reason"] = fallback_reason
+        fallback_output["fallback_source_output"] = {
+            "status": llm_output.get("status"),
+            "generated_text": generated_text,
+            "error": llm_output.get("error"),
+        }
+        return fallback_output
+
+    async def _recover_llm_contract_mismatch(
+        self,
+        *,
+        executor_type: str,
+        executor: Any,
+        step,
+        ctx: RunnerContext,
+        workflow_id: str,
+        execution_id: str,
+        input_data: Dict[str, Any],
+        selected_profile: str,
+        generated_text: str,
+        business_output: Any,
+        structured_payload: Any,
+        validation_result: Any,
+    ) -> Optional[Dict[str, Any]]:
+        if self._is_coding_executor(executor_type):
+            return None
+        if validation_result is None or validation_result.passed:
+            return None
+
+        error_msg = (
+            f"Output schema validation failed: "
+            f"{validation_result.errors[0].message if validation_result.errors else 'unknown'}"
+        )
+        repaired = await self._attempt_schema_repair(
+            executor=executor,
+            executor_type=executor_type,
+            input_data=input_data,
+            step=step,
+            workflow_id=workflow_id,
+            validation_error=error_msg,
+            business_output=business_output,
+            structured_payload=structured_payload,
+        )
+        if repaired:
+            repaired_validation = self._validate_step_output(step, repaired["business_output"])
+            if not repaired_validation or repaired_validation.passed:
+                repaired_output = dict(repaired["output"])
+                repaired_output["contract_repair_retry"] = True
+                repaired_output["schema_repair_retry"] = True
+                if self._is_qwen_chat_executor(executor_type):
+                    repaired_output["qwen_contract_repair"] = True
+                return {
+                    "output": repaired_output,
+                    "business_output": repaired["business_output"],
+                    "structured_payload": repaired["structured_payload"],
+                    "generated_text": repaired_output.get("generated_text", generated_text),
+                    "validation_result": repaired_validation,
+                }
+
+        if not self._is_qwen_chat_executor(executor_type):
+            return None
+
+        fallback_target = self._resolve_qwen_fallback_target(ctx.project_root)
+        if not fallback_target:
+            return None
+
+        fallback_output = await self._execute_fallback_executor(
+            fallback_executor_type=fallback_target,
+            selected_profile=selected_profile,
+            step=step,
+            ctx=ctx,
+            input_data=input_data,
+            workflow_id=workflow_id,
+            execution_id=execution_id,
+        )
+        if not fallback_output:
+            return None
+
+        fallback_generated_text = fallback_output.get("generated_text", "") or ""
+        fallback_structured_payload = self._parse_structured_output_if_possible(fallback_generated_text)
+        fallback_business_output = self._extract_business_output_payload(
+            fallback_structured_payload,
+            fallback_generated_text,
+            step=step,
+            written_files=[],
+        )
+        fallback_business_output, fallback_structured_payload = self._normalize_business_payload(
+            step=step,
+            workflow_id=workflow_id,
+            business_output=fallback_business_output,
+            structured_payload=fallback_structured_payload,
+            instance_data=None,
+        )
+        fallback_validation = self._validate_step_output(step, fallback_business_output)
+        if fallback_validation and not fallback_validation.passed:
+            return None
+
+        fallback_output = dict(fallback_output)
+        fallback_output["fallback_triggered"] = True
+        fallback_output["fallback_from"] = "qwen_chat"
+        fallback_output["fallback_to"] = fallback_target
+        fallback_output["fallback_reason"] = "qwen_contract_validation_failed"
+        fallback_output["fallback_source_output"] = {
+            "generated_text": generated_text,
+            "business_output": business_output,
+            "validation_result": validation_result.to_dict() if hasattr(validation_result, "to_dict") else None,
+        }
+        return {
+            "output": fallback_output,
+            "business_output": fallback_business_output,
+            "structured_payload": fallback_structured_payload,
+            "generated_text": fallback_generated_text,
+            "validation_result": fallback_validation,
+        }
 
     @staticmethod
     def _resolve_step_timeout_seconds(input_data: Dict[str, Any]) -> int:
@@ -548,6 +966,8 @@ class LLMRunner(StepRunnerBase):
                 "temperature": agent_ctx.temperature,
                 "max_tokens": agent_ctx.max_tokens,
             }
+            if self._is_qwen_chat_executor(executor_type):
+                input_data = self._adapt_qwen_input_data(input_data)
 
         if step_token:
             input_data["token_context"] = ctx.token_manager.encode_token_for_context(step_token)
@@ -976,7 +1396,7 @@ class LLMRunner(StepRunnerBase):
             default_profile = ctx.llm_config_loader.get_default_profile() if hasattr(ctx, 'llm_config_loader') else "huawei_deepseek"
             selected_profile = (
                 instance.data.get("llm_profile")
-                or ("qwen" if executor_type == "qwen" else None)
+                or ("qwen" if self._is_qwen_chat_executor(executor_type) else None)
                 or ("kimi" if executor_type == "kimi" else None)
                 or os.getenv("LLM_PROFILE")
                 or default_profile
@@ -1032,6 +1452,18 @@ class LLMRunner(StepRunnerBase):
                 )
 
             llm_output = retry_result.result
+            llm_output = await self._maybe_fallback_qwen_output(
+                executor_type=executor_type,
+                executor=executor,
+                step=step,
+                ctx=ctx,
+                instance=instance,
+                workflow_id=workflow_id,
+                execution_id=execution_id,
+                input_data=input_data,
+                llm_output=llm_output,
+                selected_profile=selected_profile,
+            )
 
             # 检查 LLM 调用是否成功
             if llm_output.get("status") == "failed":
@@ -1137,6 +1569,27 @@ class LLMRunner(StepRunnerBase):
                 instance_data=instance.data,
             )
             validation_result = self._validate_step_output(step, business_output)
+            qwen_contract_recovery = await self._recover_llm_contract_mismatch(
+                executor_type=executor_type,
+                executor=executor,
+                step=step,
+                ctx=ctx,
+                workflow_id=workflow_id,
+                execution_id=execution_id,
+                input_data=input_data,
+                selected_profile=selected_profile,
+                generated_text=generated_text,
+                business_output=business_output,
+                structured_payload=structured_payload,
+                validation_result=validation_result,
+            )
+            if qwen_contract_recovery:
+                llm_output = qwen_contract_recovery["output"]
+                business_output = qwen_contract_recovery["business_output"]
+                structured_payload = qwen_contract_recovery["structured_payload"]
+                generated_text = qwen_contract_recovery["generated_text"]
+                validation_result = qwen_contract_recovery["validation_result"]
+
             if validation_result and not validation_result.passed:
                 strict = (step.config or {}).get("strict_output_validation", False)
                 if strict:
@@ -1332,6 +1785,20 @@ class LLMRunner(StepRunnerBase):
                     "stop_reason": llm_output.get("stop_reason"),
                 },
             }
+            for key in (
+                "contract_repair_retry",
+                "schema_repair_retry",
+                "qwen_contract_repair",
+                "qwen_repair_retry",
+                "fallback_triggered",
+                "fallback_from",
+                "fallback_to",
+                "fallback_reason",
+                "fallback_source_output",
+                "qwen_initial_output",
+            ):
+                if key in llm_output:
+                    output_data[key] = llm_output[key]
             output_data.update(
                 self._extract_declared_output_values(
                     step=step,
@@ -1340,6 +1807,10 @@ class LLMRunner(StepRunnerBase):
                     generated_text=generated_text,
                 )
             )
+            if isinstance(business_output, dict):
+                output_data["business_output"] = business_output
+            if isinstance(structured_payload, dict):
+                output_data["structured_payload"] = structured_payload
             if ssot_materialized:
                 output_data["ssot_materialized"] = ssot_materialized["outputs"]
             if spec_writeback:
@@ -6219,6 +6690,9 @@ class ClaudeCodeRunner(StepRunnerBase):
     _resolve_authoritative_input_value = classmethod(LLMRunner._resolve_authoritative_input_value.__func__)
     _extract_context_file_paths = classmethod(LLMRunner._extract_context_file_paths.__func__)
     _merge_forbidden_read_paths = classmethod(LLMRunner._merge_forbidden_read_paths.__func__)
+    _is_qwen_chat_executor = staticmethod(LLMRunner._is_qwen_chat_executor)
+    _is_coding_executor = staticmethod(LLMRunner._is_coding_executor)
+    _resolve_code_executor_type = classmethod(LLMRunner._resolve_code_executor_type.__func__)
 
     def _materialize_workspace_formal_ssot_markdown(self, *args, **kwargs):
         return LLMRunner._materialize_workspace_formal_ssot_markdown(*args, **kwargs)
@@ -6489,7 +6963,10 @@ class ClaudeCodeRunner(StepRunnerBase):
 
         # 3. 解析 executor_type：CLI 参数优先级最高
         # 对于 claude_code 步骤，executor_override 可能指定为 "codex"
-        executor_type = instance.data.get("executor_override") or "claude_code"
+        executor_type = self._resolve_code_executor_type(
+            instance_data=instance.data,
+            project_root=ctx.project_root,
+        )
 
         # 4. 构建执行输入
         claude_config = step.config.get("claude_code", {}) if step.config else {}
@@ -6503,7 +6980,7 @@ class ClaudeCodeRunner(StepRunnerBase):
         if success_criteria.get("require_new_commit"):
             head_before = self._git_head(workspace)
 
-        if executor_type in ("qwen", "llm"):
+        if executor_type == "llm":
             input_data = self._build_llm_alias_input_data(agent_ctx=agent_ctx)
         else:
             input_data = self._build_claude_code_input_data(
@@ -6536,7 +7013,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             input_data["token_context"] = ctx.token_manager.encode_token_for_context(step_token)
 
         # Evidence 目录仅适用于 code-style 执行器
-        if executor_type not in ("qwen", "llm"):
+        if executor_type != "llm":
             run_id = instance.data.get("run_id", workflow_id)
             evidence_base = str(
                 Path(workspace) / ".workflow" / "claude-code" / f"{run_id}-{step.id}"
