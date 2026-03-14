@@ -21,12 +21,26 @@ contracts:
   input_schema:
     type: object
     required:
+      - release_ref
+      - test_plan_id
+      - task_refs
       - test_run_id
       - l3_results
       - exit_decision
       - confirmed_bugs
       - env_issues
     properties:
+      release_ref:
+        type: string
+        description: "Release ID"
+      test_plan_id:
+        type: string
+        description: "Test Plan ID"
+      task_refs:
+        type: array
+        description: "Task IDs covered by this retrospective"
+        items:
+          type: string
       test_run_id:
         type: string
         description: "Test Run ID"
@@ -114,14 +128,19 @@ prompting:
     - "记录成功经验（可复用的）"
     - "创建具体的改进建议（有负责人和截止日期）"
     - "提炼经验教训"
+    - "保留 release_ref / test_plan_id / task_refs 的 canonical delivery trace"
     - "输出符合 retrospective contract 的结构化数据"
 
   output_format:
-    - yaml: "retrospective.yaml"
-    - markdown: "retrospective.md"
+    - yaml: "spec/testing/reports/{release_ref}-retrospective.yaml"
+    - markdown: "spec/testing/reports/{release_ref}-retrospective.md"
 
   examples:
     - input:
+        release_ref: "REL-1.4.0"
+        test_plan_id: "TESTPLAN-REL-1.4.0"
+        task_refs:
+          - "TASK-TESTPLAN-REL-1.4.0-001"
         l3_results:
           ts_auth:
             status: "completed"
@@ -139,6 +158,10 @@ prompting:
             affected: ["ts_payment"]
       output:
         retrospective:
+          release_ref: "REL-1.4.0"
+          test_plan_id: "TESTPLAN-REL-1.4.0"
+          task_refs:
+            - "TASK-TESTPLAN-REL-1.4.0-001"
           summary:
             overall_assessment: "good"
             exit_decision: "conditional_pass"

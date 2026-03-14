@@ -10,11 +10,15 @@ description: |
   - TSE 是一次性的执行实例
   - 用例动态生成（ephemeral）
   - Bug、日志、结论都挂在 TSE 上
+  - Canonical trace 必须保留 `release_ref -> test_plan_id -> task_ref -> test_set_id`
 
 schema:
   type: object
   required:
     - tse_id
+    - release_ref
+    - test_plan_id
+    - task_ref
     - test_set_id
     - test_run_id
 
@@ -27,6 +31,24 @@ schema:
       examples:
         - "TSE-TR-2026-02-07-TS-DAILY-PLAN"
         - "TSE-TR-2026-02-07-TS-SMOKE"
+
+    release_ref:
+      type: string
+      description: "对应的 Release ID"
+      examples:
+        - "REL-1.4.0"
+
+    test_plan_id:
+      type: string
+      description: "对应的 Test Plan ID"
+      examples:
+        - "TESTPLAN-REL-1.4.0"
+
+    task_ref:
+      type: string
+      description: "触发本次执行的 Task ID"
+      examples:
+        - "TASK-TESTPLAN-REL-1.4.0-001"
 
     test_set_id:
       type: string
@@ -275,6 +297,9 @@ examples:
   - name: "每日训练计划 TSE"
     data:
       tse_id: "TSE-TR-2026-02-07-TS-DAILY-PLAN"
+      release_ref: "REL-1.4.0"
+      test_plan_id: "TESTPLAN-REL-1.4.0"
+      task_ref: "TASK-TESTPLAN-REL-1.4.0-001"
       test_set_id: "TS-DAILY-PLAN"
       test_run_id: "TR-2026-02-07-rc1"
 

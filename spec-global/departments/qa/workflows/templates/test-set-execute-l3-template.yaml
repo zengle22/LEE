@@ -19,6 +19,13 @@ description: |
   - Runtime actions live in `stages[].steps` (execution layer).
   - This eliminates root-level steps/stages split across templates.
 
+  Canonical Delivery Context:
+  - This L3 workflow is executed under the canonical delivery chain
+    `RELEASE -> TESTPLAN -> TASK -> TESTSET`
+  - `test_run_id` remains the runtime execution anchor
+  - `release_ref`, `test_plan_id`, `task_ref`, and `testset_ref` must travel with
+    runtime context so TSE, BUG, and downstream REPORT outputs remain traceable
+
 # Execution mode configuration (kept as-is)
 execution_mode:
   description: "Controls behavior_compliance enforcement level"
@@ -62,7 +69,7 @@ stages:
         mandatory: true
         depends_on: []
         outputs:
-          - path: "{{ tests_dir }}/qa/test-runs/{{ test_run_id }}/cases.yaml"
+          - path: "spec/testing/evidence/{{ test_run_id }}/cases.yaml"
             type: file
             format: yaml
             description: "Generated test cases"
@@ -77,7 +84,7 @@ stages:
         mandatory: true
         depends_on: [case_generation]
         outputs:
-          - path: "{{ tests_dir }}/qa/test-runs/{{ test_run_id }}/scripts/"
+          - path: "spec/testing/evidence/{{ test_run_id }}/scripts/"
             type: dir
             format: python
             description: "Executable test scripts"
@@ -106,12 +113,12 @@ stages:
             - fabricate_errors
             - mock_execution
         outputs:
-          - path: "{{ tests_dir }}/qa/test-runs/{{ test_run_id }}/runner-output.json"
+          - path: "spec/testing/evidence/{{ test_run_id }}/runner-output.json"
             type: file
             format: json
             description: "Test runner output"
             required: true
-          - path: "{{ tests_dir }}/qa/test-runs/{{ test_run_id }}/evidence/"
+          - path: "spec/testing/evidence/{{ test_run_id }}/bundle/"
             type: dir
             format: mixed
             description: "Evidence bundle directory"
@@ -157,7 +164,7 @@ stages:
             fail_on_crash: true
             fail_on_timeout: true
         outputs:
-          - path: "{{ tests_dir }}/qa/test-runs/{{ test_run_id }}/compliance-result.json"
+          - path: "spec/testing/evidence/{{ test_run_id }}/compliance-result.json"
             type: file
             format: json
             description: "Compliance check result"
@@ -192,7 +199,7 @@ stages:
             - modify_evidence
             - fabricate_evidence
         outputs:
-          - path: "{{ tests_dir }}/qa/test-runs/{{ test_run_id }}/results.yaml"
+          - path: "spec/testing/evidence/{{ test_run_id }}/results.yaml"
             type: file
             format: yaml
             description: "Test results with pass/fail judgment"
@@ -209,7 +216,7 @@ stages:
         mandatory: true
         depends_on: [result_judgment]
         outputs:
-          - path: "{{ tests_dir }}/qa/test-runs/{{ test_run_id }}/tse.yaml"
+          - path: "spec/testing/evidence/{{ test_run_id }}/tse.yaml"
             type: file
             format: yaml
             description: "Test Set Execution file (TSE)"
@@ -226,7 +233,7 @@ stages:
         depends_on: [tse_assembly]
         condition: "fail_count > 0"
         outputs:
-          - path: "{{ tests_dir }}/qa/bugs/{{ test_run_id }}/"
+          - path: "spec/testing/bugs/{{ test_run_id }}/"
             type: dir
             format: yaml
             description: "Bug drafts for failed cases"
@@ -346,21 +353,21 @@ observability:
     - name: l3_execution_duration
       type: histogram
       description: "L3 workflow execution duration in seconds"
-      labels: [test_set_id, status]
+      labels: [release_ref, test_plan_id, task_ref, test_set_id, status]
       buckets: [1, 5, 10, 30, 60, 120, 300]
     - name: compliance_check_duration
       type: histogram
       description: "Behavior compliance check duration"
-      labels: [check_id, result]
+      labels: [release_ref, test_plan_id, check_id, result]
       buckets: [0.1, 0.5, 1, 5, 10]
     - name: invalid_run_total
       type: counter
       description: "Total number of invalid runs"
-      labels: [invalid_run_reason, test_set_id, execution_mode]
+      labels: [release_ref, test_plan_id, task_ref, invalid_run_reason, test_set_id, execution_mode]
     - name: evidence_bundle_size
       type: histogram
       description: "Evidence bundle size in bytes"
-      labels: [case_level]
+      labels: [release_ref, test_plan_id, test_set_id, case_level]
       buckets: [1024, 10240, 102400, 1048576]
   tracing:
     description: "Distributed tracing spans for L3 workflow"
@@ -369,12 +376,12 @@ observability:
         description: "Full L3 workflow execution"
         start_step: case_generation
         end_step: bug_drafting
-        attributes: [test_set_id, environment]
+        attributes: [release_ref, test_plan_id, task_ref, test_set_id, environment]
       - name: compliance_validation
         description: "Behavior compliance check"
         start_step: behavior_compliance
         end_step: result_judgment
-        attributes: [compliance_status, violations_count]
+        attributes: [release_ref, test_plan_id, test_set_id, compliance_status, violations_count]
 
 # Human gates configuration
 human_gates:
@@ -395,7 +402,11 @@ instance_schema:
     - parent_l2_id
     - parent_phase_id
   context_fields:
+    - release_ref
+    - test_plan_id
+    - task_ref
     - test_run_id
+    - testset_ref
     - test_set_id
     - test_set_definition
     - build_version
@@ -405,6 +416,9 @@ instance_schema:
     - dependency_results
     - execution_mode
   output_fields:
+    - release_ref
+    - test_plan_id
+    - task_ref
     - test_set_id
     - status
     - invalid_run_reason

@@ -8,8 +8,9 @@ from scripts.git_ssot_hook_checks import (
 
 def test_is_ssot_related_path_detects_formal_ssot_and_runtime_paths():
     assert is_ssot_related_path("spec/delivery/releases/REL-1.4.0__march.md")
-    assert is_ssot_related_path("tests/bugs/BUG-FEAT-001-001__bug.md")
-    assert is_ssot_related_path("docs/reports/release/REPORT-REL-1.4.0-RELEASE-001__report.md")
+    assert is_ssot_related_path("spec/testing/bugs/BUG-FEAT-001-001__bug.md")
+    assert is_ssot_related_path("spec/testing/reports/REPORT-REL-1.4.0-RELEASE-001__report.md")
+    assert is_ssot_related_path("spec/testing/evidence/EVI-FEAT-001-001__evidence.md")
     assert is_ssot_related_path("src/lee/orchestrator/execution/artifacts/ssot_service.py")
     assert not is_ssot_related_path("README.md")
 
@@ -44,7 +45,8 @@ def test_collect_release_ids_reads_release_front_matter(tmp_path):
 
 def test_is_formal_ssot_markdown_path_only_matches_managed_markdown():
     assert is_formal_ssot_markdown_path("spec/requirements/features/FEAT-001__demo.md")
-    assert is_formal_ssot_markdown_path("tests/bugs/BUG-FEAT-001-001__bug.md")
+    assert is_formal_ssot_markdown_path("spec/testing/bugs/BUG-FEAT-001-001__bug.md")
+    assert is_formal_ssot_markdown_path("spec/testing/reports/REPORT-REL-1.4.0-TEST-001__report.md")
     assert not is_formal_ssot_markdown_path("src/lee/orchestrator/execution/artifacts/ssot_service.py")
     assert not is_formal_ssot_markdown_path(".github/workflows/pr-check.yml")
 

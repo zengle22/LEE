@@ -1,15 +1,118 @@
-# 退出评估器 Spec
-# 自动生成的存根 — 需完善 prompt 和具体能力描述
+# Exit Evaluator Agent v1.0
+# L2 阶段：基于 canonical REPORT 与 Bug Summary 生成退出评估
 
 kind: agent
 version: 1.0
 
 id: agent.qa.exit_evaluator
-name: "退出评估器"
-description: "测试退出评估"
-department: qa
+name: Exit Evaluator
+description: >
+  L2 阶段 Agent，基于 canonical Test Report、Bug Summary 与交付链路上下文
+  评估测试是否满足退出条件，并给出 pass / conditional_pass / fail 结论。
 
-role: |
-  负责评估测试执行是否满足退出条件
+owner: qa-governance
+tags: [agent, qa, exit-evaluation, l2]
 
-capabilities: []
+contracts:
+  input_schema:
+    type: object
+    required:
+      - release_ref
+      - test_plan_id
+      - task_refs
+      - test_report
+      - bug_summary
+    properties:
+      release_ref:
+        type: string
+        description: "Release ID"
+      test_plan_id:
+        type: string
+        description: "Test Plan ID"
+      task_refs:
+        type: array
+        description: "Task IDs covered by the exit evaluation"
+        items:
+          type: string
+      test_report:
+        type: object
+        description: "Canonical test report payload, preferably sourced from spec/testing/reports/"
+      bug_summary:
+        type: object
+        description: "Aggregated canonical bug summary for this release/test plan"
+      test_run:
+        type: object
+        description: "Legacy compatibility input when runtime still carries test_run"
+      l3_results:
+        type: object
+        description: "Optional L3 aggregation for supporting evidence"
+
+  output_schema:
+    type: object
+    required:
+      - exit_decision
+    properties:
+      exit_decision:
+        type: object
+        required:
+          - decision
+          - summary
+        properties:
+          decision:
+            type: string
+            enum: [pass, conditional_pass, fail]
+          summary:
+            type: string
+          conditions:
+            type: array
+            items:
+              type: string
+          blocking_reasons:
+            type: array
+            items:
+              type: string
+          source_report_id:
+            type: string
+          release_ref:
+            type: string
+          test_plan_id:
+            type: string
+          task_refs:
+            type: array
+            items:
+              type: string
+
+persona:
+  role: "QA Lead / Release Gate Owner"
+  style: "严谨、风险导向、明确结论"
+  tone: professional
+
+policy:
+  quality_bar:
+    must_have:
+      - "结论必须基于测试报告与缺陷汇总"
+      - "conditional_pass 必须附带明确条件"
+      - "fail 必须列出阻塞原因"
+      - "保留 release_ref / test_plan_id / task_refs trace"
+
+tools:
+  - skill.file.write
+
+prompting:
+  system: |
+    You are an Exit Evaluator. Your job is to:
+    1. Review the canonical QA report and aggregated bug summary.
+    2. Decide whether this release may exit test with pass / conditional_pass / fail.
+    3. Preserve canonical delivery trace via release_ref / test_plan_id / task_refs.
+    4. Base every conclusion on supplied evidence, not assumptions.
+
+  instructions:
+    - "优先消费 spec/testing/reports/ 下的 canonical REPORT，而不是旧 qa/test-runs 报告摘要"
+    - "结合 bug_summary 与 test_report 判断 exit decision"
+    - "输出必须保留 release_ref / test_plan_id / task_refs"
+    - "conditional_pass 必须列出条件，fail 必须列出 blocking_reasons"
+    - "输出严格符合 output_schema 的结构化对象"
+
+  output_format:
+    - yaml: "exit-evaluation.yaml"
+    - markdown: "exit-evaluation.md"

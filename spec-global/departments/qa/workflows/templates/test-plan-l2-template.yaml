@@ -20,6 +20,8 @@ description: |
   - Added test_set_dependencies format: dag
   - Added execution_mode configuration
   - Added observability metrics and tracing
+  - Canonical launch path is now RELEASE -> TESTPLAN -> TASK; runtime still keeps
+    test_plan_id as compatibility anchor while carrying release_ref/task_ref in context
 
 # Phase definitions - structural elements that cannot be omitted
 phases:
@@ -176,22 +178,28 @@ l3_input_schema:
 
 # L3 to L2 data contract
 l3_output_schema:
-  description: "Output data returned from each Test Set L3 instance"
+  description: |
+    Output data returned from each Test Set L3 instance.
+    Canonical execution artifacts must be materialized under `spec/testing/*`
+    while L2 keeps these fields as compatibility anchors for aggregation.
   required_fields:
+    - release_ref
+    - test_plan_id
+    - task_ref
     - test_set_id
     - status  # completed, failed, skipped, invalid_run
-    - tse_path  # Path to TSE file
+    - tse_path  # Canonical TSE evidence path under spec/testing/evidence/
     - results_summary
       - total_cases
       - passed_cases
       - failed_cases
       - pass_rate
-    - bug_drafts  # List of bug draft file paths
+    - bug_drafts  # Canonical bug artifact paths under spec/testing/bugs/
   optional_fields:
     - skip_reason
     - failure_reason
     - invalid_run_reason  # Required if status == invalid_run
-    - compliance_result_path
+    - compliance_result_path  # Canonical evidence path under spec/testing/evidence/
 
 # Invalid run status for L2
 l2_invalid_run_reasons:
@@ -226,6 +234,7 @@ observability:
       type: histogram
       description: "L2 workflow execution duration in seconds"
       labels:
+        - release_ref
         - test_plan_id
         - status
       buckets: [60, 300, 600, 1800, 3600, 7200]
@@ -248,6 +257,7 @@ observability:
       type: histogram
       description: "Time spent in test_set_execution phase"
       labels:
+        - release_ref
         - test_plan_id
       buckets: [60, 300, 600, 1800, 3600]
 
@@ -274,7 +284,9 @@ instance_schema:
     - context
     - phases
   context_fields:
+    - release_ref
     - test_plan_id
+    - task_ref
     - test_plan_path
     - build_version
     - build_commit

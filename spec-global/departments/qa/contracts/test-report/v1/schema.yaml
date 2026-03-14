@@ -25,6 +25,7 @@ tags: [contract, qa, test-report, l2]
 schema:
   type: object
   required:
+    - release_ref
     - test_run_id
     - test_plan_id
     - generated_at
@@ -35,6 +36,10 @@ schema:
     - risk_assessment
 
   properties:
+    release_ref:
+      type: string
+      description: "Release ID"
+
     test_run_id:
       type: string
       description: "Test Run ID"
@@ -42,6 +47,12 @@ schema:
     test_plan_id:
       type: string
       description: "Test Plan ID"
+
+    task_refs:
+      type: array
+      description: "Contributing task IDs in this report scope"
+      items:
+        type: string
 
     generated_at:
       type: string

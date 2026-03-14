@@ -16,6 +16,9 @@ tags: [qa, tse, assembly, test-plan-execution]
 # 契约定义
 contracts:
   input_schemas:
+    - release_ref: "Release ID"
+    - test_plan_id: "Test Plan ID"
+    - task_ref: "Task ID"
     - test_set_id: "Test Set ID"
     - test_run_id: "Test Run ID"
     - generated_cases: "生成的用例"
@@ -71,6 +74,15 @@ specs:
 
 # 输入输出
 inputs:
+  - name: release_ref
+    type: string
+    description: "Release ID"
+  - name: test_plan_id
+    type: string
+    description: "Test Plan ID"
+  - name: task_ref
+    type: string
+    description: "Task ID"
   - name: test_set_id
     type: string
     description: "Test Set ID"
@@ -103,6 +115,9 @@ prompting:
     ## 你的任务
 
     1. 汇总所有输入：
+       - release_ref: Release ID
+       - test_plan_id: Test Plan ID
+       - task_ref: Task ID
        - test_set_id: Test Set ID
        - test_run_id: Test Run ID
        - generated_cases: 生成的用例
@@ -112,6 +127,7 @@ prompting:
 
     2. 生成 TSE 文件：
        - TSE ID 格式: TSE-{test_set_id}-{test_run_id}
+       - 结果中必须保留 release_ref / test_plan_id / task_ref / test_set_id 的溯源关系
        - 包含所有用例的执行结果
        - 计算通过率 (pass_rate = pass_count / total_count)
        - 关联 Bug IDs（如果有失败用例）

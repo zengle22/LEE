@@ -1,17 +1,29 @@
 ---
-# Frozen Technical Architecture Contract
-# FEAT-143: QA 执行入口规范化
-contract_type: frozen-technical-architecture
-contract_version: "v1.0"
-metadata:
+id: TECH-FEAT-143-016
+ssot_type: tech
+title: QA 执行入口规范化技术架构
+status: frozen
+version: v1
+parent_id: FEAT-143
+derived_from_ids:
+  - FEAT-143
+source_refs:
+  - FEAT-143#Acceptance
+owner: architect
+tags: []
+properties:
+  contract_key: tech
+  identity_kind: ssot
+  contract_type: frozen-technical-architecture
+  contract_version: "v1.0"
   contract_id: FTA-20260313-001
-  status: FROZEN
   is_frozen: true
   feat_ref: FEAT-143
-  title: QA 执行入口规范化技术架构
-  frozen_at: "2026-03-13T00:00:00+08:00"
   frozen_by: architect
-  approvers: []
+  approvers:
+    - architect
+frozen_at: "2026-03-13T00:00:00+08:00"
+---
 
 architecture_decisions:
   tech_stack:
@@ -466,7 +478,7 @@ implementation_phases:
       - RegistryValidator
       - ChainValidator
       - QAEntryRouter (基础版)
-      - AuditLogger (基础版 - SQLite 单写)
+      - AuditLogger (基础版 - SQLite 单写 + NDJSON 文件双写)
     duration: "3-5 天"
     deliverables:
       - src/lee/orchestrator/execution/qa/registry_validator.py
