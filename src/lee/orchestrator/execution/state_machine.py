@@ -424,6 +424,10 @@ class WorkflowStateMachine(IStateMachine):
             if not target_path.is_absolute():
                 target_path = project_root / target_path
 
+            if self._should_preserve_existing_output(target_path=target_path, output=output):
+                materialized.append(str(target_path))
+                continue
+
             payload = self._build_declared_output_payload(
                 step_id=step_id,
                 output=output,
@@ -438,6 +442,18 @@ class WorkflowStateMachine(IStateMachine):
             materialized.append(str(target_path))
 
         return materialized
+
+    @staticmethod
+    def _should_preserve_existing_output(*, target_path: Path, output: Dict[str, Any]) -> bool:
+        """
+        Preserve files that were already created by shell/skill steps instead of
+        overwriting them with a synthetic gate_output wrapper.
+        """
+        if not target_path.exists() or not isinstance(output, dict):
+            return False
+        if "gate_approved" in output or "business_output" in output or "structured_payload" in output:
+            return False
+        return any(key in output for key in ("stdout", "stderr", "return_code", "commands_run"))
 
     def _infer_project_root(self, instance) -> Path:
         template_id = getattr(instance, "template_id", "") or ""
