@@ -116,3 +116,80 @@ async def test_run_step_marks_l2_workflow_failed_when_any_phase_failed(tmp_path)
         assert persisted.status == WorkflowStatus.FAILED
     finally:
         await store.close()
+
+
+@pytest.mark.asyncio
+async def test_run_step_recovers_failed_l2_phase_after_child_subworkflow_completes(tmp_path, monkeypatch):
+    store = SQLiteStore(":memory:")
+    await store.connect()
+    try:
+        orchestrator = Orchestrator(store=store, project_root=str(tmp_path))
+
+        parent = WorkflowInstance(
+            id="wf_department_recover_001",
+            level=WorkflowLevel.DEPARTMENT,
+            template_id="workflow.product.main",
+            data={
+                "kind": "l2_workflow_instance",
+                "params": {"raw_requirement": "ADR-016"},
+                "phases": [
+                    {
+                        "id": "raw_to_src",
+                        "status": "completed",
+                        "depends_on": [],
+                        "workflow": "workflow.product.task.raw_to_src",
+                        "level": "task",
+                    },
+                    {
+                        "id": "src_to_epic",
+                        "status": "completed",
+                        "depends_on": ["raw_to_src"],
+                        "workflow": "workflow.product.task.src_to_epic",
+                        "level": "task",
+                    },
+                    {
+                        "id": "epic_to_feat",
+                        "status": "failed",
+                        "depends_on": ["src_to_epic"],
+                        "workflow": "workflow.product.task.epic_to_feat",
+                        "level": "task",
+                        "error": "Child workflow failed",
+                    },
+                ],
+                "subworkflow_children": {
+                    "epic_to_feat": "wf_task_epic_to_feat_001",
+                },
+            },
+            status=WorkflowStatus.FAILED,
+        )
+        child = WorkflowInstance(
+            id="wf_task_epic_to_feat_001",
+            level=WorkflowLevel.TASK,
+            parent_id=parent.id,
+            template_id="workflow.product.task.epic_to_feat",
+            data={"completed_steps": ["feat_review", "feat_freeze"]},
+            status=WorkflowStatus.COMPLETED,
+        )
+        await store.create_workflow(parent)
+        await store.create_workflow(child)
+
+        monkeypatch.setattr(
+            orchestrator,
+            "_backfill_subworkflow_output",
+            AsyncMock(return_value={"child_workflow_id": child.id, "status": "completed"}),
+        )
+
+        result = await orchestrator.run_step(parent.id)
+
+        assert result.status == "success"
+        assert result.message == "All L2 phases completed"
+
+        persisted = await store.get_workflow(parent.id)
+        assert persisted.status == WorkflowStatus.COMPLETED
+        recovered_phase = next(
+            phase for phase in persisted.data["phases"] if phase["id"] == "epic_to_feat"
+        )
+        assert recovered_phase["status"] == "completed"
+        assert recovered_phase["child_workflow_id"] == child.id
+    finally:
+        await store.close()
