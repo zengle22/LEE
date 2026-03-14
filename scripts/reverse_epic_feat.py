@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Deterministic reverse EPIC/FEAT workflow helpers."""
+"""Deterministic reverse SSOT chain workflow helpers."""
 
 from __future__ import annotations
 
@@ -399,7 +399,10 @@ def _project_paths(repo_root: Path, specs_dir: str, docs_dir: str, artifacts_dir
     docs_root = repo_root / docs_dir
     return {
         "spec_root": spec_root,
+        "source_root": spec_root / "source",
         "requirements_root": requirements_root,
+        "epics_root": requirements_root / "epics",
+        "features_root": requirements_root / "features",
         "docs_root": docs_root,
         "guides_root": docs_root / "guides",
         "reports_root": docs_root / "reports",
@@ -1643,6 +1646,148 @@ def _render_epic_markdown(epic_id: str, capability: Dict[str, Any], feature_ids:
     return "\n".join(lines)
 
 
+def _render_src_markdown(src_id: str, capabilities: List[Dict[str, Any]], source_refs: List[str]) -> str:
+    lines = [
+        f"# {src_id} Reverse SSOT Chain Source Pack",
+        "",
+        "## Goal",
+        "将 reverse-epic-feat 从 EPIC/FEAT-only 逆向器升级为现行 SSOT 链逆向入口。",
+        "",
+        "## Scope",
+        "- repo evidence -> SRC reverse pack -> EPIC -> FEAT -> delivery prep seeds -> QA handoff seeds -> evidence views",
+        "- formal object 仅允许 SRC / EPIC / FEAT",
+        "- UI / TECH / TASK / TESTSET / TC / REPORT / BUG / EVI 只允许 seed/view/handoff",
+        "",
+        "## Capability Coverage",
+    ]
+    for capability in capabilities:
+        lines.append(f"- `{capability['id']}` {capability['name']}: {capability['summary']}")
+    lines.extend(["", "## Source Refs"])
+    for ref in source_refs:
+        lines.append(f"- `{ref}`")
+    lines.extend(["", "## Inference", "- 基于 workflow、template、script、CLI 与 orchestrator 路径归纳 reverse 主链升级边界。"])
+    return "\n".join(lines)
+
+
+def _build_reverse_src_output(
+    repo_root: Path,
+    source_root: Path,
+    capabilities: List[Dict[str, Any]],
+    capability_refs: List[str],
+) -> Tuple[Dict[str, Any], str]:
+    src_id = "SRC-001"
+    src_key = "src_reverse_ssot_chain"
+    src_content = _render_src_markdown(src_id, capabilities, capability_refs)
+    src_path = source_root / f"{src_id}__reverse-ssot-chain-source-pack.md"
+    _write_text(src_path, src_content)
+    src_layers = _build_evidence_layers(capability_refs)
+    return (
+        {
+            "key": src_key,
+            "identity_kind": "ssot",
+            "ssot_type": "src",
+            "title": "Reverse SSOT Chain Source Pack",
+            "description": "Formal reverse source pack for the current SSOT chain.",
+            "content": src_content,
+            "source_refs": capability_refs,
+            "primary_refs": _primary_refs_from_layers(src_layers),
+            "evidence_layers": src_layers,
+            "evidence_strategy": dict(EVIDENCE_STRATEGY),
+            "tags": ["reverse-ssot", "src"],
+        },
+        _repo_relative(repo_root, src_path),
+    )
+
+
+def _build_seed_view_outputs(capability_refs: List[str]) -> List[Dict[str, Any]]:
+    return [
+        {
+            "key": "delivery_prep_seed",
+            "identity_kind": "non_ssot",
+            "artifact_type": "HANDOVER",
+            "category": "seed",
+            "title": "Reverse Delivery Prep Seed",
+            "description": "Seed bundle for UI/TECH/TASK downstream workflows.",
+            "content": json.dumps(
+                {
+                    "formal_object_types": ["src", "epic", "feat"],
+                    "seed_targets": ["ui", "tech", "task"],
+                    "source_refs": capability_refs,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            "source_refs": capability_refs,
+            "tags": ["reverse-ssot", "seed", "delivery-prep"],
+        },
+        {
+            "key": "qa_handoff_seed",
+            "identity_kind": "non_ssot",
+            "artifact_type": "HANDOVER",
+            "category": "seed",
+            "title": "Reverse QA Handoff Seed",
+            "description": "Seed bundle for TESTSET-oriented downstream workflows.",
+            "content": json.dumps(
+                {
+                    "seed_targets": ["testset"],
+                    "view_targets": ["tc", "report", "bug", "evi"],
+                    "source_refs": capability_refs,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            "source_refs": capability_refs,
+            "tags": ["reverse-ssot", "seed", "qa-handoff"],
+        },
+        {
+            "key": "evidence_trace_view",
+            "identity_kind": "non_ssot",
+            "artifact_type": "DOCUMENT",
+            "category": "view",
+            "title": "Reverse Evidence Trace View",
+            "description": "Trace and evidence view over reverse-generated outputs.",
+            "content": json.dumps(
+                {
+                    "view_targets": ["tc", "report", "bug", "evi"],
+                    "source_refs": capability_refs,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            "source_refs": capability_refs,
+            "tags": ["reverse-ssot", "view", "evidence"],
+        },
+    ]
+
+
+def _write_reverse_chain_sidecars(paths: Dict[str, Path], src_key: str, capability_refs: List[str], outputs: List[Dict[str, Any]]) -> None:
+    _write_json(
+        paths["artifacts_active_root"] / "reverse-source-pack.json",
+        {"generated_at": _utc_now(), "src_key": src_key, "formal_object_types": ["src", "epic", "feat"], "source_refs": capability_refs},
+    )
+    _write_json(
+        paths["artifacts_active_root"] / "reverse-delivery-prep-seed.json",
+        {"generated_at": _utc_now(), "seed_targets": ["ui", "tech", "task"], "source_refs": capability_refs},
+    )
+    _write_json(
+        paths["artifacts_active_root"] / "reverse-qa-handoff-seed.json",
+        {"generated_at": _utc_now(), "seed_targets": ["testset"], "view_targets": ["tc", "report", "bug", "evi"], "source_refs": capability_refs},
+    )
+    _write_json(
+        paths["artifacts_active_root"] / "reverse-evidence-view.json",
+        {"generated_at": _utc_now(), "view_targets": ["tc", "report", "bug", "evi"], "source_refs": capability_refs},
+    )
+    _write_json(
+        paths["artifacts_active_root"] / "reverse-ssot-chain-manifest.json",
+        {
+            "generated_at": _utc_now(),
+            "formal_outputs": [item["key"] for item in outputs if item["identity_kind"] == "ssot"],
+            "seed_or_view_outputs": [item["key"] for item in outputs if item["identity_kind"] != "ssot"],
+            "formal_object_types": ["src", "epic", "feat"],
+        },
+    )
+
+
 def _render_feat_markdown(feat_id: str, epic_id: str, capability: Dict[str, Any], feature: Dict[str, Any]) -> str:
     lines = [f"# {feat_id} {feature['title']}", "", "## Summary", feature["summary"], "", "## Goal", feature["goal"], "", "## User Value", feature["user_value"], "", "## Parent EPIC", f"- `{epic_id}`", "", "## Capability Linkage", f"- `{capability['id']} {capability['name']}`", "", "## Scope"]
     for item in feature["scope"]:
@@ -1724,16 +1869,34 @@ def run_materialize(args: argparse.Namespace) -> int:
     capabilities = _selected_capabilities(repo_root, args.max_capabilities, args.max_features_per_capability)
     outputs: List[Dict[str, Any]] = []
     written_files: List[str] = []
-    features_dir = paths["requirements_root"]
-    features_dir.mkdir(parents=True, exist_ok=True)
+    source_root = paths["source_root"]
+    epics_root = paths["epics_root"]
+    features_root = paths["features_root"]
+    source_root.mkdir(parents=True, exist_ok=True)
+    epics_root.mkdir(parents=True, exist_ok=True)
+    features_root.mkdir(parents=True, exist_ok=True)
     epic_registry: List[Dict[str, str]] = []
+    capability_refs = _existing_paths(
+        repo_root,
+        [
+            "config/workflow-registry.yaml",
+            "spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml",
+            "scripts/reverse_epic_feat.py",
+            "src/lee/cli/commands/run.py",
+            "src/lee/orchestrator/execution/template_manager.py",
+        ],
+    )
+    src_output, src_written_file = _build_reverse_src_output(repo_root, source_root, capabilities, capability_refs)
+    src_key = src_output["key"]
+    written_files.append(src_written_file)
+    outputs.append(src_output)
     feat_counter = 1
     for epic_counter, capability in enumerate(capabilities, start=1):
         epic_id = f"EPIC-{epic_counter:03d}"
         epic_key = _epic_key(capability)
         feature_ids = [feature["id"] for feature in capability["features"]]
         epic_content = _render_epic_markdown(epic_id, capability, feature_ids)
-        epic_path = features_dir / f"{epic_id}.md"
+        epic_path = epics_root / f"{epic_id}.md"
         _write_text(epic_path, epic_content)
         written_files.append(_repo_relative(repo_root, epic_path))
         epic_layers = _build_evidence_layers(capability["code_refs"])
@@ -1745,6 +1908,7 @@ def run_materialize(args: argparse.Namespace) -> int:
                 "title": capability["name"],
                 "description": capability["summary"],
                 "content": epic_content,
+                "derived_from": [src_key],
                 "source_refs": capability["code_refs"],
                 "primary_refs": _primary_refs_from_layers(epic_layers),
                 "evidence_layers": epic_layers,
@@ -1759,7 +1923,7 @@ def run_materialize(args: argparse.Namespace) -> int:
             feat_id = f"FEAT-{feat_counter:03d}"
             feat_counter += 1
             feat_content = _render_feat_markdown(feat_id, epic_id, capability, feature)
-            feat_path = features_dir / f"{feat_id}.md"
+            feat_path = features_root / f"{feat_id}.md"
             _write_text(feat_path, feat_content)
             written_files.append(_repo_relative(repo_root, feat_path))
             outputs.append(
@@ -1779,14 +1943,145 @@ def run_materialize(args: argparse.Namespace) -> int:
                     "tags": ["reverse-ssot", "feat"],
                 }
             )
+    outputs.extend(_build_seed_view_outputs(capability_refs))
     bundle = {"contract_version": "1.0", "workflow_id": "core.reverse-epic-feat", "run_id": args.run_id or f"reverse-epic-feat-{datetime.now().strftime('%Y%m%d%H%M%S')}", "outputs": outputs}
     _write_json(paths["artifacts_active_root"] / "reverse-epic-feat-ssot-output.json", bundle)
+    _write_reverse_chain_sidecars(paths, src_key, capability_refs, outputs)
     registry_lines = ["# EPIC Registry", ""]
     for item in epic_registry:
         registry_lines.append(f"- `{item['epic_id']}` `{item['epic_key']}` {item['title']}")
-    _write_text(features_dir / "epic-registry.md", "\n".join(registry_lines))
-    print(json.dumps({"epic_count": len([item for item in outputs if item["ssot_type"] == "epic"]), "feat_count": len([item for item in outputs if item["ssot_type"] == "feat"]), "written_files": written_files}, ensure_ascii=False))
+    _write_text(paths["requirements_root"] / "epic-registry.md", "\n".join(registry_lines))
+    print(
+        json.dumps(
+            {
+                "src_count": len([item for item in outputs if item.get("ssot_type") == "src"]),
+                "epic_count": len([item for item in outputs if item.get("ssot_type") == "epic"]),
+                "feat_count": len([item for item in outputs if item.get("ssot_type") == "feat"]),
+                "non_ssot_count": len([item for item in outputs if item.get("identity_kind") != "ssot"]),
+                "written_files": written_files,
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
+
+
+def _review_output_identity(
+    item: Dict[str, Any],
+    expected_seed_view_keys: set[str],
+    blockers: List[Dict[str, Any]],
+) -> None:
+    ssot_type = item.get("ssot_type")
+    identity_kind = item.get("identity_kind")
+    if identity_kind == "ssot":
+        if ssot_type not in {"src", "epic", "feat"}:
+            blockers.append({"rule": "ssot_type_scope", "message": f"Unsupported formal ssot_type: {ssot_type}"})
+    elif item.get("key") not in expected_seed_view_keys:
+        blockers.append({"rule": "seed_view_scope", "message": f"Unsupported seed/view output: {item.get('key')}"})
+
+
+def _review_output_sources(
+    repo_root: Path,
+    item: Dict[str, Any],
+    blockers: List[Dict[str, Any]],
+    majors: List[Dict[str, Any]],
+) -> Tuple[str, Dict[str, Any], List[str]]:
+    if not item.get("source_refs"):
+        blockers.append({"rule": "source_refs", "message": f"Output {item.get('key')} lacks source_refs"})
+    for ref in item.get("source_refs", []):
+        if not (repo_root / ref).exists():
+            blockers.append({"rule": "code_ref_exists", "message": f"Missing source ref: {ref}"})
+    evidence_layers = item.get("evidence_layers") or {}
+    if evidence_layers and not isinstance(evidence_layers, dict):
+        blockers.append({"rule": "evidence_layers", "message": f"Output {item.get('key')} has invalid evidence_layers"})
+        evidence_layers = {}
+    elif evidence_layers:
+        missing_layer_keys = [key for key in ("impl_refs", "api_refs", "test_refs", "doc_refs") if key not in evidence_layers]
+        if missing_layer_keys:
+            blockers.append({"rule": "evidence_layers_shape", "message": f"Output {item.get('key')} missing layer keys: {', '.join(missing_layer_keys)}"})
+    primary_refs = item.get("primary_refs") or []
+    evidence_strategy = item.get("evidence_strategy") or {}
+    if evidence_strategy:
+        if evidence_strategy.get("primary_selection") != EVIDENCE_STRATEGY["primary_selection"]:
+            majors.append({"rule": "evidence_strategy_primary_selection", "message": f"Output {item.get('key')} has unexpected primary_selection"})
+        if (evidence_strategy.get("ranking_signals") or []) != EVIDENCE_STRATEGY["ranking_signals"]:
+            majors.append({"rule": "evidence_strategy_ranking_signals", "message": f"Output {item.get('key')} has unexpected ranking_signals ordering or values"})
+    elif item.get("identity_kind") == "ssot":
+        blockers.append({"rule": "evidence_strategy", "message": f"Output {item.get('key')} lacks evidence_strategy"})
+    return item.get("ssot_type"), evidence_layers, primary_refs
+
+
+def _review_formal_output_shape(
+    item: Dict[str, Any],
+    ssot_type: Optional[str],
+    epic_keys: set[str],
+    primary_refs: List[str],
+    evidence_layers: Dict[str, Any],
+    blockers: List[Dict[str, Any]],
+    majors: List[Dict[str, Any]],
+    strict_evidence: bool,
+) -> None:
+    if ssot_type == "src":
+        if item.get("parent"):
+            blockers.append({"rule": "src_parent", "message": f"SRC {item.get('key')} should not have a parent"})
+        if not primary_refs:
+            blockers.append({"rule": "src_primary_refs", "message": f"SRC {item.get('key')} lacks primary_refs"})
+        return
+    if ssot_type == "epic":
+        if item.get("parent"):
+            blockers.append({"rule": "epic_parent", "message": f"EPIC {item.get('key')} should not have a parent"})
+        return
+    if ssot_type != "feat":
+        return
+    if not primary_refs:
+        blockers.append({"rule": "primary_refs", "message": f"FEAT {item.get('key')} lacks primary_refs"})
+    if not item.get("parent"):
+        blockers.append({"rule": "feat_parent", "message": f"FEAT {item.get('key')} lacks parent"})
+    elif item["parent"] not in epic_keys:
+        blockers.append({"rule": "feat_parent", "message": f"FEAT {item.get('key')} parent is not an EPIC key"})
+    if strict_evidence and not item.get("source_refs"):
+        blockers.append({"rule": "strict_evidence", "message": f"FEAT {item.get('key')} lacks code refs"})
+    _review_feat_content(item, evidence_layers, primary_refs, blockers, majors)
+
+
+def _review_feat_content(
+    item: Dict[str, Any],
+    evidence_layers: Dict[str, Any],
+    primary_refs: List[str],
+    blockers: List[Dict[str, Any]],
+    majors: List[Dict[str, Any]],
+) -> None:
+    if not item.get("content"):
+        blockers.append({"rule": "feat_content", "message": f"FEAT {item.get('key')} lacks content"})
+        return
+    content = item["content"]
+    required_sections = (
+        "Goal", "User Value", "Preconditions", "Main Flow", "Processing", "Business Rules",
+        "Dependencies", "Non-goals", "Edge Cases", "State Updates", "Acceptance Criteria",
+        "Acceptance Checks", "Delivery Metadata", "Derived Object Expectations",
+    )
+    missing_sections = [section for section in required_sections if not _has_markdown_section(content, section)]
+    if missing_sections:
+        blockers.append({"rule": "feat_required_sections", "message": f"FEAT {item.get('key')} missing sections: {', '.join(missing_sections)}"})
+    if _count_section_bullets(content, "Acceptance Criteria") < 2:
+        majors.append({"rule": "feat_acceptance_depth", "message": f"FEAT {item.get('key')} has fewer than 2 acceptance criteria"})
+    if _count_acceptance_check_blocks(content) < 2:
+        blockers.append({"rule": "feat_acceptance_checks", "message": f"FEAT {item.get('key')} lacks at least 2 structured acceptance checks"})
+    if _count_section_bullets(content, "Business Rules") < 2:
+        majors.append({"rule": "feat_business_rule_depth", "message": f"FEAT {item.get('key')} has fewer than 2 business rules"})
+    if _count_section_bullets(content, "Main Flow") < 2:
+        majors.append({"rule": "feat_outline_only", "message": f"FEAT {item.get('key')} main flow is too brief and still reads like an outline"})
+    if _count_section_bullets(content, "Dependencies") < 1:
+        majors.append({"rule": "feat_dependency_depth", "message": f"FEAT {item.get('key')} lacks explicit dependencies"})
+    for ref in primary_refs:
+        ref_class = _classify_ref(ref)
+        if evidence_layers.get("impl_refs") or evidence_layers.get("api_refs"):
+            if ref_class not in {"impl", "api"}:
+                majors.append({"rule": "primary_ref_noise", "message": f"FEAT {item.get('key')} primary ref {ref} should not be doc/test when impl/api refs exist"})
+    for layer_key in ("impl_refs", "api_refs", "test_refs", "doc_refs"):
+        for ref in evidence_layers.get(layer_key, []):
+            if ref not in item.get("source_refs", []):
+                majors.append({"rule": "evidence_layer_membership", "message": f"FEAT {item.get('key')} layer ref {ref} is missing from source_refs"})
 
 
 def run_review(args: argparse.Namespace) -> int:
@@ -1808,113 +2103,61 @@ def run_review(args: argparse.Namespace) -> int:
     except ValidationError as exc:
         blockers.append({"rule": "ssot_agent_output_schema", "message": f"Bundle failed ssot-agent-output validation: {exc.message}"})
     outputs = bundle.get("outputs", [])
-    epic_keys = {item["key"] for item in outputs if item.get("ssot_type") == "epic"}
-    type_counter = Counter(item.get("ssot_type") for item in outputs)
+    formal_outputs = [item for item in outputs if item.get("identity_kind") == "ssot"]
+    non_ssot_outputs = [item for item in outputs if item.get("identity_kind") != "ssot"]
+    epic_keys = {item["key"] for item in formal_outputs if item.get("ssot_type") == "epic"}
+    type_counter = Counter(item.get("ssot_type") for item in formal_outputs)
+    expected_seed_view_keys = {"delivery_prep_seed", "qa_handoff_seed", "evidence_trace_view"}
+    strict_evidence = str(args.strict_evidence).lower() in {"1", "true", "yes"}
     for item in outputs:
-        ssot_type = item.get("ssot_type")
-        if ssot_type not in {"epic", "feat"}:
-            blockers.append({"rule": "ssot_type_scope", "message": f"Unsupported ssot_type: {ssot_type}"})
-        if item.get("identity_kind") != "ssot":
-            blockers.append({"rule": "identity_kind", "message": f"Output {item.get('key')} is not ssot"})
-        if not item.get("source_refs"):
-            blockers.append({"rule": "source_refs", "message": f"Output {item.get('key')} lacks source_refs"})
-        for ref in item.get("source_refs", []):
-            if not (repo_root / ref).exists():
-                blockers.append({"rule": "code_ref_exists", "message": f"Missing source ref: {ref}"})
-        evidence_layers = item.get("evidence_layers") or {}
-        if not isinstance(evidence_layers, dict):
-            blockers.append({"rule": "evidence_layers", "message": f"Output {item.get('key')} has invalid evidence_layers"})
-            evidence_layers = {}
-        else:
-            missing_layer_keys = [key for key in ("impl_refs", "api_refs", "test_refs", "doc_refs") if key not in evidence_layers]
-            if missing_layer_keys:
-                blockers.append({"rule": "evidence_layers_shape", "message": f"Output {item.get('key')} missing layer keys: {', '.join(missing_layer_keys)}"})
-        primary_refs = item.get("primary_refs") or []
-        evidence_strategy = item.get("evidence_strategy") or {}
-        if not evidence_strategy:
-            blockers.append({"rule": "evidence_strategy", "message": f"Output {item.get('key')} lacks evidence_strategy"})
-        else:
-            if evidence_strategy.get("primary_selection") != EVIDENCE_STRATEGY["primary_selection"]:
-                majors.append({"rule": "evidence_strategy_primary_selection", "message": f"Output {item.get('key')} has unexpected primary_selection"})
-            ranking_signals = evidence_strategy.get("ranking_signals") or []
-            if ranking_signals != EVIDENCE_STRATEGY["ranking_signals"]:
-                majors.append({"rule": "evidence_strategy_ranking_signals", "message": f"Output {item.get('key')} has unexpected ranking_signals ordering or values"})
-        if ssot_type == "feat":
-            if not primary_refs:
-                blockers.append({"rule": "primary_refs", "message": f"FEAT {item.get('key')} lacks primary_refs"})
-            if not item.get("content"):
-                blockers.append({"rule": "feat_content", "message": f"FEAT {item.get('key')} lacks content"})
-            else:
-                content = item["content"]
-                required_sections = (
-                    "Goal",
-                    "User Value",
-                    "Preconditions",
-                    "Main Flow",
-                    "Processing",
-                    "Business Rules",
-                    "Dependencies",
-                    "Non-goals",
-                    "Edge Cases",
-                    "State Updates",
-                    "Acceptance Criteria",
-                    "Acceptance Checks",
-                    "Delivery Metadata",
-                    "Derived Object Expectations",
-                )
-                missing_sections = [section for section in required_sections if not _has_markdown_section(content, section)]
-                if missing_sections:
-                    blockers.append({"rule": "feat_required_sections", "message": f"FEAT {item.get('key')} missing sections: {', '.join(missing_sections)}"})
-                if _count_section_bullets(content, "Acceptance Criteria") < 2:
-                    majors.append({"rule": "feat_acceptance_depth", "message": f"FEAT {item.get('key')} has fewer than 2 acceptance criteria"})
-                if _count_acceptance_check_blocks(content) < 2:
-                    blockers.append({"rule": "feat_acceptance_checks", "message": f"FEAT {item.get('key')} lacks at least 2 structured acceptance checks"})
-                if _count_section_bullets(content, "Business Rules") < 2:
-                    majors.append({"rule": "feat_business_rule_depth", "message": f"FEAT {item.get('key')} has fewer than 2 business rules"})
-                if _count_section_bullets(content, "Main Flow") < 2:
-                    majors.append({"rule": "feat_outline_only", "message": f"FEAT {item.get('key')} main flow is too brief and still reads like an outline"})
-                if _count_section_bullets(content, "Dependencies") < 1:
-                    majors.append({"rule": "feat_dependency_depth", "message": f"FEAT {item.get('key')} lacks explicit dependencies"})
-            for ref in primary_refs:
-                ref_class = _classify_ref(ref)
-                if evidence_layers.get("impl_refs") or evidence_layers.get("api_refs"):
-                    if ref_class not in {"impl", "api"}:
-                        majors.append({"rule": "primary_ref_noise", "message": f"FEAT {item.get('key')} primary ref {ref} should not be doc/test when impl/api refs exist"})
-            for layer_key in ("impl_refs", "api_refs", "test_refs", "doc_refs"):
-                for ref in evidence_layers.get(layer_key, []):
-                    if ref not in item.get("source_refs", []):
-                        majors.append({"rule": "evidence_layer_membership", "message": f"FEAT {item.get('key')} layer ref {ref} is missing from source_refs"})
-        if ssot_type == "feat":
-            if not item.get("parent"):
-                blockers.append({"rule": "feat_parent", "message": f"FEAT {item.get('key')} lacks parent"})
-            elif item["parent"] not in epic_keys:
-                blockers.append({"rule": "feat_parent", "message": f"FEAT {item.get('key')} parent is not an EPIC key"})
-            if args.strict_evidence and not item.get("source_refs"):
-                blockers.append({"rule": "strict_evidence", "message": f"FEAT {item.get('key')} lacks code refs"})
-        if ssot_type == "epic":
-            if item.get("parent"):
-                blockers.append({"rule": "epic_parent", "message": f"EPIC {item.get('key')} should not have a parent"})
+        _review_output_identity(item, expected_seed_view_keys, blockers)
+        ssot_type, evidence_layers, primary_refs = _review_output_sources(repo_root, item, blockers, majors)
+        _review_formal_output_shape(
+            item,
+            ssot_type,
+            epic_keys,
+            primary_refs,
+            evidence_layers,
+            blockers,
+            majors,
+            strict_evidence,
+        )
     if not outputs:
-        blockers.append({"rule": "empty_bundle", "message": "No EPIC/FEAT outputs were generated"})
+        blockers.append({"rule": "empty_bundle", "message": "No reverse outputs were generated"})
+    if type_counter.get("src", 0) == 0:
+        blockers.append({"rule": "missing_src", "message": "No SRC outputs generated"})
     if type_counter.get("epic", 0) == 0:
         blockers.append({"rule": "missing_epic", "message": "No EPIC outputs generated"})
     if type_counter.get("feat", 0) == 0:
         blockers.append({"rule": "missing_feat", "message": "No FEAT outputs generated"})
+    missing_seed_view_keys = sorted(expected_seed_view_keys - {item.get("key") for item in non_ssot_outputs})
+    if missing_seed_view_keys:
+        blockers.append({"rule": "missing_seed_view_outputs", "message": f"Missing seed/view outputs: {', '.join(missing_seed_view_keys)}"})
     report = {
         "generated_at": _utc_now(),
-        "summary": {"epic_count": type_counter.get("epic", 0), "feat_count": type_counter.get("feat", 0), "blocker_count": len(blockers), "major_count": len(majors)},
+        "summary": {
+            "src_count": type_counter.get("src", 0),
+            "epic_count": type_counter.get("epic", 0),
+            "feat_count": type_counter.get("feat", 0),
+            "non_ssot_count": len(non_ssot_outputs),
+            "blocker_count": len(blockers),
+            "major_count": len(majors),
+        },
         "findings": {"blockers": blockers, "majors": majors},
         "rules_checked": [
-            "Only epic/feat ssot_type outputs are allowed",
+            "Only src/epic/feat may materialize as formal ssot outputs",
+            "UI/TECH/TASK/TESTSET/TC/REPORT/BUG/EVI must remain seed/view outputs in this workflow",
             "Bundle must satisfy ssot-agent-output contract",
             "Every FEAT must have a valid EPIC parent",
             "Every output must carry existing source_refs",
+            "SRC outputs must carry primary refs and stay parentless",
             "FEAT outputs must carry structured evidence_layers, primary_refs, and evidence_strategy",
             "Every FEAT must include goal, user value, preconditions, main flow, processing, dependencies, non-goals, edge cases, state updates, testable acceptance criteria, and structured acceptance checks",
             "Primary refs must prefer impl/api evidence when available",
             "Template/runtime boundary stays outside checked-in spec files",
         ],
     }
+    _write_json(paths["artifacts_active_root"] / "reverse-ssot-chain-review.json", report)
     _write_json(paths["reports_root"] / "reverse-epic-feat-review.json", report)
     print(json.dumps({"blocker_count": len(blockers), "major_count": len(majors)}, ensure_ascii=False))
     return 0
@@ -1923,13 +2166,18 @@ def run_review(args: argparse.Namespace) -> int:
 def run_complete(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     paths = _project_paths(repo_root, args.specs_dir, args.docs_dir, args.artifacts_dir)
-    review = json.loads((paths["reports_root"] / "reverse-epic-feat-review.json").read_text(encoding="utf-8"))
+    review_artifact_path = paths["artifacts_active_root"] / "reverse-ssot-chain-review.json"
+    legacy_review_path = paths["reports_root"] / "reverse-epic-feat-review.json"
+    review_path = review_artifact_path if review_artifact_path.exists() else legacy_review_path
+    review = json.loads(review_path.read_text(encoding="utf-8"))
     bundle_path = paths["artifacts_active_root"] / "reverse-epic-feat-ssot-output.json"
     bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
     blockers = int(review["summary"].get("blocker_count", 0))
     majors = int(review["summary"].get("major_count", 0))
+    src_count = int(review["summary"].get("src_count", 0))
     epic_count = int(review["summary"].get("epic_count", 0))
     feat_count = int(review["summary"].get("feat_count", 0))
+    non_ssot_count = int(review["summary"].get("non_ssot_count", 0))
     publish_mode = args.publish_mode
     if blockers > 0:
         status = "blocked"
@@ -1940,34 +2188,46 @@ def run_complete(args: argparse.Namespace) -> int:
     else:
         status = "draft_generated" if majors == 0 else "review_warning"
     lines = [
-        "# Reverse EPIC/FEAT Completion",
+        "# Reverse SSOT Chain Completion",
         "",
         f"- Generated At: `{_utc_now()}`",
         f"- Publish Mode: `{publish_mode}`",
         f"- Final Status: `{status}`",
         f"- Blockers: `{blockers}`",
         f"- Majors: `{majors}`",
+        f"- SRC Outputs: `{src_count}`",
+        f"- EPIC Outputs: `{epic_count}`",
+        f"- FEAT Outputs: `{feat_count}`",
+        f"- Seed/View Outputs: `{non_ssot_count}`",
         "",
         "## Output Bundle",
         f"- `{_repo_relative(repo_root, paths['artifacts_active_root'] / 'reverse-epic-feat-ssot-output.json')}`",
         "",
         "## Review Report",
-        f"- `{_repo_relative(repo_root, paths['reports_root'] / 'reverse-epic-feat-review.json')}`",
+        f"- `{_repo_relative(repo_root, review_path)}`",
     ]
-    completion_summary_path = paths["reports_root"] / "reverse-epic-feat-completion.md"
+    completion_summary_path = paths["reports_root"] / "reverse-ssot-chain-completion.md"
     _write_text(completion_summary_path, "\n".join(lines))
+    _write_text(paths["reports_root"] / "reverse-epic-feat-completion.md", "\n".join(lines))
     output_payload = {
         "request_id": args.request_id or bundle.get("run_id", ""),
         "workflow_id": bundle.get("workflow_id", "core.reverse-epic-feat"),
         "run_id": bundle.get("run_id", ""),
+        "reverse_source_pack_path": _repo_relative(repo_root, paths["artifacts_active_root"] / "reverse-source-pack.json"),
         "system_map_path": _repo_relative(repo_root, paths["guides_root"] / "system-map.md"),
         "capability_map_path": _repo_relative(repo_root, paths["guides_root"] / "capability-map.md"),
         "feature_registry_path": _repo_relative(repo_root, paths["requirements_root"] / "feature-registry.md"),
         "epic_feat_ssot_output_path": _repo_relative(repo_root, bundle_path),
-        "review_report_path": _repo_relative(repo_root, paths["reports_root"] / "reverse-epic-feat-review.json"),
+        "reverse_delivery_prep_seed_path": _repo_relative(repo_root, paths["artifacts_active_root"] / "reverse-delivery-prep-seed.json"),
+        "reverse_qa_handoff_seed_path": _repo_relative(repo_root, paths["artifacts_active_root"] / "reverse-qa-handoff-seed.json"),
+        "reverse_evidence_view_path": _repo_relative(repo_root, paths["artifacts_active_root"] / "reverse-evidence-view.json"),
+        "reverse_chain_manifest_path": _repo_relative(repo_root, paths["artifacts_active_root"] / "reverse-ssot-chain-manifest.json"),
+        "review_report_path": _repo_relative(repo_root, review_path),
         "completion_summary_path": _repo_relative(repo_root, completion_summary_path),
+        "src_count": src_count,
         "epic_count": epic_count,
         "feat_count": feat_count,
+        "non_ssot_count": non_ssot_count,
         "blocker_count": blockers,
         "major_count": majors,
         "evidence_strategy_version": "1.0",

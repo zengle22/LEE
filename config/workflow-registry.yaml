@@ -25,7 +25,7 @@ workflows:
   core.reverse-epic-feat:
     path: spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml
     kind: l3_workflow_template
-    description: "反向生成 EPIC/FEAT SSOT 工作流 (L3) - 从现有 repo 与证据中提取 system/capability/feature，并物化 EPIC/FEAT"
+    description: "反向生成现行 SSOT 链文档工作流 (L3) - 从现有 repo 与证据中提取 SRC/EPIC/FEAT，并输出 delivery/QA seeds 与 evidence views"
     load_spec_as_params: true
     required_params:
       - request_id

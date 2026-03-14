@@ -77,6 +77,8 @@ ALLOWED_CONTEXTS: List[re.Pattern] = [
     re.compile(r'f["\'].*\.artifacts/.*\{.*\}.*["\']'),  # f-string with .artifacts/ and {}
     # 字典键中的路径（文档说明）- 如 ".workflow/runs": "description"
     re.compile(r'["\'](\.artifacts|\.workflow)/[^"\'\s]+["\']:\s*["\']'),  # dict key with description
+    # JSON/字典中的路径描述（如 docstring 说明输出路径）
+    re.compile(r'"outputs":\s*\[[^]]*(\.workflow|\.artifacts)[^]]*\]'),  # "outputs": [".workflow/..."]
 ]
 
 # 豁免的配置列表模式（列表中的路径字符串不算硬编码）
