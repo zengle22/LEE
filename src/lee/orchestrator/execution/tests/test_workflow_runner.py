@@ -58,6 +58,7 @@ async def test_workflow_runner_create_workflow_forwards_executor_override_and_ss
         skip_plan=False,
         ssot_root_id="TASK-123",
         executor_override="kimi",
+        executor_selection_source="cli_override",
     )
     runner = WorkflowRunner(config)
     monkeypatch.setattr("lee.orchestrator.execution.workflow_runner._get_pm_workflow", lambda: fake_pm_workflow)
@@ -67,7 +68,41 @@ async def test_workflow_runner_create_workflow_forwards_executor_override_and_ss
     assert workflow_id == "wf_task_demo_003"
     data = captured["kwargs"]["data"]
     assert data["executor_override"] == "kimi"
+    assert data["executor_selection_source"] == "cli_override"
     assert data["ssot_root_id"] == "TASK-123"
+
+
+@pytest.mark.asyncio
+async def test_workflow_runner_create_workflow_resolves_executor_from_project_config(tmp_path: Path, monkeypatch) -> None:
+    template = tmp_path / "workflow.yaml"
+    template.write_text("kind: workflow\nversion: '1.0'\n", encoding="utf-8")
+    lee_dir = tmp_path / ".lee"
+    lee_dir.mkdir()
+    (lee_dir / "config.yaml").write_text("executor: qwen\n", encoding="utf-8")
+
+    captured = {}
+
+    def fake_pm_workflow(action: str, **kwargs):
+        captured["action"] = action
+        captured["kwargs"] = kwargs
+        return {"workflow_id": "wf_task_demo_004"}
+
+    config = WorkflowRunConfig(
+        workflow_key="product.main",
+        template_path=template,
+        params={"raw_requirement": "ADR-015"},
+        project_root=tmp_path,
+        skip_plan=True,
+    )
+    runner = WorkflowRunner(config)
+    monkeypatch.setattr("lee.orchestrator.execution.workflow_runner._get_pm_workflow", lambda: fake_pm_workflow)
+
+    workflow_id = await runner._create_workflow(template)
+
+    assert workflow_id == "wf_task_demo_004"
+    data = captured["kwargs"]["data"]
+    assert data["executor_override"] == "qwen_chat"
+    assert data["executor_selection_source"] == "file_config"
 
 
 @pytest.mark.asyncio

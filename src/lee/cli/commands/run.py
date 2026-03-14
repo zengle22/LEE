@@ -16,6 +16,8 @@ import click
 import yaml
 
 from lee.cli.commands.workflow_registry import load_workflow_registry, resolve_workflow_template_path
+from lee.orchestrator.config import ConfigResolver
+from lee.orchestrator.config_loader import load_config
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
 from lee.orchestrator.execution.error_hints import diagnose_executor_error
@@ -820,8 +822,8 @@ def _release_project_run_lock(lock_fp) -> None:
 @click.option("--branch", help="目标分支")
 @click.option("--project-dir", default=".", help="项目目录")
 @click.option("--max-steps", default=10, show_default=True, help="最大执行步数")
-@click.option("--executor", default="claude_code", show_default=True, help="强制指定执行器类型（覆盖 spec 中的配置）", type=click.Choice([
-    "llm", "qwen", "kimi", "shell", "claude_code", "codex", "langgraph"
+@click.option("--executor", default=None, help="强制指定执行器类型（覆盖环境变量和 .lee/config.yaml）", type=click.Choice([
+    "llm", "qwen_chat", "qwen", "kimi", "shell", "claude_code", "codex", "langgraph"
 ]))
 @click.option("--plan-only", is_flag=True, help="只生成 Plan，不执行")
 @click.option("--skip-plan", is_flag=True, help="跳过 Plan，直接执行")
@@ -866,6 +868,12 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
 
     project_root = Path(project_dir).resolve()
     scope_info = derive_concurrency_scope(workflow_key, params, project_root)
+    config = load_config(str(project_root))
+    executor_resolution = ConfigResolver(project_root=project_root, config=config).resolve(
+        cli_executor=executor,
+    )
+    if not executor_resolution.is_valid or not executor_resolution.value:
+        raise click.ClickException(executor_resolution.error_message or "Executor resolution failed")
 
     # SSOT Root 确认 (v1 简化版)
     ssot_root_id = task_id
@@ -966,7 +974,8 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
                 skip_plan=False,
                 instance_id=instance,
                 ssot_root_id=ssot_root_id,
-                executor_override=executor,
+                executor_override=executor_resolution.value,
+                executor_selection_source=executor_resolution.source_marker,
             ))
 
             if not result.success:
@@ -1017,9 +1026,10 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         llm_profile = os.getenv("LLM_PROFILE")
         if llm_profile:
             workflow_data["llm_profile"] = llm_profile
+        workflow_data["executor_override"] = executor_resolution.value
+        workflow_data["executor_selection_source"] = executor_resolution.source_marker
         if executor:
-            workflow_data["executor_override"] = executor
-            click.echo(f"Executor override: {executor}")
+            click.echo(f"Executor override: {executor_resolution.value}")
 
         create_result = pm_workflow(
             "create",

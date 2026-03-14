@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 from lee.orchestrator.core.template_engine import TemplateEngine
 from lee.orchestrator.core.template_resolver import TemplateResolver
 from lee.orchestrator.core.instance_generator import InstanceGenerator
+from lee.orchestrator.config import ConfigResolver
 from lee.orchestrator.config_loader import load_config
 from lee.orchestrator.execution.plan_agent import PlanAgent, PlanConfig, create_plan
 from lee.orchestrator.execution.llm_executor import LLMExecutor
@@ -50,6 +51,7 @@ class WorkflowRunConfig:
     auto_approve: bool = False  # 自动批准（测试用，生产环境应为 False）
     ssot_root_id: Optional[str] = None  # SSOT Root ID (任务立项 ID)
     executor_override: Optional[str] = None  # CLI 显式指定执行器
+    executor_selection_source: Optional[str] = None  # 执行器来源标记
 
 
 @dataclass
@@ -353,10 +355,21 @@ class WorkflowRunner:
             "scope_source": scope_info.scope_source,
             **extra_data,
         }
+        executor_resolution = None
+        if self.config.executor_override and self.config.executor_selection_source:
+            workflow_data["executor_override"] = self.config.executor_override
+            workflow_data["executor_selection_source"] = self.config.executor_selection_source
+        else:
+            executor_resolution = ConfigResolver(
+                project_root=self.config.project_root,
+                config=self.project_config,
+            ).resolve(cli_executor=self.config.executor_override)
+            if not executor_resolution.is_valid or not executor_resolution.value:
+                raise ValueError(executor_resolution.error_message or "Executor resolution failed")
+            workflow_data["executor_override"] = executor_resolution.value
+            workflow_data["executor_selection_source"] = executor_resolution.source_marker
         if self.config.ssot_root_id:
             workflow_data["ssot_root_id"] = self.config.ssot_root_id
-        if self.config.executor_override:
-            workflow_data["executor_override"] = self.config.executor_override
         result = await asyncio.to_thread(
             pm_workflow,
             "create",

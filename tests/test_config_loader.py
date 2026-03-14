@@ -72,6 +72,13 @@ class TestLeeConfigFromDict:
         assert config.tracing.enabled is False
         assert config.evidence.output_dir == "/tmp/evidence"
 
+    def test_executor_scalar_config_is_supported(self):
+        data = {
+            "executor": "qwen",
+        }
+        config = LeeConfig.from_dict(data)
+        assert config.executor.default_type == "qwen_chat"
+
     def test_partial_config(self):
         data = {"retry": {"max_retries": 10}}
         config = LeeConfig.from_dict(data)
@@ -154,3 +161,16 @@ class TestConfigLoader:
 
             config = load_config(tmpdir)
             assert config.retry.max_retries == 3
+
+    def test_env_override_executor_default_type(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            old_value = os.environ.get("LEE_EXECUTOR")
+            try:
+                os.environ["LEE_EXECUTOR"] = "qwen"
+                config = load_config(tmpdir)
+                assert config.executor.default_type == "qwen_chat"
+            finally:
+                if old_value is None:
+                    os.environ.pop("LEE_EXECUTOR", None)
+                else:
+                    os.environ["LEE_EXECUTOR"] = old_value

@@ -490,6 +490,7 @@ def test_run_bootstraps_l2_template_as_department_workflow(monkeypatch, tmp_path
         }
     ]
     assert create_data["executor_override"] == "claude_code"
+    assert create_data["executor_selection_source"] == "default"
 
 
 def test_list_conflicting_workflows_matches_scope_and_legacy_rows(tmp_path: Path) -> None:
@@ -594,12 +595,65 @@ def test_run_accepts_qwen_executor_override(monkeypatch, tmp_path: Path) -> None
     runner = CliRunner()
     result = runner.invoke(
         run_module.run,
+        ["product.main", "--project-dir", str(tmp_path), "--skip-plan", "--executor", "qwen_chat"],
+    )
+
+    assert result.exit_code == 0, result.output
+    create_data = captured_create_payload[0]["data"]
+    assert create_data["executor_override"] == "qwen_chat"
+    assert create_data["executor_selection_source"] == "cli_override"
+
+
+def test_run_normalizes_legacy_qwen_executor_override(monkeypatch, tmp_path: Path) -> None:
+    from click.testing import CliRunner
+    from lee.cli.commands import run as run_module
+
+    template = tmp_path / "workflow.yaml"
+    rendered = tmp_path / "rendered.yaml"
+    template.write_text("kind: l2_workflow_template\nphases: []\n", encoding="utf-8")
+    rendered.write_text("kind: l2_workflow_template\nphases: []\n", encoding="utf-8")
+
+    captured_create_payload = []
+
+    monkeypatch.setattr(
+        run_module,
+        "_load_registry",
+        lambda: {
+            "workflows": {
+                "product.main": {
+                    "path": str(template),
+                    "required_params": [],
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        run_module,
+        "_run_until_settled_with_gates",
+        lambda *_a, **_k: {"status": "running", "completed_steps": 0, "blocked_at": None},
+    )
+    monkeypatch.setattr(run_module, "_print_summary", lambda *_a, **_k: None)
+
+    def fake_pm_workflow(action: str, **kwargs):
+        if action == "create":
+            captured_create_payload.append(kwargs)
+            return {"workflow_id": "wf_department_demo_alias"}
+        raise AssertionError(f"unexpected pm_workflow action: {action}")
+
+    monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_module.run,
         ["product.main", "--project-dir", str(tmp_path), "--skip-plan", "--executor", "qwen"],
     )
 
     assert result.exit_code == 0, result.output
     create_data = captured_create_payload[0]["data"]
-    assert create_data["executor_override"] == "qwen"
+    assert create_data["executor_override"] == "qwen_chat"
+    assert create_data["executor_selection_source"] == "cli_override"
 
 
 def test_run_accepts_kimi_executor_override(monkeypatch, tmp_path: Path) -> None:
@@ -651,6 +705,60 @@ def test_run_accepts_kimi_executor_override(monkeypatch, tmp_path: Path) -> None
     assert result.exit_code == 0, result.output
     create_data = captured_create_payload[0]["data"]
     assert create_data["executor_override"] == "kimi"
+    assert create_data["executor_selection_source"] == "cli_override"
+
+
+def test_run_uses_config_default_executor_when_cli_missing(monkeypatch, tmp_path: Path) -> None:
+    template = tmp_path / "workflow.yaml"
+    rendered = tmp_path / "rendered.yaml"
+    template.write_text("kind: l2_workflow_template\nphases: []\n", encoding="utf-8")
+    rendered.write_text("kind: l2_workflow_template\nphases: []\n", encoding="utf-8")
+
+    config_dir = tmp_path / ".lee"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text("executor: qwen_chat\n", encoding="utf-8")
+
+    captured_create_payload = []
+
+    monkeypatch.setattr(
+        run_module,
+        "_load_registry",
+        lambda: {
+            "workflows": {
+                "product.main": {
+                    "path": str(template),
+                    "required_params": [],
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        run_module,
+        "_run_until_settled_with_gates",
+        lambda *_a, **_k: {"status": "running", "completed_steps": 0, "blocked_at": None},
+    )
+    monkeypatch.setattr(run_module, "_print_summary", lambda *_a, **_k: None)
+
+    def fake_pm_workflow(action: str, **kwargs):
+        if action == "create":
+            captured_create_payload.append(kwargs)
+            return {"workflow_id": "wf_department_demo_004"}
+        raise AssertionError(f"unexpected pm_workflow action: {action}")
+
+    monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_module.run,
+        ["product.main", "--project-dir", str(tmp_path), "--skip-plan"],
+    )
+
+    assert result.exit_code == 0, result.output
+    create_data = captured_create_payload[0]["data"]
+    assert create_data["executor_override"] == "qwen_chat"
+    assert create_data["executor_selection_source"] == "file_config"
 
 
 def test_select_existing_workflow_action_uses_noninteractive_stdin_command(monkeypatch) -> None:
