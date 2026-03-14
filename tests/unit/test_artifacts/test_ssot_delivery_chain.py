@@ -244,6 +244,7 @@ def test_create_cli_creates_adr_draft_with_front_matter(tmp_path: Path, monkeypa
         ssot,
         [
             "create",
+            "--internal",
             "--type",
             "adr",
             "--title",
@@ -354,6 +355,41 @@ def test_show_chain_uses_source_refs_for_adr_follow_up(tmp_path: Path):
     assert chain[-1]["relation"] == "source_ref -> ADR-001"
 
 
+def test_build_lineage_graph_exposes_upstream_and_downstream_edges(tmp_path: Path):
+    manager = ArtifactManager(root_path=tmp_path / ".artifacts", project_root=tmp_path)
+    manager.create_ssot(
+        ssot_type=SSOTType.EPIC,
+        formal_id="EPIC-003",
+        title="Workflow First CLI",
+        content="# EPIC-003",
+        run_id="RUN-001",
+        source_refs=["SRC-001#scope"],
+    )
+    manager.create_ssot(
+        ssot_type=SSOTType.FEAT,
+        formal_id="FEAT-082",
+        title="Metadata Inheritance",
+        content="# FEAT-082",
+        run_id="RUN-001",
+        parent_id="EPIC-003",
+    )
+    manager.create_ssot(
+        ssot_type=SSOTType.TECH,
+        formal_id="TECH-FEAT-082-001",
+        title="Metadata Inheritance TECH",
+        content="# TECH-FEAT-082-001",
+        run_id="RUN-001",
+        parent_id="FEAT-082",
+    )
+
+    graph = SSOTService(manager).build_lineage_graph("FEAT-082")
+
+    node_ids = {node["id"] for node in graph["nodes"]}
+    assert {"EPIC-003", "FEAT-082", "TECH-FEAT-082-001"} <= node_ids
+    assert {"from": "FEAT-082", "to": "EPIC-003", "relation": "derived_from_ids@v1"} in graph["edges"]
+    assert {"from": "TECH-FEAT-082-001", "to": "FEAT-082", "relation": "parent_id"} in graph["edges"]
+
+
 def _draft_to_frozen():
     from lee.orchestrator.execution.artifacts.types import ArtifactStatus
 
@@ -367,6 +403,7 @@ def test_create_cli_requires_release_version_for_release_type(tmp_path: Path, mo
         ssot,
         [
             "create",
+            "--internal",
             "--type",
             "release",
             "--title",

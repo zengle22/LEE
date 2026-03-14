@@ -73,6 +73,7 @@ from .chain_testing import (
     TraceChainTester,
     write_chain_ci_templates,
 )
+from .metadata_inheritance import MetadataInheritanceEngine, InheritanceResult
 
 __all__ = [
     # 类型枚举
@@ -140,6 +141,8 @@ __all__ = [
     "SemanticChainTester",
     "TraceChainTester",
     "write_chain_ci_templates",
+    "MetadataInheritanceEngine",
+    "InheritanceResult",
 ]
 
 __version__ = "2.2.0"

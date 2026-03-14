@@ -18,6 +18,7 @@ if str(SRC_ROOT) not in sys.path:
 from lee.orchestrator.execution.artifacts import ArtifactManager, SSOTValidator
 from lee.orchestrator.execution.artifacts.ssot_files import (
     lint_ssot_front_matter,
+    lint_ssot_workflow_provenance,
     parse_front_matter,
 )
 from lee.orchestrator.execution.artifacts.ssot_service import SSOTService
@@ -66,25 +67,25 @@ def collect_release_ids(paths: Iterable[str]) -> List[str]:
     return sorted(set(release_ids))
 
 
-def run_ssot_lint(paths: Sequence[str] | None = None) -> tuple[bool, List[str]]:
+def run_ssot_lint(changed_paths: Sequence[str] | None = None) -> tuple[bool, List[str]]:
     manager = ArtifactManager(project_root=REPO_ROOT, root_path=REPO_ROOT / ".artifacts")
     manager.rebuild_ssot_registry()
     selected_paths = [
         (REPO_ROOT / file_path)
-        for file_path in (paths or [])
+        for file_path in (changed_paths or [])
         if is_formal_ssot_markdown_path(file_path) and (REPO_ROOT / file_path).exists()
     ]
-    if paths is not None and not selected_paths:
+    if changed_paths is not None and not selected_paths:
         return True, []
 
     errors: List[str] = lint_ssot_front_matter(
         REPO_ROOT,
-        paths=selected_paths if paths is not None else None,
+        paths=selected_paths if changed_paths is not None else None,
     )
 
     validator = SSOTValidator(manager.registry)
     artifact_ids: List[str] = []
-    if paths is None:
+    if changed_paths is None:
         artifact_ids = [artifact.id for artifact in manager.registry.get_ssot_artifacts()]
     else:
         for path in selected_paths:
@@ -99,6 +100,14 @@ def run_ssot_lint(paths: Sequence[str] | None = None) -> tuple[bool, List[str]]:
     for artifact_id in sorted(set(artifact_ids)):
         result = validator.validate_p0(artifact_id)
         errors.extend(f"{artifact_id}: {err}" for err in result.errors)
+
+    if changed_paths:
+        errors.extend(
+            lint_ssot_workflow_provenance(
+                REPO_ROOT,
+                [Path(path) for path in changed_paths if is_ssot_related_path(path)],
+            )
+        )
 
     return len(errors) == 0, errors
 

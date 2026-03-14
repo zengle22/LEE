@@ -44,6 +44,8 @@ READONLY_COMMANDS = {"status", "watch"}
 GATES_READONLY_SUBCOMMANDS = {"list", "show"}
 GATES_DECISION_SUBCOMMANDS = {"approve", "reject", "decide", "revise", "flag"}
 LIGHTWEIGHT_ARGS = {"-v", "--version"}
+WORKFLOW_COMMANDS = {"run", "adr", "epic", "feat", "approve", "status", "watch", "gates"}
+SYSTEM_COMMANDS = {"ssot", "workflow", "artifacts", "repo", "verify", "doctor", "context", "governance"}
 
 
 def _should_lock(argv: list[str]) -> bool:
@@ -190,7 +192,37 @@ def _release_cli_lock(fd: Optional[int]) -> None:
         os.close(fd)
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+class WorkflowFirstGroup(click.Group):
+    """Top-level CLI group with workflow-first help sections."""
+
+    def format_commands(self, ctx, formatter):
+        commands = []
+        for subcommand in self.list_commands(ctx):
+            command = self.get_command(ctx, subcommand)
+            if command is None or getattr(command, "hidden", False):
+                continue
+            commands.append((subcommand, command))
+
+        sections = [
+            ("Workflow Commands", [item for item in commands if item[0] in WORKFLOW_COMMANDS]),
+            ("System Commands", [item for item in commands if item[0] in SYSTEM_COMMANDS]),
+            (
+                "Other Commands",
+                [item for item in commands if item[0] not in WORKFLOW_COMMANDS and item[0] not in SYSTEM_COMMANDS],
+            ),
+        ]
+
+        for section_name, section_commands in sections:
+            if not section_commands:
+                continue
+            rows = []
+            for subcommand, command in section_commands:
+                rows.append((subcommand, command.get_short_help_str(formatter.width) or ""))
+            with formatter.section(section_name):
+                formatter.write_dl(rows)
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]}, cls=WorkflowFirstGroup)
 @click.version_option(__version__, "-v", "--version", message="%(prog)s %(version)s")
 def cli():
     """LEE 命令行工具"""
@@ -225,6 +257,7 @@ def _register_commands() -> None:
     from lee.cli.commands.task_brief import task_brief
     from lee.cli.commands.doctor import doctor
     from lee.cli.commands.governance import governance
+    from lee.cli.commands.workflow_entrypoints import adr, epic, feat
 
     cli.add_command(run)
     cli.add_command(status)
@@ -250,6 +283,9 @@ def _register_commands() -> None:
     cli.add_command(task_brief)
     cli.add_command(doctor)
     cli.add_command(governance)
+    cli.add_command(adr)
+    cli.add_command(epic)
+    cli.add_command(feat)
     cli._lee_commands_registered = True
 
 

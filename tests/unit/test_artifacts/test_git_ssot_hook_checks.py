@@ -64,3 +64,30 @@ def test_run_ssot_lint_with_non_markdown_paths_skips_repo_wide_debt(tmp_path):
         assert errors == []
     finally:
         hook_checks.REPO_ROOT = original_root
+
+
+def test_run_ssot_lint_checks_changed_file_workflow_provenance(tmp_path):
+    feat_file = tmp_path / "spec" / "requirements" / "features" / "FEAT-001__demo.md"
+    feat_file.parent.mkdir(parents=True, exist_ok=True)
+    feat_file.write_text(
+        "---\n"
+        "id: FEAT-001\n"
+        "ssot_type: feat\n"
+        "title: Demo\n"
+        "status: frozen\n"
+        "version: v1\n"
+        "---\n\n"
+        "# Demo\n",
+        encoding="utf-8",
+    )
+
+    from scripts import git_ssot_hook_checks as hook_checks
+
+    original_root = hook_checks.REPO_ROOT
+    hook_checks.REPO_ROOT = tmp_path
+    try:
+        passed, errors = run_ssot_lint(["spec/requirements/features/FEAT-001__demo.md"])
+        assert passed is False
+        assert any("missing workflow_instance_id" in err for err in errors)
+    finally:
+        hook_checks.REPO_ROOT = original_root

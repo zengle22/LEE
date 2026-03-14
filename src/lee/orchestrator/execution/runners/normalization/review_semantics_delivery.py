@@ -1,0 +1,422 @@
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+
+class DeliveryPlanReviewSemantics:
+    @classmethod
+    def expected_subject_refs(
+        cls,
+        *,
+        runner_cls,
+        instance_data: Optional[Dict[str, Any]],
+        business_output: Optional[Dict[str, Any]] = None,
+    ) -> List[str]:
+        refs: List[str] = []
+        if isinstance(business_output, dict):
+            cls._append_subject_refs(refs, business_output.get("subject_refs", []))
+        task_business = cls.load_task_plan_business_output(
+            runner_cls=runner_cls,
+            instance_data=instance_data,
+        )
+        if isinstance(task_business, dict):
+            cls._append_subject_refs(refs, task_business.get("source_feats", []))
+        return refs
+
+    @staticmethod
+    def validate_subject_refs(
+        review_payload: Any,
+        expected_subject_refs: List[str],
+    ) -> Optional[str]:
+        if not expected_subject_refs:
+            return None
+        if not isinstance(review_payload, dict):
+            return "Delivery plan review output is not a structured object"
+        if review_payload.get("review_type") != "delivery_plan_review":
+            return "Delivery plan review output must set review_type=delivery_plan_review"
+        subject_refs = review_payload.get("subject_refs")
+        if not isinstance(subject_refs, list):
+            return "Delivery plan review output missing subject_refs list"
+        expected = [ref for ref in expected_subject_refs if isinstance(ref, str) and ref.strip()]
+        actual = [ref for ref in subject_refs if isinstance(ref, str) and ref.strip()]
+        if sorted(actual) != sorted(expected):
+            return (
+                "Delivery plan review subject_refs must exactly match the planned FEAT ID(s): "
+                + ", ".join(sorted(expected))
+            )
+        return None
+
+    @classmethod
+    def load_task_plan_business_output(
+        cls,
+        *,
+        runner_cls,
+        instance_data: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(instance_data, dict):
+            return None
+        step_outputs = instance_data.get("step_outputs")
+        if not isinstance(step_outputs, dict):
+            return None
+        task_planning = step_outputs.get("task_planning")
+        if not isinstance(task_planning, dict):
+            return None
+        business_output = task_planning.get("business_output")
+        if isinstance(business_output, dict):
+            return business_output
+        generated_text = task_planning.get("generated_text")
+        if isinstance(generated_text, str) and generated_text.strip():
+            parsed = runner_cls._parse_structured_output_if_possible(generated_text)
+            if isinstance(parsed, dict):
+                nested = parsed.get("business_output")
+                if isinstance(nested, dict):
+                    return nested
+                return parsed
+        return None
+
+    @staticmethod
+    def review_clean_text(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    @classmethod
+    def has_persisted_tasks(
+        cls,
+        *,
+        project_root: str,
+        task_plan: Optional[Dict[str, Any]],
+    ) -> bool:
+        if not isinstance(task_plan, dict):
+            return False
+        planning_metadata = task_plan.get("planning_metadata")
+        task_directory = ""
+        if isinstance(planning_metadata, dict):
+            task_directory = cls.review_clean_text(planning_metadata.get("task_directory"))
+        if not task_directory:
+            task_directory = cls._default_task_directory(task_plan)
+        task_dir_path = Path(project_root) / task_directory
+        task_specs = task_plan.get("task_specs") if isinstance(task_plan.get("task_specs"), list) else []
+        if not task_dir_path.exists() or not task_specs:
+            return False
+        for task_spec in task_specs:
+            if not isinstance(task_spec, dict):
+                continue
+            task_id = cls.review_clean_text(task_spec.get("task_id"))
+            if task_id and not list(task_dir_path.glob(f"{task_id}__*.md")):
+                return False
+        return True
+
+    @classmethod
+    def has_structural_spec_coverage(
+        cls,
+        *,
+        runner_cls,
+        project_root: str,
+        task_plan: Optional[Dict[str, Any]],
+    ) -> bool:
+        if not isinstance(task_plan, dict):
+            return False
+        primary_feat = cls._primary_source_feat(task_plan)
+        if not primary_feat:
+            return False
+        formal_checks = runner_cls._load_feat_acceptance_checks(project_root, primary_feat)
+        structural_ids = {
+            str(item.get("id")).strip()
+            for item in formal_checks
+            if isinstance(item, dict)
+            and str(item.get("id") or "").strip()
+            and runner_cls._is_structural_acceptance_check(item)
+        }
+        if not structural_ids:
+            return False
+        return structural_ids.issubset(cls._covered_structural_ids(task_plan, structural_ids))
+
+    @classmethod
+    def contains_false_positive(cls, text: str) -> bool:
+        lowered = text.strip().lower()
+        if not lowered:
+            return False
+        positive_patterns = [
+            r"\bexists\b",
+            r"\bdefined\b",
+            r"\bcovers\b",
+            r"\bconsistent\b",
+            r"\bcan be derived\b",
+            r"\bhas \d+\b",
+            r"\bverified\b",
+            r"\bavailable\b",
+            r"存在",
+            r"已定义",
+            r"一致",
+            r"可推导",
+            r"可得",
+            r"已覆盖",
+            r"已落盘",
+            r"均具备",
+            r"完整的",
+            r"字段$",
+            r"清晰",
+            r"完整$",
+            r"支持",
+            r"明确",
+            r"已正确映射",
+            r"已映射到",
+            r"一致$",
+        ]
+        return any(re.search(pattern, lowered) for pattern in positive_patterns)
+
+    @classmethod
+    def sanitize_payload(
+        cls,
+        *,
+        runner_cls,
+        review_payload: Dict[str, Any],
+        instance_data: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        sanitized = dict(review_payload)
+        findings = [
+            item.strip()
+            for item in sanitized.get("findings") or []
+            if isinstance(item, str) and item.strip()
+        ]
+        project_root = cls._project_root(instance_data)
+        task_plan = cls.load_task_plan_business_output(runner_cls=runner_cls, instance_data=instance_data)
+        has_persisted_tasks = cls.has_persisted_tasks(project_root=project_root, task_plan=task_plan)
+        has_structural_spec_coverage = cls.has_structural_spec_coverage(
+            runner_cls=runner_cls,
+            project_root=project_root,
+            task_plan=task_plan,
+        )
+        sanitized["findings"] = cls._filter_findings(
+            findings=findings,
+            has_persisted_tasks=has_persisted_tasks,
+            has_structural_spec_coverage=has_structural_spec_coverage,
+        )
+        sanitized["risks"] = cls._filter_risks(
+            risks=sanitized.get("risks") or [],
+            has_persisted_tasks=has_persisted_tasks,
+            has_structural_spec_coverage=has_structural_spec_coverage,
+        )
+        sanitized["recommendations"] = cls._filter_recommendations(
+            recommendations=sanitized.get("recommendations") or [],
+            has_persisted_tasks=has_persisted_tasks,
+        )
+        if sanitized.get("decision") == "revise" and not sanitized["findings"]:
+            summary = str(sanitized.get("summary") or "").strip()
+            if not runner_cls._contains_feat_review_negative_signal(summary):
+                sanitized["decision"] = "pass"
+        if not str(sanitized.get("summary") or "").strip():
+            cls._fill_summary(sanitized)
+        return sanitized
+
+    @classmethod
+    def validate_semantics(
+        cls,
+        *,
+        runner_cls,
+        project_root: str,
+        review_payload: Any,
+        instance_data: Optional[Dict[str, Any]],
+    ) -> Optional[str]:
+        if not isinstance(review_payload, dict):
+            return "Delivery plan review output is not a structured object"
+        if review_payload.get("review_type") != "delivery_plan_review":
+            return "Delivery plan review output must set review_type=delivery_plan_review"
+        summary = review_payload.get("summary")
+        if not isinstance(summary, str) or not summary.strip():
+            return "Delivery plan review output must include a non-empty summary"
+        decision = review_payload.get("decision")
+        if decision not in {"pass", "revise", "reject"}:
+            return "Delivery plan review output decision must be one of: pass, revise, reject"
+        field_error = cls._validate_string_arrays(review_payload)
+        if field_error:
+            return field_error
+
+        findings = [item.strip() for item in review_payload.get("findings") or [] if isinstance(item, str) and item.strip()]
+        if decision == "pass":
+            if findings:
+                return "Delivery plan review output with decision=pass must not include findings"
+            if runner_cls._contains_feat_review_negative_signal(summary):
+                return "Delivery plan review summary conflicts with decision=pass"
+            return None
+        if decision in {"revise", "reject"} and not findings:
+            return f"Delivery plan review output with decision={decision} must include at least one finding"
+        if decision == "reject":
+            return "Delivery plan review rejected the generated delivery plan"
+
+        task_plan = cls.load_task_plan_business_output(runner_cls=runner_cls, instance_data=instance_data)
+        if findings and all(cls.contains_false_positive(item) for item in findings):
+            return "Delivery plan review findings contain no blocking issues"
+        false_positive_error = cls._false_positive_error(
+            runner_cls=runner_cls,
+            project_root=project_root,
+            review_payload=review_payload,
+            task_plan=task_plan,
+        )
+        if false_positive_error:
+            return false_positive_error
+        return "Delivery plan review requires revision before freeze"
+
+    @staticmethod
+    def _append_subject_refs(refs: List[str], candidates: Any) -> None:
+        for candidate in candidates if isinstance(candidates, list) else []:
+            if isinstance(candidate, str) and candidate.strip() and candidate.strip() not in refs:
+                refs.append(candidate.strip())
+
+    @staticmethod
+    def _validate_string_arrays(review_payload: Dict[str, Any]) -> Optional[str]:
+        for field_name in ("findings", "risks", "recommendations"):
+            value = review_payload.get(field_name)
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                return f"Delivery plan review output field '{field_name}' must be a string array"
+        return None
+
+    @classmethod
+    def _default_task_directory(cls, task_plan: Dict[str, Any]) -> str:
+        return f"spec/tasks/{cls._primary_source_feat(task_plan) or 'FEAT-001'}"
+
+    @classmethod
+    def _primary_source_feat(cls, task_plan: Dict[str, Any]) -> str:
+        source_feats = task_plan.get("source_feats") if isinstance(task_plan.get("source_feats"), list) else []
+        return next(
+            (
+                cls.review_clean_text(item)
+                for item in source_feats
+                if isinstance(item, str) and cls.review_clean_text(item)
+            ),
+            "",
+        )
+
+    @classmethod
+    def _covered_structural_ids(cls, task_plan: Dict[str, Any], structural_ids: set[str]) -> set[str]:
+        task_specs = task_plan.get("task_specs") if isinstance(task_plan.get("task_specs"), list) else []
+        covered_ids: set[str] = set()
+        for task_spec in task_specs:
+            if not isinstance(task_spec, dict):
+                continue
+            task_kind = cls.review_clean_text(task_spec.get("task_kind")).lower()
+            if task_kind not in {"governance", "specification", "template"}:
+                continue
+            mappings = task_spec.get("acceptance_criteria_mapping")
+            if not isinstance(mappings, list):
+                continue
+            for mapping in mappings:
+                if not isinstance(mapping, dict):
+                    continue
+                ac_id = cls.review_clean_text(mapping.get("ac"))
+                if ac_id in structural_ids:
+                    covered_ids.add(ac_id)
+        return covered_ids
+
+    @staticmethod
+    def _project_root(instance_data: Optional[Dict[str, Any]]) -> str:
+        if isinstance(instance_data, dict):
+            project_root = str(instance_data.get("project_root") or "").strip()
+            if project_root:
+                return project_root
+        return str(Path.cwd())
+
+    @classmethod
+    def _filter_findings(
+        cls,
+        *,
+        findings: List[str],
+        has_persisted_tasks: bool,
+        has_structural_spec_coverage: bool,
+    ) -> List[str]:
+        filtered: List[str] = []
+        for item in findings:
+            if cls.contains_false_positive(item):
+                continue
+            if re.search(r"双重覆盖|同时映射到 specification.*implementation|规范与实现双重覆盖", item, re.IGNORECASE) and has_structural_spec_coverage:
+                continue
+            if re.search(r"落盘|persist|persistence|unverified", item, re.IGNORECASE) and has_persisted_tasks:
+                continue
+            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", item, re.IGNORECASE) and has_persisted_tasks:
+                continue
+            if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", item, re.IGNORECASE) and has_structural_spec_coverage:
+                continue
+            filtered.append(item)
+        return filtered
+
+    @staticmethod
+    def _filter_risks(
+        *,
+        risks: List[Any],
+        has_persisted_tasks: bool,
+        has_structural_spec_coverage: bool,
+    ) -> List[str]:
+        filtered: List[str] = []
+        for item in risks:
+            if not isinstance(item, str) or not item.strip():
+                continue
+            text = item.strip()
+            if re.search(r"落盘|persist|persistence|未落盘|unverified", text, re.IGNORECASE) and has_persisted_tasks:
+                continue
+            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", text, re.IGNORECASE) and has_persisted_tasks:
+                continue
+            if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", text, re.IGNORECASE) and has_structural_spec_coverage:
+                continue
+            filtered.append(text)
+        return filtered
+
+    @staticmethod
+    def _filter_recommendations(
+        *,
+        recommendations: List[Any],
+        has_persisted_tasks: bool,
+    ) -> List[str]:
+        filtered: List[str] = []
+        for item in recommendations:
+            if not isinstance(item, str) or not item.strip():
+                continue
+            text = item.strip()
+            if re.search(r"spec/requirements/tasks/|未落盘|write.*spec/requirements/tasks|persist", text, re.IGNORECASE) and has_persisted_tasks:
+                continue
+            if re.search(r"definition_of_done|落盘文件路径", text, re.IGNORECASE) and has_persisted_tasks:
+                continue
+            filtered.append(text)
+        return filtered
+
+    @staticmethod
+    def _fill_summary(sanitized: Dict[str, Any]) -> None:
+        subject_refs = [
+            item.strip()
+            for item in sanitized.get("subject_refs") or []
+            if isinstance(item, str) and item.strip()
+        ]
+        subject_text = ", ".join(subject_refs) if subject_refs else "the planned FEATs"
+        decision = str(sanitized.get("decision") or "").strip() or "pass"
+        sanitized["summary"] = f"Delivery plan review {decision} for {subject_text}"
+
+    @classmethod
+    def _false_positive_error(
+        cls,
+        *,
+        runner_cls,
+        project_root: str,
+        review_payload: Dict[str, Any],
+        task_plan: Optional[Dict[str, Any]],
+    ) -> Optional[str]:
+        all_review_text = "\n".join(
+            [item.strip() for item in review_payload.get("findings") or [] if isinstance(item, str)]
+            + [item.strip() for item in review_payload.get("risks") or [] if isinstance(item, str)]
+            + [item.strip() for item in review_payload.get("recommendations") or [] if isinstance(item, str)]
+        )
+        if re.search(r"落盘|persist|persistence|unverified", all_review_text, re.IGNORECASE):
+            if cls.has_persisted_tasks(project_root=project_root, task_plan=task_plan):
+                return "Delivery plan review incorrectly reports TASK persistence as unverified"
+        if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", all_review_text, re.IGNORECASE):
+            if cls.has_persisted_tasks(project_root=project_root, task_plan=task_plan):
+                return "Delivery plan review incorrectly requires explicit TASK file paths"
+        if re.search(r"spec/template coverage|规范任务|模板任务|specification", all_review_text, re.IGNORECASE):
+            if cls.has_structural_spec_coverage(
+                runner_cls=runner_cls,
+                project_root=project_root,
+                task_plan=task_plan,
+            ):
+                return "Delivery plan review incorrectly reports missing structural specification coverage"
+        return None

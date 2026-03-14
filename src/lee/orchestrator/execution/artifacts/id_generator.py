@@ -245,6 +245,8 @@ class SSOTIDGenerator:
                 return f"{ssot_type.value.upper()}-{parent_scope}"
 
             if ssot_type in (SSOTType.TECH, SSOTType.TESTSET):
+                if suffix:
+                    return f"{ssot_type.value.upper()}-{parent_scope}-{suffix}"
                 return f"{ssot_type.value.upper()}-{parent_scope}"
 
             if ssot_type == SSOTType.REPORT:
@@ -290,8 +292,11 @@ class SSOTIDGenerator:
             return None
 
         # 如果 parent_id 已经是 FEAT-XXX 或 REL-x.y.z 格式
-        if parts[0].upper() == "FEAT" and len(parts) >= 4 and parts[1].upper() == "SRC":
-            return "-".join(parts[:4])
+        if parts[0].upper() == "FEAT":
+            if len(parts) >= 4 and parts[1].upper() == "SRC":
+                return "-".join(parts[:4])
+            if len(parts) >= 2:
+                return parent_id
         if parts[0].upper() == "REL":
             return parent_id
 
