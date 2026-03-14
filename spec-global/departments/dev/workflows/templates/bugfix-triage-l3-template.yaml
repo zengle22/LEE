@@ -39,7 +39,8 @@ steps:
     mandatory: true
     depends_on: [classify_bug_path]
     outputs:
-      - batch_decision_ref
+      - granularity_decision_ref
+      - batch_approval_record
 
   - id: publish_triage
     name: Publish Triage Package
@@ -58,5 +59,6 @@ instance_schema:
     - parent_phase_id
   output_fields:
     - triage_decision_ref
-    - batch_decision_ref
+    - granularity_decision_ref
+    - batch_approval_record
     - triage_package_ref

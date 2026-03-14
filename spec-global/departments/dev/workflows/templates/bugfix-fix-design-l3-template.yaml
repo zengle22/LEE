@@ -28,7 +28,7 @@ steps:
     depends_on: [design_fix_plan]
     outputs:
       - verification_scope_ref
-      - rollback_boundary_ref
+      - rollback_strategy_ref
 
   - id: approve_fix_plan
     name: Approve Fix Plan
@@ -58,4 +58,6 @@ instance_schema:
   output_fields:
     - fix_design_ref
     - risk_assessment_ref
+    - verification_scope_ref
+    - rollback_strategy_ref
     - fix_design_package_ref

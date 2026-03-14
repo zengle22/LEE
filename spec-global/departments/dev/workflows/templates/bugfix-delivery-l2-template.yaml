@@ -163,12 +163,12 @@ phase_data_flow:
         - root_cause_ref
         - affected_scope_ref
         - batch_approval_record
-        - verification_scope_ref
-        - rollback_strategy_ref
     - from: fix_design
       to: fix_implementation
       outputs:
         - fix_design_ref
+        - verification_scope_ref
+        - rollback_strategy_ref
     - from: fix_implementation
       to: verification
       outputs:
