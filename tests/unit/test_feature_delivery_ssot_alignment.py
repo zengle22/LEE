@@ -193,6 +193,17 @@ def test_evidence_pack_feat_matches_canonical_handoff_contract():
     assert "smoke_gate_inputs" in text
 
 
+def test_alternate_tech_bridge_feat_matches_canonical_contract_shape():
+    feat_121 = Path("spec/requirements/features/FEAT-121__tech-bridge-object-design.md")
+    text = feat_121.read_text(encoding="utf-8")
+
+    assert "architecture_decisions" in text
+    assert "feat_mapping" in text
+    assert "implementation_rules" in text
+    assert "delivery_handoffs" in text
+    assert "validation_rules" in text
+
+
 def test_backend_feat_matches_canonical_utdd_and_handoff_contract():
     feat_112 = Path("spec/requirements/features/FEAT-112__backend-development-l3-stage-definition.md")
     text = feat_112.read_text(encoding="utf-8")
