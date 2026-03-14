@@ -29,6 +29,7 @@ frozen_at: '2026-03-13T13:08:01.881607'
 
 ## Prerequisites
 - TASK-FEAT-143-001
+- TASK-FEAT-143-002
 
 ## Dependencies
 - {'task_id': 'TASK-FEAT-143-001', 'relation': 'requires_specification'}

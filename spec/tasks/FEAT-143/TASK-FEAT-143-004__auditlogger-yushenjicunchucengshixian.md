@@ -67,4 +67,5 @@ restore_targets:
 - 双写机制（队列 + 异步写入）已实现
 - 审计查询 API 已实现
 - entry_source 枚举值已注册
+- 错误码 QA-ENTRY-012 已实现
 - TASK 文件已冻结

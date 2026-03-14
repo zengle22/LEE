@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import click
 
+from .audit import audit
+from .execute import execute
 from .test_set import test_set
 from .test_plan import test_plan
 from .test_run import test_run
@@ -20,6 +22,14 @@ qa.add_command(test_set)
 qa.add_command(test_plan)
 qa.add_command(test_run)
 qa.add_command(sut)
+qa.add_command(execute)
+qa.add_command(audit)
+
+
+def _raise_legacy_entry_blocked(command_name: str) -> None:
+    raise click.ClickException(
+        f"`lee qa {command_name}` 已被 FEAT-143 收紧。请改用 `lee qa execute <TASK-TESTPLAN-REL-...>`。"
+    )
 
 
 # 快捷命令
@@ -33,5 +43,4 @@ qa.add_command(sut)
 def run_test_plan(test_plan_id: str, build: str, commit: str, env: str,
                   project_dir: str, max_steps: int) -> None:
     """快捷执行 Test Plan (= test-run start)"""
-    from .test_run import _start_test_run
-    _start_test_run(test_plan_id, build, commit, env, project_dir, max_steps)
+    _raise_legacy_entry_blocked("run")

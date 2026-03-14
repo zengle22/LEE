@@ -18,11 +18,11 @@ import yaml
 from lee.cli.commands.qa.test_run import test_run
 
 
-class TestTestRunSUTIntegration:
-    """测试 test_run 命令的 SUT 集成"""
+class TestLegacyTestRunEntry:
+    """测试 legacy test_run 入口已被 FEAT-143 阻断"""
 
-    def test_start_with_default_env(self, tmp_path):
-        """测试使用默认环境时的 URL 解析"""
+    def test_start_with_default_env_is_blocked(self, tmp_path):
+        """legacy 入口即使提供 env 也应被阻断"""
         runner = CliRunner()
 
         # 创建必要的目录和文件
@@ -38,25 +38,17 @@ class TestTestRunSUTIntegration:
             "title": "Test Plan"
         }))
 
-        with patch('lee.cli.commands.qa.test_run.pm_workflow') as mock_pm, \
-             patch('lee.cli.commands.qa.test_run._render_workflow_template') as mock_render:
-            mock_pm.return_value = {"workflow_id": "test-wf-123"}
-            mock_render.return_value = Path("/tmp/test.yaml")
+        result = runner.invoke(test_run, [
+            'start', 'TP-TEST',
+            '--env', 'staging',
+            '--project-dir', str(project_root)
+        ])
 
-            # 不指定 --base-url，应该使用环境默认
-            result = runner.invoke(test_run, [
-                'start', 'TP-TEST',
-                '--env', 'staging',
-                '--project-dir', str(project_root)
-            ])
+        assert result.exit_code != 0
+        assert "lee qa execute" in result.output
 
-            # 验证命令执行成功
-            assert result.exit_code == 0
-            # 验证输出包含解析的 URL
-            assert "app-staging.example.com" in result.output
-
-    def test_start_with_explicit_base_url(self, tmp_path):
-        """测试显式指定 --base-url 参数"""
+    def test_start_with_explicit_base_url_is_blocked(self, tmp_path):
+        """legacy 入口即使显式指定 base-url 也应被阻断"""
         runner = CliRunner()
 
         # 创建必要的目录和文件
@@ -71,26 +63,18 @@ class TestTestRunSUTIntegration:
             "title": "Test Plan"
         }))
 
-        with patch('lee.cli.commands.qa.test_run.pm_workflow') as mock_pm, \
-             patch('lee.cli.commands.qa.test_run._render_workflow_template') as mock_render:
-            mock_pm.return_value = {"workflow_id": "test-wf-123"}
-            mock_render.return_value = Path("/tmp/test.yaml")
+        result = runner.invoke(test_run, [
+            'start', 'TP-TEST',
+            '--env', 'staging',
+            '--base-url', 'https://custom.example.com',
+            '--project-dir', str(project_root)
+        ])
 
-            # 显式指定 --base-url
-            result = runner.invoke(test_run, [
-                'start', 'TP-TEST',
-                '--env', 'staging',
-                '--base-url', 'https://custom.example.com',
-                '--project-dir', str(project_root)
-            ])
+        assert result.exit_code != 0
+        assert "lee qa execute" in result.output
 
-            # 验证命令执行成功
-            assert result.exit_code == 0
-            # 验证输出包含显式指定的 URL
-            assert "custom.example.com" in result.output
-
-    def test_base_url_priority(self, tmp_path):
-        """测试 base-url 优先级：CLI > 环境默认"""
+    def test_base_url_priority_is_irrelevant_for_blocked_legacy_entry(self, tmp_path):
+        """legacy 入口在 FEAT-143 下不再承担 base-url 优先级验证职责"""
         runner = CliRunner()
 
         # 创建必要的目录和文件
@@ -105,22 +89,15 @@ class TestTestRunSUTIntegration:
             "title": "Test Plan"
         }))
 
-        with patch('lee.cli.commands.qa.test_run.pm_workflow') as mock_pm, \
-             patch('lee.cli.commands.qa.test_run._render_workflow_template') as mock_render:
-            mock_pm.return_value = {"workflow_id": "test-wf-123"}
-            mock_render.return_value = Path("/tmp/test.yaml")
+        result = runner.invoke(test_run, [
+            'start', 'TP-TEST',
+            '--env', 'local',
+            '--base-url', 'https://override.example.com',
+            '--project-dir', str(project_root)
+        ])
 
-            # CLI --base-url 应该覆盖环境默认
-            result = runner.invoke(test_run, [
-                'start', 'TP-TEST',
-                '--env', 'local',
-                '--base-url', 'https://override.example.com',
-                '--project-dir', str(project_root)
-            ])
-
-            # 验证显式指定的 URL 在输出中
-            assert result.exit_code == 0
-            assert "override.example.com" in result.output
+        assert result.exit_code != 0
+        assert "lee qa execute" in result.output
 
 
 class TestSUTURLResolution:
