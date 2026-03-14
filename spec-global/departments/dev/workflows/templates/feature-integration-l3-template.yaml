@@ -1,10 +1,10 @@
-# Migrated by lint_l3_templates.py on 2026-03-05T16:41:22.428617
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:44.078700
 kind: l3_workflow_template
 version: '2.0'
 id: template.dev.feature_integration_l3
 name: Feature Integration Testing L3 Template
-description: 'Canonical L3 template for integration planning, verification,
-  structural issue routing, and Evidence Pack handoff.'
+description: Canonical L3 template for integration planning, verification, structural issue routing, and
+  Evidence Pack handoff.
 owner: development
 tags:
 - template
@@ -20,53 +20,6 @@ contracts:
   routing_spec: ../../docs/structural-issue-routing-spec.md
   reporter_handoff_spec: ../../docs/integration-reporter-handoff-spec.md
   threshold_rules: ../../docs/integration-threshold-rules.md
-steps:
-- id: integration_planning
-  name: Integration Planning
-  kind: agent
-  description: Resolve FE/BE artifacts, frozen contract, and execution mode into an integration matrix.
-  agent_id: agent.dev.integration_planner
-  mandatory: true
-  depends_on: []
-  outputs:
-  - integration_plan_ref
-  - integration_matrix_ref
-  - execution_mode
-- id: integration_execution
-  name: Integration Execution
-  kind: agent
-  description: Execute integration verification in contract/mock or environment-backed mode.
-  agent_id: agent.dev.bug_fix_verifier
-  mandatory: true
-  depends_on:
-  - integration_planning
-  outputs:
-  - integration_test_result_ref
-  - threshold_summary_ref
-- id: structural_issue_routing
-  name: Structural Issue Routing
-  kind: agent
-  description: Classify failures into structural or implementation issues and determine rollback boundaries.
-  agent_id: agent.dev.bug_fix_verifier
-  mandatory: true
-  depends_on:
-  - integration_execution
-  outputs:
-  - structural_issue_ref
-  - issue_resolution_ref
-  - rollback_request_ref
-- id: integration_reporting
-  name: Integration Reporting
-  kind: agent
-  description: Publish the integration report and prepare canonical handoff into Evidence Pack.
-  agent_id: agent.dev.code_self_reviewer
-  mandatory: true
-  depends_on:
-  - structural_issue_routing
-  outputs:
-  - integration_outputs
-  - verification_results
-  - integration_report_ref
 instance_schema:
   required_fields:
   - id
@@ -95,3 +48,55 @@ instance_schema:
   - issue_resolution_ref
   - rollback_request_ref
   - integration_report_ref
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
+  - id: integration_planning
+    name: Integration Planning
+    kind: agent
+    description: Resolve FE/BE artifacts, frozen contract, and execution mode into an integration matrix.
+    agent_id: agent.dev.integration_planner
+    mandatory: true
+    depends_on: []
+    outputs:
+    - integration_plan_ref
+    - integration_matrix_ref
+    - execution_mode
+  - id: integration_execution
+    name: Integration Execution
+    kind: agent
+    description: Execute integration verification in contract/mock or environment-backed mode.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on:
+    - integration_planning
+    outputs:
+    - integration_test_result_ref
+    - threshold_summary_ref
+  - id: structural_issue_routing
+    name: Structural Issue Routing
+    kind: agent
+    description: Classify failures into structural or implementation issues and determine rollback boundaries.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on:
+    - integration_execution
+    outputs:
+    - structural_issue_ref
+    - issue_resolution_ref
+    - rollback_request_ref
+  - id: integration_reporting
+    name: Integration Reporting
+    kind: agent
+    description: Publish the integration report and prepare canonical handoff into Evidence Pack.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on:
+    - structural_issue_routing
+    outputs:
+    - integration_outputs
+    - verification_results
+    - integration_report_ref

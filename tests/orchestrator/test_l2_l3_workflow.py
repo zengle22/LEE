@@ -495,8 +495,15 @@ class TestYamlTemplates:
 
         assert data["kind"] == "l3_workflow_template"
         assert "steps" in data or "stages" in data
-        items = data.get("steps") or data.get("stages") or []
-        assert len(items) >= 4
+
+        # New format uses stages, old format uses steps
+        if "stages" in data:
+            # Count total steps across all stages
+            total_steps = sum(len(stage.get("steps", [])) for stage in data["stages"])
+            assert total_steps >= 4
+        else:
+            items = data.get("steps") or []
+            assert len(items) >= 4
 
     def test_feature_delivery_template_contract_and_evidence_hooks(self):
         """Test canonical L2 template declares required input contract and evidence closure."""
@@ -591,7 +598,13 @@ class TestYamlTemplates:
             with open(path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
             assert data["id"] == template_id
-            steps = data["steps"]
+            # Support both old (steps) and new (stages) format
+            if "stages" in data:
+                steps = []
+                for stage in data["stages"]:
+                    steps.extend(stage.get("steps", []))
+            else:
+                steps = data["steps"]
             assert len(steps) >= 4
             assert any(step.get("agent_id") == agent_id for step in steps)
 
@@ -650,7 +663,14 @@ class TestYamlTemplates:
         assert data["id"] == "template.dev.feature_contract_l3"
         assert data["contracts"]["stage_definition"] == "../../../../../spec/workflow/definitions/contract-design-stage-definition.md"
         assert data["contracts"]["freeze_gate"] == "../../gates/contract-freeze-gate/v1/gate.yaml"
-        assert [step["id"] for step in data["steps"]] == [
+        # Support both stages and legacy steps format
+        if "stages" in data:
+            steps = []
+            for stage in data["stages"]:
+                steps.extend(stage.get("steps", []))
+        else:
+            steps = data["steps"]
+        assert [step["id"] for step in steps] == [
             "api_contract_design",
             "data_contract_design",
             "event_contract_design",
@@ -734,14 +754,21 @@ class TestYamlTemplates:
 
         assert data["id"] == "template.dev.feature_be_l3"
         assert data["contracts"]["stage_definition"] == "../../stages/l3-backend-development.yaml"
-        assert [step["id"] for step in data["steps"]] == [
+        # Support both stages and legacy steps format
+        if "stages" in data:
+            steps = []
+            for stage in data["stages"]:
+                steps.extend(stage.get("steps", []))
+        else:
+            steps = data["steps"]
+        assert [step["id"] for step in steps] == [
             "write_ut",
             "implement_backend",
             "refactor_backend",
             "coverage_gate",
             "publish_backend",
         ]
-        assert data["steps"][3]["config"] == {
+        assert steps[3]["config"] == {
             "coverage_threshold": 80,
             "coverage_retry_target": "write_ut",
         }
@@ -830,14 +857,21 @@ class TestYamlTemplates:
         assert data["id"] == "template.dev.feature_fe_l3"
         assert data["contracts"]["stage_definition"] == "../../stages/l3-frontend-development.yaml"
         assert data["contracts"]["utdd_guide"] == "../../docs/frontend-utdd-execution-guide.md"
-        assert [step["id"] for step in data["steps"]] == [
+        # Support both stages and legacy steps format
+        if "stages" in data:
+            steps = []
+            for stage in data["stages"]:
+                steps.extend(stage.get("steps", []))
+        else:
+            steps = data["steps"]
+        assert [step["id"] for step in steps] == [
             "write_ut",
             "implement_ui",
             "refactor_ui",
             "coverage_gate",
             "publish_frontend",
         ]
-        assert data["steps"][3]["config"] == {
+        assert steps[3]["config"] == {
             "coverage_threshold": 80,
             "coverage_retry_target": "write_ut",
         }
@@ -914,7 +948,14 @@ class TestYamlTemplates:
             data = yaml.safe_load(f)
 
         assert data["id"] == "template.dev.feature_integration_l3"
-        assert [step["id"] for step in data["steps"]] == [
+        # Support both stages and legacy steps format
+        if "stages" in data:
+            steps = []
+            for stage in data["stages"]:
+                steps.extend(stage.get("steps", []))
+        else:
+            steps = data["steps"]
+        assert [step["id"] for step in steps] == [
             "integration_planning",
             "integration_execution",
             "structural_issue_routing",
@@ -924,7 +965,7 @@ class TestYamlTemplates:
         assert data["contracts"]["routing_spec"] == "../../docs/structural-issue-routing-spec.md"
         assert data["contracts"]["reporter_handoff_spec"] == "../../docs/integration-reporter-handoff-spec.md"
         assert data["contracts"]["threshold_rules"] == "../../docs/integration-threshold-rules.md"
-        assert data["steps"][-1]["outputs"] == [
+        assert steps[-1]["outputs"] == [
             "integration_outputs",
             "verification_results",
             "integration_report_ref",

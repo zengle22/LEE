@@ -154,7 +154,14 @@ def test_bugfix_templates_align_merge_gate_and_evidence_inputs():
     )
 
     merge_phase = next(phase for phase in l2_template["phases"] if phase["id"] == "merge_or_reject")
-    review_step = next(step for step in evidence_template["steps"] if step["id"] == "review_evidence_pack")
+    # Support both stages and legacy steps format
+    if "stages" in evidence_template:
+        steps = []
+        for stage in evidence_template["stages"]:
+            steps.extend(stage.get("steps", []))
+    else:
+        steps = evidence_template["steps"]
+    review_step = next(step for step in steps if step["id"] == "review_evidence_pack")
 
     assert merge_phase["gate_id"] == "gate.dev.merge_approval"
     assert "verification_report_ref" in evidence_template["instance_schema"]["required_fields"]

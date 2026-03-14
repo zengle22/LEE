@@ -1,16 +1,40 @@
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:44.088873
 kind: l3_workflow_template
-version: "1.0"
+version: '1.0'
 id: template.dev.tech_design_l3
 name: Tech Design L3 Template
-description: |
-  Canonical L3 workflow for deriving TECH from a frozen feature source before
+description: 'Canonical L3 workflow for deriving TECH from a frozen feature source before
+
   downstream contract or implementation work begins.
+
+  '
 owner: development
-tags: [template, dev, tech, l3, canonical, adr-008]
+tags:
+- template
+- dev
+- tech
+- l3
+- canonical
+- adr-008
 contracts:
   shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
-
-steps:
+instance_schema:
+  required_fields:
+  - id
+  - template_id
+  - parent_phase_id
+  - repo_id
+  output_fields:
+  - tech_spec_ref
+  - decision_refs
+  - risk_register_ref
+  - tech_package_ref
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
   - id: analyze_feature
     name: Analyze Feature
     kind: agent
@@ -19,50 +43,38 @@ steps:
     mandatory: true
     depends_on: []
     outputs:
-      - design_analysis
-      - implementation_scope
-
+    - design_analysis
+    - implementation_scope
   - id: draft_tech_spec
     name: Draft TECH Spec
     kind: agent
     description: Produce the technical bridge object and architectural decisions.
     agent_id: agent.dev.tech_architect
     mandatory: true
-    depends_on: [analyze_feature]
+    depends_on:
+    - analyze_feature
     outputs:
-      - tech_spec_ref
-      - decision_refs
-
+    - tech_spec_ref
+    - decision_refs
   - id: self_review
     name: Tech Self Review
     kind: agent
     description: Check consistency, feasibility, and traceability before handoff.
     agent_id: agent.dev.code_self_reviewer
     mandatory: true
-    depends_on: [draft_tech_spec]
+    depends_on:
+    - draft_tech_spec
     outputs:
-      - review_result
-      - risk_register_ref
-
+    - review_result
+    - risk_register_ref
   - id: publish_tech
     name: Publish TECH
     kind: agent
     description: Finalize the TECH handoff package for contract design.
     agent_id: agent.dev.tech_architect
     mandatory: true
-    depends_on: [self_review]
+    depends_on:
+    - self_review
     outputs:
-      - tech_package_ref
-      - handoff_notes
-
-instance_schema:
-  required_fields:
-    - id
-    - template_id
-    - parent_phase_id
-    - repo_id
-  output_fields:
-    - tech_spec_ref
-    - decision_refs
-    - risk_register_ref
     - tech_package_ref
+    - handoff_notes

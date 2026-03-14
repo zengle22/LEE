@@ -323,8 +323,17 @@ class TestRebuildRegistry:
         rebuilt_manager = ArtifactManager(temp_artifacts_dir)
         assert rebuilt_manager.get(artifact.id) is not None
 
-    def test_rebuild_registry_empty(self, temp_artifacts_dir):
+    def test_rebuild_registry_empty(self, temp_artifacts_dir, monkeypatch):
         """Test rebuilding registry with no artifacts"""
-        # Empty artifacts directory
-        count = rebuild_registry(temp_artifacts_dir)
-        assert count == 0
+        import os
+        # 保存当前工作目录
+        original_cwd = os.getcwd()
+        try:
+            # 切换到临时目录，防止扫描到项目中的 SSOT 文件
+            os.chdir(temp_artifacts_dir)
+            # Empty artifacts directory
+            count = rebuild_registry(temp_artifacts_dir)
+            assert count == 0
+        finally:
+            # 恢复工作目录
+            os.chdir(original_cwd)

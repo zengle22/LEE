@@ -1,20 +1,59 @@
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:44.066103
 kind: l3_workflow_template
-version: "2.0"
+version: '2.0'
 id: template.dev.feature_fe_l3
 name: Feature Frontend Development L3 Template
-description: |
-  Canonical L3 frontend workflow for implementing frontend behavior under TECH
-  and frozen contract constraints with an explicit UTDD loop.
-owner: development
-tags: [template, dev, feature, frontend, l3, canonical, adr-008, utdd]
+description: 'Canonical L3 frontend workflow for implementing frontend behavior under TECH
 
+  and frozen contract constraints with an explicit UTDD loop.
+
+  '
+owner: development
+tags:
+- template
+- dev
+- feature
+- frontend
+- l3
+- canonical
+- adr-008
+- utdd
 contracts:
   shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
   stage_definition: ../../stages/l3-frontend-development.yaml
   utdd_guide: ../../docs/frontend-utdd-execution-guide.md
   output_spec: ../../contracts/frontend-output-spec/v1/spec.md
-
-steps:
+instance_schema:
+  required_fields:
+  - id
+  - template_id
+  - parent_phase_id
+  - formal_ssot_id
+  - source_refs
+  - governing_adrs
+  - tech_spec_ref
+  - contract_freeze_ref
+  - repo_frontend
+  optional_fields:
+  - env_ref
+  - base_url
+  - runtime_config_ref
+  - acceptance_brief_ref
+  - decision_constraints
+  output_fields:
+  - unit_test_ref
+  - fe_artifact_ref
+  - refactor_report_ref
+  - contract_usage_verification_ref
+  - coverage_report_ref
+  - coverage_gate_result
+  - fe_handoff_package_ref
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
   - id: write_ut
     name: Write or Update Frontend Tests
     kind: agent
@@ -23,31 +62,30 @@ steps:
     mandatory: true
     depends_on: []
     outputs:
-      - unit_test_ref
-      - test_scope_ref
-
+    - unit_test_ref
+    - test_scope_ref
   - id: implement_ui
     name: Implement Frontend UI
     kind: agent
     description: Implement UI and state behavior until the test target passes.
     agent_id: agent.dev.uniapp_frontend_engineer
     mandatory: true
-    depends_on: [write_ut]
+    depends_on:
+    - write_ut
     outputs:
-      - fe_artifact_ref
-      - ui_change_notes
-
+    - fe_artifact_ref
+    - ui_change_notes
   - id: refactor_ui
     name: Refactor Frontend UI
     kind: agent
     description: Refactor implementation without breaking tests or contract field usage.
     agent_id: agent.dev.uniapp_frontend_engineer
     mandatory: true
-    depends_on: [implement_ui]
+    depends_on:
+    - implement_ui
     outputs:
-      - refactor_report_ref
-      - contract_usage_verification_ref
-
+    - refactor_report_ref
+    - contract_usage_verification_ref
   - id: coverage_gate
     name: Frontend Coverage Gate
     kind: agent
@@ -57,44 +95,19 @@ steps:
       coverage_threshold: 80
       coverage_retry_target: write_ut
     mandatory: true
-    depends_on: [refactor_ui]
+    depends_on:
+    - refactor_ui
     outputs:
-      - coverage_report_ref
-      - coverage_gate_result
-
+    - coverage_report_ref
+    - coverage_gate_result
   - id: publish_frontend
     name: Publish Frontend Handoff
     kind: agent
     description: Publish frontend handoff artifacts for integration and evidence collection.
     agent_id: agent.dev.code_self_reviewer
     mandatory: true
-    depends_on: [coverage_gate]
+    depends_on:
+    - coverage_gate
     outputs:
-      - fe_handoff_package_ref
-      - handoff_notes
-
-instance_schema:
-  required_fields:
-    - id
-    - template_id
-    - parent_phase_id
-    - formal_ssot_id
-    - source_refs
-    - governing_adrs
-    - tech_spec_ref
-    - contract_freeze_ref
-    - repo_frontend
-  optional_fields:
-    - env_ref
-    - base_url
-    - runtime_config_ref
-    - acceptance_brief_ref
-    - decision_constraints
-  output_fields:
-    - unit_test_ref
-    - fe_artifact_ref
-    - refactor_report_ref
-    - contract_usage_verification_ref
-    - coverage_report_ref
-    - coverage_gate_result
     - fe_handoff_package_ref
+    - handoff_notes

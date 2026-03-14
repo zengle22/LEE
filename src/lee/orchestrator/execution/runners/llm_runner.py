@@ -6762,6 +6762,8 @@ class ClaudeCodeRunner(StepRunnerBase):
     _is_qwen_chat_executor = staticmethod(LLMRunner._is_qwen_chat_executor)
     _is_coding_executor = staticmethod(LLMRunner._is_coding_executor)
     _resolve_code_executor_type = classmethod(LLMRunner._resolve_code_executor_type.__func__)
+    _evaluate_backend_coverage_gate = classmethod(LLMRunner._evaluate_backend_coverage_gate.__func__)
+    _parse_coverage_percentage = staticmethod(LLMRunner._parse_coverage_percentage)
 
     def _materialize_workspace_formal_ssot_markdown(self, *args, **kwargs):
         return LLMRunner._materialize_workspace_formal_ssot_markdown(*args, **kwargs)

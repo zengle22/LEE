@@ -1,18 +1,55 @@
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:44.041082
 kind: l3_workflow_template
-version: "2.0"
+version: '2.0'
 id: template.dev.feature_be_l3
 name: Feature Backend Development L3 Template
-description: |
-  Canonical L3 backend workflow for implementing backend behavior under TECH and
-  frozen contract constraints with an explicit UTDD loop.
-owner: development
-tags: [template, dev, feature, backend, l3, canonical, adr-008, utdd]
+description: 'Canonical L3 backend workflow for implementing backend behavior under TECH and
 
+  frozen contract constraints with an explicit UTDD loop.
+
+  '
+owner: development
+tags:
+- template
+- dev
+- feature
+- backend
+- l3
+- canonical
+- adr-008
+- utdd
 contracts:
   shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
   stage_definition: ../../stages/l3-backend-development.yaml
-
-steps:
+instance_schema:
+  required_fields:
+  - id
+  - template_id
+  - parent_phase_id
+  - formal_ssot_id
+  - source_refs
+  - governing_adrs
+  - tech_spec_ref
+  - contract_freeze_ref
+  - repo_backend
+  optional_fields:
+  - acceptance_brief_ref
+  - repo_context
+  - decision_constraints
+  output_fields:
+  - unit_test_ref
+  - be_artifact_ref
+  - refactor_report_ref
+  - contract_verification_ref
+  - coverage_report_ref
+  - coverage_gate_result
+  - be_handoff_package_ref
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
   - id: write_ut
     name: Write or Update Unit Tests
     kind: agent
@@ -21,31 +58,30 @@ steps:
     mandatory: true
     depends_on: []
     outputs:
-      - unit_test_ref
-      - test_scope_ref
-
+    - unit_test_ref
+    - test_scope_ref
   - id: implement_backend
     name: Implement Backend Logic
     kind: agent
     description: Implement backend code until the frozen contract and UT expectations are satisfied.
     agent_id: agent.dev.go_backend_engineer
     mandatory: true
-    depends_on: [write_ut]
+    depends_on:
+    - write_ut
     outputs:
-      - be_artifact_ref
-      - implementation_notes
-
+    - be_artifact_ref
+    - implementation_notes
   - id: refactor_backend
     name: Refactor Backend
     kind: agent
     description: Refactor implementation while preserving passing tests and contract alignment.
     agent_id: agent.dev.go_backend_engineer
     mandatory: true
-    depends_on: [implement_backend]
+    depends_on:
+    - implement_backend
     outputs:
-      - refactor_report_ref
-      - contract_verification_ref
-
+    - refactor_report_ref
+    - contract_verification_ref
   - id: coverage_gate
     name: Coverage Gate
     kind: agent
@@ -55,42 +91,19 @@ steps:
       coverage_threshold: 80
       coverage_retry_target: write_ut
     mandatory: true
-    depends_on: [refactor_backend]
+    depends_on:
+    - refactor_backend
     outputs:
-      - coverage_report_ref
-      - coverage_gate_result
-
+    - coverage_report_ref
+    - coverage_gate_result
   - id: publish_backend
     name: Publish Backend Handoff
     kind: agent
     description: Publish backend handoff artifacts for frontend and integration phases.
     agent_id: agent.dev.code_self_reviewer
     mandatory: true
-    depends_on: [coverage_gate]
+    depends_on:
+    - coverage_gate
     outputs:
-      - be_handoff_package_ref
-      - handoff_notes
-
-instance_schema:
-  required_fields:
-    - id
-    - template_id
-    - parent_phase_id
-    - formal_ssot_id
-    - source_refs
-    - governing_adrs
-    - tech_spec_ref
-    - contract_freeze_ref
-    - repo_backend
-  optional_fields:
-    - acceptance_brief_ref
-    - repo_context
-    - decision_constraints
-  output_fields:
-    - unit_test_ref
-    - be_artifact_ref
-    - refactor_report_ref
-    - contract_verification_ref
-    - coverage_report_ref
-    - coverage_gate_result
     - be_handoff_package_ref
+    - handoff_notes

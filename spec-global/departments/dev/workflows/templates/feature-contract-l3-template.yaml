@@ -1,19 +1,64 @@
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:44.053664
 kind: l3_workflow_template
-version: "2.0"
+version: '2.0'
 id: template.dev.feature_contract_l3
 name: Feature Contract Design L3 Template
-description: |
-  Canonical L3 workflow for deriving and freezing the structural truth source
-  after TECH design and before implementation begins.
-owner: development
-tags: [template, dev, feature, contract, l3, canonical, adr-008]
+description: 'Canonical L3 workflow for deriving and freezing the structural truth source
 
+  after TECH design and before implementation begins.
+
+  '
+owner: development
+tags:
+- template
+- dev
+- feature
+- contract
+- l3
+- canonical
+- adr-008
 contracts:
   shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
   stage_definition: ../../../../../spec/workflow/definitions/contract-design-stage-definition.md
   freeze_gate: ../../gates/contract-freeze-gate/v1/gate.yaml
-
-steps:
+instance_schema:
+  required_fields:
+  - id
+  - template_id
+  - parent_phase_id
+  - formal_ssot_id
+  - source_refs
+  - governing_adrs
+  - tech_spec_ref
+  optional_fields:
+  - existing_contract_refs
+  - review_context
+  - decision_constraints
+  output_fields:
+  - api_contract_ref
+  - data_contract_ref
+  - event_contract_ref
+  - contract_review_ref
+  - contract_freeze_ref
+  - contract_hash
+  - handoff_package_ref
+handoff_rules:
+  backend_dev:
+    required_inputs:
+    - tech_spec_ref
+    - contract_freeze_ref
+    - contract_hash
+  frontend_dev:
+    required_inputs:
+    - tech_spec_ref
+    - contract_freeze_ref
+    - contract_hash
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
   - id: api_contract_design
     name: API Contract Design
     kind: agent
@@ -22,83 +67,52 @@ steps:
     mandatory: true
     depends_on: []
     outputs:
-      - api_contract_ref
-      - api_review_notes
-
+    - api_contract_ref
+    - api_review_notes
   - id: data_contract_design
     name: Data Contract Design
     kind: agent
     description: Define entity, DTO, persistence, and compatibility schemas aligned with the API contract.
     agent_id: agent.dev.contract_designer
     mandatory: true
-    depends_on: [api_contract_design]
+    depends_on:
+    - api_contract_design
     outputs:
-      - data_contract_ref
-      - data_review_notes
-
+    - data_contract_ref
+    - data_review_notes
   - id: event_contract_design
     name: Event Contract Design
     kind: agent
     description: Define emitted and consumed events, payload schemas, and delivery semantics.
     agent_id: agent.dev.contract_designer
     mandatory: true
-    depends_on: [data_contract_design]
+    depends_on:
+    - data_contract_design
     outputs:
-      - event_contract_ref
-      - event_review_notes
-
+    - event_contract_ref
+    - event_review_notes
   - id: contract_self_review
     name: Contract Self Review
     kind: agent
     description: Validate coverage across API, data, and event contracts before freeze.
     agent_id: agent.dev.code_self_reviewer
     mandatory: true
-    depends_on: [event_contract_design]
+    depends_on:
+    - event_contract_design
     outputs:
-      - contract_review_ref
-      - contract_review_summary
-
+    - contract_review_ref
+    - contract_review_summary
   - id: contract_freeze
     name: Contract Freeze Gate
     kind: gate
     description: Freeze the contract package after review and produce the canonical handoff reference.
-    gate_id: gate.dev.contract_freeze_gate
     mandatory: true
-    depends_on: [contract_self_review]
+    depends_on:
+    - contract_self_review
+    config:
+      gate:
+        type: human_approval
+        gate_id: gate.dev.contract_freeze_gate
     outputs:
-      - contract_freeze_ref
-      - contract_hash
-
-instance_schema:
-  required_fields:
-    - id
-    - template_id
-    - parent_phase_id
-    - formal_ssot_id
-    - source_refs
-    - governing_adrs
-    - tech_spec_ref
-  optional_fields:
-    - existing_contract_refs
-    - review_context
-    - decision_constraints
-  output_fields:
-    - api_contract_ref
-    - data_contract_ref
-    - event_contract_ref
-    - contract_review_ref
     - contract_freeze_ref
     - contract_hash
-    - handoff_package_ref
-
-handoff_rules:
-  backend_dev:
-    required_inputs:
-      - tech_spec_ref
-      - contract_freeze_ref
-      - contract_hash
-  frontend_dev:
-    required_inputs:
-      - tech_spec_ref
-      - contract_freeze_ref
-      - contract_hash
