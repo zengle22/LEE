@@ -1,15 +1,21 @@
 {
   "repository_summary": {
     "name": "LEE",
-    "generated_at": "2026-03-07T10:59:16.453235+00:00",
+    "generated_at": "2026-03-14T04:21:19.427237+00:00",
     "include_paths": [
-      "src",
-      "README.md",
-      "spec-global"
+      "src/",
+      "scripts/",
+      "spec/",
+      "docs/",
+      ".project/"
     ],
     "exclude_paths": [
-      ".git",
-      ".tmp"
+      ".git/",
+      ".workflow/",
+      ".artifacts/archive/",
+      "legacy/",
+      "node_modules/",
+      ".tmp/"
     ],
     "top_level_entries": [
       ".VSCodeCounter",
@@ -17,6 +23,7 @@
       ".artifacts",
       ".azure-pipelines",
       ".claude",
+      ".codex-worktrees",
       ".env",
       ".env.example",
       ".git",
@@ -30,11 +37,27 @@
       ".projectignore",
       ".pytest_cache",
       ".tmp",
+      ".tmp_skill_article.html",
+      ".tmp_skill_demo.html",
+      ".tmp_skill_demo.md",
+      ".tmp_skill_pkg",
+      ".tmp_wechat_skill_check",
+      ".tmp_wechat_skill_check2",
+      ".tmp_wechat_skill_check3",
+      ".venv",
       ".workflow",
       ".yunxiao.yml",
       "CHANGELOG.md",
       "Dockerfile.e2e",
+      "EaiLEE.workflowworkspacewf_task_3e7a12f9tech_design",
+      "EaiLEE.workflowworkspacewf_task_4f469314tech_design",
+      "EaiLEE.workflowworkspacewf_task_aa5dec71tech_design",
+      "EaiLEE.workflowworkspacewf_task_c86da721ui_design",
+      "EaiLEE.workflowworkspacewf_task_ca1e62fatech_design",
+      "EaiLEE.workflowworkspacewf_task_f53534aftech_design",
       "LEE-FRAMEWORK-ANALYSIS.md",
+      "MANIFEST.in",
+      "MagicMock",
       "PROJECT_ISSUES_ANALYSIS.md",
       "QA_TEMPLATE_DIFF_REPORT.md",
       "QWEN.md",
@@ -44,7 +67,6 @@
       "REFACTORING_PLAN.md",
       "__pycache__",
       "azure-pipelines.yml",
-      "blocker_count",
       "config",
       "conftest.py",
       "debug_decision.py",
@@ -53,18 +75,19 @@
       "demo_orchestrator.db",
       "demo_ssot.py",
       "demo_ssot_contract_chain.py",
-      "demos",
+      "deploy",
       "docs",
       "evidence",
       "knowledge",
       "lee_orchestrator.db",
       "legacy",
-      "major_count",
       "mcp-server",
       "orchestrator.db",
+      "output",
       "p0-expression-eval-tech-plan.rewrite.md",
       "package-lock.json",
       "package.json",
+      "publish-local-to-marathon.cmd",
       "pyproject.toml",
       "pytest-temp",
       "pytest.ini",
@@ -76,36 +99,57 @@
       "src",
       "start-vibe-kanban.sh",
       "templates",
+      "test-temp-pytest",
+      "test-temp-system",
       "test_pm_agent_quick.py",
       "test_workflow_fix.sh",
-      "tests"
+      "tests",
+      "tmp_epic_to_feat_sample.yaml",
+      "tmp_feat_prep_cli_layering_FEAT_080.yaml",
+      "tmp_feat_prep_cli_layering_FEAT_081.yaml",
+      "tmp_feat_prep_cli_layering_FEAT_082.yaml",
+      "tmp_feat_prep_cli_layering_FEAT_083.yaml",
+      "tmp_feat_prep_cli_layering_FEAT_084.yaml",
+      "tmp_product_main_adr016_run.yaml",
+      "tmp_reverse_epic_feat_run.yaml",
+      "tmp_src011_epic_to_feat_spec.yaml",
+      "tmp_src011_feat169_to_delivery_spec.yaml",
+      "tmp_src011_feat_to_delivery_spec.yaml",
+      "tools",
+      "vibe-kanban"
     ],
     "statistics": {
-      "files": 914,
-      "python_files": 236,
-      "yaml_files": 261,
-      "markdown_files": 72,
-      "workflow_templates": 22,
-      "cli_commands": 26
+      "files": 1585,
+      "python_files": 295,
+      "yaml_files": 10,
+      "markdown_files": 928,
+      "workflow_templates": 0,
+      "cli_commands": 29
     },
     "modules": [
+      {
+        "id": "requirements",
+        "path_prefix": "spec/requirements/",
+        "summary": "需求与冻结契约 SSOT",
+        "file_count": 326
+      },
       {
         "id": "cli",
         "path_prefix": "src/lee/cli/",
         "summary": "命令行入口与用户操作命令",
-        "file_count": 69
+        "file_count": 75
       },
       {
         "id": "orchestrator",
         "path_prefix": "src/lee/orchestrator/",
         "summary": "工作流编排、执行、状态机与 gate",
-        "file_count": 299
+        "file_count": 397
       },
       {
-        "id": "spec_global",
-        "path_prefix": "spec-global/",
-        "summary": "全局 workflow/agent/contract 模板",
-        "file_count": 439
+        "id": "scripts",
+        "path_prefix": "scripts/",
+        "summary": "仓库维护与 workflow 辅助脚本",
+        "file_count": 34
       }
     ],
     "cli_commands": [
@@ -118,6 +162,7 @@
       "demo",
       "diagram_gen",
       "diagram_insert",
+      "doctor",
       "gates_cmd",
       "governance",
       "init",
@@ -134,31 +179,10 @@
       "test_runner",
       "test_set",
       "verify",
-      "watch"
+      "watch",
+      "workflow_entrypoints",
+      "workflow_registry"
     ],
-    "workflow_templates": [
-      "spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml",
-      "spec-global/core/workflows/templates/spec-governance-l3-template.yaml",
-      "spec-global/cross/workflows/product-pipeline/v1/workflow.yaml",
-      "spec-global/cross/workflows/project/product-mvp/v1/workflow.yaml",
-      "spec-global/departments/dev/workflows/phase-openspec-flow/v1/workflow.yaml",
-      "spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml",
-      "spec-global/departments/dev/workflows/templates/feature-be-l3-template.yaml",
-      "spec-global/departments/dev/workflows/templates/feature-contract-l3-template.yaml",
-      "spec-global/departments/dev/workflows/templates/feature-fe-l3-template.yaml",
-      "spec-global/departments/dev/workflows/templates/feature-integration-l3-template.yaml",
-      "spec-global/departments/dev/workflows/templates/feature-l2-template.yaml",
-      "spec-global/departments/devops/workflows/deploy/v1/workflow.yaml",
-      "spec-global/departments/media/workflows/content-layout-pipeline/v1/workflow.yaml",
-      "spec-global/departments/media/workflows/diagram-insertion-pipeline/v1/workflow.yaml",
-      "spec-global/departments/office/workflows/workspace-cleanup/v1/workflow.yaml",
-      "spec-global/departments/prd/workflows/product-pipeline/v1/workflow.yaml",
-      "spec-global/departments/prd/workflows/product-to-dev-pipeline/v1/workflow.yaml",
-      "spec-global/departments/qa/workflows/templates/test-plan-l2-template.yaml",
-      "spec-global/departments/qa/workflows/templates/test-set-execute-l3-template.yaml",
-      "spec-global/departments/qa/workflows/templates/test-set-production-l3-template.yaml",
-      "spec-global/departments/stg/workflows/opportunity_discovery/v1/workflow.yaml",
-      "spec-global/departments/ui/workflows/ui-design-pipeline/v1/workflow.yaml"
-    ]
+    "workflow_templates": []
   }
 }

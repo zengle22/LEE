@@ -1,7 +1,12 @@
 {
-  "generated_at": "2026-03-07T10:59:16.599722+00:00",
+  "generated_at": "2026-03-14T04:21:19.643061+00:00",
   "system_name": "LEE",
   "modules": [
+    {
+      "name": "requirements",
+      "path_prefix": "spec/requirements/",
+      "responsibility": "需求与冻结契约 SSOT"
+    },
     {
       "name": "cli",
       "path_prefix": "src/lee/cli/",
@@ -13,9 +18,9 @@
       "responsibility": "工作流编排、执行、状态机与 gate"
     },
     {
-      "name": "spec_global",
-      "path_prefix": "spec-global/",
-      "responsibility": "全局 workflow/agent/contract 模板"
+      "name": "scripts",
+      "path_prefix": "scripts/",
+      "responsibility": "仓库维护与 workflow 辅助脚本"
     }
   ],
   "entry_points": {
@@ -29,6 +34,7 @@
       "demo",
       "diagram_gen",
       "diagram_insert",
+      "doctor",
       "gates_cmd",
       "governance",
       "init",
@@ -38,22 +44,10 @@
       "run",
       "ssot",
       "status",
-      "sut",
-      "task_brief"
+      "sut"
     ],
     "workflow_registry": "config/workflow-registry.yaml",
-    "workflow_templates": [
-      "spec-global/core/workflows/templates/reverse-epic-feat-l3-template.yaml",
-      "spec-global/core/workflows/templates/spec-governance-l3-template.yaml",
-      "spec-global/cross/workflows/product-pipeline/v1/workflow.yaml",
-      "spec-global/cross/workflows/project/product-mvp/v1/workflow.yaml",
-      "spec-global/departments/dev/workflows/phase-openspec-flow/v1/workflow.yaml",
-      "spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml",
-      "spec-global/departments/dev/workflows/templates/feature-be-l3-template.yaml",
-      "spec-global/departments/dev/workflows/templates/feature-contract-l3-template.yaml",
-      "spec-global/departments/dev/workflows/templates/feature-fe-l3-template.yaml",
-      "spec-global/departments/dev/workflows/templates/feature-integration-l3-template.yaml"
-    ]
+    "workflow_templates": []
   },
   "core_flows": [
     {

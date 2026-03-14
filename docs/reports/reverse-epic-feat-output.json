@@ -1,0 +1,31 @@
+{
+  "request_id": "reverse-demo-20260309-224915",
+  "workflow_id": "core.reverse-epic-feat",
+  "run_id": "reverse-epic-feat-20260314122120",
+  "reverse_source_pack_path": ".artifacts/active/reverse-source-pack.json",
+  "system_map_path": "docs/guides/system-map.md",
+  "capability_map_path": "docs/guides/capability-map.md",
+  "feature_registry_path": "spec/requirements/feature-registry.md",
+  "epic_feat_ssot_output_path": ".artifacts/active/reverse-epic-feat-ssot-output.json",
+  "reverse_delivery_prep_seed_path": ".artifacts/active/reverse-delivery-prep-seed.json",
+  "reverse_qa_handoff_seed_path": ".artifacts/active/reverse-qa-handoff-seed.json",
+  "reverse_evidence_view_path": ".artifacts/active/reverse-evidence-view.json",
+  "reverse_chain_manifest_path": ".artifacts/active/reverse-ssot-chain-manifest.json",
+  "review_report_path": ".artifacts/active/reverse-ssot-chain-review.json",
+  "completion_summary_path": "docs/reports/reverse-ssot-chain-completion.md",
+  "src_count": 1,
+  "epic_count": 4,
+  "feat_count": 11,
+  "non_ssot_count": 3,
+  "blocker_count": 0,
+  "major_count": 0,
+  "evidence_strategy_version": "1.0",
+  "evidence_layering_enabled": true,
+  "primary_ref_ranking_signals": [
+    "path_quality",
+    "semantic_path_match",
+    "page_content_match",
+    "onboarding_local_rerank"
+  ],
+  "reverse_ssot_status": "draft_generated"
+}

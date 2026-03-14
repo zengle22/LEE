@@ -1,8 +1,10 @@
 {
-  "generated_at": "2026-03-09T03:45:30.714269+00:00",
+  "generated_at": "2026-03-14T04:21:21.004657+00:00",
   "summary": {
-    "epic_count": 2,
-    "feat_count": 4,
+    "src_count": 1,
+    "epic_count": 4,
+    "feat_count": 11,
+    "non_ssot_count": 3,
     "blocker_count": 0,
     "major_count": 0
   },
@@ -11,10 +13,12 @@
     "majors": []
   },
   "rules_checked": [
-    "Only epic/feat ssot_type outputs are allowed",
+    "Only src/epic/feat may materialize as formal ssot outputs",
+    "UI/TECH/TASK/TESTSET/TC/REPORT/BUG/EVI must remain seed/view outputs in this workflow",
     "Bundle must satisfy ssot-agent-output contract",
     "Every FEAT must have a valid EPIC parent",
     "Every output must carry existing source_refs",
+    "SRC outputs must carry primary refs and stay parentless",
     "FEAT outputs must carry structured evidence_layers, primary_refs, and evidence_strategy",
     "Every FEAT must include goal, user value, preconditions, main flow, processing, dependencies, non-goals, edge cases, state updates, testable acceptance criteria, and structured acceptance checks",
     "Primary refs must prefer impl/api evidence when available",
