@@ -248,6 +248,9 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # 创建 WorkflowInstance
         data = data or {}
         data.setdefault("run_id", self._generate_run_id())
+        parent = await self.store.get_workflow(parent_id) if parent_id else None
+        if parent and isinstance(parent.data, dict):
+            data.setdefault("root_run_id", parent.data.get("root_run_id") or parent.data.get("run_id"))
         instance = WorkflowInstance(
             id=workflow_id,
             level=level,
@@ -263,6 +266,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # v3.6: 创建产出物 Manifest
         try:
             run_id = data.get("run_id", workflow_id)
+            parent_run_id = parent.data.get("run_id") if parent and isinstance(parent.data, dict) else None
             department = data.get("department") or (
                 template.owner if hasattr(template, "owner") else None
             )
@@ -272,7 +276,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 department=department,
                 executor=data.get("executor"),
                 executor_version=data.get("executor_version"),
-                parent_run_id=parent_id,
+                parent_run_id=parent_run_id,
                 root_run_id=data.get("root_run_id")
             )
         except Exception as e:
@@ -843,7 +847,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
                     # v3.6: 记录步骤产出物到 ArtifactManager
                     try:
-                        self._record_step_artifacts(workflow_id, step_to_execute.id, output)
+                        self._record_step_artifacts(
+                            workflow_id,
+                            step_to_execute.id,
+                            output,
+                            run_id=run_id,
+                        )
                     except Exception as e:
                         import logging
                         logging.getLogger(__name__).warning(f"Failed to record artifacts: {e}")
@@ -2439,7 +2448,13 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         except Exception:
             pass
 
-    def _record_step_artifacts(self, workflow_id: str, step_id: str, output: Any) -> None:
+    def _record_step_artifacts(
+        self,
+        workflow_id: str,
+        step_id: str,
+        output: Any,
+        run_id: Optional[str] = None,
+    ) -> None:
         """Record step output as artifacts.
 
         Args:
@@ -2449,7 +2464,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         """
         from lee.orchestrator.execution.artifacts import ArtifactType
 
-        run_id = workflow_id  # 简化：使用 workflow_id 作为 run_id
+        run_id = run_id or workflow_id
 
         # 记录文件类型产出物
         if isinstance(output, dict):
@@ -2537,8 +2552,16 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             raise ValueError(f"No repos configured for phase {phase_id}")
 
         frontend_phases = {"frontend_dev"}
-        backend_phases = {"backend_dev", "api_align", "contract_design"}
-        shared_phases = {"tech_design", "integration", "evidence_pack", "smoke_gate"}
+        backend_phases = {
+            "backend_dev",
+            "api_align",
+            "contract_design",
+            "root_cause",
+            "fix_design",
+            "fix_implementation",
+            "verification",
+        }
+        shared_phases = {"tech_design", "integration", "evidence_pack", "smoke_gate", "triage", "merge_or_reject"}
 
         for repo in repos:
             repo_id = repo.get("id", "")
@@ -2573,6 +2596,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             "integration": "api",
             "evidence_pack": "service",
             "smoke_gate": "ui",
+            "triage": "service",
+            "root_cause": "service",
+            "fix_design": "service",
+            "fix_implementation": "service",
+            "verification": "service",
+            "merge_or_reject": "service",
         }
         return layer_map.get(phase_id, "ui")
 
@@ -2674,6 +2703,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # Get parent context
         parent = await self.store.get_workflow(parent_l2_id)
         context = parent.data.get("context", {})
+        parent_params = dict(parent.data.get("params", {}) or {})
+        parent_artifacts = dict(parent.data.get("artifacts", {}) or {})
 
         # Generate L3 instance
         config = L3InstanceConfig(
@@ -2683,6 +2714,10 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             repo_id=repo_id,
             prd_path=context.get("prd_path", ""),
             template_id=l3_template_id or "template.dev.task_l3_v3",
+            metadata={
+                "params": dict(parent_params),
+                "artifacts": dict(parent_artifacts),
+            },
         )
 
         l3_template_id = config.template_id
@@ -2707,12 +2742,15 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             template_id=l3_template_id,
             data={
                 "kind": "l3_workflow_instance",
+                "params": dict(parent_params),
+                "artifacts": dict(parent_artifacts),
                 "point_id": point.id,
                 "point_title": point.title,
                 "point_desc": point.desc,
                 "point_layer": point.layer,
                 "point_complexity": point.estimated_complexity.value,
                 "parent_phase_id": parent_phase_id,
+                "parent_l2_id": parent_l2_id,
                 "repo_id": repo_id,
                 "l3_template_id": l3_template_id,
                 "step_index": 0,  # Current step in L3 flow

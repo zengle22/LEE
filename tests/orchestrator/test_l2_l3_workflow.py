@@ -79,6 +79,12 @@ class TestL2InstanceGeneration:
             name="Test L2 Instance",
             project="Test",
             module="test",
+            shared_inputs={
+                "formal_ssot_id": "FEAT-001",
+                "source_refs": ["FEAT-001#delivery"],
+                "governing_adrs": ["ADR-008"],
+                "repo_context": {"repo_id": "be-repo", "branch": "main"},
+            },
             repos=[
                 {"id": "fe-repo", "type": "frontend"},
                 {"id": "be-repo", "type": "backend"},
@@ -96,6 +102,13 @@ class TestL2InstanceGeneration:
         assert result.generated_workflow["lifecycle_state"] == "Ready"
         assert result.generated_workflow["context"]["repo_frontend"] == "fe-repo"
         assert result.generated_workflow["context"]["repo_backend"] == "be-repo"
+        assert result.generated_workflow["params"]["formal_ssot_id"] == "FEAT-001"
+        assert result.generated_workflow["params"]["source_refs"] == ["FEAT-001#delivery"]
+        assert result.generated_workflow["params"]["governing_adrs"] == ["ADR-008"]
+        assert result.generated_workflow["params"]["repo_context"] == {
+            "repo_id": "be-repo",
+            "branch": "main",
+        }
         assert [phase["id"] for phase in result.generated_workflow["phases"]] == [
             "tech_design",
             "contract_design",
@@ -342,6 +355,12 @@ class TestOrchestratorL2Methods:
         assert orchestrator._get_repo_id_for_phase("api_align", repos) == "be-repo"
         assert orchestrator._get_repo_id_for_phase("tech_design", repos) == "fe-repo"
         assert orchestrator._get_repo_id_for_phase("contract_design", repos) == "be-repo"
+        assert orchestrator._get_repo_id_for_phase("triage", repos) == "fe-repo"
+        assert orchestrator._get_repo_id_for_phase("root_cause", repos) == "be-repo"
+        assert orchestrator._get_repo_id_for_phase("fix_design", repos) == "be-repo"
+        assert orchestrator._get_repo_id_for_phase("fix_implementation", repos) == "be-repo"
+        assert orchestrator._get_repo_id_for_phase("verification", repos) == "be-repo"
+        assert orchestrator._get_repo_id_for_phase("merge_or_reject", repos) == "fe-repo"
 
     def test_get_layer_for_phase(self, orchestrator):
         """Test layer mapping for phase."""
@@ -351,6 +370,10 @@ class TestOrchestratorL2Methods:
         assert orchestrator._get_layer_for_phase("tech_design") == "service"
         assert orchestrator._get_layer_for_phase("contract_design") == "api"
         assert orchestrator._get_layer_for_phase("evidence_pack") == "service"
+        assert orchestrator._get_layer_for_phase("root_cause") == "service"
+        assert orchestrator._get_layer_for_phase("fix_design") == "service"
+        assert orchestrator._get_layer_for_phase("fix_implementation") == "service"
+        assert orchestrator._get_layer_for_phase("verification") == "service"
 
     def test_get_repo_id_for_layer(self, orchestrator):
         """Test repo ID selection for layer."""
@@ -380,11 +403,18 @@ class TestOrchestratorL2Methods:
                 {"id": "smoke_gate", "status": "completed"},
             ]
         }
+        bugfix_closed = {
+            "phases": [
+                {"id": "evidence_pack", "status": "completed"},
+                {"id": "merge_or_reject", "status": "completed"},
+            ]
+        }
 
         assert orchestrator._derive_l2_lifecycle_state(ready) == "Ready"
         assert orchestrator._derive_l2_lifecycle_state(in_progress) == "In Progress"
         assert orchestrator._derive_l2_lifecycle_state(evidence) == "Evidence Pack Produced"
         assert orchestrator._derive_l2_lifecycle_state(closed) == "Closed"
+        assert orchestrator._derive_l2_lifecycle_state(bugfix_closed) == "Closed"
 
     def test_extract_l3_handoff_refs_collects_contract_outputs(self, orchestrator):
         """Test runtime handoff extraction preserves canonical contract refs for downstream phases."""
@@ -395,8 +425,12 @@ class TestOrchestratorL2Methods:
                 "event_contract_design": {"event_contract_ref": "CONTRACT-EVENT-001"},
                 "contract_self_review": {"contract_review_ref": "REPORT-REVIEW-001"},
                 "contract_freeze": {
-                    "contract_freeze_ref": "CONTRACT-FREEZE-001",
-                    "contract_hash": "sha256:test",
+                "contract_freeze_ref": "CONTRACT-FREEZE-001",
+                "contract_hash": "sha256:test",
+            },
+            "bugfix_verification": {
+                "verification_report_ref": "VERIFY-001",
+                "closure_summary_ref": "SUMMARY-001",
                 },
             }
         }
@@ -410,6 +444,8 @@ class TestOrchestratorL2Methods:
             "contract_review_ref": "REPORT-REVIEW-001",
             "contract_freeze_ref": "CONTRACT-FREEZE-001",
             "contract_hash": "sha256:test",
+            "verification_report_ref": "VERIFY-001",
+            "closure_summary_ref": "SUMMARY-001",
         }
 
 
@@ -581,7 +617,6 @@ class TestYamlTemplates:
         with open(bugfix_path, encoding="utf-8") as f:
             bugfix_data = yaml.safe_load(f)
         assert "bug_ssot_id" in bugfix_data["instance_schema"]["required_fields"]
-        assert "verification_results" in bugfix_data["instance_schema"]["required_fields"]
         assert "merge_or_reject_input" in bugfix_data["instance_schema"]["output_fields"]
 
     def test_contract_design_stage_definition_covers_three_contract_families(self):

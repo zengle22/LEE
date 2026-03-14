@@ -237,6 +237,12 @@ steps:
                     {"id": "test-repo", "type": "frontend"}
                 ]
             },
+            "params": {
+                "tech_spec_ref": "TECH-001",
+            },
+            "artifacts": {
+                "tech_spec_ref": "TECH-001",
+            },
             "phases": [
                 {"id": "frontend_dev", "status": "running", "complexity": "M"}
             ]
@@ -323,6 +329,8 @@ steps:
         assert instance_data["point_id"] == point.id
         assert instance_data["parent_l2_id"] == "l2-parent-test"
         assert instance_data["parent_phase_id"] == "frontend_dev"
+        assert instance_data["params"]["tech_spec_ref"] == "TECH-001"
+        assert instance_data["artifacts"]["tech_spec_ref"] == "TECH-001"
 
         # Verify L3_SPAWNED event was published
         assert len(events_captured) > 0
