@@ -498,6 +498,50 @@ class TestBugFixes:
         assert "feat_spec_generation:" in content
 
     @pytest.mark.asyncio
+    async def test_complete_step_preserves_existing_shell_generated_output_file(self, tmp_path):
+        rendered_dir = tmp_path / ".workflow" / "rendered"
+        rendered_dir.mkdir(parents=True, exist_ok=True)
+        template_path = rendered_dir / "workflow-test.yaml"
+        template_path.write_text("id: dummy\n", encoding="utf-8")
+
+        output_path = tmp_path / "docs" / "reports" / "repo-summary.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            '{"repository_summary":{"name":"LEE","modules":[{"id":"core","path_prefix":"src/","summary":"x"}]}}',
+            encoding="utf-8",
+        )
+
+        mock_instance = MagicMock()
+        mock_instance.template_id = str(template_path)
+        mock_instance.status = WorkflowStatus.RUNNING
+        mock_instance.data = {
+            "completed_steps": [],
+            "step_outputs": {},
+            "params": {},
+        }
+        self.mock_store.get_workflow.return_value = mock_instance
+
+        step_info = MagicMock()
+        step_info.outputs = [OutputSpec(type="file", path="docs/reports/repo-summary.json", format="json")]
+        step_info.input = []
+
+        template = MagicMock()
+        template.get_step_info.return_value = step_info
+        template_manager = MagicMock()
+        template_manager.get_template.return_value = template
+
+        state_machine = WorkflowStateMachine(self.mock_store, template_manager=template_manager)
+        await state_machine.complete_step(
+            "workflow-123",
+            "repo_evidence_scan",
+            {"stdout": '{"repo_file_count": 10}\n', "stderr": "", "return_code": 0, "status": "completed"},
+        )
+
+        payload = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+        assert "repository_summary" in payload
+        assert "gate_output" not in payload
+
+    @pytest.mark.asyncio
     async def test_complete_step_materializes_freeze_ref_alias_inputs(self, tmp_path):
         rendered_dir = tmp_path / ".workflow" / "rendered"
         rendered_dir.mkdir(parents=True, exist_ok=True)
