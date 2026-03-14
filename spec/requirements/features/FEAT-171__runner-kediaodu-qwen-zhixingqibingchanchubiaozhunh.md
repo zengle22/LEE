@@ -1,7 +1,7 @@
 ---
 id: FEAT-171
 ssot_type: feat
-title: Runner 可调度 qwen 执行器并产出标准化执行结果
+title: Runner 可调度 qwen_chat 对话后端并产出标准化执行结果
 status: frozen
 version: v1
 parent_id: EPIC-022
@@ -18,7 +18,7 @@ frozen_at: '2026-03-12T22:26:15.249818'
 
 # Goal
 
-Runner 能够调度 qwen 执行器并产出标准化结果
+Runner 能够调度 qwen_chat 对话后端并产出标准化结果
 # User Value
 
 用户获得一致的执行结果格式
@@ -39,15 +39,15 @@ Runner 能够调度 qwen 执行器并产出标准化结果
 - execution_logs
 # Acceptance
 
-- Runner 能接收 qwen 实例并执行
+- Runner 能接收 qwen_chat 实例并执行
 - 执行结果格式与其他执行器一致
 - 保留完整执行日志与追溯信息
 # Acceptance Checks
 
 ## AC-001
 
-- Scenario: Runner 调度 qwen 执行
-- Given: Runner 持有 qwen 实例
+- Scenario: Runner 调度 qwen_chat 执行
+- Given: Runner 持有 qwen_chat 实例
 - When: 触发任务执行
 - Then: 任务被执行并返回结果
 - Trace Hints: TECH, TESTSET
@@ -62,7 +62,7 @@ Runner 能够调度 qwen 执行器并产出标准化结果
 # Dependencies
 
 - EPIC-022
-- FEAT-022-002
+- FEAT-170
 # Non Goals
 
 - 不替换现有执行器

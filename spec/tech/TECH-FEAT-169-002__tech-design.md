@@ -2,7 +2,7 @@
 id: TECH-FEAT-169-002
 ssot_type: tech
 title: tech_design
-status: active
+status: deprecated
 version: v1
 parent_id: FEAT-169
 derived_from_ids: []
@@ -12,6 +12,7 @@ tags: []
 properties:
   contract_key: tech_spec
   identity_kind: ssot
+  superseded_by: TECH-FEAT-169-004
 ---
 
 contract_type: frozen-technical-architecture
