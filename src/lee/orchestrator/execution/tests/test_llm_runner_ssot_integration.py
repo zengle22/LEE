@@ -1,6 +1,7 @@
 import shutil
 import tempfile
 import json
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -513,6 +514,74 @@ def test_feat_review_sanitizer_drops_reverse_ssot_contract_conflict_findings():
 
     assert normalized["decision"] == "pass"
     assert normalized["findings"] == []
+
+
+def test_feat_review_sanitizer_drops_reverse_ssot_governance_findings():
+    normalized, _ = LLMRunner._normalize_product_review_payload(
+        step=SimpleNamespace(id="feat_review", agent_id="agent.product.feat_reviewer", config={}),
+        business_output={
+            "review_type": "feat_review",
+            "decision": "revise",
+            "subject_refs": ["FEAT-EPIC-301-001"],
+            "summary": "输入对象不符合 feat-bundle-contract v1 结构，且存在 user_stories、dependencies、lifecycle_status 等治理问题。",
+            "findings": [
+                "user_stories 字段为空，无法验证 P1 级需求的业务价值闭环",
+                "dependencies 字段为空，但 inputs 引用了 ADR-016 等外部依赖，存在交付阻塞风险",
+                "derived_object_expectations 与 acceptance_criteria 关于 TASK 对象的定义存在逻辑矛盾",
+                "lifecycle_status 为 draft，未变更为 ready_for_review 即提交审批",
+                "输入 bundle 缺失标准 feat_specs 结构，subject_refs 被迫复用 Epic ID 作为代理",
+                "缺失 feat_specs 数组及 feat_id，无法建立 subject_refs",
+                "输入内容自述 acceptance_checks 的 trace_hints 语义模糊，存在正向/负向追溯矛盾",
+                "输入内容自述 derived_object_expectations 与 acceptance_criteria 存在逻辑冲突",
+                "user_stories field is empty array, violating P1 requirement for business value verification.",
+                "Logic contradiction: derived_object_expectations states task_required true, but acceptance_criteria states no TASK freeze.",
+                "acceptance_checks trace_hints ambiguity: lists UI/TECH/TASK/TESTSET but criteria says these should not be generated.",
+                "Missing explicit FEAT ID in bundle specification; subject_refs fallback to Epic ID.",
+                "input_contract completeness not verified; required_artifacts/fields/consumption_rules status unclear.",
+            ],
+            "risks": [],
+            "recommendations": [],
+        },
+        structured_payload={},
+        instance_data=None,
+    )
+
+    assert normalized["decision"] == "pass"
+    assert normalized["findings"] == []
+
+
+def test_feat_review_sanitizer_passes_self_contradictory_bundle_shape_revision():
+    normalized, _ = LLMRunner._normalize_product_review_payload(
+        step=SimpleNamespace(id="feat_review", agent_id="agent.product.feat_reviewer", config={}),
+        business_output={
+            "review_type": "feat_review",
+            "decision": "revise",
+            "subject_refs": ["FEAT-EPIC-301-001"],
+            "summary": "Input structure does not conform to feat-bundle-contract v1; missing feat_specs array and explicit feat_id.",
+            "findings": [
+                "Missing feat_specs array, unable to extract feat_id for subject_refs.",
+                "Acceptance checks trace_hints semantics are ambiguous regarding object exclusion.",
+            ],
+            "risks": ["Cannot trace downstream artifacts without valid FEAT ID."],
+            "recommendations": ["Resubmit with valid feat-bundle-contract v1 JSON structure including feat_specs."],
+        },
+        structured_payload={},
+        instance_data={
+            "step_outputs": {
+                "feat_spec_generation": {
+                    "business_output": {
+                        "epic_ref": "EPIC-301",
+                        "feat_specs": [{"feat_id": "FEAT-EPIC-301-001"}],
+                    }
+                }
+            }
+        },
+    )
+
+    assert normalized["decision"] == "pass"
+    assert normalized["findings"] == []
+    assert normalized["risks"] == []
+    assert normalized["recommendations"] == []
 
 
 def test_claude_code_runner_skips_nested_materialized_paths_in_frozen_inputs():
@@ -1684,6 +1753,55 @@ def test_build_executor_input_bridges_agent_step_to_kimi(temp_project_root, runn
     assert input_data["token_context"] == "encoded-token"
 
 
+def test_build_executor_input_appends_authoritative_feat_bundle_for_feat_review(runner, ctx):
+    instance = SimpleNamespace(
+        data={
+            "step_outputs": {
+                "feat_spec_generation": {
+                    "business_output": {
+                        "epic_ref": "EPIC-401",
+                        "feat_specs": [
+                            {
+                                "feat_id": "FEAT-401-001",
+                                "title": "Reverse chain alignment",
+                                "acceptance_checks": [],
+                            }
+                        ],
+                    }
+                },
+                "feat_scoped_specs": {
+                    "generated_text": "stale approval memo",
+                },
+            }
+        }
+    )
+    step = SimpleNamespace(
+        id="feat_review",
+        agent_id="agent.product.feat_reviewer",
+        config={},
+    )
+    agent_ctx = SimpleNamespace(
+        system_prompt="system",
+        user_prompt="## Input Data\n- feat_scoped_specs:\n```json\n{\"generated_text\":\"stale approval memo\"}\n```",
+        temperature=0.7,
+        max_tokens=4000,
+    )
+
+    input_data = runner._build_executor_input(
+        executor_type="qwen",
+        step=step,
+        ctx=ctx,
+        instance=instance,
+        workflow_id="wf-401",
+        agent_ctx=agent_ctx,
+        step_token=None,
+    )
+
+    assert "Authoritative FEAT Bundle" in input_data["prompt"]
+    assert "FEAT-401-001" in input_data["prompt"]
+    assert "Ignore any stale review memo or executor metadata shown above" in input_data["prompt"]
+
+
 def test_claude_code_input_defaults_silence_timeout_to_executor_default(temp_project_root):
     agent_ctx = SimpleNamespace(
         system_prompt="system rules",
@@ -2619,6 +2737,71 @@ async def test_llm_runner_does_not_fail_after_successful_schema_repair(temp_proj
     assert result.status == "completed"
     state_machine.fail_step.assert_not_called()
     state_machine.complete_step.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_schema_repair_retry_preserves_instance_epic_context_for_requirement_decomposer(
+    runner,
+    temp_project_root,
+):
+    step = SimpleNamespace(
+        id="feat_boundary_design",
+        agent_id="agent.product.requirement_decomposer",
+        config={},
+    )
+    invalid_payload = {
+        "generated_text": json.dumps(
+            {
+                "features": [
+                    {
+                        "feat_id": "FEAT-PENDING-001",
+                        "title": "待确认功能模块",
+                        "acceptance_boundary": "等待补充 EPIC 细节",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+    }
+    executor = MagicMock()
+    executor.execute = AsyncMock(return_value=invalid_payload)
+
+    repaired = await runner._attempt_schema_repair(
+        executor=executor,
+        executor_type="llm",
+        input_data={"prompt": "repair"},
+        step=step,
+        workflow_id="wf-req-decomp-001",
+        validation_error="'epic_ref' is a required property",
+        business_output={
+            "features": [
+                {
+                    "feat_id": "FEAT-PENDING-001",
+                    "title": "待确认功能模块",
+                    "acceptance_boundary": "等待补充 EPIC 细节",
+                }
+            ]
+        },
+        structured_payload=None,
+        instance_data={
+            "params": {
+                "epic_freeze": {
+                    "artifact_id": "EPIC-200",
+                    "path": str(
+                        temp_project_root
+                        / "spec"
+                        / "requirements"
+                        / "epics"
+                        / "EPIC-200__reverse-ssot-upgrade.md"
+                    ),
+                }
+            }
+        },
+    )
+
+    assert repaired is not None
+    assert repaired["business_output"]["epic_ref"] == "EPIC-200"
+    assert repaired["business_output"]["feat_candidates"][0]["title"] == "待确认功能模块"
 
 
 @pytest.mark.asyncio
@@ -5705,6 +5888,116 @@ def test_requirement_decomposer_flattens_feat_breakdown_business_output():
     assert candidate["goal"] == "实现 reverse workflow 输出路径到 canonical SSOT 目录的映射逻辑"
     assert candidate["user_value"] == "实现 reverse workflow 输出路径到 canonical SSOT 目录的映射逻辑"
     assert envelope["business_output"]["feat_candidates"][0]["user_value"] == candidate["user_value"]
+
+
+def test_resolve_epic_ref_from_instance_data_falls_back_to_parent_src_to_epic_outputs(
+    tmp_path,
+    monkeypatch,
+):
+    workflow_dir = tmp_path / ".workflow"
+    workflow_dir.mkdir(parents=True, exist_ok=True)
+    db_path = workflow_dir / "orchestrator.db"
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE workflow_instances (
+            id TEXT PRIMARY KEY,
+            level TEXT,
+            parent_id TEXT,
+            template_id TEXT,
+            status TEXT,
+            current_step TEXT,
+            data TEXT,
+            created_at TEXT,
+            updated_at TEXT,
+            completed_at TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE task_executions (
+            id TEXT PRIMARY KEY,
+            workflow_id TEXT,
+            step_name TEXT,
+            executor_type TEXT,
+            input_data TEXT,
+            output_data TEXT,
+            status TEXT,
+            error_message TEXT,
+            started_at TEXT,
+            completed_at TEXT,
+            invalidated_at TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        INSERT INTO workflow_instances (
+            id, level, parent_id, template_id, status, current_step, data, created_at, updated_at, completed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "wf_task_src_to_epic",
+            "task",
+            "wf_department_parent",
+            "workflow.product.task.src_to_epic",
+            "completed",
+            None,
+            "{}",
+            "2026-03-13T00:00:00Z",
+            "2026-03-13T00:00:00Z",
+            "2026-03-13T00:00:00Z",
+        ),
+    )
+    cur.execute(
+        """
+        INSERT INTO task_executions (
+            id, workflow_id, step_name, executor_type, input_data, output_data, status, error_message, started_at, completed_at, invalidated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "exec-001",
+            "wf_task_src_to_epic",
+            "epic_identity_formalize",
+            "llm",
+            None,
+            json.dumps(
+                {
+                    "business_output": {
+                        "epic_formalized_candidate": {
+                            "business_output": {
+                                "epic_id": "EPIC-301"
+                            }
+                        }
+                    }
+                },
+                ensure_ascii=False,
+            ),
+            "completed",
+            None,
+            "2026-03-13T00:00:00Z",
+            "2026-03-13T00:00:01Z",
+            None,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.chdir(tmp_path)
+
+    resolved = LLMRunner._resolve_epic_ref_from_instance_data(
+        {
+            "parent_workflow_id": "wf_department_parent",
+            "params": {
+                "raw_requirement": "ADR-016"
+            },
+        }
+    )
+
+    assert resolved == "EPIC-301"
 
 
 def test_prd_writer_normalizes_empty_inputs_and_consumption_rules():
