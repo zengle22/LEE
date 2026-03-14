@@ -1,7 +1,7 @@
 ---
 id: FEAT-170
 ssot_type: feat
-title: 执行器工厂可按配置创建可用的 qwen cli 执行器实例
+title: 执行器工厂可按配置创建可用的 qwen_chat 对话执行实例
 status: frozen
 version: v1
 parent_id: EPIC-022
@@ -18,17 +18,17 @@ frozen_at: '2026-03-12T22:26:15.239944'
 
 # Goal
 
-执行器工厂能够基于配置创建 qwen cli 执行器实例
+执行器工厂能够基于配置创建 qwen_chat 对话执行实例
 # User Value
 
-系统能够动态实例化 qwen 执行器
+系统能够动态实例化 qwen 对话执行后端
 # Inputs
 
 - validated_executor_config
 # Processing
 
 - 检查 executor_type
-- 初始化 qwen cli 客户端
+- 初始化 qwen cli 对话客户端
 - 验证实例可用性
 - 返回执行器实例
 # Outputs
@@ -36,17 +36,17 @@ frozen_at: '2026-03-12T22:26:15.239944'
 - executor_instance
 # Acceptance
 
-- 工厂能基于 qwen 配置创建实例
+- 工厂能基于 qwen_chat 配置创建实例
 - 实例符合统一执行器接口
 - 实例化失败时返回可定位错误
 # Acceptance Checks
 
 ## AC-001
 
-- Scenario: 工厂创建 qwen 实例
+- Scenario: 工厂创建 qwen_chat 实例
 - Given: 配置 valid_executor_config
 - When: 调用工厂创建方法
-- Then: 返回 qwen 执行器实例
+- Then: 返回 qwen_chat 对话执行实例
 - Trace Hints: TECH, TESTSET
 
 ## AC-002

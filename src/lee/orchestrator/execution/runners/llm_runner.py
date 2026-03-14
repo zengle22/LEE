@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import sqlite3
 import subprocess
 import uuid
 import difflib
@@ -22,9 +21,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from lee.orchestrator.execution.artifacts import ArtifactManager
-from lee.orchestrator.execution.artifacts.placement import resolve_src_root_id
-from lee.orchestrator.execution.artifacts.ssot_service import SSOTService
+from lee.orchestrator.config import is_coding_executor_type, normalize_executor_type_name
+from lee.orchestrator.config_loader import load_config
 from lee.orchestrator.storage.models import (
     TaskExecution,
     TaskExecutionStatus,
@@ -32,16 +30,6 @@ from lee.orchestrator.storage.models import (
 )
 from lee.orchestrator.execution.retry import AsyncRetryExecutor, DEFAULT_RETRY_POLICY, RetryPolicy
 from lee.orchestrator.execution.runners.base import StepRunnerBase, RunnerContext
-from lee.orchestrator.execution.runners.normalization import (
-    OutputExtractor,
-    PmPlannerTaskNormalizer,
-    PrdWriterFeatNormalizer,
-    ProductReviewNormalizer,
-    ReviewSemanticValidator,
-    SchemaRepairHelper,
-    SingleSSOTNormalizer,
-    WorkflowSemanticValidator,
-)
 from lee.orchestrator.execution.llm_executor import LLMExecutor as RealLLMExecutor
 
 
@@ -51,7 +39,7 @@ class LLMRunner(StepRunnerBase):
     DEFAULT_CLAUDE_CODE_FORBIDDEN_READ_PATHS = [
         "output/",
         "evidence/",
-        "/".join([".workflow", "claude-code", ""]),
+        ".workflow/claude-code/",
         "pytest-temp/",
         ".codex-worktrees/",
     ]
@@ -183,6 +171,422 @@ class LLMRunner(StepRunnerBase):
     }
 
     @staticmethod
+    def _is_qwen_chat_executor(executor_type: Any) -> bool:
+        return str(executor_type or "").strip().lower() in {"qwen", "qwen_chat"}
+
+    @staticmethod
+    def _is_coding_executor(executor_type: Any) -> bool:
+        return str(executor_type or "").strip().lower() in {"claude_code", "codex", "kimi"}
+
+    @staticmethod
+    def _contains_cjk(text: Any) -> bool:
+        if not isinstance(text, str):
+            return False
+        return re.search(r"[\u3400-\u9fff]", text) is not None
+
+    @staticmethod
+    def _extract_markdown_section(text: Any, heading: str) -> str:
+        source = str(text or "")
+        if not source.strip() or not heading:
+            return ""
+        pattern = re.compile(
+            rf"(?ms)^##\s+{re.escape(heading)}\s*\n(.*?)(?=^##\s+|\Z)"
+        )
+        match = pattern.search(source)
+        return match.group(1).strip() if match else ""
+
+    @staticmethod
+    def _truncate_text(text: Any, limit: int) -> str:
+        value = str(text or "").strip()
+        if len(value) <= limit:
+            return value
+        return value[: max(0, limit - 4)].rstrip() + "\n..."
+
+    @classmethod
+    def _adapt_qwen_structured_prompt(cls, prompt: Any) -> str:
+        source = str(prompt or "").strip()
+        if not source:
+            return source
+
+        sections: List[str] = []
+        task_match = re.search(r"(?ms)^#\s+Task\s*\n(.*?)(?=^##\s+|\Z)", source)
+        task_body = task_match.group(1).strip() if task_match else ""
+        if task_body:
+            sections.append("## Task\n" + cls._truncate_text(task_body, 800))
+
+        for heading, limit in (
+            ("Responsibility", 400),
+            ("Input Data", 1800),
+            ("Upstream Step Outputs", 1800),
+            ("Output Contract", 2200),
+            ("Instructions", 800),
+        ):
+            body = cls._extract_markdown_section(source, heading)
+            if body:
+                sections.append(f"## {heading}\n{cls._truncate_text(body, limit)}")
+
+        compact_body = "\n\n".join(sections) if sections else cls._truncate_text(source, 3200)
+        return "\n".join(
+            [
+                "Return the required result now.",
+                "Rules:",
+                "- Output exactly one machine-readable JSON or YAML object.",
+                "- Do not introduce yourself, list capabilities, ask what the user needs, or add commentary.",
+                "- Do not use Markdown code fences unless the prompt explicitly requires file sections.",
+                "- If the input is incomplete, preserve uncertainty inside the structured payload instead of asking follow-up questions.",
+                "",
+                compact_body,
+            ]
+        ).strip()
+
+    @classmethod
+    def _adapt_qwen_input_data(cls, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        adapted = dict(input_data)
+        system_message = str(adapted.get("system_message") or "").strip()
+        strict_system = "\n".join(
+            [
+                "You are executing a workflow step and must return the requested structured payload immediately.",
+                "Never answer with greetings, capability descriptions, or clarification questions.",
+                "Prefer strict JSON output when possible.",
+            ]
+        )
+        adapted["system_message"] = (
+            f"{system_message}\n\n{strict_system}".strip()
+            if system_message
+            else strict_system
+        )
+        adapted["prompt"] = cls._adapt_qwen_structured_prompt(adapted.get("prompt"))
+        return adapted
+
+    @classmethod
+    def _build_qwen_repair_input(
+        cls,
+        *,
+        input_data: Dict[str, Any],
+        llm_output: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        original_prompt = str(input_data.get("prompt") or "")
+        previous_answer = cls._truncate_text(llm_output.get("generated_text") or "", 2400)
+        repair_prompt = "\n".join(
+            [
+                "Your previous answer did not satisfy the required structured output contract.",
+                "Return exactly one machine-readable JSON or YAML object now.",
+                "Do not ask for clarification. Do not introduce yourself. Do not describe capabilities.",
+                "Do not use Markdown code fences.",
+                "",
+                "## Original Task",
+                cls._adapt_qwen_structured_prompt(original_prompt),
+                "",
+                "## Previous Invalid Answer",
+                previous_answer or "<empty>",
+            ]
+        ).strip()
+        repaired = dict(input_data)
+        repaired["prompt"] = repair_prompt
+        return repaired
+
+    @classmethod
+    async def _retry_same_executor_output(
+        cls,
+        *,
+        executor: Any,
+        input_data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        retry_executor = AsyncRetryExecutor(policy=DEFAULT_RETRY_POLICY)
+        retry_result = await retry_executor.execute(executor.execute, input_data)
+        if not retry_result.success:
+            return None
+        repaired_output = retry_result.result or {}
+        if repaired_output.get("status") == "failed":
+            return None
+        return repaired_output
+
+    @classmethod
+    def _resolve_qwen_fallback_target(cls, project_root: Optional[str]) -> Optional[str]:
+        try:
+            config = load_config(project_root or ".")
+        except Exception:
+            return None
+        candidate = normalize_executor_type_name(getattr(config.executor, "default_type", None))
+        if not candidate or cls._is_qwen_chat_executor(candidate) or is_coding_executor_type(candidate):
+            return None
+        return candidate
+
+    @classmethod
+    def _resolve_code_executor_type(
+        cls,
+        *,
+        instance_data: Optional[Dict[str, Any]],
+        project_root: Optional[str],
+    ) -> str:
+        override = ""
+        if isinstance(instance_data, dict):
+            override = str(instance_data.get("executor_override") or "").strip().lower()
+        if cls._is_coding_executor(override):
+            return override
+        try:
+            config = load_config(project_root or ".")
+        except Exception:
+            return "claude_code"
+        configured = str(getattr(config.executor, "coding_executor", "") or "").strip().lower()
+        if cls._is_coding_executor(configured):
+            return configured
+        return "claude_code"
+
+    @classmethod
+    async def _execute_fallback_executor(
+        cls,
+        *,
+        fallback_executor_type: str,
+        selected_profile: str,
+        step,
+        ctx: RunnerContext,
+        input_data: Dict[str, Any],
+        workflow_id: str,
+        execution_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        fallback_profile = cls._resolve_fallback_profile(
+            fallback_executor_type=fallback_executor_type,
+            selected_profile=selected_profile,
+            ctx=ctx,
+        )
+        if fallback_executor_type == "llm" and not fallback_profile:
+            return None
+        fallback_executor = ctx.executor_factory.create(
+            fallback_executor_type,
+            profile=fallback_profile,
+            agent_id=step.agent_id or "",
+        )
+        retry_executor = AsyncRetryExecutor(policy=DEFAULT_RETRY_POLICY)
+        fallback_retry_result = await retry_executor.execute(fallback_executor.execute, input_data)
+        if not fallback_retry_result.success:
+            return None
+        fallback_output = fallback_retry_result.result or {}
+        if fallback_output.get("status") == "failed":
+            return None
+        return fallback_output
+
+    @classmethod
+    def _resolve_fallback_profile(
+        cls,
+        *,
+        fallback_executor_type: str,
+        selected_profile: str,
+        ctx: RunnerContext,
+    ) -> Optional[str]:
+        if fallback_executor_type == "kimi":
+            return "kimi"
+        if fallback_executor_type == "llm":
+            default_profile = (
+                ctx.llm_config_loader.get_default_profile()
+                if hasattr(ctx, "llm_config_loader")
+                else None
+            )
+            normalized = str(default_profile or "").strip().lower()
+            if normalized in {"qwen", "qwen_chat"}:
+                return None
+            return default_profile or None
+        return os.getenv("LLM_PROFILE") or selected_profile
+
+    @classmethod
+    async def _maybe_fallback_qwen_output(
+        cls,
+        *,
+        executor_type: str,
+        executor: Any,
+        step,
+        ctx: RunnerContext,
+        instance,
+        workflow_id: str,
+        execution_id: str,
+        input_data: Dict[str, Any],
+        llm_output: Dict[str, Any],
+        selected_profile: str,
+    ) -> Dict[str, Any]:
+        if not cls._is_qwen_chat_executor(executor_type):
+            return llm_output
+
+        source_prompt = "\n".join(
+            part for part in [
+                str(input_data.get("prompt") or ""),
+                str(input_data.get("goal") or ""),
+                str(input_data.get("system_message") or ""),
+            ]
+            if part
+        )
+        if not cls._contains_cjk(source_prompt):
+            return llm_output
+
+        generated_text = str(llm_output.get("generated_text") or "").strip()
+        structured_payload = llm_output.get("structured_payload")
+        should_fallback = (
+            llm_output.get("status") == "failed"
+            or not generated_text
+            or not isinstance(structured_payload, dict)
+        )
+        if should_fallback:
+            repaired_output = await cls._retry_same_executor_output(
+                executor=executor,
+                input_data=cls._build_qwen_repair_input(
+                    input_data=input_data,
+                    llm_output=llm_output,
+                ),
+            )
+            if repaired_output:
+                repaired_text = str(repaired_output.get("generated_text") or "").strip()
+                repaired_payload = repaired_output.get("structured_payload")
+                if not isinstance(repaired_payload, dict):
+                    repaired_payload = cls._parse_structured_output_if_possible(repaired_text)
+                    if isinstance(repaired_payload, dict):
+                        repaired_output = dict(repaired_output)
+                        repaired_output["structured_payload"] = repaired_payload
+                if repaired_text and isinstance(repaired_payload, dict):
+                    repaired_output["qwen_repair_retry"] = True
+                    repaired_output["qwen_initial_output"] = {
+                        "status": llm_output.get("status"),
+                        "generated_text": generated_text,
+                        "error": llm_output.get("error"),
+                    }
+                    return repaired_output
+        if not should_fallback:
+            return llm_output
+
+        fallback_target = cls._resolve_qwen_fallback_target(ctx.project_root)
+        if not fallback_target:
+            return llm_output
+
+        fallback_reason = "qwen_quality_regression"
+        fallback_output = await cls._execute_fallback_executor(
+            fallback_executor_type=fallback_target,
+            selected_profile=selected_profile,
+            step=step,
+            ctx=ctx,
+            input_data=input_data,
+            workflow_id=workflow_id,
+            execution_id=execution_id,
+        )
+        if not fallback_output:
+            return llm_output
+
+        fallback_output["fallback_triggered"] = True
+        fallback_output["fallback_from"] = "qwen_chat"
+        fallback_output["fallback_to"] = fallback_target
+        fallback_output["fallback_reason"] = fallback_reason
+        fallback_output["fallback_source_output"] = {
+            "status": llm_output.get("status"),
+            "generated_text": generated_text,
+            "error": llm_output.get("error"),
+        }
+        return fallback_output
+
+    async def _recover_llm_contract_mismatch(
+        self,
+        *,
+        executor_type: str,
+        executor: Any,
+        step,
+        ctx: RunnerContext,
+        workflow_id: str,
+        execution_id: str,
+        input_data: Dict[str, Any],
+        selected_profile: str,
+        generated_text: str,
+        business_output: Any,
+        structured_payload: Any,
+        validation_result: Any,
+    ) -> Optional[Dict[str, Any]]:
+        if self._is_coding_executor(executor_type):
+            return None
+        if validation_result is None or validation_result.passed:
+            return None
+
+        error_msg = (
+            f"Output schema validation failed: "
+            f"{validation_result.errors[0].message if validation_result.errors else 'unknown'}"
+        )
+        repaired = await self._attempt_schema_repair(
+            executor=executor,
+            executor_type=executor_type,
+            input_data=input_data,
+            step=step,
+            workflow_id=workflow_id,
+            validation_error=error_msg,
+            business_output=business_output,
+            structured_payload=structured_payload,
+        )
+        if repaired:
+            repaired_validation = self._validate_step_output(step, repaired["business_output"])
+            if not repaired_validation or repaired_validation.passed:
+                repaired_output = dict(repaired["output"])
+                repaired_output["contract_repair_retry"] = True
+                repaired_output["schema_repair_retry"] = True
+                if self._is_qwen_chat_executor(executor_type):
+                    repaired_output["qwen_contract_repair"] = True
+                return {
+                    "output": repaired_output,
+                    "business_output": repaired["business_output"],
+                    "structured_payload": repaired["structured_payload"],
+                    "generated_text": repaired_output.get("generated_text", generated_text),
+                    "validation_result": repaired_validation,
+                }
+
+        if not self._is_qwen_chat_executor(executor_type):
+            return None
+
+        fallback_target = self._resolve_qwen_fallback_target(ctx.project_root)
+        if not fallback_target:
+            return None
+
+        fallback_output = await self._execute_fallback_executor(
+            fallback_executor_type=fallback_target,
+            selected_profile=selected_profile,
+            step=step,
+            ctx=ctx,
+            input_data=input_data,
+            workflow_id=workflow_id,
+            execution_id=execution_id,
+        )
+        if not fallback_output:
+            return None
+
+        fallback_generated_text = fallback_output.get("generated_text", "") or ""
+        fallback_structured_payload = self._parse_structured_output_if_possible(fallback_generated_text)
+        fallback_business_output = self._extract_business_output_payload(
+            fallback_structured_payload,
+            fallback_generated_text,
+            step=step,
+            written_files=[],
+        )
+        fallback_business_output, fallback_structured_payload = self._normalize_business_payload(
+            step=step,
+            workflow_id=workflow_id,
+            business_output=fallback_business_output,
+            structured_payload=fallback_structured_payload,
+            instance_data=None,
+        )
+        fallback_validation = self._validate_step_output(step, fallback_business_output)
+        if fallback_validation and not fallback_validation.passed:
+            return None
+
+        fallback_output = dict(fallback_output)
+        fallback_output["fallback_triggered"] = True
+        fallback_output["fallback_from"] = "qwen_chat"
+        fallback_output["fallback_to"] = fallback_target
+        fallback_output["fallback_reason"] = "qwen_contract_validation_failed"
+        fallback_output["fallback_source_output"] = {
+            "generated_text": generated_text,
+            "business_output": business_output,
+            "validation_result": validation_result.to_dict() if hasattr(validation_result, "to_dict") else None,
+        }
+        return {
+            "output": fallback_output,
+            "business_output": fallback_business_output,
+            "structured_payload": fallback_structured_payload,
+            "generated_text": fallback_generated_text,
+            "validation_result": fallback_validation,
+        }
+
+    @staticmethod
     def _resolve_step_timeout_seconds(input_data: Dict[str, Any]) -> int:
         base_timeout = int(os.getenv("LEE_STEP_TIMEOUT_SECONDS", "300"))
         executor_timeout = input_data.get("timeout_seconds")
@@ -193,257 +597,6 @@ class LLMRunner(StepRunnerBase):
         if executor_timeout_int > 0:
             return max(base_timeout, executor_timeout_int + 30)
         return base_timeout
-
-    @staticmethod
-    def _is_identity_formalize_step(step) -> bool:
-        step_id = str(getattr(step, "id", "") or "")
-        return step_id.endswith("_identity_formalize")
-
-    @staticmethod
-    def _is_identity_prepare_step(step) -> bool:
-        step_id = str(getattr(step, "id", "") or "")
-        return step_id.endswith("_identity_prepare")
-
-    @classmethod
-    def _resolve_step_input_sources(cls, step) -> List[str]:
-        resolved: List[str] = []
-        for item in getattr(step, "inputs", []) or []:
-            source = item.get("source") if isinstance(item, dict) else getattr(item, "source", None)
-            if isinstance(source, str) and source.strip():
-                resolved.append(source.strip())
-        return resolved
-
-    @classmethod
-    def _collect_payload_artifact_ids(cls, payload: Any, collected: List[str]) -> None:
-        if isinstance(payload, dict):
-            candidate_id = payload.get("id")
-            if cls._is_literal_ssot_ref(candidate_id):
-                collected.append(str(candidate_id))
-            for value in payload.values():
-                if isinstance(value, (dict, list)):
-                    cls._collect_payload_artifact_ids(value, collected)
-        elif isinstance(payload, list):
-            for item in payload:
-                cls._collect_payload_artifact_ids(item, collected)
-        elif cls._is_literal_ssot_ref(payload):
-            collected.append(str(payload))
-
-    @classmethod
-    def _replace_text_refs(cls, text: str, replacements: Dict[str, str]) -> str:
-        updated = text
-        for old_id, new_id in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
-            updated = updated.replace(f"{old_id}#", f"{new_id}#")
-            updated = updated.replace(old_id, new_id)
-        return updated
-
-    @classmethod
-    def _rewrite_payload_refs(cls, payload: Any, replacements: Dict[str, str]) -> Any:
-        if isinstance(payload, str):
-            return cls._replace_text_refs(payload, replacements)
-        if isinstance(payload, list):
-            return [cls._rewrite_payload_refs(item, replacements) for item in payload]
-        if isinstance(payload, dict):
-            return {key: cls._rewrite_payload_refs(value, replacements) for key, value in payload.items()}
-        return payload
-
-    @classmethod
-    def _extract_src_root_from_payload(
-        cls,
-        payload: Any,
-        manager: ArtifactManager,
-        fallback: Optional[str] = None,
-    ) -> Optional[str]:
-        if isinstance(payload, dict):
-            properties = payload.get("properties") if isinstance(payload.get("properties"), dict) else {}
-            source_refs = payload.get("source_refs") if isinstance(payload.get("source_refs"), list) else []
-            parent_id = payload.get("parent_id") if isinstance(payload.get("parent_id"), str) else None
-            artifact_id = payload.get("id") if isinstance(payload.get("id"), str) else None
-            src_root_id = resolve_src_root_id(
-                parent_id=parent_id or artifact_id,
-                source_refs=source_refs,
-                properties=properties,
-            )
-            if src_root_id:
-                return src_root_id
-            if artifact_id:
-                metadata = manager.get_ssot(artifact_id)
-                if metadata:
-                    resolved = resolve_src_root_id(
-                        parent_id=metadata.properties.get("parent_id") or metadata.id,
-                        source_refs=metadata.properties.get("source_refs", []),
-                        properties=metadata.properties,
-                    )
-                    if resolved:
-                        return resolved
-            for value in payload.values():
-                if isinstance(value, (dict, list)):
-                    resolved = cls._extract_src_root_from_payload(value, manager, fallback=fallback)
-                    if resolved:
-                        return resolved
-        elif isinstance(payload, list):
-            for item in payload:
-                resolved = cls._extract_src_root_from_payload(item, manager, fallback=fallback)
-                if resolved:
-                    return resolved
-        elif isinstance(payload, str):
-            resolved = resolve_src_root_id(parent_id=payload, source_refs=[payload], properties={})
-            if resolved:
-                return resolved
-        return fallback
-
-    @classmethod
-    def _inject_identity_prepare_context(
-        cls,
-        payload: Any,
-        *,
-        src_root_id: Optional[str],
-        mode: str,
-    ) -> Any:
-        if isinstance(payload, dict):
-            rewritten = {
-                key: cls._inject_identity_prepare_context(value, src_root_id=src_root_id, mode=mode)
-                for key, value in payload.items()
-            }
-            if "id" in rewritten or "source_refs" in rewritten or "ssot_materialized" in rewritten:
-                identity_context = dict(rewritten.get("identity_context", {}) or {})
-                identity_context.setdefault("mode", mode)
-                if src_root_id:
-                    identity_context.setdefault("src_root_id", src_root_id)
-                rewritten["identity_context"] = identity_context
-            if "properties" in rewritten and isinstance(rewritten["properties"], dict) and src_root_id:
-                rewritten["properties"].setdefault("src_root_id", src_root_id)
-            return rewritten
-        if isinstance(payload, list):
-            return [
-                cls._inject_identity_prepare_context(item, src_root_id=src_root_id, mode=mode)
-                for item in payload
-            ]
-        return payload
-
-    async def _execute_identity_prepare_step(
-        self,
-        workflow_id: str,
-        step,
-        ctx: RunnerContext,
-        instance,
-    ) -> StepResult:
-        project_root = Path(ctx.project_root or ".").resolve()
-        manager = ArtifactManager(project_root=project_root)
-
-        instance_data = getattr(instance, "data", {}) or {}
-        step_outputs = instance_data.get("step_outputs", {}) if isinstance(instance_data, dict) else {}
-        params = instance_data.get("params", {}) if isinstance(instance_data, dict) else {}
-        input_sources = self._resolve_step_input_sources(step)
-
-        payloads: List[Any] = []
-        for source in input_sources:
-            if source in step_outputs:
-                payloads.append(step_outputs[source])
-                continue
-            aliased = f"{source}_ref" if not source.endswith("_ref") else source[:-4]
-            if aliased in step_outputs:
-                payloads.append(step_outputs[aliased])
-                continue
-            if source in params:
-                payloads.append(params[source])
-                continue
-            if aliased in params:
-                payloads.append(params[aliased])
-
-        fallback_src_root = params.get("src_root_id") if isinstance(params.get("src_root_id"), str) else None
-        src_root_id = None
-        for payload in payloads:
-            src_root_id = self._extract_src_root_from_payload(payload, manager, fallback=fallback_src_root)
-            if src_root_id:
-                break
-
-        primary_payload = payloads[0] if payloads else {}
-        rewritten_payload = self._inject_identity_prepare_context(
-            primary_payload,
-            src_root_id=src_root_id,
-            mode="provisional",
-        )
-        artifact_ids: List[str] = []
-        self._collect_payload_artifact_ids(primary_payload, artifact_ids)
-        if isinstance(rewritten_payload, dict):
-            rewritten_payload["identity_prepare_result"] = {
-                "src_root_id": src_root_id,
-                "mode": "provisional",
-                "artifact_ids": list(dict.fromkeys(artifact_ids)),
-            }
-        else:
-            rewritten_payload = {
-                "identity_prepare_result": {
-                    "src_root_id": src_root_id,
-                    "mode": "provisional",
-                    "artifact_ids": list(dict.fromkeys(artifact_ids)),
-                }
-            }
-
-        await ctx.state_machine.complete_step(workflow_id, step.id, rewritten_payload)
-        return StepResult(
-            status="success",
-            step_id=step.id,
-            workflow_id=workflow_id,
-            message=f"Identity prepare completed with src_root_id={src_root_id or 'unknown'}",
-            output=rewritten_payload,
-        )
-
-    async def _execute_identity_formalize_step(
-        self,
-        workflow_id: str,
-        step,
-        ctx: RunnerContext,
-        instance,
-    ) -> StepResult:
-        project_root = Path(ctx.project_root or ".").resolve()
-        manager = ArtifactManager(project_root=project_root)
-        service = SSOTService(manager)
-
-        instance_data = getattr(instance, "data", {}) or {}
-        step_outputs = instance_data.get("step_outputs", {}) if isinstance(instance_data, dict) else {}
-        input_sources = self._resolve_step_input_sources(step)
-
-        payloads: List[Any] = []
-        for source in input_sources:
-            if source in step_outputs:
-                payloads.append(step_outputs[source])
-                continue
-            aliased = f"{source}_ref" if not source.endswith("_ref") else source[:-4]
-            if aliased in step_outputs:
-                payloads.append(step_outputs[aliased])
-
-        artifact_ids: List[str] = []
-        for payload in payloads:
-            self._collect_payload_artifact_ids(payload, artifact_ids)
-        deduped_ids: List[str] = []
-        for artifact_id in artifact_ids:
-            if artifact_id not in deduped_ids:
-                deduped_ids.append(artifact_id)
-
-        result = service.formalize(deduped_ids)
-        replacements = result["replacements"]
-
-        primary_payload = payloads[0] if payloads else {}
-        rewritten_payload = self._rewrite_payload_refs(primary_payload, replacements)
-        if isinstance(rewritten_payload, dict):
-            rewritten_payload["formalize_result"] = result
-            if "outputs" not in rewritten_payload and result.get("grouped_ids"):
-                rewritten_payload["outputs"] = result["grouped_ids"]
-        else:
-            rewritten_payload = {
-                "formalize_result": result,
-                "outputs": result.get("grouped_ids", {}),
-            }
-
-        await ctx.state_machine.complete_step(workflow_id, step.id, rewritten_payload)
-        return StepResult(
-            status="success",
-            step_id=step.id,
-            workflow_id=workflow_id,
-            message=f"Identity formalize completed for {result['count']} artifacts",
-            output=rewritten_payload,
-        )
 
     def can_handle(self, step_kind: str) -> bool:
         return step_kind in ("agent", "llm")
@@ -784,7 +937,6 @@ class LLMRunner(StepRunnerBase):
                 "workspace": workspace,
                 "context_files": context_files,
                 "write_scope": code_config.get("write_scope", []),
-                "read_only": bool(code_config.get("read_only", False)),
                 "forbidden_read_paths": self._merge_forbidden_read_paths(
                     code_config.get("forbidden_read_paths")
                 ),
@@ -814,76 +966,12 @@ class LLMRunner(StepRunnerBase):
                 "temperature": agent_ctx.temperature,
                 "max_tokens": agent_ctx.max_tokens,
             }
-            input_data = self._inject_authoritative_feat_review_bundle(
-                step=step,
-                instance_data=getattr(instance, "data", {}) or {},
-                input_data=input_data,
-            )
+            if self._is_qwen_chat_executor(executor_type):
+                input_data = self._adapt_qwen_input_data(input_data)
 
         if step_token:
             input_data["token_context"] = ctx.token_manager.encode_token_for_context(step_token)
         return input_data
-
-    @classmethod
-    def _inject_authoritative_feat_review_bundle(
-        cls,
-        *,
-        step,
-        instance_data: Dict[str, Any],
-        input_data: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        if getattr(step, "agent_id", "") != "agent.product.feat_reviewer":
-            return input_data
-        if not isinstance(input_data, dict):
-            return input_data
-
-        prompt = str(input_data.get("prompt") or "")
-        if "Authoritative FEAT Bundle" in prompt:
-            return input_data
-
-        feat_bundle = cls._extract_feat_review_bundle_from_instance_data(instance_data)
-        if not isinstance(feat_bundle, dict):
-            return input_data
-        feat_specs = feat_bundle.get("feat_specs")
-        if not isinstance(feat_specs, list) or not feat_specs:
-            return input_data
-
-        authoritative_block = (
-            "\n\n## Authoritative FEAT Bundle\n"
-            "Ignore any stale review memo or executor metadata shown above.\n"
-            "Review only the following FEAT bundle as the source of truth for subject_refs, acceptance_checks, inputs, input_contract, and dependencies.\n"
-            "```json\n"
-            f"{json.dumps(feat_bundle, ensure_ascii=False, indent=2)}\n"
-            "```"
-        )
-        rewritten = dict(input_data)
-        rewritten["prompt"] = prompt + authoritative_block
-        return rewritten
-
-    @classmethod
-    def _extract_feat_review_bundle_from_instance_data(
-        cls,
-        instance_data: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
-        step_outputs = instance_data.get("step_outputs") if isinstance(instance_data, dict) else {}
-        step_outputs = step_outputs if isinstance(step_outputs, dict) else {}
-        feat_output = step_outputs.get("feat_spec_generation")
-        if isinstance(feat_output, dict):
-            direct_business = feat_output.get("business_output")
-            if isinstance(direct_business, dict) and isinstance(direct_business.get("feat_specs"), list):
-                return direct_business
-            generated_text = feat_output.get("generated_text")
-            if isinstance(generated_text, str) and generated_text.strip():
-                parsed = cls._parse_structured_output_if_possible(generated_text)
-                if isinstance(parsed, dict):
-                    business_output = parsed.get("business_output")
-                    if isinstance(business_output, dict) and isinstance(business_output.get("feat_specs"), list):
-                        return business_output
-                    if isinstance(parsed.get("feat_specs"), list):
-                        return parsed
-
-        feat_bundle = cls._load_feat_bundle_payload(instance_data)
-        return feat_bundle if isinstance(feat_bundle, dict) else None
 
     @classmethod
     def _merge_forbidden_read_paths(cls, configured_paths: Any) -> List[str]:
@@ -1308,7 +1396,7 @@ class LLMRunner(StepRunnerBase):
             default_profile = ctx.llm_config_loader.get_default_profile() if hasattr(ctx, 'llm_config_loader') else "huawei_deepseek"
             selected_profile = (
                 instance.data.get("llm_profile")
-                or ("qwen" if executor_type == "qwen" else None)
+                or ("qwen" if self._is_qwen_chat_executor(executor_type) else None)
                 or ("kimi" if executor_type == "kimi" else None)
                 or os.getenv("LLM_PROFILE")
                 or default_profile
@@ -1364,6 +1452,18 @@ class LLMRunner(StepRunnerBase):
                 )
 
             llm_output = retry_result.result
+            llm_output = await self._maybe_fallback_qwen_output(
+                executor_type=executor_type,
+                executor=executor,
+                step=step,
+                ctx=ctx,
+                instance=instance,
+                workflow_id=workflow_id,
+                execution_id=execution_id,
+                input_data=input_data,
+                llm_output=llm_output,
+                selected_profile=selected_profile,
+            )
 
             # 检查 LLM 调用是否成功
             if llm_output.get("status") == "failed":
@@ -1469,6 +1569,27 @@ class LLMRunner(StepRunnerBase):
                 instance_data=instance.data,
             )
             validation_result = self._validate_step_output(step, business_output)
+            qwen_contract_recovery = await self._recover_llm_contract_mismatch(
+                executor_type=executor_type,
+                executor=executor,
+                step=step,
+                ctx=ctx,
+                workflow_id=workflow_id,
+                execution_id=execution_id,
+                input_data=input_data,
+                selected_profile=selected_profile,
+                generated_text=generated_text,
+                business_output=business_output,
+                structured_payload=structured_payload,
+                validation_result=validation_result,
+            )
+            if qwen_contract_recovery:
+                llm_output = qwen_contract_recovery["output"]
+                business_output = qwen_contract_recovery["business_output"]
+                structured_payload = qwen_contract_recovery["structured_payload"]
+                generated_text = qwen_contract_recovery["generated_text"]
+                validation_result = qwen_contract_recovery["validation_result"]
+
             if validation_result and not validation_result.passed:
                 strict = (step.config or {}).get("strict_output_validation", False)
                 if strict:
@@ -1664,6 +1785,20 @@ class LLMRunner(StepRunnerBase):
                     "stop_reason": llm_output.get("stop_reason"),
                 },
             }
+            for key in (
+                "contract_repair_retry",
+                "schema_repair_retry",
+                "qwen_contract_repair",
+                "qwen_repair_retry",
+                "fallback_triggered",
+                "fallback_from",
+                "fallback_to",
+                "fallback_reason",
+                "fallback_source_output",
+                "qwen_initial_output",
+            ):
+                if key in llm_output:
+                    output_data[key] = llm_output[key]
             output_data.update(
                 self._extract_declared_output_values(
                     step=step,
@@ -1672,6 +1807,10 @@ class LLMRunner(StepRunnerBase):
                     generated_text=generated_text,
                 )
             )
+            if isinstance(business_output, dict):
+                output_data["business_output"] = business_output
+            if isinstance(structured_payload, dict):
+                output_data["structured_payload"] = structured_payload
             if ssot_materialized:
                 output_data["ssot_materialized"] = ssot_materialized["outputs"]
             if spec_writeback:
@@ -2046,7 +2185,6 @@ class LLMRunner(StepRunnerBase):
             output = {
                 key: value for key, value in dict(raw_output).items() if key in allowed_output_keys
             }
-            raw_verifies = output.get("verifies")
             for relation_key in relation_list_keys:
                 if relation_key not in output:
                     continue
@@ -2073,8 +2211,7 @@ class LLMRunner(StepRunnerBase):
                     output["parent"] = candidates[0]
             if isinstance(output.get("parent"), str) and output["parent"].upper().startswith("FEAT-"):
                 verifies = []
-                verify_candidates = output.get("verifies", []) or raw_verifies or []
-                for value in verify_candidates:
+                for value in output.get("verifies", []) or []:
                     if isinstance(value, str) and value.lower() == "feat":
                         verifies.append(output["parent"])
                     else:
@@ -2158,46 +2295,60 @@ class LLMRunner(StepRunnerBase):
         cls,
         instance_data: Dict[str, Any],
     ) -> List[str]:
-        return ReviewSemanticValidator.expected_feat_review_subject_refs(
-            runner_cls=cls,
-            instance_data=instance_data,
-        )
+        step_outputs = instance_data.get("step_outputs", {}) if isinstance(instance_data, dict) else {}
+        feat_spec_output = step_outputs.get("feat_spec_generation")
+        if not isinstance(feat_spec_output, dict):
+            return []
 
-    @staticmethod
-    def _extract_epic_id_from_output_payload(payload: Any) -> Optional[str]:
-        if not isinstance(payload, dict):
-            return None
+        ssot_materialized = feat_spec_output.get("ssot_materialized")
+        if isinstance(ssot_materialized, dict):
+            feat_entry = ssot_materialized.get("feat")
+            if isinstance(feat_entry, dict):
+                feat_id = feat_entry.get("id")
+                if isinstance(feat_id, str) and feat_id.strip():
+                    return [feat_id]
+            elif isinstance(feat_entry, list):
+                materialized_ids = [
+                    item.get("id")
+                    for item in feat_entry
+                    if isinstance(item, dict) and isinstance(item.get("id"), str) and item.get("id").strip()
+                ]
+                if materialized_ids:
+                    return materialized_ids
 
-        candidates: List[Any] = [payload]
-        business_output = payload.get("business_output")
-        if isinstance(business_output, dict):
-            candidates.append(business_output)
-        structured_payload = payload.get("structured_payload")
-        if isinstance(structured_payload, dict):
-            candidates.append(structured_payload)
+        generated_text = feat_spec_output.get("generated_text", "")
+        feat_payload: Any = None
+        try:
+            parsed_output = StepRunnerBase._parse_structured_output(generated_text)
+        except Exception:
+            parsed_output = None
 
-        nested_paths = [
-            ("epic_formalized_candidate", "business_output"),
-            ("epic_scoped_candidate", "business_output"),
-            ("epic_review_report", "epic_identity"),
-            ("epic_identity",),
-            ("ssot",),
-        ]
+        if isinstance(parsed_output, dict):
+            if isinstance(parsed_output.get("business_output"), dict):
+                feat_payload = parsed_output.get("business_output")
+            else:
+                feat_payload = parsed_output
 
-        for candidate in candidates:
-            direct_id = candidate.get("epic_id") or candidate.get("epic_ref") or candidate.get("id")
-            if isinstance(direct_id, str) and direct_id.strip() and direct_id.strip().upper().startswith("EPIC-"):
-                return direct_id.strip()
-            for path in nested_paths:
-                current: Any = candidate
-                for key in path:
-                    current = current.get(key) if isinstance(current, dict) else None
-                if not isinstance(current, dict):
-                    continue
-                nested_id = current.get("epic_id") or current.get("epic_ref") or current.get("id") or current.get("ssot_id")
-                if isinstance(nested_id, str) and nested_id.strip() and nested_id.strip().upper().startswith("EPIC-"):
-                    return nested_id.strip()
-        return None
+        if feat_payload is None:
+            fallback_payload = cls._parse_structured_output_if_possible(generated_text)
+            if isinstance(fallback_payload, dict):
+                nested_business = fallback_payload.get("business_output")
+                feat_payload = nested_business if isinstance(nested_business, dict) else fallback_payload
+        if not isinstance(feat_payload, dict):
+            return []
+
+        bundle_specs = feat_payload.get("feat_specs")
+        if isinstance(bundle_specs, list):
+            feat_ids = [
+                item.get("feat_id")
+                for item in bundle_specs
+                if isinstance(item, dict) and isinstance(item.get("feat_id"), str) and item.get("feat_id").strip()
+            ]
+            if feat_ids:
+                return feat_ids
+
+        feat_id = feat_payload.get("feat_id")
+        return [feat_id] if isinstance(feat_id, str) and feat_id.strip() else []
 
     @staticmethod
     def _resolve_epic_ref_from_instance_data(instance_data: Optional[Dict[str, Any]]) -> Optional[str]:
@@ -2251,51 +2402,6 @@ class LLMRunner(StepRunnerBase):
             if match:
                 return match.group(1).strip()
 
-        parent_workflow_id = str(instance_data.get("parent_workflow_id") or "").strip()
-        if parent_workflow_id:
-            db_path = Path.cwd() / ".workflow" / "orchestrator.db"
-            if db_path.exists():
-                try:
-                    conn = sqlite3.connect(str(db_path))
-                    cur = conn.cursor()
-                    sibling_ids = [
-                        row[0]
-                        for row in cur.execute(
-                            """
-                            SELECT id
-                            FROM workflow_instances
-                            WHERE parent_id = ?
-                              AND template_id = 'workflow.product.task.src_to_epic'
-                            ORDER BY created_at DESC
-                            """,
-                            (parent_workflow_id,),
-                        ).fetchall()
-                    ]
-                    for sibling_id in sibling_ids:
-                        rows = cur.execute(
-                            """
-                            SELECT output_data
-                            FROM task_executions
-                            WHERE workflow_id = ?
-                            ORDER BY started_at DESC
-                            """,
-                            (sibling_id,),
-                        ).fetchall()
-                        for (raw_output_data,) in rows:
-                            if not isinstance(raw_output_data, str) or not raw_output_data.strip():
-                                continue
-                            try:
-                                parsed_output = json.loads(raw_output_data)
-                            except Exception:
-                                continue
-                            resolved = LLMRunner._extract_epic_id_from_output_payload(parsed_output)
-                            if resolved:
-                                conn.close()
-                                return resolved
-                    conn.close()
-                except Exception:
-                    pass
-
         return None
 
     @staticmethod
@@ -2323,16 +2429,6 @@ class LLMRunner(StepRunnerBase):
             if isinstance(alternate_candidates, list):
                 raw_candidates = alternate_candidates
                 normalized_business["feat_candidates"] = alternate_candidates
-        if not isinstance(raw_candidates, list):
-            alternate_candidates = normalized_business.get("feats")
-            if isinstance(alternate_candidates, list):
-                raw_candidates = alternate_candidates
-                normalized_business["feat_candidates"] = alternate_candidates
-        if not isinstance(raw_candidates, list):
-            alternate_candidates = normalized_business.get("feat_breakdown")
-            if isinstance(alternate_candidates, list):
-                raw_candidates = alternate_candidates
-                normalized_business["feat_candidates"] = alternate_candidates
         if not str(normalized_business.get("breakdown_id") or "").strip():
             normalized_business["breakdown_id"] = f"FEAT-BREAKDOWN-{actual_epic_ref}"
         if not isinstance(raw_candidates, list):
@@ -2351,16 +2447,7 @@ class LLMRunner(StepRunnerBase):
             for item in raw_candidates:
                 if not isinstance(item, dict):
                     continue
-                nested_business_output = (
-                    item.get("business_output")
-                    if isinstance(item.get("business_output"), dict)
-                    else {}
-                )
-                normalized_item = {
-                    **nested_business_output,
-                    **dict(item),
-                }
-                normalized_item.pop("business_output", None)
+                normalized_item = dict(item)
 
                 title = str(
                     normalized_item.get("title")
@@ -2461,15 +2548,1096 @@ class LLMRunner(StepRunnerBase):
         structured_payload: Any,
         instance_data: Optional[Dict[str, Any]] = None,
     ) -> tuple[Any, Any]:
-        return PrdWriterFeatNormalizer.normalize(
-            runner_cls=LLMRunner,
-            step=step,
-            workflow_id=workflow_id,
-            business_output=business_output,
-            structured_payload=structured_payload,
-            instance_data=instance_data,
+        if getattr(step, "agent_id", "") != "agent.product.prd_writer":
+            return business_output, structured_payload
+        if not isinstance(business_output, dict):
+            return business_output, structured_payload
+
+        actual_epic_ref = LLMRunner._resolve_epic_ref_from_instance_data(instance_data)
+        step_config = getattr(step, "config", {}) or {}
+        output_contract = str(step_config.get("output_contract") or "").replace("\\", "/")
+        expects_bundle = output_contract.endswith("feat-bundle-contract/v1/schema.json") or (
+            not output_contract and getattr(step, "id", "") == "feat_spec_generation"
         )
 
+        def _clean_text(value: Any) -> str:
+            return str(value or "").strip()
+
+        def _normalize_priority(value: Any) -> str:
+            normalized = _clean_text(value).upper()
+            if normalized in {"P0", "P1", "P2"}:
+                return normalized
+            if normalized in {"HIGH", "CRITICAL"}:
+                return "P0"
+            if normalized in {"MEDIUM", "NORMAL"}:
+                return "P1"
+            if normalized in {"LOW"}:
+                return "P2"
+            if normalized in {"0", "1", "2"}:
+                return f"P{normalized}"
+            if normalized.startswith("P") and len(normalized) > 1 and normalized[1:].isdigit():
+                return normalized if normalized in {"P0", "P1", "P2"} else "P1"
+            return "P1"
+
+        def _normalize_lifecycle_status(value: Any) -> str:
+            normalized = _clean_text(value).lower()
+            mapping = {
+                "draft": "draft",
+                "active": "active",
+                "frozen": "frozen",
+                "archived": "archived",
+                "completed": "active",
+                "complete": "active",
+                "success": "active",
+                "done": "active",
+                "specified": "draft",
+            }
+            return mapping.get(normalized, "draft")
+
+        def _normalize_string_list(values: Any, *, fallback: Optional[List[str]] = None) -> List[str]:
+            items = values if isinstance(values, list) else [values] if values is not None else []
+            normalized_items: List[str] = []
+            for item in items:
+                if isinstance(item, dict):
+                    candidate = (
+                        item.get("description")
+                        or item.get("criterion")
+                        or item.get("title")
+                        or item.get("id")
+                    )
+                else:
+                    candidate = item
+                text = _clean_text(candidate)
+                if text:
+                    normalized_items.append(text)
+            if normalized_items:
+                return normalized_items
+            return [text for text in (fallback or []) if _clean_text(text)]
+
+        def _normalize_dependency_ids(values: Any) -> List[str]:
+            items = values if isinstance(values, list) else [values] if values is not None else []
+            normalized_dependencies: List[str] = []
+            for item in items:
+                if isinstance(item, dict):
+                    candidate = item.get("id") or item.get("feat_id") or item.get("epic_id") or item.get("title")
+                else:
+                    candidate = item
+                text = _clean_text(candidate)
+                if text:
+                    normalized_dependencies.append(text)
+            return normalized_dependencies
+
+        def _normalize_acceptance_criteria(values: Any, *, title: str, goal: str) -> List[str]:
+            items = values if isinstance(values, list) else [values] if values is not None else []
+            normalized_criteria: List[str] = []
+            for item in items:
+                if isinstance(item, dict):
+                    candidate = item.get("description") or item.get("criterion") or item.get("validation")
+                else:
+                    candidate = item
+                text = _clean_text(candidate)
+                if text:
+                    normalized_criteria.append(text)
+            if normalized_criteria:
+                return normalized_criteria
+            fallback_text = goal or title or "Feature is independently acceptable"
+            return [fallback_text]
+
+        def _build_acceptance_checks(
+            feat_item: Dict[str, Any],
+            acceptance_criteria: List[str],
+        ) -> List[Dict[str, Any]]:
+            raw_checks = feat_item.get("acceptance_checks")
+            normalized_checks: List[Dict[str, Any]] = []
+            if isinstance(raw_checks, list):
+                for index, item in enumerate(raw_checks[:5], start=1):
+                    if not isinstance(item, dict):
+                        normalized_checks.append(
+                            {
+                                "id": f"AC-{index:03d}",
+                                "scenario": _clean_text(item),
+                                "given": "",
+                                "when": "",
+                                "then": "",
+                                "trace_hints": ["TECH"],
+                            }
+                        )
+                        continue
+                    normalized_item = dict(item)
+                    normalized_item.setdefault("id", f"AC-{index:03d}")
+                    normalized_item.setdefault("scenario", "")
+                    normalized_item.setdefault("given", "")
+                    normalized_item.setdefault("when", "")
+                    normalized_item.setdefault("then", "")
+                    trace_hints = normalized_item.get("trace_hints")
+                    if not isinstance(trace_hints, list) or not trace_hints:
+                        normalized_item["trace_hints"] = ["TECH"]
+                    normalized_checks.append(normalized_item)
+            if normalized_checks:
+                return normalized_checks
+
+            scenario_seed = acceptance_criteria[:5]
+            if len(scenario_seed) == 1:
+                scenario_seed.append(f"{feat_item.get('title') or 'Feature'} remains traceable")
+            if not scenario_seed:
+                scenario_seed = [
+                    feat_item.get("goal") or feat_item.get("title") or "Feature behavior is verifiable",
+                    f"{feat_item.get('title') or 'Feature'} outputs remain stable",
+                ]
+
+            synthesized_checks: List[Dict[str, Any]] = []
+            for index, criterion in enumerate(scenario_seed[:5], start=1):
+                synthesized_checks.append(
+                    {
+                        "id": f"AC-{index:03d}",
+                        "scenario": criterion,
+                        "given": feat_item.get("title") or "",
+                        "when": "the feature workflow runs",
+                        "then": criterion,
+                        "trace_hints": ["TECH"],
+                    }
+                )
+            return synthesized_checks
+
+        def _extract_breakdown_feature_candidates(
+            payload: Dict[str, Any],
+            fallback_epic_ref: Optional[str],
+        ) -> tuple[Optional[List[Any]], Optional[str]]:
+            metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+            resolved_epic_ref = (
+                _clean_text(payload.get("epic_ref"))
+                or _clean_text(metadata.get("epic_id"))
+                or fallback_epic_ref
+            )
+            if isinstance(payload.get("features"), list):
+                return payload.get("features"), resolved_epic_ref
+            if isinstance(payload.get("feats"), list):
+                return payload.get("feats"), resolved_epic_ref
+            if isinstance(payload.get("feat_candidates"), list):
+                return payload.get("feat_candidates"), resolved_epic_ref
+            if isinstance(payload.get("feat_specifications"), list):
+                return payload.get("feat_specifications"), resolved_epic_ref
+
+            epic_breakdowns = payload.get("epic_breakdowns")
+            if not isinstance(epic_breakdowns, list):
+                return None, resolved_epic_ref
+
+            selected_breakdown: Optional[Dict[str, Any]] = None
+            if resolved_epic_ref:
+                for item in epic_breakdowns:
+                    if not isinstance(item, dict):
+                        continue
+                    if _clean_text(item.get("epic_id")).lower() == resolved_epic_ref.lower():
+                        selected_breakdown = item
+                        break
+            if selected_breakdown is None:
+                for item in epic_breakdowns:
+                    if isinstance(item, dict) and isinstance(item.get("features"), list):
+                        selected_breakdown = item
+                        break
+            if not isinstance(selected_breakdown, dict):
+                return None, resolved_epic_ref
+
+            resolved_epic_ref = _clean_text(selected_breakdown.get("epic_id")) or resolved_epic_ref
+            if isinstance(selected_breakdown.get("features"), list):
+                return selected_breakdown.get("features"), resolved_epic_ref
+            return None, resolved_epic_ref
+
+        def _is_placeholder_input_value(value: Any) -> bool:
+            normalized = _clean_text(value).lower()
+            if not normalized:
+                return True
+            placeholder_markers = (
+                "inputs defined by epic scope",
+                "input defined by epic scope",
+                "same as epic",
+                "tbd",
+                "to be defined",
+                "待补充",
+                "待定义",
+                "同 epic",
+            )
+            return any(marker in normalized for marker in placeholder_markers)
+
+        def _normalize_input_entries(value: Any, *, fallback: Optional[List[Any]] = None) -> List[Any]:
+            items = value if isinstance(value, list) else [value] if value is not None else []
+            normalized_entries: List[Any] = []
+            for item in items:
+                if isinstance(item, dict):
+                    normalized_item: Dict[str, Any] = {}
+                    for raw_key, raw_value in item.items():
+                        key = _clean_text(raw_key)
+                        if not key:
+                            continue
+                        if isinstance(raw_value, dict):
+                            nested: Dict[str, str] = {}
+                            for nested_key, nested_value in raw_value.items():
+                                normalized_nested_key = _clean_text(nested_key)
+                                normalized_nested_value = _clean_text(nested_value)
+                                if normalized_nested_key and normalized_nested_value:
+                                    nested[normalized_nested_key] = normalized_nested_value
+                            if nested:
+                                normalized_item[key] = nested
+                        elif isinstance(raw_value, list):
+                            normalized_list = [_clean_text(part) for part in raw_value if _clean_text(part)]
+                            if normalized_list:
+                                normalized_item[key] = normalized_list
+                        else:
+                            text_value = _clean_text(raw_value)
+                            if text_value:
+                                normalized_item[key] = text_value
+                    if normalized_item:
+                        normalized_entries.append(normalized_item)
+                    continue
+                text_value = _clean_text(item)
+                if text_value:
+                    normalized_entries.append(text_value)
+            if normalized_entries:
+                return normalized_entries
+            if fallback:
+                return _normalize_input_entries(fallback, fallback=None)
+            return []
+
+        def _extract_input_field_names(inputs: List[Any]) -> List[str]:
+            field_names: List[str] = []
+            for item in inputs:
+                if isinstance(item, str):
+                    if not _is_placeholder_input_value(item):
+                        field_names.append(item)
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                for raw_key, raw_value in item.items():
+                    key = _clean_text(raw_key)
+                    if not key:
+                        continue
+                    if isinstance(raw_value, dict) and raw_value:
+                        for nested_key in raw_value.keys():
+                            normalized_nested_key = _clean_text(nested_key)
+                            if normalized_nested_key:
+                                field_names.append(f"{key}.{normalized_nested_key}")
+                    else:
+                        field_names.append(key)
+            return list(dict.fromkeys(field_names))
+
+        def _normalize_input_contract(
+            contract_value: Any,
+            *,
+            inputs: List[Any],
+            source_refs: List[str],
+            epic_ref: Optional[str],
+        ) -> Dict[str, Any]:
+            existing = contract_value if isinstance(contract_value, dict) else {}
+            required_artifacts = _normalize_string_list(
+                existing.get("required_artifacts"),
+                fallback=source_refs or ([f"{epic_ref}#scope"] if epic_ref else []),
+            )
+            required_fields = _normalize_string_list(
+                existing.get("required_fields"),
+                fallback=_extract_input_field_names(inputs),
+            )
+            optional_fields = _normalize_string_list(existing.get("optional_fields"))
+            consumption_rules = _normalize_string_list(
+                existing.get("consumption_rules"),
+                fallback=[
+                    (
+                        f"Consume {required_artifacts[0]} and map fields "
+                        f"{', '.join(required_fields[:3])}"
+                    )
+                    if required_artifacts and required_fields
+                    else "Consume upstream FEAT context and preserve traceability"
+                ],
+            )
+            return {
+                "required_artifacts": required_artifacts,
+                "required_fields": required_fields,
+                "optional_fields": optional_fields,
+                "consumption_rules": consumption_rules,
+            }
+
+        def _synthesize_feat_spec(candidate: Dict[str, Any], epic_ref: Optional[str]) -> Dict[str, Any]:
+            title = _clean_text(candidate.get("title")) or "Untitled FEAT"
+            feat_id = _clean_text(candidate.get("feat_id") or candidate.get("id"))
+            if not feat_id:
+                slug = re.sub(r"[^A-Za-z0-9]+", "-", title).strip("-").upper()
+                feat_id = f"FEAT-{slug}" if slug else "FEAT-AUTO"
+
+            business_context = candidate.get("business_context") if isinstance(candidate.get("business_context"), dict) else {}
+            scope_boundary = candidate.get("scope_boundary") if isinstance(candidate.get("scope_boundary"), dict) else {}
+            requirement = candidate.get("requirement") if isinstance(candidate.get("requirement"), dict) else {}
+            interface_spec = candidate.get("interface_spec") if isinstance(candidate.get("interface_spec"), dict) else {}
+            input_schema = interface_spec.get("input_schema") if isinstance(interface_spec.get("input_schema"), dict) else {}
+            output_schema = interface_spec.get("output_schema") if isinstance(interface_spec.get("output_schema"), dict) else {}
+            state_machine = candidate.get("state_machine") if isinstance(candidate.get("state_machine"), dict) else {}
+            dependency_block = candidate.get("dependencies") if isinstance(candidate.get("dependencies"), dict) else {}
+            description = _clean_text(candidate.get("description"))
+            rich_description = _clean_text(requirement.get("description"))
+            goal = _clean_text(candidate.get("goal")) or rich_description or description or title
+            user_value = (
+                _clean_text(candidate.get("user_value"))
+                or _clean_text(business_context.get("problem"))
+                or rich_description
+                or description
+                or title
+            )
+            inputs = _normalize_input_entries(
+                candidate.get("inputs")
+                or candidate.get("input")
+                or [
+                    field.get("name")
+                    for field in (input_schema.get("fields") if isinstance(input_schema.get("fields"), list) else [])
+                    if isinstance(field, dict) and _clean_text(field.get("name"))
+                ]
+                or scope_boundary.get("in_scope"),
+                fallback=[],
+            )
+            processing = _normalize_string_list(
+                candidate.get("processing")
+                or [
+                    transition.get("trigger")
+                    for transition in (state_machine.get("transitions") if isinstance(state_machine.get("transitions"), list) else [])
+                    if isinstance(transition, dict) and _clean_text(transition.get("trigger"))
+                ],
+                fallback=[rich_description or description or f"Deliver {title} capability"],
+            )
+            outputs = _normalize_string_list(
+                candidate.get("outputs")
+                or candidate.get("output")
+                or [
+                    field.get("name")
+                    for field in (output_schema.get("fields") if isinstance(output_schema.get("fields"), list) else [])
+                    if isinstance(field, dict) and _clean_text(field.get("name"))
+                ]
+                or candidate.get("acceptance_boundary"),
+                fallback=[f"{title} FEAT specification"],
+            )
+            acceptance_criteria = _normalize_acceptance_criteria(
+                candidate.get("acceptance_criteria")
+                or requirement.get("acceptance_criteria")
+                or candidate.get("acceptance_boundaries"),
+                title=title,
+                goal=goal,
+            )
+            non_goals = _normalize_string_list(
+                candidate.get("non_goals") or scope_boundary.get("out_of_scope"),
+            )
+            priority = _normalize_priority(candidate.get("priority"))
+            parent_workflow = _clean_text(candidate.get("parent_workflow"))
+            category = _clean_text(candidate.get("category"))
+            delivery_slice = _clean_text(candidate.get("delivery_slice")) or parent_workflow or category or "core"
+            normalized_epic_ref = epic_ref or _clean_text(candidate.get("parent_epic"))
+            source_refs = _normalize_string_list(
+                candidate.get("source_refs"),
+                fallback=[f"{normalized_epic_ref}#scope"] if normalized_epic_ref else [],
+            )
+            dependencies = _normalize_dependency_ids(
+                candidate.get("dependencies")
+                if not isinstance(candidate.get("dependencies"), dict)
+                else dependency_block.get("upstream")
+            )
+
+            synthesized = {
+                "feat_id": feat_id,
+                "title": title,
+                "goal": goal,
+                "user_value": user_value,
+                "inputs": inputs,
+                "input_contract": _normalize_input_contract(
+                    candidate.get("input_contract"),
+                    inputs=inputs,
+                    source_refs=source_refs,
+                    epic_ref=normalized_epic_ref,
+                ),
+                "processing": processing,
+                "outputs": outputs,
+                "acceptance_criteria": acceptance_criteria,
+                "dependencies": dependencies,
+                "non_goals": non_goals,
+                "priority": priority,
+                "delivery_slice": delivery_slice,
+                "lifecycle_status": _normalize_lifecycle_status(
+                    candidate.get("lifecycle_status") or candidate.get("status")
+                ),
+                "source_refs": source_refs,
+                "ssot": {
+                    "identity_kind": "ssot",
+                    "ssot_type": "FEAT",
+                    "parent": normalized_epic_ref,
+                    "derived_from": normalized_epic_ref,
+                },
+                "testability_seed": {
+                    "risk_notes": non_goals,
+                    "integration_points": [value for value in [parent_workflow, category] if value],
+                    "priority_hint": priority,
+                },
+            }
+            synthesized["acceptance_checks"] = _build_acceptance_checks(synthesized, acceptance_criteria)
+            return synthesized
+
+        def _normalize_user_story_item(item: Any) -> Optional[Dict[str, str]]:
+            if not isinstance(item, dict):
+                return None
+
+            as_a = _clean_text(item.get("as_a") or item.get("role") or item.get("actor"))
+            i_want = _clean_text(item.get("i_want") or item.get("action") or item.get("need"))
+            so_that = _clean_text(
+                item.get("so_that")
+                or item.get("benefit")
+                or item.get("value")
+                or item.get("outcome")
+            )
+            if not (as_a and i_want and so_that):
+                return None
+
+            return {
+                "as_a": as_a,
+                "i_want": i_want,
+                "so_that": so_that,
+            }
+
+        def normalize_feat_item(feat_item: Any) -> Any:
+            if not isinstance(feat_item, dict):
+                return feat_item
+
+            normalized_feat = dict(feat_item)
+
+            def _truncate_list(values: Any, max_items: int) -> Any:
+                if not isinstance(values, list):
+                    return values
+                return values[:max_items]
+
+            ssot = normalized_feat.get("ssot")
+            if isinstance(ssot, dict):
+                normalized_ssot = dict(ssot)
+            else:
+                normalized_ssot = {}
+            feat_id = _clean_text(normalized_feat.get("feat_id") or normalized_feat.get("id"))
+            if not feat_id:
+                seed_text = (
+                    _clean_text(normalized_feat.get("title"))
+                    or _clean_text(normalized_feat.get("goal"))
+                    or _clean_text(normalized_feat.get("name"))
+                )
+                seed_slug = re.sub(r"[^A-Za-z0-9]+", "-", seed_text).strip("-").lower()
+                feat_id = (
+                    f"feat-{seed_slug}"
+                    if seed_slug
+                    else (
+                        f"{actual_epic_ref}-feat"
+                        if actual_epic_ref
+                        else "FEAT-AUTO"
+                    )
+                )
+            if feat_id:
+                normalized_feat["feat_id"] = feat_id
+            title = _clean_text(normalized_feat.get("title")) or feat_id or "Untitled FEAT"
+            normalized_feat["title"] = title
+            goal = _clean_text(normalized_feat.get("goal") or normalized_feat.get("description")) or title
+            normalized_feat["goal"] = goal
+            normalized_feat["user_value"] = (
+                _clean_text(normalized_feat.get("user_value"))
+                or _clean_text(
+                    normalized_feat.get("business_context", {}).get("problem")
+                    if isinstance(normalized_feat.get("business_context"), dict)
+                    else ""
+                )
+                or _clean_text(normalized_feat.get("description"))
+                or title
+            )
+            scope_boundary = normalized_feat.get("scope_boundary")
+            if not isinstance(scope_boundary, dict):
+                scope_boundary = {}
+            normalized_feat["inputs"] = _truncate_list(
+                _normalize_input_entries(
+                    normalized_feat.get("inputs") or normalized_feat.get("input") or scope_boundary.get("in_scope"),
+                    fallback=[
+                        normalized_feat.get("source_refs", [f"{actual_epic_ref}#scope"])[0]
+                        if isinstance(normalized_feat.get("source_refs"), list) and normalized_feat.get("source_refs")
+                        else (f"{actual_epic_ref}#scope" if actual_epic_ref else title)
+                    ],
+                ),
+                5,
+            )
+            normalized_feat["input_contract"] = _normalize_input_contract(
+                normalized_feat.get("input_contract"),
+                inputs=normalized_feat.get("inputs") or [],
+                source_refs=normalized_feat.get("source_refs") if isinstance(normalized_feat.get("source_refs"), list) else [],
+                epic_ref=actual_epic_ref
+                or _clean_text(normalized_feat.get("epic_ref"))
+                or _clean_text(normalized_ssot.get("parent")),
+            )
+            normalized_feat["processing"] = _truncate_list(
+                _normalize_string_list(
+                    normalized_feat.get("processing"),
+                    fallback=[_clean_text(normalized_feat.get("description")) or f"Deliver {title} capability"],
+                ),
+                5,
+            )
+            normalized_feat["outputs"] = _truncate_list(
+                _normalize_string_list(
+                    normalized_feat.get("outputs")
+                    or normalized_feat.get("output")
+                    or normalized_feat.get("acceptance_boundary"),
+                    fallback=[f"{title} FEAT specification"],
+                ),
+                5,
+            )
+            normalized_feat["acceptance_criteria"] = _truncate_list(
+                _normalize_acceptance_criteria(
+                    normalized_feat.get("acceptance_criteria") or normalized_feat.get("acceptance_boundaries"),
+                    title=title,
+                    goal=goal,
+                ),
+                5,
+            )
+            normalized_feat["dependencies"] = _truncate_list(
+                _normalize_dependency_ids(normalized_feat.get("dependencies")),
+                10,
+            )
+            normalized_feat["non_goals"] = _truncate_list(
+                _normalize_string_list(
+                    normalized_feat.get("non_goals") or scope_boundary.get("out_of_scope"),
+                ),
+                10,
+            )
+            normalized_feat["priority"] = _normalize_priority(normalized_feat.get("priority"))
+            normalized_feat["delivery_slice"] = (
+                _clean_text(normalized_feat.get("delivery_slice"))
+                or _clean_text(normalized_feat.get("parent_workflow"))
+                or _clean_text(normalized_feat.get("category"))
+                or "core"
+            )
+            normalized_feat["lifecycle_status"] = _normalize_lifecycle_status(
+                normalized_feat.get("lifecycle_status") or normalized_feat.get("status")
+            )
+            source_refs = normalized_feat.get("source_refs")
+            if isinstance(source_refs, list):
+                normalized_feat["source_refs"] = _truncate_list(
+                    _normalize_string_list(source_refs),
+                    5,
+                )
+            if normalized_feat.get("feat_id"):
+                normalized_ssot.setdefault("identity_kind", "ssot")
+                normalized_ssot.setdefault("ssot_type", "FEAT")
+                normalized_ssot.setdefault(
+                    "parent",
+                    actual_epic_ref
+                    or _clean_text(normalized_feat.get("epic_ref"))
+                    or _clean_text(normalized_ssot.get("parent")),
+                )
+                normalized_ssot.setdefault(
+                    "derived_from",
+                    actual_epic_ref
+                    or _clean_text(normalized_feat.get("epic_ref"))
+                    or _clean_text(normalized_ssot.get("derived_from"))
+                    or _clean_text(normalized_ssot.get("parent")),
+                )
+            if normalized_ssot:
+                normalized_feat["ssot"] = normalized_ssot
+
+            derived = normalized_feat.get("derived_object_expectations")
+            if isinstance(derived, dict):
+                normalized_derived = dict(derived)
+            else:
+                normalized_derived = {}
+            normalized_derived.setdefault("task_required", True)
+            normalized_derived.setdefault("testset_required", True)
+            normalized_derived.setdefault("testset_owner", "qa")
+            normalized_derived.setdefault("qa_seed_required", True)
+            normalized_feat["derived_object_expectations"] = normalized_derived
+            testability_seed = normalized_feat.get("testability_seed")
+            if isinstance(testability_seed, dict):
+                normalized_testability = dict(testability_seed)
+            else:
+                normalized_testability = {}
+            normalized_testability.setdefault("risk_notes", normalized_feat.get("non_goals") or [])
+            normalized_testability.setdefault("integration_points", normalized_feat.get("dependencies") or [])
+            normalized_testability.setdefault("priority_hint", normalized_feat.get("priority"))
+            normalized_feat["testability_seed"] = normalized_testability
+            normalized_user_stories: List[Dict[str, str]] = []
+            raw_user_stories = normalized_feat.get("user_stories")
+            if isinstance(raw_user_stories, list):
+                for story in raw_user_stories:
+                    normalized_story = _normalize_user_story_item(story)
+                    if normalized_story:
+                        normalized_user_stories.append(normalized_story)
+            normalized_feat["user_stories"] = normalized_user_stories[:3]
+            normalized_feat["acceptance_checks"] = _build_acceptance_checks(
+                normalized_feat,
+                normalized_feat.get("acceptance_criteria") or [],
+            )
+            return normalized_feat
+
+        def _format_list_section(title: str, values: Any) -> str:
+            normalized_values = [str(item).strip() for item in (values or []) if str(item).strip()]
+            if not normalized_values:
+                return f"# {title}\n\n- None\n"
+            lines = "\n".join(f"- {item}" for item in normalized_values)
+            return f"# {title}\n\n{lines}\n"
+
+        def _format_acceptance_checks_section(checks: Any) -> str:
+            if not isinstance(checks, list) or not checks:
+                return "# Acceptance Checks\n\n- None\n"
+
+            blocks: List[str] = []
+            for index, item in enumerate(checks, start=1):
+                if not isinstance(item, dict):
+                    blocks.append(f"## AC-{index:03d}\n\n{item}\n")
+                    continue
+                trace_hints = item.get("trace_hints") or []
+                trace_text = ", ".join(str(hint).strip() for hint in trace_hints if str(hint).strip()) or "None"
+                block = (
+                    f"## {item.get('id') or f'AC-{index:03d}'}\n\n"
+                    f"- Scenario: {item.get('scenario', '')}\n"
+                    f"- Given: {item.get('given', '')}\n"
+                    f"- When: {item.get('when', '')}\n"
+                    f"- Then: {item.get('then', '')}\n"
+                    f"- Trace Hints: {trace_text}\n"
+                )
+                blocks.append(block)
+            return "# Acceptance Checks\n\n" + "\n".join(blocks).rstrip() + "\n"
+
+        def _build_feat_markdown(feat_item: Dict[str, Any]) -> str:
+            sections = [
+                f"# Goal\n\n{feat_item.get('goal', '').strip()}\n",
+                f"# User Value\n\n{feat_item.get('user_value', '').strip()}\n",
+                _format_list_section("Inputs", feat_item.get("inputs")),
+                _format_list_section("Processing", feat_item.get("processing")),
+                _format_list_section("Outputs", feat_item.get("outputs")),
+                _format_list_section("Acceptance", feat_item.get("acceptance_criteria")),
+                _format_acceptance_checks_section(feat_item.get("acceptance_checks")),
+                _format_list_section("Dependencies", feat_item.get("dependencies")),
+                _format_list_section("Non Goals", feat_item.get("non_goals")),
+            ]
+            return "\n".join(section.rstrip() for section in sections).strip() + "\n"
+
+        def _build_contract_outputs(feat_specs: List[Dict[str, Any]], epic_ref: Optional[str]) -> List[Dict[str, Any]]:
+            outputs: List[Dict[str, Any]] = []
+            use_single_key = len(feat_specs) == 1
+            for index, feat_item in enumerate(feat_specs, start=1):
+                if not isinstance(feat_item, dict):
+                    continue
+                feat_id = str(feat_item.get("feat_id") or "").strip()
+                feat_title = str(feat_item.get("title") or feat_id or f"FEAT {index}").strip()
+                feat_ssot = feat_item.get("ssot") if isinstance(feat_item.get("ssot"), dict) else {}
+                source_refs = LLMRunner._filter_materializable_refs(feat_item.get("source_refs"))
+                parent_ref = feat_ssot.get("parent") or epic_ref
+                if not LLMRunner._is_literal_ssot_ref(parent_ref):
+                    parent_ref = None
+                output_key = "feat" if use_single_key else f"feat_{index:03d}"
+                output_item = {
+                    "key": output_key,
+                    "identity_kind": "ssot",
+                    "ssot_type": "feat",
+                    "title": feat_title,
+                    "content": _build_feat_markdown(feat_item),
+                    "properties": {
+                        "formal_id": feat_id,
+                        "feat_id": feat_id,
+                        "epic_ref": epic_ref,
+                    },
+                }
+                if parent_ref:
+                    output_item["parent"] = parent_ref
+                if source_refs:
+                    output_item["source_refs"] = source_refs
+                outputs.append(output_item)
+            return outputs
+
+        normalized_business = dict(business_output)
+        bundle_specs = normalized_business.get("feat_specs")
+        if isinstance(bundle_specs, list):
+            structured_business = (
+                structured_payload.get("business_output")
+                if isinstance(structured_payload, dict)
+                and isinstance(structured_payload.get("business_output"), dict)
+                else {}
+            )
+            normalized_business = {
+                "epic_ref": normalized_business.get("epic_ref"),
+                "feat_specs": [normalize_feat_item(item) for item in bundle_specs],
+            }
+            if normalized_business["epic_ref"] is None and structured_business.get("epic_ref"):
+                normalized_business["epic_ref"] = structured_business["epic_ref"]
+        else:
+            candidate_specs, candidate_epic_ref = _extract_breakdown_feature_candidates(
+                normalized_business,
+                actual_epic_ref or _clean_text(normalized_business.get("epic_ref")) or None,
+            )
+            if isinstance(candidate_specs, list) and candidate_specs:
+                normalized_business = {
+                    "epic_ref": candidate_epic_ref,
+                    "feat_specs": [
+                        normalize_feat_item(_synthesize_feat_spec(item, candidate_epic_ref))
+                        for item in candidate_specs
+                        if isinstance(item, dict)
+                    ],
+                }
+                if not normalized_business["feat_specs"]:
+                    normalized_business = normalize_feat_item(normalized_business)
+            else:
+                normalized_business = normalize_feat_item(normalized_business)
+                if expects_bundle:
+                    normalized_business = {
+                        "epic_ref": actual_epic_ref or _clean_text(normalized_business.get("epic_ref")) or None,
+                        "feat_specs": [normalized_business],
+                    }
+
+        if actual_epic_ref:
+            normalized_business["epic_ref"] = actual_epic_ref
+            if isinstance(normalized_business.get("feat_specs"), list):
+                rewritten_specs = []
+                for item in normalized_business["feat_specs"]:
+                    if not isinstance(item, dict):
+                        rewritten_specs.append(item)
+                        continue
+                    normalized_item = dict(item)
+                    normalized_item["source_refs"] = [f"{actual_epic_ref}#scope"]
+                    ssot = normalized_item.get("ssot") if isinstance(normalized_item.get("ssot"), dict) else {}
+                    normalized_item["ssot"] = {
+                        **dict(ssot),
+                        "identity_kind": "ssot",
+                        "ssot_type": "FEAT",
+                        "parent": actual_epic_ref,
+                        "derived_from": actual_epic_ref,
+                    }
+                    rewritten_specs.append(normalized_item)
+                normalized_business["feat_specs"] = rewritten_specs
+
+        feat_specs = normalized_business.get("feat_specs") if isinstance(normalized_business.get("feat_specs"), list) else []
+        if feat_specs:
+            project_root: Optional[Path] = None
+            if isinstance(instance_data, dict):
+                params = instance_data.get("params") if isinstance(instance_data.get("params"), dict) else {}
+                epic_freeze = params.get("epic_freeze")
+                epic_path = (
+                    epic_freeze.get("path")
+                    if isinstance(epic_freeze, dict)
+                    else epic_freeze
+                )
+                if isinstance(epic_path, str) and epic_path.strip():
+                    epic_candidate = Path(epic_path)
+                    for parent in [epic_candidate, *epic_candidate.parents]:
+                        if parent.name == ".workflow":
+                            project_root = parent.parent
+                            break
+
+            def _is_canonical_feat_id(value: str) -> bool:
+                return bool(re.fullmatch(r"FEAT-\d{3}", value))
+
+            def _next_canonical_feat_ids(count: int) -> List[str]:
+                if count <= 0:
+                    return []
+                highest = 0
+                if project_root is not None:
+                    features_dir = project_root / "spec" / "requirements" / "features"
+                    if features_dir.exists():
+                        for path in features_dir.glob("FEAT-*.md"):
+                            match = re.match(r"FEAT-(\d{3})__", path.name)
+                            if match:
+                                highest = max(highest, int(match.group(1)))
+                return [f"FEAT-{highest + index:03d}" for index in range(1, count + 1)]
+
+            if project_root is not None:
+                remap_candidates: List[tuple[str, str]] = []
+                generated_ids = _next_canonical_feat_ids(len(feat_specs))
+                for index, feat_item in enumerate(feat_specs):
+                    if not isinstance(feat_item, dict):
+                        continue
+                    current_id = _clean_text(feat_item.get("feat_id"))
+                    if current_id and _is_canonical_feat_id(current_id):
+                        continue
+                    target_id = generated_ids[index] if index < len(generated_ids) else ""
+                    if current_id and target_id:
+                        remap_candidates.append((current_id, target_id))
+
+                feat_id_alias_map = {
+                    source_id: target_id
+                    for source_id, target_id in remap_candidates
+                    if source_id != target_id
+                }
+                if feat_id_alias_map:
+                    rewritten_specs = []
+                    for feat_item in feat_specs:
+                        if not isinstance(feat_item, dict):
+                            rewritten_specs.append(feat_item)
+                            continue
+                        normalized_item = dict(feat_item)
+                        current_id = _clean_text(normalized_item.get("feat_id"))
+                        rewritten_id = feat_id_alias_map.get(current_id, current_id)
+                        if rewritten_id:
+                            normalized_item["feat_id"] = rewritten_id
+
+                        dependencies = normalized_item.get("dependencies")
+                        if isinstance(dependencies, list):
+                            normalized_item["dependencies"] = [
+                                feat_id_alias_map.get(_clean_text(dep), _clean_text(dep))
+                                for dep in dependencies
+                                if _clean_text(dep)
+                            ]
+
+                        source_refs = normalized_item.get("source_refs")
+                        if isinstance(source_refs, list):
+                            normalized_item["source_refs"] = [
+                                (
+                                    f"{feat_id_alias_map.get(ref.split('#', 1)[0], ref.split('#', 1)[0])}#{ref.split('#', 1)[1]}"
+                                    if isinstance(ref, str)
+                                    and "#" in ref
+                                    and ref.split("#", 1)[0] in feat_id_alias_map
+                                    else ref
+                                )
+                                for ref in source_refs
+                            ]
+
+                        input_contract = normalized_item.get("input_contract")
+                        if isinstance(input_contract, dict):
+                            required_artifacts = input_contract.get("required_artifacts")
+                            if isinstance(required_artifacts, list):
+                                normalized_item["input_contract"] = {
+                                    **input_contract,
+                                    "required_artifacts": [
+                                        (
+                                            f"{feat_id_alias_map.get(ref.split('#', 1)[0], ref.split('#', 1)[0])}#{ref.split('#', 1)[1]}"
+                                            if isinstance(ref, str)
+                                            and "#" in ref
+                                            and ref.split("#", 1)[0] in feat_id_alias_map
+                                            else ref
+                                        )
+                                        for ref in required_artifacts
+                                    ],
+                                }
+
+                        acceptance_checks = normalized_item.get("acceptance_checks")
+                        if isinstance(acceptance_checks, list):
+                            rewritten_checks = []
+                            for item in acceptance_checks:
+                                if not isinstance(item, dict):
+                                    rewritten_checks.append(item)
+                                    continue
+                                trace_hints = item.get("trace_hints")
+                                rewritten_checks.append(
+                                    {
+                                        **item,
+                                        "trace_hints": [
+                                            feat_id_alias_map.get(_clean_text(hint), _clean_text(hint))
+                                            for hint in trace_hints
+                                            if _clean_text(hint)
+                                        ] if isinstance(trace_hints, list) else trace_hints,
+                                    }
+                                )
+                            normalized_item["acceptance_checks"] = rewritten_checks
+
+                        rewritten_specs.append(normalized_item)
+                    normalized_business["feat_specs"] = rewritten_specs
+
+        normalized_structured = LLMRunner._ensure_structured_envelope(
+            business_output=normalized_business,
+            structured_payload=structured_payload,
+        )
+
+        ssot_contract = normalized_structured.get("ssot_output_contract")
+        if isinstance(ssot_contract, dict):
+            normalized_contract = dict(ssot_contract)
+        else:
+            normalized_contract = {}
+        normalized_contract.setdefault("contract_version", "1.0")
+        normalized_contract.setdefault("run_id", workflow_id)
+
+        outputs = normalized_contract.get("outputs")
+        if isinstance(normalized_business.get("feat_specs"), list):
+            normalized_contract["outputs"] = _build_contract_outputs(
+                normalized_business.get("feat_specs") or [],
+                normalized_business.get("epic_ref"),
+            )
+        elif not isinstance(outputs, list) or not outputs:
+            normalized_contract["outputs"] = _build_contract_outputs(
+                normalized_business.get("feat_specs") or [],
+                normalized_business.get("epic_ref"),
+            )
+        elif isinstance(outputs, list):
+            normalized_outputs = []
+            for item in outputs:
+                if not isinstance(item, dict):
+                    normalized_outputs.append(item)
+                    continue
+                normalized_item = dict(item)
+                normalized_item.setdefault("identity_kind", "ssot")
+                if normalized_item.get("key") == "feat":
+                    normalized_item.setdefault("ssot_type", "feat")
+                    if normalized_business.get("title"):
+                        normalized_item.setdefault("title", normalized_business["title"])
+                    parent = normalized_business.get("ssot", {}).get("parent")
+                    if LLMRunner._is_literal_ssot_ref(parent):
+                        normalized_item.setdefault("parent", parent)
+                    source_refs = LLMRunner._filter_materializable_refs(normalized_business.get("source_refs"))
+                    if source_refs:
+                        normalized_item.setdefault("source_refs", source_refs)
+                if actual_epic_ref and LLMRunner._is_literal_ssot_ref(actual_epic_ref):
+                    normalized_item["parent"] = actual_epic_ref
+                    normalized_item["source_refs"] = [f"{actual_epic_ref}#scope"]
+                else:
+                    parent_ref = normalized_item.get("parent")
+                    if not LLMRunner._is_literal_ssot_ref(parent_ref):
+                        normalized_item.pop("parent", None)
+                    filtered_refs = LLMRunner._filter_materializable_refs(normalized_item.get("source_refs"))
+                    if filtered_refs:
+                        normalized_item["source_refs"] = filtered_refs
+                    else:
+                        normalized_item.pop("source_refs", None)
+                properties = normalized_item.get("properties") if isinstance(normalized_item.get("properties"), dict) else {}
+                normalized_item["properties"] = {
+                    **properties,
+                    "epic_ref": actual_epic_ref or normalized_business.get("epic_ref"),
+                }
+                normalized_outputs.append(normalized_item)
+            normalized_contract["outputs"] = normalized_outputs
+        normalized_structured["ssot_output_contract"] = normalized_contract
+
+        return normalized_business, normalized_structured
+
+    @staticmethod
+    def _ensure_structured_envelope(
+        *,
+        business_output: Any,
+        structured_payload: Any,
+    ) -> Dict[str, Any]:
+        if isinstance(structured_payload, dict):
+            normalized = dict(structured_payload)
+        else:
+            normalized = {}
+        normalized["business_output"] = business_output
+        return normalized
+
+    @staticmethod
+    def _is_literal_ssot_ref(value: Any) -> bool:
+        if not isinstance(value, str):
+            return False
+        return bool(
+            re.match(
+                r"^(?:SRC|EPIC|FEAT|REL|UI|TECH|DEVPLAN|TESTPLAN|TASK|TESTSET|TC|BUG|REPORT|ADR|EVI|ART)-",
+                value.strip(),
+                re.IGNORECASE,
+            )
+        )
+
+    @staticmethod
+    def _filter_materializable_refs(values: Any) -> List[str]:
+        refs = values if isinstance(values, list) else [values] if values is not None else []
+        filtered: List[str] = []
+        for item in refs:
+            if not isinstance(item, str):
+                continue
+            ref = item.strip()
+            if not ref:
+                continue
+            ref_root = ref.split("#", 1)[0]
+            if LLMRunner._is_literal_ssot_ref(ref_root):
+                filtered.append(ref)
+        return filtered
+
+    @staticmethod
+    def _derive_source_refs_from_business_output(
+        business_output: Any,
+        *,
+        allowed_prefixes: Optional[List[str]] = None,
+    ) -> List[str]:
+        if not isinstance(business_output, dict):
+            return []
+
+        candidates: List[Any] = []
+        metadata = business_output.get("metadata")
+        if isinstance(metadata, dict):
+            candidates.extend([metadata.get("source_refs"), metadata.get("source_ref")])
+
+        normalized_content = business_output.get("normalized_content")
+        if isinstance(normalized_content, dict):
+            candidates.extend([normalized_content.get("source_refs"), normalized_content.get("source_ref")])
+
+        candidates.extend([business_output.get("source_refs"), business_output.get("source_ref")])
+
+        prefixes = {prefix.upper() for prefix in (allowed_prefixes or []) if isinstance(prefix, str)}
+        derived_refs: List[str] = []
+        for value in candidates:
+            for ref in LLMRunner._filter_materializable_refs(value):
+                ref_root = ref.split("#", 1)[0].upper()
+                if prefixes and not any(ref_root.startswith(f"{prefix}-") for prefix in prefixes):
+                    continue
+                if ref not in derived_refs:
+                    derived_refs.append(ref)
+        return derived_refs
+
+    @staticmethod
+    def _resolve_source_ref_from_instance_data(instance_data: Optional[Dict[str, Any]]) -> Optional[str]:
+        if not isinstance(instance_data, dict):
+            return None
+        params = instance_data.get("params")
+        if not isinstance(params, dict):
+            return None
+        source_freeze = params.get("source_freeze")
+        candidates: List[Any] = [source_freeze, params.get("source_freeze_ref"), params.get("src")]
+        for candidate in candidates:
+            if isinstance(candidate, dict):
+                values = [candidate.get("id"), candidate.get("artifact_id"), candidate.get("path")]
+            else:
+                values = [candidate]
+            for value in values:
+                if not isinstance(value, str):
+                    continue
+                match = re.search(r"(SRC-\d+)", value.upper())
+                if match:
+                    return match.group(1)
+        return None
+
+    @staticmethod
+    def _derive_src_title_from_business_output(business_output: Any) -> str:
+        if not isinstance(business_output, dict):
+            return "SRC"
+
+        def _clean(value: Any) -> str:
+            return str(value or "").strip()
+
+        def _meaningful(value: Any) -> Optional[str]:
+            text = _clean(value)
+            if not text:
+                return None
+            if text.upper() in {"SRC", "UNTITLED SRC"}:
+                return None
+            return text
+
+        normalized_content = (
+            business_output.get("normalized_content")
+            if isinstance(business_output.get("normalized_content"), dict)
+            else {}
+        )
+        metadata = business_output.get("metadata") if isinstance(business_output.get("metadata"), dict) else {}
+
+        for candidate in (
+            business_output.get("title"),
+            normalized_content.get("title"),
+            business_output.get("name"),
+            normalized_content.get("name"),
+            normalized_content.get("problem_statement"),
+            normalized_content.get("summary"),
+            business_output.get("problem_statement"),
+            business_output.get("summary"),
+        ):
+            title = _meaningful(candidate)
+            if title:
+                return title
+
+        source_ref = _meaningful(metadata.get("source_ref") or business_output.get("source_ref"))
+        domain = _meaningful(metadata.get("domain"))
+        if source_ref and domain:
+            return f"{source_ref} {domain}".replace("_", " ")
+        if source_ref:
+            return source_ref
+        if domain:
+            return domain.replace("_", " ")
+
+        src_id = _meaningful(business_output.get("src_id"))
+        if src_id:
+            return src_id
+        return "SRC"
 
     @staticmethod
     def _resolve_changed_file_paths(
@@ -2519,14 +3687,1093 @@ class LLMRunner(StepRunnerBase):
         structured_payload: Any,
         instance_data: Optional[Dict[str, Any]] = None,
     ) -> tuple[Any, Any]:
-        return PmPlannerTaskNormalizer.normalize(
-            runner_cls=LLMRunner,
-            step=step,
-            workflow_id=workflow_id,
-            business_output=business_output,
-            structured_payload=structured_payload,
-            instance_data=instance_data,
+        if getattr(step, "agent_id", "") != "agent.product.pm_planner":
+            return business_output, structured_payload
+        if not isinstance(business_output, dict):
+            return business_output, structured_payload
+
+        def _clean_text(value: Any) -> str:
+            return str(value or "").strip()
+
+        def _normalize_list(values: Any) -> List[str]:
+            items = values if isinstance(values, list) else [values] if values is not None else []
+            return [_clean_text(item) for item in items if _clean_text(item)]
+
+        def _normalize_priority(value: Any) -> str:
+            normalized = _clean_text(value).upper()
+            if normalized in {"P0", "P1", "P2"}:
+                return normalized
+            lowered = _clean_text(value).lower()
+            if lowered in {"critical", "high"}:
+                return "P0"
+            if lowered in {"medium", "normal"}:
+                return "P1"
+            if lowered in {"low", "minor"}:
+                return "P2"
+            return "P1"
+
+        def _normalize_role(value: Any) -> str:
+            normalized = _clean_text(value).lower().replace("_", "-").replace(" ", "-")
+            return normalized or "workflow-runtime-owner"
+
+        def _normalize_workstream(task: Dict[str, Any], role: str) -> str:
+            explicit = _clean_text(task.get("workstream"))
+            if explicit:
+                return explicit
+            combined = " ".join(
+                [
+                    _clean_text(task.get("task_id")).lower(),
+                    _clean_text(task.get("title")).lower(),
+                    _clean_text(task.get("description")).lower(),
+                ]
+            )
+            if any(token in combined for token in ("migration", "registry", "compatibility", "文档", "迁移")):
+                return "governance-spec"
+            if role.startswith("qa"):
+                return "qa-seed"
+            if role.startswith("technical-writer"):
+                return "governance-docs"
+            return "workflow-runtime"
+
+        def _infer_task_kind(task: Dict[str, Any], role: str, workstream: str) -> str:
+            combined = " ".join(
+                [
+                    _clean_text(task.get("title")).lower(),
+                    _clean_text(task.get("description")).lower(),
+                    role.lower(),
+                    workstream.lower(),
+                ]
+            )
+            if any(token in combined for token in ("migration", "迁移")):
+                return "migration"
+            if any(token in combined for token in ("governance", "registry", "compatibility", "文档")):
+                return "governance"
+            if role.startswith("qa") or "test" in combined or "验证" in combined:
+                return "validation"
+            if any(token in combined for token in ("ux", "design", "ui")):
+                return "ux"
+            if "refactor" in combined:
+                return "refactor"
+            return "implementation"
+
+        def _title_key(value: Any) -> str:
+            lowered = _clean_text(value).lower()
+            return re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", lowered)
+
+        def _derive_project_root_from_feat_freeze(feat_freeze_path: str) -> Optional[Path]:
+            candidate = Path(feat_freeze_path)
+            for parent in [candidate, *candidate.parents]:
+                if parent.name == ".workflow":
+                    return parent.parent
+            return None
+
+        def _extract_canonical_title_map(project_root: Optional[Path]) -> Dict[str, str]:
+            if project_root is None:
+                return {}
+            features_dir = project_root / "spec" / "requirements" / "features"
+            if not features_dir.exists():
+                return {}
+            title_map: Dict[str, str] = {}
+            for path in sorted(features_dir.glob("*.md")):
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                if not text.startswith("---"):
+                    continue
+                try:
+                    _, frontmatter, _ = text.split("---", 2)
+                    metadata = yaml.safe_load(frontmatter) or {}
+                except Exception:
+                    continue
+                if not isinstance(metadata, dict):
+                    continue
+                title = _clean_text(metadata.get("title"))
+                canonical_id = _clean_text(metadata.get("id"))
+                if title and canonical_id:
+                    title_map[_title_key(title)] = canonical_id
+            return title_map
+
+        def _extract_source_feat_title_map(feat_freeze_path: str) -> Dict[str, str]:
+            freeze_path = Path(feat_freeze_path)
+            if not freeze_path.exists():
+                return {}
+            try:
+                payload = yaml.safe_load(freeze_path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                return {}
+            title_map: Dict[str, str] = {}
+            candidates = payload.get("feat_specifications")
+            if not isinstance(candidates, list):
+                candidates = payload.get("feat_specs")
+            if not isinstance(candidates, list):
+                return {}
+            for item in candidates:
+                if not isinstance(item, dict):
+                    continue
+                feat_id = _clean_text(item.get("feat_id"))
+                title = _clean_text(item.get("title"))
+                if feat_id and title:
+                    title_map[feat_id] = title
+            return title_map
+
+        def _build_feat_alias_map(instance_payload: Optional[Dict[str, Any]]) -> Dict[str, str]:
+            if not isinstance(instance_payload, dict):
+                return {}
+            params = instance_payload.get("params") if isinstance(instance_payload.get("params"), dict) else {}
+            feat_freeze_path = params.get("feat_freeze")
+            if not isinstance(feat_freeze_path, str) or not feat_freeze_path.strip():
+                return {}
+            source_title_map = _extract_source_feat_title_map(feat_freeze_path)
+            if not source_title_map:
+                return {}
+            canonical_title_map = _extract_canonical_title_map(
+                _derive_project_root_from_feat_freeze(feat_freeze_path)
+            )
+            if not canonical_title_map:
+                return {}
+            alias_map: Dict[str, str] = {}
+            for source_feat_id, title in source_title_map.items():
+                canonical_id = canonical_title_map.get(_title_key(title))
+                if canonical_id:
+                    alias_map[source_feat_id] = canonical_id
+            return alias_map
+
+        feat_alias_map = _build_feat_alias_map(instance_data)
+
+        def _resolve_parent_epic(epic_candidate: str, feat_ids: List[str]) -> str:
+            for feat_id in feat_ids:
+                resolved = LLMRunner._resolve_feat_parent_epic(feat_id, instance_data)
+                if resolved:
+                    return resolved
+            return epic_candidate or "EPIC-001"
+
+        project_root = None
+        if isinstance(instance_data, dict):
+            params = instance_data.get("params") if isinstance(instance_data.get("params"), dict) else {}
+            feat_ref_path = params.get("feat_freeze_ref")
+            if isinstance(feat_ref_path, str) and feat_ref_path.strip():
+                candidate_path = Path(feat_ref_path.strip())
+                if candidate_path.exists():
+                    for parent in [candidate_path.parent, *candidate_path.parents]:
+                        if parent.name == "spec":
+                            project_root = parent.parent
+                            break
+            if project_root is None:
+                feat_freeze = params.get("feat_freeze")
+                if isinstance(feat_freeze, str) and feat_freeze.strip():
+                    project_root = _derive_project_root_from_feat_freeze(feat_freeze.strip())
+
+        def _load_formal_acceptance_checks_for_feat(feat_id: str) -> List[Dict[str, Any]]:
+            if not isinstance(project_root, Path):
+                return []
+            return LLMRunner._load_feat_acceptance_checks(str(project_root), feat_id)
+
+        def _load_formal_feat_title(feat_id: str) -> str:
+            if not isinstance(project_root, Path):
+                return ""
+            features_dir = project_root / "spec" / "requirements" / "features"
+            if not features_dir.exists():
+                return ""
+            for candidate in sorted(features_dir.glob(f"{feat_id}__*.md")):
+                frontmatter = LLMRunner._load_yaml_frontmatter(candidate) or {}
+                title = _clean_text(frontmatter.get("title"))
+                if title:
+                    return title
+            return ""
+
+        def _requires_structural_governance_task(structural_checks: List[Dict[str, Any]]) -> bool:
+            strong_markers = (
+                "rule-",
+                "状态机",
+                "链路",
+                "路径",
+                "旁路",
+                "入口",
+                "bypass",
+                "stage order",
+                "phase order",
+                "schema",
+                "template",
+                "错误码",
+                "优先级",
+                "priority",
+                "来源",
+                "source",
+                "cli_override",
+            )
+            for check in structural_checks:
+                if not isinstance(check, dict):
+                    continue
+                text = " ".join(
+                    _clean_text(check.get(key))
+                    for key in ("scenario", "given", "when", "then", "raw_text")
+                )
+                if any(LLMRunner._text_contains_keyword(text, marker) for marker in strong_markers):
+                    return True
+            return False
+
+        def _classify_structural_governance_theme(
+            feat_title: str,
+            structural_checks: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            combined_text = " ".join(
+                _clean_text(item.get(key))
+                for item in structural_checks
+                if isinstance(item, dict)
+                for key in ("scenario", "given", "when", "then", "raw_text")
+            )
+            combined_text = f"{feat_title} {combined_text}".strip()
+
+            if any(
+                LLMRunner._text_contains_keyword(combined_text, marker)
+                for marker in (
+                    "优先级",
+                    "priority",
+                    "来源",
+                    "source",
+                    "executor",
+                    "执行器",
+                    "cli_override",
+                    "config_file",
+                    "default",
+                )
+            ):
+                return {
+                    "title": "执行器配置优先级与验证规则规范",
+                    "objective": "冻结执行器类型选择、优先级判定、来源追踪与错误处理边界，作为实现任务的前置规范基线",
+                    "description": "在正式实现前冻结执行器配置规范，覆盖执行器类型白名单、CLI/环境变量/配置文件/默认值的优先级规则、来源追踪字段和错误信息模板，避免结构性规则散落在实现代码中。",
+                    "responsible_role": "executor-config-governance-owner",
+                    "milestone_name": "配置规范冻结",
+                    "milestone_acceptance": "执行器类型、优先级规则和错误处理边界已冻结",
+                }
+
+            if any(
+                LLMRunner._text_contains_keyword(combined_text, marker)
+                for marker in ("入口", "链路", "路径", "旁路", "bypass", "状态机")
+            ):
+                return {
+                    "title": "执行入口链路规则与状态机规范",
+                    "objective": "冻结执行入口链路规则、状态机边界和错误处理约束，作为实现任务的前置规范基线",
+                    "description": "在正式实现前冻结执行入口规范，覆盖路径校验边界、状态转换约束、旁路阻断规则和错误码映射，避免结构性规则直接埋入实现代码。",
+                    "responsible_role": "workflow-governance-owner",
+                    "milestone_name": "规则规范冻结",
+                    "milestone_acceptance": "执行链路规则、状态机和错误码边界已冻结",
+                }
+
+            return {
+                "title": f"{feat_title or '结构性规则'}规范冻结任务",
+                "objective": "冻结结构性规则、约束边界和模板契约，作为实现任务的前置规范基线",
+                "description": "在正式实现前冻结结构性规则，覆盖关键约束、契约边界、模板要求和错误处理基线，避免规范含义在实现过程中漂移。",
+                "responsible_role": "governance-owner",
+                "milestone_name": "规范冻结",
+                "milestone_acceptance": "结构性规则和契约边界已冻结",
+            }
+
+        def _remap_acceptance_mapping(
+            mappings: Any,
+            *,
+            feat_id: str,
+            formal_checks: List[Dict[str, Any]],
+        ) -> List[Dict[str, Any]]:
+            if not isinstance(mappings, list):
+                return []
+            formal_ids = [str(item.get("id")).strip() for item in formal_checks if isinstance(item, dict) and str(item.get("id") or "").strip()]
+            used_ids: set[str] = set()
+            normalized: List[Dict[str, Any]] = []
+            for index, item in enumerate(mappings, start=1):
+                if not isinstance(item, dict):
+                    continue
+                raw_ac = _clean_text(item.get("ac"))
+                selected_ac = raw_ac if raw_ac in formal_ids else ""
+                if not selected_ac and raw_ac:
+                    suffix_match = re.search(r"(\d{3})$", raw_ac)
+                    if suffix_match:
+                        for candidate in formal_ids:
+                            if candidate.endswith(suffix_match.group(1)):
+                                selected_ac = candidate
+                                break
+                if not selected_ac:
+                    candidate_index = min(index - 1, len(formal_ids) - 1)
+                    if candidate_index >= 0 and formal_ids:
+                        selected_ac = formal_ids[candidate_index]
+                if not selected_ac:
+                    selected_ac = raw_ac or f"AC-{index:03d}"
+                used_ids.add(selected_ac)
+                normalized.append(
+                    {
+                        "feat": feat_id,
+                        "ac": selected_ac,
+                        "description": _clean_text(item.get("description")) or _clean_text(item.get("ac")) or selected_ac,
+                    }
+                )
+            return normalized
+
+        def _task_is_structural(task_spec: Dict[str, Any]) -> bool:
+            workstream = _clean_text(task_spec.get("workstream")).lower()
+            task_kind = _clean_text(task_spec.get("task_kind")).lower()
+            if workstream in {"governance-spec", "governance-docs"}:
+                return True
+            if task_kind in {"governance", "specification", "template"}:
+                return True
+            if task_kind == "implementation":
+                return False
+
+            combined = " ".join(
+                [
+                    _clean_text(task_spec.get("title")),
+                    _clean_text(task_spec.get("objective")),
+                    _clean_text(task_spec.get("description")),
+                ]
+            )
+            structural_keywords = (
+                "governance",
+                "specification",
+                "template",
+                "schema",
+                "contract",
+                "错误码映射",
+                "状态机",
+                "规则定义",
+                "规则集",
+                "规范文档",
+                "规范冻结",
+            )
+            return any(LLMRunner._text_contains_keyword(combined, keyword) for keyword in structural_keywords)
+
+        def _normalize_task_path_refs(value: Any, feat_id: str) -> Any:
+            canonical_feat = feat_id or "FEAT-001"
+            canonical_dir = f"spec/tasks/{canonical_feat}"
+            legacy_variants = (
+                f"spec/requirements/tasks/{canonical_feat}/",
+                f"spec/requirements/tasks/{canonical_feat}",
+                "spec/requirements/tasks/<FEAT-ID>/",
+                "spec/requirements/tasks/<FEAT-ID>",
+            )
+            if isinstance(value, str):
+                normalized = value
+                for legacy in legacy_variants:
+                    normalized = normalized.replace(legacy, canonical_dir)
+                return normalized
+            if isinstance(value, list):
+                return [_normalize_task_path_refs(item, feat_id) for item in value]
+            if isinstance(value, dict):
+                return {
+                    key: _normalize_task_path_refs(item, feat_id)
+                    for key, item in value.items()
+                }
+            return value
+
+        def _ensure_structural_governance_task(normalized_business: Dict[str, Any]) -> None:
+            task_specs = normalized_business.get("task_specs")
+            source_feats = normalized_business.get("source_feats")
+            if not isinstance(task_specs, list) or not task_specs or not isinstance(source_feats, list) or not source_feats:
+                return
+
+            primary_feat = _clean_text(source_feats[0]) or "FEAT-001"
+            feat_title = _load_formal_feat_title(primary_feat)
+            formal_checks = _load_formal_acceptance_checks_for_feat(primary_feat)
+            structural_checks = [
+                check for check in formal_checks if LLMRunner._is_structural_acceptance_check(check)
+            ]
+            if not structural_checks:
+                return
+            if not _requires_structural_governance_task(structural_checks):
+                return
+            if any(_task_is_structural(task_spec) for task_spec in task_specs if isinstance(task_spec, dict)):
+                return
+
+            structural_task_id = f"TASK-{primary_feat}-000"
+            mapped_checks = [
+                {
+                    "feat": primary_feat,
+                    "ac": str(check.get("id")).strip(),
+                    "description": _clean_text(check.get("then") or check.get("scenario") or check.get("raw_text")),
+                }
+                for check in structural_checks
+                if isinstance(check, dict) and str(check.get("id") or "").strip()
+            ]
+            if not mapped_checks:
+                return
+
+            governance_theme = _classify_structural_governance_theme(feat_title, structural_checks)
+            governance_task = {
+                "task_id": structural_task_id,
+                "title": governance_theme["title"],
+                "objective": governance_theme["objective"],
+                "description": governance_theme["description"],
+                "source_feat": primary_feat,
+                "workstream": "governance-spec",
+                "task_kind": "governance",
+                "responsible_role": governance_theme["responsible_role"],
+                "acceptance_criteria_mapping": mapped_checks,
+                "prerequisites": [],
+                "dependencies": [],
+                "definition_of_done": [
+                    "结构性规则和契约边界文档已冻结",
+                    "规范任务已覆盖相关结构性 Acceptance Checks",
+                    "实现任务已明确引用该规范任务作为前置依赖",
+                ],
+                "priority": "P0",
+                "milestone": "M0-Governance-Baseline",
+                "estimated_effort": "2 days",
+                "lifecycle_status": "planned",
+                "observability": {
+                    "execution_unit": "task",
+                    "log_scope": "task-execution",
+                    "audit_fields": ["run_id", "changed_files", "evidence_refs", "review_refs"],
+                },
+                "evidence_requirements": {
+                    "required_refs": [primary_feat],
+                    "review_required": True,
+                },
+                "rollback_strategy": {
+                    "mode": "revert",
+                    "restore_targets": ["spec/tasks", "spec/contracts", "spec-global/departments/product/workflows"],
+                },
+                "source_refs": [f"{primary_feat}#delivery"] if LLMRunner._is_literal_ssot_ref(primary_feat) else [],
+                "ssot": {
+                    "identity_kind": "ssot",
+                    "ssot_type": "TASK",
+                    "parent": primary_feat,
+                    "derived_from": f"{primary_feat}#delivery",
+                },
+            }
+            task_specs.insert(0, governance_task)
+
+            for task_spec in task_specs[1:]:
+                if not isinstance(task_spec, dict):
+                    continue
+                dependencies = _normalize_list(task_spec.get("dependencies"))
+                if structural_task_id not in dependencies:
+                    dependencies.insert(0, structural_task_id)
+                task_spec["dependencies"] = dependencies
+
+                prerequisites = _normalize_list(task_spec.get("prerequisites"))
+                if governance_task["title"] not in prerequisites:
+                    prerequisites.insert(0, governance_task["title"])
+                task_spec["prerequisites"] = prerequisites
+
+            milestones = normalized_business.get("milestones")
+            if isinstance(milestones, list):
+                milestones.insert(
+                    0,
+                    {
+                        "id": "M0-Governance-Baseline",
+                        "name": governance_theme["milestone_name"],
+                        "task_ids": [structural_task_id],
+                        "acceptance_criteria": governance_theme["milestone_acceptance"],
+                    },
+                )
+
+            dependency_graph = normalized_business.get("dependency_graph")
+            if isinstance(dependency_graph, dict):
+                critical_path = dependency_graph.get("critical_path")
+                if isinstance(critical_path, list) and structural_task_id not in critical_path:
+                    critical_path.insert(0, structural_task_id)
+
+            resource_allocation = normalized_business.get("resource_allocation")
+            if isinstance(resource_allocation, dict):
+                resource_allocation.setdefault(
+                    governance_theme["responsible_role"],
+                    {"tasks": []},
+                )
+                if structural_task_id not in resource_allocation[governance_theme["responsible_role"]]["tasks"]:
+                    resource_allocation[governance_theme["responsible_role"]]["tasks"].insert(0, structural_task_id)
+
+        def _enrich_delivery_plan_structure(normalized_business: Dict[str, Any]) -> None:
+            task_specs = normalized_business.get("task_specs")
+            if not isinstance(task_specs, list) or not task_specs:
+                return
+
+            task_index: Dict[str, Dict[str, Any]] = {}
+            for task_spec in task_specs:
+                if not isinstance(task_spec, dict):
+                    continue
+                task_id = _clean_text(task_spec.get("task_id"))
+                if task_id:
+                    task_index[task_id] = task_spec
+
+            for task_spec in task_specs:
+                if not isinstance(task_spec, dict):
+                    continue
+                task_kind = _clean_text(task_spec.get("task_kind")).lower()
+                task_id = _clean_text(task_spec.get("task_id"))
+                prerequisites = [
+                    item for item in _normalize_list(task_spec.get("prerequisites"))
+                    if item in task_index
+                ]
+                dependencies = [
+                    item for item in _normalize_list(task_spec.get("dependencies"))
+                    if item in task_index
+                ]
+                if task_kind == "validation" and not dependencies and prerequisites:
+                    dependencies = list(dict.fromkeys(prerequisites))
+                    task_spec["dependencies"] = dependencies
+                elif dependencies:
+                    task_spec["dependencies"] = list(dict.fromkeys(dependencies))
+                if prerequisites:
+                    task_spec["prerequisites"] = list(dict.fromkeys(prerequisites))
+
+            dependency_graph = normalized_business.get("dependency_graph")
+            if not isinstance(dependency_graph, dict):
+                dependency_graph = {}
+            dependency_matrix: List[Dict[str, Any]] = []
+            for task_spec in task_specs:
+                if not isinstance(task_spec, dict):
+                    continue
+                task_id = _clean_text(task_spec.get("task_id"))
+                if not task_id:
+                    continue
+                depends_on = [
+                    item for item in _normalize_list(task_spec.get("dependencies"))
+                    if item in task_index
+                ]
+                dependency_matrix.append(
+                    {
+                        "task_id": task_id,
+                        "depends_on": depends_on,
+                    }
+                )
+            dependency_graph["dependency_matrix"] = dependency_matrix
+            if not isinstance(dependency_graph.get("critical_path"), list):
+                dependency_graph["critical_path"] = [
+                    item.get("task_id") for item in dependency_matrix[:1] if isinstance(item, dict) and item.get("task_id")
+                ]
+            normalized_business["dependency_graph"] = dependency_graph
+
+            risk_mitigation = normalized_business.get("risk_mitigation")
+            if isinstance(risk_mitigation, list):
+                for risk in risk_mitigation:
+                    if not isinstance(risk, dict):
+                        continue
+                    mitigation = _clean_text(risk.get("mitigation"))
+                    if "直接磁盘读取" in mitigation and "审计一致性" not in mitigation:
+                        risk["mitigation"] = (
+                            mitigation.rstrip("。")
+                            + "，并要求在降级模式下继续写入审计事件与路径链校验结果，保证审计一致性。"
+                        )
+
+        def _format_string_list_section(heading: str, values: Any) -> List[str]:
+            if not isinstance(values, list) or not values:
+                return []
+            lines = [f"## {heading}"]
+            for item in values:
+                lines.append(f"- {_clean_text(item)}")
+            lines.append("")
+            return lines
+
+        def _format_dict_section(heading: str, value: Any) -> List[str]:
+            if not isinstance(value, dict) or not value:
+                return []
+            yaml_text = yaml.safe_dump(value, allow_unicode=True, sort_keys=False).strip()
+            if not yaml_text:
+                return []
+            return [f"## {heading}", "```yaml", yaml_text, "```", ""]
+
+        def _build_task_markdown(task_spec: Dict[str, Any]) -> str:
+            lines = [
+                f"# Objective\n\n{_clean_text(task_spec.get('objective'))}\n",
+                f"# Description\n\n{_clean_text(task_spec.get('description'))}\n",
+            ]
+            mapping = task_spec.get("acceptance_criteria_mapping")
+            if isinstance(mapping, list) and mapping:
+                lines.append("## Acceptance Mapping")
+                for item in mapping:
+                    if not isinstance(item, dict):
+                        continue
+                    lines.append(
+                        f"- {item.get('feat', '')} / {item.get('ac', '')}: {item.get('description', '')}"
+                    )
+                lines.append("")
+            lines.extend(_format_string_list_section("Prerequisites", task_spec.get("prerequisites")))
+            lines.extend(_format_string_list_section("Dependencies", task_spec.get("dependencies")))
+            lines.extend(_format_dict_section("Observability", task_spec.get("observability")))
+            lines.extend(_format_dict_section("Evidence Requirements", task_spec.get("evidence_requirements")))
+            lines.extend(_format_dict_section("Rollback Strategy", task_spec.get("rollback_strategy")))
+            lines.extend(_format_string_list_section("Definition Of Done", task_spec.get("definition_of_done")))
+            return "\n".join(lines).strip() + "\n"
+
+        payload = business_output.get("task_planning") if isinstance(business_output.get("task_planning"), dict) else business_output
+        if not isinstance(payload, dict):
+            return business_output, structured_payload
+
+        if isinstance(payload.get("task_specs"), list) and payload.get("task_specs"):
+            normalized_business = dict(payload)
+            normalized_business["source_feats"] = [
+                feat_alias_map.get(_clean_text(item), _clean_text(item))
+                for item in (payload.get("source_feats") or [])
+                if _clean_text(item)
+            ]
+            remapped_task_specs: List[Dict[str, Any]] = []
+            for task_spec in payload.get("task_specs") or []:
+                if not isinstance(task_spec, dict):
+                    continue
+                remapped_task = dict(task_spec)
+                raw_source_feat = _clean_text(task_spec.get("source_feat"))
+                canonical_source_feat = feat_alias_map.get(raw_source_feat, raw_source_feat) or "FEAT-001"
+                formal_checks = _load_formal_acceptance_checks_for_feat(canonical_source_feat)
+                remapped_task["source_feat"] = canonical_source_feat
+                if isinstance(task_spec.get("source_refs"), list):
+                    remapped_task["source_refs"] = [
+                        f"{canonical_source_feat}#delivery"
+                        if isinstance(ref, str) and ref == f"{raw_source_feat}#delivery" and canonical_source_feat
+                        else ref
+                        for ref in task_spec.get("source_refs") or []
+                    ]
+                if isinstance(task_spec.get("ssot"), dict):
+                    remapped_ssot = dict(task_spec.get("ssot") or {})
+                    remapped_ssot["parent"] = canonical_source_feat
+                    derived_from = _clean_text(remapped_ssot.get("derived_from"))
+                    if raw_source_feat and derived_from == f"{raw_source_feat}#delivery":
+                        remapped_ssot["derived_from"] = f"{canonical_source_feat}#delivery"
+                    remapped_task["ssot"] = remapped_ssot
+                if isinstance(task_spec.get("acceptance_criteria_mapping"), list):
+                    remapped_task["acceptance_criteria_mapping"] = _remap_acceptance_mapping(
+                        task_spec.get("acceptance_criteria_mapping") or [],
+                        feat_id=canonical_source_feat,
+                        formal_checks=formal_checks,
+                    )
+                remapped_task = _normalize_task_path_refs(remapped_task, canonical_source_feat)
+                remapped_task_specs.append(remapped_task)
+            normalized_business["task_specs"] = remapped_task_specs
+        else:
+            epic_ref = _clean_text(payload.get("parent_epic") or payload.get("epic_ref"))
+            metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+            if not epic_ref:
+                epic_ref = _clean_text(metadata.get("epic_id"))
+            feat_tasks = payload.get("feat_tasks") if isinstance(payload.get("feat_tasks"), list) else []
+            plan_tasks = payload.get("tasks") if isinstance(payload.get("tasks"), list) else []
+            source_feats = [
+                feat_alias_map.get(_clean_text(item.get("feat_id")), _clean_text(item.get("feat_id")))
+                for item in feat_tasks
+                if isinstance(item, dict) and _clean_text(item.get("feat_id"))
+            ]
+
+            task_specs: List[Dict[str, Any]] = []
+            milestones_map: Dict[str, Dict[str, Any]] = {}
+            resource_allocation: Dict[str, Dict[str, Any]] = {}
+            critical_path: List[str] = []
+            risk_mitigation: List[Dict[str, Any]] = []
+
+            for feat_entry in feat_tasks:
+                if not isinstance(feat_entry, dict):
+                    continue
+                feat_id = feat_alias_map.get(
+                    _clean_text(feat_entry.get("feat_id")),
+                    _clean_text(feat_entry.get("feat_id")),
+                )
+                phases = (
+                    feat_entry.get("implementation_plan", {}).get("phases")
+                    if isinstance(feat_entry.get("implementation_plan"), dict)
+                    else []
+                )
+                for phase in phases if isinstance(phases, list) else []:
+                    if not isinstance(phase, dict):
+                        continue
+                    milestone_id = _clean_text(phase.get("phase_id")) or f"M{len(milestones_map) + 1}"
+                    milestone_name = _clean_text(phase.get("name")) or milestone_id
+                    milestone = milestones_map.setdefault(
+                        milestone_id,
+                        {
+                            "id": milestone_id,
+                            "name": milestone_name,
+                            "task_ids": [],
+                            "acceptance_criteria": f"{feat_id} {milestone_name}".strip(),
+                        },
+                    )
+                    tasks = phase.get("tasks") if isinstance(phase.get("tasks"), list) else []
+                    for task in tasks:
+                        if not isinstance(task, dict):
+                            continue
+                        task_id = _clean_text(task.get("task_id")) or f"{feat_id}-TASK-{len(task_specs) + 1:03d}"
+                        title = _clean_text(task.get("title")) or task_id
+                        description = _clean_text(task.get("description")) or title
+                        role = _normalize_role(task.get("assignee_role") or task.get("responsible_role"))
+                        workstream = _normalize_workstream(task, role)
+                        acceptance_items = _normalize_list(task.get("acceptance_criteria"))
+                        if not acceptance_items:
+                            acceptance_items = [description]
+                        task_specs.append(
+                            {
+                                "task_id": task_id,
+                                "title": title,
+                                "objective": acceptance_items[0],
+                                "description": description,
+                                "source_feat": feat_id or "FEAT-001",
+                                "workstream": workstream,
+                                "task_kind": _infer_task_kind(task, role, workstream),
+                                "responsible_role": role,
+                                "acceptance_criteria_mapping": [
+                                    {
+                                        "feat": feat_id or "FEAT-001",
+                                        "ac": f"{feat_id or 'FEAT-001'}-AC-{index:03d}",
+                                        "description": item,
+                                    }
+                                    for index, item in enumerate(acceptance_items, start=1)
+                                ],
+                                "prerequisites": _normalize_list(task.get("prerequisites")),
+                                "dependencies": _normalize_list(task.get("dependencies")),
+                                "definition_of_done": acceptance_items[:3] or [f"{title} completed"],
+                                "priority": _normalize_priority(feat_entry.get("priority") or task.get("priority")),
+                                "milestone": milestone_id,
+                                "estimated_effort": _clean_text(task.get("effort") or task.get("estimated_effort") or "1 day"),
+                                "lifecycle_status": "draft",
+                                "observability": {
+                                    "execution_unit": "task",
+                                    "log_scope": "task-execution",
+                                    "audit_fields": ["run_id", "task_id", "changed_files", "evidence_refs"],
+                                },
+                                "evidence_requirements": {
+                                    "required_refs": [feat_id] if feat_id else ["delivery-plan"],
+                                    "review_required": True,
+                                },
+                                "rollback_strategy": {
+                                    "mode": "revert",
+                                    "restore_targets": [workstream],
+                                },
+                                "source_refs": [f"{feat_id}#delivery"] if feat_id and LLMRunner._is_literal_ssot_ref(feat_id) else [],
+                                "ssot": {
+                                    "identity_kind": "ssot",
+                                    "ssot_type": "TASK",
+                                    "parent": feat_id or "FEAT-001",
+                                    "derived_from": f"{feat_id}#delivery" if feat_id else "delivery-plan",
+                                },
+                            }
+                        )
+                        milestone["task_ids"].append(task_id)
+                        critical_path.append(task_id)
+                        resource_allocation.setdefault(role, {"tasks": []})
+                        resource_allocation[role]["tasks"].append(task_id)
+
+            if not task_specs and plan_tasks:
+                seen_source_feats: set[str] = set(source_feats)
+                group_lookup: Dict[str, Dict[str, str]] = {}
+                overview = payload.get("overview") if isinstance(payload.get("overview"), dict) else {}
+                groups = overview.get("groups") if isinstance(overview.get("groups"), list) else []
+                for group in groups:
+                    if not isinstance(group, dict):
+                        continue
+                    milestone_id = _clean_text(group.get("group_id")) or f"M{len(milestones_map) + 1}"
+                    milestone_name = _clean_text(group.get("name")) or milestone_id
+                    milestone = milestones_map.setdefault(
+                        milestone_id,
+                        {
+                            "id": milestone_id,
+                            "name": milestone_name,
+                            "task_ids": [],
+                            "acceptance_criteria": f"{milestone_name} completed",
+                        },
+                    )
+                    for task_ref in group.get("tasks") if isinstance(group.get("tasks"), list) else []:
+                        task_key = _clean_text(task_ref)
+                        if task_key:
+                            group_lookup[task_key] = {
+                                "milestone_id": milestone_id,
+                                "milestone_name": milestone.get("name", milestone_id),
+                            }
+
+                for task in plan_tasks:
+                    if not isinstance(task, dict):
+                        continue
+                    raw_feat_id = _clean_text(
+                        task.get("feat_ref") or task.get("source_feat") or task.get("related_feat") or task.get("feat_id")
+                    )
+                    feat_id = feat_alias_map.get(raw_feat_id, raw_feat_id)
+                    if feat_id and feat_id not in seen_source_feats:
+                        source_feats.append(feat_id)
+                        seen_source_feats.add(feat_id)
+
+                    task_id = _clean_text(task.get("task_id")) or f"{feat_id or 'FEAT-001'}-TASK-{len(task_specs) + 1:03d}"
+                    title = _clean_text(task.get("title")) or task_id
+                    description = _clean_text(task.get("description")) or title
+                    role = _normalize_role(task.get("assignee_role") or task.get("responsible_role"))
+                    workstream = _normalize_workstream(task, role)
+                    acceptance_items = _normalize_list(task.get("acceptance_criteria"))
+                    if not acceptance_items:
+                        acceptance_items = [description]
+                    dependencies = task.get("dependencies") if isinstance(task.get("dependencies"), dict) else {}
+                    prerequisite_ids = _normalize_list(dependencies.get("upstream"))
+                    group_info = group_lookup.get(task_id, {})
+                    milestone_id = _clean_text(group_info.get("milestone_id")) or f"M{len(milestones_map) + 1}"
+                    milestone_name = _clean_text(group_info.get("milestone_name")) or milestone_id
+                    milestone = milestones_map.setdefault(
+                        milestone_id,
+                        {
+                            "id": milestone_id,
+                            "name": milestone_name,
+                            "task_ids": [],
+                            "acceptance_criteria": f"{milestone_name} completed",
+                        },
+                    )
+                    estimated_effort = _clean_text(task.get("estimated_effort") or task.get("effort"))
+                    if not estimated_effort and task.get("story_points") is not None:
+                        estimated_effort = f"{_clean_text(task.get('story_points'))} points"
+                    task_specs.append(
+                        {
+                            "task_id": task_id,
+                            "title": title,
+                            "objective": acceptance_items[0],
+                            "description": description,
+                            "source_feat": feat_id or "FEAT-001",
+                            "workstream": workstream,
+                            "task_kind": _infer_task_kind(task, role, workstream),
+                            "responsible_role": role,
+                            "acceptance_criteria_mapping": [
+                                {
+                                    "feat": feat_id or "FEAT-001",
+                                    "ac": f"{feat_id or 'FEAT-001'}-AC-{index:03d}",
+                                    "description": item,
+                                }
+                                for index, item in enumerate(acceptance_items, start=1)
+                            ],
+                            "prerequisites": prerequisite_ids,
+                            "dependencies": prerequisite_ids,
+                            "definition_of_done": acceptance_items[:3] or [f"{title} completed"],
+                            "priority": _normalize_priority(task.get("priority")),
+                            "milestone": milestone_id,
+                            "estimated_effort": estimated_effort or "1 day",
+                            "lifecycle_status": "draft",
+                            "observability": {
+                                "execution_unit": "task",
+                                "log_scope": "task-execution",
+                                "audit_fields": ["run_id", "task_id", "changed_files", "evidence_refs"],
+                            },
+                            "evidence_requirements": {
+                                "required_refs": [feat_id] if feat_id else ["delivery-plan"],
+                                "review_required": True,
+                            },
+                            "rollback_strategy": {
+                                "mode": "revert",
+                                "restore_targets": [workstream],
+                            },
+                            "source_refs": [f"{feat_id}#delivery"] if feat_id and LLMRunner._is_literal_ssot_ref(feat_id) else [],
+                            "ssot": {
+                                "identity_kind": "ssot",
+                                "ssot_type": "TASK",
+                                "parent": feat_id or "FEAT-001",
+                                "derived_from": f"{feat_id}#delivery" if feat_id else "delivery-plan",
+                            },
+                        }
+                    )
+                    milestone["task_ids"].append(task_id)
+                    critical_path.append(task_id)
+                    resource_allocation.setdefault(role, {"tasks": []})
+                    resource_allocation[role]["tasks"].append(task_id)
+
+            if not task_specs:
+                task_hierarchy = payload.get("task_hierarchy") if isinstance(payload.get("task_hierarchy"), list) else []
+                seen_source_feats: set[str] = set(source_feats)
+                for phase in task_hierarchy:
+                    if not isinstance(phase, dict):
+                        continue
+                    milestone_id = _clean_text(phase.get("phase_id")) or f"M{len(milestones_map) + 1}"
+                    milestone_name = _clean_text(phase.get("phase")) or _clean_text(phase.get("name")) or milestone_id
+                    milestone = milestones_map.setdefault(
+                        milestone_id,
+                        {
+                            "id": milestone_id,
+                            "name": milestone_name,
+                            "task_ids": [],
+                            "acceptance_criteria": f"{milestone_name} completed",
+                        },
+                    )
+                    tasks = phase.get("tasks") if isinstance(phase.get("tasks"), list) else []
+                    for task in tasks:
+                        if not isinstance(task, dict):
+                            continue
+                        raw_feat_id = _clean_text(
+                            task.get("related_feat") or task.get("source_feat") or task.get("feat_id")
+                        )
+                        feat_id = feat_alias_map.get(raw_feat_id, raw_feat_id)
+                        if feat_id and feat_id not in seen_source_feats:
+                            source_feats.append(feat_id)
+                            seen_source_feats.add(feat_id)
+                        task_id = _clean_text(task.get("task_id")) or f"{feat_id or 'FEAT-001'}-TASK-{len(task_specs) + 1:03d}"
+                        title = _clean_text(task.get("title")) or task_id
+                        description = _clean_text(task.get("description")) or title
+                        role = _normalize_role(task.get("assignee_role") or task.get("responsible_role"))
+                        workstream = _normalize_workstream(task, role)
+                        acceptance_items = _normalize_list(task.get("acceptance_criteria"))
+                        if not acceptance_items:
+                            acceptance_items = [description]
+                        estimated_effort = _clean_text(task.get("estimated_effort") or task.get("effort"))
+                        if not estimated_effort and task.get("story_points") is not None:
+                            estimated_effort = f"{_clean_text(task.get('story_points'))} points"
+                        task_specs.append(
+                            {
+                                "task_id": task_id,
+                                "title": title,
+                                "objective": acceptance_items[0],
+                                "description": description,
+                                "source_feat": feat_id or "FEAT-001",
+                                "workstream": workstream,
+                                "task_kind": _infer_task_kind(task, role, workstream),
+                                "responsible_role": role,
+                                "acceptance_criteria_mapping": [
+                                    {
+                                        "feat": feat_id or "FEAT-001",
+                                        "ac": f"{feat_id or 'FEAT-001'}-AC-{index:03d}",
+                                        "description": item,
+                                    }
+                                    for index, item in enumerate(acceptance_items, start=1)
+                                ],
+                                "prerequisites": _normalize_list(task.get("prerequisites")),
+                                "dependencies": _normalize_list(task.get("dependencies")),
+                                "definition_of_done": acceptance_items[:3] or [f"{title} completed"],
+                                "priority": _normalize_priority(task.get("priority")),
+                                "milestone": milestone_id,
+                                "estimated_effort": estimated_effort or "1 day",
+                                "lifecycle_status": "draft",
+                                "observability": {
+                                    "execution_unit": "task",
+                                    "log_scope": "task-execution",
+                                    "audit_fields": ["run_id", "task_id", "changed_files", "evidence_refs"],
+                                },
+                                "evidence_requirements": {
+                                    "required_refs": [feat_id] if feat_id else ["delivery-plan"],
+                                    "review_required": True,
+                                },
+                                "rollback_strategy": {
+                                    "mode": "revert",
+                                    "restore_targets": [workstream],
+                                },
+                                "source_refs": [f"{feat_id}#delivery"] if feat_id and LLMRunner._is_literal_ssot_ref(feat_id) else [],
+                                "ssot": {
+                                    "identity_kind": "ssot",
+                                    "ssot_type": "TASK",
+                                    "parent": feat_id or "FEAT-001",
+                                    "derived_from": f"{feat_id}#delivery" if feat_id else "delivery-plan",
+                                },
+                            }
+                        )
+                        milestone["task_ids"].append(task_id)
+                        critical_path.append(task_id)
+                        resource_allocation.setdefault(role, {"tasks": []})
+                        resource_allocation[role]["tasks"].append(task_id)
+
+            raw_risks = payload.get("risks") if isinstance(payload.get("risks"), list) else []
+            for risk in raw_risks:
+                if not isinstance(risk, dict):
+                    continue
+                affected_tasks = _normalize_list(risk.get("affected_tasks")) or critical_path[:2]
+                if not affected_tasks and task_specs:
+                    affected_tasks = [str(task_specs[0].get("task_id"))]
+                risk_mitigation.append(
+                    {
+                        "risk": _clean_text(risk.get("description") or risk.get("title") or risk.get("risk_id") or "planning-risk"),
+                        "mitigation": _clean_text(risk.get("mitigation") or risk.get("fallback") or "Track in delivery review"),
+                        "affected_tasks": affected_tasks,
+                    }
+                )
+
+            normalized_business = {
+                "parent_epic": epic_ref or "EPIC-001",
+                "source_feats": source_feats or ["FEAT-001"],
+                "planning_metadata": {
+                    "planning_timestamp": _clean_text(payload.get("created_at")) or datetime.now().strftime("%Y-%m-%d"),
+                    "project_profile": "legacy_task_planning_view",
+                    "task_directory": f"spec/tasks/{(source_feats or ['FEAT-001'])[0]}",
+                },
+                "task_specs": task_specs,
+                "milestones": list(milestones_map.values()) or [
+                    {
+                        "id": "M1",
+                        "name": "Initial Delivery Plan",
+                        "task_ids": [item.get("task_id") for item in task_specs[:1] if isinstance(item, dict)],
+                        "acceptance_criteria": "Delivery plan created",
+                    }
+                ],
+                "dependency_graph": {
+                    "critical_path": critical_path or [item.get("task_id") for item in task_specs[:1] if isinstance(item, dict)],
+                },
+                "resource_allocation": resource_allocation or {"workflow-runtime-owner": {"tasks": []}},
+                "risk_mitigation": risk_mitigation,
+            }
+
+        source_feat_ids = normalized_business.get("source_feats") if isinstance(normalized_business.get("source_feats"), list) else []
+        if not source_feat_ids and isinstance(normalized_business.get("task_specs"), list):
+            source_feat_ids = [
+                _clean_text(item.get("source_feat"))
+                for item in normalized_business.get("task_specs") or []
+                if isinstance(item, dict) and _clean_text(item.get("source_feat"))
+            ]
+        normalized_business["source_feats"] = [feat_alias_map.get(item, item) for item in source_feat_ids if item]
+        source_feat_ids = normalized_business.get("source_feats") if isinstance(normalized_business.get("source_feats"), list) else []
+        normalized_business["parent_epic"] = _resolve_parent_epic(
+            _clean_text(normalized_business.get("parent_epic")),
+            [item for item in source_feat_ids if isinstance(item, str)],
         )
+        _ensure_structural_governance_task(normalized_business)
+        planning_metadata = normalized_business.get("planning_metadata")
+        if isinstance(planning_metadata, dict):
+            task_directory = _clean_text(planning_metadata.get("task_directory"))
+            primary_feat = next(
+                (
+                    _clean_text(item)
+                    for item in source_feat_ids
+                    if isinstance(item, str) and _clean_text(item)
+                ),
+                "",
+            )
+            if not primary_feat and isinstance(normalized_business.get("task_specs"), list):
+                primary_feat = next(
+                    (
+                        _clean_text(item.get("source_feat"))
+                        for item in normalized_business.get("task_specs") or []
+                        if isinstance(item, dict) and _clean_text(item.get("source_feat"))
+                    ),
+                    "",
+                )
+            canonical_task_directory = f"spec/tasks/{primary_feat or 'FEAT-001'}"
+            normalized_task_directory = task_directory.replace("\\", "/") if task_directory else ""
+            if normalized_task_directory.startswith("spec/requirements/tasks/"):
+                task_directory = canonical_task_directory
+            elif not task_directory or "<FEAT-ID>" in task_directory:
+                task_directory = canonical_task_directory
+            normalized_business["planning_metadata"] = {
+                **planning_metadata,
+                "task_directory": task_directory,
+            }
+        _enrich_delivery_plan_structure(normalized_business)
+
+        normalized_structured = LLMRunner._ensure_structured_envelope(
+            business_output=normalized_business,
+            structured_payload=structured_payload,
+        )
+        task_specs = normalized_business.get("task_specs") if isinstance(normalized_business.get("task_specs"), list) else []
+        outputs: List[Dict[str, Any]] = []
+        for index, task_spec in enumerate(task_specs, start=1):
+            if not isinstance(task_spec, dict):
+                continue
+            task_id = _clean_text(task_spec.get("task_id")) or f"TASK-{index:03d}"
+            title = _clean_text(task_spec.get("title")) or task_id
+            source_feat = _clean_text(task_spec.get("source_feat")) or "FEAT-001"
+            output_key = re.sub(r"[^a-z0-9_]+", "_", task_id.lower()).strip("_") or f"task_{index:03d}"
+            output_item = {
+                "key": output_key,
+                "identity_kind": "ssot",
+                "ssot_type": "task",
+                "title": title,
+                "parent": source_feat,
+                "content": _build_task_markdown(task_spec),
+                "properties": {
+                    "feat_id": source_feat,
+                    "task_id": task_id,
+                    "slice_key": _clean_text(task_spec.get("task_kind")) or "implementation",
+                    "workstream": _clean_text(task_spec.get("workstream")) or "workflow-runtime",
+                },
+            }
+            if LLMRunner._is_literal_ssot_ref(source_feat):
+                output_item["source_refs"] = [f"{source_feat}#delivery"]
+                output_item["verifies"] = [source_feat]
+            outputs.append(output_item)
+        normalized_structured["ssot_output_contract"] = {
+            "contract_version": "1.0",
+            "run_id": workflow_id,
+            "outputs": outputs,
+        }
+        return normalized_business, normalized_structured
 
     @staticmethod
     def _synthesize_single_ssot_payload(
@@ -2536,15 +4783,183 @@ class LLMRunner(StepRunnerBase):
         structured_payload: Any,
         instance_data: Optional[Dict[str, Any]] = None,
     ) -> tuple[Any, Any]:
-        return SingleSSOTNormalizer.normalize(
-            runner_cls=LLMRunner,
-            step=step,
-            workflow_id=workflow_id,
-            business_output=business_output,
-            structured_payload=structured_payload,
-            instance_data=instance_data,
-        )
+        if not isinstance(business_output, dict):
+            return business_output, structured_payload
 
+        agent_id = getattr(step, "agent_id", "") or ""
+        step_id = getattr(step, "id", "") or ""
+        if step_id in {"ui_design", "tech_design"}:
+            payload = LLMRunner._ensure_structured_envelope(
+                business_output=business_output,
+                structured_payload=structured_payload,
+            )
+            metadata = business_output.get("metadata") if isinstance(business_output.get("metadata"), dict) else {}
+            feat_id = None
+            for candidate in (
+                business_output.get("parent"),
+                business_output.get("feat_id"),
+                metadata.get("feat_id"),
+                metadata.get("feature_id"),
+                metadata.get("parent"),
+            ):
+                if isinstance(candidate, str) and LLMRunner._is_literal_ssot_ref(candidate):
+                    feat_id = candidate.strip()
+                    break
+            if feat_id is None and isinstance(instance_data, dict):
+                params = instance_data.get("params") if isinstance(instance_data.get("params"), dict) else {}
+                for candidate in (
+                    params.get("feat_freeze"),
+                    params.get("feat_freeze_ref"),
+                ):
+                    if isinstance(candidate, str) and LLMRunner._is_literal_ssot_ref(candidate):
+                        feat_id = candidate.strip()
+                        break
+                    if isinstance(candidate, dict):
+                        artifact_id = candidate.get("artifact_id")
+                        if isinstance(artifact_id, str) and LLMRunner._is_literal_ssot_ref(artifact_id):
+                            feat_id = artifact_id.strip()
+                            break
+                if feat_id is None:
+                    feat_freeze_path = LLMRunner._extract_feat_freeze_path(instance_data)
+                    if isinstance(feat_freeze_path, str) and feat_freeze_path.strip():
+                        frontmatter = LLMRunner._load_yaml_frontmatter(Path(feat_freeze_path.strip()))
+                        candidate = frontmatter.get("id")
+                        if isinstance(candidate, str) and LLMRunner._is_literal_ssot_ref(candidate):
+                            feat_id = candidate.strip()
+            default_title = (
+                str(
+                    business_output.get("title")
+                    or metadata.get("feature_title")
+                    or metadata.get("title")
+                    or getattr(step, "name", "")
+                    or step_id
+                ).strip()
+                or step_id
+            )
+            default_output = {
+                "key": "ui_prototype" if step_id == "ui_design" else "tech_spec",
+                "identity_kind": "ssot",
+                "ssot_type": "ui" if step_id == "ui_design" else "tech",
+                "title": default_title,
+                "content": LLMRunner._extract_step_written_markdown(step_id, payload)
+                or yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
+            }
+            output_item = {
+                **default_output,
+            }
+            if feat_id:
+                output_item["parent"] = feat_id
+                output_item["implements"] = [feat_id]
+
+            existing_contract = payload.get("ssot_output_contract")
+            if isinstance(existing_contract, dict):
+                normalized_contract = dict(existing_contract)
+                raw_outputs = normalized_contract.get("outputs")
+                normalized_outputs: List[Dict[str, Any]] = []
+                if isinstance(raw_outputs, list):
+                    for raw_output in raw_outputs:
+                        if not isinstance(raw_output, dict):
+                            continue
+                        merged_output = {**default_output, **dict(raw_output)}
+                        if feat_id:
+                            current_parent = merged_output.get("parent")
+                            if not (
+                                isinstance(current_parent, str)
+                                and LLMRunner._is_literal_ssot_ref(current_parent)
+                            ):
+                                merged_output["parent"] = feat_id
+                            implements = merged_output.get("implements")
+                            if not isinstance(implements, list) or not implements:
+                                merged_output["implements"] = [feat_id]
+                        normalized_outputs.append(merged_output)
+                if not normalized_outputs:
+                    normalized_outputs = [output_item]
+                normalized_contract["contract_version"] = "1.0"
+                normalized_contract["run_id"] = str(normalized_contract.get("run_id") or workflow_id)
+                normalized_contract["outputs"] = normalized_outputs
+                payload["ssot_output_contract"] = normalized_contract
+            else:
+                payload["ssot_output_contract"] = {
+                    "contract_version": "1.0",
+                    "run_id": workflow_id,
+                    "outputs": [output_item],
+                }
+            return business_output, payload
+
+        if isinstance(structured_payload, dict) and isinstance(structured_payload.get("ssot_output_contract"), dict):
+            return business_output, structured_payload
+
+        if agent_id == "agent.product.epic_designer":
+            source_refs = LLMRunner._derive_source_refs_from_business_output(
+                business_output,
+                allowed_prefixes=["SRC"],
+            )
+            ssot_meta = business_output.get("ssot") if isinstance(business_output.get("ssot"), dict) else {}
+            derived_from = ssot_meta.get("derived_from")
+            source_problem = ssot_meta.get("source_problem")
+            canonical_source_ref = LLMRunner._resolve_source_ref_from_instance_data(instance_data)
+            if not source_refs and isinstance(source_problem, str) and LLMRunner._is_literal_ssot_ref(source_problem):
+                source_refs = [f"{source_problem}#scope"]
+            if not derived_from and isinstance(source_problem, str) and LLMRunner._is_literal_ssot_ref(source_problem):
+                derived_from = source_problem
+            if not source_refs and canonical_source_ref:
+                source_refs = [f"{canonical_source_ref}#scope"]
+            if not derived_from and canonical_source_ref:
+                derived_from = canonical_source_ref
+            elif canonical_source_ref and (
+                not isinstance(derived_from, str) or not LLMRunner._is_literal_ssot_ref(derived_from)
+            ):
+                derived_from = canonical_source_ref
+            formal_epic_id = business_output.get("epic_id")
+            if not source_refs and isinstance(derived_from, str) and LLMRunner._is_literal_ssot_ref(derived_from):
+                source_refs = [f"{derived_from}#scope"]
+            payload = LLMRunner._ensure_structured_envelope(
+                business_output=business_output,
+                structured_payload=structured_payload,
+            )
+            epic_output = {
+                "key": "epic",
+                "identity_kind": "ssot",
+                "ssot_type": "epic",
+                "title": str(business_output.get("title") or "EPIC").strip() or "EPIC",
+                "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
+            }
+            if source_refs:
+                epic_output["source_refs"] = source_refs
+            if isinstance(derived_from, str) and derived_from.strip():
+                epic_output["derived_from"] = derived_from.strip()
+            if isinstance(formal_epic_id, str) and formal_epic_id.strip():
+                epic_output["properties"] = {"formal_id": formal_epic_id.strip()}
+            payload["ssot_output_contract"] = {
+                "contract_version": "1.0",
+                "run_id": workflow_id,
+                "outputs": [epic_output],
+            }
+            return business_output, payload
+
+        if step_id == "source_normalization":
+            payload = LLMRunner._ensure_structured_envelope(
+                business_output=business_output,
+                structured_payload=structured_payload,
+            )
+            source_refs = LLMRunner._derive_source_refs_from_business_output(business_output)
+            src_output = {
+                "key": "src",
+                "identity_kind": "ssot",
+                "ssot_type": "src",
+                "title": LLMRunner._derive_src_title_from_business_output(business_output),
+                "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
+            }
+            if source_refs:
+                src_output["source_refs"] = source_refs
+            payload["ssot_output_contract"] = {
+                "contract_version": "1.0",
+                "run_id": workflow_id,
+                "outputs": [src_output],
+            }
+            return business_output, payload
+
+        return business_output, structured_payload
 
     @staticmethod
     def _normalize_business_payload(
@@ -2554,12 +4969,6 @@ class LLMRunner(StepRunnerBase):
         structured_payload: Any,
         instance_data: Optional[Dict[str, Any]] = None,
     ) -> tuple[Any, Any]:
-        business_output, structured_payload = LLMRunner._normalize_source_freeze_payload(
-            step=step,
-            business_output=business_output,
-            structured_payload=structured_payload,
-            instance_data=instance_data,
-        )
         business_output, structured_payload = LLMRunner._normalize_requirement_decomposer_payload(
             step=step,
             business_output=business_output,
@@ -2601,153 +5010,131 @@ class LLMRunner(StepRunnerBase):
         structured_payload: Any,
         instance_data: Optional[Dict[str, Any]] = None,
     ) -> tuple[Any, Any]:
-        return ProductReviewNormalizer.normalize(
-            runner_cls=LLMRunner,
-            step=step,
-            business_output=business_output,
-            structured_payload=structured_payload,
-            instance_data=instance_data,
-        )
+        if not isinstance(business_output, dict):
+            return business_output, structured_payload
 
-
-    @classmethod
-    def _sanitize_feat_review_payload(
-        cls,
-        *,
-        review_payload: Dict[str, Any],
-        instance_data: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        sanitized = dict(review_payload)
-        findings = [
-            item.strip()
-            for item in sanitized.get("findings") or []
-            if isinstance(item, str) and item.strip()
-        ]
-        filtered_findings = [
-            item for item in findings if not cls._contains_feat_review_false_positive(item)
-        ]
-        sanitized["findings"] = filtered_findings
-        if sanitized.get("decision") == "pass" and filtered_findings:
-            sanitized["decision"] = "revise"
-        all_findings_filtered = bool(findings) and not filtered_findings
-        if sanitized.get("decision") in {"revise", "reject"} and all_findings_filtered:
-            sanitized["decision"] = "pass"
-            sanitized["summary"] = ""
-        elif sanitized.get("decision") == "revise" and not filtered_findings:
-            summary = str(sanitized.get("summary") or "").strip()
-            if not cls._contains_feat_review_negative_signal(summary):
-                sanitized["decision"] = "pass"
+        normalized_business = dict(business_output)
         if (
-            sanitized.get("decision") in {"revise", "reject"}
-            and cls._is_self_contradictory_feat_review(
-                review_payload=sanitized,
+            getattr(step, "agent_id", "") == "agent.product.feat_reviewer"
+            and normalized_business.get("review_type") is None
+        ):
+            normalized_business["review_type"] = "feat_review"
+            normalized_business.setdefault("summary", normalized_business.get("review_summary") or "")
+            feat_reviews = normalized_business.get("feat_reviews")
+            if isinstance(feat_reviews, list):
+                normalized_business.setdefault(
+                    "subject_refs",
+                    [
+                        str(item.get("feat_id")).strip()
+                        for item in feat_reviews
+                        if isinstance(item, dict) and str(item.get("feat_id") or "").strip()
+                    ],
+                )
+                if "findings" not in normalized_business:
+                    findings = [
+                        str(item.get("notes")).strip()
+                        for item in feat_reviews
+                        if isinstance(item, dict)
+                        and str(item.get("status") or "").strip().lower()
+                        not in {"approved", "pass", "passed", "approved_with_notes", "approved_with_recommendations"}
+                        and str(item.get("notes") or "").strip()
+                    ]
+                    normalized_business["findings"] = findings
+                if not isinstance(normalized_business.get("recommendations"), list):
+                    normalized_business["recommendations"] = []
+                for item in feat_reviews:
+                    if not isinstance(item, dict):
+                        continue
+                    item_status = str(item.get("status") or "").strip().lower()
+                    note = str(item.get("notes") or "").strip()
+                    if item_status in {"approved_with_notes", "approved_with_recommendations"} and note:
+                        normalized_business["recommendations"].append(note)
+            recommendations = normalized_business.get("recommendations")
+            if not isinstance(recommendations, list):
+                normalized_business["recommendations"] = []
+            normalized_business.setdefault("risks", [])
+            status_text = str(normalized_business.get("status") or "").strip().lower()
+            if normalized_business.get("decision") not in {"pass", "revise", "reject"}:
+                if status_text in {"approved", "approved_with_recommendations", "approved_with_notes"}:
+                    normalized_business["decision"] = "pass"
+                elif status_text in {"revise", "needs_revision", "changes_requested"}:
+                    normalized_business["decision"] = "revise"
+                elif status_text in {"rejected", "reject", "failed"}:
+                    normalized_business["decision"] = "reject"
+            if "findings" not in normalized_business:
+                normalized_business["findings"] = []
+
+        review_type = normalized_business.get("review_type")
+        if review_type not in {"source_review", "epic_review", "feat_review", "delivery_plan_review"}:
+            return business_output, structured_payload
+
+        if review_type == "delivery_plan_review":
+            expected_subject_refs = LLMRunner._expected_delivery_plan_subject_refs(
+                instance_data,
+                normalized_business,
+            )
+            if expected_subject_refs and not normalized_business.get("subject_refs"):
+                normalized_business["subject_refs"] = expected_subject_refs
+
+        if normalized_business.get("decision") not in {"pass", "revise", "reject"}:
+            candidate = (
+                normalized_business.get("status")
+                or normalized_business.get("review_status")
+                or normalized_business.get("approval_decision")
+            )
+            decision_map = {
+                "pass": "pass",
+                "passed": "pass",
+                "approved": "pass",
+                "approve": "pass",
+                "success": "pass",
+                "ok": "pass",
+                "revise": "revise",
+                "revision_required": "revise",
+                "needs_revision": "revise",
+                "needs_revise": "revise",
+                "changes_requested": "revise",
+                "approved_with_recommendations": "pass",
+                "approved_with_notes": "pass",
+                "reject": "reject",
+                "rejected": "reject",
+                "fail": "reject",
+                "failed": "reject",
+            }
+            normalized_candidate = str(candidate or "").strip().lower()
+            normalized_decision = decision_map.get(normalized_candidate)
+            if normalized_decision:
+                normalized_business["decision"] = normalized_decision
+        if not isinstance(normalized_business.get("summary"), str):
+            normalized_business["summary"] = str(
+                normalized_business.get("review_summary")
+                or normalized_business.get("summary")
+                or ""
+            ).strip()
+        for field_name in ("subject_refs", "findings", "risks", "recommendations"):
+            value = normalized_business.get(field_name)
+            if isinstance(value, list):
+                normalized_business[field_name] = [str(item).strip() for item in value if str(item).strip()]
+            elif field_name == "subject_refs":
+                normalized_business[field_name] = []
+            else:
+                normalized_business[field_name] = []
+
+        if review_type == "delivery_plan_review":
+            normalized_business = LLMRunner._sanitize_delivery_plan_review_payload(
+                review_payload=normalized_business,
                 instance_data=instance_data,
             )
+
+        normalized_structured = structured_payload
+        if (
+            isinstance(structured_payload, dict)
+            and isinstance(structured_payload.get("business_output"), dict)
         ):
-            sanitized["decision"] = "pass"
-            sanitized["summary"] = ""
-            sanitized["findings"] = []
-            sanitized["risks"] = []
-            sanitized["recommendations"] = []
-        if not str(sanitized.get("summary") or "").strip():
-            subject_refs = [
-                item.strip()
-                for item in sanitized.get("subject_refs") or []
-                if isinstance(item, str) and item.strip()
-            ]
-            subject_text = ", ".join(subject_refs) if subject_refs else "the planned FEATs"
-            decision = str(sanitized.get("decision") or "").strip() or "pass"
-            sanitized["summary"] = f"FEAT review {decision} for {subject_text}"
-        return sanitized
+            normalized_structured = dict(structured_payload)
+            normalized_structured["business_output"] = normalized_business
 
-    @classmethod
-    def _is_self_contradictory_feat_review(
-        cls,
-        *,
-        review_payload: Dict[str, Any],
-        instance_data: Optional[Dict[str, Any]],
-    ) -> bool:
-        if not isinstance(review_payload, dict):
-            return False
-        expected_subject_refs = cls._expected_feat_review_subject_refs(instance_data or {})
-        expected = {
-            ref.strip()
-            for ref in expected_subject_refs
-            if isinstance(ref, str) and ref.strip()
-        }
-        actual = {
-            str(item).strip()
-            for item in (review_payload.get("subject_refs") or [])
-            if str(item).strip()
-        }
-        if not expected or actual != expected:
-            return False
-
-        contradiction_markers = (
-            "feat-bundle-contract",
-            "feat_specs",
-            "input bundle",
-            "输入对象",
-            "输入数据",
-            "derived_object_expectations",
-            "trace_hints",
-            "trace hints",
-            "required_fields",
-            "formal object",
-            "repo-evidence-manifest",
-            "canonical-ssot-path-rules",
-            "adr-016",
-        )
-        findings = review_payload.get("findings") or []
-        summary = review_payload.get("summary") or ""
-        lowered = "\n".join(
-            str(item).lower()
-            for item in list(findings) + [summary]
-            if isinstance(item, str) and item.strip()
-        )
-        if not lowered:
-            return False
-        if cls._looks_like_reverse_ssot_contract_noise(lowered):
-            return True
-        return any(marker in lowered for marker in contradiction_markers)
-
-    @classmethod
-    def _looks_like_reverse_ssot_contract_noise(cls, text: str) -> bool:
-        if not isinstance(text, str):
-            return False
-        lowered = text.strip().lower()
-        if not lowered:
-            return False
-        reverse_markers = (
-            "feat-bundle-contract",
-            "input bundle",
-            "输入对象",
-            "输入数据",
-            "feat_specs",
-            "feat_id",
-            "derived_object_expectations",
-            "trace_hints",
-            "trace hints",
-            "formal object",
-            "adr-016",
-            "repo-evidence-manifest",
-        )
-        governance_markers = (
-            "user_stories",
-            "user stories",
-            "dependencies",
-            "acceptance_criteria",
-            "required_fields",
-            "specific derivation paths",
-            "generic category names",
-            "technical schema keys",
-            "without business validation rules",
-            "review contract",
-            "canonical-ssot-path-rules",
-        )
-        return any(marker in lowered for marker in reverse_markers) and any(
-            marker in lowered for marker in governance_markers
-        )
+        return normalized_business, normalized_structured
 
     @staticmethod
     def _build_schema_repair_prompt(
@@ -2757,11 +5144,27 @@ class LLMRunner(StepRunnerBase):
         business_output: Any,
         structured_payload: Any,
     ) -> str:
-        return SchemaRepairHelper.build_repair_prompt(
-            step=step,
-            validation_error=validation_error,
-            business_output=business_output,
-            structured_payload=structured_payload,
+        payload = business_output
+        if not isinstance(payload, dict) and isinstance(structured_payload, dict):
+            payload = structured_payload
+
+        payload_text = json.dumps(
+            payload if payload is not None else {},
+            ensure_ascii=False,
+            indent=2,
+        )
+        return (
+            "修复下面这个结构化输出，使其满足当前 step 的 output contract。\n"
+            "只允许返回最终 JSON 对象，不要输出解释、标题、代码块或额外包裹层。\n"
+            f"step_id: {getattr(step, 'id', '')}\n"
+            f"validation_error: {validation_error}\n"
+            "要求：\n"
+            "- 保留原始语义，不要重新发明业务内容\n"
+            "- 仅补足缺失字段、修正字段名或枚举值、规范结构\n"
+            "- 如果原输出里缺少必要结论字段，请基于已有 summary/findings/risks/recommendations 做最小修复\n"
+            "- 返回内容必须是可直接通过 schema 校验的单个 JSON 对象\n"
+            "原始 payload:\n"
+            f"{payload_text}"
         )
 
     @classmethod
@@ -2775,14 +5178,31 @@ class LLMRunner(StepRunnerBase):
         business_output: Any,
         structured_payload: Any,
     ) -> Dict[str, Any]:
-        return SchemaRepairHelper.build_repair_input(
-            executor_type=executor_type,
-            input_data=input_data,
+        repair_prompt = cls._build_schema_repair_prompt(
             step=step,
             validation_error=validation_error,
             business_output=business_output,
             structured_payload=structured_payload,
         )
+        repaired_input = dict(input_data)
+        if executor_type in ("codex", "claude_code", "kimi"):
+            repaired_input["goal"] = repair_prompt
+            repaired_input["context_files"] = []
+            repaired_input["write_scope"] = []
+            repaired_input["max_iterations"] = 1
+            repaired_input["allowed_commands"] = []
+            repaired_input["system_prompt_extra"] = (
+                "你正在执行 schema repair retry。"
+                "不要修改文件，不要调用命令，只输出最终 JSON 对象。"
+            )
+        else:
+            repaired_input["prompt"] = repair_prompt
+            repaired_input["system_message"] = (
+                "You are repairing structured output to satisfy a JSON schema. "
+                "Return only a single JSON object."
+            )
+            repaired_input["temperature"] = 0
+        return repaired_input
 
     async def _attempt_schema_repair(
         self,
@@ -2796,72 +5216,222 @@ class LLMRunner(StepRunnerBase):
         business_output: Any,
         structured_payload: Any,
     ) -> Optional[Dict[str, Any]]:
-        return await SchemaRepairHelper.attempt_repair(
-            runner=self,
-            executor=executor,
+        repair_input = self._build_schema_repair_input(
             executor_type=executor_type,
             input_data=input_data,
             step=step,
-            workflow_id=workflow_id,
             validation_error=validation_error,
             business_output=business_output,
             structured_payload=structured_payload,
         )
+
+        retry_executor = AsyncRetryExecutor(
+            policy=RetryPolicy(max_retries=0, base_delay=0, jitter=False)
+        )
+        repair_result = await retry_executor.execute(executor.execute, repair_input)
+        if not repair_result.success:
+            return None
+
+        repaired_output = repair_result.result
+        if not isinstance(repaired_output, dict):
+            return None
+
+        if executor_type in ("codex", "claude_code", "kimi"):
+            repaired_business_output, repaired_structured_payload = ClaudeCodeRunner._extract_business_output_for_validation(
+                step=step,
+                workflow_id=workflow_id,
+                output=repaired_output,
+                written_files=[],
+            )
+        else:
+            repaired_generated_text = repaired_output.get("generated_text", "") or ""
+            repaired_structured_payload = self._parse_structured_output_if_possible(repaired_generated_text)
+            repaired_business_output = self._extract_business_output_payload(
+                repaired_structured_payload,
+                repaired_generated_text,
+                step=step,
+                written_files=[],
+            )
+            repaired_business_output, repaired_structured_payload = self._normalize_business_payload(
+                step=step,
+                workflow_id=workflow_id,
+                business_output=repaired_business_output,
+                structured_payload=repaired_structured_payload,
+            )
+
+        if not isinstance(repaired_business_output, dict):
+            return None
+
+        return {
+            "output": repaired_output,
+            "business_output": repaired_business_output,
+            "structured_payload": repaired_structured_payload,
+        }
 
     @staticmethod
     def _validate_feat_review_subject_refs(
         review_payload: Any,
         expected_subject_refs: List[str],
     ) -> Optional[str]:
-        return ReviewSemanticValidator.validate_feat_review_subject_refs(
-            review_payload,
-            expected_subject_refs,
-        )
+        if not expected_subject_refs:
+            return None
+        if not isinstance(review_payload, dict):
+            return "FEAT review output is not a structured object"
 
-    @classmethod
+        subject_refs = review_payload.get("subject_refs")
+        if not isinstance(subject_refs, list):
+            return "FEAT review output missing subject_refs list"
+
+        expected = {ref for ref in expected_subject_refs if isinstance(ref, str) and ref.strip()}
+        actual = {ref for ref in subject_refs if isinstance(ref, str) and ref.strip()}
+        if not expected.issubset(actual):
+            return (
+                "FEAT review subject_refs must include the reviewed FEAT ID(s): "
+                + ", ".join(sorted(expected))
+            )
+        return None
+
+    @staticmethod
     def _validate_feat_review_semantics(
-        cls,
         review_payload: Any,
         expected_subject_refs: List[str],
     ) -> Optional[str]:
-        return ReviewSemanticValidator.validate_feat_review_semantics(
-            runner_cls=cls,
-            review_payload=review_payload,
-            expected_subject_refs=expected_subject_refs,
-        )
+        if not isinstance(review_payload, dict):
+            return "FEAT review output is not a structured object"
 
-    @classmethod
+        review_type = review_payload.get("review_type")
+        if review_type != "feat_review":
+            return "FEAT review output must set review_type=feat_review"
+
+        summary = review_payload.get("summary")
+        if not isinstance(summary, str) or not summary.strip():
+            return "FEAT review output must include a non-empty summary"
+
+        decision = review_payload.get("decision")
+        if decision not in {"pass", "revise", "reject"}:
+            return "FEAT review output decision must be one of: pass, revise, reject"
+
+        for field_name in ("findings", "risks", "recommendations"):
+            value = review_payload.get(field_name)
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                return f"FEAT review output field '{field_name}' must be a string array"
+
+        subject_refs = review_payload.get("subject_refs")
+        if not isinstance(subject_refs, list):
+            return "FEAT review output missing subject_refs list"
+
+        expected = [ref for ref in expected_subject_refs if isinstance(ref, str) and ref.strip()]
+        actual = [ref for ref in subject_refs if isinstance(ref, str) and ref.strip()]
+        if expected and sorted(actual) != sorted(expected):
+            return (
+                "FEAT review subject_refs must exactly match the reviewed FEAT ID(s): "
+                + ", ".join(sorted(expected))
+            )
+
+        findings = review_payload.get("findings") or []
+        if decision == "pass":
+            if findings:
+                return "FEAT review output with decision=pass must not include findings"
+            if LLMRunner._contains_feat_review_negative_signal(summary):
+                return "FEAT review summary conflicts with decision=pass"
+
+        if decision in {"revise", "reject"} and not findings:
+            return f"FEAT review output with decision={decision} must include at least one finding"
+
+        if decision == "revise":
+            return "FEAT review requires revision before freeze"
+        if decision == "reject":
+            return "FEAT review rejected the generated FEAT bundle"
+
+        return None
+
+    @staticmethod
     def _expected_delivery_plan_subject_refs(
-        cls,
         instance_data: Optional[Dict[str, Any]],
         business_output: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
-        return ReviewSemanticValidator.expected_delivery_plan_subject_refs(
-            runner_cls=cls,
-            instance_data=instance_data,
-            business_output=business_output,
-        )
+        refs: List[str] = []
+
+        if isinstance(business_output, dict):
+            for candidate in business_output.get("subject_refs", []):
+                if isinstance(candidate, str) and candidate.strip() and candidate.strip() not in refs:
+                    refs.append(candidate.strip())
+
+        if isinstance(instance_data, dict):
+            step_outputs = instance_data.get("step_outputs")
+            if isinstance(step_outputs, dict):
+                task_planning = step_outputs.get("task_planning")
+                if isinstance(task_planning, dict):
+                    task_business = task_planning.get("business_output")
+                    if not isinstance(task_business, dict):
+                        generated_text = task_planning.get("generated_text")
+                        if isinstance(generated_text, str) and generated_text.strip():
+                            parsed = LLMRunner._parse_structured_output_if_possible(generated_text)
+                            if isinstance(parsed, dict):
+                                nested_business = parsed.get("business_output")
+                                task_business = nested_business if isinstance(nested_business, dict) else parsed
+                    if isinstance(task_business, dict):
+                        for candidate in task_business.get("source_feats", []):
+                            if isinstance(candidate, str) and candidate.strip() and candidate.strip() not in refs:
+                                refs.append(candidate.strip())
+
+        return refs
 
     @staticmethod
     def _validate_delivery_plan_review_subject_refs(
         review_payload: Any,
         expected_subject_refs: List[str],
     ) -> Optional[str]:
-        return ReviewSemanticValidator.validate_delivery_plan_review_subject_refs(
-            review_payload,
-            expected_subject_refs,
-        )
+        if not expected_subject_refs:
+            return None
+        if not isinstance(review_payload, dict):
+            return "Delivery plan review output is not a structured object"
+
+        review_type = review_payload.get("review_type")
+        if review_type != "delivery_plan_review":
+            return "Delivery plan review output must set review_type=delivery_plan_review"
+
+        subject_refs = review_payload.get("subject_refs")
+        if not isinstance(subject_refs, list):
+            return "Delivery plan review output missing subject_refs list"
+
+        expected = [ref for ref in expected_subject_refs if isinstance(ref, str) and ref.strip()]
+        actual = [ref for ref in subject_refs if isinstance(ref, str) and ref.strip()]
+        if sorted(actual) != sorted(expected):
+            return (
+                "Delivery plan review subject_refs must exactly match the planned FEAT ID(s): "
+                + ", ".join(sorted(expected))
+            )
+        return None
 
     @classmethod
     def _load_task_plan_business_output(cls, instance_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        return ReviewSemanticValidator.load_task_plan_business_output(
-            runner_cls=cls,
-            instance_data=instance_data,
-        )
+        if not isinstance(instance_data, dict):
+            return None
+        step_outputs = instance_data.get("step_outputs")
+        if not isinstance(step_outputs, dict):
+            return None
+        task_planning = step_outputs.get("task_planning")
+        if not isinstance(task_planning, dict):
+            return None
+        business_output = task_planning.get("business_output")
+        if isinstance(business_output, dict):
+            return business_output
+        generated_text = task_planning.get("generated_text")
+        if isinstance(generated_text, str) and generated_text.strip():
+            parsed = cls._parse_structured_output_if_possible(generated_text)
+            if isinstance(parsed, dict):
+                nested = parsed.get("business_output")
+                if isinstance(nested, dict):
+                    return nested
+                return parsed
+        return None
 
     @staticmethod
     def _review_clean_text(value: Any) -> str:
-        return ReviewSemanticValidator.review_clean_text(value)
+        if value is None:
+            return ""
+        return str(value).strip()
 
     @classmethod
     def _delivery_plan_has_persisted_tasks(
@@ -2870,10 +5440,36 @@ class LLMRunner(StepRunnerBase):
         project_root: str,
         task_plan: Optional[Dict[str, Any]],
     ) -> bool:
-        return ReviewSemanticValidator.delivery_plan_has_persisted_tasks(
-            project_root=project_root,
-            task_plan=task_plan,
-        )
+        if not isinstance(task_plan, dict):
+            return False
+        planning_metadata = task_plan.get("planning_metadata")
+        task_directory = ""
+        if isinstance(planning_metadata, dict):
+            task_directory = cls._review_clean_text(planning_metadata.get("task_directory"))
+        if not task_directory:
+            source_feats = task_plan.get("source_feats") if isinstance(task_plan.get("source_feats"), list) else []
+            primary_feat = next(
+                (
+                    cls._review_clean_text(item)
+                    for item in source_feats
+                    if isinstance(item, str) and cls._review_clean_text(item)
+                ),
+                "",
+            )
+            task_directory = f"spec/tasks/{primary_feat or 'FEAT-001'}"
+        task_dir_path = Path(project_root) / task_directory
+        task_specs = task_plan.get("task_specs") if isinstance(task_plan.get("task_specs"), list) else []
+        if not task_dir_path.exists() or not task_specs:
+            return False
+        for task_spec in task_specs:
+            if not isinstance(task_spec, dict):
+                continue
+            task_id = cls._review_clean_text(task_spec.get("task_id"))
+            if not task_id:
+                continue
+            if not list(task_dir_path.glob(f"{task_id}__*.md")):
+                return False
+        return True
 
     @classmethod
     def _delivery_plan_has_structural_spec_coverage(
@@ -2882,15 +5478,81 @@ class LLMRunner(StepRunnerBase):
         project_root: str,
         task_plan: Optional[Dict[str, Any]],
     ) -> bool:
-        return ReviewSemanticValidator.delivery_plan_has_structural_spec_coverage(
-            runner_cls=cls,
-            project_root=project_root,
-            task_plan=task_plan,
+        if not isinstance(task_plan, dict):
+            return False
+        source_feats = task_plan.get("source_feats") if isinstance(task_plan.get("source_feats"), list) else []
+        primary_feat = next(
+            (
+                cls._review_clean_text(item)
+                for item in source_feats
+                if isinstance(item, str) and cls._review_clean_text(item)
+            ),
+            "",
         )
+        if not primary_feat:
+            return False
+        formal_checks = cls._load_feat_acceptance_checks(project_root, primary_feat)
+        structural_ids = {
+            str(item.get("id")).strip()
+            for item in formal_checks
+            if isinstance(item, dict)
+            and str(item.get("id") or "").strip()
+            and cls._is_structural_acceptance_check(item)
+        }
+        if not structural_ids:
+            return False
+        task_specs = task_plan.get("task_specs") if isinstance(task_plan.get("task_specs"), list) else []
+        covered_ids: set[str] = set()
+        for task_spec in task_specs:
+            if not isinstance(task_spec, dict):
+                continue
+            task_kind = cls._review_clean_text(task_spec.get("task_kind")).lower()
+            if task_kind not in {"governance", "specification", "template"}:
+                continue
+            mappings = task_spec.get("acceptance_criteria_mapping")
+            if not isinstance(mappings, list):
+                continue
+            for mapping in mappings:
+                if not isinstance(mapping, dict):
+                    continue
+                ac_id = cls._review_clean_text(mapping.get("ac"))
+                if ac_id in structural_ids:
+                    covered_ids.add(ac_id)
+        return structural_ids.issubset(covered_ids)
 
     @classmethod
     def _contains_delivery_plan_false_positive(cls, text: str) -> bool:
-        return ReviewSemanticValidator.contains_delivery_plan_false_positive(text)
+        lowered = text.strip().lower()
+        if not lowered:
+            return False
+        positive_patterns = [
+            r"\bexists\b",
+            r"\bdefined\b",
+            r"\bcovers\b",
+            r"\bconsistent\b",
+            r"\bcan be derived\b",
+            r"\bhas \d+\b",
+            r"\bverified\b",
+            r"\bavailable\b",
+            r"存在",
+            r"已定义",
+            r"一致",
+            r"可推导",
+            r"可得",
+            r"已覆盖",
+            r"已落盘",
+            r"均具备",
+            r"完整的",
+            r"字段$",
+            r"清晰",
+            r"完整$",
+            r"支持",
+            r"明确",
+            r"已正确映射",
+            r"已映射到",
+            r"一致$",
+        ]
+        return any(re.search(pattern, lowered) for pattern in positive_patterns)
 
     @classmethod
     def _sanitize_delivery_plan_review_payload(
@@ -2899,11 +5561,93 @@ class LLMRunner(StepRunnerBase):
         review_payload: Dict[str, Any],
         instance_data: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        return ReviewSemanticValidator.sanitize_delivery_plan_review_payload(
-            runner_cls=cls,
-            review_payload=review_payload,
-            instance_data=instance_data,
+        sanitized = dict(review_payload)
+        findings = [
+            item.strip()
+            for item in sanitized.get("findings") or []
+            if isinstance(item, str) and item.strip()
+        ]
+
+        task_plan = cls._load_task_plan_business_output(instance_data)
+        project_root = ""
+        if isinstance(instance_data, dict):
+            project_root = str(instance_data.get("project_root") or "").strip()
+        if not project_root:
+            project_root = str(Path.cwd())
+        has_persisted_tasks = cls._delivery_plan_has_persisted_tasks(
+            project_root=project_root,
+            task_plan=task_plan,
         )
+        has_structural_spec_coverage = cls._delivery_plan_has_structural_spec_coverage(
+            project_root=project_root,
+            task_plan=task_plan,
+        )
+
+        filtered_findings: List[str] = []
+        for item in findings:
+            if cls._contains_delivery_plan_false_positive(item):
+                continue
+            if re.search(r"双重覆盖|同时映射到 specification.*implementation|规范与实现双重覆盖", item, re.IGNORECASE):
+                if has_structural_spec_coverage:
+                    continue
+            if re.search(r"落盘|persist|persistence|unverified", item, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", item, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", item, re.IGNORECASE):
+                if has_structural_spec_coverage:
+                    continue
+            filtered_findings.append(item)
+
+        sanitized["findings"] = filtered_findings
+        filtered_risks: List[str] = []
+        for item in sanitized.get("risks") or []:
+            if not isinstance(item, str) or not item.strip():
+                continue
+            text = item.strip()
+            if re.search(r"落盘|persist|persistence|未落盘|unverified", text, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", text, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", text, re.IGNORECASE):
+                if has_structural_spec_coverage:
+                    continue
+            filtered_risks.append(text)
+        sanitized["risks"] = filtered_risks
+
+        filtered_recommendations: List[str] = []
+        for item in sanitized.get("recommendations") or []:
+            if not isinstance(item, str) or not item.strip():
+                continue
+            text = item.strip()
+            if re.search(r"spec/requirements/tasks/|未落盘|write.*spec/requirements/tasks|persist", text, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            if re.search(r"definition_of_done|落盘文件路径", text, re.IGNORECASE):
+                if has_persisted_tasks:
+                    continue
+            filtered_recommendations.append(text)
+        sanitized["recommendations"] = filtered_recommendations
+        if sanitized.get("decision") == "revise" and not filtered_findings:
+            summary = str(sanitized.get("summary") or "").strip()
+            if not cls._contains_feat_review_negative_signal(summary):
+                sanitized["decision"] = "pass"
+        if not str(sanitized.get("summary") or "").strip():
+            review_type = str(sanitized.get("review_type") or "").strip()
+            subject_refs = [
+                item.strip()
+                for item in sanitized.get("subject_refs") or []
+                if isinstance(item, str) and item.strip()
+            ]
+            subject_text = ", ".join(subject_refs) if subject_refs else "the planned FEATs"
+            decision = str(sanitized.get("decision") or "").strip() or "pass"
+            if review_type == "delivery_plan_review":
+                sanitized["summary"] = f"Delivery plan review {decision} for {subject_text}"
+        return sanitized
 
     @classmethod
     def _validate_delivery_plan_review_semantics(
@@ -2913,12 +5657,61 @@ class LLMRunner(StepRunnerBase):
         review_payload: Any,
         instance_data: Optional[Dict[str, Any]],
     ) -> Optional[str]:
-        return ReviewSemanticValidator.validate_delivery_plan_review_semantics(
-            runner_cls=cls,
-            project_root=project_root,
-            review_payload=review_payload,
-            instance_data=instance_data,
-        )
+        if not isinstance(review_payload, dict):
+            return "Delivery plan review output is not a structured object"
+
+        if review_payload.get("review_type") != "delivery_plan_review":
+            return "Delivery plan review output must set review_type=delivery_plan_review"
+
+        summary = review_payload.get("summary")
+        if not isinstance(summary, str) or not summary.strip():
+            return "Delivery plan review output must include a non-empty summary"
+
+        decision = review_payload.get("decision")
+        if decision not in {"pass", "revise", "reject"}:
+            return "Delivery plan review output decision must be one of: pass, revise, reject"
+
+        for field_name in ("findings", "risks", "recommendations"):
+            value = review_payload.get(field_name)
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                return f"Delivery plan review output field '{field_name}' must be a string array"
+
+        findings = [item.strip() for item in review_payload.get("findings") or [] if isinstance(item, str) and item.strip()]
+        if decision == "pass":
+            if findings:
+                return "Delivery plan review output with decision=pass must not include findings"
+            if cls._contains_feat_review_negative_signal(summary):
+                return "Delivery plan review summary conflicts with decision=pass"
+
+        if decision in {"revise", "reject"} and not findings:
+            return f"Delivery plan review output with decision={decision} must include at least one finding"
+
+        task_plan = cls._load_task_plan_business_output(instance_data)
+        if decision == "revise":
+            if findings and all(cls._contains_delivery_plan_false_positive(item) for item in findings):
+                return "Delivery plan review findings contain no blocking issues"
+
+            all_review_text = "\n".join(
+                findings
+                + [item.strip() for item in review_payload.get("risks") or [] if isinstance(item, str)]
+                + [item.strip() for item in review_payload.get("recommendations") or [] if isinstance(item, str)]
+            )
+            if re.search(r"落盘|persist|persistence|unverified", all_review_text, re.IGNORECASE):
+                if cls._delivery_plan_has_persisted_tasks(project_root=project_root, task_plan=task_plan):
+                    return "Delivery plan review incorrectly reports TASK persistence as unverified"
+            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", all_review_text, re.IGNORECASE):
+                if cls._delivery_plan_has_persisted_tasks(project_root=project_root, task_plan=task_plan):
+                    return "Delivery plan review incorrectly requires explicit TASK file paths"
+            if re.search(r"spec/template coverage|规范任务|模板任务|specification", all_review_text, re.IGNORECASE):
+                if cls._delivery_plan_has_structural_spec_coverage(project_root=project_root, task_plan=task_plan):
+                    return "Delivery plan review incorrectly reports missing structural specification coverage"
+
+            return "Delivery plan review requires revision before freeze"
+
+        if decision == "reject":
+            return "Delivery plan review rejected the generated delivery plan"
+
+        return None
 
     @staticmethod
     def _contains_feat_review_negative_signal(text: Any) -> bool:
@@ -2947,41 +5740,6 @@ class LLMRunner(StepRunnerBase):
             r"不可通过",
         ]
         return any(re.search(pattern, normalized) for pattern in patterns)
-
-    @classmethod
-    def _contains_feat_review_false_positive(cls, text: str) -> bool:
-        lowered = text.strip().lower()
-        if not lowered:
-            return False
-        positive_patterns = [
-            r"\bsatisf(y|ies)\b",
-            r"\bcomplete\b",
-            r"\bvalid\b",
-            r"\baligns?\b",
-            r"\btraceable\b",
-            r"\bconcrete\b",
-            r"\bspecific\b",
-            r"\bcomplies?\b",
-            r"\bcover(s|age)?\b",
-            r"\bclear\b",
-            r"\bexplicitly support\b",
-            r"\bno unauthorized\b",
-            r"满足",
-            r"完整",
-            r"有效",
-            r"对齐",
-            r"可追溯",
-            r"清晰",
-            r"合规",
-            r"具体",
-            r"覆盖",
-            r"明确",
-            r"支持下游",
-            r"无未经授权",
-        ]
-        if cls._contains_feat_review_negative_signal(lowered):
-            return False
-        return any(re.search(pattern, lowered) for pattern in positive_patterns)
 
     @classmethod
     def _extract_topic_families(cls, text: Any) -> set[str]:
@@ -3048,11 +5806,85 @@ class LLMRunner(StepRunnerBase):
         project_root: str,
         business_output: Any,
     ) -> Optional[str]:
-        return WorkflowSemanticValidator.validate_feat_bundle_epic_semantics(
-            runner_cls=cls,
-            project_root=project_root,
-            business_output=business_output,
-        )
+        if not isinstance(business_output, dict):
+            return None
+        epic_ref = business_output.get("epic_ref")
+        feat_specs = business_output.get("feat_specs")
+        if not isinstance(epic_ref, str) or not epic_ref.strip():
+            return None
+        if not isinstance(feat_specs, list) or not feat_specs:
+            return None
+
+        def _is_placeholder_input_value(value: Any) -> bool:
+            normalized = str(value or "").strip().lower()
+            if not normalized:
+                return True
+            placeholder_markers = (
+                "inputs defined by epic scope",
+                "input defined by epic scope",
+                "same as epic",
+                "tbd",
+                "to be defined",
+                "待补充",
+                "待定义",
+                "同 epic",
+            )
+            return any(marker in normalized for marker in placeholder_markers)
+
+        for feat_spec in feat_specs:
+            if not isinstance(feat_spec, dict):
+                continue
+            feat_id = str(feat_spec.get("feat_id") or feat_spec.get("title") or "unknown").strip()
+            inputs = feat_spec.get("inputs")
+            if not isinstance(inputs, list) or not inputs:
+                return f"FEAT {feat_id} is missing concrete inputs"
+            if any(_is_placeholder_input_value(item) for item in inputs):
+                return f"FEAT {feat_id} uses placeholder inputs and cannot drive downstream design"
+            input_contract = feat_spec.get("input_contract")
+            if not isinstance(input_contract, dict):
+                return f"FEAT {feat_id} is missing input_contract"
+            required_artifacts = input_contract.get("required_artifacts")
+            required_fields = input_contract.get("required_fields")
+            consumption_rules = input_contract.get("consumption_rules")
+            if not isinstance(required_artifacts, list) or not required_artifacts:
+                return f"FEAT {feat_id} is missing input_contract.required_artifacts"
+            if not isinstance(required_fields, list) or not required_fields:
+                return f"FEAT {feat_id} is missing input_contract.required_fields"
+            if any(_is_placeholder_input_value(item) for item in required_fields):
+                return f"FEAT {feat_id} uses placeholder required_fields and cannot drive downstream design"
+            if not isinstance(consumption_rules, list) or not consumption_rules:
+                return f"FEAT {feat_id} is missing input_contract.consumption_rules"
+
+        epic_markdown = cls._load_ssot_markdown(project_root, epic_ref.strip())
+        if not isinstance(epic_markdown, str) or not epic_markdown.strip():
+            return None
+
+        epic_families = cls._extract_topic_families(epic_markdown)
+        if not epic_families:
+            return None
+
+        feat_fragments: List[str] = []
+        for feat_spec in feat_specs:
+            if not isinstance(feat_spec, dict):
+                continue
+            for key in ("title", "goal", "user_value"):
+                value = feat_spec.get(key)
+                if isinstance(value, str) and value.strip():
+                    feat_fragments.append(value.strip())
+            for key in ("inputs", "processing", "outputs", "acceptance_criteria", "dependencies", "non_goals"):
+                value = feat_spec.get(key)
+                if isinstance(value, list):
+                    feat_fragments.extend(str(item).strip() for item in value if str(item).strip())
+
+        feat_text = "\n".join(feat_fragments)
+        feat_families = cls._extract_topic_families(feat_text)
+        if feat_families and epic_families.isdisjoint(feat_families):
+            return (
+                f"FEAT bundle semantics drift from {epic_ref}: "
+                f"epic topic families={sorted(epic_families)}, "
+                f"feat topic families={sorted(feat_families)}"
+            )
+        return None
 
     @classmethod
     def _validate_pm_planner_task_semantics(
@@ -3061,11 +5893,134 @@ class LLMRunner(StepRunnerBase):
         project_root: str,
         business_output: Any,
     ) -> Optional[str]:
-        return WorkflowSemanticValidator.validate_pm_planner_task_semantics(
-            runner_cls=cls,
-            project_root=project_root,
-            business_output=business_output,
+        if not isinstance(business_output, dict):
+            return None
+
+        task_specs = business_output.get("task_specs")
+        if not isinstance(task_specs, list) or not task_specs:
+            return None
+
+        source_feats = [
+            str(item).strip()
+            for item in (business_output.get("source_feats") or [])
+            if isinstance(item, str) and str(item).strip()
+        ]
+        if not source_feats:
+            source_feats = list(
+                dict.fromkeys(
+                    str(item.get("source_feat")).strip()
+                    for item in task_specs
+                    if isinstance(item, dict) and isinstance(item.get("source_feat"), str) and item.get("source_feat").strip()
+                )
+            )
+        if not source_feats:
+            return None
+
+        feat_markdowns: List[str] = []
+        for feat_id in source_feats:
+            markdown = cls._load_ssot_markdown(project_root, feat_id)
+            if isinstance(markdown, str) and markdown.strip():
+                feat_markdowns.append(markdown)
+        if not feat_markdowns:
+            return None
+
+        source_text = "\n".join(feat_markdowns)
+        source_families = cls._extract_topic_families(source_text)
+        governance_scope = bool(source_families & {"governance"}) or any(
+            cls._text_contains_keyword(
+                source_text,
+                keyword,
+            )
+            for keyword in (
+                "workflow",
+                "pipeline",
+                "freeze",
+                "gate",
+                "registry",
+                "run spec",
+                "migration guide",
+                "调用文档",
+                "契约",
+                "文档",
+                "模板",
+            )
         )
+        if not governance_scope:
+            return None
+
+        task_fragments: List[str] = []
+        for task_spec in task_specs:
+            if not isinstance(task_spec, dict):
+                continue
+            for key in (
+                "task_id",
+                "title",
+                "objective",
+                "description",
+                "source_feat",
+                "workstream",
+                "task_kind",
+                "responsible_role",
+                "milestone",
+                "estimated_effort",
+            ):
+                value = task_spec.get(key)
+                if isinstance(value, str) and value.strip():
+                    task_fragments.append(value.strip())
+            for key in ("definition_of_done", "prerequisites", "dependencies"):
+                value = task_spec.get(key)
+                if isinstance(value, list):
+                    task_fragments.extend(str(item).strip() for item in value if str(item).strip())
+            for mapping in task_spec.get("acceptance_criteria_mapping") or []:
+                if not isinstance(mapping, dict):
+                    continue
+                for key in ("feat", "ac", "description"):
+                    value = mapping.get(key)
+                    if isinstance(value, str) and value.strip():
+                        task_fragments.append(value.strip())
+            rollback_strategy = task_spec.get("rollback_strategy")
+            if isinstance(rollback_strategy, dict):
+                for key in ("mode",):
+                    value = rollback_strategy.get(key)
+                    if isinstance(value, str) and value.strip():
+                        task_fragments.append(value.strip())
+                restore_targets = rollback_strategy.get("restore_targets")
+                if isinstance(restore_targets, list):
+                    task_fragments.extend(str(item).strip() for item in restore_targets if str(item).strip())
+
+        task_text = "\n".join(task_fragments)
+        source_allows_ui = any(
+            cls._text_contains_keyword(source_text, keyword)
+            for keyword in cls.FEAT_UI_KEYWORDS
+        )
+        source_allows_tech = bool(
+            re.search(r"trace hints:\s*[^\n]*\btech\b", source_text, re.IGNORECASE)
+            or re.search(r"trace hints:\s*[^\n]*技术", source_text, re.IGNORECASE)
+        )
+
+        drift_hits: List[str] = []
+        for family, keywords in cls.PM_TASK_DRIFT_KEYWORDS.items():
+            if family == "product_ui" and source_allows_ui:
+                continue
+            if family == "infra_storage" and source_allows_tech:
+                continue
+            for keyword in keywords:
+                if cls._text_contains_keyword(task_text, keyword) and not cls._text_contains_keyword(source_text, keyword):
+                    drift_hits.append(keyword)
+        if drift_hits:
+            return (
+                "TASK bundle semantics drift from source FEAT scope: "
+                f"unexpected topics={sorted(set(drift_hits))}, source_feats={source_feats}"
+            )
+
+        max_expected_tasks = max(len(source_feats) * 2, 8)
+        if len(task_specs) > max_expected_tasks:
+            return (
+                "TASK bundle overscoped for workflow/governance FEATs: "
+                f"task_count={len(task_specs)}, max_expected={max_expected_tasks}, source_feats={source_feats}"
+            )
+
+        return None
 
     @staticmethod
     def _extract_primary_file_output(step, written_files: List[str]) -> Optional[Any]:
@@ -3461,7 +6416,6 @@ class LLMRunner(StepRunnerBase):
 
     @classmethod
     def _build_pm_planner_bundle_from_written_files(cls, written_files: List[str]) -> Optional[Dict[str, Any]]:
-        markdown_tasks: List[Dict[str, Any]] = []
         for file_path in written_files:
             path = Path(file_path)
             try:
@@ -3483,221 +6437,33 @@ class LLMRunner(StepRunnerBase):
                 legacy_candidate = cls._parse_legacy_task_planning_specs_text(text)
                 if legacy_candidate is not None:
                     return legacy_candidate
-            if path.suffix.lower() == ".md":
-                markdown_task = cls._parse_pm_planner_task_markdown(path)
-                if markdown_task is not None:
-                    markdown_tasks.append(markdown_task)
-        if markdown_tasks:
-            return cls._build_pm_planner_bundle_from_task_markdowns(markdown_tasks)
         return None
-
-    @staticmethod
-    def _extract_markdown_section_lines(markdown: str, heading: str) -> List[str]:
-        if not isinstance(markdown, str) or not markdown.strip():
-            return []
-        pattern = rf"(?ms)^##\s+{re.escape(heading)}\s*\n(.*?)(?=^##\s+|\Z)"
-        match = re.search(pattern, markdown)
-        if not match:
-            return []
-        return [line.rstrip() for line in match.group(1).strip().splitlines()]
-
-    @classmethod
-    def _parse_pm_planner_task_markdown(cls, path: Path) -> Optional[Dict[str, Any]]:
-        frontmatter = cls._load_yaml_frontmatter(path) or {}
-        task_id = str(frontmatter.get("id") or "").strip()
-        parent_id = str(frontmatter.get("parent_id") or "").strip()
-        ssot_type = str(frontmatter.get("ssot_type") or "").strip().lower()
-        if not task_id or not parent_id or ssot_type != "task":
-            return None
-        try:
-            raw_text = path.read_text(encoding="utf-8")
-        except Exception:
-            return None
-        body = cls._extract_markdown_body(raw_text)
-
-        def _lines(section: str) -> List[str]:
-            return cls._extract_markdown_section_lines(body, section)
-
-        def _bullet_values(section: str) -> List[str]:
-            values: List[str] = []
-            for line in _lines(section):
-                stripped = line.strip()
-                if stripped.startswith("- "):
-                    values.append(stripped[2:].strip())
-            return values
-
-        title = str(frontmatter.get("title") or task_id).strip()
-        objective = "\n".join(_lines("Objective")).strip()
-        description = "\n".join(_lines("Description")).strip()
-        definition_of_done = _bullet_values("Definition Of Done")
-        processing = _bullet_values("Processing")
-        outputs = _bullet_values("Outputs")
-        input_refs = _bullet_values("Inputs")
-        non_goals = _bullet_values("Non Goals")
-
-        acceptance_mapping: List[Dict[str, Any]] = []
-        for line in _bullet_values("Acceptance Mapping"):
-            match = re.match(r"^(FEAT-[A-Za-z0-9-]+)\s*/\s*([A-Z0-9-]+)\s*:\s*(.+)$", line)
-            if match:
-                acceptance_mapping.append(
-                    {
-                        "feat": match.group(1).strip(),
-                        "ac": match.group(2).strip(),
-                        "description": match.group(3).strip(),
-                    }
-                )
-
-        dependencies: List[str] = []
-        for line in _bullet_values("Dependencies"):
-            nested_match = re.search(r'"task_id"\s*:\s*"([^"]+)"', line)
-            if nested_match:
-                dependencies.append(nested_match.group(1).strip())
-                continue
-            task_match = re.search(r"(TASK-[A-Za-z0-9-]+)", line)
-            if task_match:
-                dependencies.append(task_match.group(1).strip())
-                continue
-            if line == "无（规范定义 TASK 为起始 TASK）":
-                continue
-
-        task_kind = "implementation"
-        lowered_title = title.lower()
-        lowered_desc = description.lower()
-        if any(keyword in title for keyword in ("规范", "契约", "定义")):
-            task_kind = "specification"
-        elif any(keyword in title for keyword in ("验证", "测试")):
-            task_kind = "validation"
-        elif "audit" in lowered_title or "审计" in title:
-            task_kind = "implementation"
-
-        role_map = {
-            "specification": "spec-owner",
-            "implementation": "runtime-owner",
-            "validation": "qa-validation-owner",
-        }
-        workstream_map = {
-            "specification": "specification",
-            "implementation": "runtime-implementation",
-            "validation": "validation",
-        }
-
-        return {
-            "task_id": task_id,
-            "title": title,
-            "objective": objective or title,
-            "description": description or objective or title,
-            "source_feat": parent_id,
-            "workstream": workstream_map.get(task_kind, "runtime-implementation"),
-            "task_kind": task_kind,
-            "responsible_role": role_map.get(task_kind, "runtime-owner"),
-            "acceptance_criteria_mapping": acceptance_mapping,
-            "prerequisites": list(dict.fromkeys(dependencies)),
-            "dependencies": list(dict.fromkeys(dependencies)),
-            "definition_of_done": definition_of_done or ["TASK 文件已冻结"],
-            "priority": "P0",
-            "milestone": "M1" if task_kind == "specification" else "M2",
-            "estimated_effort": "2 days",
-            "lifecycle_status": str(frontmatter.get("status") or "draft").strip() or "draft",
-            "observability": {
-                "execution_unit": "task",
-                "log_scope": f"task-{task_id.lower()}",
-                "audit_fields": ["run_id", "task_id", "changed_files", "evidence_refs"],
-            },
-            "evidence_requirements": {
-                "required_refs": list(dict.fromkeys([parent_id] + input_refs[:3])),
-                "review_required": True,
-            },
-            "rollback_strategy": {
-                "mode": "revert",
-                "restore_targets": outputs[:3] or [f"spec/tasks/{parent_id}"],
-            },
-            "non_goals": non_goals,
-            "processing": processing,
-            "outputs": outputs,
-            "source_refs": frontmatter.get("source_refs") if isinstance(frontmatter.get("source_refs"), list) else [],
-            "ssot": {
-                "identity_kind": str((frontmatter.get("properties") or {}).get("identity_kind") or "ssot").strip(),
-                "ssot_type": "TASK",
-                "parent": parent_id,
-                "derived_from": f"{parent_id}#delivery",
-            },
-        }
-
-    @classmethod
-    def _build_pm_planner_bundle_from_task_markdowns(
-        cls,
-        task_specs: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
-        source_feats = list(
-            dict.fromkeys(
-                str(task.get("source_feat")).strip()
-                for task in task_specs
-                if isinstance(task, dict) and str(task.get("source_feat") or "").strip()
-            )
-        )
-        primary_feat = source_feats[0] if source_feats else "FEAT-001"
-        milestones: Dict[str, Dict[str, Any]] = {}
-        resource_allocation: Dict[str, Dict[str, Any]] = {}
-        dependency_matrix: List[Dict[str, Any]] = []
-        critical_path: List[str] = []
-        for task in task_specs:
-            if not isinstance(task, dict):
-                continue
-            task_id = str(task.get("task_id") or "").strip()
-            if not task_id:
-                continue
-            milestone_id = str(task.get("milestone") or "M1").strip() or "M1"
-            milestones.setdefault(
-                milestone_id,
-                {
-                    "id": milestone_id,
-                    "name": milestone_id,
-                    "task_ids": [],
-                    "acceptance_criteria": f"{milestone_id} completed",
-                },
-            )
-            milestones[milestone_id]["task_ids"].append(task_id)
-            role = str(task.get("responsible_role") or "runtime-owner").strip() or "runtime-owner"
-            resource_allocation.setdefault(role, {"tasks": []})
-            resource_allocation[role]["tasks"].append(task_id)
-            dependencies = [
-                item for item in (task.get("dependencies") or [])
-                if isinstance(item, str) and item.strip()
-            ]
-            dependency_matrix.append({"task_id": task_id, "depends_on": dependencies})
-            if not dependencies:
-                critical_path.append(task_id)
-
-        if not critical_path:
-            critical_path = [item["task_id"] for item in dependency_matrix if item.get("task_id")]
-
-        return {
-            "parent_epic": cls._resolve_feat_parent_epic(primary_feat, {}) or "EPIC-001",
-            "source_feats": source_feats or ["FEAT-001"],
-            "planning_metadata": {
-                "planning_timestamp": datetime.now().strftime("%Y-%m-%d"),
-                "project_profile": "task_markdown_recovery",
-                "task_directory": f"spec/tasks/{primary_feat}",
-            },
-            "task_specs": task_specs,
-            "milestones": list(milestones.values()),
-            "dependency_graph": {
-                "critical_path": critical_path,
-                "dependency_matrix": dependency_matrix,
-            },
-            "resource_allocation": resource_allocation,
-            "risk_mitigation": [],
-        }
 
     @classmethod
     def _extract_best_written_file_payload(cls, step, written_files: List[str]) -> Optional[Any]:
-        return OutputExtractor.extract_best_written_file_payload(
-            step=step,
-            written_files=written_files,
-            build_prd_writer_bundle_from_written_files=cls._build_prd_writer_bundle_from_written_files,
-            build_pm_planner_bundle_from_written_files=cls._build_pm_planner_bundle_from_written_files,
-            score_written_output_candidate=cls._score_written_output_candidate,
-        )
+        if getattr(step, "agent_id", "") == "agent.product.prd_writer":
+            aggregated_bundle = cls._build_prd_writer_bundle_from_written_files(written_files)
+            if aggregated_bundle is not None:
+                return aggregated_bundle
+        if getattr(step, "agent_id", "") == "agent.product.pm_planner":
+            aggregated_bundle = cls._build_pm_planner_bundle_from_written_files(written_files)
+            if aggregated_bundle is not None:
+                return aggregated_bundle
+
+        best_payload: Optional[Any] = None
+        best_score = -1
+        for file_path in written_files:
+            try:
+                parsed_file = StepRunnerBase._parse_structured_output(
+                    Path(file_path).read_text(encoding="utf-8")
+                )
+            except Exception:
+                continue
+            score = cls._score_written_output_candidate(step, parsed_file)
+            if score > best_score:
+                best_score = score
+                best_payload = parsed_file
+        return best_payload
 
     def _extract_structured_segment_payload(
         self,
@@ -3752,13 +6518,36 @@ class LLMRunner(StepRunnerBase):
         structured_payload: Optional[Any],
         generated_text: str = "",
     ) -> Optional[Dict[str, Any]]:
-        return OutputExtractor.extract_ssot_contract_payload(
-            structured_payload=structured_payload,
-            generated_text=generated_text,
-            extract_structured_segment_payload=self._extract_structured_segment_payload,
-            extract_structured_payload_from_code_blocks=self._extract_structured_payload_from_code_blocks,
-            coerce_ssot_contract_dict=self._coerce_ssot_contract_dict,
+        if not isinstance(structured_payload, dict):
+            payload = self._extract_structured_segment_payload(generated_text, "ssot_output_contract")
+            payload = self._coerce_ssot_contract_dict(payload)
+            if isinstance(payload, dict):
+                return payload
+            block_payload = self._extract_structured_payload_from_code_blocks(
+                generated_text,
+                "ssot_output_contract",
+            )
+            block_payload = self._coerce_ssot_contract_dict(block_payload)
+            return block_payload if isinstance(block_payload, dict) else None
+        if "contract_version" in structured_payload and "outputs" in structured_payload:
+            return structured_payload
+        payload = self._coerce_ssot_contract_dict(structured_payload.get("ssot_output_contract"))
+        if isinstance(payload, dict):
+            return payload
+        segment_payload = self._coerce_ssot_contract_dict(
+            self._extract_structured_segment_payload(generated_text, "ssot_output_contract")
         )
+        if isinstance(segment_payload, dict):
+            return segment_payload
+        block_payload = self._coerce_ssot_contract_dict(
+            self._extract_structured_payload_from_code_blocks(
+                generated_text,
+                "ssot_output_contract",
+            )
+        )
+        if isinstance(block_payload, dict):
+            return block_payload
+        return None
 
     @staticmethod
     def _coerce_ssot_contract_dict(payload: Optional[Any]) -> Optional[Dict[str, Any]]:
@@ -3851,340 +6640,6 @@ class LLMRunner(StepRunnerBase):
             )
 
 
-    @staticmethod
-    def _ensure_structured_envelope(
-        *,
-        business_output: Any,
-        structured_payload: Any,
-    ) -> Dict[str, Any]:
-        if isinstance(structured_payload, dict):
-            normalized = dict(structured_payload)
-        else:
-            normalized = {}
-        normalized["business_output"] = business_output
-        return normalized
-
-    @staticmethod
-    def _is_literal_ssot_ref(value: Any) -> bool:
-        if not isinstance(value, str):
-            return False
-        return bool(
-            re.match(
-                r"^(?:SRC|EPIC|FEAT|REL|UI|TECH|DEVPLAN|TESTPLAN|TASK|TESTSET|TC|BUG|REPORT|ADR|EVI|ART)-",
-                value.strip(),
-                re.IGNORECASE,
-            )
-        )
-
-    @staticmethod
-    def _filter_materializable_refs(values: Any) -> List[str]:
-        refs = values if isinstance(values, list) else [values] if values is not None else []
-        filtered: List[str] = []
-        for item in refs:
-            if not isinstance(item, str):
-                continue
-            ref = item.strip()
-            if not ref:
-                continue
-            ref_root = ref.split("#", 1)[0]
-            if LLMRunner._is_literal_ssot_ref(ref_root):
-                filtered.append(ref)
-        return filtered
-
-    @staticmethod
-    def _derive_source_refs_from_business_output(
-        business_output: Any,
-        *,
-        allowed_prefixes: Optional[List[str]] = None,
-    ) -> List[str]:
-        if not isinstance(business_output, dict):
-            return []
-
-        candidates: List[Any] = []
-        metadata = business_output.get("metadata")
-        if isinstance(metadata, dict):
-            candidates.extend([metadata.get("source_refs"), metadata.get("source_ref")])
-
-        normalized_content = business_output.get("normalized_content")
-        if isinstance(normalized_content, dict):
-            candidates.extend([normalized_content.get("source_refs"), normalized_content.get("source_ref")])
-
-        candidates.extend([business_output.get("source_refs"), business_output.get("source_ref")])
-
-        prefixes = {prefix.upper() for prefix in (allowed_prefixes or []) if isinstance(prefix, str)}
-        derived_refs: List[str] = []
-        for value in candidates:
-            for ref in LLMRunner._filter_materializable_refs(value):
-                ref_root = ref.split("#", 1)[0].upper()
-                if prefixes and not any(ref_root.startswith(f"{prefix}-") for prefix in prefixes):
-                    continue
-                if ref not in derived_refs:
-                    derived_refs.append(ref)
-        return derived_refs
-
-    @staticmethod
-    def _resolve_source_ref_from_instance_data(instance_data: Optional[Dict[str, Any]]) -> Optional[str]:
-        if not isinstance(instance_data, dict):
-            return None
-        params = instance_data.get("params")
-        if not isinstance(params, dict):
-            return None
-        source_freeze = params.get("source_freeze")
-        candidates: List[Any] = [source_freeze, params.get("source_freeze_ref"), params.get("src")]
-        for candidate in candidates:
-            if isinstance(candidate, dict):
-                values = [candidate.get("id"), candidate.get("artifact_id"), candidate.get("path")]
-            else:
-                values = [candidate]
-            for value in values:
-                if not isinstance(value, str):
-                    continue
-                match = re.search(r"(SRC-\d+)", value.upper())
-                if match:
-                    return match.group(1)
-        return None
-
-    @staticmethod
-    def _derive_src_title_from_business_output(business_output: Any) -> str:
-        if not isinstance(business_output, dict):
-            return "SRC"
-
-        def _clean(value: Any) -> str:
-            return str(value or "").strip()
-
-        def _meaningful(value: Any) -> Optional[str]:
-            text = _clean(value)
-            if not text:
-                return None
-            if text.upper() in {"SRC", "UNTITLED SRC"}:
-                return None
-            return text
-
-        normalized_content = (
-            business_output.get("normalized_content")
-            if isinstance(business_output.get("normalized_content"), dict)
-            else {}
-        )
-        metadata = business_output.get("metadata") if isinstance(business_output.get("metadata"), dict) else {}
-
-        for candidate in (
-            business_output.get("title"),
-            normalized_content.get("title"),
-            business_output.get("name"),
-            normalized_content.get("name"),
-            normalized_content.get("problem_statement"),
-            normalized_content.get("summary"),
-            business_output.get("problem_statement"),
-            business_output.get("summary"),
-        ):
-            title = _meaningful(candidate)
-            if title:
-                return title
-
-        source_ref = _meaningful(metadata.get("source_ref") or business_output.get("source_ref"))
-        domain = _meaningful(metadata.get("domain"))
-        if source_ref and domain:
-            return f"{source_ref} {domain}".replace("_", " ")
-        if source_ref:
-            return source_ref
-        if domain:
-            return domain.replace("_", " ")
-
-        src_id = _meaningful(business_output.get("src_id"))
-        if src_id:
-            return src_id
-        return "SRC"
-
-    @staticmethod
-    def _normalize_source_freeze_payload(
-        step,
-        business_output: Any,
-        structured_payload: Any,
-        instance_data: Optional[Dict[str, Any]] = None,
-    ) -> tuple[Any, Any]:
-        if getattr(step, "id", "") != "source_normalization":
-            return business_output, structured_payload
-
-        def _fallback_constraints() -> List[str]:
-            return [
-                "不新增平行 workflow key",
-                "formal object 只直接物化 SRC / EPIC / FEAT",
-                "UI / TECH / TASK / TESTSET / TC / REPORT / BUG / EVI 默认只产 seed、view、handoff/index",
-                "输出路径必须对齐当前 canonical SSOT 目录",
-            ]
-
-        def _sanitize_constraints(items: Any) -> List[str]:
-            if not isinstance(items, list):
-                return _fallback_constraints()
-            blocked_patterns = (
-                r"待补充",
-                r"raw_source_input",
-                r"工作区路径参考",
-                r"范围排除",
-                r"out of scope",
-                r"下一步建议",
-                r"next steps",
-                r"分析师备注",
-                r"\broi\b",
-                r"具体功能列表",
-                r"技术选型",
-                r"研发排期",
-                r"持久化中间草稿",
-                r"内容边界",
-                r"^\s*✅",
-                r"\b包含\b",
-            )
-            required_signals = (
-                "workflow",
-                "ssot",
-                "formal",
-                "canonical",
-                "path",
-                "seed",
-                "view",
-                "handoff",
-                "freeze",
-                "src",
-                "epic",
-                "feat",
-                "ui",
-                "tech",
-                "task",
-                "testset",
-                "tc",
-                "report",
-                "bug",
-                "evi",
-                "物化",
-                "目录",
-                "路径",
-                "边界",
-                "种子",
-                "视图",
-                "移交",
-            )
-            sanitized: List[str] = []
-            for item in items:
-                text = str(item or "").strip()
-                if not text:
-                    continue
-                compact = re.sub(r"\s+", " ", text)
-                lowered = compact.lower()
-                if (
-                    compact.startswith("##")
-                    or compact.startswith(">")
-                    or compact.startswith("--")
-                    or compact.startswith("❌")
-                    or any(re.search(pattern, compact, flags=re.I) for pattern in blocked_patterns)
-                    or not any(signal in lowered for signal in required_signals)
-                ):
-                    continue
-                sanitized.append(compact)
-            sanitized = list(dict.fromkeys(sanitized))
-            return sanitized or _fallback_constraints()
-
-        required_fields = {
-            "source_id",
-            "title",
-            "problem_statement",
-            "target_user",
-            "business_motivation",
-            "constraints",
-            "freeze_meta",
-            "ssot",
-        }
-        if isinstance(business_output, dict) and required_fields.issubset(business_output.keys()):
-            normalized_business = dict(business_output)
-            normalized_business["constraints"] = _sanitize_constraints(
-                normalized_business.get("constraints")
-            )
-            payload = LLMRunner._ensure_structured_envelope(
-                business_output=normalized_business,
-                structured_payload=structured_payload,
-            )
-            return normalized_business, payload
-
-        if isinstance(structured_payload, dict):
-            structured_business = structured_payload.get("business_output")
-            if isinstance(structured_business, dict) and required_fields.issubset(structured_business.keys()):
-                normalized_business = dict(structured_business)
-                normalized_business["constraints"] = _sanitize_constraints(
-                    normalized_business.get("constraints")
-                )
-                payload = dict(structured_payload)
-                payload["business_output"] = normalized_business
-                return normalized_business, payload
-
-        params = instance_data.get("params") if isinstance(instance_data, dict) else {}
-        params = params if isinstance(params, dict) else {}
-        step_outputs = instance_data.get("step_outputs") if isinstance(instance_data, dict) else {}
-        step_outputs = step_outputs if isinstance(step_outputs, dict) else {}
-
-        raw_requirement = str(params.get("raw_requirement") or "").strip()
-        raw_intake = step_outputs.get("raw_input_intake") if isinstance(step_outputs.get("raw_input_intake"), dict) else {}
-        raw_intake_text = str(raw_intake.get("generated_text") or "").strip()
-        seed_text = raw_requirement or raw_intake_text or (
-            business_output if isinstance(business_output, str) else ""
-        )
-        seed_lines = [line.strip() for line in seed_text.splitlines() if line.strip()]
-
-        def _extract_numbered_block(label: str) -> List[str]:
-            match = re.search(
-                rf"{re.escape(label)}[:：]\s*(.*?)(?=\n\s*[^\n]+[:：]\s*$|\n\s*\d+\.\s|\Z)",
-                seed_text,
-                flags=re.S,
-            )
-            if not match:
-                return []
-            items: List[str] = []
-            for line in match.group(1).splitlines():
-                normalized = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
-                if normalized:
-                    items.append(normalized)
-            return items
-
-        title_line = next((line for line in seed_lines if "reverse-epic-feat" in line or "SSOT" in line), "")
-        title = re.sub(r"^[#*\-\s]+", "", title_line).strip(" 。:：") or "reverse-epic-feat-l3 对齐现行 SSOT 链逆向升级"
-        problem_statement = " ".join(_extract_numbered_block("当前问题")) or (
-            raw_requirement[:400].strip() if raw_requirement else "当前 reverse workflow 无法完整承接现行 SSOT 文档链。"
-        )
-        business_motivation = " ".join(_extract_numbered_block("目标")) or problem_statement
-        constraints = _sanitize_constraints(_extract_numbered_block("约束"))
-        target_users = []
-        if "产品经理" in raw_intake_text or "Product Manager" in raw_intake_text:
-            target_users.append("产品经理")
-        if "架构" in raw_intake_text or "开发" in raw_intake_text:
-            target_users.extend(["架构师", "研发工程师"])
-        if "QA" in raw_intake_text or "测试" in raw_intake_text:
-            target_users.append("QA 工程师")
-        if "审查" in raw_intake_text or "Reviewer" in raw_intake_text:
-            target_users.append("治理审查员")
-        if not target_users:
-            target_users = ["产品经理", "研发工程师", "QA 工程师", "治理审查员"]
-
-        adr_refs = sorted(set(re.findall(r"ADR-\d+", seed_text, flags=re.I)))
-        synthesized = {
-            "source_id": "SRC-DRAFT",
-            "title": title,
-            "problem_statement": problem_statement,
-            "target_user": list(dict.fromkeys(target_users)),
-            "trigger_context": title,
-            "business_motivation": business_motivation,
-            "constraints": constraints,
-            "source_refs": [ref.upper() for ref in adr_refs],
-            "freeze_meta": {"status": "draft"},
-            "ssot": {
-                "identity_kind": "ssot",
-                "ssot_type": "SRC",
-            },
-        }
-        payload = LLMRunner._ensure_structured_envelope(
-            business_output=synthesized,
-            structured_payload=structured_payload,
-        )
-        return synthesized, payload
-
-
 class ClaudeCodeRunner(StepRunnerBase):
     """Claude Code 步骤运行器"""
 
@@ -4235,6 +6690,9 @@ class ClaudeCodeRunner(StepRunnerBase):
     _resolve_authoritative_input_value = classmethod(LLMRunner._resolve_authoritative_input_value.__func__)
     _extract_context_file_paths = classmethod(LLMRunner._extract_context_file_paths.__func__)
     _merge_forbidden_read_paths = classmethod(LLMRunner._merge_forbidden_read_paths.__func__)
+    _is_qwen_chat_executor = staticmethod(LLMRunner._is_qwen_chat_executor)
+    _is_coding_executor = staticmethod(LLMRunner._is_coding_executor)
+    _resolve_code_executor_type = classmethod(LLMRunner._resolve_code_executor_type.__func__)
 
     def _materialize_workspace_formal_ssot_markdown(self, *args, **kwargs):
         return LLMRunner._materialize_workspace_formal_ssot_markdown(*args, **kwargs)
@@ -4318,7 +6776,10 @@ class ClaudeCodeRunner(StepRunnerBase):
 
     @staticmethod
     def _parse_structured_output_if_possible(output_text: str) -> Optional[Any]:
-        return OutputExtractor.parse_structured_output_if_possible(output_text)
+        try:
+            return StepRunnerBase._parse_structured_output(output_text)
+        except ValueError:
+            return None
 
     @classmethod
     def _extract_business_output_for_validation(
@@ -4329,14 +6790,59 @@ class ClaudeCodeRunner(StepRunnerBase):
         output: Dict[str, Any],
         written_files: List[str],
     ) -> tuple[Any, Any]:
-        return OutputExtractor.extract_for_validation(
+        raw_output = output.get("raw_output", "") or ""
+        generated_text = output.get("generated_text", "") or ""
+
+        def looks_like_executor_wrapper(payload: Any) -> bool:
+            if not isinstance(payload, dict):
+                return False
+            wrapper_keys = {
+                "status",
+                "changed_files",
+                "commands_run",
+                "test_results",
+                "diff_summary",
+                "evidence_bundle_path",
+                "conversation_log_path",
+                "debug_log_path",
+                "prompt_system_path",
+                "prompt_user_path",
+                "generated_text",
+                "error",
+                "iterations_used",
+            }
+            return bool(wrapper_keys & set(payload.keys()))
+
+        raw_structured_payload = cls._parse_structured_output_if_possible(raw_output)
+        generated_structured_payload = cls._parse_structured_output_if_possible(generated_text)
+
+        structured_payload = raw_structured_payload
+        if structured_payload is None or looks_like_executor_wrapper(structured_payload):
+            if generated_structured_payload is not None:
+                structured_payload = generated_structured_payload
+
+        if isinstance(structured_payload, dict) and "business_output" in structured_payload:
+            business_output = structured_payload["business_output"]
+        elif isinstance(structured_payload, dict) and not looks_like_executor_wrapper(structured_payload):
+            business_output = structured_payload
+        else:
+            business_output = LLMRunner._extract_primary_file_output(step, written_files)
+            if business_output is None:
+                business_output = LLMRunner._extract_best_written_file_payload(step, written_files)
+            if isinstance(business_output, dict) and "business_output" in business_output:
+                business_output = business_output["business_output"]
+            if business_output is None:
+                business_output = raw_output or generated_text or json.dumps(output)
+
+        if isinstance(business_output, list):
+            business_output = business_output[0] if business_output else {}
+
+        return LLMRunner._normalize_business_payload(
             step=step,
             workflow_id=workflow_id,
-            output=output,
-            written_files=written_files,
-            extract_primary_file_output=LLMRunner._extract_primary_file_output,
-            extract_best_written_file_payload=LLMRunner._extract_best_written_file_payload,
-            normalize_business_payload=LLMRunner._normalize_business_payload,
+            business_output=business_output,
+            structured_payload=structured_payload,
+            instance_data=None,
         )
 
     @classmethod
@@ -4397,7 +6903,6 @@ class ClaudeCodeRunner(StepRunnerBase):
             ),
             "context_files": context_files,
             "write_scope": claude_config.get("write_scope", []),
-            "read_only": bool(claude_config.get("read_only", False)),
             "forbidden_read_paths": cls._merge_forbidden_read_paths(
                 claude_config.get("forbidden_read_paths")
             ),
@@ -4441,22 +6946,6 @@ class ClaudeCodeRunner(StepRunnerBase):
             "data": instance.data,
         }
 
-        if self._is_identity_prepare_step(step):
-            return await self._execute_identity_prepare_step(
-                workflow_id=workflow_id,
-                step=step,
-                ctx=ctx,
-                instance=instance,
-            )
-
-        if self._is_identity_formalize_step(step):
-            return await self._execute_identity_formalize_step(
-                workflow_id=workflow_id,
-                step=step,
-                ctx=ctx,
-                instance=instance,
-            )
-
         # 1. 构建 Agent 执行上下文
         agent_ctx = await ctx.agent_context_builder.build(step, workflow_context)
 
@@ -4474,7 +6963,10 @@ class ClaudeCodeRunner(StepRunnerBase):
 
         # 3. 解析 executor_type：CLI 参数优先级最高
         # 对于 claude_code 步骤，executor_override 可能指定为 "codex"
-        executor_type = instance.data.get("executor_override") or "claude_code"
+        executor_type = self._resolve_code_executor_type(
+            instance_data=instance.data,
+            project_root=ctx.project_root,
+        )
 
         # 4. 构建执行输入
         claude_config = step.config.get("claude_code", {}) if step.config else {}
@@ -4488,7 +6980,7 @@ class ClaudeCodeRunner(StepRunnerBase):
         if success_criteria.get("require_new_commit"):
             head_before = self._git_head(workspace)
 
-        if executor_type in ("qwen", "llm"):
+        if executor_type == "llm":
             input_data = self._build_llm_alias_input_data(agent_ctx=agent_ctx)
         else:
             input_data = self._build_claude_code_input_data(
@@ -4521,7 +7013,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             input_data["token_context"] = ctx.token_manager.encode_token_for_context(step_token)
 
         # Evidence 目录仅适用于 code-style 执行器
-        if executor_type not in ("qwen", "llm"):
+        if executor_type != "llm":
             run_id = instance.data.get("run_id", workflow_id)
             evidence_base = str(
                 Path(workspace) / ".workflow" / "claude-code" / f"{run_id}-{step.id}"

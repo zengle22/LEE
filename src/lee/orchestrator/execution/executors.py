@@ -57,6 +57,7 @@ except ModuleNotFoundError:  # Optional dependency in some installs
 from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor
 from lee.orchestrator.execution.codex_executor import CodexExecutor
 from lee.orchestrator.execution.kimi_code_executor import KimiCodeExecutor
+from lee.orchestrator.execution.qwen_executor import QwenExecutor as QwenChatExecutor
 from lee.orchestrator.execution.llm_executor import LLMConfig
 
 
@@ -89,21 +90,13 @@ class LLMExecutor(BaseExecutor):
         return await self._executor.execute(input_data)
 
 
-class QwenExecutor(LLMExecutor):
-    """Qwen 执行器别名，复用通用 LLMExecutor 并默认绑定 qwen profile。"""
-
-    def __init__(self, profile: str = "qwen", config_path: str = None,
-                 fallback_providers: list = None, **kwargs):
-        super().__init__(
-            profile=profile or "qwen",
-            config_path=config_path,
-            fallback_providers=fallback_providers,
-            **kwargs,
-        )
-
-
 class KimiExecutor(KimiCodeExecutor):
     """兼容旧导入名的 Kimi code executor 别名。"""
+
+
+# QwenExecutor 是 qwen_executor.QwenExecutor 的别名
+# 在 executors.py 中不创建新的子类，直接导出原始类
+QwenExecutor = QwenChatExecutor
 
 
 class ShellExecutor(BaseExecutor):
@@ -212,7 +205,8 @@ class ExecutorFactory:
 
     _executors = {
         "llm": LLMExecutor,
-        "qwen": QwenExecutor,
+        "qwen_chat": QwenChatExecutor,
+        "qwen": QwenChatExecutor,
         "kimi": KimiExecutor,
         "shell": ShellExecutor,
         "metagpt": MetaGPTExecutor,
@@ -244,18 +238,15 @@ class ExecutorFactory:
         if executor_class is None:
             raise ValueError(f"Unknown executor type: {executor_type}")
 
-        if executor_type in ("llm", "qwen"):
+        if executor_type == "llm":
             use_mock = os.getenv("LEE_LLM_MOCK", "").lower() in ("1", "true", "yes") \
                 or os.getenv("LEE_DEMO_MODE", "").lower() in ("1", "true", "yes")
             if use_mock:
                 return MockLLMExecutor(agent_id=kwargs.get("agent_id", ""))
 
             if "profile" not in kwargs:
-                if executor_type == "qwen":
-                    kwargs["profile"] = "qwen"
-                else:
-                    default_profile = LLMConfig(kwargs.get("config_path")).get_default_profile()
-                    kwargs["profile"] = os.getenv("LLM_PROFILE", default_profile)
+                default_profile = LLMConfig(kwargs.get("config_path")).get_default_profile()
+                kwargs["profile"] = os.getenv("LLM_PROFILE", default_profile)
 
             try:
                 return executor_class(**kwargs)

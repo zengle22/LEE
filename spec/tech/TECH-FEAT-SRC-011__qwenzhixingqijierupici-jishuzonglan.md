@@ -1,7 +1,11 @@
 ---
 id: TECH-FEAT-SRC-011
 ssot_type: tech
+<<<<<<< HEAD
 title: SRC-011 Qwen 执行器接入批次技术总览
+=======
+title: SRC-011 Qwen 对话后端接入批次技术总览
+>>>>>>> codex/src011-qwen-implementation
 status: frozen
 version: v1
 parent_id: SRC-011
@@ -39,10 +43,17 @@ properties:
 
 本批次技术目标分成五层：
 
+<<<<<<< HEAD
 - `FEAT-169`：配置层识别、校验与透传 `qwen` 执行器类型
 - `FEAT-170`：执行器工厂按配置创建 `qwen` 执行器实例
 - `FEAT-171`：Runner 调度 `qwen` 并归一化执行结果
 - `FEAT-172`：workflow instance 携带执行器上下文并隔离运行
+=======
+- `FEAT-169`：配置层识别、校验与透传 `qwen_chat` 对话后端类型
+- `FEAT-170`：执行器工厂按配置创建 `qwen_chat` 对话实例
+- `FEAT-171`：Runner 调度 `qwen_chat` 并归一化执行结果
+- `FEAT-172`：workflow instance 区分对话后端与真正的 coding executor
+>>>>>>> codex/src011-qwen-implementation
 - `FEAT-173`：中文任务与文档场景下的输出质量评估与回退
 
 # Current Anchors
@@ -70,7 +81,11 @@ properties:
 
 ## 2. 执行器构造层
 
+<<<<<<< HEAD
 该层负责把逻辑执行器类型映射到实际 executor 实例，要求与既有 `claude_code`、`codex`、`kimi` 并存，不引入平行工厂体系。
+=======
+该层负责把逻辑执行器类型映射到实际 executor 实例，要求 `qwen_chat` 作为对话后端与既有 `claude_code`、`codex`、`kimi` 并存，不引入平行工厂体系。
+>>>>>>> codex/src011-qwen-implementation
 
 对应 FEAT：
 
@@ -78,7 +93,11 @@ properties:
 
 ## 3. 调度与结果归一化层
 
+<<<<<<< HEAD
 该层负责在 Runner 中调度 `qwen`，并把输出压回现有 LEE 标准 envelope、trace 与 materialization 语义。
+=======
+该层负责在 Runner 中调度 `qwen_chat`，并把输出压回现有 LEE 标准 envelope、trace 与 materialization 语义。
+>>>>>>> codex/src011-qwen-implementation
 
 对应 FEAT：
 
@@ -86,7 +105,11 @@ properties:
 
 ## 4. 工作流状态隔离层
 
+<<<<<<< HEAD
 该层负责让 workflow instance 明确携带 `executor_override`，避免多执行器并行时在 workspace、trace、gate 语义上相互污染。
+=======
+该层负责让 workflow instance 明确携带 `executor_override`，并保证 `qwen_chat` 不会误覆盖真正的 coding executor，避免多执行器并行时在 workspace、trace、gate 语义上相互污染。
+>>>>>>> codex/src011-qwen-implementation
 
 对应 FEAT：
 
@@ -102,10 +125,17 @@ properties:
 
 # Cross-Cutting Decisions
 
+<<<<<<< HEAD
 - 不替换 `claude_code`、`codex`，只增加一个可切换执行器
 - 不新增平行 workflow，继续复用现有 runner / factory / workflow wiring
 - 所有执行链都必须保留统一的 `task execution`、`trace`、`ssot materialization` 语义
 - 中文场景质量问题通过测试与回退治理解决，不把“模型能力假设”写死到主流程
+=======
+- 不替换 `claude_code`、`codex`、`kimi`，只增加一个可切换对话后端
+- 不新增平行 workflow，继续复用现有 runner / factory / workflow wiring
+- 所有执行链都必须保留统一的 `task execution`、`trace`、`ssot materialization` 语义
+- `qwen_chat` 不承担文件编辑与命令执行，工具调用由 LEE runtime 统一负责
+>>>>>>> codex/src011-qwen-implementation
 
 # File Touchpoints
 
@@ -125,7 +155,11 @@ properties:
 - `product.feat-to-delivery-prep` 可在 `FEAT-169` 上完成到 `delivery_prep_freeze`
 - `delivery_plan_validation` 能稳定产出 `pass/revise/reject` 的结构化结果
 - `ssot validate` 对新增 TASK / TECH 文档通过
+<<<<<<< HEAD
 - `qwen` 与既有执行器能在同一仓库中切换且不破坏 workflow 状态连续性
+=======
+- `qwen_chat` 与既有执行器能在同一仓库中切换且不破坏 workflow 状态连续性
+>>>>>>> codex/src011-qwen-implementation
 
 # Risks
 

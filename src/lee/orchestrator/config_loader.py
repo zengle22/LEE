@@ -88,12 +88,28 @@ class ExecutorConfig:
     llm_model: Optional[str] = None
     timeout_seconds: int = 600
 
+    _ALIASES = {
+        "qwen": "qwen_chat",
+        "kimi-cli": "kimi",
+    }
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ExecutorConfig":
+    def _normalize_executor_name(cls, raw_value: Any, default: str) -> str:
+        value = str(raw_value or "").strip().lower()
+        if not value:
+            return default
+        return cls._ALIASES.get(value, value)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "ExecutorConfig":
+        if isinstance(data, str):
+            return cls(default_type=cls._normalize_executor_name(data, "claude_code"))
+        if not isinstance(data, dict):
+            data = {}
         return cls(
-            default_type=data.get("default_type", "claude_code"),
-            coding_executor=data.get("coding_executor", "claude_code"),
-            coding_fallback=data.get("coding_fallback", "kimi"),
+            default_type=cls._normalize_executor_name(data.get("default_type"), "claude_code"),
+            coding_executor=cls._normalize_executor_name(data.get("coding_executor"), "claude_code"),
+            coding_fallback=cls._normalize_executor_name(data.get("coding_fallback"), "kimi"),
             llm_model=data.get("llm_model"),
             timeout_seconds=data.get("timeout_seconds", 600),
         )
@@ -250,6 +266,13 @@ class ConfigLoader:
         spec_root_env = os.getenv("LEE_SPEC_ROOT")
         if spec_root_env:
             config.spec_root = spec_root_env
+
+        executor_env = os.getenv("LEE_EXECUTOR") or os.getenv("LEE_EXECUTOR_TYPE")
+        if executor_env:
+            config.executor.default_type = ExecutorConfig._normalize_executor_name(
+                executor_env,
+                config.executor.default_type,
+            )
 
         # LEE_REPO_REGISTRY
         repo_registry_env = os.getenv("LEE_REPO_REGISTRY")

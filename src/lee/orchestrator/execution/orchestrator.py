@@ -65,6 +65,7 @@ from lee.runtime.repo_registry import RepoRegistry
 from lee.orchestrator.execution.patch_output import PatchCollector
 from lee.orchestrator.execution.receipt import ReceiptStore, ExecutionReceipt
 from lee.orchestrator.execution.context_index import ContextIndex
+from lee.orchestrator.config import is_coding_executor_type
 from lee.orchestrator.core.event_bus import get_event_bus, Event, EventType
 # Mixin 模块
 from lee.orchestrator.execution.step_runners import StepRunnerMixin
@@ -763,7 +764,13 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 elif step_to_execute.kind == "patch_apply":
                     return await self._run_patch_apply_step(workflow_id, step_to_execute)
                 elif step_to_execute.kind == "agent":
-                    if step_to_execute.executor_type == "claude_code":
+                    executor_override = str(
+                        (instance.data or {}).get("executor_override") or ""
+                    ).strip().lower()
+                    if (
+                        step_to_execute.executor_type == "claude_code"
+                        and (not executor_override or is_coding_executor_type(executor_override))
+                    ):
                         return await self._run_claude_code_step(workflow_id, step_to_execute)
                     else:
                         return await self._run_agent_step(workflow_id, step_to_execute)
@@ -1587,6 +1594,9 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             executor_override = parent_data.get("executor_override")
             if executor_override:
                 child_data["executor_override"] = executor_override
+            executor_selection_source = parent_data.get("executor_selection_source")
+            if executor_selection_source:
+                child_data["executor_selection_source"] = executor_selection_source
             llm_profile = parent_data.get("llm_profile") or os.getenv("LLM_PROFILE")
             if llm_profile:
                 child_data["llm_profile"] = llm_profile

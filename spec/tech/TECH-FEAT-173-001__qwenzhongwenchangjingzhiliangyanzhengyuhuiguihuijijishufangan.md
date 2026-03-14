@@ -1,7 +1,11 @@
 ---
 id: TECH-FEAT-173-001
 ssot_type: tech
+<<<<<<< HEAD
 title: Qwen 中文任务与文档场景质量验证与回退技术方案
+=======
+title: Qwen Chat 中文任务与文档场景质量验证与回退技术方案
+>>>>>>> codex/src011-qwen-implementation
 status: frozen
 version: v1
 parent_id: FEAT-173
@@ -27,7 +31,11 @@ properties:
 
 # Overview
 
+<<<<<<< HEAD
 本 TECH 为 `FEAT-173` 定义 `qwen` 在中文任务与文档场景下的质量验证与回退机制，目标是在不放宽 SSOT 约束的前提下，让 `qwen` 成为可用的通用中文执行器选项。
+=======
+本 TECH 为 `FEAT-173` 定义 `qwen_chat` 在中文任务与文档场景下的质量验证与回退机制，目标是在不放宽 SSOT 约束的前提下，让 `qwen_chat` 成为可用的通用中文对话后端选项。
+>>>>>>> codex/src011-qwen-implementation
 
 # Current Anchors
 
@@ -76,7 +84,11 @@ properties:
 
 验证顺序应为：
 
+<<<<<<< HEAD
 1. `qwen` 输出归一化
+=======
+1. `qwen_chat` 输出归一化
+>>>>>>> codex/src011-qwen-implementation
 2. schema 校验
 3. 关键字段对齐比对
 4. 失败时记录原始输出并触发回退
@@ -87,6 +99,10 @@ properties:
 
 - `claude_code`
 - `codex`
+<<<<<<< HEAD
+=======
+- `kimi`
+>>>>>>> codex/src011-qwen-implementation
 
 回退记录中必须保存：
 
@@ -104,7 +120,11 @@ properties:
 
 # Validation
 
+<<<<<<< HEAD
 - `qwen` 中文输出能通过当前步骤既有 schema / contract
+=======
+- `qwen_chat` 中文输出能通过当前步骤既有 schema / contract
+>>>>>>> codex/src011-qwen-implementation
 - 基准样本完整率与对齐率达到 FEAT 约束
 - 失败样本能触发并记录回退
 - 回退后下游 workflow 可继续执行

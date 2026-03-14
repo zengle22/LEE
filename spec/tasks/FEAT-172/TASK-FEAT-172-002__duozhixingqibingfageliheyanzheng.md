@@ -21,7 +21,11 @@ properties:
 
 # Description
 
+<<<<<<< HEAD
 基于 TECH-FEAT-172-001，验证在同一仓库中并行存在 `qwen`、`claude_code`、`codex` 等执行器实例时，workflow state、evidence 路径和 workspace 临时产物互不污染。
+=======
+基于 TECH-FEAT-172-001，验证在同一仓库中并行存在 `qwen_chat`、`claude_code`、`codex`、`kimi` 等执行器实例时，workflow state、evidence 路径和 workspace 临时产物互不污染。
+>>>>>>> codex/src011-qwen-implementation
 
 ## Acceptance Mapping
 - FEAT-172 / AC-002: 多执行器隔离
@@ -64,4 +68,7 @@ restore_targets:
 - 不同执行器实例的状态与 workspace 互不干扰
 - 并发 scope 的 continue / restart 行为有测试覆盖
 - TASK 文件已冻结
+<<<<<<< HEAD
 
+=======
+>>>>>>> codex/src011-qwen-implementation

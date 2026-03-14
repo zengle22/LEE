@@ -21,7 +21,11 @@ properties:
 
 # Description
 
+<<<<<<< HEAD
 基于 TECH-FEAT-172-001，将 `executor_override` 写入 workflow instance 数据，并在 create / continue / restart / resume 路径上保持一致，避免执行器信息只在 CLI 进程内短暂存在。
+=======
+基于 TECH-FEAT-172-001，将 `executor_override` 写入 workflow instance 数据，并在 create / continue / restart / resume 路径上保持一致，避免对话执行后端信息只在 CLI 进程内短暂存在，同时保证 code step 的真正 executor 不被 `qwen_chat` 误覆盖。
+>>>>>>> codex/src011-qwen-implementation
 
 ## Acceptance Mapping
 - FEAT-172 / AC-001: 实例携带执行器上下文
@@ -60,4 +64,7 @@ restore_targets:
 - continue / restart / resume 路径保持执行器上下文正确
 - `task_executions.executor_type` 可审计
 - TASK 文件已冻结
+<<<<<<< HEAD
 
+=======
+>>>>>>> codex/src011-qwen-implementation

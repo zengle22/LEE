@@ -174,6 +174,13 @@ class LLMConfig:
 
         return "default"
 
+    def list_available_profiles(self) -> List[str]:
+        reserved = {"default_profile", "fallback_providers"}
+        return sorted(
+            key for key, value in self.configs.items()
+            if key not in reserved and isinstance(value, dict)
+        )
+
     @staticmethod
     def _has_usable_api_key(config: Dict[str, Any]) -> bool:
         api_key = str(config.get("api_key") or "").strip()
@@ -208,7 +215,13 @@ class LLMExecutor:
 
         # 验证必要配置
         if not self.config.get("api_key"):
-            raise ValueError(f"LLM config '{profile}' missing api_key")
+            available = ", ".join(self.config_manager.list_available_profiles()) or "(none)"
+            requested = self.profile or profile or "default"
+            raise ValueError(
+                f"LLM config '{requested}' missing api_key. "
+                f"Available profiles: {available}. "
+                f"Config path: {self.config_manager.config_path}"
+            )
 
     def _load_fallback_providers(self) -> List[str]:
         """从配置文件或环境变量加载 fallback providers"""

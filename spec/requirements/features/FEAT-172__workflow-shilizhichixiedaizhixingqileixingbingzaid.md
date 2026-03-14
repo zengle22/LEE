@@ -28,7 +28,7 @@ Workflow 实例能够携带执行器类型并隔离运行
 - executor_binding
 # Processing
 
-- 携带执行器类型上下文
+- 携带对话执行后端与 coding executor 上下文
 - 隔离多执行器实例
 - 保持 workflow 状态连续性
 - 验证执行器切换兼容性
@@ -38,6 +38,7 @@ Workflow 实例能够携带执行器类型并隔离运行
 # Acceptance
 
 - workflow 实例可携带执行器类型
+- `qwen_chat` 不会误覆盖 code step 的真正 coding executor
 - 执行器切换不破坏状态连续性
 - 多执行器实例可隔离运行
 # Acceptance Checks

@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 import yaml
 
+from lee.orchestrator.config import normalize_executor_type_name
+
 
 @dataclass
 class AgentExecutionContext:
@@ -89,6 +91,126 @@ class AgentContextBuilder:
         self.template_engine = template_engine
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.context_index = context_index
+
+    @staticmethod
+    def _extract_markdown_section(text: str, heading: str) -> str:
+        if not text or not heading:
+            return ""
+        import re
+
+        pattern = re.compile(rf"(?ms)^##\s+{re.escape(heading)}\s*\n(.*?)(?=^##\s+|\Z)")
+        match = pattern.search(text)
+        return match.group(1).strip() if match else ""
+
+    @staticmethod
+    def _truncate_text(text: Any, limit: int) -> str:
+        value = str(text or "").strip()
+        if len(value) <= limit:
+            return value
+        return value[: max(0, limit - 4)].rstrip() + "\n..."
+
+    @classmethod
+    def _adapt_qwen_user_prompt(
+        cls,
+        prompt: str,
+        *,
+        workflow_context: Optional[Dict[str, Any]] = None,
+        step=None,
+    ) -> str:
+        source = str(prompt or "").strip()
+        if not source:
+            return source
+
+        import re
+
+        sections: List[str] = []
+        workflow_id = ""
+        step_id = ""
+        step_name = ""
+        agent_id = ""
+        if isinstance(workflow_context, dict):
+            workflow_id = str(workflow_context.get("workflow_id") or "").strip()
+        if step is not None:
+            step_id = str(getattr(step, "id", "") or "").strip()
+            step_name = str(
+                (
+                    getattr(step, "config", {}).get("name")
+                    if isinstance(getattr(step, "config", None), dict)
+                    else ""
+                )
+                or step_id
+            ).strip()
+            agent_id = str(getattr(step, "agent_id", "") or "").strip()
+
+        workflow_lines: List[str] = []
+        if workflow_id:
+            workflow_lines.append(f"- workflow_id: {workflow_id}")
+        if step_id:
+            workflow_lines.append(f"- step_id: {step_id}")
+        if step_name:
+            workflow_lines.append(f"- step_name: {step_name}")
+        if agent_id:
+            workflow_lines.append(f"- agent_id: {agent_id}")
+        if workflow_lines:
+            sections.append("## Workflow Context\n" + "\n".join(workflow_lines))
+
+        task_match = re.search(r"(?ms)^#\s+Task\s*\n(.*?)(?=^##\s+|\Z)", source)
+        task_body = task_match.group(1).strip() if task_match else ""
+        if task_body:
+            sections.append("## Task\n" + cls._truncate_text(task_body, 800))
+
+        for heading, limit in (
+            ("Responsibility", 400),
+            ("Input Data", 1800),
+            ("Upstream Step Outputs", 1800),
+            ("Instructions", 800),
+        ):
+            body = cls._extract_markdown_section(source, heading)
+            if body:
+                sections.append(f"## {heading}\n{cls._truncate_text(body, limit)}")
+
+        output_contract = cls._extract_markdown_section(source, "Output Contract")
+        template_match = re.search(
+            r'(?ms)Fill this JSON template shape and replace placeholders with concrete values:\s*```json\s*(\{.*?\})\s*```',
+            output_contract,
+        )
+        if template_match:
+            sections.append("## Output Template\n```json\n" + template_match.group(1).strip() + "\n```")
+        elif output_contract:
+            sections.append("## Output Contract\n" + cls._truncate_text(output_contract, 900))
+
+        compact_body = "\n\n".join(sections) if sections else cls._truncate_text(source, 3200)
+        task_packet = {
+            "rules": {
+                "output_format": "exactly one JSON or YAML object",
+                "start_with_json_brace": True,
+                "no_greetings": True,
+                "no_clarifying_questions": True,
+                "no_markdown_fences_unless_required": True,
+                "preserve_uncertainty_inside_payload": True,
+                "follow_output_template_exactly": True,
+            },
+            "payload": compact_body,
+        }
+        return "\n".join(
+            [
+                "Return the required result now.",
+                "You already have the workflow context, step information, task description, inputs, and output template.",
+                "Do not ask for workflow names, instance files, step IDs, payload format, or more context.",
+                "Respond immediately with one JSON object that fills the required template.",
+                "Task Packet:",
+                "```json",
+                json.dumps(task_packet, ensure_ascii=False, indent=2),
+                "```",
+            ]
+        ).strip()
+
+    @staticmethod
+    def _should_apply_qwen_adapter(workflow_context: Dict[str, Any]) -> bool:
+        data = workflow_context.get("data", {}) if isinstance(workflow_context, dict) else {}
+        if not isinstance(data, dict):
+            return False
+        return normalize_executor_type_name(data.get("executor_override")) == "qwen_chat"
 
     async def build(
         self,
@@ -162,6 +284,21 @@ class AgentContextBuilder:
         model = agent_spec.get("model", "gpt-4")
         temperature = agent_spec.get("temperature", 0.7)
         max_tokens = agent_spec.get("max_tokens", 4000)
+
+        if self._should_apply_qwen_adapter(workflow_context):
+            system_prompt = "\n".join(
+                [
+                    "You are executing a workflow step and must return the requested structured payload immediately.",
+                    "Never answer with greetings, capability descriptions, or clarification questions.",
+                    "Return valid JSON when possible, starting with '{' and ending with '}'.",
+                    "Do not act like an assistant introduction screen.",
+                ]
+            )
+            user_prompt = self._adapt_qwen_user_prompt(
+                user_prompt,
+                workflow_context=workflow_context,
+                step=step,
+            )
 
         return AgentExecutionContext(
             agent_id=step.agent_id,
@@ -567,7 +704,7 @@ Verification items:
                         "If repository files conflict with the provided input content, prefer the provided input content and preserve its IDs, parent links, and scope."
                     )
 
-            upstream_outputs = self._collect_upstream_step_outputs(step, workflow_context)
+            upstream_outputs = await self._collect_upstream_step_outputs(step, workflow_context)
             if upstream_outputs:
                 parts.append("\n## Upstream Step Outputs")
                 self._append_prompt_kv_pairs(parts, upstream_outputs)
@@ -1020,7 +1157,7 @@ Verification items:
             return context_files if isinstance(context_files, list) else []
         return []
 
-    def _collect_upstream_step_outputs(
+    async def _collect_upstream_step_outputs(
         self,
         step,
         workflow_context: Dict[str, Any],
@@ -1035,9 +1172,50 @@ Verification items:
             output = step_outputs.get(step_id)
             if output is not None:
                 sanitized = self._sanitize_prompt_payload(output, allow_generated_text_fallback=False)
+                sanitized = await self._hydrate_upstream_output_artifacts(sanitized, workflow_context)
                 if self._payload_has_signal(sanitized):
                     upstream[step_id] = sanitized
         return upstream
+
+    async def _hydrate_upstream_output_artifacts(
+        self,
+        value: Any,
+        workflow_context: Dict[str, Any],
+    ) -> Any:
+        if isinstance(value, list):
+            return [
+                await self._hydrate_upstream_output_artifacts(item, workflow_context)
+                for item in value
+            ]
+
+        if not isinstance(value, dict):
+            return value
+
+        hydrated: Dict[str, Any] = {}
+        for key, item in value.items():
+            hydrated[key] = await self._hydrate_upstream_output_artifacts(item, workflow_context)
+
+        artifact_paths = hydrated.get("workspace_artifacts")
+        if isinstance(artifact_paths, list):
+            previews: List[Dict[str, Any]] = []
+            for raw_path in artifact_paths[:2]:
+                if not isinstance(raw_path, str) or not raw_path.strip():
+                    continue
+                try:
+                    resolved_path = self._resolve_path(raw_path, workflow_context)
+                    content = await self._read_file(resolved_path)
+                except Exception:
+                    continue
+                previews.append(
+                    {
+                        "path": raw_path,
+                        "content": self._truncate_text(content, 1600),
+                    }
+                )
+            if previews:
+                hydrated["workspace_artifact_previews"] = previews
+
+        return hydrated
 
     @classmethod
     def _sanitize_prompt_payload(
@@ -1180,6 +1358,19 @@ Verification items:
             lines.append("```yaml")
             lines.append(output_schema_text)
             lines.append("```")
+            output_template = self._build_output_schema_template(agent_spec, output_schema)
+            if output_template:
+                lines.append("Fill this JSON template shape and replace placeholders with concrete values:")
+                lines.append("```json")
+                lines.append(output_template)
+                lines.append("```")
+            if not ssot_output_schema:
+                lines.append(
+                    "Return one machine-readable JSON or YAML object only, directly conforming to the business output schema."
+                )
+                lines.append(
+                    "Do not add greetings, explanations, wrapper keys, or Markdown code fences."
+                )
 
         ssot_example = ((raw_data.get("ssot_output_contract") or {}).get("example"))
         if ssot_output_schema:
@@ -1230,14 +1421,132 @@ Verification items:
         spec_path = agent_spec.get("_spec_path")
         base_dir = Path(spec_path).parent if spec_path else self.project_root
         schema_path = Path(schema_ref)
-        if not schema_path.is_absolute():
-            schema_path = (base_dir / schema_path).resolve()
-        try:
-            raw = schema_path.read_text(encoding="utf-8")
-        except OSError:
+        candidate_paths = self._resolve_contract_paths(base_dir, schema_path)
+        raw = None
+        for candidate in candidate_paths:
+            try:
+                raw = candidate.read_text(encoding="utf-8")
+                break
+            except OSError:
+                continue
+        if raw is None:
             return None
 
         excerpt = raw.strip()
         if len(excerpt) > 2800:
             excerpt = excerpt[:2800].rstrip() + "\n..."
         return excerpt
+
+    def _resolve_contract_paths(self, base_dir: Path, schema_path: Path) -> List[Path]:
+        if schema_path.is_absolute():
+            return [schema_path]
+
+        candidates: List[Path] = [(base_dir / schema_path).resolve()]
+        spec_root = self.project_root / "spec-global"
+        normalized_parts = list(schema_path.parts)
+        while normalized_parts and normalized_parts[0] == "..":
+            normalized_parts = normalized_parts[1:]
+        if spec_root.exists() and normalized_parts:
+            candidates.append((spec_root / Path(*normalized_parts)).resolve())
+            for anchor in ("core", "cross", "departments"):
+                if anchor in normalized_parts:
+                    anchor_index = normalized_parts.index(anchor)
+                    candidates.append((spec_root / Path(*normalized_parts[anchor_index:])).resolve())
+                    break
+
+        ordered: List[Path] = []
+        for candidate in candidates:
+            if candidate not in ordered:
+                ordered.append(candidate)
+        return ordered
+
+    def _build_output_schema_template(
+        self,
+        agent_spec: Dict[str, Any],
+        schema_ref: Optional[str],
+    ) -> Optional[str]:
+        schema = self._load_contract_schema(agent_spec, schema_ref)
+        if not isinstance(schema, dict):
+            return None
+        template = self._build_schema_template_node(schema, schema)
+        if not isinstance(template, dict):
+            return None
+        try:
+            return json.dumps(template, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):
+            return None
+
+    def _load_contract_schema(
+        self,
+        agent_spec: Dict[str, Any],
+        schema_ref: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        if not schema_ref or not isinstance(schema_ref, (str, os.PathLike)):
+            return None
+        spec_path = agent_spec.get("_spec_path")
+        base_dir = Path(spec_path).parent if spec_path else self.project_root
+        schema_path = Path(schema_ref)
+        for candidate in self._resolve_contract_paths(base_dir, schema_path):
+            try:
+                return json.loads(candidate.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+        return None
+
+    def _build_schema_template_node(
+        self,
+        node: Any,
+        root_schema: Dict[str, Any],
+        depth: int = 0,
+    ) -> Any:
+        if depth > 4:
+            return "<value>"
+        if not isinstance(node, dict):
+            return "<value>"
+        if "$ref" in node and isinstance(node["$ref"], str):
+            resolved = self._resolve_schema_ref(root_schema, node["$ref"])
+            if isinstance(resolved, dict):
+                return self._build_schema_template_node(resolved, root_schema, depth + 1)
+        if "const" in node:
+            return node["const"]
+        if isinstance(node.get("enum"), list) and node["enum"]:
+            return node["enum"][0]
+
+        node_type = node.get("type")
+        if isinstance(node_type, list):
+            node_type = next((item for item in node_type if item != "null"), node_type[0] if node_type else None)
+
+        if node_type == "object" or ("properties" in node and isinstance(node.get("properties"), dict)):
+            properties = node.get("properties", {}) if isinstance(node.get("properties"), dict) else {}
+            required = node.get("required") if isinstance(node.get("required"), list) else list(properties.keys())
+            result: Dict[str, Any] = {}
+            for key in required[:8]:
+                child = properties.get(key, {})
+                result[key] = self._build_schema_template_node(child, root_schema, depth + 1)
+            return result
+        if node_type == "array":
+            items = node.get("items", {})
+            child = self._build_schema_template_node(items, root_schema, depth + 1)
+            return [child] if child not in (None, "", {}) else []
+        if node_type == "integer":
+            return 0
+        if node_type == "number":
+            return 0
+        if node_type == "boolean":
+            return False
+        if node.get("format") == "date-time":
+            return "2026-01-01T00:00:00Z"
+        if node.get("format") == "date":
+            return "2026-01-01"
+        return "<string>"
+
+    @staticmethod
+    def _resolve_schema_ref(root_schema: Dict[str, Any], ref: str) -> Optional[Dict[str, Any]]:
+        if not isinstance(ref, str) or not ref.startswith("#/"):
+            return None
+        current: Any = root_schema
+        for part in ref[2:].split("/"):
+            if not isinstance(current, dict):
+                return None
+            current = current.get(part)
+        return current if isinstance(current, dict) else None

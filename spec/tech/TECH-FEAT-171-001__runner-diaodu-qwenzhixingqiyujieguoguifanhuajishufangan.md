@@ -1,7 +1,11 @@
 ---
 id: TECH-FEAT-171-001
 ssot_type: tech
+<<<<<<< HEAD
 title: Runner 调度 Qwen 执行器与结果归一化技术方案
+=======
+title: Runner 调度 Qwen 对话后端与结果归一化技术方案
+>>>>>>> codex/src011-qwen-implementation
 status: frozen
 version: v1
 parent_id: FEAT-171
@@ -26,7 +30,11 @@ properties:
 
 # Overview
 
+<<<<<<< HEAD
 本 TECH 为 `FEAT-171` 定义 Runner 如何调度 `qwen` 执行器，并把其输出归一化到现有 LEE 执行结果语义中。
+=======
+本 TECH 为 `FEAT-171` 定义 Runner 如何调度 `qwen_chat` 对话后端，并把其输出归一化到现有 LEE 执行结果语义中。
+>>>>>>> codex/src011-qwen-implementation
 
 核心约束是：`qwen` 不能绕开现有 `task execution`、`structured payload`、`ssot materialization` 和 `review` 机制，且其无头模式适配必须建立在 `qwen -p/--prompt` 与 `--output-format json|stream-json` 之上，而不是假定存在 `claude --print` 同名参数。
 
@@ -41,8 +49,13 @@ properties:
 
 本方案覆盖：
 
+<<<<<<< HEAD
 - Runner 对 `executor_override=qwen` 的识别
 - `qwen` 输入适配
+=======
+- Runner 对 `executor_override=qwen_chat` 的识别
+- `qwen_chat` 输入适配
+>>>>>>> codex/src011-qwen-implementation
 - 结果 envelope 归一化
 - trace / evidence / task execution 记录
 
@@ -56,11 +69,19 @@ properties:
 
 ## 1. Executor Routing
 
+<<<<<<< HEAD
 Runner 在 `agent` 或 `claude_code` 类步骤上遇到 `executor_override=qwen` 时，应路由到 LLM 形态执行，而不是继续沿用 code-runner 的命令式假设。
 
 ## 2. Input Shape
 
 对 `qwen` 的最小输入应压缩为：
+=======
+Runner 在 `agent` 类步骤上遇到 `executor_override=qwen_chat` 时，应路由到对话型执行，而不是沿用 code-runner 的命令式假设。`claude_code` 类步骤不应再被 `qwen_chat` 覆盖。
+
+## 2. Input Shape
+
+对 `qwen_chat` 的最小输入应压缩为：
+>>>>>>> codex/src011-qwen-implementation
 
 - `system_message`
 - `prompt`
@@ -72,11 +93,19 @@ Runner 在 `agent` 或 `claude_code` 类步骤上遇到 `executor_override=qwen`
 - `qwen -p "<prompt>" --output-format json`
 - 在需要增量事件时使用 `--output-format stream-json`
 
+<<<<<<< HEAD
 避免把 `claude_code` 专属的 MCP、bash 白名单、workspace command policy 直接硬塞给 `qwen`。
 
 ## 3. Output Normalization
 
 Runner 需要把 `qwen` 输出统一压回以下语义：
+=======
+避免把 `claude_code` 专属的 MCP、bash 白名单、workspace command policy 直接硬塞给 `qwen_chat`。
+
+## 3. Output Normalization
+
+Runner 需要把 `qwen_chat` 输出统一压回以下语义：
+>>>>>>> codex/src011-qwen-implementation
 
 - `business_output`
 - `structured_payload`
@@ -108,10 +137,17 @@ Runner 需要把 `qwen` 输出统一压回以下语义：
 
 # Validation
 
+<<<<<<< HEAD
 - `executor_override=qwen` 时 Runner 能稳定调度
 - 结果可继续通过下游 schema 校验
 - `delivery_plan_validation` 等 review 步骤仍能消费归一化结果
 - `qwen` 不会破坏既有 `claude_code` 路径
+=======
+- `executor_override=qwen_chat` 时 Runner 能稳定调度
+- 结果可继续通过下游 schema 校验
+- `delivery_plan_validation` 等 review 步骤仍能消费归一化结果
+- `qwen_chat` 不会破坏既有 `claude_code` 路径，也不会误作为 code-step executor
+>>>>>>> codex/src011-qwen-implementation
 
 # Risks
 

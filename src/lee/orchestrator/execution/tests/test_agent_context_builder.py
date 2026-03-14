@@ -92,6 +92,35 @@ def test_build_output_contract_guidance_for_file_plus_ssot(builder):
     assert "test_set_id" in rendered
 
 
+def test_build_output_contract_guidance_for_business_schema_only_real_agent(builder):
+    agent_spec = {
+        "_spec_path": str(
+            Path.cwd()
+            / "spec-global"
+            / "departments"
+            / "product"
+            / "agents"
+            / "product-goal-analyzer"
+            / "v1"
+            / "agent.yaml"
+        ),
+        "_raw_data": {
+            "contracts": {
+                "output_schema": "../../../../departments/stg/contracts/product-goal-contract/v1/schema.json",
+            },
+        },
+    }
+    step = SimpleNamespace(outputs=[SimpleNamespace(path=None, type="symbol")])
+
+    guidance = builder._build_output_contract_guidance(agent_spec, step)
+    rendered = "\n".join(guidance)
+
+    assert "Product Goal Contract Schema" in rendered
+    assert "machine-readable JSON or YAML object only" in rendered
+    assert "Do not add greetings" in rendered
+    assert "\"contract_type\": \"product-goal-contract\"" in rendered
+
+
 @pytest.mark.asyncio
 async def test_default_prompt_includes_upstream_step_outputs(builder):
     step = SimpleNamespace(
@@ -135,6 +164,109 @@ async def test_default_prompt_includes_upstream_step_outputs(builder):
     assert "feat_spec_generation" in prompt
     assert "FEAT-042" in prompt
     assert "authoritative derived inputs" in prompt
+
+
+@pytest.mark.asyncio
+async def test_build_applies_qwen_prompt_adapter_when_executor_override_is_qwen(tmp_path):
+    agent_loader = AgentLoader(str(Path.cwd()))
+    builder = AgentContextBuilder(agent_loader=agent_loader, project_root=str(Path.cwd()))
+    step = SimpleNamespace(
+        id="raw_input_intake",
+        agent_id="agent.analysis.product_goal",
+        input=[{"source": "external", "type": ["raw_requirement"], "required": True}],
+        depends_on=[],
+        outputs=[SimpleNamespace(symbol="raw_source_input", path=None, type="symbol")],
+    )
+    workflow_context = {
+        "workflow_id": "wf-qwen-adapter",
+        "data": {
+            "executor_override": "qwen",
+            "raw_requirement": "支持 qwen cli 作为通用执行器",
+        },
+    }
+
+    context = await builder.build(step, workflow_context)
+
+    assert "workflow step" in context.system_prompt
+    assert "Task Packet:" in context.user_prompt
+    assert "\"output_format\": \"exactly one JSON or YAML object\"" in context.user_prompt
+    assert "\"no_clarifying_questions\": true" in context.user_prompt
+    assert "## Workflow Context" in context.user_prompt
+    assert "workflow_id: wf-qwen-adapter" in context.user_prompt
+    assert "step_id: raw_input_intake" in context.user_prompt
+    assert "agent_id: agent.analysis.product_goal" in context.user_prompt
+
+
+@pytest.mark.asyncio
+async def test_build_applies_qwen_prompt_adapter_when_executor_override_is_qwen_chat(tmp_path):
+    agent_loader = AgentLoader(str(Path.cwd()))
+    builder = AgentContextBuilder(agent_loader=agent_loader, project_root=str(Path.cwd()))
+    step = SimpleNamespace(
+        id="raw_input_intake",
+        agent_id="agent.analysis.product_goal",
+        input=[{"source": "external", "type": ["raw_requirement"], "required": True}],
+        depends_on=[],
+        outputs=[SimpleNamespace(symbol="raw_source_input", path=None, type="symbol")],
+    )
+    workflow_context = {
+        "workflow_id": "wf-qwen-chat-adapter",
+        "data": {
+            "executor_override": "qwen_chat",
+            "raw_requirement": "支持 qwen chat 作为对话执行器",
+        },
+    }
+
+    context = await builder.build(step, workflow_context)
+
+    assert "Task Packet:" in context.user_prompt
+    assert "\"no_clarifying_questions\": true" in context.user_prompt
+    assert "workflow_id: wf-qwen-chat-adapter" in context.user_prompt
+
+
+@pytest.mark.asyncio
+async def test_build_qwen_prompt_inlines_upstream_workspace_artifact_preview(tmp_path):
+    artifact_path = (
+        tmp_path
+        / ".workflow"
+        / "workspace"
+        / "wf-qwen-inline"
+        / "raw_input_intake"
+        / "business_output.yaml"
+    )
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(
+        "contract_type: product-goal-contract\nrequirement_overview:\n  description: qwen executor integration\n",
+        encoding="utf-8",
+    )
+
+    agent_loader = AgentLoader(str(Path.cwd()))
+    builder = AgentContextBuilder(agent_loader=agent_loader, project_root=str(tmp_path))
+    step = SimpleNamespace(
+        id="source_normalization",
+        agent_id="agent.analysis.product_goal",
+        input=[{"source": "raw_source_input", "required": True}],
+        depends_on=["raw_input_intake"],
+        outputs=[SimpleNamespace(symbol="normalized_src", path=None, type="symbol")],
+        config={"name": "源文档归一化"},
+    )
+    workflow_context = {
+        "workflow_id": "wf-qwen-inline",
+        "data": {
+            "executor_override": "qwen",
+            "step_outputs": {
+                "raw_input_intake": {
+                    "status": "completed",
+                    "workspace_artifacts": [str(artifact_path)],
+                }
+            },
+        },
+    }
+
+    context = await builder.build(step, workflow_context)
+
+    assert "workspace_artifact_previews" in context.user_prompt
+    assert "qwen executor integration" in context.user_prompt
+    assert "step_name: 源文档归一化" in context.user_prompt
 
 
 @pytest.mark.asyncio
@@ -244,29 +376,6 @@ def test_collect_step_inputs_accepts_freeze_ref_alias(builder):
     resolved = builder._collect_step_inputs(step, workflow_context)
 
     assert resolved["epic_freeze"]["artifact_id"] == "EPIC-001"
-
-
-def test_collect_step_inputs_falls_back_to_single_dependency_symbol_output(builder):
-    step = SimpleNamespace(
-        id="source_normalization",
-        inputs=[{"source": "raw_source_input", "required": True}],
-        depends_on=["raw_input_intake"],
-        outputs=[],
-    )
-    workflow_context = {
-        "template_id": "workflow.product.task.raw_to_src",
-        "data": {
-            "step_outputs": {
-                "raw_input_intake": {
-                    "generated_text": "Reverse workflow SSOT chain upgrade analysis",
-                }
-            }
-        },
-    }
-
-    resolved = builder._collect_step_inputs(step, workflow_context)
-
-    assert resolved["raw_source_input"]["generated_text"].startswith("Reverse workflow SSOT chain")
 
 
 def test_collect_step_inputs_sanitizes_gate_frozen_inputs(builder):
@@ -499,20 +608,7 @@ stages:
     assert "generated_text" not in resolved["tech_specs"]
 
 
-def test_payload_has_signal_ignores_metadata_only_executor_payload(builder):
-    assert not builder._payload_has_signal(
-        {
-            "model": "qwen3.5-plus",
-            "provider": "aliyun",
-            "profile": "qwen",
-            "input_tokens": 100,
-            "output_tokens": 200,
-            "status": "completed",
-        }
-    )
-
-
-def test_collect_step_inputs_recovers_symbol_payload_from_alias_step_inputs(tmp_path):
+def test_collect_step_inputs_resolves_general_symbols_from_declared_outputs(tmp_path):
     rendered_workflow = tmp_path / ".workflow" / "rendered" / "workflow-symbols.yaml"
     rendered_workflow.parent.mkdir(parents=True, exist_ok=True)
     rendered_workflow.write_text(
@@ -520,209 +616,52 @@ def test_collect_step_inputs_recovers_symbol_payload_from_alias_step_inputs(tmp_
 stages:
   - id: flow
     steps:
-      - id: feat_spec_generation
+      - id: source_normalization
         outputs:
-          - symbol: feat_specs
-      - id: feat_identity_prepare
-        depends_on: [feat_spec_generation]
+          - symbol: normalized_src
+      - id: source_review
+        depends_on: [source_normalization]
         inputs:
-          - source: feat_specs
-          - source: epic_freeze
-        outputs:
-          - symbol: feat_scoped_specs
-      - id: feat_review
-        depends_on: [feat_identity_prepare]
-        inputs:
-          - source: feat_scoped_specs
+          - source: normalized_src
 """.strip(),
         encoding="utf-8",
     )
 
     builder = AgentContextBuilder(agent_loader=None, project_root=str(tmp_path))
     step = SimpleNamespace(
-        id="feat_review",
-        inputs=[{"source": "feat_scoped_specs", "required": True}],
-        depends_on=["feat_identity_prepare"],
+        id="source_review",
+        inputs=[{"source": "normalized_src", "required": True}],
+        depends_on=["source_normalization"],
     )
     workflow_context = {
         "template_id": str(rendered_workflow),
         "data": {
-            "params": {
-                "epic_freeze": {
-                    "artifact_id": "EPIC-301",
+            "step_outputs": {
+                "source_normalization": {
+                    "status": "success",
+                    "generated_text": "noisy summary that should not win over structured payload",
+                    "business_output": {
+                        "source_id": "SRC-024",
+                        "title": "Qwen CLI 执行器集成",
+                        "problem_statement": "支持 qwen cli 作为可选执行器组件。",
+                    },
+                    "structured_payload": {
+                        "business_output": {
+                            "source_id": "SRC-024",
+                            "title": "Qwen CLI 执行器集成",
+                            "problem_statement": "支持 qwen cli 作为可选执行器组件。",
+                        }
+                    },
                 }
-            },
-            "step_outputs": {
-                "feat_spec_generation": {
-                    "business_output": {
-                        "epic_ref": "EPIC-301",
-                        "feat_specs": [
-                            {
-                                "feat_id": "FEAT-301-001",
-                                "title": "Reverse SSOT alignment",
-                            }
-                        ],
-                    }
-                },
-                "feat_identity_prepare": {
-                    "model": "qwen3.5-plus",
-                    "provider": "aliyun",
-                    "profile": "qwen",
-                    "input_tokens": 1200,
-                    "output_tokens": 600,
-                    "status": "completed",
-                },
-            },
-        },
-    }
-
-    resolved = builder._collect_step_inputs(step, workflow_context)
-
-    assert resolved["feat_scoped_specs"]["epic_ref"] == "EPIC-301"
-    assert resolved["feat_scoped_specs"]["feat_specs"][0]["feat_id"] == "FEAT-301-001"
-
-
-def test_collect_step_inputs_overrides_direct_symbol_metadata_with_alias_payload(tmp_path):
-    rendered_workflow = tmp_path / ".workflow" / "rendered" / "workflow-symbols.yaml"
-    rendered_workflow.parent.mkdir(parents=True, exist_ok=True)
-    rendered_workflow.write_text(
-        """
-stages:
-  - id: flow
-    steps:
-      - id: feat_spec_generation
-        outputs:
-          - symbol: feat_specs
-      - id: feat_identity_prepare
-        depends_on: [feat_spec_generation]
-        inputs:
-          - source: feat_specs
-        outputs:
-          - symbol: feat_scoped_specs
-      - id: feat_review
-        depends_on: [feat_identity_prepare]
-        inputs:
-          - source: feat_scoped_specs
-""".strip(),
-        encoding="utf-8",
-    )
-
-    builder = AgentContextBuilder(agent_loader=None, project_root=str(tmp_path))
-    step = SimpleNamespace(
-        id="feat_review",
-        inputs=[{"source": "feat_scoped_specs", "required": True}],
-        depends_on=["feat_identity_prepare"],
-    )
-    workflow_context = {
-        "template_id": str(rendered_workflow),
-        "data": {
-            "step_outputs": {
-                "feat_scoped_specs": {
-                    "model": "qwen3.5-plus",
-                    "provider": "aliyun",
-                    "profile": "qwen",
-                    "status": "completed",
-                },
-                "feat_spec_generation": {
-                    "business_output": {
-                        "epic_ref": "EPIC-302",
-                        "feat_specs": [{"feat_id": "FEAT-302-001"}],
-                    }
-                },
-                "feat_identity_prepare": {
-                    "model": "qwen3.5-plus",
-                    "provider": "aliyun",
-                    "status": "completed",
-                },
             }
         },
     }
 
     resolved = builder._collect_step_inputs(step, workflow_context)
 
-    assert resolved["feat_scoped_specs"]["epic_ref"] == "EPIC-302"
-    assert resolved["feat_scoped_specs"]["feat_specs"][0]["feat_id"] == "FEAT-302-001"
-
-
-def test_collect_step_inputs_resolves_registry_template_key_for_symbol_fallback(tmp_path):
-    workflow_file = (
-        tmp_path
-        / "spec-global"
-        / "departments"
-        / "product"
-        / "workflows"
-        / "templates"
-        / "epic-to-feat"
-        / "v1"
-        / "workflow.yaml"
-    )
-    workflow_file.parent.mkdir(parents=True, exist_ok=True)
-    workflow_file.write_text(
-        """
-stages:
-  - id: flow
-    steps:
-      - id: feat_spec_generation
-        outputs:
-          - symbol: feat_specs
-      - id: feat_identity_prepare
-        depends_on: [feat_spec_generation]
-        inputs:
-          - source: feat_specs
-        outputs:
-          - symbol: feat_scoped_specs
-      - id: feat_review
-        depends_on: [feat_identity_prepare]
-        inputs:
-          - source: feat_scoped_specs
-""".strip(),
-        encoding="utf-8",
-    )
-    registry_file = tmp_path / "config" / "workflow-registry.yaml"
-    registry_file.parent.mkdir(parents=True, exist_ok=True)
-    registry_file.write_text(
-        """
-workflows:
-  workflow.product.task.epic_to_feat:
-    path: spec-global/departments/product/workflows/templates/epic-to-feat/v1/workflow.yaml
-""".strip(),
-        encoding="utf-8",
-    )
-
-    builder = AgentContextBuilder(agent_loader=None, project_root=str(tmp_path))
-    step = SimpleNamespace(
-        id="feat_review",
-        inputs=[{"source": "feat_scoped_specs", "required": True}],
-        depends_on=["feat_identity_prepare"],
-    )
-    workflow_context = {
-        "template_id": "workflow.product.task.epic_to_feat",
-        "data": {
-            "step_outputs": {
-                "feat_scoped_specs": {
-                    "model": "qwen3.5-plus",
-                    "provider": "aliyun",
-                    "status": "completed",
-                },
-                "feat_spec_generation": {
-                    "business_output": {
-                        "epic_ref": "EPIC-303",
-                        "feat_specs": [{"feat_id": "FEAT-303-001"}],
-                    }
-                },
-                "feat_identity_prepare": {
-                    "model": "qwen3.5-plus",
-                    "provider": "aliyun",
-                    "status": "completed",
-                },
-            }
-        },
-    }
-
-    resolved = builder._collect_step_inputs(step, workflow_context)
-
-    assert resolved["feat_scoped_specs"]["epic_ref"] == "EPIC-303"
-    assert resolved["feat_scoped_specs"]["feat_specs"][0]["feat_id"] == "FEAT-303-001"
+    assert resolved["normalized_src"]["source_id"] == "SRC-024"
+    assert resolved["normalized_src"]["problem_statement"] == "支持 qwen cli 作为可选执行器组件。"
+    assert "generated_text" not in resolved["normalized_src"]
 
 
 def test_agent_loader_scans_spec_global_by_agent_id(tmp_path):

@@ -91,5 +91,10 @@ test-temp-system
 tmp_epic_to_feat_sample.yaml
 .tmp/
 tmp_*.yaml
+tmp_*.txt
+tmp_*.json
+tmp_*.log
+tmp_*.md
+tmp_*.py
 vibe-kanban/
 .tmp*

@@ -1,7 +1,7 @@
 ---
 id: TASK-FEAT-171-001
 ssot_type: task
-title: Qwen 执行器实现与 CLI 封装
+title: Qwen Chat 实现与 CLI 封装
 status: active
 version: v1
 parent_id: FEAT-171
@@ -17,14 +17,14 @@ properties:
 
 # Objective
 
-实现 Qwen 执行器适配层，封装 qwen CLI 无头调用并兼容现有执行器接口
+实现 Qwen Chat 适配层，封装 qwen CLI 无头调用并兼容现有对话执行接口
 
 # Description
 
-基于 TECH-FEAT-171-001 技术方案，实现 `qwen` 执行器适配层。封装 `qwen -p/--prompt` 无头调用和 `--output-format json|stream-json` 输出模式，兼容现有执行器接口，处理超时控制、流式输出捕获、错误码映射与会话恢复语义。
+基于 TECH-FEAT-171-001 技术方案，实现 `qwen_chat` 适配层。封装 `qwen -p/--prompt` 无头调用和 `--output-format json|stream-json` 输出模式，兼容现有对话执行接口，处理超时控制、流式输出捕获、错误码映射与会话恢复语义。
 
 ## Acceptance Mapping
-- FEAT-171 / AC-001: Runner 能接收 qwen 实例并执行，任务被执行并返回结果
+- FEAT-171 / AC-001: Runner 能接收 qwen_chat 实例并执行，任务被执行并返回结果
 
 ## Prerequisites
 - TECH-FEAT-171-001 技术方案已冻结
@@ -58,7 +58,7 @@ restore_targets:
 ```
 
 ## Definition Of Done
-- Qwen 执行器适配层实现完成并通过单元测试
+- Qwen Chat 适配层实现完成并通过单元测试
 - 无头调用封装层通过契约测试
 - 超时控制与取消机制验证通过
 - `json` 与 `stream-json` 两种输出模式行为已验证

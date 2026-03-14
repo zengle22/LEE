@@ -17,6 +17,7 @@ properties:
 
 # Objective
 
+<<<<<<< HEAD
 补齐 qwen profile 解析、缺失配置报错和工厂回归测试
 
 # Description
@@ -25,6 +26,16 @@ properties:
 
 ## Acceptance Mapping
 - FEAT-170 / AC-001: 工厂创建 qwen 实例
+=======
+补齐 qwen_chat profile 解析、缺失配置报错和工厂回归测试
+
+# Description
+
+基于 TECH-FEAT-170-001，完善 `qwen_chat` 对 `qwen` profile 的解析优先级、缺失 profile 时的错误提示，以及工厂层的回归测试，确保实例化失败时能快速定位到配置问题，而不是在 workflow 深处报错。
+
+## Acceptance Mapping
+- FEAT-170 / AC-001: 工厂创建 qwen_chat 实例
+>>>>>>> codex/src011-qwen-implementation
 - FEAT-170 / AC-002: 实例化失败时返回可定位错误
 
 ## Prerequisites
@@ -64,4 +75,7 @@ restore_targets:
 - profile 解析优先级有测试覆盖
 - 工厂实例化异常可在日志中定位
 - TASK 文件已冻结
+<<<<<<< HEAD
 
+=======
+>>>>>>> codex/src011-qwen-implementation

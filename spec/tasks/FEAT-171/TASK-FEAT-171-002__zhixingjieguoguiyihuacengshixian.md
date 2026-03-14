@@ -17,11 +17,11 @@ properties:
 
 # Objective
 
-实现结果归一化层，确保 Qwen 执行结果与其他执行器格式一致
+实现结果归一化层，确保 Qwen Chat 执行结果与其他执行器格式一致
 
 # Description
 
-基于 TECH-FEAT-171-001 技术方案，实现结果归一化层。统一吸收 `qwen` 的 `json` / `stream-json` 输出事件，归并为与 `claude_code`、`codex` 一致的执行状态、输出内容、元数据与追溯信息，并补齐日志记录功能。
+基于 TECH-FEAT-171-001 技术方案，实现结果归一化层。统一吸收 `qwen_chat` 的 `json` / `stream-json` 输出事件，归并为与其他执行器一致的执行状态、输出内容、元数据与追溯信息，并补齐日志记录功能。
 
 ## Acceptance Mapping
 - FEAT-171 / AC-002: 执行结果格式与其他执行器一致，符合统一规范
@@ -62,7 +62,7 @@ restore_targets:
 
 ## Definition Of Done
 - NormalizedExecutionResult 模型定义完成
-- Qwen 结果归一化适配器实现并通过测试
+- Qwen Chat 结果归一化适配器实现并通过测试
 - 归一化结果包含完整追溯信息
 - 结构化日志输出验证通过
 - TASK 文件已冻结

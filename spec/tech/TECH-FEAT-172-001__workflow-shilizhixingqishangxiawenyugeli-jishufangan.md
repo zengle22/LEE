@@ -26,7 +26,11 @@ properties:
 
 # Overview
 
+<<<<<<< HEAD
 本 TECH 为 `FEAT-172` 定义 workflow instance 如何携带执行器类型，并在多执行器并存时保持状态、workspace 与 trace 的隔离性。
+=======
+本 TECH 为 `FEAT-172` 定义 workflow instance 如何携带执行器类型，并在多执行器并存时保持状态、workspace 与 trace 的隔离性，同时区分对话执行后端与真正的 coding executor。
+>>>>>>> codex/src011-qwen-implementation
 
 # Current Anchors
 
@@ -40,6 +44,10 @@ properties:
 本方案覆盖：
 
 - workflow data 中的 `executor_override`
+<<<<<<< HEAD
+=======
+- code step 的真正 `coding_executor`
+>>>>>>> codex/src011-qwen-implementation
 - 并发 scope 下的实例隔离
 - trace / evidence 路径中的执行器上下文
 - 旧实例重跑时的执行器一致性
@@ -60,11 +68,19 @@ workflow instance 至少应携带：
 - `workflow_key`
 - `params`
 
+<<<<<<< HEAD
 其中 `executor_override` 是执行器选择的权威字段，避免 CLI 参数只在启动瞬间生效。
 
 ## 2. Concurrency Scope
 
 同一 FEAT 或同一业务对象的并发 scope 检查继续复用现有逻辑，但在 `continue / restart` 场景中必须保留旧实例的执行器信息，避免误把 `qwen` 实例恢复成 `claude_code`。
+=======
+其中 `executor_override` 是对话执行后端选择的权威字段，避免 CLI 参数只在启动瞬间生效。对于 code step，真正的 executor 仍由 `coding_executor` 或显式 code-step override 决定。
+
+## 2. Concurrency Scope
+
+同一 FEAT 或同一业务对象的并发 scope 检查继续复用现有逻辑，但在 `continue / restart` 场景中必须保留旧实例的执行器信息，避免误把 `qwen_chat` 实例恢复成 `claude_code`，或把 code step 误路由到 chat backend。
+>>>>>>> codex/src011-qwen-implementation
 
 ## 3. Execution Isolation
 
@@ -95,7 +111,11 @@ workflow instance 至少应携带：
 
 - 新建 workflow 时 `executor_override` 能写入实例数据
 - 同一 FEAT 重跑时可继续或重启，并保持执行器上下文正确
+<<<<<<< HEAD
 - `task_executions` 中能区分 `qwen` 与其他执行器
+=======
+- `task_executions` 中能区分 `qwen_chat` 与其他执行器
+>>>>>>> codex/src011-qwen-implementation
 - 并行实例不会互相污染 evidence / workspace
 
 # Risks

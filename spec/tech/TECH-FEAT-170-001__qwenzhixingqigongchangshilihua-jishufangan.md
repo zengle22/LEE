@@ -1,7 +1,11 @@
 ---
 id: TECH-FEAT-170-001
 ssot_type: tech
+<<<<<<< HEAD
 title: Qwen 执行器工厂实例化技术方案
+=======
+title: Qwen 对话后端工厂实例化技术方案
+>>>>>>> codex/src011-qwen-implementation
 status: frozen
 version: v1
 parent_id: FEAT-170
@@ -26,9 +30,15 @@ properties:
 
 # Overview
 
+<<<<<<< HEAD
 本 TECH 为 `FEAT-170` 定义执行器工厂如何在不破坏现有执行器体系的前提下创建 `qwen cli` 执行器实例。
 
 技术目标不是引入新的工厂框架，而是在现有 `ExecutorFactory` 上扩一条 `qwen` 分支，并复用 `LLMExecutor` / profile loader 的既有能力。
+=======
+本 TECH 为 `FEAT-170` 定义执行器工厂如何在不破坏现有执行器体系的前提下创建 `qwen_chat` 对话执行实例。
+
+技术目标不是引入新的工厂框架，而是在现有 `ExecutorFactory` 上扩一条 `qwen_chat` 分支，并复用现有 headless text executor 的既有能力。
+>>>>>>> codex/src011-qwen-implementation
 
 # Current Anchors
 
@@ -41,8 +51,13 @@ properties:
 
 本方案覆盖：
 
+<<<<<<< HEAD
 - `qwen` 执行器类型注册
 - `ExecutorFactory.create("qwen")` 的实例化路径
+=======
+- `qwen_chat` 执行器类型注册
+- `ExecutorFactory.create("qwen_chat")` 的实例化路径
+>>>>>>> codex/src011-qwen-implementation
 - `qwen profile` 的默认绑定
 - 实例化失败时的错误定位
 
@@ -56,6 +71,7 @@ properties:
 
 ## 1. Factory Registration
 
+<<<<<<< HEAD
 在 `ExecutorFactory._executors` 中增加 `qwen` 映射，并确保其构造路径与 `llm` 一致，只是在默认 profile 上强制收敛为 `qwen`。
 
 ## 2. Executor Alias
@@ -64,6 +80,17 @@ properties:
 
 - 默认绑定 `profile="qwen"`
 - 复用 `LLMExecutor` 的 provider、token、timeout、fallback 机制
+=======
+在 `ExecutorFactory._executors` 中增加 `qwen_chat` 映射，并兼容历史别名 `qwen`，默认 profile 收敛为 `qwen`。
+
+## 2. Chat Executor Alias
+
+`QwenExecutor` 在 LEE 中作为 `qwen_chat` 的兼容类名保留，但语义明确为对话执行后端，不作为文件编辑型 coding executor。其职责只有：
+
+- 默认绑定 `qwen` 对话模型语义
+- 接收 prompt / system_message 并返回文本或结构化输出
+- 不负责工具调用、文件修改和命令执行
+>>>>>>> codex/src011-qwen-implementation
 
 ## 3. Profile Resolution
 
@@ -96,7 +123,11 @@ properties:
 
 # Validation
 
+<<<<<<< HEAD
 - `ExecutorFactory.create("qwen")` 返回可执行实例
+=======
+- `ExecutorFactory.create("qwen_chat")` 返回可执行实例
+>>>>>>> codex/src011-qwen-implementation
 - `QwenExecutor` 默认走 `qwen` profile
 - profile 缺失时返回可定位错误
 - 不影响 `claude_code`、`codex`、`kimi` 的既有实例化逻辑

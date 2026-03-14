@@ -9,6 +9,7 @@
 """
 
 import asyncio
+import json
 import sys
 import os
 import pytest
@@ -143,13 +144,287 @@ def test_llm_executor_uses_config_default_profile_when_unspecified(tmp_path, mon
     assert executor._executor.profile == "sample_profile"
 
 
-def test_executor_factory_qwen_executor_defaults_to_qwen_profile(monkeypatch):
+def test_executor_factory_qwen_chat_executor_defaults_to_qwen_profile(monkeypatch):
     monkeypatch.delenv("LLM_PROFILE", raising=False)
+    monkeypatch.setattr("lee.orchestrator.execution.qwen_executor.shutil.which", lambda name: "C:/Users/test/AppData/Roaming/npm/qwen.cmd" if name in {"qwen", "qwen.cmd"} else None)
 
+    executor = ExecutorFactory.create("qwen_chat")
+
+    assert isinstance(executor, QwenExecutor)
+    assert executor._qwen_binary.endswith("qwen.cmd")
+
+
+def test_executor_factory_qwen_chat_executor_ignores_llm_profile_config(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "llm_config.yaml").write_text("qwen:\n  model: qwen-max\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+
+    executor = ExecutorFactory.create("qwen_chat")
+
+    assert isinstance(executor, QwenExecutor)
+
+
+def test_executor_factory_legacy_qwen_alias_maps_to_chat_executor():
     executor = ExecutorFactory.create("qwen")
 
     assert isinstance(executor, QwenExecutor)
-    assert executor._executor.profile == "qwen"
+
+
+@pytest.mark.asyncio
+async def test_qwen_executor_uses_headless_json_mode(monkeypatch):
+    captured = {"calls": []}
+
+    class _FakeProcess:
+        returncode = 0
+
+        async def communicate(self, input=None):
+            return (
+                json.dumps({"result": "hello qwen", "changed_files": ["spec/demo.md"]}).encode("utf-8"),
+                b"",
+            )
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        captured["calls"].append((args, kwargs))
+        return _FakeProcess()
+
+    from lee.orchestrator.execution.qwen_executor import QwenExecutor
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    executor = QwenExecutor()
+    result = await executor.execute(
+        {
+            "system_message": "system",
+            "prompt": "user",
+            "workspace": os.getcwd(),
+        }
+    )
+
+    first_args = captured["calls"][0][0]
+    assert str(first_args[0]).lower().endswith("qwen.cmd") or first_args[0] == "qwen"
+    assert "system\n\nuser" in first_args
+    assert "--output-format" in first_args
+    assert result["status"] == "completed"
+    assert result["generated_text"] == "hello qwen"
+    assert result["changed_files"] == ["spec/demo.md"]
+    assert ".workflow" in result["evidence_bundle_path"]
+    assert "qwen-cli" in result["evidence_bundle_path"]
+
+
+def test_qwen_executor_build_command_supports_coding_mode_flags():
+    executor = QwenExecutor()
+
+    command = executor._build_command(
+        prompt="fix bug",
+        output_format="stream-json",
+        approval_mode="auto_edit",
+        include_directories=["src", "tests"],
+        all_files=True,
+        yolo=False,
+    )
+
+    assert "fix bug" in command
+    assert "--output-format" in command
+    assert "stream-json" in command
+    assert "--approval-mode" in command
+    assert "auto_edit" in command
+    assert command.count("--include-directories") == 1
+    assert "src,tests" in command
+    assert "--all-files" in command
+    assert "--yolo" not in command
+
+
+def test_qwen_executor_build_command_supports_yolo_shortcut_and_string_directory():
+    executor = QwenExecutor()
+
+    command = executor._build_command(
+        prompt="fix bug",
+        output_format="json",
+        approval_mode="default",
+        include_directories="src",
+        all_files=False,
+        yolo=True,
+    )
+
+    assert "--yolo" in command
+    assert "--approval-mode" not in command
+    assert command.count("--include-directories") == 1
+    assert "src" in command
+    assert "--all-files" not in command
+
+
+def test_qwen_executor_detects_invalid_greeting_reply_for_retry():
+    executor = QwenExecutor()
+
+    assert executor._should_retry_for_invalid_reply(
+        {"generated_text": "我是产品目标分析师。请告诉我您需要分析什么。", "structured_payload": None, "error": None}
+    ) is True
+    assert executor._should_retry_for_invalid_reply(
+        {"generated_text": "我是 Qwen Code，你的 AI 编程助手。我可以帮助你。有什么需要我帮助的吗？", "structured_payload": None, "error": None}
+    ) is True
+    assert executor._should_retry_for_invalid_reply(
+        {"generated_text": "{\"ok\": true}", "structured_payload": {"ok": True}, "error": None}
+    ) is False
+
+
+def test_qwen_executor_detects_placeholder_heavy_structured_payload_for_retry():
+    executor = QwenExecutor()
+
+    assert executor._should_retry_for_invalid_reply(
+        {
+            "generated_text": "{\"contract_type\": \"product-goal-contract\"}",
+            "structured_payload": {
+                "contract_type": "product-goal-contract",
+                "requirement_overview": {
+                    "description": "待确认",
+                    "target_users": "待补充",
+                    "expected_timeline": "待定",
+                },
+                "key_designs": {
+                    "core_goal": {
+                        "primary_goal": {
+                            "description": "待完善",
+                            "rationale": "待确认",
+                        }
+                    }
+                },
+            },
+            "error": None,
+        }
+    ) is True
+
+
+def test_qwen_executor_allows_structured_payload_with_limited_placeholders():
+    executor = QwenExecutor()
+
+    assert executor._should_retry_for_invalid_reply(
+        {
+            "generated_text": "{\"contract_type\": \"product-goal-contract\"}",
+            "structured_payload": {
+                "contract_type": "product-goal-contract",
+                "requirement_overview": {
+                    "description": "支持 qwen cli 作为可选执行器组件。",
+                    "target_users": "LEE 工作流维护者",
+                    "expected_timeline": "待确认",
+                },
+                "key_designs": {
+                    "core_goal": {
+                        "primary_goal": {
+                            "description": "通过配置切换执行器。",
+                            "rationale": "降低单执行器耦合。",
+                        }
+                    }
+                },
+            },
+            "error": None,
+        }
+    ) is False
+
+
+@pytest.mark.asyncio
+async def test_qwen_executor_retries_invalid_reply_with_stdin(monkeypatch):
+    calls = []
+
+    async def fake_invoke_qwen(self, **kwargs):
+        calls.append((kwargs["prompt_transport"], kwargs["output_format"]))
+        if len(calls) == 1:
+            return json.dumps(
+                [
+                    {
+                        "type": "result",
+                        "result": "我是产品目标分析师。请告诉我您需要分析什么。",
+                    }
+                ]
+            )
+        return json.dumps(
+            [
+                {
+                    "type": "result",
+                    "result": "```json\n{\"business_output\":{\"summary\":\"ok\"}}\n```",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(QwenExecutor, "_invoke_qwen", fake_invoke_qwen)
+    executor = QwenExecutor()
+    result = await executor.execute({"prompt": "user", "workspace": os.getcwd()})
+
+    assert calls == [("positional", "json"), ("stdin", "json")]
+    assert result["status"] == "completed"
+    assert result["structured_payload"] == {"business_output": {"summary": "ok"}}
+
+
+@pytest.mark.asyncio
+async def test_qwen_executor_normalizes_stream_json(monkeypatch):
+    payload = "\n".join(
+        [
+            json.dumps({"type": "delta", "text": "hello"}),
+            json.dumps({"type": "delta", "text": "world"}),
+            json.dumps({"type": "result", "changed_files": ["a.md"]}),
+        ]
+    )
+
+    class _FakeProcess:
+        returncode = 0
+
+        async def communicate(self, input=None):
+            return (payload.encode("utf-8"), b"")
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        return _FakeProcess()
+
+    from lee.orchestrator.execution.qwen_executor import QwenExecutor
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setenv("QWEN_OUTPUT_FORMAT", "stream-json")
+    executor = QwenExecutor()
+    result = await executor.execute(
+        {
+            "prompt": "user",
+            "workspace": os.getcwd(),
+        }
+    )
+
+    assert result["status"] == "completed"
+    assert "hello" in result["generated_text"]
+    assert "world" in result["generated_text"]
+    assert result["changed_files"] == ["a.md"]
+
+
+@pytest.mark.asyncio
+async def test_qwen_executor_extracts_structured_payload_from_fenced_json(monkeypatch):
+    payload = json.dumps(
+        [
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": "```json\n{\"business_output\":{\"summary\":\"中文验证通过\"}}\n```"}]}},
+            {"type": "result", "result": "```json\n{\"business_output\":{\"summary\":\"中文验证通过\"}}\n```"},
+        ]
+    )
+
+    class _FakeProcess:
+        returncode = 0
+
+        async def communicate(self, input=None):
+            return (payload.encode("utf-8"), b"")
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        return _FakeProcess()
+
+    from lee.orchestrator.execution.qwen_executor import QwenExecutor
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    executor = QwenExecutor()
+    result = await executor.execute(
+        {
+            "prompt": "user",
+            "workspace": os.getcwd(),
+        }
+    )
+
+    assert result["status"] == "completed"
+    assert result["structured_payload"] == {
+        "business_output": {"summary": "中文验证通过"}
+    }
 
 
 def test_executor_factory_kimi_executor_defaults_to_kimi_profile(monkeypatch):
@@ -255,7 +530,13 @@ async def test_llm_executor():
         return True
 
     print("\n1. 创建 LLM Executor...")
-    executor = ExecutorFactory.create("llm", profile="zhipu", config_path=config_path)
+    try:
+        executor = ExecutorFactory.create("llm", profile="zhipu", config_path=config_path)
+    except ValueError as e:
+        if "missing api_key" in str(e).lower():
+            print(f"   ⚠️  LLM API key not configured, skipping: {e}")
+            return True
+        raise
 
     print("\n2. 执行 LLM 调用...")
     result = await executor.execute({
