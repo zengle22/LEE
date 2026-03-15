@@ -3,8 +3,13 @@ LEE CLI
 
 提供统一命令入口：
 - lee run <dept>.<workflow>
+- lee src new --spec <raw.md>
 - lee status [workflow_id]
 - lee approve <workflow_id> <gate_id>
+- lee epic new --spec <frozen-src.md>
+- lee feat new --spec <frozen-epic.md>
+- lee delivery-prep new --spec <frozen-feat.md>
+- lee chain validate --source-freeze <src> --epic-freeze-bundle <epic> --feat-freeze-bundle <feat> --delivery-prep-bundle <prep>
 - lee workflow create/list/pause/resume/run-step/reject
 - lee test-runner run-e2e ...
 - lee check-env qa-e2e ...
@@ -44,7 +49,19 @@ READONLY_COMMANDS = {"status", "watch"}
 GATES_READONLY_SUBCOMMANDS = {"list", "show"}
 GATES_DECISION_SUBCOMMANDS = {"approve", "reject", "decide", "revise", "flag"}
 LIGHTWEIGHT_ARGS = {"-v", "--version"}
-WORKFLOW_COMMANDS = {"run", "adr", "epic", "feat", "approve", "status", "watch", "gates"}
+WORKFLOW_COMMANDS = {
+    "run",
+    "adr",
+    "src",
+    "epic",
+    "feat",
+    "delivery-prep",
+    "chain",
+    "approve",
+    "status",
+    "watch",
+    "gates",
+}
 SYSTEM_COMMANDS = {"ssot", "workflow", "artifacts", "repo", "verify", "doctor", "context", "governance"}
 
 
@@ -225,7 +242,19 @@ class WorkflowFirstGroup(click.Group):
 @click.group(context_settings={"help_option_names": ["-h", "--help"]}, cls=WorkflowFirstGroup)
 @click.version_option(__version__, "-v", "--version", message="%(prog)s %(version)s")
 def cli():
-    """LEE 命令行工具"""
+    """LEE 命令行工具
+
+    Workflow-first 常用入口：
+    - `lee src new --spec <raw.md>`: 原始输入进入 product.raw-to-src
+    - `lee epic new --spec <frozen-src.md>`: 冻结 SRC 进入 product.src-to-epic
+    - `lee feat new --spec <frozen-epic.md>`: 冻结 EPIC 进入 product.epic-to-feat
+    - `lee delivery-prep new --spec <frozen-feat.md>`: 冻结 FEAT 进入 product.feat-to-delivery-prep
+    - `lee chain validate --source-freeze <src> --epic-freeze-bundle <epic> --feat-freeze-bundle <feat> --delivery-prep-bundle <prep>`:
+      直接校验需求链，无需先手写 YAML spec
+
+    也可使用底层入口：
+    - `lee run <dept>.<workflow> --spec <input.yaml>`
+    """
     pass
 
 
@@ -257,7 +286,7 @@ def _register_commands() -> None:
     from lee.cli.commands.task_brief import task_brief
     from lee.cli.commands.doctor import doctor
     from lee.cli.commands.governance import governance
-    from lee.cli.commands.workflow_entrypoints import adr, epic, feat
+    from lee.cli.commands.workflow_entrypoints import adr, src, epic, feat, delivery_prep, chain
 
     cli.add_command(run)
     cli.add_command(status)
@@ -284,8 +313,11 @@ def _register_commands() -> None:
     cli.add_command(doctor)
     cli.add_command(governance)
     cli.add_command(adr)
+    cli.add_command(src)
     cli.add_command(epic)
     cli.add_command(feat)
+    cli.add_command(delivery_prep)
+    cli.add_command(chain)
     cli._lee_commands_registered = True
 
 

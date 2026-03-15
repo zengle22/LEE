@@ -412,6 +412,8 @@ def _refresh_summary_from_store(
 def _select_existing_workflow_action(
     existing: List[Dict[str, Any]],
     scope_info: ConcurrencyScopeInfo,
+    *,
+    noninteractive_default_action: str | None = "continue",
 ) -> tuple[str, str]:
     """
     让用户在“继续旧流程”与“结束旧流程后开新流程”之间做选择。
@@ -439,10 +441,15 @@ def _select_existing_workflow_action(
         if supplied in {"continue", "restart"}:
             action = supplied
             click.echo(f"非交互模式：使用 stdin 指令 {action}。")
+        elif noninteractive_default_action in {"continue", "restart"}:
+            action = noninteractive_default_action
+            click.echo(f"非交互模式：默认选择 {action}。")
         else:
-            # 非交互场景无法提问，默认 continue 防止重复创建。
-            action = "continue"
-            click.echo("非交互模式：默认继续旧流程（continue）。")
+            raise click.ClickException(
+                "检测到同并发域内已有 workflow。当前命令携带显式新运行参数，"
+                "非交互模式下不会默认续接旧流程。请改用 --instance 指定实例继续，"
+                "或通过 stdin 明确传入 continue / restart。"
+            )
 
     selected_workflow_id = existing[0]["id"]
     if action == "continue" and len(existing) > 1 and stdin.isatty():
@@ -876,7 +883,15 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             scope_info.concurrency_scope,
         )
         if existing:
-            action, existing_workflow_id = _select_existing_workflow_action(existing, scope_info)
+            explicit_new_run_intent = any(
+                value is not None and value != ""
+                for value in (spec, env, version, branch, task_id, new_task, executor)
+            )
+            action, existing_workflow_id = _select_existing_workflow_action(
+                existing,
+                scope_info,
+                noninteractive_default_action=None if explicit_new_run_intent else "continue",
+            )
             if action == "continue":
                 selected = next((item for item in existing if item["id"] == existing_workflow_id), existing[0])
                 if selected["status"] == "paused":
