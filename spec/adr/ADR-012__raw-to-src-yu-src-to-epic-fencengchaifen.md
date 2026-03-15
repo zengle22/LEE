@@ -4,6 +4,7 @@ ssot_type: adr
 title: raw-to-src 与 src-to-epic 分层拆分
 status: draft
 version: v1
+workflow_instance_id: raw-to-src-governance-20260315
 parent_id: null
 derived_from_ids:
   - id: ADR-001
@@ -148,12 +149,17 @@ workflow 名称与真实职责不一致。
 - 保存来源与引用关系
 - 归一化为 `SRC candidate`
 - 评审并冻结正式 `SRC`
+- 每次 canonical `raw_to_src` run 只允许产出并冻结 1 个 canonical `SRC`
+- 若输入包含多个彼此独立的问题域，必须显式返回“需要先拆分原始输入”，不得在同一 run 中自动扇出多个 `SRC`
+- 产出的 `SRC` 必须保持与原始输入同题，不得把 intake 流程、schema 复用策略或工作流方法论本身改写成 `SRC` 正文主题
 
 `raw_to_src` 不负责：
 
 - 生成 `EPIC`
 - 引入 `EPIC` 级问题空间抽象
 - 在同一模板中继续推进下游主题设计
+- 自动拆分并冻结多个 `SRC`
+- 将“如何归一化输入”替代为“原始输入要解决的问题”
 
 ### 6.2 src_to_epic
 

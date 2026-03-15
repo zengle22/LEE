@@ -49,6 +49,8 @@ phases:
     depends_on: []
     output_map:
       source_freeze: "$child_data.step_outputs.source_freeze"
+      source_freeze_ref: "$child_data.step_outputs.source_freeze.source_freeze_ref"
+      src_root_id: "$child_data.step_outputs.source_freeze.src_root_id"
 
   - id: src_to_epic
     name: SRC to EPIC

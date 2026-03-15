@@ -8,6 +8,8 @@ name: Product Raw to SRC
 description: >
   将任意原始输入收敛为正式 SRC 并完成冻结。
   该流程只负责源归一化和冻结，不承担 EPIC 语义建模。
+  canonical path 上每次运行只允许产出 1 个与原始输入同题的 SRC。
+  若输入包含多个独立问题域，流程必须显式返回拆分要求，而不是在 SRC 层自动扇出。
   同时负责建立下游需求链共用的 `src_root_id` 作用域上下文。
   该文件是 checked-in workflow template，运行时实例由 Python runtime 动态生成。
 owner: product-ai
@@ -70,6 +72,8 @@ stages:
         description: >
           将原始输入归一化为可审阅的 SRC candidate，
           提炼问题陈述、目标用户、触发场景、业务动因和关键约束。
+          输出必须保持与原始输入同题，不得把 intake 流程、schema 复用策略
+          或工作流方法论本身改写成 SRC 正文主题。
         inputs:
           - source: raw_source_input
             required: true
@@ -152,6 +156,18 @@ constraints:
   src_only_boundary: |
     该流程只负责 raw -> SRC。
     不得在本流程中生成 EPIC、FEAT 或 TASK。
+
+  single_src_per_run: |
+    canonical raw_to_src path 每次运行只允许产出并冻结 1 个 SRC。
+    不得在 source_normalization 或 source_freeze 阶段自动扇出多个 SRC 文件。
+
+  no_auto_split_before_src_freeze: |
+    若原始输入包含多个独立问题域，流程必须返回“需要先拆分原始输入”或等价阻塞信号。
+    多主题拆分不属于 canonical raw_to_src 冻结路径。
+
+  semantic_fidelity_required: |
+    生成的 SRC 必须保持与原始输入同题。
+    不得将 intake、schema、复用策略、workflow 方法论或过程说明替代为源问题定义。
 
   src_root_scope_required: |
     source_freeze 完成后必须产出稳定的 src_root_id。

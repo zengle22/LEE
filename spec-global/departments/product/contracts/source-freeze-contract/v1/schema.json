@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ai-spec.example.com/contracts/source-freeze-contract/v1/schema.json",
   "title": "Source Freeze Contract",
-  "description": "需求源冻结契约 - 正式 SRC 对象或其冻结视图",
+  "description": "需求源冻结契约 - 正式 SRC 对象或其冻结视图。该契约表达单一 canonical SRC 冻结边界，不用于同一 run 内的多 SRC 扇出。",
   "type": "object",
   "required": [
     "source_id",
@@ -17,15 +17,15 @@
   "properties": {
     "source_id": {
       "type": "string",
-      "description": "SRC 对象唯一标识"
+      "description": "SRC 对象唯一标识。单次 canonical raw_to_src run 只应对应一个 source_id。"
     },
     "title": {
       "type": "string",
-      "description": "SRC 标题"
+      "description": "SRC 标题。必须与原始输入同题，不得将 intake、schema、workflow 方法论替代为标题主题。"
     },
     "problem_statement": {
       "type": "string",
-      "description": "问题陈述"
+      "description": "问题陈述。描述原始输入要解决的单一问题边界，而不是描述如何处理该输入的流程。"
     },
     "target_user": {
       "type": "array",
@@ -87,7 +87,8 @@
         "derived_from": {
           "type": "string"
         }
-      }
+      },
+      "description": "SSOT 身份信息。该对象表示一个 canonical SRC，而非同一输入拆分出的多个并列 SRC 集合。"
     }
   }
 }
