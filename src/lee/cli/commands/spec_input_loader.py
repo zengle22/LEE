@@ -72,6 +72,24 @@ def load_spec_option_for_workflow(spec_path: str, entry: Dict[str, Any]) -> Dict
     candidate_params = set(entry.get("required_params", []) or [])
     candidate_params.update(entry.get("optional_params", []) or [])
 
+    ssot_adaptations = (
+        ("source_freeze", "source_freeze_ref", "src", "SRC", "product.src-to-epic"),
+        ("epic_freeze", "epic_freeze_ref", "epic", "EPIC", "product.epic-to-feat"),
+        ("feat_freeze", "feat_freeze_ref", "feat", "FEAT", "product.feat-to-delivery-prep"),
+    )
+    for primary_key, ref_key, ssot_type, label, workflow_name in ssot_adaptations:
+        freeze_payload = _build_frozen_ssot_input_payload(
+            path,
+            ssot_type=ssot_type,
+            label=label,
+            workflow_name=workflow_name,
+        )
+        if freeze_payload is not None and primary_key in candidate_params:
+            adapted = {primary_key: freeze_payload}
+            if ref_key in candidate_params or primary_key in candidate_params:
+                adapted[ref_key] = dict(freeze_payload)
+            return adapted
+
     adr_payload = _build_adr_input_payload(path)
     if adr_payload is not None:
         adapted: Dict[str, Any] = {}
@@ -86,6 +104,39 @@ def load_spec_option_for_workflow(spec_path: str, entry: Dict[str, Any]) -> Dict
         return {"raw_requirement": path.read_text(encoding="utf-8")}
 
     return {"spec": str(path)}
+
+
+def _build_frozen_ssot_input_payload(
+    path: Path,
+    *,
+    ssot_type: str,
+    label: str,
+    workflow_name: str,
+) -> Dict[str, Any] | None:
+    try:
+        front_matter, _ = parse_front_matter(path)
+    except Exception:
+        return None
+
+    actual_ssot_type = str(front_matter.get("ssot_type") or "").strip().lower()
+    if actual_ssot_type != ssot_type:
+        return None
+
+    status = str(front_matter.get("status") or "").strip().lower()
+    if status != "frozen":
+        raise click.ClickException(
+            f"{label} spec '{path}' is not frozen (status={status or 'unknown'}); "
+            f"{workflow_name} requires a frozen {label}."
+        )
+
+    artifact_id = str(front_matter.get("id") or path.stem.split("__", 1)[0]).strip()
+    if not artifact_id:
+        raise click.ClickException(f"{label} spec '{path}' is missing front matter field 'id'")
+
+    return {
+        "artifact_id": artifact_id,
+        "path": str(path),
+    }
 
 
 def _build_adr_input_payload(path: Path) -> Dict[str, Any] | None:

@@ -4,7 +4,12 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Mapping, Tuple
 
+from lee.orchestrator.execution.artifacts.placement import (
+    resolve_ssot_relative_dir,
+    resolve_transfer_package_relative_dir,
+)
 from lee.orchestrator.execution.artifacts.id_parser import parse_src_root
+from lee.orchestrator.execution.artifacts.types import SSOTType
 
 
 def resolve_registry_entry(
@@ -93,8 +98,12 @@ def _derive_tech_design_paths(formal_ssot_id: str, project_root: Path | None) ->
         return {}
 
     src_root = parse_src_root(formal_ssot_id) or "shared"
-    tech_root = Path("spec") / "tech" / src_root
-    bundle_root = Path("spec") / "tech" / formal_ssot_id
+    tech_root = resolve_ssot_relative_dir(
+        ssot_type=SSOTType.TECH,
+        parent_id=formal_ssot_id,
+        artifact_id=f"TECH-{formal_ssot_id}",
+    )
+    bundle_root = resolve_transfer_package_relative_dir("tech_design", formal_ssot_id)
 
     def _repo_path(path: Path) -> str:
         return path.as_posix()
@@ -103,6 +112,7 @@ def _derive_tech_design_paths(formal_ssot_id: str, project_root: Path | None) ->
         "tech_src_root": src_root,
         "tech_root_dir": _repo_path(tech_root),
         "tech_bundle_dir": _repo_path(bundle_root),
+        "frozen_architecture_path": _repo_path(bundle_root / "frozen-technical-architecture.yaml"),
         "design_analysis_path": _repo_path(bundle_root / "design_analysis.md"),
         "implementation_scope_path": _repo_path(bundle_root / "implementation_scope.md"),
         "decision_refs_path": _repo_path(bundle_root / "decision_refs.yaml"),
