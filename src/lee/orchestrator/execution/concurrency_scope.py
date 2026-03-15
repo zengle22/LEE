@@ -51,6 +51,12 @@ def _extract_path_token(value: Any) -> str | None:
     return None
 
 
+def _extract_string_token(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 def derive_concurrency_scope(
     workflow_key: str,
     params: Mapping[str, Any] | None,
@@ -109,6 +115,18 @@ def derive_concurrency_scope(
                 concurrency_scope=concurrency_scope,
                 concurrency_key=workflow_conflict_key(workflow_key, concurrency_scope),
                 scope_source="params.feat_freeze",
+            )
+        return _project_scope(project_root, workflow_key, fallback=True)
+
+    if workflow_key == "dev.tech-design-l3":
+        formal_ssot_id = _extract_string_token(params.get("formal_ssot_id"))
+        if formal_ssot_id:
+            concurrency_scope = f"tech:{formal_ssot_id}"
+            return ConcurrencyScopeInfo(
+                workflow_key=workflow_key,
+                concurrency_scope=concurrency_scope,
+                concurrency_key=workflow_conflict_key(workflow_key, concurrency_scope),
+                scope_source="params.formal_ssot_id",
             )
         return _project_scope(project_root, workflow_key, fallback=True)
 
