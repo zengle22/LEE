@@ -96,6 +96,36 @@ Apply the synchronized LEE safe coding guardrail for Claude Code coding tasks.
 - Structured candidate result package before completion claims
 - Independent supervisor-style PASS/REJECT/ESCALATE_TO_HUMAN closure decision
 
+### `/lee-product-main`
+Run the canonical product main pipeline.
+
+**File**: `lee-product-main.md`
+
+### `/lee-product-raw-to-src`
+Run the canonical product raw-to-src workflow.
+
+**File**: `lee-product-raw-to-src.md`
+
+### `/lee-product-src-to-epic`
+Run the canonical product src-to-epic workflow.
+
+**File**: `lee-product-src-to-epic.md`
+
+### `/lee-product-epic-to-feat`
+Run the canonical product epic-to-feat workflow.
+
+**File**: `lee-product-epic-to-feat.md`
+
+### `/lee-product-feat-to-delivery-prep`
+Run the canonical product feat-to-delivery-prep workflow.
+
+**File**: `lee-product-feat-to-delivery-prep.md`
+
+### `/lee-product-chain-validate`
+Run the canonical product requirement-chain-validation workflow.
+
+**File**: `lee-product-chain-validate.md`
+
 ## Creating New Commands
 
 To create a new slash command:
