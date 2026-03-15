@@ -98,3 +98,4 @@ tmp_*.md
 tmp_*.py
 vibe-kanban/
 .tmp*
+.claude/scheduled_tasks.lock
