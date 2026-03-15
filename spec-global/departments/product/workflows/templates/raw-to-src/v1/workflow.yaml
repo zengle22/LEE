@@ -74,6 +74,8 @@ stages:
         description: >
           将原始输入归一化为可审阅的 SRC candidate，
           提炼问题陈述、目标用户、触发场景、业务动因和关键约束。
+          若输入是需要桥接进入主链的 ADR，输出必须保持 thin SRC 语义，
+          并显式给出 `source_kind = governance_bridge_src` 与最小 `bridge_context`。
           输出必须保持与原始输入同题，不得把 intake 流程、schema 复用策略
           或工作流方法论本身改写成 SRC 正文主题。
         inputs:
@@ -138,6 +140,9 @@ stages:
             - label: "问题定义稳定"
               criteria: "问题陈述、目标用户、业务动因和关键约束完整"
               required: true
+            - label: "Bridge 语义完整"
+              criteria: "若为 ADR 桥接 thin SRC，则已显式记录 governed_by_adrs、change_scope、expected_downstream_objects、acceptance_impact 与 non_goals"
+              required: false
             - label: "可独立复用"
               criteria: "SRC 已具备独立 replay、单测和复用条件"
               required: true
@@ -170,6 +175,11 @@ constraints:
   semantic_fidelity_required: |
     生成的 SRC 必须保持与原始输入同题。
     不得将 intake、schema、复用策略、workflow 方法论或过程说明替代为源问题定义。
+
+  thin_src_bridge_required: |
+    若原始输入是会触发主链变化的 ADR，则输出必须是 governance_bridge_src 语义，
+    至少显式表达 governed_by_adrs、change_scope、expected_downstream_objects、
+    acceptance_impact 与 non_goals。
 
   src_root_scope_required: |
     source_freeze 完成后必须产出稳定的 src_root_id。

@@ -23,6 +23,8 @@ roles:
 
 overview:
   input_types:
+    - type: adr
+      description: 需要桥接进入需求链的治理 ADR
     - type: raw_requirement
       description: 原始需求描述
     - type: business_opportunity_freeze
@@ -75,6 +77,9 @@ phases:
     level: task
     workflow: workflow.product.task.feat_to_delivery_prep
     depends_on: [epic_to_feat]
+    output_map:
+      delivery_prep_bundle: "$child_data.step_outputs.delivery_prep_freeze"
+      delivery_prep_freeze_ref: "$child_data.step_outputs.delivery_prep_freeze.delivery_prep_freeze_ref"
 
   - id: requirement_chain_validation
     name: Requirement Chain Validation

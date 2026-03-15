@@ -42,6 +42,7 @@ policy:
       - "关键约束和不确定性显式化"
       - "输出主题与输入问题域同题"
       - "若输入是 ADR，提炼的是 ADR 触发的需求/范围变化，不是 ADR 文档治理过程本身"
+      - "若输入是进入主链的 ADR，输出应能支撑 thin SRC：至少明确 change_scope、预计下游对象、验收影响和非目标"
       - "不把 intake/schema/workflow 方法论当作输入本身的产品目标"
 
   refusal:

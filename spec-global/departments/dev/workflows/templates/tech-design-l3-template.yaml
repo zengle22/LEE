@@ -1,6 +1,6 @@
 # Migrated by lint_l3_templates.py on 2026-03-15T00:01:44.088873
 kind: l3_workflow_template
-version: '1.0'
+version: '2.0'
 id: template.dev.tech_design_l3
 name: Tech Design L3 Template
 description: 'Canonical L3 workflow for deriving TECH from a frozen feature source before
@@ -23,7 +23,22 @@ instance_schema:
   - id
   - template_id
   - parent_phase_id
-  - repo_id
+  - formal_ssot_id
+  - source_refs
+  - governing_adrs
+  - repo_context
+  optional_fields:
+  - formal_ssot_path
+  - governing_adr_paths
+  - tech_spec_path
+  - frozen_architecture_path
+  - design_analysis_path
+  - implementation_scope_path
+  - decision_refs_path
+  - review_result_path
+  - risk_register_path
+  - tech_package_path
+  - handoff_notes_path
   output_fields:
   - tech_spec_ref
   - decision_refs
@@ -42,9 +57,45 @@ stages:
     agent_id: agent.dev.tech_architect
     mandatory: true
     depends_on: []
+    config:
+      claude_code:
+        goal: |
+          Analyze the current frozen FEAT only and write the required analysis artifacts.
+          Formal FEAT ID: {{ params.formal_ssot_id }}.
+          Formal FEAT file: {{ params.formal_ssot_path | default('not provided') }}.
+          Governing ADRs: {{ params.governing_adrs | default([]) }}.
+          Formal SSOT must stay under spec/. Support artifacts must stay under {{ params.tech_bundle_dir }}.
+          Write:
+          - design analysis -> {{ params.design_analysis_path }}
+          - implementation scope -> {{ params.implementation_scope_path }}
+          Use only the provided FEAT and ADR context files as the authoritative inputs.
+          Do not reuse unrelated FEAT, TECH, or example artifacts from the repository.
+        context_files:
+          - "{{ params.formal_ssot_path | default('') }}"
+          - "{{ params.governing_adr_paths | default([]) }}"
+    inputs:
+      formal_ssot_id: "{{ params.formal_ssot_id }}"
+      source_refs: "{{ params.source_refs }}"
+      governing_adrs: "{{ params.governing_adrs | default([]) }}"
+      repo_context: "{{ params.repo_context | default({}) }}"
+      context_files:
+      - path: "{{ params.formal_ssot_path | default('') }}"
+        required: true
+      - path: "{{ (params.governing_adr_paths | default([]))[0] | default('') }}"
+        required: false
+      - path: "{{ (params.governing_adr_paths | default([]))[1] | default('') }}"
+        required: false
     outputs:
-    - design_analysis
-    - implementation_scope
+    - path: "{{ params.design_analysis_path }}"
+      type: file
+      format: markdown
+      description: "Feature-centric technical analysis"
+      required: true
+    - path: "{{ params.implementation_scope_path }}"
+      type: file
+      format: markdown
+      description: "Implementation scope and constraints"
+      required: true
   - id: draft_tech_spec
     name: Draft TECH Spec
     kind: agent
@@ -53,9 +104,54 @@ stages:
     mandatory: true
     depends_on:
     - analyze_feature
+    config:
+      claude_code:
+        goal: |
+          Draft the formal TECH SSOT for the current FEAT and write the decision companion file.
+          Formal FEAT ID: {{ params.formal_ssot_id }}.
+          Formal FEAT file: {{ params.formal_ssot_path | default('not provided') }}.
+          Target TECH markdown: {{ params.tech_spec_path }}.
+          Decision refs YAML: {{ params.decision_refs_path }}.
+          Support package directory: {{ params.tech_bundle_dir }}.
+          The TECH markdown must stay scoped to {{ params.formal_ssot_id }} and must not cite unrelated FEAT examples.
+          Write the TECH file as human-readable Markdown with YAML front matter and normal Markdown headings.
+          Do not wrap the whole TECH file in a fenced code block.
+          Do not dump the decision_refs YAML payload into the TECH markdown.
+          Put machine-readable decision reference data only in {{ params.decision_refs_path }}.
+          If you emit a machine-readable frozen architecture companion, write it only to {{ params.frozen_architecture_path }}.
+        context_files:
+          - "{{ params.formal_ssot_path | default('') }}"
+          - "{{ params.design_analysis_path }}"
+          - "{{ params.implementation_scope_path }}"
+          - "{{ params.governing_adr_paths | default([]) }}"
+    inputs:
+      formal_ssot_id: "{{ params.formal_ssot_id }}"
+      source_refs: "{{ params.source_refs }}"
+      design_analysis_path: "{{ params.design_analysis_path }}"
+      implementation_scope_path: "{{ params.implementation_scope_path }}"
+      context_files:
+      - path: "{{ params.formal_ssot_path | default('') }}"
+        required: true
+      - path: "{{ params.design_analysis_path }}"
+        required: true
+      - path: "{{ params.implementation_scope_path }}"
+        required: true
     outputs:
-    - tech_spec_ref
-    - decision_refs
+    - path: "{{ params.tech_spec_path }}"
+      type: file
+      format: markdown
+      description: "Formal TECH SSOT markdown"
+      required: true
+    - path: "{{ params.decision_refs_path }}"
+      type: file
+      format: yaml
+      description: "Decision references for the TECH package"
+      required: true
+    - path: "{{ params.frozen_architecture_path }}"
+      type: file
+      format: yaml
+      description: "Optional machine-readable TECH companion"
+      required: false
   - id: self_review
     name: Tech Self Review
     kind: agent
@@ -64,9 +160,43 @@ stages:
     mandatory: true
     depends_on:
     - draft_tech_spec
+    config:
+      claude_code:
+        goal: |
+          Review the just-written TECH package for internal consistency and delivery readiness.
+          Review only the current FEAT package for {{ params.formal_ssot_id }}.
+          Keep review outputs under {{ params.tech_bundle_dir }}. Do not create review artifacts under spec/.
+          Write:
+          - review result -> {{ params.review_result_path }}
+          - risk register -> {{ params.risk_register_path }}
+          If you find issues, keep them scoped to the current FEAT and TECH files.
+        context_files:
+          - "{{ params.tech_spec_path }}"
+          - "{{ params.decision_refs_path }}"
+          - "{{ params.formal_ssot_path | default('') }}"
+          - "{{ params.governing_adr_paths | default([]) }}"
+    inputs:
+      formal_ssot_id: "{{ params.formal_ssot_id }}"
+      tech_spec_path: "{{ params.tech_spec_path }}"
+      decision_refs_path: "{{ params.decision_refs_path }}"
+      context_files:
+      - path: "{{ params.tech_spec_path }}"
+        required: true
+      - path: "{{ params.decision_refs_path }}"
+        required: true
+      - path: "{{ params.formal_ssot_path | default('') }}"
+        required: true
     outputs:
-    - review_result
-    - risk_register_ref
+    - path: "{{ params.review_result_path }}"
+      type: file
+      format: markdown
+      description: "Self review findings"
+      required: true
+    - path: "{{ params.risk_register_path }}"
+      type: file
+      format: markdown
+      description: "Risk register for the TECH package"
+      required: true
   - id: publish_tech
     name: Publish TECH
     kind: agent
@@ -75,6 +205,48 @@ stages:
     mandatory: true
     depends_on:
     - self_review
+    config:
+      claude_code:
+        goal: |
+          Publish the TECH handoff package for the current FEAT only.
+          Confirm the package points to:
+          - TECH spec: {{ params.tech_spec_path }}
+          - decision refs: {{ params.decision_refs_path }}
+          - review result: {{ params.review_result_path }}
+          - risk register: {{ params.risk_register_path }}
+          Publish support artifacts only under {{ params.tech_bundle_dir }}.
+          Write:
+          - tech package manifest -> {{ params.tech_package_path }}
+          - handoff notes -> {{ params.handoff_notes_path }}
+        context_files:
+          - "{{ params.tech_spec_path }}"
+          - "{{ params.decision_refs_path }}"
+          - "{{ params.review_result_path }}"
+          - "{{ params.risk_register_path }}"
+          - "{{ params.governing_adr_paths | default([]) }}"
+    inputs:
+      formal_ssot_id: "{{ params.formal_ssot_id }}"
+      tech_spec_path: "{{ params.tech_spec_path }}"
+      decision_refs_path: "{{ params.decision_refs_path }}"
+      review_result_path: "{{ params.review_result_path }}"
+      risk_register_path: "{{ params.risk_register_path }}"
+      context_files:
+      - path: "{{ params.tech_spec_path }}"
+        required: true
+      - path: "{{ params.decision_refs_path }}"
+        required: true
+      - path: "{{ params.review_result_path }}"
+        required: true
+      - path: "{{ params.risk_register_path }}"
+        required: true
     outputs:
-    - tech_package_ref
-    - handoff_notes
+    - path: "{{ params.tech_package_path }}"
+      type: file
+      format: yaml
+      description: "TECH handoff package manifest"
+      required: true
+    - path: "{{ params.handoff_notes_path }}"
+      type: file
+      format: markdown
+      description: "TECH handoff notes"
+      required: true

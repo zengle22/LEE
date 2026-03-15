@@ -17,7 +17,7 @@ roles:
   agents:
     - agent.product.requirement_alignment
     - agent.product.epic_designer
-    - agent.review.requirement_reviewer
+    - agent.product.epic_reviewer
     - agent.governance.approval_reviewer
   skills: []
   gates:
@@ -111,7 +111,7 @@ stages:
       - id: epic_review
         name: EPIC 对齐评审
         kind: agent
-        agent_id: agent.review.requirement_reviewer
+        agent_id: agent.product.epic_reviewer
         mandatory: true
         depends_on: [epic_identity_prepare]
         description: >

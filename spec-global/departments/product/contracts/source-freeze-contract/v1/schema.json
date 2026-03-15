@@ -49,6 +49,59 @@
       },
       "description": "关键约束"
     },
+    "source_kind": {
+      "type": "string",
+      "enum": ["business_src", "governance_bridge_src"],
+      "description": "SRC 类型。普通业务入口使用 business_src；由 ADR 桥接进入主链的薄 SRC 使用 governance_bridge_src。"
+    },
+    "bridge_context": {
+      "type": "object",
+      "description": "当 source_kind = governance_bridge_src 时，用于表达最小桥接语义。",
+      "required": [
+        "governed_by_adrs",
+        "change_scope",
+        "expected_downstream_objects",
+        "acceptance_impact",
+        "non_goals"
+      ],
+      "properties": {
+        "governed_by_adrs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "触发该 thin SRC 的上游 ADR 引用。"
+        },
+        "change_scope": {
+          "type": "string",
+          "description": "该 ADR 触发的主链变化范围。"
+        },
+        "expected_downstream_objects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "预计将被创建或调整的下游对象类型。"
+        },
+        "acceptance_impact": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "本次桥接会影响的验收或交付边界。"
+        },
+        "non_goals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "明确排除在本次桥接范围外的内容。"
+        }
+      }
+    },
     "source_refs": {
       "type": "array",
       "items": {
@@ -90,5 +143,19 @@
       },
       "description": "SSOT 身份信息。该对象表示一个 canonical SRC，而非同一输入拆分出的多个并列 SRC 集合。"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source_kind": {
+            "const": "governance_bridge_src"
+          }
+        }
+      },
+      "then": {
+        "required": ["bridge_context"]
+      }
+    }
+  ]
 }

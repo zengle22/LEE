@@ -14,7 +14,6 @@ tags: [product, epic, ssot]
 contracts:
   input_schema: ../../../../departments/product/contracts/problem-definition/v1/schema.json
   output_schema: ../../../../departments/product/contracts/epic-contract/v1/schema.json
-  ssot_output_schema: ../../../../../core/contracts/ssot-agent-output/v1/schema.json
 
 persona:
   role: "资深产品战略与需求分层设计师"

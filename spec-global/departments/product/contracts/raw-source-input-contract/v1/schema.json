@@ -23,7 +23,7 @@
     },
     "input_type": {
       "type": "string",
-      "enum": ["one_liner", "article", "customer_request", "meeting_note", "idea", "other"],
+      "enum": ["one_liner", "article", "customer_request", "meeting_note", "idea", "adr_decision", "other"],
       "description": "输入类型"
     },
     "raw_content": {
