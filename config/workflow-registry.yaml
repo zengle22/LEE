@@ -78,6 +78,45 @@ workflows:
       - process_constraints
       - env_ref
 
+  dev.tech-design-l3:
+    path: spec-global/departments/dev/workflows/templates/tech-design-l3-template.yaml
+    kind: l3_workflow_template
+    description: "Dev canonical Tech Design 工作流 (L3) - FEAT -> TECH"
+    load_spec_as_params: true
+    required_params:
+      - formal_ssot_id
+      - source_refs
+      - governing_adrs
+      - repo_context
+    optional_params:
+      - acceptance_brief_ref
+      - decision_refs
+      - decision_constraints
+      - architecture_constraints
+      - process_constraints
+      - env_ref
+      - human_gate_required
+
+  dev.tech_design_l3:
+    path: spec-global/departments/dev/workflows/templates/tech-design-l3-template.yaml
+    canonical_workflow: dev.tech-design-l3
+    kind: l3_workflow_template
+    description: "Tech Design L3 兼容入口 -> canonical dev.tech-design-l3"
+    load_spec_as_params: true
+    required_params:
+      - formal_ssot_id
+      - source_refs
+      - governing_adrs
+      - repo_context
+    optional_params:
+      - acceptance_brief_ref
+      - decision_refs
+      - decision_constraints
+      - architecture_constraints
+      - process_constraints
+      - env_ref
+      - human_gate_required
+
   dev.bugfix:
     path: spec-global/departments/dev/workflows/templates/bugfix-delivery-l2-template.yaml
     canonical_workflow: dev.bugfix-delivery
@@ -166,6 +205,7 @@ workflows:
     load_spec_as_params: true
     required_params: []
     optional_params:
+      - adr
       - raw_requirement
       - business_opportunity_freeze
 
@@ -176,6 +216,7 @@ workflows:
     load_spec_as_params: true
     required_params: []
     optional_params:
+      - adr
       - raw_requirement
       - business_opportunity
       - business_opportunity_freeze
