@@ -51,8 +51,71 @@ def _seed_valid_chain(project_root: Path) -> None:
     )
 
 
+def _seed_execution_prerequisites(
+    project_root: Path,
+    *,
+    environment: str = "staging",
+    test_set_ids: tuple[str, ...] = ("TESTSET-FEAT-143",),
+) -> None:
+    lee_dir = project_root / ".lee"
+    lee_dir.mkdir(parents=True, exist_ok=True)
+    (lee_dir / "repos.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "version": "1.0",
+                "repos": {
+                    "frontend": {"path": "./.", "type": "frontend"},
+                    "backend": {"path": "./.", "type": "backend"},
+                },
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    sut_path = project_root / "tests" / "runtime" / environment / "sut.yaml"
+    sut_path.parent.mkdir(parents=True, exist_ok=True)
+    sut_path.write_text(
+        yaml.safe_dump(
+            {
+                "template_status": "ready",
+                "sut_type": "web",
+                "name": f"{environment}-sut",
+                "base_url": "https://staging.example.test",
+                "base_path": "",
+                "protocol": "https",
+                "enabled": True,
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    test_set_dir = project_root / "spec" / "qa" / "test-sets"
+    test_set_dir.mkdir(parents=True, exist_ok=True)
+    for test_set_id in test_set_ids:
+        test_set_path = test_set_dir / f"ts-{test_set_id.lower().replace('_', '-')}.yaml"
+        test_set_path.write_text(
+            yaml.safe_dump(
+                {
+                    "test_set_id": test_set_id,
+                    "module": "feat-143",
+                    "title": "QA regression set",
+                    "status": "ready",
+                    "cases": [{"case_id": "CASE-001", "title": "smoke"}],
+                },
+                allow_unicode=True,
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+
 def test_execute_command_accepts_valid_taskplan_task(tmp_path: Path, monkeypatch):
     _seed_valid_chain(tmp_path)
+    _seed_execution_prerequisites(tmp_path)
     runner = CliRunner()
     calls = []
 
@@ -166,6 +229,7 @@ def test_execute_command_reports_chain_validation_error_code(tmp_path: Path):
 
 def test_execute_command_respects_max_steps(tmp_path: Path, monkeypatch):
     _seed_valid_chain(tmp_path)
+    _seed_execution_prerequisites(tmp_path)
     runner = CliRunner()
     calls = []
 
@@ -199,6 +263,7 @@ def test_execute_command_respects_max_steps(tmp_path: Path, monkeypatch):
 
 def test_execute_command_renders_l2_workflow_with_canonical_tail_phases(tmp_path: Path, monkeypatch):
     _seed_valid_chain(tmp_path)
+    _seed_execution_prerequisites(tmp_path)
     runner = CliRunner()
     calls = []
 
@@ -245,6 +310,7 @@ def test_execute_command_renders_l2_workflow_with_canonical_tail_phases(tmp_path
 
 def test_audit_log_command_reads_written_entries(tmp_path: Path):
     _seed_valid_chain(tmp_path)
+    _seed_execution_prerequisites(tmp_path)
     runner = CliRunner()
     execute_result = runner.invoke(
         qa,
@@ -279,6 +345,7 @@ def test_audit_log_command_reads_written_entries(tmp_path: Path):
 
 def test_execute_command_creates_real_workflow_instance(tmp_path: Path):
     _seed_valid_chain(tmp_path)
+    _seed_execution_prerequisites(tmp_path)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -335,6 +402,7 @@ def test_execute_command_creates_real_workflow_instance(tmp_path: Path):
 
 def test_audit_log_command_filters_by_release(tmp_path: Path):
     _seed_valid_chain(tmp_path)
+    _seed_execution_prerequisites(tmp_path)
     runner = CliRunner()
     runner.invoke(
         qa,
@@ -366,6 +434,7 @@ def test_audit_log_command_filters_by_release(tmp_path: Path):
 
 def test_execute_command_advances_to_qa_l3_spawn_state(tmp_path: Path):
     _seed_valid_chain(tmp_path)
+    _seed_execution_prerequisites(tmp_path)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -397,7 +466,34 @@ def test_execute_command_advances_to_qa_l3_spawn_state(tmp_path: Path):
     test_set_phase = next(phase for phase in state["data"]["phases"] if phase["id"] == "test_set_execution")
     assert test_set_phase["status"] == "running"
     assert len(test_set_phase["l3_instance_ids"]) == 1
+    assert test_set_phase["l3_template_id"] == "template.qa.test_set_execute"
     assert state["children"] == test_set_phase["l3_instance_ids"]
+
+
+def test_execute_command_blocks_on_missing_prerequisites_and_generates_templates(tmp_path: Path):
+    _seed_valid_chain(tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        qa,
+        [
+            "execute",
+            "TASK-TESTPLAN-REL-1.4.0-001",
+            "--project-dir",
+            str(tmp_path),
+            "--triggered-by",
+            "qa-user",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "status=BLOCKED error_code=QA-PREFLIGHT-001" in result.output
+    assert "[repo_registry]" in result.output
+    assert "[sut_config]" in result.output
+    assert "[test_set]" in result.output
+    assert (tmp_path / ".lee" / "repos.yaml").exists()
+    assert (tmp_path / "tests" / "runtime" / "staging" / "sut.yaml").exists()
+    assert (tmp_path / "spec" / "qa" / "test-sets" / "ts-testset-feat-143.yaml").exists()
 
 
 def test_legacy_test_run_entry_is_blocked():

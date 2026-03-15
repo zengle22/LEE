@@ -11,6 +11,7 @@ from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.execution.artifacts.manager import ArtifactManager
 from lee.orchestrator.execution.workflow_runner import derive_workflow_creation_metadata
 from lee.qa import AuditLogger, ChainValidator, EntryRouter, EntrySource, ExecutionRequest
+from lee.qa.preflight import run_execution_preflight
 from lee.qa.workflow_launch import (
     build_test_plan_execution_params,
     render_test_plan_execution_template,
@@ -77,14 +78,26 @@ def execute(task_ref: str, triggered_by: str, entry_source: str, project_dir: st
         )
     )
 
-    click.echo(_phase_line(1, 7, "request parsed", "pass"))
+    click.echo(_phase_line(1, 8, "request parsed", "pass"))
     if response.success:
-        click.echo(_phase_line(2, 7, "bypass check passed", "pass"))
-        click.echo(_phase_line(3, 7, "chain validation passed", "pass"))
-        click.echo(_phase_line(4, 7, f"audit logged: {response.audit_log_ref or 'N/A'}", "pass"))
+        click.echo(_phase_line(2, 8, "bypass check passed", "pass"))
+        click.echo(_phase_line(3, 8, "chain validation passed", "pass"))
+        click.echo(_phase_line(4, 8, f"audit logged: {response.audit_log_ref or 'N/A'}", "pass"))
         params = build_test_plan_execution_params(_, response.path.task_ref or task_ref)
+        preflight = run_execution_preflight(project_root, params)
+        if not preflight.ok:
+            click.echo(_phase_line(5, 8, f"execution prerequisites blocked ({len(preflight.issues)} item(s) need input)", "fail"))
+            click.echo("status=BLOCKED error_code=QA-PREFLIGHT-001")
+            for issue in preflight.issues:
+                created_label = "已生成" if issue.created else "待补全"
+                click.echo(f"- [{issue.kind}] {issue.message} ({created_label})")
+                click.echo(f"  path={issue.path}")
+                click.echo(f"  next={issue.action_hint}")
+            click.echo(f"请补全上述文件后重试: lee qa execute {task_ref}")
+            raise click.exceptions.Exit(1)
         rendered_path = render_test_plan_execution_template(project_root, params)
-        click.echo(_phase_line(5, 7, f"workflow template rendered: {rendered_path.name}", "pass"))
+        click.echo(_phase_line(5, 8, "execution prerequisites ready", "pass"))
+        click.echo(_phase_line(6, 8, f"workflow template rendered: {rendered_path.name}", "pass"))
 
         workflow_data = {
             "params": params,
@@ -110,7 +123,7 @@ def execute(task_ref: str, triggered_by: str, entry_source: str, project_dir: st
         workflow_id = create_result.get("workflow_id")
         if not workflow_id:
             raise click.ClickException(f"Workflow creation failed: {create_result}")
-        click.echo(_phase_line(6, 7, f"workflow created: {workflow_id}", "pass"))
+        click.echo(_phase_line(7, 8, f"workflow created: {workflow_id}", "pass"))
 
         summary = pm_workflow(
             "run_until_blocked",
@@ -122,18 +135,18 @@ def execute(task_ref: str, triggered_by: str, entry_source: str, project_dir: st
             raise click.ClickException(str(summary["error"]))
         summary_status = str(summary.get("status", "unknown")).lower()
         if summary_status == "failed":
-            click.echo(_phase_line(7, 7, "execution advanced: failed", "fail"))
+            click.echo(_phase_line(8, 8, "execution advanced: failed", "fail"))
             click.echo(f"status=FAILED task_ref={response.path.task_ref}")
             click.echo(f"testplan_ref={response.path.testplan_ref} release_ref={response.path.release_ref}")
             click.echo(f"workflow_id={workflow_id}")
             raise click.ClickException(str(summary.get("blocked_at") or "workflow execution failed"))
-        click.echo(_phase_line(7, 7, f"execution advanced: {summary.get('status', 'unknown')}", "pass"))
+        click.echo(_phase_line(8, 8, f"execution advanced: {summary.get('status', 'unknown')}", "pass"))
         click.echo(f"status={summary.get('status', 'unknown').upper()} task_ref={response.path.task_ref}")
         click.echo(f"testplan_ref={response.path.testplan_ref} release_ref={response.path.release_ref}")
         click.echo(f"workflow_id={workflow_id}")
         return
 
-    click.echo(_phase_line(2, 7, "entry blocked", "fail"))
+    click.echo(_phase_line(2, 8, "entry blocked", "fail"))
     click.echo(f"status=BLOCKED error_code={response.error_code.value if response.error_code else 'N/A'}")
     click.echo(response.error_message or "request blocked")
     raise click.exceptions.Exit(1)

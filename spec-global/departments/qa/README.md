@@ -28,6 +28,30 @@
 
 这是一个**工程化的多轮循环测试框架**，支持从需求分析到出测发布的完整测试生命周期管理。
 
+### 当前 CLI 入口与 L2/L3 分工
+
+当前 QA 部门实现已经收口到 canonical 执行入口：
+
+```bash
+lee qa execute TASK-TESTPLAN-REL-1.4.0-001 --project-dir .
+```
+
+请注意：
+
+- `lee qa execute` 是正式执行入口，要求输入是 `TASK-TESTPLAN-REL-*`。
+- `lee qa run`、`lee qa test-run start`、`lee qa test-set run` 已被 FEAT-143 收紧，不再作为推荐执行入口。
+- `lee qa execute` 在创建 L2 前会先做 preflight；缺少 `repos.yaml`、SUT 配置或 Test Set 资产时，会先生成模板文件并阻断执行，等待人工补全。
+- QA L2 使用 `test-plan-l2-template.yaml`，负责 Test Run 初始化、环境准备、L3 调度、汇总、出测评估、复盘。
+- QA L3 分为两类：
+  - `test-set-production`：生成 Test Set 设计资产
+  - `test-set-execute`：执行单个 Test Set
+
+详细命令、使用指南、限制和 demo 见：
+
+- `docs/qa/qa-l2-l3-cli-guide.md`
+- `docs/qa/qa-execution-prerequisites.md`
+- `docs/qa/qa-l3-template-resolution-tech-debt.md`
+
 ### 核心特性
 
 ✅ **双流程架构**
