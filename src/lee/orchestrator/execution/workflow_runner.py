@@ -30,6 +30,7 @@ from lee.orchestrator.execution.llm_executor import LLMExecutor
 from lee.orchestrator.execution.review_gate import ReviewGate, check_review_gate
 from lee.orchestrator.execution.concurrency_scope import derive_concurrency_scope
 from lee.orchestrator.storage.models import WorkflowLevel
+from lee.orchestrator.execution.workflow_bootstrap import hydrate_l2_bootstrap
 
 
 def derive_workflow_creation_metadata(instance_path: Path) -> Tuple[WorkflowLevel, Dict[str, Any]]:
@@ -64,6 +65,8 @@ def derive_workflow_creation_metadata(instance_path: Path) -> Tuple[WorkflowLeve
                 "depends_on": phase.get("depends_on", []),
                 "workflow": phase.get("workflow"),
                 "level": phase.get("level"),
+                "spawns_l3": phase.get("spawns_l3", False),
+                "l3_template_id": phase.get("l3_template_id"),
                 "l3_instance_ids": [],
             })
         return WorkflowLevel.DEPARTMENT, {
@@ -385,6 +388,8 @@ class WorkflowRunner:
         """创建工作流实例"""
         pm_workflow = _get_pm_workflow()
         workflow_level, extra_data = self._derive_workflow_creation_metadata(instance_path)
+        if workflow_level == WorkflowLevel.DEPARTMENT:
+            extra_data = hydrate_l2_bootstrap(extra_data, self.config.params)
         scope_info = derive_concurrency_scope(
             self.config.workflow_key,
             self.config.params,
@@ -455,6 +460,7 @@ async def run_workflow(
     instance_id: Optional[str] = None,
     ssot_root_id: Optional[str] = None,
     executor_override: Optional[str] = None,
+    executor_selection_source: Optional[str] = None,
 ) -> WorkflowRunResult:
     """
     便捷函数：运行工作流
@@ -482,6 +488,7 @@ async def run_workflow(
         instance_id=instance_id,
         ssot_root_id=ssot_root_id,
         executor_override=executor_override,
+        executor_selection_source=executor_selection_source,
     )
 
     runner = WorkflowRunner(config)

@@ -16,6 +16,7 @@ import click
 import yaml
 
 from lee.cli.commands.workflow_registry import load_workflow_registry, resolve_workflow_template_path
+from lee.cli.commands.workflow_compat import adapt_params_for_workflow, resolve_registry_entry
 from lee.orchestrator.config import ConfigResolver
 from lee.orchestrator.config_loader import load_config
 from lee.orchestrator.api import pm_workflow
@@ -29,6 +30,7 @@ from lee.orchestrator.execution.concurrency_scope import (
     derive_concurrency_scope,
     describe_conflict_scope,
 )
+from lee.orchestrator.execution.workflow_bootstrap import hydrate_l2_bootstrap
 
 try:
     import fcntl
@@ -841,8 +843,8 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
     if workflow_key not in workflows:
         raise click.ClickException(f"Unknown workflow: {workflow_key}")
 
-    entry = workflows[workflow_key]
-    template_path = resolve_workflow_template_path(entry.get("path", ""))
+    effective_workflow_key, entry, effective_entry = resolve_registry_entry(workflows, workflow_key)
+    template_path = resolve_workflow_template_path(effective_entry.get("path", ""))
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
@@ -856,6 +858,8 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
     if branch:
         params["branch"] = branch
 
+    params = adapt_params_for_workflow(workflow_key, params, project_root=Path(project_dir).resolve())
+
     # 为未显式传入的参数填充模板默认值，避免渲染为空字符串。
     default_params = _load_template_param_defaults(template_path)
     for k, v in default_params.items():
@@ -866,8 +870,16 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
     if missing:
         raise click.ClickException(f"Missing required params: {', '.join(missing)}")
 
+    effective_required = effective_entry.get("required_params", []) or []
+    effective_missing = [p for p in effective_required if not _has_param_with_aliases(params, p)]
+    if effective_missing:
+        raise click.ClickException(
+            f"Missing canonical params after adapting '{workflow_key}' -> '{effective_workflow_key}': "
+            f"{', '.join(effective_missing)}"
+        )
+
     project_root = Path(project_dir).resolve()
-    scope_info = derive_concurrency_scope(workflow_key, params, project_root)
+    scope_info = derive_concurrency_scope(effective_workflow_key, params, project_root)
     config = load_config(str(project_root))
     executor_resolution = ConfigResolver(project_root=project_root, config=config).resolve(
         cli_executor=executor,
@@ -919,7 +931,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
 
         existing = _list_conflicting_workflows(
             project_root,
-            workflow_key,
+            effective_workflow_key,
             scope_info.concurrency_scope,
         )
         if existing:
@@ -966,7 +978,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             click.echo(f"[Plan Mode] 生成执行计划...")
 
             result = asyncio.run(run_workflow(
-                workflow_key=workflow_key,
+                workflow_key=effective_workflow_key,
                 template_path=template_path,
                 params=params,
                 project_root=project_root,
@@ -1012,12 +1024,15 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         rendered_path = _render_workflow_template(template_path, params, project_root)
 
         workflow_level, workflow_bootstrap = _derive_workflow_creation_metadata(rendered_path)
+        if workflow_level == WorkflowLevel.DEPARTMENT:
+            workflow_bootstrap = hydrate_l2_bootstrap(workflow_bootstrap, params)
 
         # Create workflow instance
         # 如果指定了 executor override，将其加入 data 中传递给 workflow
         workflow_data: Dict[str, Any] = {
             "params": params,
-            "workflow_key": workflow_key,
+            "workflow_key": effective_workflow_key,
+            "invoked_workflow_key": workflow_key,
             "concurrency_scope": scope_info.concurrency_scope,
             "concurrency_key": scope_info.concurrency_key,
             "scope_source": scope_info.scope_source,

@@ -44,9 +44,10 @@ workflows:
 
   # ========== Dev 工作流 ==========
   dev.feature:
-    path: spec-global/departments/dev/workflows/templates/feature-l2-template.yaml
+    path: spec-global/departments/dev/workflows/templates/feature-delivery-l2-template.yaml
+    canonical_workflow: dev.feature-delivery
     kind: l2_workflow_template
-    description: "特性开发工作流 (L2)"
+    description: "特性开发工作流兼容入口 (L2) -> canonical dev.feature-delivery"
     required_params:
       - project
       - module
@@ -55,11 +56,33 @@ workflows:
       - feature_spec
       - repo_frontend
       - repo_backend
+      - branch
+
+  dev.feature-delivery:
+    path: spec-global/departments/dev/workflows/templates/feature-delivery-l2-template.yaml
+    kind: l2_workflow_template
+    description: "Dev canonical Feature Delivery 工作流 (L2) - FEAT -> TECH -> CONTRACT -> FE/BE -> INTEGRATION -> EVIDENCE -> SMOKE"
+    required_params:
+      - formal_ssot_id
+      - source_refs
+      - governing_adrs
+      - repo_context
+      - repo_frontend
+      - repo_backend
+    optional_params:
+      - task_refs
+      - acceptance_brief_ref
+      - decision_refs
+      - decision_constraints
+      - architecture_constraints
+      - process_constraints
+      - env_ref
 
   dev.bugfix:
-    path: spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml
-    kind: l3_workflow_template
-    description: "Bug 修复工作流 (L3) - 单个 Bug 的完整修复流程"
+    path: spec-global/departments/dev/workflows/templates/bugfix-delivery-l2-template.yaml
+    canonical_workflow: dev.bugfix-delivery
+    kind: l2_workflow_template
+    description: "Bug 修复工作流兼容入口 -> canonical dev.bugfix-delivery"
     required_params:
       - bug_id
       - bug_description
@@ -69,6 +92,23 @@ workflows:
       - reproduction_steps
       - severity
       - assignee
+
+  dev.bugfix-delivery:
+    path: spec-global/departments/dev/workflows/templates/bugfix-delivery-l2-template.yaml
+    kind: l2_workflow_template
+    description: "Dev canonical Bugfix Delivery 工作流 (L2) - TRIAGE -> RCA -> FIX -> VERIFY -> EVIDENCE -> MERGE"
+    required_params:
+      - bug_ssot_id
+      - severity
+      - reproduction_evidence
+    optional_params:
+      - source_refs
+      - repo_context
+      - test_case_refs
+      - batch_mode
+      - batch_context
+      - batch_approval_record
+      - repo
 
   devops.deploy:
     path: spec-global/departments/devops/workflows/deploy/v1/workflow.yaml
