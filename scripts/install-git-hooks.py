@@ -106,9 +106,8 @@ exit_code=$?
 # 如果检查失败，阻止操作
 if [ $exit_code -ne 0 ]; then
     echo ""
-    echo "💡 提示：可以使用 --no-verify 跳过 hooks（不推荐）"
-    echo "   git commit --no-verify"
-    echo "   git push --no-verify"
+    echo "🚫 本仓库禁止通过跳过本地 hooks 来绕过检查。"
+    echo "   请先修复本地检查失败项，再重新执行 Git 操作。"
     exit $exit_code
 fi
 '''
@@ -193,9 +192,9 @@ def install_all() -> bool:
         print("   - push 时自动检查 L3 模板规范")
         print("   - push 时若涉及 SSOT 文件/实现，会自动跑 SSOT lint 和 RELEASE gate")
         print()
-        print("🚫 临时跳过 hooks（不推荐）:")
-        print("   git commit --no-verify")
-        print("   git push --no-verify")
+        print("🚫 仓库约束:")
+        print("   - 不要使用 --no-verify 跳过本地 hooks")
+        print("   - 检查失败后应先在本地修复，再重新 commit / push")
     else:
         print("❌ 部分 hooks 安装失败")
     

@@ -41,12 +41,18 @@ python scripts/install-git-hooks.py --uninstall
 | pre-commit | `git commit` 时 | 硬编码路径检测 |
 | pre-push | `git push` 时 | L3 模板 Lint 检查 |
 
-### 临时跳过 Hooks（不推荐）
+### Hook 失败处理
 
 ```bash
-git commit --no-verify
-git push --no-verify
+# 先修复本地检查失败项，再重新执行
+git commit
+git push
 ```
+
+本仓库约束：
+
+- 不要使用 `--no-verify` 跳过本地 hooks
+- 本地校验失败时，先修复再提交/推送
 
 ## 方式二：阿里云 Flow CI/CD
 
