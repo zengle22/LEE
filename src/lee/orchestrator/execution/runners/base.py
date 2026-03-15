@@ -241,6 +241,14 @@ class StepRunnerBase(StepRunnerStrategy):
             execution_config = config.get("execution", {})
             schema_path = execution_config.get("output_contract") if isinstance(execution_config, dict) else None
         if not schema_path:
+            for output_spec in getattr(step, "outputs", []) or []:
+                if hasattr(output_spec, "contract"):
+                    schema_path = getattr(output_spec, "contract", None)
+                elif isinstance(output_spec, dict):
+                    schema_path = output_spec.get("contract")
+                if schema_path:
+                    break
+        if not schema_path:
             return None
 
         try:
