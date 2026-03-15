@@ -59,6 +59,10 @@ phases:
     level: task
     workflow: workflow.product.task.src_to_epic
     depends_on: [raw_to_src]
+    input_map:
+      source_freeze: "$params.source_freeze"
+      source_freeze_ref: "$params.source_freeze_ref"
+      src_root_id: "$params.src_root_id"
     output_map:
       epic_freeze: "$child_data.step_outputs.epic_freeze"
       epic_freeze_ref: "$child_data.step_outputs.epic_freeze.epic_freeze_ref"
