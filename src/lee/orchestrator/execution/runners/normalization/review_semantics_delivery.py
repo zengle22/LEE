@@ -305,7 +305,7 @@ class DeliveryPlanReviewSemantics:
 
         findings = [item.strip() for item in review_payload.get("findings") or [] if isinstance(item, str) and item.strip()]
         if decision == "pass":
-            if findings:
+            if findings and not all(cls.contains_false_positive(item) for item in findings):
                 return "Delivery plan review output with decision=pass must not include findings"
             if runner_cls._contains_feat_review_negative_signal(summary):
                 return "Delivery plan review summary conflicts with decision=pass"

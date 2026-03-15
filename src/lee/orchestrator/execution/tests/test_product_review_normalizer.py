@@ -241,3 +241,24 @@ def test_delivery_plan_subject_ref_validation_tolerates_task_only_refs_before_no
     )
 
     assert error is None
+
+
+def test_delivery_plan_validation_accepts_pass_with_positive_only_findings():
+    error = LLMRunner._validate_delivery_plan_review_semantics(
+        project_root="E:/ai/LEE",
+        review_payload={
+            "review_type": "delivery_plan_review",
+            "decision": "pass",
+            "subject_refs": ["FEAT-101"],
+            "summary": "ok",
+            "findings": [
+                "All TASKs contain required fields.",
+                "resource_allocation is defined.",
+            ],
+            "risks": [],
+            "recommendations": [],
+        },
+        instance_data=None,
+    )
+
+    assert error is None
