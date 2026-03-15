@@ -104,7 +104,11 @@ class ReviewSemanticValidator:
 
         findings = review_payload.get("findings") or []
         if decision == "pass":
-            if findings:
+            if findings and any(
+                runner_cls._contains_feat_review_negative_signal(item)
+                for item in findings
+                if isinstance(item, str) and item.strip()
+            ):
                 return "FEAT review output with decision=pass must not include findings"
             if runner_cls._contains_feat_review_negative_signal(summary):
                 return "FEAT review summary conflicts with decision=pass"

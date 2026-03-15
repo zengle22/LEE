@@ -171,9 +171,30 @@ class SingleSSOTNormalizer:
             normalized_business["ssot"] = normalized_ssot
             if source_refs:
                 normalized_business["source_refs"] = source_refs
-            return normalized_business, runner_cls._ensure_structured_envelope(
+            payload = runner_cls._ensure_structured_envelope(
                 business_output=normalized_business,
                 structured_payload=structured_payload,
             )
+            formal_epic_id = normalized_business.get("epic_id")
+            if not (
+                isinstance(formal_epic_id, str)
+                and runner_cls._is_literal_ssot_ref(formal_epic_id)
+            ):
+                output_item = {
+                    "key": "epic",
+                    "identity_kind": "ssot",
+                    "ssot_type": "epic",
+                    "title": str(normalized_business.get("title") or step_id or "Untitled Epic").strip() or "Untitled Epic",
+                    "source_refs": source_refs,
+                }
+                normalized_derived_from = normalized_business.get("ssot", {}).get("derived_from")
+                if isinstance(normalized_derived_from, str) and runner_cls._is_literal_ssot_ref(normalized_derived_from):
+                    output_item["derived_from"] = [normalized_derived_from]
+                payload["ssot_output_contract"] = {
+                    "contract_version": "1.0",
+                    "run_id": workflow_id,
+                    "outputs": [output_item],
+                }
+            return normalized_business, payload
 
         return business_output, structured_payload

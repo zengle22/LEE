@@ -1,5 +1,11 @@
 """Normalization helpers for runner output handling."""
 
+from .feat_payload_semantics import (
+    align_inputs_with_required_artifacts,
+    align_required_artifacts,
+    refine_acceptance_checks,
+    refine_feat_outputs,
+)
 from .models import ExtractionResult, NormalizationContext, NormalizedPayload
 from .output_extraction import OutputExtractor
 from .pm_planner_task import PmPlannerTaskNormalizer
@@ -15,6 +21,10 @@ __all__ = [
     "ExtractionResult",
     "NormalizationContext",
     "NormalizedPayload",
+    "align_inputs_with_required_artifacts",
+    "align_required_artifacts",
+    "refine_acceptance_checks",
+    "refine_feat_outputs",
     "OutputExtractor",
     "PmPlannerTaskNormalizer",
     "PrdWriterFeatNormalizer",
