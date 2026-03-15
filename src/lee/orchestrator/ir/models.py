@@ -350,6 +350,10 @@ class StepOutputIR:
     required: bool = True
     description: Optional[str] = None
     include: Optional[List[Dict[str, str]]] = None  # 包含的字段
+    symbol: Optional[str] = None
+    contract: Optional[str] = None
+    freeze: bool = False
+    ssot: Optional[Dict[str, Any]] = None
 
 
 @dataclass
