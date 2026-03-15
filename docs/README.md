@@ -6,6 +6,7 @@
 
 ## Subdirectories
 
+- `business/`
 - `guides/`
 - `reports/`
 - `archive/`

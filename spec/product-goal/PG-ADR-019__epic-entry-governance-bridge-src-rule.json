@@ -1,0 +1,142 @@
+{
+  "contract_type": "product-goal-contract",
+  "contract_version": "1.0.0",
+  "contract_info": {
+    "contract_id": "PG-ADR-019",
+    "title": "EPIC 入口统一经 SRC 及 ADR 桥接薄 SRC 规则",
+    "version": "v1",
+    "created_at": "2026-03-15T00:00:00Z",
+    "updated_at": "2026-03-15T00:00:00Z",
+    "status": "DRAFT",
+    "source_adr": "ADR-019",
+    "owner": "governance"
+  },
+  "requirement_overview": {
+    "description": "建立 ADR 到业务主链的正式桥接规则，确保所有正式 EPIC 必须经由至少一个冻结后的 SRC 进入主链，同时明确 ADR 桥接 SRC 的边界条件，避免治理决策污染业务链或绕过 SSOT 设计。",
+    "target_users": "产品治理团队、产品架构师、工作流设计者、EPIC/SRC 设计师",
+    "context": "ADR-003 已冻结产品主链 (raw input -> SRC -> EPIC -> FEAT -> UI/TECH/TASK)，ADR-012 将产品前半链分为 raw_to_src 和 src_to_epic。但在实际治理讨论中，需要明确当 ADR 触发下游业务变更时应如何正确桥接到业务主链，避免两种错误做法：(1) ADR 直接充当 EPIC 的 source object，(2) 要求所有 ADR 无差别地产生业务链对象。",
+    "expected_timeline": "治理规则立即生效，后续 follow-up 工作包括 SRC 分类语义设计、EPIC 校验增强、workflow 入口适配等"
+  },
+  "key_designs": {
+    "core_goal": {
+      "primary_goal": {
+        "description": "建立 ADR 桥接 SRC 的正式规则，确保 EPIC 入口统一经由 SRC，同时避免治理污染或 SSOT 设计冲突",
+        "rationale": "解决三种问题：(1) 直接 ADR->EPIC 与 ADR-003 冲突，(2) 每个 ADR 都产生 SRC 导致治理污染，(3) 缺少正式的桥接模式定义",
+        "metrics": "所有新 EPIC 必须能追溯到至少一个冻结 SRC；桥接 SRC 正确分类治理驱动与业务驱动来源；历史 EPIC 迁移决策完成",
+        "success_criteria": "新产生的正式 EPIC 不再出现只引用 ADR 未引用 SRC 的模式；桥接 SRC 有明确的 source_kind 标识和 machine-readable 追溯关系"
+      }
+    },
+    "value_chain": {
+      "user_need": {
+        "description": "产品治理团队需要明确的规则来判断哪些 ADR 需要桥接 SRC，哪些不需要",
+        "validation": "ADR-019 正文提供明确的判断条件和示例"
+      },
+      "product_feature": {
+        "description": "桥接 SRC 作为主链入口对象，保留 ADR->SRC->EPIC 的稳定追溯关系",
+        "validation": "后续 contract 变更将增加 source_kind: governance_bridge_src 等字段"
+      },
+      "direct_value": {
+        "description": "维护 SSOT 设计一致性，避免业务来源与治理来源混淆",
+        "validation": "EPIC validator 增加必须引用 SRC 的硬校验"
+      },
+      "business_impact": {
+        "description": "确保正式交付轴的对象链完整性，RELEASE 必须 pin 住可追溯的 FEAT scope",
+        "validation": "FEAT/RELEASE validator 增加治理驱动交付也必须落为可 pin 的 FEAT 校验"
+      },
+      "strategic_significance": {
+        "description": "巩固产品前半链 (raw_to_src, src_to_epic) 的治理边界，为后续 workflow/contract 变更提供明确的决策输入",
+        "validation": "后续派生工作包括 SRC 分类语义、EPIC 校验、workflow 入口、review checklist、历史 EPIC 迁移"
+      }
+    },
+    "priority": {
+      "scores": {
+        "user_value": "8",
+        "industry": "7",
+        "efficiency": "9",
+        "cost": "6",
+        "overall": "8"
+      },
+      "recommendation": {
+        "priority_level": "高优先级 - 治理基础规则",
+        "suggested_timeline": "治理规则立即生效，follow-up 工作建议在 2 周内完成",
+        "resource_estimate": "产品治理团队主导，需架构师配合 design contract 变更和 validator 增强",
+        "rationale": "该规则是产品前半链治理的基础设施，影响所有后续 EPIC 入口设计和历史 EPIC 的治理合规性"
+      }
+    },
+    "risks_and_boundaries": {
+      "risks": [
+        "历史 EPIC 只引用 ADR 未引用 SRC，需要决定迁移策略或兼容处理",
+        "bridge SRC 的 schema 字段名未冻结，后续 contract 变更可能引入不兼容",
+        "团队可能误解桥接 SRC 的定位，试图用 SRC 替代 ADR 或反之"
+      ],
+      "in_scope": [
+        "EPIC 入口必须经由冻结 SRC 的规则",
+        "ADR 桥接 SRC 的判断条件（触发新 EPIC/FEAT 范围设计、触发下游实施计划、形成新验收对象链）",
+        "不需要桥接 SRC 的 ADR 类型（纯治理说明、纯 review/approval 策略调整、局部约束修订）",
+        "进入正式交付的最小 canonical 路径定义",
+        "桥接 SRC 的最小语义内容要求"
+      ],
+      "out_of_scope": [
+        "bridge SRC 的最终 schema 字段名（留给后续 contract 冻结）",
+        "是否需要单独 raw_to_src 子模式处理 ADR 输入",
+        "历史 EPIC 的一次性回补迁移策略",
+        "FEAT、TECH、TASK 的具体字段补充",
+        "ADR 直接生成 DEVPLAN/TESTPLAN/TASK 的捷径路径"
+      ],
+      "dependencies": [
+        "ADR-003: 产品主链冻结 (ADR 不进入业务主链)",
+        "ADR-012: 产品前半链划分 (raw_to_src, src_to_epic)",
+        "后续需派生：SRC 分类语义、EPIC 校验增强、workflow 入口适配、review checklist"
+      ],
+      "confirmation": "本 goal 源自 ADR-019 决策，作为 raw_source_input 进入 SRC normalization 前置分析"
+    }
+  },
+  "detailed_analysis": {
+    "user_value_analysis": "产品治理团队和架构师需要明确的规则来判断 ADR 是否需要桥接 SRC，避免在两种错误做法之间摇摆：要么让 ADR 直接充当 EPIC 的 source，要么要求所有 ADR 都产生业务链对象。该规则提供清晰的判断标准和示例。",
+    "industry_analysis": "在复杂产品治理体系中，决策链 (ADR) 与业务链 (SRC->EPIC->FEAT) 的分离是常见最佳实践。该规则巩固了这一分离，同时提供了正式的桥接机制，避免了治理决策无法落地或业务链被治理对象污染的两难困境。",
+    "efficiency_analysis": "通过明确桥接规则，减少团队在 EPIC 入口设计上的反复讨论和错误尝试。桥接 SRC 的轻量设计避免了不必要的对象膨胀，同时保持了追溯关系的完整性。",
+    "cost_analysis": "主要成本在于后续 follow-up 工作（contract 变更、validator 增强、workflow 适配、历史 EPIC 盘点）。但避免了长期维护混乱对象链的隐性成本。"
+  },
+  "confirmation_summary": {
+    "confirmation_status": "pending",
+    "confirmed_by": null,
+    "confirmed_at": null,
+    "notes": "等待产品经理和治理负责人确认"
+  },
+  "approval": {
+    "approval_status": "pending",
+    "approved_by": null,
+    "approved_at": null,
+    "approvers": [
+      {
+        "role": "product_owner",
+        "name": null,
+        "status": "pending"
+      },
+      {
+        "role": "governance_lead",
+        "name": null,
+        "status": "pending"
+      }
+    ],
+    "notes": "等待正式审批流程"
+  },
+  "change_log": [
+    {
+      "version": "1.0.0",
+      "date": "2026-03-15",
+      "author": "product-goal-analyzer",
+      "description": "初始版本，基于 ADR-019 决策提取产品目标与价值分析"
+    }
+  ],
+  "raw_source_input": {
+    "symbol": "rsi_adr019_bridge_src_rule",
+    "source_kind": "governance_adr",
+    "source_id": "ADR-019",
+    "source_title": "EPIC 入口统一经 SRC 及 ADR 桥接薄 SRC 规则",
+    "source_version": "v1",
+    "source_status": "draft",
+    "intake_kind": "adr_to_product_goal",
+    "intake_summary": "从 ADR-019 提取产品目标分析，为后续 SRC 归一化和 EPIC 入口设计提供前置输入"
+  }
+}
