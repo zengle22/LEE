@@ -7,6 +7,7 @@ SSOT agent output contract materializer.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -50,6 +51,7 @@ class SSOTContractMaterializer:
         self.manager = manager
         self.schema_path = Path(schema_path or DEFAULT_SSOT_CONTRACT_SCHEMA)
         self._validator = SchemaValidator(project_dir=str(FRAMEWORK_ROOT))
+        self._legacy_sequences: Dict[str, int] = {}
 
     def validate_contract(self, contract_data: Dict[str, Any]) -> None:
         """Validate a contract payload against the SSOT output schema."""
@@ -136,6 +138,8 @@ class SSOTContractMaterializer:
                     if isinstance(candidate_value, str) and candidate_value.strip():
                         formal_id = candidate_value.strip()
                         break
+            if formal_id is None:
+                formal_id = self._next_legacy_formal_id(output)
             artifact = self.manager.create_ssot(
                 ssot_type=SSOTType(output["ssot_type"]),
                 title=title,
@@ -177,6 +181,34 @@ class SSOTContractMaterializer:
             identity_kind=identity_kind,
             artifact=artifact,
         )
+
+    def _next_legacy_formal_id(self, output: Dict[str, Any]) -> Optional[str]:
+        if output.get("identity_kind") != "ssot":
+            return None
+        try:
+            ssot_type = SSOTType(output["ssot_type"])
+        except Exception:
+            return None
+        if ssot_type not in (SSOTType.EPIC, SSOTType.FEAT):
+            return None
+
+        cache_key = ssot_type.value
+        if cache_key not in self._legacy_sequences:
+            base_dir = self.manager.project_root / (
+                "spec/requirements/epics" if ssot_type == SSOTType.EPIC else "spec/requirements/features"
+            )
+            max_seq = 0
+            if base_dir.exists():
+                prefix = ssot_type.value.upper()
+                for path in base_dir.glob(f"{prefix}-*__*.md"):
+                    object_id = path.name.split("__", 1)[0]
+                    match = re.fullmatch(rf"{prefix}-(\d+)", object_id)
+                    if match:
+                        max_seq = max(max_seq, int(match.group(1)))
+            self._legacy_sequences[cache_key] = max_seq
+
+        self._legacy_sequences[cache_key] += 1
+        return f"{ssot_type.value.upper()}-{self._legacy_sequences[cache_key]:03d}"
 
     def _resolve_optional_id(
         self,

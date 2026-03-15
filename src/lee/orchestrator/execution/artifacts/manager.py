@@ -904,19 +904,22 @@ class ArtifactManager:
                     parsed_front_matter = {}
                 if isinstance(parsed_front_matter, dict):
                     existing_front_matter = parsed_front_matter
-
         # 生成 ID
         generator = SSOTIDGenerator(self.root_path)
-
         # 生成 slug
         slug = generator.generate_slug(title)
-
+        explicit_src_root_id = (properties or {}).get("src_root_id")
+        legacy_formal_placement = (
+            formal_id
+            and ssot_type in (SSOTType.EPIC, SSOTType.FEAT)
+            and not (isinstance(explicit_src_root_id, str) and explicit_src_root_id.strip())
+            and not resolve_src_root_id(artifact_id=formal_id)
+        )
         src_root_id = resolve_src_root_id(
-            parent_id=parent_id,
-            source_refs=source_refs,
+            parent_id=None if legacy_formal_placement else parent_id,
+            source_refs=None if legacy_formal_placement else source_refs,
             properties=properties,
         )
-
         # 生成完整 ID
         generation_suffix = None
         if ssot_type == SSOTType.RELEASE:
@@ -938,18 +941,16 @@ class ArtifactManager:
             generation_suffix,
             src_root_id=src_root_id,
         )
-
         # 生成文件名
         filename = f"{artifact_id}__{slug}.md"
-
         # 正式 SSOT 主文件落在项目内容目录，而不是 .artifacts/ssot/
         effective_properties = dict(properties or {})
         if src_root_id:
             effective_properties.setdefault("src_root_id", src_root_id)
         relative_dir = resolve_ssot_relative_dir(
             ssot_type,
-            parent_id=parent_id,
-            source_refs=source_refs,
+            parent_id=None if legacy_formal_placement else parent_id,
+            source_refs=None if legacy_formal_placement else source_refs,
             artifact_id=artifact_id,
             properties=effective_properties,
         )
@@ -963,7 +964,6 @@ class ArtifactManager:
             target_path=artifact_path,
             existing_metadata=existing_metadata,
         )
-
         derived_from_ids = derived_from or []
         front_matter = {
             "id": artifact_id,

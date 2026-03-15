@@ -320,6 +320,8 @@ class SSOTIDGenerator:
                 feat_idx = parts.index("FEAT")
                 if feat_idx + 3 < len(parts) and parts[feat_idx + 1].upper() == "SRC":
                     return "-".join(parts[feat_idx:feat_idx + 4])
+                if feat_idx + 1 < len(parts) and parts[feat_idx + 1].isdigit():
+                    return "-".join(parts[feat_idx:feat_idx + 2])
             except ValueError:
                 pass
 
