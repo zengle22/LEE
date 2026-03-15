@@ -2,29 +2,30 @@
 id: ADR-012
 ssot_type: adr
 title: raw-to-src 与 src-to-epic 分层拆分
-status: draft
+status: frozen
 version: v1
 workflow_instance_id: raw-to-src-governance-20260315
 parent_id: null
 derived_from_ids:
-  - id: ADR-001
-    version: v1
-  - id: ADR-003
-    version: v1
-  - id: ADR-011
-    version: v1
+- id: ADR-001
+  version: v1
+- id: ADR-003
+  version: v1
+- id: ADR-011
+  version: v1
 source_refs: []
 owner: governance
 tags:
-  - governance
-  - product
-  - workflow
-  - ssot
-  - src
-  - epic
+- governance
+- product
+- workflow
+- ssot
+- src
+- epic
 properties:
   adr_kind: workflow_design
   decision_scope: product_requirement_chain_layer_split
+frozen_at: '2026-03-15T15:51:12.628700'
 ---
 
 # raw-to-src 与 src-to-epic 分层拆分

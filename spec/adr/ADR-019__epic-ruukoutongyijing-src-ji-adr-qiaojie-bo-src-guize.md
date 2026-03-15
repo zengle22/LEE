@@ -2,29 +2,30 @@
 id: ADR-019
 ssot_type: adr
 title: EPIC 入口统一经 SRC 及 ADR 桥接薄 SRC 规则
-status: draft
+status: frozen
 version: v1
 workflow_instance_id: epic-entry-governance-20260315
 parent_id: null
 derived_from_ids:
-  - id: ADR-001
-    version: v1
-  - id: ADR-003
-    version: v1
-  - id: ADR-012
-    version: v1
+- id: ADR-001
+  version: v1
+- id: ADR-003
+  version: v1
+- id: ADR-012
+  version: v1
 source_refs: []
 owner: governance
 tags:
-  - governance
-  - product
-  - src
-  - epic
-  - adr
-  - traceability
+- governance
+- product
+- src
+- epic
+- adr
+- traceability
 properties:
   adr_kind: governance_design
   decision_scope: epic_entry_via_src_and_adr_bridge_rule
+frozen_at: '2026-03-15T15:51:12.612643'
 ---
 
 # EPIC 入口统一经 SRC 及 ADR 桥接薄 SRC 规则
@@ -36,12 +37,17 @@ LEE 对 `EPIC` 的入口边界补充冻结以下规则：
 - 所有正式 `EPIC` 都必须经由至少一个冻结后的 `SRC` 进入主链。
 - `ADR` 仍是决策型 SSOT，不直接充当 `EPIC` 的业务 source object。
 - 当某个 `ADR` 需要推动下游进入 `EPIC -> FEAT -> UI / TECH / TASK` 主链时，必须先桥接生成一份薄 `SRC`，再由该 `SRC` 进入 `src_to_epic`。
+- 当某个 `ADR` 需要进入正式交付轴或 `RELEASE` scope 时，必须继续物化出可被 `RELEASE` pin 住的 `thin EPIC / thin FEAT`，不得试图以 `ADR` 直接生成 `DEVPLAN / TESTPLAN / TASK`。
 - 不是每个 `ADR` 都必须生成 `SRC`；只有会形成业务/交付对象链变更的 `ADR` 才需要桥接 `SRC`。
 - 该桥接 `SRC` 的正式定位是“主链入口对象”，不是“用 `SRC` 替代 `ADR`”。
 
 本 ADR 采纳以下 canonical 关系：
 
 `ADR governs -> bridge SRC enters -> EPIC derives`
+
+若进入正式交付，则最小 canonical 路径为：
+
+`ADR governs -> bridge SRC -> thin EPIC -> thin FEAT -> RELEASE -> DEVPLAN / TESTPLAN -> TASK`
 
 不采纳以下表达：
 
@@ -107,6 +113,7 @@ LEE 对 `EPIC` 的入口边界补充冻结以下规则：
 - 哪些 `ADR` 需要桥接 `SRC`
 - 桥接 `SRC` 的语义边界是什么
 - `EPIC` 应如何同时保留 `SRC` 溯源和 `ADR` 治理引用
+- 若要进入正式交付，最薄需要物化到哪一层需求对象
 
 ## 4. Boundary Rule
 
@@ -146,7 +153,7 @@ LEE 对 `EPIC` 的入口边界补充冻结以下规则：
 当某个 `ADR` 满足以下条件之一时，应先桥接生成一份薄 `SRC`：
 
 - 将触发新的 `EPIC/FEAT` 范围设计
-- 将触发新的下游实施计划或交付对象
+- 将触发新的下游实施计划、release scope 或交付对象
 - 将形成需要业务验收、实施验收或回归验证的新增对象链
 
 当 `ADR` 仅用于以下场景时，不要求生成 `SRC`：
@@ -155,6 +162,17 @@ LEE 对 `EPIC` 的入口边界补充冻结以下规则：
 - 纯 review / approval / gate 策略调整
 - 不形成新 `EPIC/FEAT` 的局部约束修订
 - 仅作为现有对象的 governing ADR，被动提供约束
+
+### 4.4 Release Rule
+
+若某个 `ADR` 触发的变更需要进入正式交付轴，则必须遵守：
+
+- `RELEASE` 仍是交付轴根对象
+- `RELEASE` scope 仍必须 pin 住正式需求对象版本
+- 在当前模型下，该正式需求对象最小应落为 `FEAT`
+- 因此该路径不得收缩为 `ADR -> DEVPLAN`、`ADR -> TESTPLAN` 或 `ADR -> TASK`
+
+本 ADR 不采纳任何绕过 `RELEASE` 或绕过 `FEAT` scope pinning 的捷径表达。
 
 ## 5. Bridge SRC Definition
 
@@ -185,6 +203,28 @@ LEE 对 `EPIC` 的入口边界补充冻结以下规则：
 
 留待后续 contract 变更冻结。
 
+### 5.4 Canonical Field Recommendation
+
+为避免 bridge SRC 只停留在自然语言约束，本 ADR 推荐后续 contract 采用以下最小字段：
+
+- `source_kind: governance_bridge_src`
+- `bridge_context.governed_by_adrs`
+- `bridge_context.change_scope`
+- `bridge_context.expected_downstream_objects`
+- `bridge_context.acceptance_impact`
+- `bridge_context.non_goals`
+
+其中：
+
+- `source_kind` 用于把普通业务入口 SRC 与 ADR 桥接 SRC 明确区分
+- `governed_by_adrs` 负责保留治理来源
+- `change_scope` 负责表达本次进入主链的变化边界
+- `expected_downstream_objects` 负责声明后续预计产生的 `EPIC / FEAT / RELEASE / TECH / TASK`
+- `acceptance_impact` 负责表达会受影响的验收或交付边界
+- `non_goals` 负责表达本次桥接明确不处理的内容
+
+若未来 contract 采用不同字段名，也应保持以上语义等价，不得删减。
+
 ### 5.3 Minimum Semantic Content
 
 桥接 `SRC` 至少应表达以下语义：
@@ -196,6 +236,11 @@ LEE 对 `EPIC` 的入口边界补充冻结以下规则：
 - 哪些内容明确不在本次桥接范围内
 
 桥接 `SRC` 不要求重复书写完整 `ADR` 正文，也不应伪装成普通用户原始需求。
+
+若该桥接 `SRC` 最终进入正式交付，则后续还必须继续收敛出：
+
+- 与 `SRC` 对应的 `thin EPIC`
+- 可被 `RELEASE` 引用的 `thin FEAT`
 
 ## 6. EPIC Derivation Rule
 
@@ -211,6 +256,12 @@ LEE 对 `EPIC` 的入口边界补充冻结以下规则：
 - `EPIC.parent = ADR`
 - 用自由文本在 `EPIC` 正文里口头说明“其实它来自某个 ADR”，但 machine-readable 关系缺失
 
+若目标是正式实施，则还应继续满足：
+
+- 至少存在一个由该 `EPIC` 派生的 `FEAT`
+- `RELEASE` 只能 pin 住该 `FEAT@version`
+- `DEVPLAN / TESTPLAN / TASK` 不得以 `ADR` 直接替代该 scope truth
+
 ## 7. Examples
 
 ### 7.1 Should Create Bridge SRC
@@ -221,8 +272,9 @@ LEE 对 `EPIC` 的入口边界补充冻结以下规则：
 
 - 新增产品 workflow `EPIC`
 - 新增 contract / runtime / migration `FEAT`
+- 新增正式 `RELEASE` scope 与实施计划
 
-则应先生成一份桥接 `SRC`，再由该 `SRC` 进入 `EPIC` 设计。
+则应先生成一份桥接 `SRC`，再由该 `SRC` 进入 `EPIC` 设计，并继续物化最薄 `FEAT` 供 `RELEASE` pin 住。
 
 ### 7.2 Should Not Create Bridge SRC
 
@@ -242,6 +294,7 @@ LEE 对 `EPIC` 的入口边界补充冻结以下规则：
 
 - 在 `SRC` contract 中增加 source kind 或等价分类语义
 - 在 `EPIC` contract / validator 中增加“必须引用 `SRC`”校验
+- 在 `FEAT` / `RELEASE` validator 中增加“治理驱动交付也必须落为可 pin 的 `FEAT`”校验
 - 在 workflow 中增加 `ADR -> bridge SRC` 的显式入口或适配逻辑
 - 为 bridge SRC 补充示例、review checklist 和 replay 基线
 
