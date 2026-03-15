@@ -1040,21 +1040,11 @@ class GateOperationsMixin:
 
     def _collect_publishable_ssot_candidates(self, payload: Any) -> List[Dict[str, Any]]:
         """从payload中收集可发布的SSOT候选对象"""
-        collected: List[Dict[str, Any]] = []
-        self._walk_publishable_candidates(payload, collected)
-        return collected
+        from lee.orchestrator.execution.gate_candidate_fingerprint import (
+            collect_unique_publishable_candidates,
+        )
 
-    def _walk_publishable_candidates(self, payload: Any, collected: List[Dict[str, Any]]) -> None:
-        """递归遍历payload寻找SSOT候选"""
-        if isinstance(payload, dict):
-            if self._candidate_ssot_type(payload):
-                collected.append(payload)
-            for value in payload.values():
-                if isinstance(value, (dict, list)):
-                    self._walk_publishable_candidates(value, collected)
-        elif isinstance(payload, list):
-            for item in payload:
-                self._walk_publishable_candidates(item, collected)
+        return collect_unique_publishable_candidates(payload, self._candidate_ssot_type)
 
     def _candidate_ssot_type(self, payload: Dict[str, Any]) -> Optional[str]:
         """识别payload是否为可物化的SSOT候选类型"""
