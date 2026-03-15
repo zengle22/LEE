@@ -960,7 +960,9 @@ class GateOperationsMixin:
         gate_step_id: str,
         manager,
     ) -> None:
-        payloads = self._collect_gate_freeze_payloads(instance, gate_step_id)
+        payloads = self._collect_primary_gate_publish_payloads(instance, gate_step_id)
+        if not payloads:
+            payloads = self._collect_gate_freeze_payloads(instance, gate_step_id)
         if not payloads:
             return
 
@@ -1000,6 +1002,44 @@ class GateOperationsMixin:
 
         await self.store.update_workflow_data(workflow_id, instance_data)
 
+    def _collect_primary_gate_publish_payloads(self, instance, gate_step_id: str) -> List[Any]:
+        instance_data = getattr(instance, "data", {}) or {}
+        step_outputs = instance_data.get("step_outputs", {}) or {}
+        gate_output = step_outputs.get(gate_step_id)
+        if not isinstance(gate_output, dict):
+            return []
+
+        payloads: List[Any] = []
+        direct_business_payload = self._extract_gate_business_payload(gate_output)
+        if self._candidate_ssot_type(direct_business_payload or {}):
+            payloads.append(direct_business_payload)
+        elif self._candidate_ssot_type(gate_output):
+            payloads.append(gate_output)
+        return payloads
+
+    @staticmethod
+    def _extract_gate_business_payload(output: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if not isinstance(output, dict) or "gate_approved" not in output:
+            return None
+
+        noise_keys = {
+            "gate_approved",
+            "approver",
+            "comments",
+            "frozen_at",
+            "step_id",
+            "frozen_inputs",
+            "freeze_meta",
+            "gate_evaluation",
+            "rules_overridden",
+        }
+        business_payload = {
+            key: value
+            for key, value in output.items()
+            if key not in noise_keys
+        }
+        return business_payload or None
+
     def _collect_gate_freeze_payloads(self, instance, gate_step_id: str) -> List[Any]:
         instance_data = getattr(instance, "data", {}) or {}
         step_output_map = instance_data.get("step_outputs", {}) or {}
@@ -1022,6 +1062,17 @@ class GateOperationsMixin:
                 if key in params:
                     payloads.append(params[key])
                     break
+
+        if not payloads:
+            for source, step_id in self._preferred_gate_step_output_aliases(gate_step_id):
+                if step_id in step_output_map:
+                    payloads.append(step_output_map[step_id])
+                    continue
+                if source in step_output_map:
+                    payloads.append(step_output_map[source])
+                    continue
+                if source in params:
+                    payloads.append(params[source])
 
         if not payloads:
             payloads.extend(step_output_map.values())
@@ -1050,6 +1101,14 @@ class GateOperationsMixin:
         """识别payload是否为可物化的SSOT候选类型"""
         if not isinstance(payload, dict):
             return None
+        identity_kind = str(payload.get("identity_kind") or "").strip().lower()
+        declared_ssot_type = str(payload.get("ssot_type") or "").strip().upper()
+        if identity_kind == "ssot" and declared_ssot_type == "SRC":
+            if payload.get("title") and payload.get("content"):
+                return "SRC"
+        if identity_kind == "ssot" and declared_ssot_type == "EPIC":
+            if payload.get("title") and payload.get("content"):
+                return "EPIC"
         ssot_identity = payload.get("ssot_identity")
         if isinstance(ssot_identity, dict) and str(ssot_identity.get("ssot_type", "")).upper() == "SRC":
             if isinstance(payload.get("src_structure"), dict):
@@ -1071,6 +1130,28 @@ class GateOperationsMixin:
 
     def _materialize_src_candidate(self, payload: Dict[str, Any], manager) -> Dict[str, Any]:
         """将SRC候选物化为规范SRC文件"""
+        if str(payload.get("identity_kind") or "").strip().lower() == "ssot" and str(
+            payload.get("ssot_type") or ""
+        ).strip().upper() == "SRC":
+            title = str(payload.get("title") or "").strip() or "Untitled SRC"
+            content = str(payload.get("content") or "").strip() or f"# {title}\n"
+            source_refs = self._dedupe_strings(payload.get("source_refs", []))
+            properties = {}
+            for key in ("source_kind", "bridge_context"):
+                value = payload.get(key)
+                if value is not None:
+                    properties[key] = value
+            metadata = manager.create_ssot(
+                ssot_type=SSOTType.SRC,
+                title=title,
+                content=content,
+                run_id="gate-materialize",
+                parent_id=None,
+                source_refs=source_refs,
+                properties=properties or None,
+            )
+            return {"artifact_id": metadata.id, "path": metadata.path}
+
         src_structure = payload.get("src_structure", {}) or {}
         governance_refs = payload.get("governance_refs", {}) or {}
         title = str(src_structure.get("title") or "").strip()
@@ -1109,6 +1190,30 @@ class GateOperationsMixin:
 
     def _materialize_epic_candidate(self, payload: Dict[str, Any], manager) -> Dict[str, Any]:
         """将EPIC候选物化为规范EPIC文件"""
+        if str(payload.get("identity_kind") or "").strip().lower() == "ssot" and str(
+            payload.get("ssot_type") or ""
+        ).strip().upper() == "EPIC":
+            title = str(payload.get("title") or "Untitled Epic")
+            content = str(payload.get("content") or "").strip() or f"# {title}\n"
+            source_refs = self._dedupe_strings(payload.get("source_refs", []))
+            parent_id = None
+            for ref in source_refs:
+                ref_root = ref.split("#", 1)[0].strip()
+                if ref_root.startswith("SRC-"):
+                    parent_id = ref_root
+                    break
+            metadata = manager.create_ssot(
+                ssot_type=SSOTType.EPIC,
+                title=title,
+                content=content,
+                run_id="gate-materialize",
+                parent_id=parent_id,
+                source_refs=source_refs,
+                properties={"src_root_id": parent_id} if parent_id else None,
+            )
+            frozen = manager.freeze(metadata.id)
+            return {"artifact_id": frozen.id, "path": frozen.path}
+
         title = str(payload.get("title") or "Untitled Epic")
         goal = str(payload.get("goal") or "")
         scope = payload.get("scope", []) or []

@@ -275,6 +275,25 @@ class AutoCheckGateRunner(StepRunnerBase):
                 approval_criteria = [approval_criteria]
 
         gate_id_base = step.gate_id or f"gate_{workflow_id}_{step.id}"
+        pending_gates = await ctx.store.get_pending_gates(workflow_id)
+        existing_pending_gate = next(
+            (
+                gate
+                for gate in pending_gates
+                if gate.step_id == step.id and gate.status == GateStatus.PENDING
+            ),
+            None,
+        )
+        if existing_pending_gate is not None:
+            return StepResult(
+                status="blocked",
+                blocked_reason="human_gate",
+                step_id=step.id,
+                workflow_id=workflow_id,
+                message=f"{error_message}; waiting for human review at gate: {existing_pending_gate.gate_id}",
+                output=output_data,
+            )
+
         gate_id_value = gate_id_base
         existing_gate = await ctx.store.get_gate_approval(workflow_id, gate_id_base)
         if existing_gate is not None:

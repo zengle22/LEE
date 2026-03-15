@@ -32,8 +32,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .claude_code_result_resilience import should_retry_empty_tool_use_result
 from .error_hints import append_executor_hints
 from .executors import BaseExecutor
+from .output_seed import normalize_declared_output_files, seed_declared_output_files
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,7 @@ class ClaudeCodeExecutor(BaseExecutor):
     DEFAULT_ALLOWED_COMMANDS = ["cat", "ls", "find", "grep"]
     DEFAULT_HEARTBEAT_SECONDS = 5
     DEFAULT_MODEL = "sonnet"
+    DEFAULT_EMPTY_RESULT_RETRIES = 1
     LEGACY_MODEL_ALIASES = {
         "claude-sonnet-4-6": "sonnet",
         "claude-sonnet-4.6": "sonnet",
@@ -129,6 +132,9 @@ class ClaudeCodeExecutor(BaseExecutor):
         goal = input_data["goal"]
         workspace = input_data["workspace"]
         context_files = input_data.get("context_files") or []
+        declared_output_files = normalize_declared_output_files(
+            input_data.get("declared_output_files")
+        )
         step_workspace = str(input_data.get("step_workspace") or "").strip()
 
         configured_commands = input_data.get("allowed_commands")
@@ -181,12 +187,23 @@ class ClaudeCodeExecutor(BaseExecutor):
             input_data.get("max_bash_calls"),
             self.DEFAULT_MAX_BASH_CALLS,
         )
+        empty_result_retries = self._coerce_non_negative_int(
+            input_data.get("empty_result_retries"),
+            self.DEFAULT_EMPTY_RESULT_RETRIES,
+        )
         resume_on_retry = bool(
             input_data.get("resume_on_retry", self.DEFAULT_RESUME_ON_RETRY)
         )
 
         # ========== 2. 构建 evidence bundle 目录 ==========
         evidence_dir = self._prepare_evidence_dir(evidence_base, workspace)
+        seeded_output_files = seed_declared_output_files(
+            workspace=workspace,
+            output_files=declared_output_files,
+        )
+        for output_file in seeded_output_files:
+            if output_file not in context_files:
+                context_files.append(output_file)
 
         # ========== 3. 构建 system prompt（治理约束注入） ==========
         system_prompt = self._build_system_prompt(
@@ -207,6 +224,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         user_prompt = self._build_user_prompt(
             goal=goal,
             context_files=context_files,
+            output_files=seeded_output_files,
         )
 
         # 调试输出文件（即使失败也可用于排障）
@@ -239,30 +257,35 @@ class ClaudeCodeExecutor(BaseExecutor):
             conversation_live_log_path,
             f"model={model or '(default)'}",
         )
+        self._append_live_log_meta(
+            conversation_live_log_path,
+            f"empty_result_retries={empty_result_retries}",
+        )
 
         # ========== 5. 调用 claude CLI ==========
         try:
-            raw_output = await self._invoke_claude(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                workspace=workspace,
-                allowed_commands=allowed_commands,
-                timeout_seconds=timeout_seconds,
-                max_iterations=max_iterations,
-                timeout_retries=timeout_retries,
-                retry_backoff_seconds=retry_backoff_seconds,
-                silence_timeout_seconds=silence_timeout_seconds,
-                silence_grace_seconds=silence_grace_seconds,
-                strict_mcp_config=strict_mcp_config,
-                setting_sources=setting_sources,
-                mcp_config_path=mcp_config_path,
-                model=model,
-                debug_file_path=claude_debug_log_path,
-                live_log_path=conversation_live_log_path,
-                max_bash_calls=max_bash_calls,
-                resume_on_retry=resume_on_retry,
-                read_only=read_only,
-            )
+            invoke_kwargs = {
+                "prompt": user_prompt,
+                "system_prompt": system_prompt,
+                "workspace": workspace,
+                "allowed_commands": allowed_commands,
+                "timeout_seconds": timeout_seconds,
+                "max_iterations": max_iterations,
+                "timeout_retries": timeout_retries,
+                "retry_backoff_seconds": retry_backoff_seconds,
+                "silence_timeout_seconds": silence_timeout_seconds,
+                "silence_grace_seconds": silence_grace_seconds,
+                "strict_mcp_config": strict_mcp_config,
+                "setting_sources": setting_sources,
+                "mcp_config_path": mcp_config_path,
+                "model": model,
+                "debug_file_path": claude_debug_log_path,
+                "live_log_path": conversation_live_log_path,
+                "max_bash_calls": max_bash_calls,
+                "resume_on_retry": resume_on_retry,
+                "read_only": read_only,
+            }
+            raw_output = await self._invoke_claude(**invoke_kwargs)
         except asyncio.TimeoutError as e:
             detail = str(e).strip()
             if not detail:
@@ -330,6 +353,23 @@ class ClaudeCodeExecutor(BaseExecutor):
 
         # ========== 6. 解析输出 ==========
         parsed = self._parse_claude_output(raw_output)
+        empty_result_retry_count = 0
+        while (
+            empty_result_retry_count < empty_result_retries
+            and should_retry_empty_tool_use_result(parsed)
+        ):
+            empty_result_retry_count += 1
+            self._append_live_log_meta(
+                conversation_live_log_path,
+                (
+                    "retrying empty tool_use result "
+                    f"(attempt={empty_result_retry_count + 1}/{empty_result_retries + 1})"
+                ),
+            )
+            raw_output = await self._invoke_claude(**invoke_kwargs)
+            parsed = self._parse_claude_output(raw_output)
+        if empty_result_retry_count > 0:
+            parsed["empty_result_retries"] = empty_result_retry_count
 
         # ========== 7. 收集 diff 摘要 ==========
         diff_summary = await self._collect_diff_summary(workspace)
@@ -359,6 +399,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             "prompt_system_path": prompt_system_path,
             "prompt_user_path": prompt_user_path,
             "generated_text": parsed.get("result_text", ""),
+            "empty_result_retries": parsed.get("empty_result_retries", 0),
             "error": append_executor_hints(parsed.get("error")),
         }
 
@@ -556,7 +597,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         return prompt
 
     def _build_user_prompt(
-        self, goal: str, context_files: List[str]
+        self, goal: str, context_files: List[str], output_files: Optional[List[str]] = None
     ) -> str:
         """构建用户 prompt"""
         prompt = f"## 任务目标\n\n{goal}"
@@ -564,6 +605,14 @@ class ClaudeCodeExecutor(BaseExecutor):
         if context_files:
             files_list = "\n".join(f"- {f}" for f in context_files)
             prompt += f"\n\n## 上下文文件\n\n请先阅读以下文件：\n{files_list}"
+
+        if output_files:
+            files_list = "\n".join(f"- {f}" for f in output_files)
+            prompt += (
+                "\n\n## 目标输出文件\n\n"
+                "以下目标文件已经预创建。第一次写入前，必须先用 Read 读取这些文件，即使它们当前为空：\n"
+                f"{files_list}"
+            )
 
         return prompt
 
