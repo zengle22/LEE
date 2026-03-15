@@ -133,3 +133,115 @@ LEE 采纳以下本地治理方向：
 - 远端失败自动修复是否允许全自动执行
 
 这些内容留待后续专门设计。
+
+## 9. Current Repository Entry Points
+
+为避免“知道方向，但不知道怎么执行”，当前仓库统一认可以下操作入口。
+
+### 9.1 Repository-Local Canonical Entry
+
+仓库内 canonical 命令为：
+
+```bash
+python scripts/pr_flow.py --base dev --body "本次改动摘要"
+```
+
+该命令用于：
+
+- 推送当前 branch
+- 创建或复用到 `dev` / `main` 的 PR
+- 轮询当前提交对应的 GitHub check-runs
+- 在 checks 通过、失败或超时后给出明确结果
+
+当需要复用已有 PR 或只观察远端状态时，可使用：
+
+```bash
+python scripts/pr_flow.py --base dev --no-push
+python scripts/pr_flow.py --base dev --no-watch
+python scripts/pr_flow.py --base main --body-file .pr_description.md
+```
+
+### 9.2 Skill Entry
+
+对 agent 使用场景，当前仓库外部包装入口统一为：
+
+- Codex skill: `github-pr-flow`
+- Claude Code skill: `github-pr-flow`
+
+两者都应优先调用仓库内 `scripts/pr_flow.py`，只有仓库缺失该脚本时，才回退到各自 skill 自带脚本。
+
+### 9.3 CI Failure Repair Entry
+
+当远端 PR 已经红灯时，当前认可的失败回流入口为：
+
+- 读取失败 checks / actions log
+- 在隔离 `worktree` 内修复
+- 本地复现对应失败步骤
+- 修复后重新通过 `scripts/pr_flow.py` 回到 PR 与 checks 链路
+
+对 agent 来说，可使用：
+
+- `gh-fix-ci` 负责读取失败检查与日志
+- `github-pr-flow` 负责 push / PR / checks 收口
+
+## 10. Standard SOP
+
+当前仓库冻结以下标准操作流程，作为从本地改动进入 `dev` 的默认路径。
+
+### 10.1 Start From A Clean Integration Baseline
+
+1. 以 `origin/dev` 作为集成基线。
+2. 通过 `git worktree` 创建隔离工作目录，不直接在脏的本地 `dev` 上堆改动。
+3. 在 `worktree` 内新建短命分支，分支名必须清晰表达用途；agent 分支默认使用 `codex/` 前缀。
+
+### 10.2 Fix And Validate In The Worktree
+
+1. 只在该 `worktree` 分支内实现修复或功能。
+2. 先跑与改动直接相关的最小验证，再跑与 CI 对齐的必要验证。
+3. 不允许通过放宽断言、删测试、降阈值来制造绿灯。
+
+### 10.3 Submit Through The PR Flow Script
+
+1. 在 `worktree` 内整理 PR 标题与摘要。
+2. 执行：
+
+```bash
+python scripts/pr_flow.py --base dev --body "本次改动摘要"
+```
+
+3. 让脚本完成以下动作：
+   - `git push -u origin <branch>`
+   - 创建或复用 `branch -> dev` 的 PR
+   - 等待 checks 收敛
+
+### 10.4 Handle CI Failures Through The Return Loop
+
+1. 若 checks 失败，不直接手工在本地 `dev` 回拷代码。
+2. 在同一 `worktree` 分支继续修复。
+3. 先复现失败，再补修复和验证。
+4. 再次执行 `scripts/pr_flow.py --base dev ...`，直到 PR checks 变为 clean。
+
+### 10.5 Merge And Release Staging
+
+1. 只有 `branch -> dev` PR clean 后，才进入 `dev`。
+2. 阶段性集成完成后，再发起 `dev -> main` PR。
+3. 只从 `main` merge commit 或 release tag 出包，不从临时分支或本地 `dev` 直接出包。
+
+## 11. Explicitly Rejected Local Shortcuts
+
+以下行为在当前仓库中不再被视为标准路径：
+
+- 在本地长期脏 `dev` 上直接开发并手工回拷到集成分支
+- 修完后不走 PR，直接把本地分支当作交付结论
+- 使用 `--no-verify` 作为日常提交或推送路径
+- 远端红灯后跳出当前 `worktree`，在其他目录另起一套修复实现
+- 未验证 checks 结果就把 `dev` 视为阶段完成
+
+## 12. Scope Clarification For This SOP
+
+本节冻结的是“当前仓库的标准操作路径”，目的是让治理决策具备可执行入口。
+
+它不额外改变本 ADR 第 6 节已经声明的边界：
+
+- 远端失败回流的最终 workflow 设计仍可在后续 `EPIC / FEAT / TECH / TASK` 中继续演进
+- `scripts/pr_flow.py` 与 skill 只是当前 canonical 操作入口，不代表未来不能被更强的一体化 workflow 替代
