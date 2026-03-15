@@ -117,3 +117,29 @@ def test_l3_template_parses_symbol_outputs(tmp_path: Path) -> None:
     assert output_spec.symbol == "feat_scoped_specs"
     assert output_spec.contract == "departments/product/contracts/feat-bundle-contract/v1/schema.json"
     assert output_spec.ssot == {"identity_kind": "ssot", "ssot_type": "FEAT"}
+
+
+def test_flat_template_preserves_agent_and_executor_aliases(tmp_path: Path) -> None:
+    template_root = tmp_path / "templates"
+    template_root.mkdir(parents=True)
+
+    template_path = template_root / "legacy_task.yaml"
+    template_path.write_text(
+        "id: legacy_task\n"
+        "level: task\n"
+        "name: Legacy Task\n"
+        "description: test\n"
+        "steps:\n"
+        "  - id: feat_boundary_design\n"
+        "    kind: agent\n"
+        "    agent_id: agent.product.prd_writer\n"
+        "    executor_type: llm\n",
+        encoding="utf-8",
+    )
+
+    manager = TemplateManager(template_dir=str(template_root))
+    template = manager.get_template("legacy_task")
+
+    assert template is not None
+    assert template.steps[0].agent_id == "agent.product.prd_writer"
+    assert template.steps[0].executor_type == "llm"
