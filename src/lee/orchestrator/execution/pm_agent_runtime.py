@@ -76,17 +76,6 @@ class Job:
             self.created_at = datetime.now()
 
 @dataclass
-class CompiledParams:
-    """Compiled parameters from natural language prompt"""
-    workflow_ref: str
-    params: Dict[str, Any]
-    confidence: float
-    reasoning: str
-    action: str = ""
-    allowed: bool = True
-    denial_reason: Optional[str] = None
-
-@dataclass
 class ProgressReport:
     run_id: str
     status: str

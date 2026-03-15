@@ -56,10 +56,6 @@ class LLMClient:
         Returns:
             Generated text
         """
-        # This is a placeholder implementation
-        # In production, this would call the actual LLM service
-        # For now, return a mock response
-
         if not self._client:
             self._initialize_client()
 
@@ -74,9 +70,11 @@ class LLMClient:
 
     def _initialize_client(self):
         """Initialize the LLM client"""
-        # Placeholder for client initialization
-        # In production, this would initialize the actual LLM client
-        pass
+        # Fail fast to avoid fake-success behavior in non-mock mode.
+        raise RuntimeError(
+            "LLMClient backend is not configured. "
+            "Inject a concrete client or use MockLLMClient for tests."
+        )
 
     def _call_llm(
         self,
@@ -85,38 +83,11 @@ class LLMClient:
         temperature: float,
         max_tokens: int,
     ) -> str:
-        """
-        Call the LLM service.
-
-        This is a placeholder implementation.
-        Production implementation would use:
-        - Anthropic Claude API
-        - OpenAI API
-        - Or internal LEE LLM service
-        """
-        # For now, return a simple template response
-        # This allows the rest of the code to work for testing
-        return """
-```python
-import pytest
-from playwright.sync_api import sync_playwright, expect
-
-@pytest.fixture(scope="module")
-def browser_context():
-    '''Browser context fixture'''
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
-        yield page
-        browser.close()
-
-def test_example(page):
-    '''Test example function'''
-    page.goto("http://localhost:3000")
-    expect(page).to_have_title("Example")
-```
-"""
+        """Call the LLM service."""
+        raise RuntimeError(
+            "LLMClient has no configured backend implementation. "
+            "Use MockLLMClient in tests or provide a real provider client."
+        )
 
     def complete_with_feedback(
         self,

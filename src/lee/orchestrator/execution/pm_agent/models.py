@@ -97,6 +97,9 @@ class CompiledParams:
     params: Dict[str, Any]
     confidence: float
     reasoning: str
+    action: str = ""
+    allowed: bool = True
+    denial_reason: Optional[str] = None
 
 
 @dataclass
