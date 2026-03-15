@@ -2,8 +2,16 @@
 Claude Code executor unit tests.
 """
 
+import json
 import os
+
+import pytest
+
+from lee.orchestrator.execution.claude_code_result_resilience import (
+    should_retry_empty_tool_use_result,
+)
 from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor
+from lee.orchestrator.execution.output_seed import seed_declared_output_files
 
 
 class TestClaudeCodeExecutor:
@@ -39,6 +47,17 @@ class TestClaudeCodeExecutor:
         )
 
         assert status == "fail"
+
+    def test_empty_tool_use_result_is_retryable(self):
+        assert should_retry_empty_tool_use_result(
+            {
+                "error": None,
+                "stop_reason": "tool_use",
+                "result_text": "",
+                "changed_files": [],
+                "commands_run": [],
+            }
+        )
 
     def test_determine_status_keeps_success_for_completed_turn(self):
         status = self.executor._determine_status(
@@ -124,3 +143,152 @@ class TestClaudeCodeExecutor:
 
         assert "只允许返回最终 machine-readable JSON 对象本体" in prompt
         assert '"status": "success 或 fail"' not in prompt
+
+    def test_build_user_prompt_requires_read_before_writing_outputs(self):
+        prompt = self.executor._build_user_prompt(
+            goal="write tech package",
+            context_files=["spec/feat.md"],
+            output_files=["output/tech-packages/FEAT-1/design_analysis.md"],
+        )
+
+        assert "第一次写入前，必须先用 Read 读取这些文件" in prompt
+        assert "output/tech-packages/FEAT-1/design_analysis.md" in prompt
+
+
+def test_seed_declared_output_files_touches_missing_targets(tmp_path):
+    seeded = seed_declared_output_files(
+        workspace=str(tmp_path),
+        output_files=["output/tech-packages/FEAT-1/design_analysis.md"],
+    )
+
+    assert seeded == ["output/tech-packages/FEAT-1/design_analysis.md"]
+    assert (tmp_path / "output" / "tech-packages" / "FEAT-1" / "design_analysis.md").exists()
+
+
+@pytest.mark.asyncio
+async def test_execute_retries_empty_tool_use_result_once(monkeypatch, tmp_path):
+    executor = ClaudeCodeExecutor()
+    attempts = {"count": 0}
+
+    async def fake_invoke(**_: object) -> str:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            return json.dumps(
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "is_error": False,
+                    "num_turns": 1,
+                    "result": "",
+                    "stop_reason": "tool_use",
+                    "session_id": "11111111-1111-1111-1111-111111111111",
+                }
+            )
+        return json.dumps(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "num_turns": 1,
+                "result": "```json\n{\"status\":\"success\",\"changed_files\":[],\"commands_run\":[],\"test_results\":{\"passed\":0,\"failed\":0},\"error\":null}\n```",
+                "stop_reason": "end_turn",
+                "session_id": "11111111-1111-1111-1111-111111111111",
+            }
+        )
+
+    async def fake_diff(_: str) -> dict:
+        return {"files_changed": 0, "lines_added": 0, "lines_deleted": 0}
+
+    monkeypatch.setattr(executor, "_invoke_claude", fake_invoke)
+    monkeypatch.setattr(executor, "_collect_diff_summary", fake_diff)
+
+    result = await executor.execute(
+        {
+            "goal": "Return a structured payload.",
+            "workspace": str(tmp_path),
+            "empty_result_retries": 1,
+            "evidence_base": str(tmp_path / "evidence"),
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["empty_result_retries"] == 1
+    assert attempts["count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_execute_fails_after_empty_tool_use_retry_exhausted(monkeypatch, tmp_path):
+    executor = ClaudeCodeExecutor()
+    attempts = {"count": 0}
+
+    async def fake_invoke(**_: object) -> str:
+        attempts["count"] += 1
+        return json.dumps(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "num_turns": 1,
+                "result": "",
+                "stop_reason": "tool_use",
+                "session_id": "22222222-2222-2222-2222-222222222222",
+            }
+        )
+
+    async def fake_diff(_: str) -> dict:
+        return {"files_changed": 0, "lines_added": 0, "lines_deleted": 0}
+
+    monkeypatch.setattr(executor, "_invoke_claude", fake_invoke)
+    monkeypatch.setattr(executor, "_collect_diff_summary", fake_diff)
+
+    result = await executor.execute(
+        {
+            "goal": "Return a structured payload.",
+            "workspace": str(tmp_path),
+            "empty_result_retries": 1,
+            "evidence_base": str(tmp_path / "evidence"),
+        }
+    )
+
+    assert result["status"] == "fail"
+    assert result["empty_result_retries"] == 1
+    assert attempts["count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_execute_seeds_declared_output_files_into_prompt(monkeypatch, tmp_path):
+    executor = ClaudeCodeExecutor()
+    captured = {}
+
+    async def fake_invoke(**kwargs: object) -> str:
+        captured["prompt"] = kwargs["prompt"]
+        return json.dumps(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "num_turns": 1,
+                "result": "```json\n{\"status\":\"success\",\"changed_files\":[],\"commands_run\":[],\"test_results\":{\"passed\":0,\"failed\":0},\"error\":null}\n```",
+                "stop_reason": "end_turn",
+                "session_id": "33333333-3333-3333-3333-333333333333",
+            }
+        )
+
+    async def fake_diff(_: str) -> dict:
+        return {"files_changed": 0, "lines_added": 0, "lines_deleted": 0}
+
+    monkeypatch.setattr(executor, "_invoke_claude", fake_invoke)
+    monkeypatch.setattr(executor, "_collect_diff_summary", fake_diff)
+
+    result = await executor.execute(
+        {
+            "goal": "Write the declared outputs.",
+            "workspace": str(tmp_path),
+            "declared_output_files": ["output/tech-packages/FEAT-1/design_analysis.md"],
+            "evidence_base": str(tmp_path / "evidence"),
+        }
+    )
+
+    assert result["status"] == "success"
+    assert "output/tech-packages/FEAT-1/design_analysis.md" in captured["prompt"]
+    assert (tmp_path / "output" / "tech-packages" / "FEAT-1" / "design_analysis.md").exists()

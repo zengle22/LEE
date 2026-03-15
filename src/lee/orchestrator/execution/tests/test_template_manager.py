@@ -116,6 +116,7 @@ def test_l3_template_parses_symbol_outputs(tmp_path: Path) -> None:
     assert output_spec.path == "feat_scoped_specs"
     assert output_spec.symbol == "feat_scoped_specs"
     assert output_spec.contract == "departments/product/contracts/feat-bundle-contract/v1/schema.json"
+    assert output_spec.freeze is False
     assert output_spec.ssot == {"identity_kind": "ssot", "ssot_type": "FEAT"}
 
 
@@ -143,3 +144,61 @@ def test_flat_template_preserves_agent_and_executor_aliases(tmp_path: Path) -> N
     assert template is not None
     assert template.steps[0].agent_id == "agent.product.prd_writer"
     assert template.steps[0].executor_type == "llm"
+
+
+def test_spec_global_template_preserves_freeze_and_ssot_output_metadata(tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    template_root = project_root / "spec-global"
+    template_root.mkdir(parents=True)
+    (project_root / ".lee").mkdir()
+    (project_root / ".lee" / "config.yaml").write_text(
+        "executor:\n"
+        "  default_type: claude_code\n",
+        encoding="utf-8",
+    )
+
+    template_path = template_root / "workflow.yaml"
+    template_path.write_text(
+        "kind: workflow\n"
+        "id: workflow.product.task.src_to_epic\n"
+        "version: '1.0'\n"
+        "name: Product SRC to EPIC\n"
+        "description: test\n"
+        "stages:\n"
+        "  - id: flow\n"
+        "    name: flow\n"
+        "    steps:\n"
+        "      - id: epic_design\n"
+        "        kind: agent\n"
+        "        agent_id: agent.product.epic_designer\n"
+        "        outputs:\n"
+        "          - symbol: epic_candidate\n"
+        "            contract: departments/product/contracts/epic-contract/v1/schema.json\n"
+        "            freeze: false\n"
+        "            ssot:\n"
+        "              identity_kind: ssot\n"
+        "              ssot_type: EPIC\n"
+        "      - id: epic_freeze\n"
+        "        kind: gate\n"
+        "        outputs:\n"
+        "          - path: output/design-frozen/{project}-epic-freeze.yaml\n"
+        "            required: true\n"
+        "            freeze: true\n"
+        "            ssot:\n"
+        "              identity_kind: ssot\n"
+        "              ssot_type: EPIC\n",
+        encoding="utf-8",
+    )
+
+    manager = TemplateManager(template_dir=str(template_root), project_root=str(project_root))
+    template = manager.get_template(str(template_path))
+
+    assert template is not None
+    design_output = template.get_step_info("epic_design").outputs[0]
+    freeze_output = template.get_step_info("epic_freeze").outputs[0]
+    assert design_output.symbol == "epic_candidate"
+    assert design_output.freeze is False
+    assert design_output.ssot == {"identity_kind": "ssot", "ssot_type": "EPIC"}
+    assert freeze_output.path == "output/design-frozen/{project}-epic-freeze.yaml"
+    assert freeze_output.freeze is True
+    assert freeze_output.ssot == {"identity_kind": "ssot", "ssot_type": "EPIC"}

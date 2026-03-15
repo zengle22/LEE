@@ -134,6 +134,146 @@ def test_product_review_normalizer_sanitizes_soft_feat_review_revise_when_bundle
     assert normalized_structured["business_output"]["decision"] == "pass"
 
 
+def test_product_review_normalizer_drops_schema_and_ui_false_positives_for_governance_feat():
+    step = SimpleNamespace(agent_id="agent.product.feat_reviewer")
+    business_output = {
+        "review_id": "RVW-003B",
+        "review_type": "feat_review",
+        "decision": "revise",
+        "subject_refs": ["FEAT-001"],
+        "summary": "needs revision",
+        "findings": [
+            "FEAT-001 的 required_fields 仍然是抽象口号，未定义其具体 schema。",
+            "全部 FEAT 的 trace_hints 仅覆盖 TECH/TESTSET，缺少 UI。",
+        ],
+        "risks": ["缺少统一字段级契约可能导致治理分叉。"],
+        "recommendations": [],
+    }
+
+    normalized_business, _ = ProductReviewNormalizer.normalize(
+        runner_cls=LLMRunner,
+        step=step,
+        business_output=business_output,
+        structured_payload={"business_output": dict(business_output)},
+        instance_data={
+            "step_outputs": {
+                "feat_spec_generation": {
+                    "business_output": {
+                        "epic_ref": "EPIC-001",
+                        "feat_specs": [
+                            {
+                                "feat_id": "FEAT-001",
+                                "title": "ADR Bridge Rule",
+                                "goal": "Freeze governance bridge rules",
+                                "user_value": "Downstream workflows can derive tasks deterministically",
+                                "inputs": ["draft ADR 决策文档", "baseline 桥接规则"],
+                                "processing": ["validate bridge rule", "emit bridge result"],
+                                "outputs": ["bridge_result"],
+                                "acceptance_criteria": ["bridge_result can drive downstream planning"],
+                                "input_contract": {
+                                    "required_artifacts": ["draft ADR 决策文档"],
+                                    "required_fields": ["formal_ssot_id", "source_refs", "governing_adrs"],
+                                    "consumption_rules": ["consume ADR fields and preserve traceability"],
+                                },
+                                "acceptance_checks": [
+                                    {
+                                        "id": "AC-001",
+                                        "scenario": "bridge result generation",
+                                        "given": "an ADR requires bridging",
+                                        "when": "the workflow evaluates bridge rules",
+                                        "then": "the bridge result is emitted",
+                                        "trace_hints": ["TECH", "TASK", "TESTSET"],
+                                    }
+                                ],
+                                "ssot": {
+                                    "parent": "EPIC-001",
+                                    "derived_from": "EPIC-001#breakdown",
+                                },
+                            }
+                        ],
+                    }
+                }
+            }
+        },
+    )
+
+    assert normalized_business["decision"] == "pass"
+    assert normalized_business["findings"] == []
+    assert normalized_business["risks"] == []
+
+
+def test_product_review_normalizer_drops_positive_findings_for_pass_feat_review():
+    step = SimpleNamespace(agent_id="agent.product.feat_reviewer")
+    business_output = {
+        "review_id": "RVW-003C",
+        "review_type": "feat_review",
+        "decision": "pass",
+        "subject_refs": ["FEAT-001"],
+        "summary": "All reviewed FEATs satisfy the minimum structural requirements.",
+        "findings": [
+            "所有 FEAT 的 acceptance_checks 均包含完整六要素（id/scenario/given/when/then/trace_hints）",
+            "所有 input_contract 包含 required_artifacts/required_fields/consumption_rules 三要素",
+            "所有 FEAT 的 ssot.parent 统一指向 EPIC-001，追溯链完整",
+        ],
+        "risks": [
+            "依赖图清晰，当前未发现额外交付风险。",
+        ],
+        "recommendations": [],
+    }
+
+    normalized_business, normalized_structured = ProductReviewNormalizer.normalize(
+        runner_cls=LLMRunner,
+        step=step,
+        business_output=business_output,
+        structured_payload={"business_output": dict(business_output)},
+        instance_data={
+            "step_outputs": {
+                "feat_spec_generation": {
+                    "business_output": {
+                        "epic_ref": "EPIC-001",
+                        "feat_specs": [
+                            {
+                                "feat_id": "FEAT-001",
+                                "title": "ADR Bridge Rule",
+                                "goal": "Freeze governance bridge rules",
+                                "user_value": "Downstream workflows can derive tasks deterministically",
+                                "inputs": ["draft ADR"],
+                                "processing": ["validate bridge rule"],
+                                "outputs": ["bridge_result"],
+                                "acceptance_criteria": ["bridge_result can drive downstream planning"],
+                                "input_contract": {
+                                    "required_artifacts": ["draft ADR"],
+                                    "required_fields": ["formal_ssot_id", "source_refs", "governing_adrs"],
+                                    "consumption_rules": ["consume ADR fields and preserve traceability"],
+                                },
+                                "acceptance_checks": [
+                                    {
+                                        "id": "AC-001",
+                                        "scenario": "bridge result generation",
+                                        "given": "an ADR requires bridging",
+                                        "when": "the workflow evaluates bridge rules",
+                                        "then": "the bridge result is emitted",
+                                        "trace_hints": ["TECH", "TASK", "TESTSET"],
+                                    }
+                                ],
+                                "ssot": {
+                                    "parent": "EPIC-001",
+                                    "derived_from": "EPIC-001#breakdown",
+                                },
+                            }
+                        ],
+                    }
+                }
+            }
+        },
+    )
+
+    assert normalized_business["decision"] == "pass"
+    assert normalized_business["findings"] == []
+    assert normalized_business["risks"] == []
+    assert normalized_structured["business_output"]["findings"] == []
+
+
 def test_product_review_normalizer_sanitizes_delivery_plan_directory_and_subject_false_positives(tmp_path):
     for feat_id, task_id in (
         ("FEAT-101", "TASK-FEAT-101-001"),
@@ -290,6 +430,26 @@ def test_delivery_plan_validation_accepts_pass_with_positive_only_findings():
             "recommendations": [],
         },
         instance_data=None,
+    )
+
+    assert error is None
+
+
+def test_feat_review_validation_accepts_pass_with_positive_only_findings():
+    error = LLMRunner._validate_feat_review_semantics(
+        {
+            "review_type": "feat_review",
+            "decision": "pass",
+            "subject_refs": ["FEAT-101"],
+            "summary": "ok",
+            "findings": [
+                "All reviewed FEATs contain complete acceptance checks.",
+                "dependencies are clear and traceability is complete.",
+            ],
+            "risks": [],
+            "recommendations": [],
+        },
+        ["FEAT-101"],
     )
 
     assert error is None

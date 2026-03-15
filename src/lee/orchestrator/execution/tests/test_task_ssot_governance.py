@@ -623,3 +623,83 @@ def test_materialize_src_candidate_preserves_bridge_context_in_markdown():
         assert "## 非目标" in content
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.mark.asyncio
+async def test_publish_gate_canonical_ssot_prefers_gate_primary_payload_for_epic_freeze():
+    temp_dir = Path(tempfile.mkdtemp())
+    try:
+        manager = ArtifactManager(project_root=temp_dir)
+        src = manager.create_ssot(
+            ssot_type=SSOTType.SRC,
+            title="Delivery Workflow Source",
+            content="# Source\n",
+            run_id="run-src-046",
+        )
+        harness = _GateHarness()
+        harness.project_root = temp_dir
+
+        gate_payload = {
+            "gate_approved": True,
+            "approver": "human",
+            "comments": "approve",
+            "title": "交付轴 workflow 化治理与发布闭环建设",
+            "goal": "建立正式交付主链。",
+            "scope": ["构建 RELEASE 主链"],
+            "non_goals": ["不改 ADR 根模型"],
+            "success_metrics": ["交付主链可追溯"],
+            "priority": "P0",
+            "source_refs": [src.id, "ADR-001"],
+            "ssot": {
+                "identity_kind": "ssot",
+                "ssot_type": "EPIC",
+                "parent": src.id,
+                "derived_from": src.id,
+            },
+            "frozen_inputs": {
+                "epic_formalized_candidate": {
+                    "business_output": {
+                        "title": "交付轴 workflow 化治理与发布闭环建设",
+                        "goal": "建立正式交付主链。",
+                        "scope": ["构建 RELEASE 主链"],
+                        "non_goals": ["不改 ADR 根模型"],
+                        "success_metrics": ["交付主链可追溯"],
+                        "priority": "P0",
+                        "source_refs": [src.id],
+                        "ssot": {
+                            "identity_kind": "ssot",
+                            "ssot_type": "EPIC",
+                            "parent": src.id,
+                            "derived_from": src.id,
+                        },
+                    }
+                },
+                "epic_review_report": {
+                    "business_output": {
+                        "decision": "pass",
+                        "source_refs": [src.id, "ADR-001"],
+                    }
+                },
+            },
+        }
+        instance = SimpleNamespace(
+            data={
+                "step_outputs": {"epic_freeze": gate_payload},
+                "params": {},
+            }
+        )
+
+        await harness._publish_gate_canonical_ssot(
+            instance=instance,
+            workflow_id="wf_task_epic_freeze",
+            gate_step_id="epic_freeze",
+            manager=manager,
+        )
+
+        epic_dir = temp_dir / "spec" / "requirements" / src.id
+        artifacts = list(epic_dir.glob("EPIC-*.md"))
+        assert len(artifacts) == 1
+        assert artifacts[0].name.startswith(f"EPIC-{src.id}-")
+        harness.store.update_workflow_data.assert_awaited_once()
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)

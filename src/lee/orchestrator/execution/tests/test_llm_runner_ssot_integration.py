@@ -888,11 +888,11 @@ async def test_materialize_ssot_outputs_from_agent_contract(runner, ctx, temp_pr
     )
 
     assert result is not None
-    assert result["outputs"]["epic"]["id"] == "EPIC-001"
-    assert result["outputs"]["feat"]["parent_id"] == "EPIC-001"
+    assert result["outputs"]["epic"]["id"].startswith("EPIC-SRC-001-")
+    assert result["outputs"]["feat"]["parent_id"] == result["outputs"]["epic"]["id"]
     assert len(result["materialized_files"]) == 2
-    assert (temp_project_root / "spec" / "requirements" / "epics").exists()
-    assert (temp_project_root / "spec" / "requirements" / "features").exists()
+    assert any("spec\\requirements\\SRC-001\\" in path or "spec/requirements/SRC-001/" in path for path in result["materialized_files"])
+    assert all(Path(path).exists() for path in result["materialized_files"])
 
 
 @pytest.mark.asyncio
@@ -944,6 +944,173 @@ async def test_materialize_ssot_outputs_from_envelope_payload(runner, ctx, temp_
     assert (temp_project_root / "spec" / "requirements" / "features").exists()
 
 
+@pytest.mark.asyncio
+async def test_materialize_ssot_outputs_skips_explicit_non_freeze_steps(runner, ctx, temp_project_root):
+    step = SimpleNamespace(
+        id="epic_design",
+        agent_id="agent.product.epic_designer",
+        config={},
+        outputs=[
+            SimpleNamespace(
+                type="symbol",
+                path="epic_candidate",
+                symbol="epic_candidate",
+                contract="departments/product/contracts/epic-contract/v1/schema.json",
+                freeze=False,
+                ssot={"identity_kind": "ssot", "ssot_type": "EPIC"},
+            )
+        ],
+    )
+
+    generated_text = """
+{
+  "contract_version": "1.0",
+  "run_id": "run-ssot-003",
+  "outputs": [
+    {
+      "key": "epic",
+      "identity_kind": "ssot",
+      "ssot_type": "epic",
+      "title": "交付轴治理"
+    }
+  ]
+}
+""".strip()
+
+    result = await runner._materialize_ssot_outputs(
+        ctx=ctx,
+        step=step,
+        workflow_id="wf-003",
+        generated_text=generated_text,
+    )
+
+    assert result is None
+    assert not (temp_project_root / "spec").exists()
+
+
+@pytest.mark.asyncio
+async def test_materialize_ssot_outputs_validate_only_for_non_freeze_steps(runner, ctx):
+    step = SimpleNamespace(
+        id="epic_design",
+        agent_id="agent.product.epic_designer",
+        config={"strict_output_validation": True},
+        outputs=[
+            SimpleNamespace(
+                type="symbol",
+                path="epic_candidate",
+                symbol="epic_candidate",
+                contract="departments/product/contracts/epic-contract/v1/schema.json",
+                freeze=False,
+                ssot={"identity_kind": "ssot", "ssot_type": "EPIC"},
+            )
+        ],
+    )
+
+    generated_text = """
+{
+  "contract_version": "1.0",
+  "run_id": "run-ssot-003-validate",
+  "outputs": [
+    {
+      "key": "epic",
+      "identity_kind": "ssot",
+      "ssot_type": "epic",
+      "title": "交付轴治理"
+    }
+  ]
+}
+""".strip()
+
+    result = await runner._materialize_ssot_outputs(
+        ctx=ctx,
+        step=step,
+        workflow_id="wf-003-validate",
+        generated_text=generated_text,
+    )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_materialize_ssot_outputs_non_freeze_steps_still_fail_strict_validation(runner, ctx):
+    step = SimpleNamespace(
+        id="epic_design",
+        agent_id="agent.product.epic_designer",
+        config={"strict_output_validation": True},
+        outputs=[
+            SimpleNamespace(
+                type="symbol",
+                path="epic_candidate",
+                symbol="epic_candidate",
+                contract="departments/product/contracts/epic-contract/v1/schema.json",
+                freeze=False,
+                ssot={"identity_kind": "ssot", "ssot_type": "EPIC"},
+            )
+        ],
+    )
+
+    generated_text = """
+{
+  "contract_version": "1.0",
+  "run_id": "run-ssot-003-invalid",
+  "outputs": []
+}
+""".strip()
+
+    with pytest.raises(ValueError, match="Invalid SSOT contract"):
+        await runner._materialize_ssot_outputs(
+            ctx=ctx,
+            step=step,
+            workflow_id="wf-003-invalid",
+            generated_text=generated_text,
+        )
+
+
+@pytest.mark.asyncio
+async def test_materialize_ssot_outputs_allows_explicit_freeze_steps(runner, ctx, temp_project_root):
+    step = SimpleNamespace(
+        id="epic_freeze",
+        agent_id="agent.product.epic_designer",
+        config={},
+        outputs=[
+            SimpleNamespace(
+                type="file",
+                path="output/design-frozen/{project}-epic-freeze.yaml",
+                symbol=None,
+                contract=None,
+                freeze=True,
+                ssot={"identity_kind": "ssot", "ssot_type": "EPIC"},
+            )
+        ],
+    )
+
+    generated_text = """
+{
+  "contract_version": "1.0",
+  "run_id": "run-ssot-004",
+  "outputs": [
+    {
+      "key": "epic",
+      "identity_kind": "ssot",
+      "ssot_type": "epic",
+      "title": "交付轴治理"
+    }
+  ]
+}
+""".strip()
+
+    result = await runner._materialize_ssot_outputs(
+        ctx=ctx,
+        step=step,
+        workflow_id="wf-004",
+        generated_text=generated_text,
+    )
+
+    assert result is not None
+    assert result["outputs"]["epic"]["id"] == "EPIC-001"
+    assert (temp_project_root / "spec" / "requirements" / "epics").exists()
+
+
 def test_governance_preflight_requires_anchor_when_no_formal_ssot(temp_project_root, runner):
     agent_spec = SimpleNamespace(
         contracts={},
@@ -985,12 +1152,13 @@ def test_claude_code_runner_merges_forbidden_read_paths():
 def test_claude_code_runner_merges_context_files():
     merged = ClaudeCodeRunner._merge_context_files(
         ["spec/requirements/epics/EPIC-001.md"],
-        ["spec/requirements/epics/EPIC-001.md", "spec/adr/ADR-007.md"],
+        ["['spec/requirements/epics/EPIC-001.md', 'spec/adr/ADR-007.md', 'spec/adr/ADR-008.md']"],
     )
 
     assert merged == [
         "spec/requirements/epics/EPIC-001.md",
         "spec/adr/ADR-007.md",
+        "spec/adr/ADR-008.md",
     ]
 
 
@@ -2040,6 +2208,37 @@ def test_claude_code_input_defaults_silence_timeout_to_executor_default(temp_pro
     )
 
     assert input_data["silence_timeout_seconds"] == ClaudeCodeRunner.DEFAULT_SILENCE_TIMEOUT_SECONDS
+
+
+def test_claude_code_input_collects_declared_file_outputs_from_step_objects(temp_project_root):
+    agent_ctx = SimpleNamespace(
+        system_prompt="system rules",
+        user_prompt="publish tech package",
+        temperature=0.2,
+        max_tokens=1200,
+    )
+    step = SimpleNamespace(
+        outputs=[
+            SimpleNamespace(path="output/tech-packages/FEAT-SRC-041-005/tech_package.yaml", type="file"),
+            SimpleNamespace(path="output/tech-packages/FEAT-SRC-041-005/handoff_notes.md", type="file"),
+            SimpleNamespace(path="gate_result", type="symbol"),
+        ]
+    )
+
+    input_data = ClaudeCodeRunner._build_claude_code_input_data(
+        agent_ctx=agent_ctx,
+        step=step,
+        claude_config={},
+        workspace=str(temp_project_root),
+        workflow_id="wf-claude-002",
+        step_id="publish_tech",
+        context_files=[],
+    )
+
+    assert input_data["declared_output_files"] == [
+        "output/tech-packages/FEAT-SRC-041-005/tech_package.yaml",
+        "output/tech-packages/FEAT-SRC-041-005/handoff_notes.md",
+    ]
 
 
 @pytest.mark.asyncio
@@ -5028,6 +5227,52 @@ def test_normalize_prd_writer_feat_bundle_payload_maps_user_story_shape(runner):
             "so_that": "减少手工维护",
         }
     ]
+
+
+def test_normalize_prd_writer_feat_bundle_payload_refines_governance_output_semantics(runner):
+    step = SimpleNamespace(agent_id="agent.product.prd_writer")
+    business_output = {
+        "epic_ref": "EPIC-052",
+        "feat_specs": [
+            {
+                "feat_id": "FEAT-052-002",
+                "title": "bridge SRC 生成与语义标识机制",
+                "goal": "生成带 bridge_flag 语义标识的 bridge SRC 对象",
+                "user_value": "bridge SRC 与业务 SRC 可区分",
+                "inputs": ["trigger_result", "source_adr"],
+                "input_contract": {
+                    "required_artifacts": ["bridge SRC schema 定义", "冻结后的 ADR 对象"],
+                    "required_fields": ["trigger_result", "source_adr"],
+                    "optional_fields": [],
+                    "consumption_rules": ["仅当 trigger_result=true 时才生成 bridge SRC"],
+                },
+                "processing": ["生成 bridge SRC 对象", "执行 bridge SRC schema 校验"],
+                "outputs": ["bridge SRC 生成与语义标识机制 FEAT specification"],
+                "acceptance_criteria": [
+                    "输入触发桥接的 ADR 后输出包含 bridge_flag 字段的 bridge SRC 对象",
+                    "bridge SRC 通过 schema 校验且与业务 SRC 语义可区分",
+                ],
+                "acceptance_checks": [],
+                "dependencies": ["EPIC-052"],
+                "non_goals": ["bridge SRC 的最终 schema 字段名冻结"],
+                "priority": "P0",
+                "delivery_slice": "mvp",
+                "lifecycle_status": "draft",
+                "ssot": {"parent": "EPIC-052", "derived_from": "EPIC-052"},
+            }
+        ],
+    }
+
+    normalized_business, _ = runner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-task-052",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+    )
+
+    feat = normalized_business["feat_specs"][0]
+    assert "包含 bridge_flag 字段的 bridge SRC 对象" in feat["outputs"]
+    assert feat["input_contract"]["required_artifacts"][0] == "bridge SRC schema 基线"
 
 
 def test_normalize_prd_writer_feat_bundle_payload_rebuilds_invalid_contract_keys(runner):

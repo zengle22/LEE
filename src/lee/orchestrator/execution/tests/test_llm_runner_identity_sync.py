@@ -1,4 +1,7 @@
-from lee.orchestrator.execution.runners.llm_runner import LLMRunner
+import inspect
+import re
+
+from lee.orchestrator.execution.runners.llm_runner import ClaudeCodeRunner, LLMRunner
 
 
 def test_sync_business_output_uses_materialized_epic_id() -> None:
@@ -31,3 +34,38 @@ def test_sync_business_output_uses_materialized_epic_id() -> None:
     assert normalized_business["epic_ref"] == "EPIC-SRC-046-001"
     assert normalized_structured["business_output"]["epic_id"] == "EPIC-SRC-046-001"
     assert normalized_structured["business_output"]["epic_ref"] == "EPIC-SRC-046-001"
+
+
+def test_claude_code_runner_exposes_identity_sync_helper() -> None:
+    business_output = {"epic_id": "EPIC-046"}
+    structured_payload = {"business_output": {"epic_id": "EPIC-046"}}
+    ssot_materialized = {"outputs": {"epic": {"id": "EPIC-SRC-046-001"}}}
+
+    normalized_business, normalized_structured = (
+        ClaudeCodeRunner._synchronize_business_identity_from_materialized_ssot(
+            business_output=business_output,
+            structured_payload=structured_payload,
+            ssot_materialized=ssot_materialized,
+        )
+    )
+
+    assert normalized_business["epic_id"] == "EPIC-SRC-046-001"
+    assert normalized_structured["business_output"]["epic_id"] == "EPIC-SRC-046-001"
+
+
+def test_claude_code_runner_borrowed_llm_methods_have_required_helpers() -> None:
+    borrowed_missing = {}
+
+    for name, value in ClaudeCodeRunner.__dict__.items():
+        if not name.startswith("_"):
+            continue
+        target = getattr(value, "__func__", value)
+        qualname = getattr(target, "__qualname__", "")
+        if not qualname.startswith("LLMRunner."):
+            continue
+        refs = sorted(set(re.findall(r"self\\.(_[A-Za-z0-9_]+)", inspect.getsource(target))))
+        missing = [ref for ref in refs if not hasattr(ClaudeCodeRunner, ref)]
+        if missing:
+            borrowed_missing[name] = missing
+
+    assert borrowed_missing == {}
