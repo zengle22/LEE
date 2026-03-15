@@ -443,11 +443,14 @@ class WorkflowRunner:
 
     @staticmethod
     def _should_bypass_plan(template: Dict[str, Any]) -> bool:
-        """PlanAgent 目前仅适配 step-based template；phase-based L2 模板直接走原生编排。"""
+        """PlanAgent 目前仅适配 root step-based template。"""
         kind = str(template.get("kind") or "").strip()
         phases = template.get("phases")
+        stages = template.get("stages")
         steps = template.get("steps")
-        return kind in {"l2_workflow_template", "l2_workflow_instance"} and isinstance(phases, list) and not steps
+        if kind in {"l2_workflow_template", "l2_workflow_instance"} and isinstance(phases, list) and not steps:
+            return True
+        return isinstance(stages, list) and not steps
 
 
 async def run_workflow(
