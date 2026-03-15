@@ -76,7 +76,18 @@ class ProductReviewNormalizer:
                 instance_data,
                 normalized_business,
             )
-            if expected_subject_refs and not normalized_business.get("subject_refs"):
+            actual_subject_refs = normalized_business.get("subject_refs")
+            actual_subject_ref_set = {
+                str(item).strip()
+                for item in actual_subject_refs
+                if isinstance(actual_subject_refs, list) and str(item).strip()
+            }
+            expected_subject_ref_set = {
+                str(item).strip()
+                for item in expected_subject_refs
+                if isinstance(item, str) and item.strip()
+            }
+            if expected_subject_ref_set and actual_subject_ref_set != expected_subject_ref_set:
                 normalized_business["subject_refs"] = expected_subject_refs
         elif review_type == "feat_review":
             expected_subject_refs = runner_cls._expected_feat_review_subject_refs(
