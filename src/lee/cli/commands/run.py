@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 import threading
@@ -15,6 +14,11 @@ from typing import Dict, Any, List, Optional, Tuple
 import click
 import yaml
 
+from lee.cli.commands.spec_input_loader import (
+    load_spec_option as _load_spec_option,
+    load_spec_option_as_params as _load_spec_option_as_params,
+    load_spec_option_for_workflow as _load_spec_option_for_workflow,
+)
 from lee.cli.commands.workflow_registry import load_workflow_registry, resolve_workflow_template_path
 from lee.cli.commands.workflow_compat import adapt_params_for_workflow, resolve_registry_entry
 from lee.orchestrator.config import ConfigResolver
@@ -92,69 +96,6 @@ def _has_param_with_aliases(params: Dict[str, Any], name: str) -> bool:
 
 def _load_registry() -> Dict[str, Any]:
     return load_workflow_registry()
-
-
-def _load_spec_option_as_params(spec_path: str) -> Dict[str, Any]:
-    """Load --spec file as params payload when the workflow opts into it."""
-    path = Path(spec_path).resolve()
-    if not path.exists():
-        raise click.ClickException(f"Spec file not found: {path}")
-
-    try:
-        if path.suffix.lower() == ".json":
-            return json.loads(path.read_text(encoding="utf-8"))
-        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception as exc:
-        raise click.ClickException(f"Failed to parse spec file '{path}': {exc}") from exc
-
-
-def _load_spec_option(spec_path: str) -> Dict[str, Any]:
-    """
-    Resolve --spec into workflow params.
-
-    Default behavior:
-    - object-like YAML/JSON -> merge as params
-    - everything else -> keep as {"spec": "<absolute-path>"}
-    """
-    path = Path(spec_path).resolve()
-    if not path.exists():
-        raise click.ClickException(f"Spec file not found: {path}")
-
-    if path.suffix.lower() not in {".json", ".yaml", ".yml"}:
-        return {"spec": str(path)}
-
-    loaded = _load_spec_option_as_params(str(path))
-    if isinstance(loaded, dict):
-        return loaded
-    return {"spec": str(path)}
-
-
-def _load_spec_option_for_workflow(spec_path: str, entry: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Resolve --spec into workflow params with workflow-specific adaptation.
-
-    For text specs such as ADR/Markdown, product raw-input workflows expect the
-    content itself rather than only the path. If the workflow opts into
-    `load_spec_as_params` and declares `raw_requirement`, inject the file text
-    into that param.
-    """
-    path = Path(spec_path).resolve()
-    if not path.exists():
-        raise click.ClickException(f"Spec file not found: {path}")
-
-    if path.suffix.lower() in {".json", ".yaml", ".yml"}:
-        loaded = _load_spec_option_as_params(str(path))
-        if isinstance(loaded, dict):
-            return loaded
-        return {"spec": str(path)}
-
-    if entry.get("load_spec_as_params"):
-        candidate_params = set(entry.get("required_params", []) or [])
-        candidate_params.update(entry.get("optional_params", []) or [])
-        if "raw_requirement" in candidate_params:
-            return {"raw_requirement": path.read_text(encoding="utf-8")}
-
-    return {"spec": str(path)}
 
 
 def _render_workflow_template(template_path: Path, params: Dict[str, Any], project_dir: Path) -> Path:
