@@ -183,12 +183,6 @@ class GateOperationsMixin:
         *,
         max_steps: int = 20,
     ) -> None:
-        """
-        当子工作流在 gate 审批后完成时，自动尝试推进父工作流。
-
-        这避免 L2/L3 链路在 child 已 completed 后，还需要人工再执行一次
-        `lee workflow run-step` 才能让父流程吸收 child 输出并进入下一阶段。
-        """
         from lee.orchestrator.storage.models import WorkflowStatus
 
         current = await self.store.get_workflow(workflow_id)
@@ -530,7 +524,6 @@ class GateOperationsMixin:
 
     @staticmethod
     def _coerce_gate_business_payload(payload: Any) -> Optional[Dict[str, Any]]:
-        """Normalize agent/gate payloads into a dict suitable for downstream frozen-object handoff."""
         if not isinstance(payload, dict):
             return None
         if isinstance(payload.get("business_output"), dict):
@@ -576,7 +569,6 @@ class GateOperationsMixin:
 
     @classmethod
     def _sanitize_gate_payload(cls, payload: Any) -> Any:
-        """Drop executor wrapper noise before passing frozen payloads downstream."""
         if isinstance(payload, list):
             return [cls._sanitize_gate_payload(item) for item in payload]
         if not isinstance(payload, dict):
@@ -930,21 +922,11 @@ class GateOperationsMixin:
         ]
 
     def _find_gate_ir(self, template, gate_id: str):
-        """
-        从 template 中查找 Gate IR 定义
-
-        v3.1: 支持从 spec-global IR 或 template steps 中查找 gate
-        如果找不到 gate IR，返回 None（向后兼容）
-        """
-        # 尝试从 template 中查找带 gate 的 step
         if template and hasattr(template, 'steps'):
             for step in template.steps:
                 if hasattr(step, 'gate_id') and step.gate_id == gate_id:
-                    # 如果 step 有内联的 gate 定义，尝试解析
                     if hasattr(step, 'gate') and step.gate:
                         return step.gate
-        # template_manager 目前不提供 GateIR 对象
-        # 当 spec-global 全面迁移后，可以从 WorkflowIR.gates 中获取
         return None
 
     async def _freeze_gate_targets(self, workflow_id: str, gate_step_id: str) -> None:
@@ -957,9 +939,6 @@ class GateOperationsMixin:
             return
 
         target_ids = self._collect_gate_freeze_target_ids(instance, gate_step_id)
-        if not target_ids:
-            return
-
         from lee.orchestrator.execution.artifacts import ArtifactManager
 
         manager = ArtifactManager(project_root=Path(self.project_root or ".").resolve())
@@ -981,7 +960,6 @@ class GateOperationsMixin:
         gate_step_id: str,
         manager,
     ) -> None:
-        """发布Gate产出的规范SSOT对象到标准目录"""
         payloads = self._collect_gate_freeze_payloads(instance, gate_step_id)
         if not payloads:
             return
@@ -995,16 +973,27 @@ class GateOperationsMixin:
                 alias = f"{gate_step_id}_ref"
                 published_refs[alias] = published
 
+        instance_data = dict(getattr(instance, "data", {}) or {})
+        step_outputs = dict(instance_data.get("step_outputs", {}) or {})
+        gate_output = dict(step_outputs.get(gate_step_id, {}) or {})
+        if gate_step_id == "delivery_prep_freeze" and "delivery_prep_freeze_ref" not in published_refs:
+            for candidate in gate_output.get("paths", []) if isinstance(gate_output.get("paths"), list) else []:
+                if not isinstance(candidate, (str, Path)) or not str(candidate).strip():
+                    continue
+                path = Path(str(candidate).strip())
+                try:
+                    normalized = path.resolve().relative_to(Path(self.project_root or ".").resolve()).as_posix()
+                except Exception:
+                    normalized = path.as_posix() if path.is_absolute() else str(candidate).strip().replace("\\", "/")
+                published_refs["delivery_prep_freeze_ref"] = {"path": normalized}
+                break
         if not published_refs:
             return
 
-        instance_data = dict(getattr(instance, "data", {}) or {})
         params = dict(instance_data.get("params", {}) or {})
         params.update(published_refs)
         instance_data["params"] = params
 
-        step_outputs = dict(instance_data.get("step_outputs", {}) or {})
-        gate_output = dict(step_outputs.get(gate_step_id, {}) or {})
         gate_output.update(published_refs)
         step_outputs[gate_step_id] = gate_output
         instance_data["step_outputs"] = step_outputs
@@ -1012,7 +1001,6 @@ class GateOperationsMixin:
         await self.store.update_workflow_data(workflow_id, instance_data)
 
     def _collect_gate_freeze_payloads(self, instance, gate_step_id: str) -> List[Any]:
-        """收集Gate freeze所需的payloads，支持别名解析"""
         instance_data = getattr(instance, "data", {}) or {}
         step_output_map = instance_data.get("step_outputs", {}) or {}
         params = instance_data.get("params", {}) or {}
