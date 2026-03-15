@@ -16,6 +16,7 @@ from lee.orchestrator.execution.validators.schema_validator import SchemaValidat
 
 from .manager import ArtifactManager
 from .models import ArtifactMetadata
+from .placement import resolve_src_root_id
 from .types import ArtifactType, GovernanceKind, SSOTType
 
 
@@ -138,7 +139,8 @@ class SSOTContractMaterializer:
                     if isinstance(candidate_value, str) and candidate_value.strip():
                         formal_id = candidate_value.strip()
                         break
-            if formal_id is None:
+            formal_id = self._normalize_explicit_formal_id(output, formal_id)
+            if formal_id is None and self._should_use_legacy_formal_id(output):
                 formal_id = self._next_legacy_formal_id(output)
             artifact = self.manager.create_ssot(
                 ssot_type=SSOTType(output["ssot_type"]),
@@ -181,6 +183,55 @@ class SSOTContractMaterializer:
             identity_kind=identity_kind,
             artifact=artifact,
         )
+
+    def _normalize_explicit_formal_id(
+        self,
+        output: Dict[str, Any],
+        formal_id: Optional[str],
+    ) -> Optional[str]:
+        if not isinstance(formal_id, str) or not formal_id.strip():
+            return None
+        if output.get("identity_kind") != "ssot":
+            return formal_id.strip()
+        try:
+            ssot_type = SSOTType(output["ssot_type"])
+        except Exception:
+            return formal_id.strip()
+        if ssot_type not in (SSOTType.EPIC, SSOTType.FEAT):
+            return formal_id.strip()
+
+        normalized_formal_id = formal_id.strip()
+        src_root_id = resolve_src_root_id(
+            artifact_id=None,
+            parent_id=output.get("parent"),
+            source_refs=output.get("source_refs"),
+            properties=output.get("properties"),
+        )
+        if not src_root_id:
+            return normalized_formal_id
+
+        if resolve_src_root_id(artifact_id=normalized_formal_id) == src_root_id:
+            return normalized_formal_id
+
+        return None
+
+    def _should_use_legacy_formal_id(self, output: Dict[str, Any]) -> bool:
+        if output.get("identity_kind") != "ssot":
+            return False
+        try:
+            ssot_type = SSOTType(output["ssot_type"])
+        except Exception:
+            return False
+        if ssot_type not in (SSOTType.EPIC, SSOTType.FEAT):
+            return True
+
+        src_root_id = resolve_src_root_id(
+            artifact_id=None,
+            parent_id=output.get("parent"),
+            source_refs=output.get("source_refs"),
+            properties=output.get("properties"),
+        )
+        return not bool(src_root_id)
 
     def _next_legacy_formal_id(self, output: Dict[str, Any]) -> Optional[str]:
         if output.get("identity_kind") != "ssot":
