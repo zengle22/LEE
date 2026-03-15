@@ -110,7 +110,7 @@ class TaskExecution:
     step_name: str
 
     # 执行器
-    executor_type: str  # llm | shell | mcp | metagpt
+    executor_type: str  # llm | shell | mcp | claude_code | codex | langgraph
 
     # 输入输出
     input_data: Dict[str, Any] = field(default_factory=dict)
@@ -179,7 +179,7 @@ class Step:
     kind: str  # agent | skill | human_gate | marker
 
     # 执行器类型（运行时决定，或由 agent/skill 映射）
-    executor_type: Optional[str] = None  # llm | shell | mcp | metagpt
+    executor_type: Optional[str] = None  # llm | shell | mcp | claude_code | codex | langgraph
 
     # Agent/Skill/Gate 引用（v1.4 新增）
     agent_id: Optional[str] = None

@@ -208,7 +208,7 @@ class TestExecutorTypes:
     def test_executor_type_strings(self):
         """Test executor type constants."""
         # These are the valid executor types
-        executor_types = ["llm", "shell", "mcp", "metagpt", "claude_code", "skill"]
+        executor_types = ["llm", "shell", "mcp", "claude_code", "skill"]
 
         for et in executor_types:
             assert isinstance(et, str)

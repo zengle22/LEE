@@ -1507,7 +1507,7 @@ class BuiltinTemplates:
                 {
                     "id": "fix",
                     "kind": "agent",
-                    "executor": "metagpt",
+                    "executor": "llm",
                     "depends_on": ["analyze"],
                     "config": {"task_type": "code_implementation"},
                 },
