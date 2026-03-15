@@ -189,6 +189,7 @@ def normalize_task_directory(normalized_business: Dict[str, Any], source_feat_id
         normalized_task_directory.startswith("spec/requirements/tasks/")
         or not task_directory
         or "<FEAT-ID>" in task_directory
+        or re.fullmatch(r"spec/tasks/EPIC[^/]*", normalized_task_directory, re.IGNORECASE) is not None
     ):
         task_directory = canonical_task_directory
     normalized_business["planning_metadata"] = {

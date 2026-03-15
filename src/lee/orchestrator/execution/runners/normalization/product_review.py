@@ -17,8 +17,9 @@ class ProductReviewNormalizer:
             return business_output, structured_payload
 
         normalized_business = dict(business_output)
+        agent_id = getattr(step, "agent_id", "") or ""
         if (
-            getattr(step, "agent_id", "") == "agent.product.feat_reviewer"
+            agent_id == "agent.product.feat_reviewer"
             and normalized_business.get("review_type") is None
         ):
             normalized_business["review_type"] = "feat_review"
@@ -66,6 +67,17 @@ class ProductReviewNormalizer:
                     normalized_business["decision"] = "reject"
             if "findings" not in normalized_business:
                 normalized_business["findings"] = []
+        elif (
+            agent_id == "agent.product.epic_reviewer"
+            and normalized_business.get("review_type") is None
+        ):
+            normalized_business["review_type"] = "epic_review"
+
+        if normalized_business.get("review_type") == "epic_review":
+            normalized_business = runner_cls._normalize_epic_review_legacy_payload(
+                normalized_business,
+                instance_data=instance_data,
+            )
 
         review_type = normalized_business.get("review_type")
         if review_type not in {"source_review", "epic_review", "feat_review", "delivery_plan_review"}:

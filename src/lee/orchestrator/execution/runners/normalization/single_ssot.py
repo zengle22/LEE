@@ -156,34 +156,24 @@ class SingleSSOTNormalizer:
                 not isinstance(derived_from, str) or not runner_cls._is_literal_ssot_ref(derived_from)
             ):
                 derived_from = canonical_source_ref
-            formal_epic_id = business_output.get("epic_id")
             if not source_refs and isinstance(derived_from, str) and runner_cls._is_literal_ssot_ref(derived_from):
                 source_refs = [f"{derived_from}#scope"]
-            payload = runner_cls._ensure_structured_envelope(
-                business_output=business_output,
+            normalized_business = dict(business_output)
+            normalized_ssot = dict(ssot_meta)
+            normalized_ssot["identity_kind"] = "ssot"
+            normalized_ssot["ssot_type"] = "EPIC"
+            if canonical_source_ref:
+                normalized_ssot["parent"] = canonical_source_ref
+            if canonical_source_ref:
+                normalized_ssot["derived_from"] = canonical_source_ref
+            elif isinstance(derived_from, str) and runner_cls._is_literal_ssot_ref(derived_from):
+                normalized_ssot["derived_from"] = derived_from.strip()
+            normalized_business["ssot"] = normalized_ssot
+            if source_refs:
+                normalized_business["source_refs"] = source_refs
+            return normalized_business, runner_cls._ensure_structured_envelope(
+                business_output=normalized_business,
                 structured_payload=structured_payload,
             )
-            epic_output = {
-                "key": "epic",
-                "identity_kind": "ssot",
-                "ssot_type": "epic",
-                "title": str(business_output.get("title") or "EPIC").strip() or "EPIC",
-                "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
-            }
-            if source_refs:
-                epic_output["source_refs"] = source_refs
-            if isinstance(derived_from, str) and derived_from.strip():
-                if explicit_source_refs and explicit_source_refs[0].split("#", 1)[0] == derived_from.strip():
-                    epic_output["derived_from"] = [derived_from.strip()]
-                else:
-                    epic_output["derived_from"] = derived_from.strip()
-            if isinstance(formal_epic_id, str) and formal_epic_id.strip():
-                epic_output["properties"] = {"formal_id": formal_epic_id.strip()}
-            payload["ssot_output_contract"] = {
-                "contract_version": "1.0",
-                "run_id": workflow_id,
-                "outputs": [epic_output],
-            }
-            return business_output, payload
 
         return business_output, structured_payload

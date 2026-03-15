@@ -217,6 +217,9 @@ class DeliveryPlanReviewSemantics:
             r"完整$",
             r"支持",
             r"明确",
+            r"匹配正确",
+            r"正确定义",
+            r"对应 .* 的 ac-",
             r"已正确映射",
             r"已映射到",
             r"一致$",
@@ -296,24 +299,56 @@ class DeliveryPlanReviewSemantics:
             return "Delivery plan review output is not a structured object"
         if review_payload.get("review_type") != "delivery_plan_review":
             return "Delivery plan review output must set review_type=delivery_plan_review"
-        summary = review_payload.get("summary")
+        raw_decision = review_payload.get("decision")
+        raw_findings = [
+            item.strip()
+            for item in review_payload.get("findings") or []
+            if isinstance(item, str) and item.strip()
+        ]
+        if raw_decision == "revise" and raw_findings and all(cls.contains_false_positive(item) for item in raw_findings):
+            return "Delivery plan review findings contain no blocking issues"
+        sanitized_payload = cls.sanitize_payload(
+            runner_cls=runner_cls,
+            review_payload=review_payload,
+            instance_data=instance_data,
+        )
+        summary = sanitized_payload.get("summary")
         if not isinstance(summary, str) or not summary.strip():
             return "Delivery plan review output must include a non-empty summary"
-        decision = review_payload.get("decision")
+        decision = sanitized_payload.get("decision")
         if decision not in {"pass", "revise", "reject"}:
             return "Delivery plan review output decision must be one of: pass, revise, reject"
-        field_error = cls._validate_string_arrays(review_payload)
+        field_error = cls._validate_string_arrays(sanitized_payload)
         if field_error:
             return field_error
 
-        findings = [item.strip() for item in review_payload.get("findings") or [] if isinstance(item, str) and item.strip()]
+        findings = [
+            item.strip()
+            for item in sanitized_payload.get("findings") or []
+            if isinstance(item, str) and item.strip()
+        ]
         if decision == "pass":
-            if findings and not all(cls.contains_false_positive(item) for item in findings):
+            if findings and any(
+                runner_cls._contains_feat_review_negative_signal(item)
+                for item in findings
+            ) and not all(cls.contains_false_positive(item) for item in findings):
                 return "Delivery plan review output with decision=pass must not include findings"
             if runner_cls._contains_feat_review_negative_signal(summary):
                 return "Delivery plan review summary conflicts with decision=pass"
             return None
         if decision in {"revise", "reject"} and not findings:
+            if raw_decision == "revise" and raw_findings:
+                if all(cls.contains_false_positive(item) for item in raw_findings):
+                    return "Delivery plan review findings contain no blocking issues"
+                task_plan = cls.load_task_plan_business_output(runner_cls=runner_cls, instance_data=instance_data)
+                false_positive_error = cls._false_positive_error(
+                    runner_cls=runner_cls,
+                    project_root=project_root,
+                    review_payload=review_payload,
+                    task_plan=task_plan,
+                )
+                if false_positive_error:
+                    return false_positive_error
             return f"Delivery plan review output with decision={decision} must include at least one finding"
         if decision == "reject":
             return "Delivery plan review rejected the generated delivery plan"
@@ -324,7 +359,7 @@ class DeliveryPlanReviewSemantics:
         false_positive_error = cls._false_positive_error(
             runner_cls=runner_cls,
             project_root=project_root,
-            review_payload=review_payload,
+            review_payload=sanitized_payload,
             task_plan=task_plan,
         )
         if false_positive_error:
