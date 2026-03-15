@@ -20,7 +20,7 @@ def test_department_agent_ssot_output_schema_paths_resolve_to_existing_spec_glob
     project_root = Path.cwd()
     loader = AgentLoader(project_root=str(project_root))
 
-    for agent_ref in ("agent.design.ui_designer", "agent.product.epic_designer"):
+    for agent_ref in ("agent.design.ui_designer",):
         spec = loader.load(agent_ref)
         resolved = StepRunnerBase._resolve_contract_path(
             schema_ref=spec.contracts["ssot_output_schema"],
@@ -35,3 +35,12 @@ def test_department_agent_ssot_output_schema_paths_resolve_to_existing_spec_glob
                 "spec-global/core/contracts/ssot-agent-output/v1/schema.json"
             )
         ), resolved_path
+
+
+def test_product_epic_designer_emits_business_contract_only():
+    loader = AgentLoader(project_root=str(Path.cwd()))
+
+    spec = loader.load("agent.product.epic_designer")
+
+    assert spec.contracts.get("output_schema")
+    assert "ssot_output_schema" not in spec.contracts

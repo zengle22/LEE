@@ -308,3 +308,53 @@ async def test_workflow_runner_bypasses_plan_for_phase_based_l2_template(tmp_pat
     assert result.workflow_id == "wf_department_demo_999"
     assert result.instance_path == template
     assert "Bypassed PlanAgent" in (result.plan_summary or "")
+
+
+@pytest.mark.asyncio
+async def test_workflow_runner_bypasses_plan_for_stage_based_l3_template(tmp_path: Path, monkeypatch) -> None:
+    template = tmp_path / "tech-design.yaml"
+    template.write_text(
+        "\n".join(
+            [
+                "kind: l3_workflow_template",
+                "version: '1.0'",
+                "stages:",
+                "  - id: execution",
+                "    kind: stage",
+                "    steps:",
+                "      - id: analyze_feature",
+                "        kind: agent",
+                "        agent_id: agent.dev.tech_architect",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    config = WorkflowRunConfig(
+        workflow_key="dev.tech-design-l3",
+        template_path=template,
+        params={"formal_ssot_id": "FEAT-001"},
+        project_root=tmp_path,
+        plan_mode="suggest",
+    )
+    runner = WorkflowRunner(config)
+
+    async def fake_load_template():
+        return {
+            "kind": "l3_workflow_template",
+            "version": "1.0",
+            "stages": [{"id": "execution", "steps": [{"id": "analyze_feature"}]}],
+        }
+
+    async def fake_create_workflow(path: Path):
+        return "wf_task_demo_tech_001"
+
+    monkeypatch.setattr(runner, "_load_template", fake_load_template)
+    monkeypatch.setattr(runner, "_create_workflow", fake_create_workflow)
+
+    result = await runner._run_with_plan()
+
+    assert result.success is True
+    assert result.workflow_id == "wf_task_demo_tech_001"
+    assert result.instance_path == template
+    assert "Bypassed PlanAgent" in (result.plan_summary or "")

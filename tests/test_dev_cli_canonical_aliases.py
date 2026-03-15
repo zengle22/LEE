@@ -27,6 +27,8 @@ def test_registry_exposes_dev_canonical_aliases() -> None:
     assert workflows["dev.bugfix-delivery"]["kind"] == "l2_workflow_template"
     assert workflows["dev.feature"]["canonical_workflow"] == "dev.feature-delivery"
     assert workflows["dev.bugfix"]["canonical_workflow"] == "dev.bugfix-delivery"
+    assert workflows["dev.tech-design-l3"]["path"].endswith("tech-design-l3-template.yaml")
+    assert workflows["dev.tech_design_l3"]["canonical_workflow"] == "dev.tech-design-l3"
 
 
 def test_build_runtime_context_from_params_adds_repo_bindings() -> None:
@@ -86,6 +88,54 @@ def test_compat_params_are_adapted_for_dev_bugfix() -> None:
     assert adapted["severity"] == "P2"
     assert adapted["reproduction_evidence"]["summary"] == "click submit -> 500"
     assert adapted["repo_context"]["repo_id"] == "be-repo"
+
+
+def test_compat_params_are_adapted_for_dev_tech_design(tmp_path: Path) -> None:
+    feat_path = tmp_path / "spec" / "requirements" / "SRC-041" / "FEAT-SRC-041-001__gate.md"
+    feat_path.parent.mkdir(parents=True, exist_ok=True)
+    feat_path.write_text("---\nid: FEAT-SRC-041-001\n---\n", encoding="utf-8")
+
+    adr_dir = tmp_path / "spec" / "adr"
+    adr_dir.mkdir(parents=True, exist_ok=True)
+    (adr_dir / "ADR-008__runtime.md").write_text("# ADR-008\n", encoding="utf-8")
+    (adr_dir / "ADR-017__gate.md").write_text("# ADR-017\n", encoding="utf-8")
+
+    adapted = adapt_params_for_workflow(
+        "dev.tech_design_l3",
+        {
+            "formal_ssot_id": "FEAT-SRC-041-001",
+            "source_refs": ["EPIC-SRC-041-016#scope"],
+            "governing_adrs": ["ADR-008", "ADR-017"],
+            "repo_context": {"repo_id": "lee", "branch": "codex/tech-design-batch"},
+        },
+        project_root=tmp_path,
+    )
+
+    assert adapted["formal_ssot_path"] == feat_path.resolve().as_posix()
+    assert adapted["source_refs"][0] == feat_path.resolve().as_posix()
+    assert adapted["tech_spec_path"] == "spec/tech/SRC-041/TECH-FEAT-SRC-041-001__tech-design.md"
+    assert adapted["design_analysis_path"] == "spec/tech/FEAT-SRC-041-001/design_analysis.md"
+    assert adapted["decision_refs_path"] == "spec/tech/FEAT-SRC-041-001/decision_refs.yaml"
+    assert adapted["governing_adr_paths"] == [
+        (adr_dir / "ADR-008__runtime.md").resolve().as_posix(),
+        (adr_dir / "ADR-017__gate.md").resolve().as_posix(),
+    ]
+
+
+def test_tech_design_template_binds_authoritative_feat_inputs() -> None:
+    template_path = Path("spec-global/departments/dev/workflows/templates/tech-design-l3-template.yaml")
+    template = yaml.safe_load(template_path.read_text(encoding="utf-8"))
+
+    steps = template["stages"][0]["steps"]
+    analyze_feature = next(step for step in steps if step["id"] == "analyze_feature")
+    draft_tech_spec = next(step for step in steps if step["id"] == "draft_tech_spec")
+
+    assert analyze_feature["inputs"]["formal_ssot_id"] == "{{ params.formal_ssot_id }}"
+    assert analyze_feature["inputs"]["context_files"][0]["path"] == "{{ params.formal_ssot_path | default('') }}"
+    assert analyze_feature["outputs"][0]["path"] == "{{ params.design_analysis_path }}"
+    assert draft_tech_spec["inputs"]["context_files"][0]["path"] == "{{ params.formal_ssot_path | default('') }}"
+    assert draft_tech_spec["outputs"][0]["path"] == "{{ params.tech_spec_path }}"
+    assert "Formal FEAT ID: {{ params.formal_ssot_id }}." in draft_tech_spec["config"]["claude_code"]["goal"]
 
 
 def test_hydrate_l2_bootstrap_preserves_phase_payload_and_sets_context() -> None:

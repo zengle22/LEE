@@ -231,6 +231,37 @@ def test_product_review_normalizer_rewrites_delivery_plan_subject_refs_to_feats(
     assert normalized_business["subject_refs"] == ["FEAT-101", "FEAT-102"]
 
 
+def test_product_review_normalizer_recovers_legacy_epic_review_payload():
+    step = SimpleNamespace(agent_id="agent.product.epic_reviewer")
+    business_output = {
+        "review_id": "epic_review-20260315",
+        "epic_id": "EPIC-046",
+        "title": "交付轴 workflow 化治理与发布闭环建设",
+        "review_status": "PASS",
+        "observations": [
+            "EPIC 设计完整覆盖当前 release delivery 问题域。",
+            "拆分原则可以继续驱动下游 FEAT 设计。",
+        ],
+        "recommendations": [],
+    }
+
+    normalized_business, normalized_structured = ProductReviewNormalizer.normalize(
+        runner_cls=LLMRunner,
+        step=step,
+        business_output=business_output,
+        structured_payload={"business_output": dict(business_output)},
+        instance_data={},
+    )
+
+    assert normalized_business["review_type"] == "epic_review"
+    assert normalized_business["subject_refs"] == ["EPIC-046"]
+    assert normalized_business["decision"] == "pass"
+    assert normalized_business["summary"] == (
+        "EPIC 交付轴 workflow 化治理与发布闭环建设 passed structure, boundary, and split readiness review."
+    )
+    assert normalized_structured["business_output"]["review_type"] == "epic_review"
+
+
 def test_delivery_plan_subject_ref_validation_tolerates_task_only_refs_before_normalization():
     error = LLMRunner._validate_delivery_plan_review_subject_refs(
         {

@@ -630,6 +630,46 @@ def test_qwen_fallback_target_disables_unsafe_coding_executor_default(tmp_path):
     assert LLMRunner._resolve_qwen_fallback_target(str(tmp_path)) is None
 
 
+def test_resolve_code_executor_type_uses_configured_fallback_chain(tmp_path):
+    config_dir = tmp_path / ".lee"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text(
+        "executor:\n"
+        "  coding_executor: unknown\n"
+        "  coding_fallbacks:\n"
+        "    - kimi\n"
+        "    - codex\n",
+        encoding="utf-8",
+    )
+
+    resolved = LLMRunner._resolve_code_executor_type(
+        instance_data={},
+        project_root=str(tmp_path),
+    )
+
+    assert resolved == "kimi"
+
+
+def test_resolve_code_executor_type_uses_codex_as_last_fallback(tmp_path):
+    config_dir = tmp_path / ".lee"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text(
+        "executor:\n"
+        "  coding_executor: unknown\n"
+        "  coding_fallbacks:\n"
+        "    - invalid\n"
+        "    - codex\n",
+        encoding="utf-8",
+    )
+
+    resolved = LLMRunner._resolve_code_executor_type(
+        instance_data={},
+        project_root=str(tmp_path),
+    )
+
+    assert resolved == "codex"
+
+
 @pytest.mark.asyncio
 async def test_llm_runner_qwen_fallback_to_llm_uses_default_non_qwen_profile(runner, ctx, temp_project_root, monkeypatch):
     schema_path = temp_project_root / "product-goal.schema.json"
@@ -1271,6 +1311,40 @@ def test_epic_designer_synthesizes_epic_source_refs_and_derived_from(runner):
     assert output["derived_from"] == ["SRC-007"]
 
 
+def test_epic_designer_normalizes_business_ssot_fields(runner):
+    step = SimpleNamespace(id="epic_design", agent_id="agent.product.epic_designer", config={})
+    business_output = {
+        "epic_id": "EPIC-046",
+        "title": "交付轴 workflow 化治理与发布闭环建设",
+        "ssot": {
+            "derived_from": "SRC-046",
+        },
+    }
+
+    normalized_business, payload = runner._synthesize_single_ssot_payload(
+        step=step,
+        workflow_id="wf-epic-005",
+        business_output=business_output,
+        structured_payload={},
+        instance_data={
+            "params": {
+                "source_freeze": {
+                    "artifact_id": "SRC-046",
+                    "path": "spec/source/SRC-046__delivery.md",
+                }
+            }
+        },
+    )
+
+    assert normalized_business["ssot"]["identity_kind"] == "ssot"
+    assert normalized_business["ssot"]["ssot_type"] == "EPIC"
+    assert normalized_business["ssot"]["parent"] == "SRC-046"
+    assert normalized_business["ssot"]["derived_from"] == "SRC-046"
+    assert normalized_business["source_refs"] == ["SRC-046#scope"]
+    assert payload["business_output"]["source_refs"] == ["SRC-046#scope"]
+    assert "ssot_output_contract" not in payload
+
+
 def test_epic_designer_falls_back_to_derived_from_for_source_refs(runner):
     step = SimpleNamespace(id="epic_design", agent_id="agent.product.epic_designer", config={})
     business_output = {
@@ -1308,10 +1382,9 @@ def test_epic_designer_uses_source_problem_and_formal_epic_id(runner):
         structured_payload={},
     )
 
-    output = payload["ssot_output_contract"]["outputs"][0]
-    assert output["source_refs"] == ["SRC-012#scope"]
-    assert output["derived_from"] == "SRC-012"
-    assert output["properties"]["formal_id"] == "EPIC-012"
+    assert payload["business_output"]["source_refs"] == ["SRC-012#scope"]
+    assert payload["business_output"]["ssot"]["derived_from"] == "SRC-012"
+    assert "ssot_output_contract" not in payload
 
 
 def test_epic_designer_uses_instance_source_freeze_when_problem_id_is_prefixed(runner):
@@ -1340,10 +1413,9 @@ def test_epic_designer_uses_instance_source_freeze_when_problem_id_is_prefixed(r
         },
     )
 
-    output = payload["ssot_output_contract"]["outputs"][0]
-    assert output["source_refs"] == ["SRC-012#scope"]
-    assert output["derived_from"] == "SRC-012"
-    assert output["properties"]["formal_id"] == "EPIC-012"
+    assert payload["business_output"]["source_refs"] == ["SRC-012#scope"]
+    assert payload["business_output"]["ssot"]["derived_from"] == "SRC-012"
+    assert "ssot_output_contract" not in payload
 
 
 def test_pm_planner_normalization_remaps_acceptance_ids_from_formal_feat(temp_project_root, runner):
@@ -2868,6 +2940,170 @@ async def test_llm_runner_does_not_fail_after_successful_schema_repair(temp_proj
     assert result.status == "completed"
     state_machine.fail_step.assert_not_called()
     state_machine.complete_step.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_llm_runner_uses_output_spec_contract_for_strict_symbol_validation(temp_project_root):
+    runner = LLMRunner()
+    schema_path = temp_project_root / "problem-definition.schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "required": ["problem_id", "title", "problem_statement"],
+                "properties": {
+                    "problem_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "problem_statement": {"type": "string"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    step = SimpleNamespace(
+        id="problem_alignment",
+        agent_id="agent.product.requirement_alignment",
+        executor_type="llm",
+        config={"strict_output_validation": True},
+        input={},
+        outputs=[
+            SimpleNamespace(
+                type="symbol",
+                path="problem_definition",
+                symbol="problem_definition",
+                contract=str(schema_path),
+            )
+        ],
+    )
+    llm_payload = {
+        "status": "success",
+        "provider": "test",
+        "model": "test-model",
+        "tokens_used": 1,
+        "input_tokens": 1,
+        "output_tokens": 1,
+        "duration_seconds": 0.1,
+        "stop_reason": "stop",
+        "generated_text": json.dumps(
+            {
+                "problem_id": "SRC-046",
+                "title": "交付轴 workflow 化治理与发布闭环建设",
+            },
+            ensure_ascii=False,
+        ),
+    }
+    executor = MagicMock()
+    executor.execute = AsyncMock(return_value=llm_payload)
+    file_handler = MagicMock()
+    file_handler.handle = AsyncMock(return_value=[])
+    store = MagicMock()
+    store.get_workflow = AsyncMock(
+        return_value=SimpleNamespace(
+            data={"run_id": "run-001"},
+            level="task",
+            template_id="template.product.src_to_epic",
+        )
+    )
+    store.create_task_execution = AsyncMock(return_value="exec-001")
+    store.update_task_execution = AsyncMock()
+    state_machine = MagicMock()
+    state_machine.complete_step = AsyncMock(
+        return_value=StepResult(
+            status="completed",
+            step_id=step.id,
+            workflow_id="wf-001",
+            message="ok",
+        )
+    )
+    state_machine.fail_step = AsyncMock()
+    event_log = MagicMock()
+    event_log.emit = AsyncMock()
+    evidence_collector = MagicMock()
+    evidence_collector.collect_task_execution = AsyncMock()
+    verifier_engine = MagicMock()
+    agent_loader = MagicMock()
+    agent_loader.load.return_value = None
+    agent_context_builder = MagicMock()
+    agent_context_builder.build = AsyncMock(
+        return_value=SimpleNamespace(
+            system_prompt="system",
+            user_prompt="user",
+            temperature=0.1,
+            max_tokens=100,
+        )
+    )
+    agent_context_builder.agent_loader = agent_loader
+    token_manager = MagicMock()
+    token_manager.issue_token = MagicMock(return_value=None)
+    ctx = RunnerContext(
+        store=store,
+        state_machine=state_machine,
+        event_log=event_log,
+        evidence_collector=evidence_collector,
+        verifier_engine=verifier_engine,
+        executor_factory=MagicMock(create=MagicMock(return_value=executor)),
+        agent_context_builder=agent_context_builder,
+        contract_discovery=MagicMock(get_workflow_inputs=MagicMock(return_value={})),
+        file_output_handler=file_handler,
+        token_manager=token_manager,
+        project_root=str(temp_project_root),
+    )
+
+    repair_called = {"value": False}
+
+    async def fake_attempt_schema_repair(**kwargs):
+        repair_called["value"] = True
+        return {
+            "output": {
+                "generated_text": json.dumps(
+                    {
+                        "problem_id": "SRC-046",
+                        "title": "交付轴 workflow 化治理与发布闭环建设",
+                        "problem_statement": "补齐 RELEASE 到发布关闭的正式主链。",
+                    },
+                    ensure_ascii=False,
+                )
+            },
+            "business_output": {
+                "problem_id": "SRC-046",
+                "title": "交付轴 workflow 化治理与发布闭环建设",
+                "problem_statement": "补齐 RELEASE 到发布关闭的正式主链。",
+            },
+            "structured_payload": None,
+        }
+
+    runner._attempt_schema_repair = fake_attempt_schema_repair
+
+    result = await runner.execute("wf-001", step, ctx)
+
+    assert result.status == "completed"
+    assert repair_called["value"] is True
+    state_machine.fail_step.assert_not_called()
+    completed_output = state_machine.complete_step.await_args.args[2]
+    assert completed_output["business_output"]["problem_statement"] == "补齐 RELEASE 到发布关闭的正式主链。"
+
+
+def test_problem_alignment_normalizer_maps_out_of_scope_to_non_goals(runner):
+    step = SimpleNamespace(id="problem_alignment", agent_id="agent.product.requirement_alignment", config={})
+    business_output = {
+        "problem_id": "SRC-046",
+        "title": "交付轴 workflow 化治理与发布闭环建设",
+        "problem_statement": "建立交付主链。",
+        "target_users": ["治理负责人"],
+        "scenarios": ["命令式交付收口不稳定"],
+        "out_of_scope": ["EPIC 设计", "技术架构"],
+        "constraints": ["遵循 ADR-001"],
+    }
+
+    normalized_business, normalized_structured = runner._normalize_business_payload(
+        step=step,
+        workflow_id="wf-problem-001",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+    )
+
+    assert normalized_business["non_goals"] == ["EPIC 设计", "技术架构"]
+    assert normalized_structured["business_output"]["non_goals"] == ["EPIC 设计", "技术架构"]
 
 
 @pytest.mark.asyncio
@@ -5585,6 +5821,76 @@ def test_claude_code_validation_reads_changed_file_for_symbol_outputs(temp_proje
     assert validation.passed is True
 
 
+def test_claude_code_validation_prefers_declared_symbol_payload_for_review_contract(temp_project_root):
+    schema_path = temp_project_root / "review.schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "required": ["review_id", "review_type", "subject_refs", "summary", "decision", "findings", "risks", "recommendations"],
+                "properties": {
+                    "review_id": {"type": "string"},
+                    "review_type": {"type": "string"},
+                    "subject_refs": {"type": "array", "items": {"type": "string"}},
+                    "summary": {"type": "string"},
+                    "decision": {"type": "string"},
+                    "findings": {"type": "array", "items": {"type": "string"}},
+                    "risks": {"type": "array", "items": {"type": "string"}},
+                    "recommendations": {"type": "array", "items": {"type": "string"}},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    step = SimpleNamespace(
+        id="epic_review",
+        agent_id="agent.review.requirement_reviewer",
+        config={"strict_output_validation": True},
+        outputs=[
+            SimpleNamespace(
+                type="symbol",
+                path="epic_review_report",
+                symbol="epic_review_report",
+                contract=str(schema_path),
+            )
+        ],
+    )
+    output = {
+        "raw_output": json.dumps(
+            {
+                "status": "success",
+                "symbols": {
+                    "epic_review_report": {
+                        "review_id": "RVW-046",
+                        "review_type": "epic_review",
+                        "subject_refs": ["EPIC-046"],
+                        "summary": "通过",
+                        "decision": "pass",
+                        "findings": [],
+                        "risks": [],
+                        "recommendations": [],
+                    }
+                },
+            },
+            ensure_ascii=False,
+        )
+    }
+
+    business_output, structured_payload = ClaudeCodeRunner._extract_business_output_for_validation(
+        step=step,
+        workflow_id="wf-001",
+        output=output,
+        written_files=[],
+    )
+    validation = ClaudeCodeRunner._validate_step_output(step, business_output)
+
+    assert isinstance(structured_payload, dict)
+    assert isinstance(business_output, dict)
+    assert business_output["review_id"] == "RVW-046"
+    assert validation is not None
+    assert validation.passed is True
+
+
 def test_parse_structured_output_accepts_fenced_json_with_leading_prose():
     output_text = """
 评审已完成。
@@ -5806,6 +6112,56 @@ def test_normalize_product_review_payload_updates_top_level_structured_review_pa
     assert normalized_business["decision"] == "pass"
     assert normalized_structured["decision"] == "pass"
     assert normalized_structured["findings"] == []
+
+
+def test_normalize_product_review_payload_recovers_legacy_epic_review_shape():
+    step = SimpleNamespace(
+        id="epic_review",
+        agent_id="agent.product.epic_reviewer",
+    )
+    business_output = {
+        "review_id": "epic_review-20260315",
+        "epic_id": "EPIC-046",
+        "title": "交付轴 workflow 化治理与发布闭环建设",
+        "review_status": "PASS",
+        "observations": [
+            "EPIC 设计完整覆盖当前 release delivery 问题域。",
+            "拆分原则可以继续驱动下游 FEAT 设计。",
+        ],
+        "recommendations": [],
+    }
+
+    normalized_business, normalized_structured = LLMRunner._normalize_product_review_payload(
+        step=step,
+        business_output=business_output,
+        structured_payload={"business_output": dict(business_output)},
+        instance_data={},
+    )
+
+    assert normalized_business["review_type"] == "epic_review"
+    assert normalized_business["subject_refs"] == ["EPIC-046"]
+    assert normalized_business["decision"] == "pass"
+    assert normalized_business["summary"] == (
+        "EPIC 交付轴 workflow 化治理与发布闭环建设 passed structure, boundary, and split readiness review."
+    )
+    assert normalized_structured["business_output"]["review_type"] == "epic_review"
+
+
+def test_build_schema_repair_input_enables_structured_output_only_for_claude_code():
+    step = SimpleNamespace(id="problem_alignment")
+
+    repaired_input = LLMRunner._build_schema_repair_input(
+        executor_type="claude_code",
+        input_data={"goal": "original", "workspace": "E:\\ai\\LEE"},
+        step=step,
+        validation_error="Invalid JSON",
+        business_output="```json\n{}\n```",
+        structured_payload=None,
+    )
+
+    assert repaired_input["structured_output_only"] is True
+    assert repaired_input["allowed_commands"] == []
+    assert repaired_input["max_iterations"] == 1
 
 
 def test_materialize_symbolic_workspace_outputs_writes_to_workflow_workspace(temp_project_root, runner):

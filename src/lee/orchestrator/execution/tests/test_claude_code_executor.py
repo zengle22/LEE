@@ -106,3 +106,21 @@ class TestClaudeCodeExecutor:
         )
 
         assert allowed_tools == ["Read", "Write", "Edit", "MultiEdit", "Bash"]
+
+    def test_build_system_prompt_uses_structured_output_only_mode(self):
+        prompt = self.executor._build_system_prompt(
+            goal="repair structured payload",
+            workspace="E:\\ai\\LEE",
+            allowed_commands=[],
+            write_scope=[],
+            read_only=True,
+            forbidden_read_paths=[],
+            max_iterations=1,
+            max_bash_calls=0,
+            stop_conditions={},
+            system_prompt_extra="",
+            structured_output_only=True,
+        )
+
+        assert "只允许返回最终 machine-readable JSON 对象本体" in prompt
+        assert '"status": "success 或 fail"' not in prompt
