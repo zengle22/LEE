@@ -5,6 +5,8 @@ from typing import Any, Dict, List
 
 import yaml
 
+from lee.orchestrator.execution.src_bridge import build_src_markdown, infer_bridge_src_fields
+
 
 SOURCE_NORMALIZATION_DRIFT_MARKERS = (
     "原始输入归一化",
@@ -126,15 +128,24 @@ def normalize_source_normalization_ssot_contract(
         structured_payload=structured_payload,
     )
     source_refs = runner_cls._derive_source_refs_from_business_output(business_output)
+    bridge_fields = infer_bridge_src_fields(business_output, source_refs=source_refs)
+    bridge_context = bridge_fields.get("bridge_context") if isinstance(bridge_fields, dict) else None
+    if not source_refs and isinstance(bridge_context, dict):
+        source_refs = bridge_context.get("governed_by_adrs") or []
     default_output = {
         "key": "src",
         "identity_kind": "ssot",
         "ssot_type": "src",
         "title": derive_src_title_from_business_output(business_output),
-        "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
+        "content": build_src_markdown(
+            business_output,
+            title=derive_src_title_from_business_output(business_output),
+            source_refs=source_refs,
+        ),
     }
     if source_refs:
         default_output["source_refs"] = source_refs
+    default_output.update(infer_bridge_src_fields(business_output, source_refs=source_refs))
 
     existing_contract = payload.get("ssot_output_contract")
     if not isinstance(existing_contract, dict):

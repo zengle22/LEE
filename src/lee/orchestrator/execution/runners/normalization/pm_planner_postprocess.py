@@ -178,10 +178,25 @@ def normalize_task_directory(normalized_business: Dict[str, Any], source_feat_id
     if not primary_feat and isinstance(normalized_business.get("task_specs"), list):
         primary_feat = next((ctx.clean_text(item.get("source_feat")) for item in normalized_business.get("task_specs") or [] if isinstance(item, dict) and ctx.clean_text(item.get("source_feat"))), "")
     canonical_task_directory = f"spec/tasks/{primary_feat or 'FEAT-001'}"
+    canonical_task_directories = [
+        f"spec/tasks/{feat_id}"
+        for feat_id in dict.fromkeys(
+            ctx.clean_text(item) for item in source_feat_ids if isinstance(item, str) and ctx.clean_text(item)
+        )
+    ] or [canonical_task_directory]
     normalized_task_directory = task_directory.replace("\\", "/") if task_directory else ""
-    if normalized_task_directory.startswith("spec/requirements/tasks/") or not task_directory or "<FEAT-ID>" in task_directory:
+    if (
+        normalized_task_directory.startswith("spec/requirements/tasks/")
+        or not task_directory
+        or "<FEAT-ID>" in task_directory
+        or re.fullmatch(r"spec/tasks/EPIC[^/]*", normalized_task_directory, re.IGNORECASE) is not None
+    ):
         task_directory = canonical_task_directory
-    normalized_business["planning_metadata"] = {**planning_metadata, "task_directory": task_directory}
+    normalized_business["planning_metadata"] = {
+        **planning_metadata,
+        "task_directory": task_directory,
+        "task_directories": canonical_task_directories,
+    }
 
 
 def enrich_delivery_plan_structure(normalized_business: Dict[str, Any], ctx: PmPlannerContext) -> None:

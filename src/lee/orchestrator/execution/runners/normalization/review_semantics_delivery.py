@@ -91,23 +91,68 @@ class DeliveryPlanReviewSemantics:
     ) -> bool:
         if not isinstance(task_plan, dict):
             return False
-        planning_metadata = task_plan.get("planning_metadata")
-        task_directory = ""
-        if isinstance(planning_metadata, dict):
-            task_directory = cls.review_clean_text(planning_metadata.get("task_directory"))
-        if not task_directory:
-            task_directory = cls._default_task_directory(task_plan)
-        task_dir_path = Path(project_root) / task_directory
+        task_dir_paths = {
+            task_directory: Path(project_root) / task_directory
+            for task_directory in cls._task_directories(task_plan)
+        }
         task_specs = task_plan.get("task_specs") if isinstance(task_plan.get("task_specs"), list) else []
-        if not task_dir_path.exists() or not task_specs:
+        if not task_specs or not task_dir_paths:
             return False
         for task_spec in task_specs:
             if not isinstance(task_spec, dict):
                 continue
             task_id = cls.review_clean_text(task_spec.get("task_id"))
-            if task_id and not list(task_dir_path.glob(f"{task_id}__*.md")):
+            source_feat = cls.review_clean_text(task_spec.get("source_feat"))
+            preferred_task_directory = f"spec/tasks/{source_feat}" if source_feat else ""
+            candidate_paths = []
+            if preferred_task_directory and preferred_task_directory in task_dir_paths:
+                candidate_paths.append(task_dir_paths[preferred_task_directory])
+            candidate_paths.extend(
+                path
+                for directory, path in task_dir_paths.items()
+                if directory != preferred_task_directory
+            )
+            if task_id and not any(
+                path.exists() and list(path.glob(f"{task_id}__*.md"))
+                for path in candidate_paths
+            ):
                 return False
         return True
+
+    @classmethod
+    def task_directories_cover_source_feats(cls, task_plan: Optional[Dict[str, Any]]) -> bool:
+        if not isinstance(task_plan, dict):
+            return False
+        source_feats = task_plan.get("source_feats") if isinstance(task_plan.get("source_feats"), list) else []
+        expected_directories = {
+            f"spec/tasks/{cls.review_clean_text(item)}"
+            for item in source_feats
+            if isinstance(item, str) and cls.review_clean_text(item)
+        }
+        if not expected_directories:
+            return False
+        actual_directories = set(cls._task_directories(task_plan))
+        return expected_directories.issubset(actual_directories)
+
+    @classmethod
+    def subject_refs_match_task_plan(
+        cls,
+        review_payload: Dict[str, Any],
+        task_plan: Optional[Dict[str, Any]],
+    ) -> bool:
+        if not isinstance(task_plan, dict):
+            return False
+        expected_subject_refs = [
+            cls.review_clean_text(item)
+            for item in task_plan.get("source_feats") or []
+            if isinstance(item, str) and cls.review_clean_text(item)
+        ]
+        actual_subject_refs = [
+            cls.review_clean_text(item)
+            for item in review_payload.get("subject_refs") or []
+            if isinstance(item, str) and cls.review_clean_text(item)
+        ]
+        return bool(expected_subject_refs) and sorted(actual_subject_refs) == sorted(expected_subject_refs)
 
     @classmethod
     def has_structural_spec_coverage(
@@ -185,6 +230,8 @@ class DeliveryPlanReviewSemantics:
         project_root = cls._project_root(instance_data)
         task_plan = cls.load_task_plan_business_output(runner_cls=runner_cls, instance_data=instance_data)
         has_persisted_tasks = cls.has_persisted_tasks(project_root=project_root, task_plan=task_plan)
+        task_directories_cover_source_feats = cls.task_directories_cover_source_feats(task_plan)
+        subject_refs_match_task_plan = cls.subject_refs_match_task_plan(sanitized, task_plan)
         has_structural_spec_coverage = cls.has_structural_spec_coverage(
             runner_cls=runner_cls,
             project_root=project_root,
@@ -193,16 +240,22 @@ class DeliveryPlanReviewSemantics:
         sanitized["findings"] = cls._filter_findings(
             findings=findings,
             has_persisted_tasks=has_persisted_tasks,
+            task_directories_cover_source_feats=task_directories_cover_source_feats,
+            subject_refs_match_task_plan=subject_refs_match_task_plan,
             has_structural_spec_coverage=has_structural_spec_coverage,
         )
         sanitized["risks"] = cls._filter_risks(
             risks=sanitized.get("risks") or [],
             has_persisted_tasks=has_persisted_tasks,
+            task_directories_cover_source_feats=task_directories_cover_source_feats,
+            subject_refs_match_task_plan=subject_refs_match_task_plan,
             has_structural_spec_coverage=has_structural_spec_coverage,
         )
         sanitized["recommendations"] = cls._filter_recommendations(
             recommendations=sanitized.get("recommendations") or [],
             has_persisted_tasks=has_persisted_tasks,
+            task_directories_cover_source_feats=task_directories_cover_source_feats,
+            subject_refs_match_task_plan=subject_refs_match_task_plan,
         )
         if sanitized.get("decision") == "revise" and not sanitized["findings"]:
             summary = str(sanitized.get("summary") or "").strip()
@@ -279,6 +332,25 @@ class DeliveryPlanReviewSemantics:
         return f"spec/tasks/{cls._primary_source_feat(task_plan) or 'FEAT-001'}"
 
     @classmethod
+    def _task_directories(cls, task_plan: Dict[str, Any]) -> List[str]:
+        planning_metadata = task_plan.get("planning_metadata")
+        directories: List[str] = []
+        if isinstance(planning_metadata, dict):
+            task_directories = planning_metadata.get("task_directories")
+            if isinstance(task_directories, list):
+                directories.extend(
+                    cls.review_clean_text(item).replace("\\", "/")
+                    for item in task_directories
+                    if isinstance(item, str) and cls.review_clean_text(item)
+                )
+            task_directory = cls.review_clean_text(planning_metadata.get("task_directory"))
+            if task_directory:
+                directories.append(task_directory.replace("\\", "/"))
+        if not directories:
+            directories.append(cls._default_task_directory(task_plan))
+        return list(dict.fromkeys(item for item in directories if item))
+
+    @classmethod
     def _primary_source_feat(cls, task_plan: Dict[str, Any]) -> str:
         source_feats = task_plan.get("source_feats") if isinstance(task_plan.get("source_feats"), list) else []
         return next(
@@ -325,11 +397,17 @@ class DeliveryPlanReviewSemantics:
         *,
         findings: List[str],
         has_persisted_tasks: bool,
+        task_directories_cover_source_feats: bool,
+        subject_refs_match_task_plan: bool,
         has_structural_spec_coverage: bool,
     ) -> List[str]:
         filtered: List[str] = []
         for item in findings:
             if cls.contains_false_positive(item):
+                continue
+            if re.search(r"task_directory.*不一致|task_directory.*inconsistent", item, re.IGNORECASE) and task_directories_cover_source_feats and has_persisted_tasks:
+                continue
+            if re.search(r"source_feats.*不匹配|source_feats.*mismatch|source_feats 为 .* 与 .*不匹配", item, re.IGNORECASE) and subject_refs_match_task_plan:
                 continue
             if re.search(r"双重覆盖|同时映射到 specification.*implementation|规范与实现双重覆盖", item, re.IGNORECASE) and has_structural_spec_coverage:
                 continue
@@ -347,6 +425,8 @@ class DeliveryPlanReviewSemantics:
         *,
         risks: List[Any],
         has_persisted_tasks: bool,
+        task_directories_cover_source_feats: bool,
+        subject_refs_match_task_plan: bool,
         has_structural_spec_coverage: bool,
     ) -> List[str]:
         filtered: List[str] = []
@@ -354,6 +434,10 @@ class DeliveryPlanReviewSemantics:
             if not isinstance(item, str) or not item.strip():
                 continue
             text = item.strip()
+            if re.search(r"task_directory.*不一致|task_directory.*inconsistent", text, re.IGNORECASE) and task_directories_cover_source_feats and has_persisted_tasks:
+                continue
+            if re.search(r"source_feats.*不匹配|source_feats.*mismatch", text, re.IGNORECASE) and subject_refs_match_task_plan:
+                continue
             if re.search(r"落盘|persist|persistence|未落盘|unverified", text, re.IGNORECASE) and has_persisted_tasks:
                 continue
             if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", text, re.IGNORECASE) and has_persisted_tasks:
@@ -368,12 +452,18 @@ class DeliveryPlanReviewSemantics:
         *,
         recommendations: List[Any],
         has_persisted_tasks: bool,
+        task_directories_cover_source_feats: bool,
+        subject_refs_match_task_plan: bool,
     ) -> List[str]:
         filtered: List[str] = []
         for item in recommendations:
             if not isinstance(item, str) or not item.strip():
                 continue
             text = item.strip()
+            if re.search(r"task_directory|spec/tasks/EPIC", text, re.IGNORECASE) and task_directories_cover_source_feats and has_persisted_tasks:
+                continue
+            if re.search(r"source_feats|subject_refs", text, re.IGNORECASE) and subject_refs_match_task_plan:
+                continue
             if re.search(r"spec/requirements/tasks/|未落盘|write.*spec/requirements/tasks|persist", text, re.IGNORECASE) and has_persisted_tasks:
                 continue
             if re.search(r"definition_of_done|落盘文件路径", text, re.IGNORECASE) and has_persisted_tasks:
@@ -409,6 +499,15 @@ class DeliveryPlanReviewSemantics:
         if re.search(r"落盘|persist|persistence|unverified", all_review_text, re.IGNORECASE):
             if cls.has_persisted_tasks(project_root=project_root, task_plan=task_plan):
                 return "Delivery plan review incorrectly reports TASK persistence as unverified"
+        if re.search(r"task_directory.*不一致|task_directory.*inconsistent", all_review_text, re.IGNORECASE):
+            if (
+                cls.has_persisted_tasks(project_root=project_root, task_plan=task_plan)
+                and cls.task_directories_cover_source_feats(task_plan)
+            ):
+                return "Delivery plan review incorrectly reports TASK directory mismatch"
+        if re.search(r"source_feats.*不匹配|source_feats.*mismatch", all_review_text, re.IGNORECASE):
+            if cls.subject_refs_match_task_plan(review_payload, task_plan):
+                return "Delivery plan review incorrectly reports source_feats mismatch"
         if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", all_review_text, re.IGNORECASE):
             if cls.has_persisted_tasks(project_root=project_root, task_plan=task_plan):
                 return "Delivery plan review incorrectly requires explicit TASK file paths"
