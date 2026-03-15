@@ -461,6 +461,7 @@ def _create_config(project_root: Path, force: bool = False) -> None:
             "default_type": "claude_code",
             "coding_executor": "claude_code",
             "coding_fallback": "kimi",
+            "coding_fallbacks": ["kimi", "codex"],
         },
     }
 
