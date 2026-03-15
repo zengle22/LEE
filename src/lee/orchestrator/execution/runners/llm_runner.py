@@ -4254,27 +4254,11 @@ class LLMRunner(StepRunnerBase):
         instance_data: Optional[Dict[str, Any]],
         business_output: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
-        refs: List[str] = []
-
-        if isinstance(business_output, dict):
-            for candidate in business_output.get("subject_refs", []):
-                if isinstance(candidate, str) and candidate.strip() and candidate.strip() not in refs:
-                    refs.append(candidate.strip())
-
-        if isinstance(instance_data, dict):
-            step_outputs = instance_data.get("step_outputs")
-            if isinstance(step_outputs, dict):
-                for step_id in ("task_plan", "task_planning"):
-                    task_planning = step_outputs.get(step_id)
-                    if not isinstance(task_planning, dict):
-                        continue
-                    task_business = LLMRunner._extract_step_business_candidate(task_planning)
-                    if isinstance(task_business, dict):
-                        for candidate in task_business.get("source_feats", []):
-                            if isinstance(candidate, str) and candidate.strip() and candidate.strip() not in refs:
-                                refs.append(candidate.strip())
-
-        return refs
+        return ReviewSemanticValidator.expected_delivery_plan_subject_refs(
+            runner_cls=LLMRunner,
+            instance_data=instance_data,
+            business_output=business_output,
+        )
 
     @staticmethod
     def _validate_delivery_plan_review_subject_refs(
@@ -4676,140 +4660,11 @@ class LLMRunner(StepRunnerBase):
         review_payload: Dict[str, Any],
         instance_data: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        sanitized = dict(review_payload)
-        findings = [
-            item.strip()
-            for item in sanitized.get("findings") or []
-            if isinstance(item, str) and item.strip()
-        ]
-
-        task_plan = cls._load_task_plan_business_output(instance_data)
-        project_root = ""
-        if isinstance(instance_data, dict):
-            project_root = str(instance_data.get("project_root") or "").strip()
-        if not project_root:
-            project_root = str(Path.cwd())
-        has_persisted_tasks = cls._delivery_plan_has_persisted_tasks(
-            project_root=project_root,
-            task_plan=task_plan,
+        return ReviewSemanticValidator.sanitize_delivery_plan_review_payload(
+            runner_cls=cls,
+            review_payload=review_payload,
+            instance_data=instance_data,
         )
-        has_structural_spec_coverage = cls._delivery_plan_has_structural_spec_coverage(
-            project_root=project_root,
-            task_plan=task_plan,
-        )
-        has_authoritative_plan_shape = cls._delivery_plan_has_authoritative_plan_shape(task_plan)
-        feat_review_report = {}
-        if isinstance(instance_data, dict):
-            params = instance_data.get("params") if isinstance(instance_data.get("params"), dict) else {}
-            feat_freeze = params.get("feat_freeze") if isinstance(params.get("feat_freeze"), dict) else {}
-            frozen_inputs = feat_freeze.get("frozen_inputs") if isinstance(feat_freeze.get("frozen_inputs"), dict) else {}
-            feat_review_report = frozen_inputs.get("feat_review_report") if isinstance(frozen_inputs.get("feat_review_report"), dict) else {}
-        feat_review_business = feat_review_report.get("business_output") if isinstance(feat_review_report.get("business_output"), dict) else {}
-        feat_review_structured = feat_review_report.get("structured_payload") if isinstance(feat_review_report.get("structured_payload"), dict) else {}
-        has_stale_feat_review_conflict = (
-            str(feat_review_business.get("decision") or "").strip() == "pass"
-            and not (feat_review_business.get("findings") or [])
-            and str(feat_review_structured.get("decision") or "").strip() in {"revise", "reject"}
-        )
-
-        filtered_findings: List[str] = []
-        for item in findings:
-            if cls._contains_delivery_plan_false_positive(item):
-                continue
-            if re.search(r"双重覆盖|同时映射到 specification.*implementation|规范与实现双重覆盖", item, re.IGNORECASE):
-                if has_structural_spec_coverage:
-                    continue
-            if re.search(r"落盘|persist|persistence|unverified", item, re.IGNORECASE):
-                if has_persisted_tasks:
-                    continue
-            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", item, re.IGNORECASE):
-                if has_persisted_tasks:
-                    continue
-            if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", item, re.IGNORECASE):
-                if has_structural_spec_coverage:
-                    continue
-            if re.search(r"feat_review_report\.(business_output|structured_payload).*(decision=pass|decision=revise)|上游基线.*评审结论", item, re.IGNORECASE):
-                if has_stale_feat_review_conflict:
-                    continue
-            if re.search(r"dependency_graph.*权威对象|resource_allocation|关键路径|并行分支|里程碑退出条件", item, re.IGNORECASE):
-                if has_authoritative_plan_shape:
-                    continue
-            if re.search(r"结构化 task plan 产物|一体化计划包|bundle 级.*(milestones|dependency_graph|resource_allocation)|delivery[- ]prep 计划包", item, re.IGNORECASE):
-                if has_authoritative_plan_shape:
-                    continue
-            if re.search(r"testset|qa[_ ]?seed|qa seed", item, re.IGNORECASE):
-                if has_authoritative_plan_shape and has_persisted_tasks:
-                    continue
-            filtered_findings.append(item)
-
-        sanitized["findings"] = filtered_findings
-        filtered_risks: List[str] = []
-        for item in sanitized.get("risks") or []:
-            if not isinstance(item, str) or not item.strip():
-                continue
-            text = item.strip()
-            if re.search(r"落盘|persist|persistence|未落盘|unverified", text, re.IGNORECASE):
-                if has_persisted_tasks:
-                    continue
-            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", text, re.IGNORECASE):
-                if has_persisted_tasks:
-                    continue
-            if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", text, re.IGNORECASE):
-                if has_structural_spec_coverage:
-                    continue
-            if re.search(r"feat_review_report\.(business_output|structured_payload)|评审结论冲突|上游基线", text, re.IGNORECASE):
-                if has_stale_feat_review_conflict:
-                    continue
-            if re.search(r"dependency_graph|resource_allocation|关键路径|并行分支|里程碑退出条件", text, re.IGNORECASE):
-                if has_authoritative_plan_shape:
-                    continue
-            if re.search(r"结构化 task plan 产物|一体化计划包|bundle 级.*(milestones|dependency_graph|resource_allocation)|delivery[- ]prep 计划包", text, re.IGNORECASE):
-                if has_authoritative_plan_shape:
-                    continue
-            if re.search(r"testset|qa[_ ]?seed|qa seed", text, re.IGNORECASE):
-                if has_authoritative_plan_shape and has_persisted_tasks:
-                    continue
-            filtered_risks.append(text)
-        sanitized["risks"] = filtered_risks
-
-        filtered_recommendations: List[str] = []
-        for item in sanitized.get("recommendations") or []:
-            if not isinstance(item, str) or not item.strip():
-                continue
-            text = item.strip()
-            if re.search(r"spec/requirements/tasks/|未落盘|write.*spec/requirements/tasks|persist", text, re.IGNORECASE):
-                if has_persisted_tasks:
-                    continue
-            if re.search(r"definition_of_done|落盘文件路径", text, re.IGNORECASE):
-                if has_persisted_tasks:
-                    continue
-            if re.search(r"dependency_graph|resource_allocation|关键路径|并行分支|里程碑退出条件", text, re.IGNORECASE):
-                if has_authoritative_plan_shape:
-                    continue
-            if re.search(r"结构化 task plan 产物|一体化计划包|bundle 级.*(milestones|dependency_graph|resource_allocation)|delivery[- ]prep 计划包", text, re.IGNORECASE):
-                if has_authoritative_plan_shape:
-                    continue
-            if re.search(r"testset|qa[_ ]?seed|qa seed", text, re.IGNORECASE):
-                if has_authoritative_plan_shape and has_persisted_tasks:
-                    continue
-            filtered_recommendations.append(text)
-        sanitized["recommendations"] = filtered_recommendations
-        if sanitized.get("decision") == "revise" and not filtered_findings:
-            summary = str(sanitized.get("summary") or "").strip()
-            if not cls._contains_feat_review_negative_signal(summary):
-                sanitized["decision"] = "pass"
-        if not str(sanitized.get("summary") or "").strip():
-            review_type = str(sanitized.get("review_type") or "").strip()
-            subject_refs = [
-                item.strip()
-                for item in sanitized.get("subject_refs") or []
-                if isinstance(item, str) and item.strip()
-            ]
-            subject_text = ", ".join(subject_refs) if subject_refs else "the planned FEATs"
-            decision = str(sanitized.get("decision") or "").strip() or "pass"
-            if review_type == "delivery_plan_review":
-                sanitized["summary"] = f"Delivery plan review {decision} for {subject_text}"
-        return sanitized
 
     @classmethod
     def _validate_delivery_plan_review_semantics(
@@ -4819,61 +4674,12 @@ class LLMRunner(StepRunnerBase):
         review_payload: Any,
         instance_data: Optional[Dict[str, Any]],
     ) -> Optional[str]:
-        if not isinstance(review_payload, dict):
-            return "Delivery plan review output is not a structured object"
-
-        if review_payload.get("review_type") != "delivery_plan_review":
-            return "Delivery plan review output must set review_type=delivery_plan_review"
-
-        summary = review_payload.get("summary")
-        if not isinstance(summary, str) or not summary.strip():
-            return "Delivery plan review output must include a non-empty summary"
-
-        decision = review_payload.get("decision")
-        if decision not in {"pass", "revise", "reject"}:
-            return "Delivery plan review output decision must be one of: pass, revise, reject"
-
-        for field_name in ("findings", "risks", "recommendations"):
-            value = review_payload.get(field_name)
-            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-                return f"Delivery plan review output field '{field_name}' must be a string array"
-
-        findings = [item.strip() for item in review_payload.get("findings") or [] if isinstance(item, str) and item.strip()]
-        if decision == "pass":
-            if findings:
-                return "Delivery plan review output with decision=pass must not include findings"
-            if cls._contains_feat_review_negative_signal(summary):
-                return "Delivery plan review summary conflicts with decision=pass"
-
-        if decision in {"revise", "reject"} and not findings:
-            return f"Delivery plan review output with decision={decision} must include at least one finding"
-
-        task_plan = cls._load_task_plan_business_output(instance_data)
-        if decision == "revise":
-            if findings and all(cls._contains_delivery_plan_false_positive(item) for item in findings):
-                return "Delivery plan review findings contain no blocking issues"
-
-            all_review_text = "\n".join(
-                findings
-                + [item.strip() for item in review_payload.get("risks") or [] if isinstance(item, str)]
-                + [item.strip() for item in review_payload.get("recommendations") or [] if isinstance(item, str)]
-            )
-            if re.search(r"落盘|persist|persistence|unverified", all_review_text, re.IGNORECASE):
-                if cls._delivery_plan_has_persisted_tasks(project_root=project_root, task_plan=task_plan):
-                    return "Delivery plan review incorrectly reports TASK persistence as unverified"
-            if re.search(r"definition_of_done.*未声明具体.*落盘文件路径|未声明具体.*落盘文件路径", all_review_text, re.IGNORECASE):
-                if cls._delivery_plan_has_persisted_tasks(project_root=project_root, task_plan=task_plan):
-                    return "Delivery plan review incorrectly requires explicit TASK file paths"
-            if re.search(r"spec/template coverage|规范任务|模板任务|specification", all_review_text, re.IGNORECASE):
-                if cls._delivery_plan_has_structural_spec_coverage(project_root=project_root, task_plan=task_plan):
-                    return "Delivery plan review incorrectly reports missing structural specification coverage"
-
-            return "Delivery plan review requires revision before freeze"
-
-        if decision == "reject":
-            return "Delivery plan review rejected the generated delivery plan"
-
-        return None
+        return ReviewSemanticValidator.validate_delivery_plan_review_semantics(
+            runner_cls=cls,
+            project_root=project_root,
+            review_payload=review_payload,
+            instance_data=instance_data,
+        )
 
     @staticmethod
     def _contains_feat_review_negative_signal(text: Any) -> bool:

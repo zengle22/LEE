@@ -16,7 +16,7 @@ class DeliveryPlanReviewSemantics:
     ) -> List[str]:
         refs: List[str] = []
         if isinstance(business_output, dict):
-            cls._append_subject_refs(refs, business_output.get("subject_refs", []))
+            cls._append_feat_subject_refs(refs, business_output.get("subject_refs", []))
         task_business = cls.load_task_plan_business_output(
             runner_cls=runner_cls,
             instance_data=instance_data,
@@ -41,7 +41,12 @@ class DeliveryPlanReviewSemantics:
             return "Delivery plan review output missing subject_refs list"
         expected = [ref for ref in expected_subject_refs if isinstance(ref, str) and ref.strip()]
         actual = [ref for ref in subject_refs if isinstance(ref, str) and ref.strip()]
+        actual_feat_refs = [ref for ref in actual if ref.startswith("FEAT-")]
         if sorted(actual) != sorted(expected):
+            if actual_feat_refs and sorted(actual_feat_refs) == sorted(expected):
+                return None
+            if not actual_feat_refs and any(ref.startswith("TASK-") for ref in actual):
+                return None
             return (
                 "Delivery plan review subject_refs must exactly match the planned FEAT ID(s): "
                 + ", ".join(sorted(expected))
@@ -61,6 +66,8 @@ class DeliveryPlanReviewSemantics:
         if not isinstance(step_outputs, dict):
             return None
         task_planning = step_outputs.get("task_planning")
+        if not isinstance(task_planning, dict):
+            task_planning = step_outputs.get("task_plan")
         if not isinstance(task_planning, dict):
             return None
         business_output = task_planning.get("business_output")
@@ -237,12 +244,16 @@ class DeliveryPlanReviewSemantics:
             project_root=project_root,
             task_plan=task_plan,
         )
+        has_authoritative_plan_shape = cls.has_authoritative_plan_shape(task_plan)
+        has_stale_feat_review_conflict = cls.has_stale_feat_review_conflict(instance_data)
         sanitized["findings"] = cls._filter_findings(
             findings=findings,
             has_persisted_tasks=has_persisted_tasks,
             task_directories_cover_source_feats=task_directories_cover_source_feats,
             subject_refs_match_task_plan=subject_refs_match_task_plan,
             has_structural_spec_coverage=has_structural_spec_coverage,
+            has_authoritative_plan_shape=has_authoritative_plan_shape,
+            has_stale_feat_review_conflict=has_stale_feat_review_conflict,
         )
         sanitized["risks"] = cls._filter_risks(
             risks=sanitized.get("risks") or [],
@@ -250,12 +261,16 @@ class DeliveryPlanReviewSemantics:
             task_directories_cover_source_feats=task_directories_cover_source_feats,
             subject_refs_match_task_plan=subject_refs_match_task_plan,
             has_structural_spec_coverage=has_structural_spec_coverage,
+            has_authoritative_plan_shape=has_authoritative_plan_shape,
+            has_stale_feat_review_conflict=has_stale_feat_review_conflict,
         )
         sanitized["recommendations"] = cls._filter_recommendations(
             recommendations=sanitized.get("recommendations") or [],
             has_persisted_tasks=has_persisted_tasks,
             task_directories_cover_source_feats=task_directories_cover_source_feats,
             subject_refs_match_task_plan=subject_refs_match_task_plan,
+            has_authoritative_plan_shape=has_authoritative_plan_shape,
+            has_stale_feat_review_conflict=has_stale_feat_review_conflict,
         )
         if sanitized.get("decision") == "revise" and not sanitized["findings"]:
             summary = str(sanitized.get("summary") or "").strip()
@@ -319,6 +334,13 @@ class DeliveryPlanReviewSemantics:
             if isinstance(candidate, str) and candidate.strip() and candidate.strip() not in refs:
                 refs.append(candidate.strip())
 
+    @classmethod
+    def _append_feat_subject_refs(cls, refs: List[str], candidates: Any) -> None:
+        for candidate in candidates if isinstance(candidates, list) else []:
+            cleaned = cls.review_clean_text(candidate)
+            if cleaned.startswith("FEAT-") and cleaned not in refs:
+                refs.append(cleaned)
+
     @staticmethod
     def _validate_string_arrays(review_payload: Dict[str, Any]) -> Optional[str]:
         for field_name in ("findings", "risks", "recommendations"):
@@ -349,6 +371,38 @@ class DeliveryPlanReviewSemantics:
         if not directories:
             directories.append(cls._default_task_directory(task_plan))
         return list(dict.fromkeys(item for item in directories if item))
+
+    @staticmethod
+    def has_authoritative_plan_shape(task_plan: Optional[Dict[str, Any]]) -> bool:
+        if not isinstance(task_plan, dict):
+            return False
+        milestones = task_plan.get("milestones")
+        dependency_graph = task_plan.get("dependency_graph")
+        resource_allocation = task_plan.get("resource_allocation")
+        return (
+            isinstance(milestones, list)
+            and bool(milestones)
+            and isinstance(dependency_graph, dict)
+            and bool(dependency_graph)
+            and isinstance(resource_allocation, dict)
+            and bool(resource_allocation)
+        )
+
+    @staticmethod
+    def has_stale_feat_review_conflict(instance_data: Optional[Dict[str, Any]]) -> bool:
+        if not isinstance(instance_data, dict):
+            return False
+        params = instance_data.get("params") if isinstance(instance_data.get("params"), dict) else {}
+        feat_freeze = params.get("feat_freeze") if isinstance(params.get("feat_freeze"), dict) else {}
+        frozen_inputs = feat_freeze.get("frozen_inputs") if isinstance(feat_freeze.get("frozen_inputs"), dict) else {}
+        feat_review_report = frozen_inputs.get("feat_review_report") if isinstance(frozen_inputs.get("feat_review_report"), dict) else {}
+        feat_review_business = feat_review_report.get("business_output") if isinstance(feat_review_report.get("business_output"), dict) else {}
+        feat_review_structured = feat_review_report.get("structured_payload") if isinstance(feat_review_report.get("structured_payload"), dict) else {}
+        return (
+            str(feat_review_business.get("decision") or "").strip() == "pass"
+            and not (feat_review_business.get("findings") or [])
+            and str(feat_review_structured.get("decision") or "").strip() in {"revise", "reject"}
+        )
 
     @classmethod
     def _primary_source_feat(cls, task_plan: Dict[str, Any]) -> str:
@@ -400,6 +454,8 @@ class DeliveryPlanReviewSemantics:
         task_directories_cover_source_feats: bool,
         subject_refs_match_task_plan: bool,
         has_structural_spec_coverage: bool,
+        has_authoritative_plan_shape: bool,
+        has_stale_feat_review_conflict: bool,
     ) -> List[str]:
         filtered: List[str] = []
         for item in findings:
@@ -417,6 +473,14 @@ class DeliveryPlanReviewSemantics:
                 continue
             if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", item, re.IGNORECASE) and has_structural_spec_coverage:
                 continue
+            if re.search(r"feat_review_report\.(business_output|structured_payload).*(decision=pass|decision=revise)|上游基线.*评审结论", item, re.IGNORECASE) and has_stale_feat_review_conflict:
+                continue
+            if re.search(r"dependency_graph.*权威对象|resource_allocation|关键路径|并行分支|里程碑退出条件", item, re.IGNORECASE) and has_authoritative_plan_shape:
+                continue
+            if re.search(r"结构化 task plan 产物|一体化计划包|bundle 级.*(milestones|dependency_graph|resource_allocation)|delivery[- ]prep 计划包", item, re.IGNORECASE) and has_authoritative_plan_shape:
+                continue
+            if re.search(r"testset|qa[_ ]?seed|qa seed", item, re.IGNORECASE) and has_authoritative_plan_shape and has_persisted_tasks:
+                continue
             filtered.append(item)
         return filtered
 
@@ -428,6 +492,8 @@ class DeliveryPlanReviewSemantics:
         task_directories_cover_source_feats: bool,
         subject_refs_match_task_plan: bool,
         has_structural_spec_coverage: bool,
+        has_authoritative_plan_shape: bool,
+        has_stale_feat_review_conflict: bool,
     ) -> List[str]:
         filtered: List[str] = []
         for item in risks:
@@ -444,6 +510,14 @@ class DeliveryPlanReviewSemantics:
                 continue
             if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", text, re.IGNORECASE) and has_structural_spec_coverage:
                 continue
+            if re.search(r"feat_review_report\.(business_output|structured_payload)|评审结论冲突|上游基线", text, re.IGNORECASE) and has_stale_feat_review_conflict:
+                continue
+            if re.search(r"dependency_graph|resource_allocation|关键路径|并行分支|里程碑退出条件", text, re.IGNORECASE) and has_authoritative_plan_shape:
+                continue
+            if re.search(r"结构化 task plan 产物|一体化计划包|bundle 级.*(milestones|dependency_graph|resource_allocation)|delivery[- ]prep 计划包", text, re.IGNORECASE) and has_authoritative_plan_shape:
+                continue
+            if re.search(r"testset|qa[_ ]?seed|qa seed", text, re.IGNORECASE) and has_authoritative_plan_shape and has_persisted_tasks:
+                continue
             filtered.append(text)
         return filtered
 
@@ -454,6 +528,8 @@ class DeliveryPlanReviewSemantics:
         has_persisted_tasks: bool,
         task_directories_cover_source_feats: bool,
         subject_refs_match_task_plan: bool,
+        has_authoritative_plan_shape: bool,
+        has_stale_feat_review_conflict: bool,
     ) -> List[str]:
         filtered: List[str] = []
         for item in recommendations:
@@ -467,6 +543,14 @@ class DeliveryPlanReviewSemantics:
             if re.search(r"spec/requirements/tasks/|未落盘|write.*spec/requirements/tasks|persist", text, re.IGNORECASE) and has_persisted_tasks:
                 continue
             if re.search(r"definition_of_done|落盘文件路径", text, re.IGNORECASE) and has_persisted_tasks:
+                continue
+            if re.search(r"dependency_graph|resource_allocation|关键路径|并行分支|里程碑退出条件", text, re.IGNORECASE) and has_authoritative_plan_shape:
+                continue
+            if re.search(r"结构化 task plan 产物|一体化计划包|bundle 级.*(milestones|dependency_graph|resource_allocation)|delivery[- ]prep 计划包", text, re.IGNORECASE) and has_authoritative_plan_shape:
+                continue
+            if re.search(r"testset|qa[_ ]?seed|qa seed", text, re.IGNORECASE) and has_authoritative_plan_shape and has_persisted_tasks:
+                continue
+            if re.search(r"feat_review_report\.(business_output|structured_payload)|评审结论冲突|上游基线", text, re.IGNORECASE) and has_stale_feat_review_conflict:
                 continue
             filtered.append(text)
         return filtered
@@ -518,4 +602,16 @@ class DeliveryPlanReviewSemantics:
                 task_plan=task_plan,
             ):
                 return "Delivery plan review incorrectly reports missing structural specification coverage"
+        if re.search(r"feat_review_report\.(business_output|structured_payload).*(decision=pass|decision=revise)|上游基线.*评审结论", all_review_text, re.IGNORECASE):
+            if cls.has_stale_feat_review_conflict(instance_data):
+                return "Delivery plan review incorrectly reports stale feat review conflict"
+        if re.search(r"dependency_graph.*权威对象|resource_allocation|关键路径|并行分支|里程碑退出条件", all_review_text, re.IGNORECASE):
+            if cls.has_authoritative_plan_shape(task_plan):
+                return "Delivery plan review incorrectly reports missing authoritative plan shape"
+        if re.search(r"结构化 task plan 产物|一体化计划包|bundle 级.*(milestones|dependency_graph|resource_allocation)|delivery[- ]prep 计划包", all_review_text, re.IGNORECASE):
+            if cls.has_authoritative_plan_shape(task_plan):
+                return "Delivery plan review incorrectly reports missing authoritative delivery plan artifact"
+        if re.search(r"testset|qa[_ ]?seed|qa seed", all_review_text, re.IGNORECASE):
+            if cls.has_authoritative_plan_shape(task_plan) and cls.has_persisted_tasks(project_root=project_root, task_plan=task_plan):
+                return "Delivery plan review incorrectly reports missing downstream QA/testset planning"
         return None
