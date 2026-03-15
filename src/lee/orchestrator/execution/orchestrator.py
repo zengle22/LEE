@@ -25,6 +25,7 @@ v3.1 重构：
 - 抽取 SubworkflowMixin  → subworkflow_ops.py
 """
 
+import asyncio
 import uuid
 import json
 import hashlib
@@ -105,6 +106,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
     - GateOperationsMixin: 门禁审批/拒绝/查询
     - SubworkflowMixin: 子工作流 spawn/执行/回填
     """
+
+    RUNNING_EXECUTION_POLL_SECONDS = 1.0
 
     def __init__(
         self,
@@ -1236,15 +1239,18 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         blocked_at = None
         final_status = "completed"
 
-        for _ in range(max_steps):
+        step_attempts = 0
+        while step_attempts < max_steps:
             # 执行一个步骤
             result = await self.run_step(workflow_id)
 
-            total_steps += 1
-
             if result.status == "success":
+                step_attempts += 1
+                total_steps += 1
                 completed_steps += 1
             elif result.status in ("waiting_approval", "blocked"):
+                step_attempts += 1
+                total_steps += 1
                 blocked_at = result.step_id
                 final_status = "blocked"
                 break
@@ -1253,10 +1259,18 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 instance = await self.store.get_workflow(workflow_id)
                 if instance.status == WorkflowStatus.COMPLETED:
                     break
+                if instance.status == WorkflowStatus.FAILED:
+                    final_status = "failed"
+                    break
+                if await self._has_running_task_executions(workflow_id):
+                    await asyncio.sleep(self.RUNNING_EXECUTION_POLL_SECONDS)
+                    continue
                 blocked_at = None  # 没有步骤可执行
                 final_status = "blocked"
                 break
             elif result.status == "failed":
+                step_attempts += 1
+                total_steps += 1
                 final_status = "failed"
                 break
 
@@ -1303,6 +1317,10 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             status=final_status,
             duration_seconds=duration,
         )
+
+    async def _has_running_task_executions(self, workflow_id: str) -> bool:
+        executions = await self.store.get_task_executions(workflow_id)
+        return any(exe.status == TaskExecutionStatus.RUNNING for exe in executions)
 
     # ============ 暂停/恢复 ============
 

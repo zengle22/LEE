@@ -193,3 +193,64 @@ async def test_run_step_recovers_failed_l2_phase_after_child_subworkflow_complet
         assert recovered_phase["child_workflow_id"] == child.id
     finally:
         await store.close()
+
+
+@pytest.mark.asyncio
+async def test_run_until_blocked_waits_for_running_task_execution(tmp_path, monkeypatch):
+    store = SQLiteStore(":memory:")
+    await store.connect()
+    try:
+        orchestrator = Orchestrator(store=store, project_root=str(tmp_path))
+
+        workflow = WorkflowInstance(
+            id="wf_department_wait_running_001",
+            level=WorkflowLevel.DEPARTMENT,
+            template_id="workflow.product.main",
+            data={"kind": "l2_workflow_instance", "phases": []},
+            status=WorkflowStatus.RUNNING,
+        )
+        await store.create_workflow(workflow)
+
+        call_count = 0
+
+        async def fake_run_step(workflow_id: str):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return StepResult(
+                    status="no_ready_step",
+                    step_id=None,
+                    workflow_id=workflow_id,
+                    message="No ready steps available",
+                )
+            await store.update_workflow_status(
+                workflow_id,
+                WorkflowStatus.FAILED,
+                completed_at=None,
+            )
+            return StepResult(
+                status="failed",
+                step_id="feat_to_delivery_prep",
+                workflow_id=workflow_id,
+                message="L2 phase feat_to_delivery_prep failed: Child workflow failed",
+            )
+
+        monkeypatch.setattr(orchestrator, "run_step", fake_run_step)
+        monkeypatch.setattr(
+            orchestrator,
+            "_has_running_task_executions",
+            AsyncMock(side_effect=[True, False]),
+        )
+        sleep_mock = AsyncMock()
+        monkeypatch.setattr(
+            "lee.orchestrator.execution.orchestrator.asyncio.sleep",
+            sleep_mock,
+        )
+
+        summary = await orchestrator.run_until_blocked(workflow.id, max_steps=3)
+
+        assert summary.status == "failed"
+        assert call_count == 2
+        sleep_mock.assert_awaited_once()
+    finally:
+        await store.close()
