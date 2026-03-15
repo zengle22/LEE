@@ -127,6 +127,7 @@ class GateOperationsMixin:
             if gate_evaluation:
                 gate_output["gate_evaluation"] = gate_evaluation.to_dict()
                 gate_output["rules_overridden"] = rules_overridden
+            await self._advance_parent_workflows_if_ready(workflow_id)
             return StepResult(
                 status="success",
                 step_id=gate_approval.step_id,
@@ -165,6 +166,7 @@ class GateOperationsMixin:
 
         # 检查工作流是否完成
         await self._check_workflow_completion(workflow_id)
+        await self._advance_parent_workflows_if_ready(workflow_id)
 
         return StepResult(
             status="success",
@@ -173,6 +175,42 @@ class GateOperationsMixin:
             message=f"Gate {gate_id} approved by {approver}",
             output=gate_output,
         )
+
+    async def _advance_parent_workflows_if_ready(
+        self,
+        workflow_id: str,
+        *,
+        max_steps: int = 20,
+    ) -> None:
+        """
+        当子工作流在 gate 审批后完成时，自动尝试推进父工作流。
+
+        这避免 L2/L3 链路在 child 已 completed 后，还需要人工再执行一次
+        `lee workflow run-step` 才能让父流程吸收 child 输出并进入下一阶段。
+        """
+        from lee.orchestrator.storage.models import WorkflowStatus
+
+        current = await self.store.get_workflow(workflow_id)
+        visited: set[str] = set()
+
+        while (
+            current
+            and getattr(current, "status", None) == WorkflowStatus.COMPLETED
+            and getattr(current, "parent_id", None)
+        ):
+            parent_id = getattr(current, "parent_id", None)
+            if parent_id in visited:
+                break
+            visited.add(parent_id)
+
+            parent = await self.store.get_workflow(parent_id)
+            if not parent:
+                break
+            if parent.status not in {WorkflowStatus.PENDING, WorkflowStatus.RUNNING}:
+                break
+
+            await self.run_until_blocked(parent.id, max_steps=max_steps)
+            current = await self.store.get_workflow(parent.id)
 
     @staticmethod
     def _is_l2_phase_gate(instance, step_id: str) -> bool:
@@ -263,6 +301,11 @@ class GateOperationsMixin:
             if isinstance(primary_payload, dict):
                 gate_output.update(primary_payload)
             gate_output["frozen_inputs"] = frozen_inputs
+            self._inject_gate_handoff_refs(
+                gate_step_id=gate_step_id,
+                frozen_inputs=frozen_inputs,
+                gate_output=gate_output,
+            )
 
         freeze_meta = gate_output.get("freeze_meta")
         if not isinstance(freeze_meta, dict):
@@ -273,6 +316,91 @@ class GateOperationsMixin:
         gate_output["freeze_meta"] = freeze_meta
 
         return gate_output
+
+    def _inject_gate_handoff_refs(
+        self,
+        *,
+        gate_step_id: str,
+        frozen_inputs: Dict[str, Any],
+        gate_output: Dict[str, Any],
+    ) -> None:
+        alias_by_step = {
+            "source_freeze": ("source_freeze_ref", "SRC", "src_root_id"),
+            "epic_freeze": ("epic_freeze_ref", "EPIC", None),
+            "feat_freeze": ("feat_freeze_ref", "FEAT", None),
+        }
+        alias_spec = alias_by_step.get(gate_step_id)
+        if not alias_spec:
+            return
+
+        alias_key, ssot_type, root_key = alias_spec
+        canonical_ref = self._extract_canonical_ssot_ref(
+            frozen_inputs,
+            preferred_ssot_type=ssot_type,
+        )
+        if not canonical_ref:
+            return
+
+        gate_output.setdefault(alias_key, canonical_ref)
+        if root_key:
+            artifact_id = canonical_ref.get("artifact_id") or canonical_ref.get("id")
+            if isinstance(artifact_id, str) and artifact_id.strip():
+                gate_output.setdefault(root_key, artifact_id.strip())
+
+    def _extract_canonical_ssot_ref(
+        self,
+        payload: Any,
+        *,
+        preferred_ssot_type: str,
+    ) -> Optional[Dict[str, Any]]:
+        expected_prefix = f"{preferred_ssot_type.upper()}-"
+
+        def _normalize_ref(candidate: Any) -> Optional[Dict[str, Any]]:
+            if not isinstance(candidate, dict):
+                return None
+            artifact_id = candidate.get("artifact_id") or candidate.get("id")
+            path = candidate.get("path")
+            if not isinstance(artifact_id, str) or not artifact_id.startswith(expected_prefix):
+                return None
+            normalized = {"artifact_id": artifact_id}
+            if isinstance(path, str) and path.strip():
+                normalized["path"] = path.strip()
+            return normalized
+
+        if isinstance(payload, dict):
+            materialized = payload.get("ssot_materialized")
+            if isinstance(materialized, dict):
+                preferred_key = preferred_ssot_type.lower()
+                normalized = _normalize_ref(materialized.get(preferred_key))
+                if normalized:
+                    return normalized
+                for value in materialized.values():
+                    normalized = _normalize_ref(value)
+                    if normalized:
+                        return normalized
+
+            normalized = _normalize_ref(payload)
+            if normalized:
+                return normalized
+
+            for value in payload.values():
+                normalized = self._extract_canonical_ssot_ref(
+                    value,
+                    preferred_ssot_type=preferred_ssot_type,
+                )
+                if normalized:
+                    return normalized
+
+        if isinstance(payload, list):
+            for item in payload:
+                normalized = self._extract_canonical_ssot_ref(
+                    item,
+                    preferred_ssot_type=preferred_ssot_type,
+                )
+                if normalized:
+                    return normalized
+
+        return None
 
     def _resolve_gate_frozen_inputs(self, instance, gate_step_id: str) -> Dict[str, Any]:
         """Resolve the gate's upstream inputs so they can be embedded into the frozen output."""
