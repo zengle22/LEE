@@ -26,6 +26,8 @@ roles:
 
 overview:
   input_types:
+    - type: adr
+      description: 需要桥接进入 SRC 的治理 ADR
     - type: raw_requirement
       description: 原始需求描述
     - type: business_opportunity
@@ -53,11 +55,11 @@ stages:
         mandatory: true
         depends_on: []
         description: >
-          接收一句话、文章、客户反馈、会议结论或商业机会输入，
+          接收一句话、文章、客户反馈、会议结论、治理 ADR 或商业机会输入，
           保存原始内容和来源引用，形成待归一化输入对象。
         inputs:
           - source: external
-            type: [raw_requirement, business_opportunity, business_opportunity_freeze]
+            type: [adr, raw_requirement, business_opportunity, business_opportunity_freeze]
             required: true
         outputs:
           - symbol: raw_source_input
@@ -180,6 +182,7 @@ instance_schema:
     - name
     - status
   context_fields:
+    - adr
     - raw_requirement
     - business_opportunity
     - business_opportunity_freeze

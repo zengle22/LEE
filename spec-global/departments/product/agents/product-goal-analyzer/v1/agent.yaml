@@ -6,7 +6,7 @@ version: 1.0
 id: agent.analysis.product_goal
 name: Product Goal Analyzer
 description: >
-  接收原始需求、想法、文章或商业机会输入，
+  接收原始需求、想法、文章、治理 ADR 或商业机会输入，
   提炼核心目标、业务动因、目标用户和关键约束，
   用于形成 raw input intake 与 SRC normalization 的前置分析。
 owner: product-ai
@@ -41,6 +41,7 @@ policy:
       - "目标用户或受影响对象明确"
       - "关键约束和不确定性显式化"
       - "输出主题与输入问题域同题"
+      - "若输入是 ADR，提炼的是 ADR 触发的需求/范围变化，不是 ADR 文档治理过程本身"
       - "不把 intake/schema/workflow 方法论当作输入本身的产品目标"
 
   refusal:
