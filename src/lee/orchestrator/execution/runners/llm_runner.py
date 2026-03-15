@@ -332,14 +332,40 @@ class LLMRunner(StepRunnerBase):
             override = str(instance_data.get("executor_override") or "").strip().lower()
         if cls._is_coding_executor(override):
             return override
+
+        for candidate in cls._resolve_code_executor_candidates(project_root):
+            return candidate
+        return "claude_code"
+
+    @classmethod
+    def _resolve_code_executor_candidates(cls, project_root: Optional[str]) -> List[str]:
+        candidates: List[str] = []
+
+        def add(raw_value: Any) -> None:
+            normalized = normalize_executor_type_name(raw_value)
+            if cls._is_coding_executor(normalized) and normalized not in candidates:
+                candidates.append(normalized)
+
         try:
             config = load_config(project_root or ".")
         except Exception:
-            return "claude_code"
-        configured = str(getattr(config.executor, "coding_executor", "") or "").strip().lower()
-        if cls._is_coding_executor(configured):
-            return configured
-        return "claude_code"
+            config = None
+
+        executor_config = getattr(config, "executor", None) if config is not None else None
+        add(getattr(executor_config, "coding_executor", None))
+
+        configured_fallbacks = getattr(executor_config, "coding_fallbacks", None)
+        if isinstance(configured_fallbacks, (list, tuple)):
+            for item in configured_fallbacks:
+                add(item)
+        else:
+            add(getattr(executor_config, "coding_fallback", None))
+            add(getattr(executor_config, "coding_second_fallback", None))
+
+        add(getattr(executor_config, "default_type", None))
+        for builtin in ("claude_code", "kimi", "codex"):
+            add(builtin)
+        return candidates
 
     @classmethod
     async def _execute_fallback_executor(
@@ -1598,6 +1624,30 @@ class LLMRunner(StepRunnerBase):
                 await self._collect_evidence(ctx, workflow_id, step.id, written_files)
                 await self._register_artifacts(ctx, workflow_id, step.id, written_files, generated_text)
 
+            declared_output_error = self._validate_declared_output_files(
+                step=step,
+                project_root=ctx.project_root,
+            )
+            if declared_output_error:
+                await ctx.state_machine.fail_step(workflow_id, step.id, declared_output_error)
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    output_data={
+                        "generated_text": generated_text,
+                        "written_files": written_files,
+                        "structured_payload": structured_payload,
+                    },
+                    error_message=declared_output_error,
+                    completed_at=datetime.now(),
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=declared_output_error,
+                )
+
             # 4. Verifiers (if configured)
             verifier_results = await self._run_verifiers(ctx, workflow_id, step)
             if verifier_results is not None and not self._verifiers_passed(ctx, verifier_results):
@@ -1836,6 +1886,11 @@ class LLMRunner(StepRunnerBase):
                 if materialized_files:
                     await self._collect_evidence(ctx, workflow_id, step.id, materialized_files)
                 written_files = list(dict.fromkeys(written_files + materialized_files))
+                business_output, structured_payload = self._synchronize_business_identity_from_materialized_ssot(
+                    business_output=business_output,
+                    structured_payload=structured_payload,
+                    ssot_materialized=ssot_materialized,
+                )
 
             workspace_files = self._materialize_symbolic_workspace_outputs(
                 step=step,
@@ -2065,6 +2120,50 @@ class LLMRunner(StepRunnerBase):
             "outputs": materialized_summary,
             "materialized_files": materialized_files,
         }
+
+    @staticmethod
+    def _synchronize_business_identity_from_materialized_ssot(
+        *,
+        business_output: Any,
+        structured_payload: Any,
+        ssot_materialized: Optional[Dict[str, Any]],
+    ) -> tuple[Any, Any]:
+        if not isinstance(business_output, dict) or not isinstance(ssot_materialized, dict):
+            return business_output, structured_payload
+
+        outputs = ssot_materialized.get("outputs")
+        if not isinstance(outputs, dict):
+            return business_output, structured_payload
+
+        epic_id = None
+        for item in outputs.values():
+            if not isinstance(item, dict):
+                continue
+            candidate_id = str(item.get("id") or "").strip()
+            if candidate_id.startswith("EPIC-"):
+                epic_id = candidate_id
+                break
+
+        if not epic_id:
+            return business_output, structured_payload
+
+        normalized_business = dict(business_output)
+        normalized_business["epic_id"] = epic_id
+        normalized_business["epic_ref"] = epic_id
+
+        if not isinstance(structured_payload, dict):
+            return normalized_business, structured_payload
+
+        normalized_structured = dict(structured_payload)
+        structured_business = (
+            dict(normalized_structured.get("business_output"))
+            if isinstance(normalized_structured.get("business_output"), dict)
+            else {}
+        )
+        structured_business["epic_id"] = epic_id
+        structured_business["epic_ref"] = epic_id
+        normalized_structured["business_output"] = structured_business
+        return normalized_business, normalized_structured
 
     @staticmethod
     def _materialize_workspace_formal_ssot_markdown(
@@ -3898,6 +3997,12 @@ class LLMRunner(StepRunnerBase):
         structured_payload: Any,
         instance_data: Optional[Dict[str, Any]] = None,
     ) -> tuple[Any, Any]:
+        business_output, structured_payload = LLMRunner._normalize_problem_definition_payload(
+            step=step,
+            business_output=business_output,
+            structured_payload=structured_payload,
+            instance_data=instance_data,
+        )
         business_output, structured_payload = LLMRunner._normalize_requirement_decomposer_payload(
             step=step,
             business_output=business_output,
@@ -3939,6 +4044,80 @@ class LLMRunner(StepRunnerBase):
         )
 
     @staticmethod
+    def _normalize_problem_definition_payload(
+        step,
+        business_output: Any,
+        structured_payload: Any,
+        instance_data: Optional[Dict[str, Any]] = None,
+    ) -> tuple[Any, Any]:
+        if not isinstance(business_output, dict):
+            return business_output, structured_payload
+
+        agent_id = getattr(step, "agent_id", "") or ""
+        step_id = getattr(step, "id", "") or ""
+        if step_id != "problem_alignment" and agent_id != "agent.product.requirement_alignment":
+            return business_output, structured_payload
+
+        def _normalize_list(value: Any) -> List[str]:
+            if isinstance(value, list):
+                return [str(item).strip() for item in value if str(item).strip()]
+            if isinstance(value, str) and value.strip():
+                return [value.strip()]
+            return []
+
+        normalized_business = dict(business_output)
+        if not str(normalized_business.get("problem_statement") or "").strip():
+            for candidate_key in ("summary", "description", "essence"):
+                candidate = str(normalized_business.get(candidate_key) or "").strip()
+                if candidate:
+                    normalized_business["problem_statement"] = candidate
+                    break
+        if not _normalize_list(normalized_business.get("target_users")):
+            for candidate_key in ("target_user", "stakeholders", "users"):
+                values = _normalize_list(normalized_business.get(candidate_key))
+                if values:
+                    normalized_business["target_users"] = values
+                    break
+        if not _normalize_list(normalized_business.get("scenarios")):
+            for candidate_key in ("findings", "use_cases", "situations"):
+                values = _normalize_list(normalized_business.get(candidate_key))
+                if values:
+                    normalized_business["scenarios"] = values
+                    break
+        if not _normalize_list(normalized_business.get("non_goals")):
+            for candidate_key in ("out_of_scope", "non_goal_items", "excluded_scope"):
+                values = _normalize_list(normalized_business.get(candidate_key))
+                if values:
+                    normalized_business["non_goals"] = values
+                    break
+        if not _normalize_list(normalized_business.get("constraints")):
+            for candidate_key in ("risks", "risk_notes", "assumptions"):
+                values = _normalize_list(normalized_business.get(candidate_key))
+                if values:
+                    normalized_business["constraints"] = values
+                    break
+
+        normalized_target_users = _normalize_list(normalized_business.get("target_users"))
+        if normalized_target_users:
+            normalized_business["target_users"] = normalized_target_users
+        normalized_scenarios = _normalize_list(normalized_business.get("scenarios"))
+        if normalized_scenarios:
+            normalized_business["scenarios"] = normalized_scenarios
+        normalized_non_goals = _normalize_list(normalized_business.get("non_goals"))
+        if normalized_non_goals:
+            normalized_business["non_goals"] = normalized_non_goals
+        normalized_constraints = _normalize_list(normalized_business.get("constraints"))
+        if normalized_constraints:
+            normalized_business["constraints"] = normalized_constraints
+
+        if isinstance(structured_payload, dict):
+            normalized_structured = dict(structured_payload)
+            if isinstance(normalized_structured.get("business_output"), dict):
+                normalized_structured["business_output"] = normalized_business
+            return normalized_business, normalized_structured
+        return normalized_business, structured_payload
+
+    @staticmethod
     def _normalize_product_review_payload(
         step,
         business_output: Any,
@@ -3949,8 +4128,9 @@ class LLMRunner(StepRunnerBase):
             return business_output, structured_payload
 
         normalized_business = dict(business_output)
+        agent_id = getattr(step, "agent_id", "") or ""
         if (
-            getattr(step, "agent_id", "") == "agent.product.feat_reviewer"
+            agent_id == "agent.product.feat_reviewer"
             and normalized_business.get("review_type") is None
         ):
             normalized_business["review_type"] = "feat_review"
@@ -3998,6 +4178,17 @@ class LLMRunner(StepRunnerBase):
                     normalized_business["decision"] = "reject"
             if "findings" not in normalized_business:
                 normalized_business["findings"] = []
+        elif (
+            agent_id == "agent.product.epic_reviewer"
+            and normalized_business.get("review_type") is None
+        ):
+            normalized_business["review_type"] = "epic_review"
+
+        if normalized_business.get("review_type") == "epic_review":
+            normalized_business = LLMRunner._normalize_epic_review_legacy_payload(
+                normalized_business,
+                instance_data=instance_data,
+            )
 
         review_type = normalized_business.get("review_type")
         if review_type not in {"source_review", "epic_review", "feat_review", "delivery_plan_review"}:
@@ -4096,6 +4287,84 @@ class LLMRunner(StepRunnerBase):
         return normalized_business, normalized_structured
 
     @staticmethod
+    def _normalize_epic_review_legacy_payload(
+        review_payload: Dict[str, Any],
+        *,
+        instance_data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        normalized = dict(review_payload)
+
+        epic_ref = (
+            str(normalized.get("epic_id") or "").strip()
+            or str(normalized.get("epic_ref") or "").strip()
+            or str(LLMRunner._resolve_epic_ref_from_instance_data(instance_data) or "").strip()
+        )
+        if epic_ref:
+            normalized["subject_refs"] = [epic_ref]
+
+        if not str(normalized.get("review_id") or "").strip():
+            normalized["review_id"] = f"RVW-{epic_ref}" if epic_ref else "RVW-EPIC-001"
+
+        if normalized.get("decision") not in {"pass", "revise", "reject"}:
+            status_candidate = str(
+                normalized.get("review_status")
+                or normalized.get("status")
+                or normalized.get("approval_decision")
+                or ""
+            ).strip().lower()
+            decision_map = {
+                "pass": "pass",
+                "passed": "pass",
+                "approved": "pass",
+                "approve": "pass",
+                "success": "pass",
+                "ok": "pass",
+                "revise": "revise",
+                "revision_required": "revise",
+                "needs_revision": "revise",
+                "changes_requested": "revise",
+                "reject": "reject",
+                "rejected": "reject",
+                "fail": "reject",
+                "failed": "reject",
+            }
+            decision = decision_map.get(status_candidate)
+            if decision:
+                normalized["decision"] = decision
+
+        observations = normalized.get("observations")
+        if not isinstance(normalized.get("findings"), list) and isinstance(observations, list):
+            normalized["findings"] = [
+                str(item).strip() for item in observations if str(item).strip()
+            ]
+
+        recommendations = normalized.get("recommendations")
+        if not isinstance(recommendations, list):
+            if isinstance(recommendations, str) and recommendations.strip():
+                normalized["recommendations"] = [recommendations.strip()]
+            else:
+                normalized["recommendations"] = []
+
+        if not isinstance(normalized.get("risks"), list):
+            normalized["risks"] = []
+
+        if not str(normalized.get("summary") or "").strip():
+            title = str(normalized.get("title") or "").strip()
+            findings = normalized.get("findings") if isinstance(normalized.get("findings"), list) else []
+            if title and normalized.get("decision") == "pass":
+                normalized["summary"] = (
+                    f"EPIC {title} passed structure, boundary, and split readiness review."
+                )
+            elif findings:
+                normalized["summary"] = str(findings[0]).strip()
+            elif epic_ref:
+                normalized["summary"] = f"{epic_ref} review completed."
+            else:
+                normalized["summary"] = "EPIC review completed."
+
+        return normalized
+
+    @staticmethod
     def _build_schema_repair_prompt(
         *,
         step,
@@ -4150,6 +4419,7 @@ class LLMRunner(StepRunnerBase):
             repaired_input["write_scope"] = []
             repaired_input["max_iterations"] = 1
             repaired_input["allowed_commands"] = []
+            repaired_input["structured_output_only"] = True
             repaired_input["system_prompt_extra"] = (
                 "你正在执行 schema repair retry。"
                 "不要修改文件，不要调用命令，只输出最终 JSON 对象。"
@@ -5594,10 +5864,13 @@ class ClaudeCodeRunner(StepRunnerBase):
             if generated_structured_payload is not None:
                 structured_payload = generated_structured_payload
 
+        symbol_payload = cls._extract_declared_symbol_payload(step, structured_payload)
         if isinstance(structured_payload, dict) and "business_output" in structured_payload:
             business_output = structured_payload["business_output"]
         elif isinstance(structured_payload, dict) and not looks_like_executor_wrapper(structured_payload):
             business_output = structured_payload
+        elif symbol_payload is not None:
+            business_output = symbol_payload
         else:
             business_output = LLMRunner._extract_primary_file_output(step, written_files)
             if business_output is None:
@@ -5617,6 +5890,29 @@ class ClaudeCodeRunner(StepRunnerBase):
             structured_payload=structured_payload,
             instance_data=None,
         )
+
+    @classmethod
+    def _extract_declared_symbol_payload(cls, step, structured_payload: Any) -> Any:
+        if not isinstance(structured_payload, dict):
+            return None
+        symbols = structured_payload.get("symbols")
+        if not isinstance(symbols, dict):
+            return None
+
+        for output_spec in getattr(step, "outputs", []) or []:
+            symbol = getattr(output_spec, "symbol", None)
+            if symbol is None and isinstance(output_spec, dict):
+                symbol = output_spec.get("symbol")
+            if not isinstance(symbol, str) or not symbol.strip():
+                continue
+            candidate = symbols.get(symbol.strip())
+            if candidate is None:
+                continue
+            if isinstance(candidate, str):
+                parsed = cls._parse_structured_output_if_possible(candidate)
+                return parsed if parsed is not None else candidate
+            return candidate
+        return None
 
     @classmethod
     def _validate_success_criteria(
@@ -5652,6 +5948,41 @@ class ClaudeCodeRunner(StepRunnerBase):
             if head_before == head_after:
                 return f"No new commit detected (HEAD unchanged: {head_after[:8]})"
 
+        return None
+
+    @classmethod
+    def _validate_declared_output_files(
+        cls,
+        *,
+        step,
+        project_root: Optional[str],
+    ) -> Optional[str]:
+        missing_paths: List[str] = []
+        base_dir = Path(project_root or ".").resolve()
+
+        for output_spec in getattr(step, "outputs", []) or []:
+            if isinstance(output_spec, dict):
+                output_type = output_spec.get("type")
+                raw_path = output_spec.get("path")
+                required = output_spec.get("required", True)
+            else:
+                output_type = getattr(output_spec, "type", None)
+                raw_path = getattr(output_spec, "path", None)
+                required = getattr(output_spec, "required", True)
+
+            if output_type == "symbol" or not raw_path or required is False:
+                continue
+
+            normalized_path = cls._normalize_project_relative_path(str(raw_path))
+            candidate = Path(normalized_path)
+            if not candidate.is_absolute():
+                candidate = (base_dir / candidate).resolve()
+
+            if not candidate.exists():
+                missing_paths.append(str(candidate))
+
+        if missing_paths:
+            return f"Missing declared output file(s): {', '.join(missing_paths)}"
         return None
 
     def can_handle(self, step_kind: str) -> bool:
@@ -5932,6 +6263,32 @@ class ClaudeCodeRunner(StepRunnerBase):
                     output=output,
                 )
 
+            declared_output_error = self._validate_declared_output_files(
+                step=step,
+                project_root=ctx.project_root,
+            )
+            if declared_output_error:
+                await ctx.state_machine.fail_step(workflow_id, step.id, declared_output_error)
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    output_data=output,
+                    error_message=declared_output_error,
+                    completed_at=datetime.now(),
+                )
+                ctx.event_log.log_step_failed(
+                    step_id=step.id,
+                    agent_id=step.agent_id or "claude_code",
+                    error=declared_output_error,
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=f"Claude Code declared outputs missing: {declared_output_error}",
+                    output=output,
+                )
+
             # 9. 收集证据
             evidence_path = output.get("evidence_bundle_path", "")
             if evidence_path:
@@ -6123,6 +6480,15 @@ class ClaudeCodeRunner(StepRunnerBase):
                     await self._collect_evidence(ctx, workflow_id, step.id, materialized_files)
                     changed = list(dict.fromkeys(changed + materialized_files))
                 output["ssot_materialized"] = ssot_materialized["outputs"]
+                business_output, structured_payload = self._synchronize_business_identity_from_materialized_ssot(
+                    business_output=business_output,
+                    structured_payload=structured_payload,
+                    ssot_materialized=ssot_materialized,
+                )
+                if isinstance(business_output, dict):
+                    output["business_output"] = business_output
+                if isinstance(structured_payload, dict):
+                    output["structured_payload"] = structured_payload
 
             workspace_files = self._materialize_symbolic_workspace_outputs(
                 step=step,
