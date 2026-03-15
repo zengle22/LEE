@@ -1,12 +1,4 @@
-"""
-LEE Orchestrator — LLM Step Runners
-
-包含:
-  - LLMRunner: 处理 agent 步骤 (kind=agent)
-  - ClaudeCodeRunner: 处理 claude_code 步骤 (kind=claude_code)
-
-从 step_runners.py 提取，保持原有逻辑不变。
-"""
+"""LEE Orchestrator LLM step runners."""
 
 from __future__ import annotations
 
@@ -31,6 +23,7 @@ from lee.orchestrator.storage.models import (
 from lee.orchestrator.execution.retry import AsyncRetryExecutor, DEFAULT_RETRY_POLICY, RetryPolicy
 from lee.orchestrator.execution.output_path_guard import detect_forbidden_template_write_paths
 from lee.orchestrator.execution.runners.base import StepRunnerBase, RunnerContext
+from lee.orchestrator.execution.runners.code_executor_scope import build_code_executor_io_config, fail_code_executor_scope_violation, validate_code_executor_write_scope
 from lee.orchestrator.execution.runners.normalization import (
     PmPlannerTaskNormalizer,
     PrdWriterFeatNormalizer,
@@ -1023,7 +1016,6 @@ class LLMRunner(StepRunnerBase):
                 "goal": agent_ctx.user_prompt or code_config.get("goal", ""),
                 "workspace": workspace,
                 "context_files": context_files,
-                "write_scope": code_config.get("write_scope", []),
                 "forbidden_read_paths": self._merge_forbidden_read_paths(
                     code_config.get("forbidden_read_paths")
                 ),
@@ -1034,6 +1026,13 @@ class LLMRunner(StepRunnerBase):
                 "stop_conditions": code_config.get("stop_conditions", {}),
                 "system_prompt_extra": agent_ctx.system_prompt or "",
             }
+            input_data.update(build_code_executor_io_config(
+                workspace=workspace,
+                workflow_id=workflow_id,
+                step_id=step.id,
+                step=step,
+                configured_write_scope=code_config.get("write_scope", []),
+            ))
             if code_config.get("allowed_commands"):
                 input_data["allowed_commands"] = code_config.get("allowed_commands")
             if code_config.get("model"):
@@ -1633,6 +1632,11 @@ class LLMRunner(StepRunnerBase):
                 )
 
             generated_text = llm_output.get("generated_text", "")
+            changed_files = llm_output.get("changed_files", [])
+            resolved_changed_files = self._resolve_changed_file_paths(workspace=input_data.get("workspace", ctx.project_root), project_root=ctx.project_root, changed_files=changed_files) if changed_files else []
+            write_scope_error = validate_code_executor_write_scope(changed_files=resolved_changed_files, project_root=ctx.project_root, write_scope=input_data.get("write_scope"))
+            if write_scope_error:
+                return await fail_code_executor_scope_violation(ctx=ctx, workflow_id=workflow_id, step=step, execution_id=execution_id, message=write_scope_error, output_data=llm_output)
             declared_output_error = self._detect_forbidden_template_write_paths(
                 paths=[
                     str(getattr(output, "path", None) or output.get("path"))
@@ -6337,27 +6341,10 @@ class ClaudeCodeRunner(StepRunnerBase):
         step_id: str,
         context_files: List[str],
     ) -> Dict[str, Any]:
-        declared_output_files: List[str] = []
-        for output in (getattr(step, "outputs", None) or []):
-            if isinstance(output, dict):
-                output_type = output.get("type")
-                output_path = output.get("path", "")
-            else:
-                output_type = getattr(output, "type", None)
-                output_path = getattr(output, "path", "")
-            normalized_path = str(output_path or "").strip()
-            if output_type == "file" and normalized_path:
-                declared_output_files.append(normalized_path)
-
-        return {
+        input_data = {
             "goal": agent_ctx.user_prompt or claude_config.get("goal", ""),
             "workspace": workspace,
-            "step_workspace": str(
-                Path(workspace) / ".workflow" / "workspace" / workflow_id / step_id
-            ),
             "context_files": context_files,
-            "declared_output_files": declared_output_files,
-            "write_scope": claude_config.get("write_scope", []),
             "forbidden_read_paths": cls._merge_forbidden_read_paths(
                 claude_config.get("forbidden_read_paths")
             ),
@@ -6372,6 +6359,14 @@ class ClaudeCodeRunner(StepRunnerBase):
             "stop_conditions": claude_config.get("stop_conditions", {}),
             "system_prompt_extra": agent_ctx.system_prompt or "",
         }
+        input_data.update(build_code_executor_io_config(
+            workspace=workspace,
+            workflow_id=workflow_id,
+            step_id=step_id,
+            step=step,
+            configured_write_scope=claude_config.get("write_scope", []),
+        ))
+        return input_data
 
     @staticmethod
     def _build_llm_alias_input_data(*, agent_ctx) -> Dict[str, Any]:
@@ -6448,7 +6443,6 @@ class ClaudeCodeRunner(StepRunnerBase):
                 context_files=context_files,
             )
 
-            # 仅在显式配置时传 allowed_commands，避免把空列表传给执行器导致 Bash 被禁用。
             configured_allowed_commands = claude_config.get("allowed_commands")
             if isinstance(configured_allowed_commands, list) and configured_allowed_commands:
                 input_data["allowed_commands"] = configured_allowed_commands
@@ -6468,7 +6462,6 @@ class ClaudeCodeRunner(StepRunnerBase):
         if step_token:
             input_data["token_context"] = ctx.token_manager.encode_token_for_context(step_token)
 
-        # Evidence 目录仅适用于 code-style 执行器
         if executor_type != "llm":
             run_id = instance.data.get("run_id", workflow_id)
             evidence_base = str(
@@ -6476,7 +6469,6 @@ class ClaudeCodeRunner(StepRunnerBase):
             )
             input_data["evidence_base"] = evidence_base
 
-        # 5. 创建 task_execution 记录
         execution_id = uuid.uuid4().hex
         execution = TaskExecution(
             id=execution_id,
@@ -6500,12 +6492,10 @@ class ClaudeCodeRunner(StepRunnerBase):
                     reason="Source FEAT bundle does not describe any UI surface.",
                 )
 
-        # P0-5: 记录步骤执行开始日志
         import logging
         logging.info(f"[ClaudeCodeRunner] Starting execution for step {step.id} (workflow={workflow_id}, execution={execution_id})")
 
         try:
-            # 6. v3.4: AsyncRetryExecutor 包裹 Claude Code/Codex 调用
             executor = ctx.executor_factory.create(executor_type)
             retry_executor = AsyncRetryExecutor(policy=DEFAULT_RETRY_POLICY)
             retry_result = await retry_executor.execute(executor.execute, input_data)
@@ -6528,13 +6518,9 @@ class ClaudeCodeRunner(StepRunnerBase):
 
             output = retry_result.result
 
-            # 审批 agent 特殊状态处理：将审批决策与任务执行状态分离
-            # 审批 agent 返回的 "status": "fail" 可能只是审批决策（如 CONDITIONAL_APPROVED），
-            # 而非任务执行失败。需要根据审批决策字段判断实际执行状态。
             status = output.get("status", "fail")
             agent_id = getattr(step, "agent_id", "") or ""
             if agent_id.startswith("agent.governance.approval_"):
-                # 从输出中提取审批决策
                 approval_decision = (
                     output.get("approval_decision")
                     or output.get("审批决策")
@@ -6542,11 +6528,8 @@ class ClaudeCodeRunner(StepRunnerBase):
                 )
                 if approval_decision:
                     decision_str = str(approval_decision).upper()
-                    # 如果审批决策是通过（包括条件批准），则任务执行成功
                     if decision_str in ("APPROVED", "CONDITIONAL_APPROVED", "PASS", "SUCCESS"):
-                        # 任务执行成功，但可能需要记录审批条件
                         status = "success"
-                        # 保留原始状态用于后续业务逻辑
                         output["execution_status"] = "success"
                         output["approval_decision"] = approval_decision
 
@@ -6581,8 +6564,10 @@ class ClaudeCodeRunner(StepRunnerBase):
                     message=forbidden_write_error,
                     output=output,
                 )
+            write_scope_error = validate_code_executor_write_scope(changed_files=abs_changed, project_root=ctx.project_root, write_scope=input_data.get("write_scope"))
+            if write_scope_error:
+                return await fail_code_executor_scope_violation(ctx=ctx, workflow_id=workflow_id, step=step, execution_id=execution_id, message=write_scope_error, output_data=output, include_output=True)
 
-            # 6. 治理 Gate：diff 过大检查
             diff_summary = output.get("diff_summary", {})
             max_diff_files = claude_config.get("max_diff_files", 1000)
             if diff_summary.get("files_changed", 0) > max_diff_files:
@@ -6592,7 +6577,6 @@ class ClaudeCodeRunner(StepRunnerBase):
                     f"(limit: {max_diff_files})"
                 )
 
-            # 7. 处理 needs_human → 暂停工作流
             if status == "needs_human":
                 from lee.orchestrator.storage.models import WorkflowStatus
 
@@ -6613,7 +6597,6 @@ class ClaudeCodeRunner(StepRunnerBase):
                     output=output,
                 )
 
-            # 8. 失败处理
             if status in ("fail", "failed", "timeout"):
                 error_msg = output.get("error", f"Claude Code step {status}")
                 debug_hint = output.get("debug_log_path") or output.get("conversation_log_path")
@@ -6694,14 +6677,12 @@ class ClaudeCodeRunner(StepRunnerBase):
                     output=output,
                 )
 
-            # 9. 收集证据
             evidence_path = output.get("evidence_bundle_path", "")
             if evidence_path:
                 await self._collect_evidence(ctx, workflow_id, step.id, [evidence_path])
             if changed:
                 await self._collect_evidence(ctx, workflow_id, step.id, abs_changed)
 
-            # 10. Verifiers
             verifier_results = await self._run_verifiers(ctx, workflow_id, step)
             if verifier_results is not None and not self._verifiers_passed(ctx, verifier_results):
                 await ctx.state_machine.fail_step(workflow_id, step.id, "Verifier failed")
