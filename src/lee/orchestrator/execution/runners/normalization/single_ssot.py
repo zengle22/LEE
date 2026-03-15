@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from .source_normalization_ssot import normalize_source_normalization_ssot_contract
+
 
 class SingleSSOTNormalizer:
     @staticmethod
@@ -121,7 +123,8 @@ class SingleSSOTNormalizer:
             return business_output, payload
 
         if step_id == "source_normalization":
-            payload = runner_cls._normalize_source_normalization_ssot_contract(
+            payload = normalize_source_normalization_ssot_contract(
+                runner_cls=runner_cls,
                 workflow_id=workflow_id,
                 business_output=business_output,
                 structured_payload=structured_payload,

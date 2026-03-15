@@ -373,8 +373,8 @@ async def test_approve_gate_emits_source_freeze_ref_and_src_root_id():
                         "title": "需求链一致性测试体系建设",
                         "ssot_materialized": {
                             "src": {
-                                "id": "SRC-040",
-                                "path": "spec/source/SRC-040__src.md",
+                                "id": "SRC-041",
+                                "path": "spec/source/SRC-041__adr-017-gate-zhilimubiaoyujiazhifenxi.md",
                             }
                         },
                     }
@@ -423,10 +423,10 @@ async def test_approve_gate_emits_source_freeze_ref_and_src_root_id():
 
     gate_output = harness.state_machine.complete_step.await_args.args[2]
     assert gate_output["source_freeze_ref"] == {
-        "artifact_id": "SRC-040",
-        "path": "spec/source/SRC-040__src.md",
+        "artifact_id": "SRC-041",
+        "path": "spec/source/SRC-041__adr-017-gate-zhilimubiaoyujiazhifenxi.md",
     }
-    assert gate_output["src_root_id"] == "SRC-040"
+    assert gate_output["src_root_id"] == "SRC-041"
 
 
 @pytest.mark.asyncio

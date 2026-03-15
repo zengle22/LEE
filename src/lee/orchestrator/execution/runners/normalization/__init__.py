@@ -8,6 +8,7 @@ from .product_review import ProductReviewNormalizer
 from .review_semantics import ReviewSemanticValidator
 from .schema_repair import SchemaRepairHelper
 from .single_ssot import SingleSSOTNormalizer
+from .source_normalization_ssot import normalize_source_normalization_ssot_contract
 from .workflow_semantics import WorkflowSemanticValidator
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "ReviewSemanticValidator",
     "SchemaRepairHelper",
     "SingleSSOTNormalizer",
+    "normalize_source_normalization_ssot_contract",
     "WorkflowSemanticValidator",
 ]

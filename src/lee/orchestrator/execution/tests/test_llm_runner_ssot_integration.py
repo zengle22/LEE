@@ -936,8 +936,9 @@ def test_claude_code_runner_merges_forbidden_read_paths():
         "output/",
         "evidence/",
         ".workflow/claude-code/",
-        ".tmp/",
         "pytest-temp/",
+        ".codex-worktrees/",
+        ".tmp/",
     ]
 
 
@@ -1133,6 +1134,73 @@ def test_source_normalization_rewrites_generic_src_contract_title_when_contract_
         workflow_id="wf-src-002c",
         business_output=business_output,
         structured_payload=structured_payload,
+    )
+
+    output = payload["ssot_output_contract"]["outputs"][0]
+    assert output["title"] == "ADR-017 Gate 治理目标与价值分析"
+    assert output["source_refs"] == ["ADR-017"]
+
+
+def test_source_normalization_rejects_process_analysis_title(runner):
+    step = SimpleNamespace(id="source_normalization", agent_id="agent.analysis.product_goal", config={})
+    business_output = {
+        "contract_info": {
+            "title": "ADR 原始输入归一化与合同复用前置目标分析",
+        }
+    }
+
+    with pytest.raises(ValueError, match="semantic drift"):
+        runner._synthesize_single_ssot_payload(
+            step=step,
+            workflow_id="wf-src-drift",
+            business_output=business_output,
+            structured_payload={},
+        )
+
+
+def test_source_normalization_rejects_multiple_src_outputs(runner):
+    step = SimpleNamespace(id="source_normalization", agent_id="agent.analysis.product_goal", config={})
+    business_output = {
+        "contract_info": {
+            "title": "ADR-017 Gate 治理目标与价值分析",
+        }
+    }
+
+    with pytest.raises(ValueError, match="exactly one src output"):
+        runner._synthesize_single_ssot_payload(
+            step=step,
+            workflow_id="wf-src-multi",
+            business_output=business_output,
+            structured_payload={
+                "ssot_output_contract": {
+                    "outputs": [
+                        {"key": "src", "identity_kind": "ssot", "ssot_type": "src", "title": "SRC"},
+                        {"key": "note", "identity_kind": "ssot", "ssot_type": "note", "title": "bad extra"},
+                    ]
+                }
+            },
+        )
+
+
+def test_source_normalization_allows_contextual_normalization_wording(runner):
+    step = SimpleNamespace(id="source_normalization", agent_id="agent.analysis.product_goal", config={})
+    business_output = {
+        "contract_info": {
+            "title": "ADR-017 Gate 治理目标与价值分析",
+        },
+        "requirement_overview": {
+            "description": "该对象会在 source normalization 阶段作为下游输入，并沿用既有复用策略。",
+        },
+        "metadata": {
+            "source_ref": "ADR-017",
+        },
+    }
+
+    _, payload = runner._synthesize_single_ssot_payload(
+        step=step,
+        workflow_id="wf-src-context",
+        business_output=business_output,
+        structured_payload={},
     )
 
     output = payload["ssot_output_contract"]["outputs"][0]
