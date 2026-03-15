@@ -282,6 +282,52 @@ async def test_gate_publish_epic_freeze_to_canonical_spec_directory():
 
 
 @pytest.mark.asyncio
+async def test_freeze_gate_backfills_delivery_prep_ref_from_frozen_path():
+    temp_dir = Path(tempfile.mkdtemp())
+    try:
+        harness = _GateHarness()
+        harness.project_root = temp_dir
+        manager = ArtifactManager(project_root=temp_dir)
+        _, feat_id = _create_src_scoped_feat(manager, "051")
+        feat_meta = manager.get(feat_id)
+
+        freeze_path = temp_dir / "output" / "frozen-packages" / "demo-delivery-prep-freeze.yaml"
+        freeze_path.parent.mkdir(parents=True, exist_ok=True)
+        freeze_path.write_text("gate_output:\n  gate_approved: true\n", encoding="utf-8")
+
+        instance = SimpleNamespace(
+            data={
+                "params": {
+                    "feat_freeze_ref": {
+                        "artifact_id": feat_id,
+                        "path": feat_meta.path,
+                    }
+                },
+                "step_outputs": {
+                    "delivery_prep_freeze": {
+                        "gate_approved": True,
+                        "paths": [str(freeze_path)],
+                    }
+                },
+            }
+        )
+        harness.store.get_workflow.return_value = instance
+
+        await harness._freeze_gate_targets("wf-delivery-001", "delivery_prep_freeze")
+
+        harness.store.update_workflow_data.assert_awaited_once()
+        updated_data = harness.store.update_workflow_data.await_args.args[1]
+        assert updated_data["params"]["delivery_prep_freeze_ref"] == {
+            "path": "output/frozen-packages/demo-delivery-prep-freeze.yaml"
+        }
+        assert updated_data["step_outputs"]["delivery_prep_freeze"]["delivery_prep_freeze_ref"] == {
+            "path": "output/frozen-packages/demo-delivery-prep-freeze.yaml"
+        }
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.mark.asyncio
 async def test_approve_gate_embeds_frozen_business_payload_for_downstream_handoff():
     harness = _GateHarness()
     instance = SimpleNamespace(

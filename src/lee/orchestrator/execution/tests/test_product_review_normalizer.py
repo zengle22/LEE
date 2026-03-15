@@ -197,3 +197,47 @@ def test_product_review_normalizer_sanitizes_delivery_plan_directory_and_subject
     assert normalized_business["risks"] == []
     assert normalized_business["recommendations"] == []
     assert normalized_structured["business_output"]["decision"] == "pass"
+
+
+def test_product_review_normalizer_rewrites_delivery_plan_subject_refs_to_feats():
+    step = SimpleNamespace(agent_id="agent.product.delivery_plan_reviewer")
+    business_output = {
+        "review_id": "RVW-DEL-002",
+        "review_type": "delivery_plan_review",
+        "decision": "pass",
+        "subject_refs": ["TASK-FEAT-101-001"],
+        "summary": "ok",
+        "findings": [],
+        "risks": [],
+        "recommendations": [],
+    }
+
+    normalized_business, _ = ProductReviewNormalizer.normalize(
+        runner_cls=LLMRunner,
+        step=step,
+        business_output=business_output,
+        structured_payload={"business_output": dict(business_output)},
+        instance_data={
+            "step_outputs": {
+                "task_planning": {
+                    "business_output": {
+                        "source_feats": ["FEAT-101", "FEAT-102"],
+                    }
+                }
+            }
+        },
+    )
+
+    assert normalized_business["subject_refs"] == ["FEAT-101", "FEAT-102"]
+
+
+def test_delivery_plan_subject_ref_validation_tolerates_task_only_refs_before_normalization():
+    error = LLMRunner._validate_delivery_plan_review_subject_refs(
+        {
+            "review_type": "delivery_plan_review",
+            "subject_refs": ["TASK-FEAT-101-001", "TASK-FEAT-102-001"],
+        },
+        ["FEAT-101", "FEAT-102"],
+    )
+
+    assert error is None
