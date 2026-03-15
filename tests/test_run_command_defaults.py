@@ -5,6 +5,7 @@ import sqlite3
 import io
 
 from click.testing import CliRunner
+import pytest
 import yaml
 
 import lee.cli.commands.run as run_module
@@ -874,3 +875,62 @@ def test_select_existing_workflow_action_uses_noninteractive_stdin_command(monke
 
     assert action == "restart"
     assert workflow_id == "wf_department_old"
+
+
+def test_select_existing_workflow_action_defaults_to_continue_in_noninteractive_mode(monkeypatch) -> None:
+    class _FakeStdin(io.StringIO):
+        def isatty(self) -> bool:
+            return False
+
+    monkeypatch.setattr(run_module.click, "get_text_stream", lambda _name: _FakeStdin(""))
+
+    action, workflow_id = run_module._select_existing_workflow_action(
+        existing=[
+            {
+                "id": "wf_department_old",
+                "status": "running",
+                "current_step": None,
+                "created_at": "2026-03-12T19:00:00",
+                "concurrency_scope": "project:E:/ai/LEE:workflow:product.main",
+            }
+        ],
+        scope_info=run_module.ConcurrencyScopeInfo(
+            workflow_key="product.main",
+            concurrency_scope="project:E:/ai/LEE:workflow:product.main",
+            concurrency_key="product.main::project:E:/ai/LEE:workflow:product.main",
+            scope_source="fallback:project+workflow_key",
+        ),
+    )
+
+    assert action == "continue"
+    assert workflow_id == "wf_department_old"
+
+
+def test_select_existing_workflow_action_requires_explicit_choice_for_new_run_in_noninteractive_mode(
+    monkeypatch,
+) -> None:
+    class _FakeStdin(io.StringIO):
+        def isatty(self) -> bool:
+            return False
+
+    monkeypatch.setattr(run_module.click, "get_text_stream", lambda _name: _FakeStdin(""))
+
+    with pytest.raises(run_module.click.ClickException, match="显式新运行参数"):
+        run_module._select_existing_workflow_action(
+            existing=[
+                {
+                    "id": "wf_department_old",
+                    "status": "running",
+                    "current_step": None,
+                    "created_at": "2026-03-12T19:00:00",
+                    "concurrency_scope": "project:E:/ai/LEE:workflow:product.main",
+                }
+            ],
+            scope_info=run_module.ConcurrencyScopeInfo(
+                workflow_key="product.main",
+                concurrency_scope="project:E:/ai/LEE:workflow:product.main",
+                concurrency_key="product.main::project:E:/ai/LEE:workflow:product.main",
+                scope_source="fallback:project+workflow_key",
+            ),
+            noninteractive_default_action=None,
+        )

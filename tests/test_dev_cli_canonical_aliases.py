@@ -114,8 +114,10 @@ def test_compat_params_are_adapted_for_dev_tech_design(tmp_path: Path) -> None:
     assert adapted["formal_ssot_path"] == feat_path.resolve().as_posix()
     assert adapted["source_refs"][0] == feat_path.resolve().as_posix()
     assert adapted["tech_spec_path"] == "spec/tech/SRC-041/TECH-FEAT-SRC-041-001__tech-design.md"
-    assert adapted["design_analysis_path"] == "spec/tech/FEAT-SRC-041-001/design_analysis.md"
-    assert adapted["decision_refs_path"] == "spec/tech/FEAT-SRC-041-001/decision_refs.yaml"
+    assert adapted["tech_bundle_dir"] == "output/tech-packages/FEAT-SRC-041-001"
+    assert adapted["design_analysis_path"] == "output/tech-packages/FEAT-SRC-041-001/design_analysis.md"
+    assert adapted["decision_refs_path"] == "output/tech-packages/FEAT-SRC-041-001/decision_refs.yaml"
+    assert adapted["frozen_architecture_path"] == "output/tech-packages/FEAT-SRC-041-001/frozen-technical-architecture.yaml"
     assert adapted["governing_adr_paths"] == [
         (adr_dir / "ADR-008__runtime.md").resolve().as_posix(),
         (adr_dir / "ADR-017__gate.md").resolve().as_posix(),
@@ -136,6 +138,10 @@ def test_tech_design_template_binds_authoritative_feat_inputs() -> None:
     assert draft_tech_spec["inputs"]["context_files"][0]["path"] == "{{ params.formal_ssot_path | default('') }}"
     assert draft_tech_spec["outputs"][0]["path"] == "{{ params.tech_spec_path }}"
     assert "Formal FEAT ID: {{ params.formal_ssot_id }}." in draft_tech_spec["config"]["claude_code"]["goal"]
+    assert "Support package directory: {{ params.tech_bundle_dir }}." in draft_tech_spec["config"]["claude_code"]["goal"]
+    assert analyze_feature["config"]["claude_code"]["context_files"][1] == "{{ params.governing_adr_paths | default([]) }}"
+    assert draft_tech_spec["config"]["claude_code"]["context_files"][3] == "{{ params.governing_adr_paths | default([]) }}"
+    assert draft_tech_spec["outputs"][2]["path"] == "{{ params.frozen_architecture_path }}"
 
 
 def test_hydrate_l2_bootstrap_preserves_phase_payload_and_sets_context() -> None:

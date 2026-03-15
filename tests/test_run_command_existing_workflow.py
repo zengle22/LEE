@@ -40,7 +40,7 @@ def test_run_continue_existing_workflow(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         run_module,
         "_select_existing_workflow_action",
-        lambda _existing, _scope_info: ("continue", "wf_old_001"),
+        lambda _existing, _scope_info, **_kwargs: ("continue", "wf_old_001"),
     )
     monkeypatch.setattr(
         run_module,
@@ -104,7 +104,7 @@ def test_run_restart_existing_workflow(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         run_module,
         "_select_existing_workflow_action",
-        lambda _existing, _scope_info: ("restart", "wf_old_001"),
+        lambda _existing, _scope_info, **_kwargs: ("restart", "wf_old_001"),
     )
     monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_args, **_kwargs: rendered)
     monkeypatch.setattr(
@@ -139,3 +139,123 @@ def test_run_restart_existing_workflow(monkeypatch, tmp_path: Path) -> None:
     create_calls = [c for c in calls if c["action"] == "create"]
     assert len(pause_calls) == 2
     assert len(create_calls) == 1
+
+
+def test_run_with_spec_requires_explicit_choice_when_conflict_exists_noninteractive(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    template = tmp_path / "workflow.yaml"
+    template.write_text("kind: workflow\nid: x\nversion: '1.0'\n", encoding="utf-8")
+    spec_file = tmp_path / "input.yaml"
+    spec_file.write_text("source_freeze: spec/source/SRC-046.md\n", encoding="utf-8")
+
+    calls: List[Dict[str, Any]] = []
+
+    monkeypatch.setattr(
+        run_module,
+        "_load_registry",
+        lambda: {
+            "workflows": {
+                "product.src-to-epic": {
+                    "path": str(template),
+                    "required_params": [],
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(
+        run_module,
+        "_list_conflicting_workflows",
+        lambda *_args, **_kwargs: [
+            {
+                "id": "wf_department_old",
+                "status": "running",
+                "current_step": "src_to_epic",
+                "created_at": "2026-03-15T20:13:58",
+                "concurrency_scope": "project:E:/ai/LEE:workflow:product.main",
+            }
+        ],
+    )
+
+    def fake_pm_workflow(action: str, **kwargs):
+        calls.append({"action": action, "kwargs": kwargs})
+        raise AssertionError(f"unexpected pm_workflow action: {action}")
+
+    monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_module.run,
+        [
+            "product.src-to-epic",
+            "--project-dir",
+            str(tmp_path),
+            "--skip-plan",
+            "--spec",
+            str(spec_file),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "显式新运行参数" in result.output
+    assert calls == []
+
+
+def test_run_with_executor_requires_explicit_choice_when_conflict_exists_noninteractive(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    template = tmp_path / "workflow.yaml"
+    template.write_text("kind: workflow\nid: x\nversion: '1.0'\n", encoding="utf-8")
+
+    calls: List[Dict[str, Any]] = []
+
+    monkeypatch.setattr(
+        run_module,
+        "_load_registry",
+        lambda: {
+            "workflows": {
+                "product.src-to-epic": {
+                    "path": str(template),
+                    "required_params": [],
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(
+        run_module,
+        "_list_conflicting_workflows",
+        lambda *_args, **_kwargs: [
+            {
+                "id": "wf_department_old",
+                "status": "running",
+                "current_step": "src_to_epic",
+                "created_at": "2026-03-15T20:13:58",
+                "concurrency_scope": "project:E:/ai/LEE:workflow:product.main",
+            }
+        ],
+    )
+
+    def fake_pm_workflow(action: str, **kwargs):
+        calls.append({"action": action, "kwargs": kwargs})
+        raise AssertionError(f"unexpected pm_workflow action: {action}")
+
+    monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_module.run,
+        [
+            "product.src-to-epic",
+            "--project-dir",
+            str(tmp_path),
+            "--skip-plan",
+            "--executor",
+            "kimi",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "显式新运行参数" in result.output
+    assert calls == []
