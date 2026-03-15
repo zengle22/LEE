@@ -228,8 +228,18 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # 生成唯一 ID
         workflow_id = f"wf_{level.value}_{uuid.uuid4().hex[:8]}"
 
+        template_ref = template_id
+
         # 验证模板存在
-        template = self.template_manager.get_template(template_id)
+        template = self.template_manager.get_template(template_ref)
+        if not template and template_id.startswith("template."):
+            try:
+                resolved_template_path = self._resolve_l3_template_path(template_id)
+            except FileNotFoundError:
+                resolved_template_path = None
+            if resolved_template_path is not None:
+                template_ref = str(resolved_template_path)
+                template = self.template_manager.get_template(template_ref)
         if not template:
             raise ValueError(f"Template not found: {template_id}")
 
@@ -256,7 +266,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             id=workflow_id,
             level=level,
             parent_id=parent_id,
-            template_id=template_id,
+            template_id=template_ref,
             status=WorkflowStatus.PENDING,
             data=data,
         )
@@ -2852,12 +2862,10 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         if not result.success:
             raise RuntimeError(f"Failed to generate L3 instance: {result.errors}")
 
-        # Spawn against the resolved template path so transient project dirs do not
-        # need to mirror the framework's template registry layout.
         l3_instance = await self.spawn_workflow(
             parent_id=parent_l2_id,
             level=WorkflowLevel.TASK,
-            template_id=str(l3_template_path),
+            template_id=l3_template_id,
             data={
                 "kind": "l3_workflow_instance",
                 "params": dict(parent_params),

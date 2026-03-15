@@ -1129,8 +1129,8 @@ class TemplateManager:
             pass  # 保持原值
 
         # 解析 agent/skill/gate 引用
-        agent_id = step_data.get("agent")  # kind=agent 时
-        skill_id = step_data.get("skill")  # kind=skill 时
+        agent_id = step_data.get("agent_id") or step_data.get("agent")  # kind=agent 时
+        skill_id = step_data.get("skill_id") or step_data.get("skill")  # kind=skill 时
 
         # 解析 gate_id（从 human_gate、post_gate 或独立的 gate）
         gate_id = None
@@ -1164,7 +1164,7 @@ class TemplateManager:
 
         # 解析 executor_type（v3.5：使用配置中的 default_type）
         # 保留兼容性：如果指定了 executor 则使用，否则根据 kind 和配置决定
-        executor_type = step_data.get("executor")
+        executor_type = step_data.get("executor_type") or step_data.get("executor")
         if not executor_type:
             if kind == "agent":
                 # v3.5: 从配置读取默认执行器类型

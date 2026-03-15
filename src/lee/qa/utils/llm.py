@@ -127,8 +127,13 @@ class MockLLMClient(LLMClient):
 
     def __init__(self):
         super().__init__()
+        self._client = self
         self.responses = {}
         self.call_count = 0
+
+    def _initialize_client(self):
+        """Mock clients are ready immediately and do not need backend setup."""
+        self._client = self
 
     def set_response(self, pattern: str, response: str):
         """Set a response for a specific prompt pattern"""

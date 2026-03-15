@@ -255,7 +255,7 @@ class ParamMapper:
                     logger.warning(f"Failed to load workflow {workflow_id}: {e}")
 
             self._workflow_cache = workflows
-            self._cache_timestamp = now
+            self._cache_timestamp = time.time()
 
             return workflows
 
