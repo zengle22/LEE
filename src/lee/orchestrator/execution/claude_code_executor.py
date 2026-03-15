@@ -174,6 +174,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         setting_sources = input_data.get("setting_sources", "")
         stop_conditions = input_data.get("stop_conditions", {})
         system_prompt_extra = input_data.get("system_prompt_extra", "")
+        structured_output_only = bool(input_data.get("structured_output_only", False))
         evidence_base = input_data.get("evidence_base", "")
         model = self._normalize_model_name(input_data.get("model") or self._model or "")
         max_bash_calls = self._coerce_non_negative_int(
@@ -199,6 +200,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             max_bash_calls=max_bash_calls,
             stop_conditions=stop_conditions,
             system_prompt_extra=system_prompt_extra,
+            structured_output_only=structured_output_only,
         )
 
         # ========== 4. 构建用户 prompt ==========
@@ -473,6 +475,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         max_bash_calls: int,
         stop_conditions: Dict[str, str],
         system_prompt_extra: str,
+        structured_output_only: bool = False,
     ) -> str:
         """构建系统 prompt（注入治理约束）"""
         constraints = [
@@ -512,18 +515,31 @@ class ClaudeCodeExecutor(BaseExecutor):
         prompt = f"""## 治理约束
 
 {constraints_text}
+"""
+
+        if structured_output_only:
+            prompt += """
+
+## 输出要求
+
+本次任务处于结构化修复模式。
+只允许返回最终 machine-readable JSON 对象本体。
+不要输出执行器包装层，不要输出 status/changed_files/commands_run/test_results/error 这类执行摘要字段。
+不要输出解释、标题、代码块或额外包裹层。"""
+        else:
+            prompt += """
 
 ## 输出要求
 
 完成任务后，请在最后输出一个 JSON 代码块，格式如下：
 ```json
-{{
+{
   "status": "success 或 fail",
   "changed_files": ["修改的文件列表"],
-  "commands_run": [{{"cmd": "执行的命令", "exit_code": 0, "stdout_tail": "输出尾部"}}],
-  "test_results": {{"passed": 0, "failed": 0}},
+  "commands_run": [{"cmd": "执行的命令", "exit_code": 0, "stdout_tail": "输出尾部"}],
+  "test_results": {"passed": 0, "failed": 0},
   "error": null
-}}
+}
 ```
 
 重要提示 (BUG-2026-0061):

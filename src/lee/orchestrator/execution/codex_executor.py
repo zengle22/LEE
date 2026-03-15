@@ -170,6 +170,7 @@ class CodexExecutor(BaseExecutor):
         )
         stop_conditions = input_data.get("stop_conditions", {})
         system_prompt_extra = input_data.get("system_prompt_extra", "")
+        structured_output_only = bool(input_data.get("structured_output_only", False))
         evidence_base = input_data.get("evidence_base", "")
         model = str(input_data.get("model") or self._model or "").strip()
         max_bash_calls = self._coerce_non_negative_int(
@@ -194,6 +195,7 @@ class CodexExecutor(BaseExecutor):
             max_bash_calls=max_bash_calls,
             stop_conditions=stop_conditions,
             system_prompt_extra=system_prompt_extra,
+            structured_output_only=structured_output_only,
         )
 
         # ========== 4. 构建用户 prompt ==========
@@ -875,6 +877,7 @@ class CodexExecutor(BaseExecutor):
         max_bash_calls: int,
         stop_conditions: Dict[str, str],
         system_prompt_extra: str,
+        structured_output_only: bool = False,
     ) -> str:
         """构建系统 prompt（注入治理约束）"""
         constraints = [
@@ -904,18 +907,31 @@ class CodexExecutor(BaseExecutor):
         prompt = f"""## Governance Constraints
 
 {constraints_text}
+"""
+
+        if structured_output_only:
+            prompt += """
+
+## Output Requirements
+
+This run is in structured repair mode.
+Return only the final machine-readable JSON object body.
+Do not output executor wrapper fields such as status, changed_files, commands_run, test_results, or error.
+Do not output prose, headings, code fences, or any extra wrapper."""
+        else:
+            prompt += """
 
 ## Output Requirements
 
 After completing the task, output a JSON code block with the following format:
 ```json
-{{
+{
   "status": "success or fail",
   "changed_files": ["list of modified files"],
-  "commands_run": [{{"cmd": "command", "exit_code": 0}}],
-  "test_results": {{"passed": 0, "failed": 0}},
+  "commands_run": [{"cmd": "command", "exit_code": 0}],
+  "test_results": {"passed": 0, "failed": 0},
   "error": null
-}}
+}
 ```
 """
 
