@@ -29,6 +29,7 @@ from lee.orchestrator.storage.models import (
     StepResult,
 )
 from lee.orchestrator.execution.retry import AsyncRetryExecutor, DEFAULT_RETRY_POLICY, RetryPolicy
+from lee.orchestrator.execution.output_path_guard import detect_forbidden_template_write_paths
 from lee.orchestrator.execution.runners.base import StepRunnerBase, RunnerContext
 from lee.orchestrator.execution.runners.normalization import (
     PmPlannerTaskNormalizer,
@@ -37,6 +38,10 @@ from lee.orchestrator.execution.runners.normalization import (
     ReviewSemanticValidator,
     SingleSSOTNormalizer,
     WorkflowSemanticValidator,
+    align_inputs_with_required_artifacts,
+    align_required_artifacts,
+    refine_acceptance_checks,
+    refine_feat_outputs,
 )
 from lee.orchestrator.execution.llm_executor import LLMExecutor as RealLLMExecutor
 
@@ -1073,13 +1078,44 @@ class LLMRunner(StepRunnerBase):
     def _merge_context_files(*groups: Any) -> List[str]:
         merged: List[str] = []
         for group in groups:
-            if not isinstance(group, list):
-                continue
-            for raw_path in group:
-                normalized = str(raw_path).strip()
-                if normalized and normalized not in merged:
-                    merged.append(normalized)
+            LLMRunner._append_context_files(group, merged)
         return merged
+
+    @classmethod
+    def _append_context_files(cls, value: Any, collected: List[str]) -> None:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                return
+            if normalized.startswith("[") and normalized.endswith("]"):
+                try:
+                    parsed = yaml.safe_load(normalized)
+                except Exception:
+                    parsed = None
+                if isinstance(parsed, (list, tuple, set)):
+                    for item in parsed:
+                        cls._append_context_files(item, collected)
+                    return
+            if normalized not in collected:
+                collected.append(normalized)
+            return
+
+        if isinstance(value, dict):
+            for key in ("resolved_path", "path"):
+                raw_path = value.get(key)
+                if isinstance(raw_path, str):
+                    normalized = raw_path.strip()
+                    if normalized and normalized not in collected:
+                        collected.append(normalized)
+            for key, nested in value.items():
+                if key in cls.AUTHORITATIVE_CONTEXT_SKIP_KEYS:
+                    continue
+                cls._append_context_files(nested, collected)
+            return
+
+        if isinstance(value, (list, tuple, set)):
+            for item in value:
+                cls._append_context_files(item, collected)
 
     @classmethod
     def _collect_authoritative_context_files(cls, step, instance_data: Optional[Dict[str, Any]]) -> List[str]:
@@ -1140,9 +1176,7 @@ class LLMRunner(StepRunnerBase):
             for key in ("resolved_path", "path"):
                 raw_path = value.get(key)
                 if isinstance(raw_path, str):
-                    normalized = raw_path.strip()
-                    if normalized and normalized not in collected:
-                        collected.append(normalized)
+                    cls._append_context_files(raw_path, collected)
             for key, nested in value.items():
                 if key in cls.AUTHORITATIVE_CONTEXT_SKIP_KEYS:
                     continue
@@ -1548,7 +1582,41 @@ class LLMRunner(StepRunnerBase):
             )
 
             # 检查 LLM 调用是否成功
-            if llm_output.get("status") == "failed":
+            # 审批 agent 特殊状态处理：审批决策（如 CONDITIONAL_APPROVED）不应视为任务执行失败
+            llm_status = llm_output.get("status")
+            agent_id = getattr(step, "agent_id", "") or ""
+            is_approval_agent = agent_id.startswith("agent.governance.approval_")
+
+            if is_approval_agent and llm_status in ("fail", "failed"):
+                # 检查审批决策字段，如果是通过状态则视为成功
+                approval_decision = (
+                    llm_output.get("approval_decision")
+                    or llm_output.get("审批决策")
+                    or llm_output.get("decision")
+                )
+                if approval_decision:
+                    decision_str = str(approval_decision).upper()
+                    # 审批通过状态映射（包括条件批准的各种变体）
+                    approval_states = {
+                        "APPROVED",
+                        "APPROVE",
+                        "CONDITIONAL_APPROVED",
+                        "CONDITIONALLY_APPROVED",
+                        "PASS",
+                        "PASSED",
+                        "SUCCESS",
+                        "OK",
+                        "APPROVED_WITH_RECOMMENDATIONS",
+                        "APPROVED_WITH_NOTES",
+                        "APPROVED_WITH_CONDITIONS",
+                    }
+                    if decision_str in approval_states:
+                        # 审批通过，任务执行成功
+                        llm_output["execution_status"] = "success"
+                        llm_output["approval_decision"] = approval_decision
+                        llm_status = "success"  # 覆盖状态
+
+            if llm_status in ("fail", "failed"):
                 error_msg = llm_output.get("error", "Unknown error")
                 await ctx.state_machine.fail_step(workflow_id, step.id, error_msg)
                 await ctx.store.update_task_execution(
@@ -1565,6 +1633,31 @@ class LLMRunner(StepRunnerBase):
                 )
 
             generated_text = llm_output.get("generated_text", "")
+            declared_output_error = self._detect_forbidden_template_write_paths(
+                paths=[
+                    str(getattr(output, "path", None) or output.get("path"))
+                    for output in (step.outputs or [])
+                    if (
+                        (isinstance(output, dict) and output.get("path"))
+                        or getattr(output, "path", None)
+                    )
+                ],
+                project_root=ctx.project_root,
+            )
+            if declared_output_error:
+                await ctx.state_machine.fail_step(workflow_id, step.id, declared_output_error)
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    error_message=declared_output_error,
+                    completed_at=datetime.now()
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=declared_output_error,
+                )
 
             # 检查是否生成了内容
             if not generated_text or not generated_text.strip():
@@ -1627,6 +1720,7 @@ class LLMRunner(StepRunnerBase):
             declared_output_error = self._validate_declared_output_files(
                 step=step,
                 project_root=ctx.project_root,
+                written_files=written_files,
             )
             if declared_output_error:
                 await ctx.state_machine.fail_step(workflow_id, step.id, declared_output_error)
@@ -2025,6 +2119,12 @@ class LLMRunner(StepRunnerBase):
         """
         If the agent spec declares ssot_output_schema, validate and materialize it.
         """
+        formal_output_specs = (
+            getattr(self, "_resolve_formal_ssot_output_specs", None)
+            or LLMRunner._resolve_formal_ssot_output_specs
+        )(step)
+        validate_only = formal_output_specs == []
+
         agent_spec = self._load_agent_spec_for_step(ctx, step)
         contracts = getattr(agent_spec, "contracts", {}) or {} if agent_spec else {}
         schema_ref = contracts.get("ssot_output_schema")
@@ -2037,6 +2137,8 @@ class LLMRunner(StepRunnerBase):
             generated_text=generated_text,
         )
         if not schema_ref and contract_data is None:
+            if formal_output_specs is not None:
+                return None
             return self._materialize_workspace_formal_ssot_markdown(
                 ctx=ctx,
                 step=step,
@@ -2051,6 +2153,8 @@ class LLMRunner(StepRunnerBase):
                 if strict:
                     raise
                 print(f"[SSOTContract] Warning: Step {step.id} structured output parse failed: {exc}")
+                if formal_output_specs is not None:
+                    return None
                 return self._materialize_workspace_formal_ssot_markdown(
                     ctx=ctx,
                     step=step,
@@ -2063,6 +2167,8 @@ class LLMRunner(StepRunnerBase):
             if strict:
                 raise ValueError("SSOT output schema declared but no ssot_output_contract found")
             print(f"[SSOTContract] Warning: Step {step.id} missing ssot_output_contract payload")
+            if formal_output_specs is not None:
+                return None
             return self._materialize_workspace_formal_ssot_markdown(
                 ctx=ctx,
                 step=step,
@@ -2089,12 +2195,17 @@ class LLMRunner(StepRunnerBase):
                 project_root=Path(ctx.project_root or ".").resolve(),
             )
             materializer = SSOTContractMaterializer(manager, schema_path=Path(schema_path))
+            if validate_only:
+                materializer.validate_contract(contract_data)
+                return None
             outputs = materializer.materialize(contract_data)
         except Exception as exc:
             strict = (step.config or {}).get("strict_output_validation", False)
             if strict:
                 raise
             print(f"[SSOTContract] Warning: Step {step.id} SSOT materialization failed: {exc}")
+            if formal_output_specs is not None:
+                return None
             return self._materialize_workspace_formal_ssot_markdown(
                 ctx=ctx,
                 step=step,
@@ -2120,6 +2231,71 @@ class LLMRunner(StepRunnerBase):
             "outputs": materialized_summary,
             "materialized_files": materialized_files,
         }
+
+    @staticmethod
+    def _resolve_formal_ssot_output_specs(step) -> Optional[List[Any]]:
+        outputs = getattr(step, "outputs", None)
+        if not outputs:
+            return None
+
+        return [
+            output_spec
+            for output_spec in outputs
+            if bool(getattr(output_spec, "freeze", False))
+        ]
+
+    @classmethod
+    def _validate_declared_output_files(
+        cls,
+        *,
+        step,
+        project_root: Optional[str],
+        written_files: Optional[List[str]] = None,
+    ) -> Optional[str]:
+        declared_paths: List[str] = []
+        missing_paths: List[str] = []
+        base_dir = Path(project_root or ".").resolve()
+        normalized_written: set[str] = set()
+        for path in written_files or []:
+            if not isinstance(path, str) or not path.strip():
+                continue
+            candidate = Path(path)
+            if not candidate.is_absolute():
+                candidate = (base_dir / candidate).resolve()
+            else:
+                candidate = candidate.resolve()
+            normalized_written.add(str(candidate))
+
+        for output_spec in getattr(step, "outputs", []) or []:
+            output_type = getattr(output_spec, "type", None)
+            if output_type and str(output_type).lower() == "symbol":
+                continue
+            raw_path = getattr(output_spec, "path", None)
+            if not raw_path:
+                continue
+            normalized_path = str(raw_path).strip()
+            if not normalized_path:
+                continue
+            if "{" in normalized_path or "}" in normalized_path:
+                continue
+
+            candidate = Path(normalized_path)
+            if not candidate.is_absolute():
+                candidate = (base_dir / candidate).resolve()
+            declared_paths.append(str(candidate))
+
+            if not candidate.exists() and str(candidate) not in normalized_written:
+                missing_paths.append(str(candidate))
+
+        forbidden_write_error = cls._detect_forbidden_template_write_paths(
+            paths=declared_paths,
+            project_root=project_root,
+        )
+        if forbidden_write_error:
+            return forbidden_write_error
+        if missing_paths:
+            return f"Missing declared output file(s): {', '.join(missing_paths)}"
+        return None
 
     @staticmethod
     def _synchronize_business_identity_from_materialized_ssot(
@@ -3221,7 +3397,7 @@ class LLMRunner(StepRunnerBase):
                 ],
                 fallback=[rich_description or description or f"Deliver {title} capability"],
             )
-            outputs = _normalize_string_list(
+            raw_outputs = _normalize_string_list(
                 candidate.get("outputs")
                 or candidate.get("output")
                 or [
@@ -3242,6 +3418,13 @@ class LLMRunner(StepRunnerBase):
             non_goals = _normalize_string_list(
                 candidate.get("non_goals") or scope_boundary.get("out_of_scope"),
             )
+            outputs = refine_feat_outputs(
+                raw_outputs,
+                title=title,
+                goal=goal,
+                acceptance_criteria=acceptance_criteria,
+                processing=processing,
+            )
             priority = _normalize_priority(candidate.get("priority"))
             parent_workflow = _clean_text(candidate.get("parent_workflow"))
             category = _clean_text(candidate.get("category"))
@@ -3257,18 +3440,28 @@ class LLMRunner(StepRunnerBase):
                 else dependency_block.get("upstream")
             )
 
+            input_contract = _normalize_input_contract(
+                candidate.get("input_contract"),
+                inputs=inputs,
+                source_refs=source_refs,
+                epic_ref=normalized_epic_ref,
+            )
+            input_contract["required_artifacts"] = align_required_artifacts(
+                input_contract.get("required_artifacts") or [],
+                non_goals,
+            )
+            inputs = align_inputs_with_required_artifacts(
+                inputs,
+                input_contract.get("required_artifacts") or [],
+            )
+
             synthesized = {
                 "feat_id": feat_id,
                 "title": title,
                 "goal": goal,
                 "user_value": user_value,
                 "inputs": inputs,
-                "input_contract": _normalize_input_contract(
-                    candidate.get("input_contract"),
-                    inputs=inputs,
-                    source_refs=source_refs,
-                    epic_ref=normalized_epic_ref,
-                ),
+                "input_contract": input_contract,
                 "processing": processing,
                 "outputs": outputs,
                 "acceptance_criteria": acceptance_criteria,
@@ -3292,7 +3485,14 @@ class LLMRunner(StepRunnerBase):
                     "priority_hint": priority,
                 },
             }
-            synthesized["acceptance_checks"] = _build_acceptance_checks(synthesized, acceptance_criteria)
+            synthesized["acceptance_checks"] = refine_acceptance_checks(
+                _build_acceptance_checks(synthesized, acceptance_criteria),
+                title=title,
+                goal=goal,
+                outputs=outputs,
+                processing=processing,
+                derived_object_expectations=synthesized.get("derived_object_expectations"),
+            )
             return synthesized
 
         def _normalize_user_story_item(item: Any) -> Optional[Dict[str, str]]:
@@ -3394,14 +3594,11 @@ class LLMRunner(StepRunnerBase):
                 ),
                 5,
             )
-            normalized_feat["outputs"] = _truncate_list(
-                _normalize_string_list(
-                    normalized_feat.get("outputs")
-                    or normalized_feat.get("output")
-                    or normalized_feat.get("acceptance_boundary"),
-                    fallback=[f"{title} FEAT specification"],
-                ),
-                5,
+            raw_outputs = _normalize_string_list(
+                normalized_feat.get("outputs")
+                or normalized_feat.get("output")
+                or normalized_feat.get("acceptance_boundary"),
+                fallback=[f"{title} FEAT specification"],
             )
             normalized_feat["acceptance_criteria"] = _truncate_list(
                 _normalize_acceptance_criteria(
@@ -3420,6 +3617,27 @@ class LLMRunner(StepRunnerBase):
                     normalized_feat.get("non_goals") or scope_boundary.get("out_of_scope"),
                 ),
                 10,
+            )
+            normalized_feat["input_contract"]["required_artifacts"] = align_required_artifacts(
+                normalized_feat["input_contract"].get("required_artifacts") or [],
+                normalized_feat.get("non_goals") or [],
+            )
+            normalized_feat["inputs"] = _truncate_list(
+                align_inputs_with_required_artifacts(
+                    normalized_feat.get("inputs") or [],
+                    normalized_feat["input_contract"].get("required_artifacts") or [],
+                ),
+                5,
+            )
+            normalized_feat["outputs"] = _truncate_list(
+                refine_feat_outputs(
+                    raw_outputs,
+                    title=title,
+                    goal=goal,
+                    acceptance_criteria=normalized_feat.get("acceptance_criteria") or [],
+                    processing=normalized_feat.get("processing") or [],
+                ),
+                5,
             )
             normalized_feat["priority"] = _normalize_priority(normalized_feat.get("priority"))
             normalized_feat["delivery_slice"] = (
@@ -3483,9 +3701,16 @@ class LLMRunner(StepRunnerBase):
                     if normalized_story:
                         normalized_user_stories.append(normalized_story)
             normalized_feat["user_stories"] = normalized_user_stories[:3]
-            normalized_feat["acceptance_checks"] = _build_acceptance_checks(
-                normalized_feat,
-                normalized_feat.get("acceptance_criteria") or [],
+            normalized_feat["acceptance_checks"] = refine_acceptance_checks(
+                _build_acceptance_checks(
+                    normalized_feat,
+                    normalized_feat.get("acceptance_criteria") or [],
+                ),
+                title=title,
+                goal=goal,
+                outputs=normalized_feat.get("outputs") or [],
+                processing=normalized_feat.get("processing") or [],
+                derived_object_expectations=normalized_feat.get("derived_object_expectations"),
             )
             return normalized_feat
 
@@ -3954,6 +4179,10 @@ class LLMRunner(StepRunnerBase):
             else:
                 resolved_paths.append(str(workspace_candidate))
         return resolved_paths
+
+    _detect_forbidden_template_write_paths = staticmethod(
+        detect_forbidden_template_write_paths
+    )
 
     @staticmethod
     def _normalize_pm_planner_task_payload(
@@ -4814,9 +5043,14 @@ class LLMRunner(StepRunnerBase):
             r"未冻结每条链路的输出字段契约",
             r"decision_outcome.*正式结果枚举",
             r"trace_hints.*标签级别",
+            r"trace_hints.*缺少 UI",
+            r"trace_hints.*仅覆盖 TECH/TESTSET",
             r"缺少可直接派生下游对象的具体追踪锚点",
             r"形成新的治理分叉",
             r"缺少统一字段级契约",
+            r"required_fields.*抽象口号",
+            r"required_fields.*未定义其.*schema",
+            r"required_fields.*未说明具体格式或内容边界",
         ]
         combined_pattern = re.compile("|".join(soft_blocker_patterns), re.IGNORECASE)
         governance_markers = [
@@ -4881,6 +5115,14 @@ class LLMRunner(StepRunnerBase):
             normalized = text.strip()
             return bool(normalized) and bool(hard_blocker_pattern.search(normalized))
 
+        def _is_positive_observation(text: str) -> bool:
+            normalized = text.strip()
+            if not normalized:
+                return False
+            if cls._contains_feat_review_negative_signal(normalized):
+                return False
+            return cls._contains_feat_review_positive_signal(normalized)
+
         findings = [
             item.strip()
             for item in sanitized.get("findings") or []
@@ -4888,7 +5130,9 @@ class LLMRunner(StepRunnerBase):
         ]
         filtered_findings = [
             item for item in findings
-            if not combined_pattern.search(item) and not _is_soft_governance_refinement(item)
+            if not combined_pattern.search(item)
+            and not _is_soft_governance_refinement(item)
+            and not _is_positive_observation(item)
         ]
         sanitized["findings"] = filtered_findings
 
@@ -4899,6 +5143,7 @@ class LLMRunner(StepRunnerBase):
             and item.strip()
             and not combined_pattern.search(item.strip())
             and not _is_soft_governance_refinement(item.strip())
+            and not _is_positive_observation(item.strip())
         ]
 
         if (
@@ -4921,6 +5166,14 @@ class LLMRunner(StepRunnerBase):
             sanitized["summary"] = (
                 f"All reviewed FEATs satisfy the minimum structural requirements for downstream derivation: {subject_text}."
             )
+        elif (
+            sanitized.get("decision") == "pass"
+            and not cls._contains_feat_review_negative_signal(sanitized.get("summary"))
+            and not any(cls._contains_feat_review_negative_signal(item) for item in sanitized["findings"])
+            and not any(cls._contains_feat_review_negative_signal(item) for item in sanitized["risks"])
+        ):
+            sanitized["findings"] = []
+            sanitized["risks"] = []
         return sanitized
 
     @classmethod
@@ -4966,6 +5219,10 @@ class LLMRunner(StepRunnerBase):
             r"\brevise\b",
             r"\bmust fix\b",
             r"\bcritical issue\b",
+            r"\bincomplete\b",
+            r"\bmissing\b",
+            r"\bunclear\b",
+            r"\binsufficient\b",
             r"阻塞",
             r"不通过",
             r"拒绝",
@@ -4976,6 +5233,66 @@ class LLMRunner(StepRunnerBase):
             r"关键问题",
             r"严重问题",
             r"不可通过",
+            r"不完整",
+            r"缺少",
+            r"不清晰",
+            r"不足",
+        ]
+        return any(re.search(pattern, normalized) for pattern in patterns)
+
+    @staticmethod
+    def _contains_feat_review_positive_signal(text: Any) -> bool:
+        if not isinstance(text, str):
+            return False
+        normalized = text.strip().lower()
+        if not normalized:
+            return False
+
+        patterns = [
+            r"\ball\b.*\b(?:complete|defined|consistent|covered|present|valid)\b",
+            r"\bcontains?\b.*\b(?:required|complete)\b",
+            r"\bcovers?\b",
+            r"\bdefined\b",
+            r"\bconsistent\b",
+            r"\bclear\b",
+            r"\bcorrect(?:ly)?\b",
+            r"\bcomplete\b",
+            r"\bno ui\b",
+            r"\bwithout ui\b",
+            r"\btraceability\b.*\bcomplete\b",
+            r"\bdependencies?\b.*\bclear\b",
+            r"\brequired_fields\b.*\bconcrete\b",
+            r"\binput_contract\b.*\bcomplete\b",
+            r"\bconsumption_rules\b.*\bclear\b",
+            r"\bnon_goals\b.*\bclear\b",
+            r"\bderived_object_expectations\b.*\bconsistent\b",
+            r"所有 .* 均包含",
+            r"所有 .* 完整",
+            r"所有 .* 统一",
+            r"均覆盖",
+            r"覆盖 .*tech/task/testset",
+            r"无需 ui",
+            r"无 ui",
+            r"无 .*tbd",
+            r"无 .*占位值",
+            r"未使用 tbd",
+            r"未使用 same as epic",
+            r"具体输入物",
+            r"具体输入",
+            r"包含 .* 三要素",
+            r"为具体字段名",
+            r"明确说明",
+            r"正确声明",
+            r"正确指向",
+            r"依赖图清晰",
+            r"明确排除",
+            r"统一指向",
+            r"追溯链完整",
+            r"预期一致",
+            r"边界清晰",
+            r"结构完整",
+            r"可派生下游",
+            r"优先级分层合理",
         ]
         return any(re.search(pattern, normalized) for pattern in patterns)
 
@@ -5708,6 +6025,12 @@ class ClaudeCodeRunner(StepRunnerBase):
     _filter_materializable_refs = staticmethod(LLMRunner._filter_materializable_refs)
     _is_literal_ssot_ref = staticmethod(LLMRunner._is_literal_ssot_ref)
     _resolve_changed_file_paths = staticmethod(LLMRunner._resolve_changed_file_paths)
+    _detect_forbidden_template_write_paths = staticmethod(
+        LLMRunner._detect_forbidden_template_write_paths
+    )
+    _synchronize_business_identity_from_materialized_ssot = staticmethod(
+        LLMRunner._synchronize_business_identity_from_materialized_ssot
+    )
     _synthesize_single_ssot_payload = staticmethod(LLMRunner._synthesize_single_ssot_payload)
     _extract_topic_families = classmethod(LLMRunner._extract_topic_families.__func__)
     _text_contains_keyword = staticmethod(LLMRunner._text_contains_keyword)
@@ -5721,10 +6044,15 @@ class ClaudeCodeRunner(StepRunnerBase):
     _extract_structured_segment_payload = LLMRunner._extract_structured_segment_payload
     _extract_structured_payload_from_code_blocks = LLMRunner._extract_structured_payload_from_code_blocks
     _extract_business_output_payload = LLMRunner._extract_business_output_payload
+    _extract_primary_file_output = staticmethod(LLMRunner._extract_primary_file_output)
+    _should_prefer_written_file_payload = staticmethod(LLMRunner._should_prefer_written_file_payload)
+    _unwrap_business_output_candidate = staticmethod(LLMRunner._unwrap_business_output_candidate)
     _extract_best_written_file_payload = classmethod(LLMRunner._extract_best_written_file_payload.__func__)
     _extract_named_output_segment = staticmethod(LLMRunner._extract_named_output_segment)
     _coerce_ssot_contract_dict = staticmethod(LLMRunner._coerce_ssot_contract_dict)
     _normalize_ssot_contract_payload = staticmethod(LLMRunner._normalize_ssot_contract_payload)
+    _resolve_formal_ssot_output_specs = staticmethod(LLMRunner._resolve_formal_ssot_output_specs)
+    _append_context_files = classmethod(LLMRunner._append_context_files.__func__)
     _parse_structured_output_if_possible = staticmethod(LLMRunner._parse_structured_output_if_possible)
     _merge_context_files = staticmethod(LLMRunner._merge_context_files)
     _collect_authoritative_context_files = classmethod(LLMRunner._collect_authoritative_context_files.__func__)
@@ -5733,6 +6061,7 @@ class ClaudeCodeRunner(StepRunnerBase):
     _merge_forbidden_read_paths = classmethod(LLMRunner._merge_forbidden_read_paths.__func__)
     _is_qwen_chat_executor = staticmethod(LLMRunner._is_qwen_chat_executor)
     _is_coding_executor = staticmethod(LLMRunner._is_coding_executor)
+    _resolve_code_executor_candidates = classmethod(LLMRunner._resolve_code_executor_candidates.__func__)
     _resolve_code_executor_type = classmethod(LLMRunner._resolve_code_executor_type.__func__)
     _evaluate_backend_coverage_gate = classmethod(LLMRunner._evaluate_backend_coverage_gate.__func__)
     _parse_coverage_percentage = staticmethod(LLMRunner._parse_coverage_percentage)
@@ -5957,6 +6286,7 @@ class ClaudeCodeRunner(StepRunnerBase):
         step,
         project_root: Optional[str],
     ) -> Optional[str]:
+        declared_paths: List[str] = []
         missing_paths: List[str] = []
         base_dir = Path(project_root or ".").resolve()
 
@@ -5977,10 +6307,17 @@ class ClaudeCodeRunner(StepRunnerBase):
             candidate = Path(normalized_path)
             if not candidate.is_absolute():
                 candidate = (base_dir / candidate).resolve()
+            declared_paths.append(str(candidate))
 
             if not candidate.exists():
                 missing_paths.append(str(candidate))
 
+        forbidden_write_error = cls._detect_forbidden_template_write_paths(
+            paths=declared_paths,
+            project_root=project_root,
+        )
+        if forbidden_write_error:
+            return forbidden_write_error
         if missing_paths:
             return f"Missing declared output file(s): {', '.join(missing_paths)}"
         return None
@@ -5993,12 +6330,25 @@ class ClaudeCodeRunner(StepRunnerBase):
         cls,
         *,
         agent_ctx,
+        step=None,
         claude_config: Dict[str, Any],
         workspace: str,
         workflow_id: str,
         step_id: str,
         context_files: List[str],
     ) -> Dict[str, Any]:
+        declared_output_files: List[str] = []
+        for output in (getattr(step, "outputs", None) or []):
+            if isinstance(output, dict):
+                output_type = output.get("type")
+                output_path = output.get("path", "")
+            else:
+                output_type = getattr(output, "type", None)
+                output_path = getattr(output, "path", "")
+            normalized_path = str(output_path or "").strip()
+            if output_type == "file" and normalized_path:
+                declared_output_files.append(normalized_path)
+
         return {
             "goal": agent_ctx.user_prompt or claude_config.get("goal", ""),
             "workspace": workspace,
@@ -6006,6 +6356,7 @@ class ClaudeCodeRunner(StepRunnerBase):
                 Path(workspace) / ".workflow" / "workspace" / workflow_id / step_id
             ),
             "context_files": context_files,
+            "declared_output_files": declared_output_files,
             "write_scope": claude_config.get("write_scope", []),
             "forbidden_read_paths": cls._merge_forbidden_read_paths(
                 claude_config.get("forbidden_read_paths")
@@ -6089,6 +6440,7 @@ class ClaudeCodeRunner(StepRunnerBase):
         else:
             input_data = self._build_claude_code_input_data(
                 agent_ctx=agent_ctx,
+                step=step,
                 claude_config=claude_config,
                 workspace=workspace,
                 workflow_id=workflow_id,
@@ -6175,7 +6527,60 @@ class ClaudeCodeRunner(StepRunnerBase):
                 )
 
             output = retry_result.result
+
+            # 审批 agent 特殊状态处理：将审批决策与任务执行状态分离
+            # 审批 agent 返回的 "status": "fail" 可能只是审批决策（如 CONDITIONAL_APPROVED），
+            # 而非任务执行失败。需要根据审批决策字段判断实际执行状态。
             status = output.get("status", "fail")
+            agent_id = getattr(step, "agent_id", "") or ""
+            if agent_id.startswith("agent.governance.approval_"):
+                # 从输出中提取审批决策
+                approval_decision = (
+                    output.get("approval_decision")
+                    or output.get("审批决策")
+                    or output.get("decision")
+                )
+                if approval_decision:
+                    decision_str = str(approval_decision).upper()
+                    # 如果审批决策是通过（包括条件批准），则任务执行成功
+                    if decision_str in ("APPROVED", "CONDITIONAL_APPROVED", "PASS", "SUCCESS"):
+                        # 任务执行成功，但可能需要记录审批条件
+                        status = "success"
+                        # 保留原始状态用于后续业务逻辑
+                        output["execution_status"] = "success"
+                        output["approval_decision"] = approval_decision
+
+            changed = output.get("changed_files", [])
+            abs_changed = self._resolve_changed_file_paths(
+                workspace=workspace,
+                project_root=ctx.project_root,
+                changed_files=changed,
+            ) if changed else []
+            forbidden_write_error = self._detect_forbidden_template_write_paths(
+                paths=abs_changed,
+                project_root=ctx.project_root,
+            )
+            if forbidden_write_error:
+                await ctx.state_machine.fail_step(workflow_id, step.id, forbidden_write_error)
+                await ctx.store.update_task_execution(
+                    execution_id,
+                    TaskExecutionStatus.FAILED,
+                    output_data=output,
+                    error_message=forbidden_write_error,
+                    completed_at=datetime.now(),
+                )
+                ctx.event_log.log_step_failed(
+                    step_id=step.id,
+                    agent_id=step.agent_id or "claude_code",
+                    error=forbidden_write_error,
+                )
+                return StepResult(
+                    status="failed",
+                    step_id=step.id,
+                    workflow_id=workflow_id,
+                    message=forbidden_write_error,
+                    output=output,
+                )
 
             # 6. 治理 Gate：diff 过大检查
             diff_summary = output.get("diff_summary", {})
@@ -6293,13 +6698,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             evidence_path = output.get("evidence_bundle_path", "")
             if evidence_path:
                 await self._collect_evidence(ctx, workflow_id, step.id, [evidence_path])
-            changed = output.get("changed_files", [])
             if changed:
-                abs_changed = self._resolve_changed_file_paths(
-                    workspace=workspace,
-                    project_root=ctx.project_root,
-                    changed_files=changed,
-                )
                 await self._collect_evidence(ctx, workflow_id, step.id, abs_changed)
 
             # 10. Verifiers
