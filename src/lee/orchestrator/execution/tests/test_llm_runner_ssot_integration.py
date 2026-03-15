@@ -1208,6 +1208,47 @@ def test_source_normalization_allows_contextual_normalization_wording(runner):
     assert output["source_refs"] == ["ADR-017"]
 
 
+def test_source_normalization_synthesizes_governance_bridge_src_fields(runner):
+    step = SimpleNamespace(id="source_normalization", agent_id="agent.analysis.product_goal", config={})
+    business_output = {
+        "contract_info": {
+            "contract_id": "PGC-ADR-019-BRIDGE",
+            "source_adr": "ADR-019",
+        },
+        "requirement_overview": {
+            "description": "建立 ADR 到主链的桥接规则，并生成 thin SRC 作为 EPIC 入口。",
+            "target_users": "产品治理团队",
+        },
+        "key_designs": {
+            "core_goal": {
+                "primary_goal": {
+                    "description": "让 EPIC 必须经 SRC 进入主链",
+                    "rationale": "保持 ADR 作为治理 SSOT，不直接替代业务入口",
+                    "metrics": ["100% 正式 EPIC 拥有 SRC 上游"],
+                    "success_criteria": ["桥接 SRC 明确记录交付影响边界"],
+                }
+            },
+            "risks_and_boundaries": {
+                "out_of_scope": ["不修改 RELEASE 作为交付轴根对象的模型"],
+            },
+        },
+    }
+
+    _, payload = runner._synthesize_single_ssot_payload(
+        step=step,
+        workflow_id="wf-src-bridge",
+        business_output=business_output,
+        structured_payload={},
+    )
+
+    output = payload["ssot_output_contract"]["outputs"][0]
+    assert output["source_kind"] == "governance_bridge_src"
+    assert output["source_refs"] == ["ADR-019"]
+    assert output["bridge_context"]["governed_by_adrs"] == ["ADR-019"]
+    assert output["bridge_context"]["expected_downstream_objects"][:2] == ["EPIC", "FEAT"]
+    assert "Bridge Context" in output["content"]
+
+
 def test_epic_designer_synthesizes_epic_source_refs_and_derived_from(runner):
     step = SimpleNamespace(id="epic_design", agent_id="agent.product.epic_designer", config={})
     business_output = {

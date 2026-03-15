@@ -480,6 +480,37 @@ def test_collect_step_inputs_resolves_external_input_types(builder):
     assert resolved["external"] == "Gate 三分类治理模型重构需求"
 
 
+def test_collect_step_inputs_prefers_adr_external_payload_when_declared_first(builder):
+    step = SimpleNamespace(
+        id="raw_input_intake",
+        inputs=[
+            {
+                "source": "external",
+                "type": ["adr", "raw_requirement"],
+                "required": True,
+            }
+        ],
+        depends_on=[],
+    )
+    workflow_context = {
+        "data": {
+            "params": {
+                "raw_requirement": "fallback raw requirement",
+                "adr": {
+                    "artifact_id": "ADR-019",
+                    "path": "spec/adr/ADR-019__demo.md",
+                    "decision_summary": "所有正式 EPIC 都必须经 SRC 进入主链。",
+                },
+            }
+        }
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["external"]["artifact_id"] == "ADR-019"
+    assert resolved["external"]["decision_summary"].startswith("所有正式 EPIC")
+
+
 def test_get_step_input_definition_prefers_structured_inputs_over_runtime_input(builder):
     step = SimpleNamespace(
         id="raw_input_intake",

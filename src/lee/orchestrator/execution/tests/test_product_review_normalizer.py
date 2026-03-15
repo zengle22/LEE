@@ -132,3 +132,68 @@ def test_product_review_normalizer_sanitizes_soft_feat_review_revise_when_bundle
         "All reviewed FEATs satisfy the minimum structural requirements"
     )
     assert normalized_structured["business_output"]["decision"] == "pass"
+
+
+def test_product_review_normalizer_sanitizes_delivery_plan_directory_and_subject_false_positives(tmp_path):
+    for feat_id, task_id in (
+        ("FEAT-101", "TASK-FEAT-101-001"),
+        ("FEAT-102", "TASK-FEAT-102-001"),
+    ):
+        task_dir = tmp_path / "spec" / "tasks" / feat_id
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / f"{task_id}__plan.md").write_text("# task\n", encoding="utf-8")
+
+    step = SimpleNamespace(agent_id="agent.product.delivery_plan_reviewer")
+    business_output = {
+        "review_id": "RVW-DEL-001",
+        "review_type": "delivery_plan_review",
+        "decision": "revise",
+        "subject_refs": ["FEAT-101", "FEAT-102"],
+        "summary": "",
+        "findings": [
+            "TASK 文件落盘路径为 spec/tasks/FEAT-XXX/，与 task_directory 定义 spec/tasks/EPIC-SRC-101 不一致",
+            "当前 task_plan.yaml 的 source_feats 为 FEAT-026/027/028，与 FEAT-101 系列不匹配",
+        ],
+        "risks": [
+            "task_directory 与落盘路径不一致可能导致交付追踪断裂",
+            "source_feats mismatch may cause downstream confusion",
+        ],
+        "recommendations": [
+            "将 task_directory 更新为 spec/tasks/FEAT-101 或统一 TASK 落盘到 spec/tasks/EPIC-SRC-101/",
+            "创建专门针对 FEAT-101 系列的 delivery_prep task_plan.yaml，包含正确的 source_feats 引用",
+        ],
+    }
+
+    normalized_business, normalized_structured = ProductReviewNormalizer.normalize(
+        runner_cls=LLMRunner,
+        step=step,
+        business_output=business_output,
+        structured_payload={"business_output": dict(business_output)},
+        instance_data={
+            "project_root": str(tmp_path),
+            "step_outputs": {
+                "task_planning": {
+                    "business_output": {
+                        "source_feats": ["FEAT-101", "FEAT-102"],
+                        "planning_metadata": {
+                            "task_directory": "spec/tasks/EPIC-SRC-101",
+                            "task_directories": [
+                                "spec/tasks/FEAT-101",
+                                "spec/tasks/FEAT-102",
+                            ],
+                        },
+                        "task_specs": [
+                            {"task_id": "TASK-FEAT-101-001", "source_feat": "FEAT-101"},
+                            {"task_id": "TASK-FEAT-102-001", "source_feat": "FEAT-102"},
+                        ],
+                    }
+                }
+            },
+        },
+    )
+
+    assert normalized_business["decision"] == "pass"
+    assert normalized_business["findings"] == []
+    assert normalized_business["risks"] == []
+    assert normalized_business["recommendations"] == []
+    assert normalized_structured["business_output"]["decision"] == "pass"

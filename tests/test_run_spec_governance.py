@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -48,6 +49,8 @@ def test_workflow_registry_contains_product_templates() -> None:
         "spec-global/departments/product/workflows/templates/raw-to-src/v1/workflow.yaml"
     )
     assert workflows["product.raw-to-src"]["load_spec_as_params"] is True
+    assert "adr" in workflows["product.main"]["optional_params"]
+    assert "adr" in workflows["product.raw-to-src"]["optional_params"]
     assert "raw_requirement" in workflows["product.raw-to-src"]["optional_params"]
     assert "business_opportunity_freeze" in workflows["product.raw-to-src"]["optional_params"]
     assert workflows["product.src-to-epic"]["description"] == "Product L3 - frozen SRC to EPIC"
@@ -137,6 +140,9 @@ def test_product_pipeline_handoff_contracts_are_aligned() -> None:
     src_input_types = {item["type"] for item in src_doc["overview"]["input_types"]}
     src_external_types = set(src_doc["stages"][0]["steps"][0]["inputs"][0]["type"])
 
+    assert "adr" in main_input_types
+    assert "adr" in raw_input_types
+    assert "adr" in raw_external_types
     assert "business_opportunity_freeze" in main_input_types
     assert "business_opportunity_freeze" in raw_input_types
     assert "business_opportunity_freeze" in raw_external_types
@@ -169,6 +175,25 @@ def test_requirement_chain_validation_template_requires_delivery_outputs() -> No
     ]
     execution_inputs = {item["source"] for item in steps[0]["inputs"]}
     assert {"source_freeze", "epic_freeze_bundle", "feat_freeze_bundle", "delivery_prep_bundle"} == execution_inputs
+
+
+def test_source_freeze_contract_supports_governance_bridge_src() -> None:
+    contract_path = (
+        Path(__file__).resolve().parents[1]
+        / "spec-global"
+        / "departments"
+        / "product"
+        / "contracts"
+        / "source-freeze-contract"
+        / "v1"
+        / "schema.json"
+    )
+    doc = json.loads(contract_path.read_text(encoding="utf-8"))
+
+    assert "source_kind" in doc["properties"]
+    assert "bridge_context" in doc["properties"]
+    assert "governance_bridge_src" in doc["properties"]["source_kind"]["enum"]
+    assert "bridge_context" in doc["allOf"][0]["then"]["required"]
 
 
 def test_workflow_registry_updates_qa_test_set_production_inputs() -> None:

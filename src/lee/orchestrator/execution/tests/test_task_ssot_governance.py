@@ -543,3 +543,37 @@ def test_gate_payload_coerces_business_output_from_workspace_artifacts(tmp_path)
         "title": "Kimi Executor 接入与配置能力",
         "source_id": "SRC-012",
     }
+
+
+def test_materialize_src_candidate_preserves_bridge_context_in_markdown():
+    temp_dir = Path(tempfile.mkdtemp())
+    try:
+        manager = ArtifactManager(project_root=temp_dir)
+        harness = _GateHarness()
+        published = harness._materialize_src_candidate(
+            {
+                "title": "ADR-019 bridge SRC",
+                "problem_statement": "将 ADR 触发的主链变更桥接为 thin SRC。",
+                "target_user": ["产品治理团队"],
+                "business_motivation": "保证 EPIC 仍统一经 SRC 进入。",
+                "constraints": ["RELEASE 仍 pin 住 FEAT"],
+                "source_kind": "governance_bridge_src",
+                "source_refs": ["ADR-019"],
+                "bridge_context": {
+                    "governed_by_adrs": ["ADR-019"],
+                    "change_scope": "新增 ADR -> thin SRC 的正式主链入口",
+                    "expected_downstream_objects": ["EPIC", "FEAT", "RELEASE"],
+                    "acceptance_impact": ["EPIC 不再允许裸挂 ADR"],
+                    "non_goals": ["不修改 RELEASE 根模型"],
+                },
+            },
+            manager,
+        )
+
+        content = (temp_dir / published["path"]).read_text(encoding="utf-8")
+        assert "## Bridge Context" in content
+        assert "ADR-019" in content
+        assert "EPIC, FEAT, RELEASE" in content
+        assert "## 非目标" in content
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)

@@ -125,3 +125,70 @@ def test_pm_planner_task_normalizer_builds_task_markdown_content():
     assert "# Objective" in outputs[0]["content"]
     assert "## Acceptance Mapping" in outputs[0]["content"]
     assert "## Definition Of Done" in outputs[0]["content"]
+
+
+def test_pm_planner_task_normalizer_rewrites_epic_task_directory_and_emits_feat_directories():
+    step = SimpleNamespace(agent_id="agent.product.pm_planner")
+    business_output = {
+        "parent_epic": "EPIC-SRC-045-015",
+        "source_feats": ["FEAT-045-001", "FEAT-045-002", "FEAT-045-003"],
+        "planning_metadata": {
+            "project_profile": "governance-bridge",
+            "task_directory": "spec/tasks/EPIC-SRC-045-015",
+        },
+        "task_specs": [
+            {
+                "task_id": "TASK-045-001-001",
+                "title": "Bridge rule definition",
+                "objective": "Freeze the bridge rule",
+                "description": "Document bridge behavior",
+                "source_feat": "FEAT-045-001",
+                "workstream": "governance-spec",
+                "task_kind": "governance",
+                "responsible_role": "governance-owner",
+                "acceptance_criteria_mapping": [{"feat": "FEAT-045-001", "ac": "AC-1", "description": "Bridge rule exists"}],
+                "dependencies": [],
+                "definition_of_done": ["Bridge rule frozen"],
+                "observability": {"execution_unit": "task", "log_scope": "task-execution", "audit_fields": ["run_id"]},
+                "evidence_requirements": {"required_refs": ["FEAT-045-001"], "review_required": True},
+                "rollback_strategy": {"mode": "revert", "restore_targets": ["spec/tasks/FEAT-045-001"]},
+                "ssot": {"identity_kind": "ssot", "ssot_type": "TASK", "parent": "FEAT-045-001", "derived_from": "FEAT-045-001#delivery"},
+            },
+            {
+                "task_id": "TASK-045-002-001",
+                "title": "Validator implementation",
+                "objective": "Implement validation",
+                "description": "Add contract validation",
+                "source_feat": "FEAT-045-002",
+                "workstream": "workflow-runtime",
+                "task_kind": "implementation",
+                "responsible_role": "runtime-owner",
+                "acceptance_criteria_mapping": [{"feat": "FEAT-045-002", "ac": "AC-2", "description": "Validator works"}],
+                "dependencies": [],
+                "definition_of_done": ["Validation implemented"],
+                "observability": {"execution_unit": "task", "log_scope": "task-execution", "audit_fields": ["run_id"]},
+                "evidence_requirements": {"required_refs": ["FEAT-045-002"], "review_required": True},
+                "rollback_strategy": {"mode": "revert", "restore_targets": ["spec/tasks/FEAT-045-002"]},
+                "ssot": {"identity_kind": "ssot", "ssot_type": "TASK", "parent": "FEAT-045-002", "derived_from": "FEAT-045-002#delivery"},
+            },
+        ],
+        "milestones": [{"id": "M1", "name": "Freeze", "task_ids": ["TASK-045-001-001"], "acceptance_criteria": "Bridge plan exists"}],
+        "dependency_graph": {"critical_path": ["TASK-045-001-001"]},
+        "resource_allocation": {"governance-owner": {"tasks": ["TASK-045-001-001"]}},
+        "risk_mitigation": [],
+    }
+
+    normalized_business, _ = PmPlannerTaskNormalizer.normalize(
+        runner_cls=LLMRunner,
+        step=step,
+        workflow_id="wf-task-045",
+        business_output=business_output,
+        structured_payload={"business_output": business_output},
+    )
+
+    assert normalized_business["planning_metadata"]["task_directory"] == "spec/tasks/FEAT-045-001"
+    assert normalized_business["planning_metadata"]["task_directories"] == [
+        "spec/tasks/FEAT-045-001",
+        "spec/tasks/FEAT-045-002",
+        "spec/tasks/FEAT-045-003",
+    ]

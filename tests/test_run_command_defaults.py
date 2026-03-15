@@ -279,6 +279,92 @@ def test_run_loads_markdown_spec_into_raw_requirement_for_product_main(monkeypat
     assert "spec" not in params
 
 
+def test_run_loads_formal_adr_spec_into_adr_and_raw_requirement_for_product_main(
+    monkeypatch, tmp_path: Path
+) -> None:
+    template = tmp_path / "workflow.yaml"
+    template.write_text("kind: l2_workflow_template\nversion: '1.0'\n", encoding="utf-8")
+    spec_file = tmp_path / "spec" / "adr" / "ADR-019__demo.md"
+    spec_file.parent.mkdir(parents=True, exist_ok=True)
+    spec_file.write_text(
+        "\n".join(
+            [
+                "---",
+                "id: ADR-019",
+                "ssot_type: adr",
+                "title: EPIC 入口统一经 SRC",
+                "status: draft",
+                "version: v1",
+                "---",
+                "",
+                "## 1. Decision",
+                "",
+                "- 所有正式 EPIC 都必须经由冻结后的 SRC 进入主链。",
+                "",
+                "## 3. Problem",
+                "",
+                "- 直接把 ADR 当成 EPIC source object 会打破现有边界。",
+                "",
+                "## 11. Follow-Up",
+                "",
+                "1. 为 bridge SRC 增加字段模板。",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    rendered = tmp_path / "rendered.yaml"
+    rendered.write_text("kind: l2_workflow_template\nid: x\nversion: '1.0'\nphases: []\n", encoding="utf-8")
+
+    captured_create_payload: List[Dict[str, Any]] = []
+
+    monkeypatch.setattr(
+        run_module,
+        "_load_registry",
+        lambda: {
+            "workflows": {
+                "product.main": {
+                    "path": str(template),
+                    "load_spec_as_params": True,
+                    "required_params": [],
+                    "optional_params": ["adr", "raw_requirement"],
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(run_module, "_list_conflicting_workflows", lambda *_a, **_k: [])
+    monkeypatch.setattr(run_module, "_render_workflow_template", lambda *_a, **_k: rendered)
+    monkeypatch.setattr(
+        run_module,
+        "_run_until_settled_with_gates",
+        lambda *_a, **_k: {"status": "running", "completed_steps": 0, "blocked_at": None},
+    )
+    monkeypatch.setattr(run_module, "_print_summary", lambda *_a, **_k: None)
+
+    def fake_pm_workflow(action: str, **kwargs):
+        if action == "create":
+            captured_create_payload.append(kwargs)
+            return {"workflow_id": "wf_department_adr_001"}
+        raise AssertionError(f"unexpected pm_workflow action: {action}")
+
+    monkeypatch.setattr(run_module, "pm_workflow", fake_pm_workflow)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_module.run,
+        ["product.main", "--project-dir", str(tmp_path), "--skip-plan", "--spec", str(spec_file)],
+    )
+
+    assert result.exit_code == 0, result.output
+    params = captured_create_payload[0]["data"]["params"]
+    assert params["adr"]["artifact_id"] == "ADR-019"
+    assert params["adr"]["ssot_type"] == "ADR"
+    assert params["adr"]["path"] == str(spec_file.resolve())
+    assert "Decision:" in params["raw_requirement"]
+    assert "Problem:" in params["raw_requirement"]
+    assert "Follow-Up:" in params["raw_requirement"]
+    assert "spec" not in params
+
+
 def test_run_uses_instance_without_existing_workflow_selection(monkeypatch, tmp_path: Path) -> None:
     template = tmp_path / "workflow.yaml"
     template.write_text("kind: workflow\nversion: '1.0'\n", encoding="utf-8")
