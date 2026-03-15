@@ -2,6 +2,7 @@
 SSOT placement policy.
 
 目录层回答正式 SSOT 主文件应该落在哪个内容目录。
+非正式 workflow 支撑产物落在 output/ 下。
 运行态缓存、manifest、registry 仍然保留在 .artifacts/ 下。
 """
 
@@ -33,6 +34,10 @@ SSOT_PLACEMENT_DIRS = {
 LEGACY_REQUIREMENT_DIRS = {
     SSOTType.EPIC: Path("spec/requirements/epics"),
     SSOTType.FEAT: Path("spec/requirements/features"),
+}
+
+TRANSFER_PACKAGE_DIRS = {
+    "tech_design": Path("output/tech-packages"),
 }
 
 def resolve_src_root_id(
@@ -96,3 +101,26 @@ def resolve_ssot_relative_dir(
         return base_dir / src_root_id
 
     return base_dir
+
+
+def resolve_transfer_package_relative_dir(package_kind: str, package_id: str) -> Path:
+    """
+    Resolve the project-relative directory for non-SSOT workflow support packages.
+
+    Formal SSOT lives under spec/. Analysis notes, review bundles, handoff manifests,
+    and similar workflow support artifacts must live under output/.
+    """
+    normalized_kind = str(package_kind or "").strip().lower()
+    if not normalized_kind:
+        raise ValueError("package_kind is required")
+
+    try:
+        base_dir = TRANSFER_PACKAGE_DIRS[normalized_kind]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported transfer package kind: {package_kind}") from exc
+
+    normalized_id = str(package_id or "").strip()
+    if not normalized_id:
+        raise ValueError("package_id is required")
+
+    return base_dir / normalized_id

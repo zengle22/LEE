@@ -694,15 +694,22 @@ class SpecGlobalParser:
         for output_item in outputs_data:
             if isinstance(output_item, dict):
                 # 完整格式
-                path = output_item.get("path", "")
-                output_type = "dir" if path.endswith("/") else "file"
+                symbol = output_item.get("symbol")
+                path = output_item.get("path") or symbol or ""
+                output_type = output_item.get("type")
+                if not output_type:
+                    output_type = "symbol" if symbol else ("dir" if path.endswith("/") else "file")
                 outputs.append(StepOutputIR(
                     path=path,
                     type=output_type,
-                    format=self._infer_format(path),
+                    format=output_item.get("format") or self._infer_format(path),
                     required=output_item.get("required", True),
                     description=output_item.get("description"),
                     include=output_item.get("include"),
+                    symbol=symbol,
+                    contract=output_item.get("contract"),
+                    freeze=bool(output_item.get("freeze", False)),
+                    ssot=output_item.get("ssot") if isinstance(output_item.get("ssot"), dict) else None,
                 ))
             elif isinstance(output_item, str):
                 # 简写格式: 纯字符串路径
@@ -714,6 +721,10 @@ class SpecGlobalParser:
                     required=True,
                     description=None,
                     include=None,
+                    symbol=None,
+                    contract=None,
+                    freeze=False,
+                    ssot=None,
                 ))
             else:
                 # 其他类型，跳过或使用默认值

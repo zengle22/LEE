@@ -1030,42 +1030,13 @@ class TemplateManager:
 
     def _dict_to_step(self, step_dict: Dict[str, Any]) -> Step:
         """将字典转换为 Step 对象"""
-        from lee.orchestrator.storage.models import OutputSpec
-
         # 解析 outputs（支持旧/新格式）
         outputs_raw = step_dict.get("outputs", [])
         outputs = []
         for output_item in outputs_raw:
-            if isinstance(output_item, str):
-                # 字符串格式：直接作为路径
-                path = output_item
-                output_type = "dir" if path.endswith("/") else "file"
-                outputs.append(OutputSpec(
-                    type=output_type,
-                    path=path,
-                    format=self._infer_format(path),
-                    required=True,
-                    description="",
-                ))
-            elif isinstance(output_item, dict):
-                if "type" not in output_item:
-                    path = output_item.get("path", "")
-                    output_type = "dir" if path.endswith("/") else "file"
-                    outputs.append(OutputSpec(
-                        type=output_type,
-                        path=path,
-                        format=self._infer_format(path),
-                        required=output_item.get("required", True),
-                        description=output_item.get("description", ""),
-                    ))
-                else:
-                    outputs.append(OutputSpec(
-                        type=output_item.get("type", "file"),
-                        path=output_item.get("path", ""),
-                        format=output_item.get("format", "text"),
-                        required=output_item.get("required", True),
-                        description=output_item.get("description", ""),
-                    ))
+            parsed = self._parse_output_spec(output_item)
+            if parsed is not None:
+                outputs.append(parsed)
 
         step = Step(
             id=step_dict["id"],
@@ -1184,47 +1155,9 @@ class TemplateManager:
         outputs_raw = step_data.get("outputs", [])
         outputs = []
         for output_item in outputs_raw:
-            if isinstance(output_item, str):
-                # 字符串格式：直接作为路径
-                path = output_item
-                if path.endswith("/"):
-                    output_type = "dir"
-                else:
-                    output_type = "file"
-
-                outputs.append(OutputSpec(
-                    type=output_type,
-                    path=path,
-                    format=self._infer_format(path),
-                    required=True,
-                    description="",
-                ))
-            elif isinstance(output_item, dict):
-                # 兼容旧格式：{path, required, description}
-                if "type" not in output_item:
-                    # 根据 path 判断类型
-                    path = output_item.get("path", "")
-                    if path.endswith("/"):
-                        output_type = "dir"
-                    else:
-                        output_type = "file"
-
-                    outputs.append(OutputSpec(
-                        type=output_type,
-                        path=path,
-                        format=self._infer_format(path),
-                        required=output_item.get("required", True),
-                        description=output_item.get("description", ""),
-                    ))
-                else:
-                    # 新格式：{type, path, format, required, description}
-                    outputs.append(OutputSpec(
-                        type=output_item.get("type", "file"),
-                        path=output_item.get("path", ""),
-                        format=output_item.get("format", "text"),
-                        required=output_item.get("required", True),
-                        description=output_item.get("description", ""),
-                    ))
+            parsed = self._parse_output_spec(output_item)
+            if parsed is not None:
+                outputs.append(parsed)
 
         # 兼容 dependencies/depends_on 两种写法
         depends_on = step_data.get("depends_on")
