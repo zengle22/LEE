@@ -11,7 +11,7 @@ from lee.orchestrator.execution.artifacts.ssot_contract import SSOTContractMater
 from lee.orchestrator.execution.artifacts.ssot_service import SSOTValidator
 from lee.orchestrator.execution.artifacts.types import ArtifactStatus, SSOTType
 from lee.orchestrator.execution.gate_operations import GateOperationsMixin
-from lee.orchestrator.storage.models import GateApproval, GateStatus
+from lee.orchestrator.storage.models import GateApproval, GateStatus, WorkflowStatus
 
 
 class _GateHarness(GateOperationsMixin):
@@ -24,6 +24,7 @@ class _GateHarness(GateOperationsMixin):
             get_workflow=AsyncMock(),
             update_workflow_data=AsyncMock(),
         )
+        self.run_until_blocked = AsyncMock()
 
 
 def _create_src_scoped_feat(manager: ArtifactManager, suffix: str = "001") -> tuple[str, str]:
@@ -356,6 +357,143 @@ async def test_approve_gate_embeds_frozen_business_payload_for_downstream_handof
     assert gate_output["frozen_inputs"]["normalized_src"]["business_output"]["source_id"] == "SRC-013"
     assert "generated_text" not in gate_output["frozen_inputs"]["normalized_src"]
     assert "debug_log_path" not in gate_output["frozen_inputs"]["normalized_src"]
+
+
+@pytest.mark.asyncio
+async def test_approve_gate_emits_source_freeze_ref_and_src_root_id():
+    harness = _GateHarness()
+    instance = SimpleNamespace(
+        template_id="workflow.product.task.raw_to_src",
+        data={
+            "completed_steps": ["source_normalization", "source_review"],
+            "params": {},
+            "step_outputs": {
+                "source_normalization": {
+                    "business_output": {
+                        "title": "需求链一致性测试体系建设",
+                        "ssot_materialized": {
+                            "src": {
+                                "id": "SRC-040",
+                                "path": "spec/source/SRC-040__src.md",
+                            }
+                        },
+                    }
+                }
+            },
+        },
+    )
+    gate_approval = GateApproval(
+        workflow_id="wf-src-002",
+        gate_id="gate_wf_src_002_source_freeze",
+        step_id="source_freeze",
+        status=GateStatus.PENDING,
+    )
+
+    harness.template_manager = SimpleNamespace(get_template=lambda _template_id: None)
+    harness.gate_engine = SimpleNamespace(evaluate_gate=lambda gate_ir, context: None)
+    harness.event_log = SimpleNamespace(log_gate_approved=lambda **kwargs: None)
+    harness.state_machine = SimpleNamespace(
+        _resolve_step_inputs_for_freeze=lambda step_id, inst: ["normalized_src"],
+        complete_step=AsyncMock(return_value={"status": "success"}),
+    )
+    harness.store = SimpleNamespace(
+        get_workflow=AsyncMock(return_value=instance),
+        get_gate_approval=AsyncMock(return_value=gate_approval),
+        update_gate_approval=AsyncMock(
+            return_value=GateApproval(
+                workflow_id="wf-src-002",
+                gate_id="gate_wf_src_002_source_freeze",
+                step_id="source_freeze",
+                status=GateStatus.APPROVED,
+                approver="codex",
+                comments="approve",
+            )
+        ),
+        update_workflow_status=AsyncMock(),
+    )
+    harness._check_workflow_completion = AsyncMock()
+    harness._freeze_gate_targets = AsyncMock()
+
+    await harness.approve_gate(
+        workflow_id="wf-src-002",
+        gate_id="gate_wf_src_002_source_freeze",
+        approver="codex",
+        comments="approve",
+    )
+
+    gate_output = harness.state_machine.complete_step.await_args.args[2]
+    assert gate_output["source_freeze_ref"] == {
+        "artifact_id": "SRC-040",
+        "path": "spec/source/SRC-040__src.md",
+    }
+    assert gate_output["src_root_id"] == "SRC-040"
+
+
+@pytest.mark.asyncio
+async def test_approve_gate_advances_parent_workflow_when_child_completes():
+    harness = _GateHarness()
+    child_instance = SimpleNamespace(
+        id="wf-child-001",
+        parent_id="wf-parent-001",
+        status=WorkflowStatus.COMPLETED,
+        template_id="workflow.product.task.raw_to_src",
+        data={"completed_steps": [], "params": {}, "step_outputs": {}},
+    )
+    parent_instance = SimpleNamespace(
+        id="wf-parent-001",
+        parent_id=None,
+        status=WorkflowStatus.RUNNING,
+        template_id="workflow.product.main",
+        data={"completed_steps": [], "params": {}, "step_outputs": {}},
+    )
+    gate_approval = GateApproval(
+        workflow_id="wf-child-001",
+        gate_id="gate_wf_child_001_source_freeze",
+        step_id="source_freeze",
+        status=GateStatus.PENDING,
+    )
+
+    harness.template_manager = SimpleNamespace(get_template=lambda _template_id: None)
+    harness.gate_engine = SimpleNamespace(evaluate_gate=lambda gate_ir, context: None)
+    harness.event_log = SimpleNamespace(log_gate_approved=lambda **kwargs: None)
+    harness.state_machine = SimpleNamespace(
+        _resolve_step_inputs_for_freeze=lambda step_id, inst: [],
+        complete_step=AsyncMock(return_value={"status": "success"}),
+    )
+
+    async def _get_workflow(workflow_id: str):
+        if workflow_id == "wf-child-001":
+            return child_instance
+        if workflow_id == "wf-parent-001":
+            return parent_instance
+        return None
+
+    harness.store = SimpleNamespace(
+        get_workflow=AsyncMock(side_effect=_get_workflow),
+        get_gate_approval=AsyncMock(return_value=gate_approval),
+        update_gate_approval=AsyncMock(
+            return_value=GateApproval(
+                workflow_id="wf-child-001",
+                gate_id="gate_wf_child_001_source_freeze",
+                step_id="source_freeze",
+                status=GateStatus.APPROVED,
+                approver="codex",
+                comments="approve",
+            )
+        ),
+        update_workflow_status=AsyncMock(),
+    )
+    harness._check_workflow_completion = AsyncMock()
+    harness._freeze_gate_targets = AsyncMock()
+
+    await harness.approve_gate(
+        workflow_id="wf-child-001",
+        gate_id="gate_wf_child_001_source_freeze",
+        approver="codex",
+        comments="approve",
+    )
+
+    harness.run_until_blocked.assert_awaited_once_with("wf-parent-001", max_steps=20)
 
 
 def test_declared_output_payload_extracts_business_output_from_gate_payload(tmp_path):

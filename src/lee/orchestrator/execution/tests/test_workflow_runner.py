@@ -194,6 +194,8 @@ async def test_workflow_runner_create_workflow_bootstraps_l2_instance(tmp_path: 
             "depends_on": [],
             "workflow": "workflow.product.task.src_to_epic",
             "level": "task",
+            "spawns_l3": False,
+            "l3_template_id": None,
             "l3_instance_ids": [],
         }
     ]

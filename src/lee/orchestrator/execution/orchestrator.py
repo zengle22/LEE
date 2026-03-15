@@ -2734,37 +2734,57 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
     def _resolve_l3_template_path(self, l3_template_id: str) -> Path:
         """Resolve a canonical L3 template ID to an on-disk template path."""
-        template_roots = []
+        dev_template_roots = []
+        qa_template_roots = []
+        framework_root = Path(__file__).resolve().parents[4]
         if self.project_root:
             project_root_path = Path(self.project_root)
-            template_roots.extend([
+            dev_template_roots.extend([
                 project_root_path / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates",
                 project_root_path / "spec-global" / "departments" / "dev" / "workflows" / "templates",
             ])
+            qa_template_roots.extend([
+                project_root_path / "lee" / "spec-global" / "departments" / "qa" / "workflows" / "templates",
+                project_root_path / "spec-global" / "departments" / "qa" / "workflows" / "templates",
+            ])
         else:
-            template_roots.extend([
+            dev_template_roots.extend([
                 Path("lee/spec-global/departments/dev/workflows/templates"),
                 Path("spec-global/departments/dev/workflows/templates"),
             ])
+            qa_template_roots.extend([
+                Path("lee/spec-global/departments/qa/workflows/templates"),
+                Path("spec-global/departments/qa/workflows/templates"),
+            ])
+        dev_template_roots.extend([
+            framework_root / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+        ])
+        qa_template_roots.extend([
+            framework_root / "spec-global" / "departments" / "qa" / "workflows" / "templates",
+        ])
 
         template_file_map = {
-            "template.dev.task_l3_v3": "l3/task-l3-v3-template.yaml",
-            "template.dev.tech_design_l3": "tech-design-l3-template.yaml",
-            "template.dev.feature_contract_l3": "feature-contract-l3-template.yaml",
-            "template.dev.feature_fe_l3": "feature-fe-l3-template.yaml",
-            "template.dev.feature_be_l3": "feature-be-l3-template.yaml",
-            "template.dev.feature_integration_l3": "feature-integration-l3-template.yaml",
-            "template.dev.evidence_pack_l3": "evidence-pack-l3-template.yaml",
-            "template.dev.bugfix_triage_l3": "bugfix-triage-l3-template.yaml",
-            "template.dev.bugfix_root_cause_l3": "bugfix-root-cause-l3-template.yaml",
-            "template.dev.bugfix_fix_design_l3": "bugfix-fix-design-l3-template.yaml",
-            "template.dev.bugfix_fix_impl_l3": "bugfix-fix-impl-l3-template.yaml",
-            "template.dev.bugfix_verification_l3": "bugfix-verification-l3-template.yaml",
-            "template.dev.bugfix_evidence_pack_l3": "bugfix-evidence-pack-l3-template.yaml",
+            "template.dev.task_l3_v3": ("dev", "l3/task-l3-v3-template.yaml"),
+            "template.dev.tech_design_l3": ("dev", "tech-design-l3-template.yaml"),
+            "template.dev.feature_contract_l3": ("dev", "feature-contract-l3-template.yaml"),
+            "template.dev.feature_fe_l3": ("dev", "feature-fe-l3-template.yaml"),
+            "template.dev.feature_be_l3": ("dev", "feature-be-l3-template.yaml"),
+            "template.dev.feature_integration_l3": ("dev", "feature-integration-l3-template.yaml"),
+            "template.dev.evidence_pack_l3": ("dev", "evidence-pack-l3-template.yaml"),
+            "template.dev.bugfix_triage_l3": ("dev", "bugfix-triage-l3-template.yaml"),
+            "template.dev.bugfix_root_cause_l3": ("dev", "bugfix-root-cause-l3-template.yaml"),
+            "template.dev.bugfix_fix_design_l3": ("dev", "bugfix-fix-design-l3-template.yaml"),
+            "template.dev.bugfix_fix_impl_l3": ("dev", "bugfix-fix-impl-l3-template.yaml"),
+            "template.dev.bugfix_verification_l3": ("dev", "bugfix-verification-l3-template.yaml"),
+            "template.dev.bugfix_evidence_pack_l3": ("dev", "bugfix-evidence-pack-l3-template.yaml"),
+            "template.qa.test_set_execute": ("qa", "test-set-execute-l3-template.yaml"),
+            "template.qa.test_set_production": ("qa", "test-set-production-l3-template.yaml"),
         }
-        relative_path = template_file_map.get(l3_template_id)
-        if relative_path is None:
+        template_spec = template_file_map.get(l3_template_id)
+        if template_spec is None:
             raise FileNotFoundError(f"Unsupported L3 template ID: {l3_template_id}")
+        domain, relative_path = template_spec
+        template_roots = qa_template_roots if domain == "qa" else dev_template_roots
 
         for template_root in template_roots:
             candidate = template_root / relative_path
@@ -2832,11 +2852,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         if not result.success:
             raise RuntimeError(f"Failed to generate L3 instance: {result.errors}")
 
-        # Spawn L3 workflow using the phase-resolved template ID.
+        # Spawn against the resolved template path so transient project dirs do not
+        # need to mirror the framework's template registry layout.
         l3_instance = await self.spawn_workflow(
             parent_id=parent_l2_id,
             level=WorkflowLevel.TASK,
-            template_id=l3_template_id,
+            template_id=str(l3_template_path),
             data={
                 "kind": "l3_workflow_instance",
                 "params": dict(parent_params),

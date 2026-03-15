@@ -120,6 +120,14 @@ class SingleSSOTNormalizer:
                 }
             return business_output, payload
 
+        if step_id == "source_normalization":
+            payload = runner_cls._normalize_source_normalization_ssot_contract(
+                workflow_id=workflow_id,
+                business_output=business_output,
+                structured_payload=structured_payload,
+            )
+            return business_output, payload
+
         if isinstance(structured_payload, dict) and isinstance(structured_payload.get("ssot_output_contract"), dict):
             return business_output, structured_payload
 
@@ -172,28 +180,6 @@ class SingleSSOTNormalizer:
                 "contract_version": "1.0",
                 "run_id": workflow_id,
                 "outputs": [epic_output],
-            }
-            return business_output, payload
-
-        if step_id == "source_normalization":
-            payload = runner_cls._ensure_structured_envelope(
-                business_output=business_output,
-                structured_payload=structured_payload,
-            )
-            source_refs = runner_cls._derive_source_refs_from_business_output(business_output)
-            src_output = {
-                "key": "src",
-                "identity_kind": "ssot",
-                "ssot_type": "src",
-                "title": runner_cls._derive_src_title_from_business_output(business_output),
-                "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
-            }
-            if source_refs:
-                src_output["source_refs"] = source_refs
-            payload["ssot_output_contract"] = {
-                "contract_version": "1.0",
-                "run_id": workflow_id,
-                "outputs": [src_output],
             }
             return business_output, payload
 

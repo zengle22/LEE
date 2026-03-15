@@ -1079,6 +1079,67 @@ def test_source_normalization_derives_meaningful_src_title_from_problem_statemen
     assert output["title"] == "QA Department SSOT Alignment and Workflow Reframe"
 
 
+def test_source_normalization_derives_meaningful_src_title_from_nested_product_goal(runner):
+    step = SimpleNamespace(id="source_normalization", agent_id="agent.analysis.product_goal", config={})
+    business_output = {
+        "product_goal": {
+            "title": "需求链一致性测试体系建设",
+            "essence": "将需求链从文档审阅对象转化为可测试系统",
+        },
+        "src_metadata": {
+            "derived_from": "ADR-011",
+        },
+    }
+
+    _, payload = runner._synthesize_single_ssot_payload(
+        step=step,
+        workflow_id="wf-src-002b",
+        business_output=business_output,
+        structured_payload={},
+    )
+
+    output = payload["ssot_output_contract"]["outputs"][0]
+    assert output["title"] == "需求链一致性测试体系建设"
+
+
+def test_source_normalization_rewrites_generic_src_contract_title_when_contract_already_exists(runner):
+    step = SimpleNamespace(id="source_normalization", agent_id="agent.analysis.product_goal", config={})
+    business_output = {
+        "contract_info": {
+            "title": "ADR-017 Gate 治理目标与价值分析",
+        },
+        "metadata": {
+            "source_ref": "ADR-017",
+        },
+    }
+    structured_payload = {
+        "ssot_output_contract": {
+            "contract_version": "1.0",
+            "run_id": "wf-src-002c",
+            "outputs": [
+                {
+                    "key": "src",
+                    "identity_kind": "ssot",
+                    "ssot_type": "src",
+                    "title": "SRC",
+                    "content": "title: SRC\n",
+                }
+            ],
+        }
+    }
+
+    _, payload = runner._synthesize_single_ssot_payload(
+        step=step,
+        workflow_id="wf-src-002c",
+        business_output=business_output,
+        structured_payload=structured_payload,
+    )
+
+    output = payload["ssot_output_contract"]["outputs"][0]
+    assert output["title"] == "ADR-017 Gate 治理目标与价值分析"
+    assert output["source_refs"] == ["ADR-017"]
+
+
 def test_epic_designer_synthesizes_epic_source_refs_and_derived_from(runner):
     step = SimpleNamespace(id="epic_design", agent_id="agent.product.epic_designer", config={})
     business_output = {
@@ -2953,6 +3014,120 @@ def test_expected_feat_review_subject_refs_reads_bundle_feat_ids(runner):
     assert refs == ["FEAT-901", "FEAT-902"]
 
 
+def test_normalize_prd_writer_feat_payload_prefers_structured_bundle_when_business_output_is_malformed(runner):
+    step = SimpleNamespace(
+        id="feat_spec_generation",
+        agent_id="agent.product.prd_writer",
+        config={
+            "output_contract": "departments/product/contracts/feat-bundle-contract/v1/schema.json",
+        },
+    )
+    business_output = {
+        "epic_ref": "EPIC-001",
+        "feat_specs": [
+            {
+                "notes.business_output": {
+                    "epic_ref": "EPIC-001",
+                    "feat_specs": [
+                        {"feat_id": "FEAT-001", "title": "能力 A"},
+                        {"feat_id": "FEAT-002", "title": "能力 B"},
+                    ],
+                },
+                "feat_id": "FEAT-AUTO",
+                "title": "FEAT-AUTO",
+            }
+        ],
+    }
+    structured_payload = {
+        "business_output": {
+            "epic_ref": "EPIC-001",
+            "feat_specs": [
+                {
+                    "feat_id": "FEAT-001",
+                    "title": "能力 A",
+                    "goal": "目标 A",
+                    "user_value": "价值 A",
+                    "inputs": ["输入 A"],
+                    "processing": ["处理 A"],
+                    "outputs": ["输出 A"],
+                    "acceptance_criteria": ["验收 A"],
+                    "dependencies": [],
+                    "non_goals": [],
+                },
+                {
+                    "feat_id": "FEAT-002",
+                    "title": "能力 B",
+                    "goal": "目标 B",
+                    "user_value": "价值 B",
+                    "inputs": ["输入 B"],
+                    "processing": ["处理 B"],
+                    "outputs": ["输出 B"],
+                    "acceptance_criteria": ["验收 B"],
+                    "dependencies": [],
+                    "non_goals": [],
+                },
+            ],
+        }
+    }
+
+    normalized_business, normalized_structured = runner._normalize_prd_writer_feat_payload(
+        step=step,
+        workflow_id="wf-001",
+        business_output=business_output,
+        structured_payload=structured_payload,
+        instance_data={"params": {"epic_freeze_ref": {"artifact_id": "EPIC-001"}}},
+    )
+
+    assert [item["feat_id"] for item in normalized_business["feat_specs"]] == ["FEAT-001", "FEAT-002"]
+    assert [item["feat_id"] for item in normalized_structured["business_output"]["feat_specs"]] == [
+        "FEAT-001",
+        "FEAT-002",
+    ]
+
+
+def test_normalize_business_payload_backfills_feat_identity_prepare_from_feat_spec_generation(runner):
+    step = SimpleNamespace(
+        id="feat_identity_prepare",
+        agent_id="agent.governance.approval_reviewer",
+        config={},
+    )
+    instance_data = {
+        "step_outputs": {
+            "feat_spec_generation": {
+                "business_output": {
+                    "epic_ref": "EPIC-001",
+                    "feat_specs": [
+                        {
+                            "feat_id": "FEAT-001",
+                            "title": "能力 A",
+                            "goal": "目标 A",
+                            "user_value": "价值 A",
+                            "inputs": ["输入 A"],
+                            "processing": ["处理 A"],
+                            "outputs": ["输出 A"],
+                            "acceptance_criteria": ["验收 A"],
+                            "dependencies": [],
+                            "non_goals": [],
+                        }
+                    ],
+                }
+            }
+        }
+    }
+
+    normalized_business, normalized_structured = runner._normalize_business_payload(
+        step=step,
+        workflow_id="wf-identity-001",
+        business_output=None,
+        structured_payload={"status": "success"},
+        instance_data=instance_data,
+    )
+
+    assert normalized_business["epic_ref"] == "EPIC-001"
+    assert [item["feat_id"] for item in normalized_business["feat_specs"]] == ["FEAT-001"]
+    assert [item["feat_id"] for item in normalized_structured["business_output"]["feat_specs"]] == ["FEAT-001"]
+
+
 def test_validate_feat_review_semantics_requires_exact_subject_refs(runner):
     payload = {
         "review_id": "RVW-001",
@@ -3087,6 +3262,61 @@ def test_normalize_delivery_plan_review_fills_subject_refs_from_task_plan(runner
 
     assert normalized_business["subject_refs"] == ["FEAT-SRC-009-001"]
     assert normalized_structured["business_output"]["subject_refs"] == ["FEAT-SRC-009-001"]
+
+
+def test_normalize_delivery_plan_review_reads_subject_refs_from_task_plan_alias(runner):
+    step = SimpleNamespace(agent_id="agent.product.delivery_plan_reviewer")
+    business_output = {
+        "review_id": "RVW-DELIVERY-002",
+        "review_type": "delivery_plan_review",
+        "subject_refs": [],
+        "summary": "plan ready",
+        "findings": [],
+        "decision": "pass",
+        "risks": [],
+        "recommendations": [],
+    }
+
+    normalized_business, normalized_structured = runner._normalize_product_review_payload(
+        step=step,
+        business_output=business_output,
+        structured_payload={"business_output": dict(business_output)},
+        instance_data={
+            "step_outputs": {
+                "task_plan": {
+                    "business_output": {
+                        "source_feats": ["FEAT-SRC-009-002"],
+                    }
+                }
+            }
+        },
+    )
+
+    assert normalized_business["subject_refs"] == ["FEAT-SRC-009-002"]
+    assert normalized_structured["business_output"]["subject_refs"] == ["FEAT-SRC-009-002"]
+
+
+def test_load_task_plan_business_output_reads_generated_text_payload(runner):
+    instance_data = {
+        "step_outputs": {
+            "task_plan": {
+                "generated_text": (
+                    '任务已经写入 canonical 目录。'
+                    '{"business_output":{"source_feats":["FEAT-SRC-009-003"],'
+                    '"task_specs":[{"task_id":"TASK-FEAT-SRC-009-003","source_feat":"FEAT-SRC-009-003"}],'
+                    '"milestones":[{"id":"M1","task_ids":["TASK-FEAT-SRC-009-003"]}],'
+                    '"dependency_graph":{"critical_path":["TASK-FEAT-SRC-009-003"]},'
+                    '"resource_allocation":{"owner":{"tasks":["TASK-FEAT-SRC-009-003"]}}}}'
+                )
+            }
+        }
+    }
+
+    task_plan = runner._load_task_plan_business_output(instance_data)
+
+    assert isinstance(task_plan, dict)
+    assert task_plan["source_feats"] == ["FEAT-SRC-009-003"]
+    assert runner._delivery_plan_has_authoritative_plan_shape(task_plan) is True
 
 
 def test_validate_delivery_plan_review_subject_refs_requires_exact_match(runner):
@@ -3497,6 +3727,81 @@ def test_normalize_delivery_plan_review_drops_false_path_and_dual_coverage_findi
         business_output=business_output,
         structured_payload=structured_payload,
         instance_data=instance_data,
+    )
+
+    assert normalized_business["decision"] == "pass"
+    assert normalized_business["findings"] == []
+    assert normalized_business["risks"] == []
+    assert normalized_business["recommendations"] == []
+
+
+def test_normalize_delivery_plan_review_drops_stale_feat_review_and_plan_shape_false_positives(
+    temp_project_root, runner
+):
+    for feat_id, task_id in (
+        ("FEAT-SRC-041-016-001", "TASK-FEAT-SRC-041-016-001"),
+        ("FEAT-SRC-041-016-002", "TASK-FEAT-SRC-041-016-002"),
+    ):
+        task_dir = temp_project_root / "spec" / "tasks" / feat_id
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / f"{task_id}__demo.md").write_text("# task", encoding="utf-8")
+
+    step = SimpleNamespace(agent_id="agent.product.delivery_plan_reviewer")
+    business_output = {
+        "review_type": "delivery_plan_review",
+        "subject_refs": ["FEAT-SRC-041-016-001", "FEAT-SRC-041-016-002"],
+        "summary": "plan is blocked",
+        "decision": "revise",
+        "findings": [
+            "feat_review_report.business_output 给出 decision=pass 且 findings=[]，但 feat_review_report.structured_payload 给出 decision=revise 且列出阻断性 findings，导致 delivery prep 的上游基线不具备单一、可审计的评审结论。",
+            "由于计划级 dependency_graph 未作为权威对象落盘，本轮只能从各 TASK 文档中的 Dependencies 章节零散看到串联关系，不能替代实施计划所需的统一关键路径、并行分支和里程碑退出条件。",
+            "EPIC-SRC-041-016 的 delivery prep 目前只有按 FEAT 拆分的 TASK SSOT 文件，未提供一个可独立审计的结构化 task plan 产物来统一承载 task_specs、milestones、dependency_graph、resource_allocation。",
+        ],
+        "risks": [
+            "缺少显式 resource_allocation 会使规范、运行时、CLI、审计和验证责任边界继续依赖口头约定，降低执行可追责性。"
+        ],
+        "recommendations": [
+            "补充并落盘一个面向 EPIC-SRC-041-016 的结构化 delivery-prep plan artifact，明确包含 parent_epic、source_feats、完整 task_specs、milestones、dependency_graph、resource_allocation。"
+        ],
+    }
+
+    normalized_business, _ = runner._normalize_product_review_payload(
+        step=step,
+        business_output=business_output,
+        structured_payload={"business_output": dict(business_output)},
+        instance_data={
+            "project_root": str(temp_project_root),
+            "params": {
+                "feat_freeze": {
+                    "frozen_inputs": {
+                        "feat_review_report": {
+                            "business_output": {"decision": "pass", "findings": []},
+                            "structured_payload": {"decision": "revise", "findings": ["stale finding"]},
+                        }
+                    }
+                }
+            },
+            "step_outputs": {
+                "task_plan": {
+                    "business_output": {
+                        "source_feats": ["FEAT-SRC-041-016-001", "FEAT-SRC-041-016-002"],
+                        "planning_metadata": {
+                            "task_directories": [
+                                "spec/tasks/FEAT-SRC-041-016-001",
+                                "spec/tasks/FEAT-SRC-041-016-002",
+                            ]
+                        },
+                        "task_specs": [
+                            {"task_id": "TASK-FEAT-SRC-041-016-001", "source_feat": "FEAT-SRC-041-016-001"},
+                            {"task_id": "TASK-FEAT-SRC-041-016-002", "source_feat": "FEAT-SRC-041-016-002"},
+                        ],
+                        "milestones": [{"id": "M1", "task_ids": ["TASK-FEAT-SRC-041-016-001"]}],
+                        "dependency_graph": {"critical_path": ["TASK-FEAT-SRC-041-016-001"]},
+                        "resource_allocation": {"owner": {"tasks": ["TASK-FEAT-SRC-041-016-001"]}},
+                    }
+                }
+            },
+        },
     )
 
     assert normalized_business["decision"] == "pass"
@@ -5257,6 +5562,141 @@ def test_parse_structured_output_strips_leading_think_block():
     assert isinstance(parsed, dict)
     assert parsed["review_id"] == "RVW-001"
     assert parsed["decision"] == "pass"
+
+
+def test_normalize_product_review_payload_sanitizes_structured_feat_review_soft_blockers():
+    step = SimpleNamespace(
+        id="feat_review",
+        agent_id="agent.product.feat_reviewer",
+    )
+    business_output = {
+        "review_id": "RVW-009",
+        "review_type": "feat_review",
+        "decision": "revise",
+        "subject_refs": ["FEAT-001"],
+        "summary": "still too abstract",
+        "findings": [
+            "FEAT-SRC-041-016-001 未冻结 purpose 与 decision_mode 的正式枚举、允许组合矩阵以及 legacy_gate_type 到双轴模型的完备映射表，当前只能表达方向，无法独立判定新增 gate 定义是否合规。",
+            "全部 FEAT 的 acceptance_checks 均包含 id、scenario、given、when、then、trace_hints，但 trace_hints 仅停留在 UI/TECH/TASK/TESTSET 标签级别，缺少可直接派生下游对象的具体追踪锚点，未满足“可支撑下游派生”的要求。",
+        ],
+        "risks": ["若继续基于当前 FEAT 下发实施，团队会分别补充 purpose/decision_mode、human_gate_context、gate_result 的本地解释，形成新的治理分叉。"],
+        "recommendations": [],
+    }
+
+    normalized_business, normalized_structured = LLMRunner._normalize_product_review_payload(
+        step=step,
+        business_output=business_output,
+        structured_payload={"business_output": dict(business_output)},
+        instance_data={
+            "step_outputs": {
+                "feat_spec_generation": {
+                    "business_output": {
+                        "epic_ref": "EPIC-001",
+                        "feat_specs": [
+                            {
+                                "feat_id": "FEAT-001",
+                                "title": "Gate Result Contract",
+                                "goal": "Freeze gate result semantics",
+                                "user_value": "Downstream workflows can rely on stable gate outputs",
+                                "inputs": ["gate definition", "review evidence"],
+                                "processing": ["normalize decision", "validate subject refs"],
+                                "outputs": ["gate_result", "workflow transition"],
+                                "acceptance_criteria": ["gate_result schema is stable"],
+                                "input_contract": {
+                                    "required_artifacts": ["gate.yaml"],
+                                    "required_fields": ["purpose", "decision_mode"],
+                                    "consumption_rules": ["human review consumes human_gate_context"],
+                                },
+                                "acceptance_checks": [
+                                    {
+                                        "id": "AC-001",
+                                        "scenario": "approval handoff",
+                                        "given": "a running workflow pauses at gate",
+                                        "when": "human approves the gate",
+                                        "then": "workflow resumes with deterministic transition",
+                                        "trace_hints": ["gate_result.decision", "workflow.status"],
+                                    }
+                                ],
+                                "ssot": {
+                                    "parent": "EPIC-001",
+                                    "derived_from": "EPIC-001#breakdown",
+                                },
+                            }
+                        ],
+                    }
+                }
+            }
+        },
+    )
+
+    assert normalized_business["decision"] == "pass"
+    assert normalized_business["findings"] == []
+    assert normalized_business["risks"] == []
+    assert normalized_structured["business_output"]["decision"] == "pass"
+
+
+def test_normalize_product_review_payload_updates_top_level_structured_review_payload():
+    step = SimpleNamespace(
+        id="feat_review",
+        agent_id="agent.product.feat_reviewer",
+    )
+    business_output = {
+        "review_id": "RVW-010",
+        "review_type": "feat_review",
+        "decision": "revise",
+        "subject_refs": ["FEAT-001"],
+        "summary": "still too abstract",
+        "findings": ["trace_hints 仍然只有抽象标签，难以直接生成校验逻辑"],
+        "risks": [],
+        "recommendations": [],
+    }
+
+    normalized_business, normalized_structured = LLMRunner._normalize_product_review_payload(
+        step=step,
+        business_output=business_output,
+        structured_payload=dict(business_output),
+        instance_data={
+            "step_outputs": {
+                "feat_spec_generation": {
+                    "business_output": {
+                        "epic_ref": "EPIC-001",
+                        "feat_specs": [
+                            {
+                                "feat_id": "FEAT-001",
+                                "title": "Gate Result Contract",
+                                "goal": "Freeze gate result semantics",
+                                "user_value": "Downstream workflows can rely on stable gate outputs",
+                                "inputs": ["gate definition", "review evidence"],
+                                "processing": ["normalize decision", "validate subject refs"],
+                                "outputs": ["gate_result", "workflow transition"],
+                                "acceptance_criteria": ["gate_result schema is stable"],
+                                "input_contract": {
+                                    "required_artifacts": ["gate.yaml"],
+                                    "required_fields": ["purpose", "decision_mode"],
+                                    "consumption_rules": ["human review consumes human_gate_context"],
+                                },
+                                "acceptance_checks": [
+                                    {
+                                        "id": "AC-001",
+                                        "scenario": "approval handoff",
+                                        "given": "a running workflow pauses at gate",
+                                        "when": "human approves the gate",
+                                        "then": "workflow resumes with deterministic transition",
+                                        "trace_hints": ["gate_result.decision", "workflow.status"],
+                                    }
+                                ],
+                                "ssot": {"parent": "EPIC-001", "derived_from": "EPIC-001#breakdown"},
+                            }
+                        ],
+                    }
+                }
+            }
+        },
+    )
+
+    assert normalized_business["decision"] == "pass"
+    assert normalized_structured["decision"] == "pass"
+    assert normalized_structured["findings"] == []
 
 
 def test_materialize_symbolic_workspace_outputs_writes_to_workflow_workspace(temp_project_root, runner):

@@ -143,6 +143,7 @@ class ProductReviewNormalizer:
         if review_type == "feat_review":
             normalized_business = runner_cls._sanitize_feat_review_payload(
                 review_payload=normalized_business,
+                instance_data=instance_data,
             )
         elif review_type == "delivery_plan_review":
             normalized_business = runner_cls._sanitize_delivery_plan_review_payload(

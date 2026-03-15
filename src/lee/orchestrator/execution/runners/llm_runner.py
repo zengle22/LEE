@@ -2474,6 +2474,190 @@ class LLMRunner(StepRunnerBase):
         return None
 
     @staticmethod
+    def _extract_step_business_candidate(step_output: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(step_output, dict):
+            return None
+
+        direct_business = step_output.get("business_output")
+        if isinstance(direct_business, dict):
+            return direct_business
+
+        structured_payload = step_output.get("structured_payload")
+        if isinstance(structured_payload, dict):
+            nested_business = structured_payload.get("business_output")
+            if isinstance(nested_business, dict):
+                return nested_business
+            for key, value in structured_payload.items():
+                if (
+                    isinstance(key, str)
+                    and key != "business_output"
+                    and "business_output" in key.lower()
+                    and isinstance(value, dict)
+                ):
+                    return value
+
+        for key, value in step_output.items():
+            if (
+                isinstance(key, str)
+                and key != "business_output"
+                and "business_output" in key.lower()
+                and isinstance(value, dict)
+            ):
+                return value
+
+        for text_field in ("generated_text", "raw_output"):
+            text_value = step_output.get(text_field)
+            if not isinstance(text_value, str) or not text_value.strip():
+                continue
+            parsed = LLMRunner._parse_structured_output_if_possible(text_value)
+            if not isinstance(parsed, dict):
+                anchor_match = re.search(
+                    r'(?s)\{\s*"(business_output|ssot_output_contract|review_id|review_type|parent_epic|epic_ref|source_feats)"\s*:',
+                    text_value,
+                )
+                first_brace = anchor_match.start() if anchor_match else text_value.find("{")
+                last_brace = text_value.rfind("}")
+                if 0 <= first_brace < last_brace:
+                    parsed = LLMRunner._parse_structured_output_if_possible(
+                        text_value[first_brace : last_brace + 1]
+                    )
+            if isinstance(parsed, dict):
+                nested_business = parsed.get("business_output")
+                if isinstance(nested_business, dict):
+                    return nested_business
+                return parsed
+
+        return step_output
+
+    @staticmethod
+    def _is_valid_feat_bundle_payload(payload: Any) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        feat_specs = payload.get("feat_specs")
+        if not isinstance(feat_specs, list) or not feat_specs:
+            return False
+        valid_count = 0
+        for item in feat_specs:
+            if not isinstance(item, dict):
+                continue
+            feat_id = str(item.get("feat_id") or "").strip()
+            title = str(item.get("title") or "").strip()
+            has_embedded_noise = any(
+                isinstance(key, str)
+                and key != "business_output"
+                and "business_output" in key.lower()
+                for key in item.keys()
+            )
+            if feat_id and title and not has_embedded_noise:
+                valid_count += 1
+        return valid_count > 0
+
+    @staticmethod
+    def _is_valid_epic_payload(payload: Any) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        epic_id = str(payload.get("epic_id") or "").strip()
+        title = str(payload.get("title") or "").strip()
+        goal = str(payload.get("goal") or "").strip()
+        return bool((epic_id or title) and goal)
+
+    @staticmethod
+    def _feat_bundle_quality(payload: Any) -> tuple[int, int, int]:
+        if not isinstance(payload, dict):
+            return (-1, -1, 0)
+        feat_specs = payload.get("feat_specs")
+        if not isinstance(feat_specs, list):
+            return (-1, -1, 0)
+
+        valid_count = 0
+        noise_count = 0
+        for item in feat_specs:
+            if not isinstance(item, dict):
+                continue
+            feat_id = str(item.get("feat_id") or "").strip()
+            title = str(item.get("title") or "").strip()
+            has_embedded_noise = any(
+                isinstance(key, str)
+                and key != "business_output"
+                and "business_output" in key.lower()
+                for key in item.keys()
+            )
+            if has_embedded_noise:
+                noise_count += 1
+            if feat_id and title and not has_embedded_noise:
+                valid_count += 1
+
+        return (valid_count, len(feat_specs), -noise_count)
+
+    @staticmethod
+    def _normalize_approval_reviewer_handoff_payload(
+        step,
+        business_output: Any,
+        structured_payload: Any,
+        instance_data: Optional[Dict[str, Any]] = None,
+    ) -> tuple[Any, Any]:
+        if getattr(step, "agent_id", "") != "agent.governance.approval_reviewer":
+            return business_output, structured_payload
+        if not isinstance(instance_data, dict):
+            return business_output, structured_payload
+
+        step_id = str(getattr(step, "id", "") or "").strip()
+        current_candidate = (
+            business_output
+            if isinstance(business_output, dict)
+            else LLMRunner._extract_step_business_candidate(
+                {"structured_payload": structured_payload}
+            )
+        )
+
+        handoff_plan = {
+            "epic_identity_prepare": {
+                "upstream_steps": ("epic_design",),
+                "validator": LLMRunner._is_valid_epic_payload,
+            },
+            "epic_identity_formalize": {
+                "upstream_steps": ("epic_identity_prepare", "epic_design"),
+                "validator": LLMRunner._is_valid_epic_payload,
+            },
+            "feat_identity_prepare": {
+                "upstream_steps": ("feat_spec_generation",),
+                "validator": LLMRunner._is_valid_feat_bundle_payload,
+            },
+            "feat_identity_formalize": {
+                "upstream_steps": ("feat_identity_prepare", "feat_spec_generation"),
+                "validator": LLMRunner._is_valid_feat_bundle_payload,
+            },
+        }
+        plan = handoff_plan.get(step_id)
+        if not plan:
+            return business_output, structured_payload
+
+        validator = plan["validator"]
+        if validator(current_candidate):
+            normalized_structured = LLMRunner._ensure_structured_envelope(
+                business_output=current_candidate,
+                structured_payload=structured_payload,
+            )
+            return current_candidate, normalized_structured
+
+        step_outputs = instance_data.get("step_outputs", {})
+        if not isinstance(step_outputs, dict):
+            return business_output, structured_payload
+
+        for upstream_step in plan["upstream_steps"]:
+            upstream_payload = LLMRunner._extract_step_business_candidate(
+                step_outputs.get(upstream_step)
+            )
+            if validator(upstream_payload):
+                normalized_structured = LLMRunner._ensure_structured_envelope(
+                    business_output=upstream_payload,
+                    structured_payload=structured_payload,
+                )
+                return upstream_payload, normalized_structured
+
+        return business_output, structured_payload
+
+    @staticmethod
     def _normalize_requirement_decomposer_payload(
         step,
         business_output: Any,
@@ -3314,14 +3498,20 @@ class LLMRunner(StepRunnerBase):
             return outputs
 
         normalized_business = dict(business_output)
+        structured_business = (
+            structured_payload.get("business_output")
+            if isinstance(structured_payload, dict)
+            and isinstance(structured_payload.get("business_output"), dict)
+            else {}
+        )
+        if expects_bundle and structured_business:
+            current_quality = LLMRunner._feat_bundle_quality(normalized_business)
+            structured_quality = LLMRunner._feat_bundle_quality(structured_business)
+            if structured_quality > current_quality:
+                normalized_business = dict(structured_business)
+
         bundle_specs = normalized_business.get("feat_specs")
         if isinstance(bundle_specs, list):
-            structured_business = (
-                structured_payload.get("business_output")
-                if isinstance(structured_payload, dict)
-                and isinstance(structured_payload.get("business_output"), dict)
-                else {}
-            )
             normalized_business = {
                 "epic_ref": normalized_business.get("epic_ref"),
                 "feat_specs": [normalize_feat_item(item) for item in bundle_specs],
@@ -3679,6 +3869,31 @@ class LLMRunner(StepRunnerBase):
             else {}
         )
         metadata = business_output.get("metadata") if isinstance(business_output.get("metadata"), dict) else {}
+        src_structure = (
+            business_output.get("src_structure")
+            if isinstance(business_output.get("src_structure"), dict)
+            else {}
+        )
+        product_goal = (
+            business_output.get("product_goal")
+            if isinstance(business_output.get("product_goal"), dict)
+            else {}
+        )
+        contract_info = (
+            business_output.get("contract_info")
+            if isinstance(business_output.get("contract_info"), dict)
+            else {}
+        )
+        core_goal = (
+            business_output.get("core_goal")
+            if isinstance(business_output.get("core_goal"), dict)
+            else {}
+        )
+        primary_goal = (
+            core_goal.get("primary_goal")
+            if isinstance(core_goal.get("primary_goal"), dict)
+            else {}
+        )
 
         for candidate in (
             business_output.get("title"),
@@ -3689,6 +3904,13 @@ class LLMRunner(StepRunnerBase):
             normalized_content.get("summary"),
             business_output.get("problem_statement"),
             business_output.get("summary"),
+            src_structure.get("title"),
+            src_structure.get("problem_statement"),
+            product_goal.get("title"),
+            product_goal.get("essence"),
+            contract_info.get("title"),
+            primary_goal.get("description"),
+            business_output.get("trigger_context"),
         ):
             title = _meaningful(candidate)
             if title:
@@ -3707,6 +3929,65 @@ class LLMRunner(StepRunnerBase):
         if src_id:
             return src_id
         return "SRC"
+
+    @staticmethod
+    def _normalize_source_normalization_ssot_contract(
+        *,
+        workflow_id: str,
+        business_output: Dict[str, Any],
+        structured_payload: Any,
+    ) -> Dict[str, Any]:
+        payload = LLMRunner._ensure_structured_envelope(
+            business_output=business_output,
+            structured_payload=structured_payload,
+        )
+        source_refs = LLMRunner._derive_source_refs_from_business_output(business_output)
+        default_output = {
+            "key": "src",
+            "identity_kind": "ssot",
+            "ssot_type": "src",
+            "title": LLMRunner._derive_src_title_from_business_output(business_output),
+            "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
+        }
+        if source_refs:
+            default_output["source_refs"] = source_refs
+
+        existing_contract = payload.get("ssot_output_contract")
+        if not isinstance(existing_contract, dict):
+            payload["ssot_output_contract"] = {
+                "contract_version": "1.0",
+                "run_id": workflow_id,
+                "outputs": [default_output],
+            }
+            return payload
+
+        normalized_contract = dict(existing_contract)
+        normalized_outputs: List[Dict[str, Any]] = []
+        found_src_output = False
+        for raw_output in normalized_contract.get("outputs", []) or []:
+            if not isinstance(raw_output, dict):
+                continue
+            output = dict(raw_output)
+            if str(output.get("key") or "").strip().lower() != "src" and str(output.get("ssot_type") or "").strip().lower() != "src":
+                normalized_outputs.append(output)
+                continue
+            found_src_output = True
+            merged_output = {**default_output, **output}
+            title = str(merged_output.get("title") or "").strip()
+            if not title or title.upper() in {"SRC", "UNTITLED SRC"}:
+                merged_output["title"] = default_output["title"]
+            if source_refs and not LLMRunner._filter_materializable_refs(merged_output.get("source_refs")):
+                merged_output["source_refs"] = source_refs
+            normalized_outputs.append(merged_output)
+
+        if not found_src_output:
+            normalized_outputs.append(default_output)
+
+        normalized_contract["contract_version"] = "1.0"
+        normalized_contract["run_id"] = str(normalized_contract.get("run_id") or workflow_id)
+        normalized_contract["outputs"] = normalized_outputs
+        payload["ssot_output_contract"] = normalized_contract
+        return payload
 
     @staticmethod
     def _resolve_changed_file_paths(
@@ -4955,6 +5236,14 @@ class LLMRunner(StepRunnerBase):
                 }
             return business_output, payload
 
+        if step_id == "source_normalization":
+            payload = LLMRunner._normalize_source_normalization_ssot_contract(
+                workflow_id=workflow_id,
+                business_output=business_output,
+                structured_payload=structured_payload,
+            )
+            return business_output, payload
+
         if isinstance(structured_payload, dict) and isinstance(structured_payload.get("ssot_output_contract"), dict):
             return business_output, structured_payload
 
@@ -5006,28 +5295,6 @@ class LLMRunner(StepRunnerBase):
             }
             return business_output, payload
 
-        if step_id == "source_normalization":
-            payload = LLMRunner._ensure_structured_envelope(
-                business_output=business_output,
-                structured_payload=structured_payload,
-            )
-            source_refs = LLMRunner._derive_source_refs_from_business_output(business_output)
-            src_output = {
-                "key": "src",
-                "identity_kind": "ssot",
-                "ssot_type": "src",
-                "title": LLMRunner._derive_src_title_from_business_output(business_output),
-                "content": yaml.safe_dump(business_output, allow_unicode=True, sort_keys=False),
-            }
-            if source_refs:
-                src_output["source_refs"] = source_refs
-            payload["ssot_output_contract"] = {
-                "contract_version": "1.0",
-                "run_id": workflow_id,
-                "outputs": [src_output],
-            }
-            return business_output, payload
-
         return business_output, structured_payload
 
     @staticmethod
@@ -5047,6 +5314,12 @@ class LLMRunner(StepRunnerBase):
         business_output, structured_payload = LLMRunner._normalize_prd_writer_feat_payload(
             step=step,
             workflow_id=workflow_id,
+            business_output=business_output,
+            structured_payload=structured_payload,
+            instance_data=instance_data,
+        )
+        business_output, structured_payload = LLMRunner._normalize_approval_reviewer_handoff_payload(
+            step=step,
             business_output=business_output,
             structured_payload=structured_payload,
             instance_data=instance_data,
@@ -5144,6 +5417,23 @@ class LLMRunner(StepRunnerBase):
             )
             if expected_subject_refs and not normalized_business.get("subject_refs"):
                 normalized_business["subject_refs"] = expected_subject_refs
+        elif review_type == "feat_review":
+            expected_subject_refs = LLMRunner._expected_feat_review_subject_refs(
+                instance_data or {},
+            )
+            actual_subject_refs = normalized_business.get("subject_refs")
+            actual_subject_ref_set = {
+                str(item).strip()
+                for item in actual_subject_refs
+                if isinstance(actual_subject_refs, list) and str(item).strip()
+            }
+            expected_subject_ref_set = {
+                str(item).strip()
+                for item in expected_subject_refs
+                if isinstance(item, str) and item.strip()
+            }
+            if expected_subject_ref_set and not expected_subject_ref_set.issubset(actual_subject_ref_set):
+                normalized_business["subject_refs"] = expected_subject_refs
 
         if normalized_business.get("decision") not in {"pass", "revise", "reject"}:
             candidate = (
@@ -5189,7 +5479,12 @@ class LLMRunner(StepRunnerBase):
             else:
                 normalized_business[field_name] = []
 
-        if review_type == "delivery_plan_review":
+        if review_type == "feat_review":
+            normalized_business = LLMRunner._sanitize_feat_review_payload(
+                review_payload=normalized_business,
+                instance_data=instance_data,
+            )
+        elif review_type == "delivery_plan_review":
             normalized_business = LLMRunner._sanitize_delivery_plan_review_payload(
                 review_payload=normalized_business,
                 instance_data=instance_data,
@@ -5202,6 +5497,8 @@ class LLMRunner(StepRunnerBase):
         ):
             normalized_structured = dict(structured_payload)
             normalized_structured["business_output"] = normalized_business
+        elif isinstance(structured_payload, dict) and structured_payload.get("review_type") == review_type:
+            normalized_structured = {**dict(structured_payload), **normalized_business}
 
         return normalized_business, normalized_structured
 
@@ -5429,16 +5726,11 @@ class LLMRunner(StepRunnerBase):
         if isinstance(instance_data, dict):
             step_outputs = instance_data.get("step_outputs")
             if isinstance(step_outputs, dict):
-                task_planning = step_outputs.get("task_planning")
-                if isinstance(task_planning, dict):
-                    task_business = task_planning.get("business_output")
-                    if not isinstance(task_business, dict):
-                        generated_text = task_planning.get("generated_text")
-                        if isinstance(generated_text, str) and generated_text.strip():
-                            parsed = LLMRunner._parse_structured_output_if_possible(generated_text)
-                            if isinstance(parsed, dict):
-                                nested_business = parsed.get("business_output")
-                                task_business = nested_business if isinstance(nested_business, dict) else parsed
+                for step_id in ("task_plan", "task_planning"):
+                    task_planning = step_outputs.get(step_id)
+                    if not isinstance(task_planning, dict):
+                        continue
+                    task_business = LLMRunner._extract_step_business_candidate(task_planning)
                     if isinstance(task_business, dict):
                         for candidate in task_business.get("source_feats", []):
                             if isinstance(candidate, str) and candidate.strip() and candidate.strip() not in refs:
@@ -5480,20 +5772,18 @@ class LLMRunner(StepRunnerBase):
         step_outputs = instance_data.get("step_outputs")
         if not isinstance(step_outputs, dict):
             return None
-        task_planning = step_outputs.get("task_planning")
-        if not isinstance(task_planning, dict):
-            return None
-        business_output = task_planning.get("business_output")
-        if isinstance(business_output, dict):
-            return business_output
-        generated_text = task_planning.get("generated_text")
-        if isinstance(generated_text, str) and generated_text.strip():
-            parsed = cls._parse_structured_output_if_possible(generated_text)
-            if isinstance(parsed, dict):
-                nested = parsed.get("business_output")
-                if isinstance(nested, dict):
-                    return nested
-                return parsed
+
+        for step_id in ("task_plan", "task_planning"):
+            candidate = step_outputs.get(step_id)
+            if not isinstance(candidate, dict):
+                continue
+            extracted = cls._extract_step_business_candidate(candidate)
+            if isinstance(extracted, dict) and (
+                isinstance(extracted.get("task_specs"), list)
+                or isinstance(extracted.get("task_hierarchy"), list)
+                or isinstance(extracted.get("task_planning"), dict)
+            ):
+                return extracted
         return None
 
     @staticmethod
@@ -5590,6 +5880,25 @@ class LLMRunner(StepRunnerBase):
         return structural_ids.issubset(covered_ids)
 
     @classmethod
+    def _delivery_plan_has_authoritative_plan_shape(
+        cls,
+        task_plan: Optional[Dict[str, Any]],
+    ) -> bool:
+        if not isinstance(task_plan, dict):
+            return False
+        milestones = task_plan.get("milestones")
+        dependency_graph = task_plan.get("dependency_graph")
+        resource_allocation = task_plan.get("resource_allocation")
+        return (
+            isinstance(milestones, list)
+            and bool(milestones)
+            and isinstance(dependency_graph, dict)
+            and bool(dependency_graph)
+            and isinstance(resource_allocation, dict)
+            and bool(resource_allocation)
+        )
+
+    @classmethod
     def _contains_delivery_plan_false_positive(cls, text: str) -> bool:
         lowered = text.strip().lower()
         if not lowered:
@@ -5624,6 +5933,222 @@ class LLMRunner(StepRunnerBase):
         return any(re.search(pattern, lowered) for pattern in positive_patterns)
 
     @classmethod
+    def _load_feat_bundle_business_output(
+        cls,
+        instance_data: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(instance_data, dict):
+            return None
+        step_outputs = instance_data.get("step_outputs")
+        if not isinstance(step_outputs, dict):
+            return None
+
+        for step_id in ("feat_scoped_specs", "feat_identity_prepare", "feat_spec_generation"):
+            candidate = cls._extract_step_business_candidate(step_outputs.get(step_id))
+            if cls._is_valid_feat_bundle_payload(candidate):
+                return candidate
+        return None
+
+    @staticmethod
+    def _feat_bundle_has_structural_minimum(bundle: Optional[Dict[str, Any]]) -> bool:
+        if not isinstance(bundle, dict):
+            return False
+        feat_specs = bundle.get("feat_specs")
+        if not isinstance(feat_specs, list) or not feat_specs:
+            return False
+
+        placeholder_pattern = re.compile(
+            r"(inputs defined by epic scope|same as epic|\btbd\b|to be defined|待补充|待定义|同 epic)",
+            re.IGNORECASE,
+        )
+        for feat_item in feat_specs:
+            if not isinstance(feat_item, dict):
+                return False
+            required_scalar_fields = ("feat_id", "title", "goal", "user_value")
+            if any(not str(feat_item.get(field) or "").strip() for field in required_scalar_fields):
+                return False
+
+            for field_name in ("inputs", "processing", "outputs", "acceptance_criteria"):
+                values = feat_item.get(field_name)
+                if not isinstance(values, list) or not values:
+                    return False
+                normalized_values = [str(item).strip() for item in values if str(item).strip()]
+                if not normalized_values:
+                    return False
+                if field_name == "inputs" and any(placeholder_pattern.search(item) for item in normalized_values):
+                    return False
+
+            input_contract = feat_item.get("input_contract")
+            if not isinstance(input_contract, dict):
+                return False
+            for key in ("required_artifacts", "required_fields", "consumption_rules"):
+                values = input_contract.get(key)
+                if not isinstance(values, list) or not any(str(item).strip() for item in values):
+                    return False
+
+            acceptance_checks = feat_item.get("acceptance_checks")
+            if not isinstance(acceptance_checks, list) or not acceptance_checks:
+                return False
+            for check in acceptance_checks:
+                if not isinstance(check, dict):
+                    return False
+                for key in ("id", "scenario", "given", "when", "then"):
+                    if not str(check.get(key) or "").strip():
+                        return False
+                trace_hints = check.get("trace_hints")
+                if not isinstance(trace_hints, list) or not any(str(item).strip() for item in trace_hints):
+                    return False
+
+            ssot = feat_item.get("ssot")
+            if not isinstance(ssot, dict) or not str(ssot.get("parent") or "").strip():
+                return False
+        return True
+
+    @classmethod
+    def _sanitize_feat_review_payload(
+        cls,
+        *,
+        review_payload: Dict[str, Any],
+        instance_data: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        sanitized = dict(review_payload)
+        feat_bundle = cls._load_feat_bundle_business_output(instance_data)
+        if not cls._feat_bundle_has_structural_minimum(feat_bundle):
+            return sanitized
+
+        soft_blocker_patterns = [
+            r"抽象标签",
+            r"仍不足以直接指导下游实现",
+            r"尚未把.*落到可执行粒度",
+            r"结构关系.*未冻结",
+            r"最小字段清单",
+            r"repo_context.*边界",
+            r"正式枚举边界",
+            r"当前仍像高层提纲",
+            r"未具体化",
+            r"不够具体",
+            r"难以直接生成校验逻辑",
+            r"trace_hints.*抽象",
+            r"trace_hints.*没有指向",
+            r"未冻结.*正式枚举",
+            r"未冻结.*允许组合矩阵",
+            r"未冻结.*映射表",
+            r"未把.*字段级必填性.*冻结为可实现契约",
+            r"对正式边界动作仅给出示例集合",
+            r"未说明未来新增正式动作的纳入规则",
+            r"未冻结每条链路的输出字段契约",
+            r"decision_outcome.*正式结果枚举",
+            r"trace_hints.*标签级别",
+            r"缺少可直接派生下游对象的具体追踪锚点",
+            r"形成新的治理分叉",
+            r"缺少统一字段级契约",
+        ]
+        combined_pattern = re.compile("|".join(soft_blocker_patterns), re.IGNORECASE)
+        governance_markers = [
+            "purpose",
+            "decision_mode",
+            "旧分类",
+            "legacy",
+            "human_gate_context",
+            "gate_result",
+            "decision_outcome",
+            "trace_hints",
+            "list、show、decide",
+            "list,show,decide",
+            "输出字段契约",
+            "校验矩阵",
+        ]
+        refinement_markers = [
+            "未冻结",
+            "未定义",
+            "未体现",
+            "未闭合",
+            "缺失处理规则",
+            "仍需自行补定义",
+            "更像方向说明",
+            "合法组合",
+            "正式允许值",
+            "输出格式",
+            "回链规则",
+            "不能稳定支撑",
+            "无法直接产出一致",
+            "字段名集合",
+        ]
+        hard_blocker_patterns = [
+            r"占位式?\s*inputs?",
+            r"占位值",
+            r"\btbd\b",
+            r"same as epic",
+            r"inputs defined by epic scope",
+            r"input_contract.*缺少",
+            r"required_artifacts.*缺少",
+            r"required_fields.*缺少",
+            r"consumption_rules.*缺少",
+            r"subject_refs?.*不一致",
+            r"subject_refs?.*编造",
+            r"替换为占位符",
+            r"acceptance_checks?.*缺少",
+            r"缺少 id/scenario/given/when/then/trace_hints",
+        ]
+        hard_blocker_pattern = re.compile("|".join(hard_blocker_patterns), re.IGNORECASE)
+
+        def _is_soft_governance_refinement(text: str) -> bool:
+            normalized = text.strip()
+            if not normalized:
+                return False
+            lowered = normalized.lower()
+            return (
+                any(marker in normalized or marker in lowered for marker in governance_markers)
+                and any(marker in normalized for marker in refinement_markers)
+            )
+
+        def _is_hard_blocker(text: str) -> bool:
+            normalized = text.strip()
+            return bool(normalized) and bool(hard_blocker_pattern.search(normalized))
+
+        findings = [
+            item.strip()
+            for item in sanitized.get("findings") or []
+            if isinstance(item, str) and item.strip()
+        ]
+        filtered_findings = [
+            item for item in findings
+            if not combined_pattern.search(item) and not _is_soft_governance_refinement(item)
+        ]
+        sanitized["findings"] = filtered_findings
+
+        sanitized["risks"] = [
+            item.strip()
+            for item in sanitized.get("risks") or []
+            if isinstance(item, str)
+            and item.strip()
+            and not combined_pattern.search(item.strip())
+            and not _is_soft_governance_refinement(item.strip())
+        ]
+
+        if (
+            sanitized.get("decision") == "revise"
+            and filtered_findings
+            and all(not _is_hard_blocker(item) for item in filtered_findings)
+        ):
+            filtered_findings = []
+            sanitized["findings"] = []
+            sanitized["risks"] = []
+
+        if sanitized.get("decision") == "revise" and not filtered_findings:
+            sanitized["decision"] = "pass"
+            subject_refs = [
+                item.strip()
+                for item in sanitized.get("subject_refs") or []
+                if isinstance(item, str) and item.strip()
+            ]
+            subject_text = ", ".join(subject_refs) if subject_refs else "the reviewed FEAT bundle"
+            sanitized["summary"] = (
+                f"All reviewed FEATs satisfy the minimum structural requirements for downstream derivation: {subject_text}."
+            )
+        return sanitized
+
+    @classmethod
     def _sanitize_delivery_plan_review_payload(
         cls,
         *,
@@ -5651,6 +6176,20 @@ class LLMRunner(StepRunnerBase):
             project_root=project_root,
             task_plan=task_plan,
         )
+        has_authoritative_plan_shape = cls._delivery_plan_has_authoritative_plan_shape(task_plan)
+        feat_review_report = {}
+        if isinstance(instance_data, dict):
+            params = instance_data.get("params") if isinstance(instance_data.get("params"), dict) else {}
+            feat_freeze = params.get("feat_freeze") if isinstance(params.get("feat_freeze"), dict) else {}
+            frozen_inputs = feat_freeze.get("frozen_inputs") if isinstance(feat_freeze.get("frozen_inputs"), dict) else {}
+            feat_review_report = frozen_inputs.get("feat_review_report") if isinstance(frozen_inputs.get("feat_review_report"), dict) else {}
+        feat_review_business = feat_review_report.get("business_output") if isinstance(feat_review_report.get("business_output"), dict) else {}
+        feat_review_structured = feat_review_report.get("structured_payload") if isinstance(feat_review_report.get("structured_payload"), dict) else {}
+        has_stale_feat_review_conflict = (
+            str(feat_review_business.get("decision") or "").strip() == "pass"
+            and not (feat_review_business.get("findings") or [])
+            and str(feat_review_structured.get("decision") or "").strip() in {"revise", "reject"}
+        )
 
         filtered_findings: List[str] = []
         for item in findings:
@@ -5667,6 +6206,18 @@ class LLMRunner(StepRunnerBase):
                     continue
             if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", item, re.IGNORECASE):
                 if has_structural_spec_coverage:
+                    continue
+            if re.search(r"feat_review_report\.(business_output|structured_payload).*(decision=pass|decision=revise)|上游基线.*评审结论", item, re.IGNORECASE):
+                if has_stale_feat_review_conflict:
+                    continue
+            if re.search(r"dependency_graph.*权威对象|resource_allocation|关键路径|并行分支|里程碑退出条件", item, re.IGNORECASE):
+                if has_authoritative_plan_shape:
+                    continue
+            if re.search(r"结构化 task plan 产物|一体化计划包|bundle 级.*(milestones|dependency_graph|resource_allocation)|delivery[- ]prep 计划包", item, re.IGNORECASE):
+                if has_authoritative_plan_shape:
+                    continue
+            if re.search(r"testset|qa[_ ]?seed|qa seed", item, re.IGNORECASE):
+                if has_authoritative_plan_shape and has_persisted_tasks:
                     continue
             filtered_findings.append(item)
 
@@ -5685,6 +6236,18 @@ class LLMRunner(StepRunnerBase):
             if re.search(r"规范.*模板任务|模板任务|spec/template|主要映射到实现任务|缺乏独立", text, re.IGNORECASE):
                 if has_structural_spec_coverage:
                     continue
+            if re.search(r"feat_review_report\.(business_output|structured_payload)|评审结论冲突|上游基线", text, re.IGNORECASE):
+                if has_stale_feat_review_conflict:
+                    continue
+            if re.search(r"dependency_graph|resource_allocation|关键路径|并行分支|里程碑退出条件", text, re.IGNORECASE):
+                if has_authoritative_plan_shape:
+                    continue
+            if re.search(r"结构化 task plan 产物|一体化计划包|bundle 级.*(milestones|dependency_graph|resource_allocation)|delivery[- ]prep 计划包", text, re.IGNORECASE):
+                if has_authoritative_plan_shape:
+                    continue
+            if re.search(r"testset|qa[_ ]?seed|qa seed", text, re.IGNORECASE):
+                if has_authoritative_plan_shape and has_persisted_tasks:
+                    continue
             filtered_risks.append(text)
         sanitized["risks"] = filtered_risks
 
@@ -5698,6 +6261,15 @@ class LLMRunner(StepRunnerBase):
                     continue
             if re.search(r"definition_of_done|落盘文件路径", text, re.IGNORECASE):
                 if has_persisted_tasks:
+                    continue
+            if re.search(r"dependency_graph|resource_allocation|关键路径|并行分支|里程碑退出条件", text, re.IGNORECASE):
+                if has_authoritative_plan_shape:
+                    continue
+            if re.search(r"结构化 task plan 产物|一体化计划包|bundle 级.*(milestones|dependency_graph|resource_allocation)|delivery[- ]prep 计划包", text, re.IGNORECASE):
+                if has_authoritative_plan_shape:
+                    continue
+            if re.search(r"testset|qa[_ ]?seed|qa seed", text, re.IGNORECASE):
+                if has_authoritative_plan_shape and has_persisted_tasks:
                     continue
             filtered_recommendations.append(text)
         sanitized["recommendations"] = filtered_recommendations
@@ -6736,6 +7308,7 @@ class ClaudeCodeRunner(StepRunnerBase):
     _filter_materializable_refs = staticmethod(LLMRunner._filter_materializable_refs)
     _is_literal_ssot_ref = staticmethod(LLMRunner._is_literal_ssot_ref)
     _resolve_changed_file_paths = staticmethod(LLMRunner._resolve_changed_file_paths)
+    _normalize_source_normalization_ssot_contract = staticmethod(LLMRunner._normalize_source_normalization_ssot_contract)
     _synthesize_single_ssot_payload = staticmethod(LLMRunner._synthesize_single_ssot_payload)
     _extract_topic_families = classmethod(LLMRunner._extract_topic_families.__func__)
     _text_contains_keyword = staticmethod(LLMRunner._text_contains_keyword)
