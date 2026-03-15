@@ -19,6 +19,7 @@ from types import SimpleNamespace
 import yaml
 
 from lee.orchestrator.config import normalize_executor_type_name
+from lee.orchestrator.execution.external_inputs import resolve_declared_external_input
 
 
 @dataclass
@@ -890,12 +891,6 @@ Verification items:
                         )
                     if extracted is None and value is None:
                         extracted = self._sanitize_prompt_payload(output)
-                    if not self._payload_has_signal(extracted):
-                        generated_text = output.get("generated_text")
-                        if isinstance(generated_text, str) and generated_text.strip():
-                            extracted = {
-                                "generated_text": generated_text[: self._PROMPT_FALLBACK_TEXT_LIMIT].rstrip()
-                            }
                     if extracted is not None:
                         value = extracted
                         break
@@ -1074,17 +1069,13 @@ Verification items:
             if key in step_outputs:
                 return self._sanitize_prompt_payload(step_outputs[key])
 
-        if source == "external" and isinstance(item, dict):
-            raw_types = item.get("type", [])
-            if isinstance(raw_types, str):
-                raw_types = [raw_types]
-            for type_name in raw_types:
-                if not isinstance(type_name, str):
-                    continue
-                if type_name in data:
-                    return self._sanitize_prompt_payload(data[type_name])
-                if type_name in params:
-                    return self._sanitize_prompt_payload(params[type_name])
+        if source == "external":
+            return resolve_declared_external_input(
+                item,
+                data,
+                params,
+                transform=self._sanitize_prompt_payload,
+            )
         return None
 
     def _resolve_symbol_step_aliases(

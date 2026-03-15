@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from lee.orchestrator.execution.artifacts.types import SSOTType
+from lee.orchestrator.execution.src_bridge import build_src_markdown, infer_bridge_src_fields
 from lee.orchestrator.storage.models import StepResult
 
 
@@ -1108,16 +1109,14 @@ class GateOperationsMixin:
         )
         source_refs = self._dedupe_strings([
             *(governance_refs.get("source_refs") or []),
+            *(payload.get("source_refs") or []),
             derived_ref,
         ])
-
-        content_lines = [f"# {title}", ""]
-
-        problem_statement = src_structure.get("problem_statement")
-        if problem_statement:
-            content_lines.extend(["## 问题陈述", "", str(problem_statement), ""])
-
-        content = "\n".join(content_lines)
+        bridge_fields = infer_bridge_src_fields(payload, source_refs=source_refs)
+        bridge_context = bridge_fields.get("bridge_context") if isinstance(bridge_fields, dict) else None
+        if not source_refs and isinstance(bridge_context, dict):
+            source_refs = self._dedupe_strings(bridge_context.get("governed_by_adrs") or [])
+        content = build_src_markdown(payload, title=title, source_refs=source_refs)
 
         metadata = manager.create_ssot(
             ssot_type=SSOTType.SRC,
@@ -1125,6 +1124,8 @@ class GateOperationsMixin:
             content=content,
             run_id=derived_ref or "gate-materialize",
             parent_id=None,
+            source_refs=source_refs,
+            properties=bridge_fields or None,
         )
         return {"artifact_id": metadata.id, "path": metadata.path}
 
