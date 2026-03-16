@@ -43,7 +43,7 @@
     },
     "source_feat": {
       "type": "string",
-      "pattern": "^FEAT-\\d{3}$"
+      "pattern": "^FEAT-([A-Z]+-)?\\d{3}(-\\d+)?$"
     },
     "workstream": {
       "type": "string",
@@ -68,7 +68,7 @@
         "properties": {
           "feat": {
             "type": "string",
-            "pattern": "^FEAT-\\d{3}$"
+            "pattern": "^FEAT-([A-Z]+-)?\\d{3}(-\\d+)?$"
           },
           "ac": {
             "type": "string",
@@ -198,7 +198,7 @@
         },
         "parent": {
           "type": "string",
-          "pattern": "^FEAT-\\d{3}$"
+          "pattern": "^FEAT-([A-Z]+-)?\\d{3}(-\\d+)?$"
         },
         "derived_from": {
           "type": "string",

@@ -1,65 +1,56 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from lee.orchestrator.execution.runners.base import StepRunnerBase
 from lee.orchestrator.storage.models import StepResult, TaskExecutionStatus
 
 
-def _render_template_path(path: str, params: Dict[str, Any]) -> str:
+def collect_declared_output_paths(step, project_root: Optional[str] = None) -> List[str]:
     """
-    Render Jinja2-style template variables in a path string.
+    Collect declared output paths from step outputs.
 
-    Supports:
-    - {{ params.xxx }} -> params['xxx']
-    - {{ params.xxx | default('yyy') }} -> params['xxx'] or 'yyy'
-    """
-    if not isinstance(path, str):
-        return str(path) if path else ""
+    Handles three types of outputs:
+    1. Dict with type="file"/"dir" and path: returns the explicit path
+    2. Dict with type="symbol" or no type: symbolic output, allows project root
+    3. String (symbolic name): symbolic output, allows project root
 
-    # Pattern to match {{ params.xxx }} or {{ params.xxx | default('yyy') }}
-    template_pattern = r'\{\{\s*params\.(\w+)(?:\s*\|\s*default\(\s*[\'"]([^\'"]*)[\'"]\s*\))?\s*\}\}'
-
-    def replace_param(match):
-        param_name = match.group(1)
-        default_value = match.group(2)
-        value = params.get(param_name, default_value)
-        return str(value) if value is not None else (default_value or '')
-
-    rendered = re.sub(template_pattern, replace_param, path)
-    return rendered
-
-
-def collect_declared_output_paths(step, params: Optional[Dict[str, Any]] = None) -> List[str]:
-    """
-    Collect declared output file paths from step outputs.
-
-    Args:
-        step: Step object with outputs attribute
-        params: Optional params dict for rendering template variables
-
-    Returns:
-        List of normalized output paths (with template variables rendered if params provided)
+    For symbolic outputs, project root is added to allow writes to standard locations.
     """
     declared_output_files: List[str] = []
+    has_symbolic_output = False
+
     for output in (getattr(step, "outputs", None) or []):
         if isinstance(output, dict):
             output_type = output.get("type")
             output_path = output.get("path", "")
+            # Symbolic output (type="symbol" or no type with symbol name)
+            if output_type == "symbol" or (output_type is None and "symbol" in output):
+                has_symbolic_output = True
+                continue
         else:
+            # Check if it's a SimpleNamespace or similar object
             output_type = getattr(output, "type", None)
             output_path = getattr(output, "path", "")
-
-        # Render template variables if params provided
-        if params and isinstance(output_path, str):
-            output_path = _render_template_path(output_path, params)
+            # Check for symbolic output
+            if output_type == "symbol":
+                has_symbolic_output = True
+                continue
+            # String output is a symbolic name
+            if isinstance(output, str):
+                has_symbolic_output = True
+                continue
 
         normalized_path = str(output_path or "").strip()
         if output_type in {"file", "dir"} and normalized_path:
             declared_output_files.append(normalized_path)
+
+    # If there are symbolic outputs, add project root to allow standard location writes
+    if has_symbolic_output and project_root:
+        declared_output_files.append(project_root)
+
     return declared_output_files
 
 
@@ -93,10 +84,10 @@ def build_code_executor_io_config(
     step_id: str,
     step,
     configured_write_scope: Any,
-    params: Optional[Dict[str, Any]] = None,
+    project_root: Optional[str] = None,
 ) -> dict[str, Any]:
     step_workspace = str(Path(workspace) / ".workflow" / "workspace" / workflow_id / step_id)
-    declared_output_files = collect_declared_output_paths(step, params)
+    declared_output_files = collect_declared_output_paths(step, project_root)
     return {
         "step_workspace": step_workspace,
         "declared_output_files": declared_output_files,

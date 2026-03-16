@@ -54,11 +54,13 @@ def test_build_code_executor_io_config_defaults_to_step_workspace(temp_project_r
         step=step,
         configured_write_scope=[],
         params={},
+        project_root=str(temp_project_root),
     )
 
     assert config["step_workspace"].endswith(".workflow\\workspace\\wf-001\\spec_maintenance")
-    assert config["declared_output_files"] == []
-    assert config["write_scope"] == [config["step_workspace"]]
+    # With symbolic output, project root should be included
+    assert config["declared_output_files"] == [str(temp_project_root)]
+    assert config["write_scope"] == [config["step_workspace"], str(temp_project_root)]
 
 
 def test_llm_runner_build_executor_input_uses_scoped_write_paths(temp_project_root, ctx):
@@ -85,8 +87,9 @@ def test_llm_runner_build_executor_input_uses_scoped_write_paths(temp_project_ro
     )
 
     assert input_data["step_workspace"].endswith(".workflow\\workspace\\wf-001\\spec_maintenance")
-    assert input_data["declared_output_files"] == []
-    assert input_data["write_scope"] == [input_data["step_workspace"]]
+    # With symbolic output, project root should be included in declared output files
+    assert input_data["declared_output_files"] == [str(temp_project_root)]
+    assert input_data["write_scope"] == [input_data["step_workspace"], str(temp_project_root)]
     assert input_data["token_context"] == "encoded-token"
 
 
@@ -150,3 +153,81 @@ async def test_claude_code_runner_rejects_unauthorized_write_scope(temp_project_
     assert "Unauthorized write" in result.message
     ctx.state_machine.fail_step.assert_awaited()
     ctx.store.update_task_execution.assert_awaited()
+
+
+def test_symbolic_output_allows_project_root_writes(temp_project_root):
+    """Test that symbolic outputs (like unit_test_ref) allow writes to project root.
+
+    This is the fix for BUG-2026-003 where dev.feature_be_l3 workflow failed with
+    'Unauthorized write' error when writing to src/lee/agents/tests/ because
+    symbolic outputs were not recognized.
+    """
+    # Step with symbolic outputs (like dev.feature_be_l3 template)
+    step = SimpleNamespace(outputs=["unit_test_ref", "test_scope_ref"])
+
+    config = build_code_executor_io_config(
+        workspace=str(temp_project_root),
+        workflow_id="wf-001",
+        step_id="write_ut",
+        step=step,
+        configured_write_scope=[],
+        project_root=str(temp_project_root),
+    )
+
+    # Project root should be in declared output files
+    assert str(temp_project_root) in config["declared_output_files"]
+    # Project root should be in write scope
+    assert str(temp_project_root) in config["write_scope"]
+
+    # Now verify that writes to standard project locations are allowed
+    test_file = str(temp_project_root / "src" / "lee" / "agents" / "tests" / "test_example.py")
+    impl_file = str(temp_project_root / "src" / "lee" / "agents" / "example.py")
+
+    error = validate_code_executor_write_scope(
+        changed_files=[test_file, impl_file],
+        project_root=str(temp_project_root),
+        write_scope=config["write_scope"],
+    )
+
+    # Should NOT have unauthorized write error
+    assert error is None
+
+
+def test_string_output_allows_project_root_writes(temp_project_root):
+    """Test that string outputs (symbolic names) allow writes to project root."""
+    # Step with string output (alternative symbolic format)
+    step = SimpleNamespace(outputs=["be_artifact_ref"])
+
+    config = build_code_executor_io_config(
+        workspace=str(temp_project_root),
+        workflow_id="wf-001",
+        step_id="implement_backend",
+        step=step,
+        configured_write_scope=[],
+        project_root=str(temp_project_root),
+    )
+
+    # Project root should be in declared output files
+    assert str(temp_project_root) in config["declared_output_files"]
+
+
+def test_mixed_outputs_handle_both_types(temp_project_root):
+    """Test that mixed symbolic and explicit path outputs are handled correctly."""
+    step = SimpleNamespace(outputs=[
+        "unit_test_ref",  # symbolic
+        {"type": "symbol", "symbol": "coverage_ref"},  # symbolic dict
+        {"type": "file", "path": "reports/coverage.json"},  # explicit file
+    ])
+
+    config = build_code_executor_io_config(
+        workspace=str(temp_project_root),
+        workflow_id="wf-001",
+        step_id="coverage_gate",
+        step=step,
+        configured_write_scope=[],
+        project_root=str(temp_project_root),
+    )
+
+    # Should have project root (from symbolic) and explicit file path
+    assert str(temp_project_root) in config["declared_output_files"]
+    assert "reports/coverage.json" in config["declared_output_files"]

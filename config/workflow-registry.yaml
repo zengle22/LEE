@@ -30,7 +30,6 @@ workflows:
     required_params:
       - request_id
       - repo_root
-      - objective
     optional_params:
       - include_paths
       - exclude_paths
@@ -96,6 +95,24 @@ workflows:
       - process_constraints
       - env_ref
       - human_gate_required
+
+  dev.feature_be_l3:
+    path: spec-global/departments/dev/workflows/templates/feature-be-l3-template.yaml
+    kind: l3_workflow_template
+    description: "Dev canonical Feature Backend Development L3 工作流 - UTDD 模式后端实现"
+    load_spec_as_params: true
+    required_params:
+      - tech_spec_ref
+      - contract_freeze_ref
+      - repo_backend
+      - source_refs
+      - governing_adrs
+    optional_params:
+      - acceptance_brief_ref
+      - decision_constraints
+      - architecture_constraints
+      - process_constraints
+      - env_ref
 
   dev.tech_design_l3:
     path: spec-global/departments/dev/workflows/templates/tech-design-l3-template.yaml

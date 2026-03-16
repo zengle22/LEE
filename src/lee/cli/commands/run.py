@@ -764,7 +764,46 @@ def _release_project_run_lock(lock_fp) -> None:
         lock_fp.close()
 
 
-@click.command()
+# Epilog text for help message
+_RUN_COMMAND_EPILOG = (
+    "\n常用工作流入口:\n"
+    "  product.main              产品主流程 (raw -> SRC -> EPIC -> FEAT -> delivery-prep)\n"
+    "  product.raw-to-src        原始需求转 SRC\n"
+    "  product.src-to-epic       冻结 SRC 转 EPIC\n"
+    "  product.epic-to-feat      冻结 EPIC 转 FEAT\n"
+    "  product.feat-to-delivery  冻结 FEAT 转交付准备\n"
+    "  core.reverse-epic-feat    反向工程：从现有代码生成 SRC/EPIC/FEAT\n"
+    "  dev.feature-delivery      特性开发交付 (FEAT -> TECH -> CONTRACT -> FE/BE)\n"
+    "  dev.bugfix-delivery       Bug 修复流程\n"
+    "  qa.test-set-production    生成 Test Set\n"
+    "  qa.test-plan-execution    执行 Test Plan\n"
+    "\n使用示例:\n"
+    "  lee run product.main --spec spec.yaml\n"
+    "  lee run core.reverse-epic-feat --request-id req-001 --repo-root .\n"
+    "  lee run dev.bugfix-delivery --spec bug.yaml --executor claude_code\n"
+)
+
+
+class RunCommand(click.Command):
+    """Custom Command class that displays epilog in help."""
+
+    def format_epilog(self, ctx, formatter):
+        """Writes the epilog into the formatter if it exists."""
+        if not self.epilog:
+            return
+        with formatter.section("使用方式"):
+            formatter.write(self.epilog)
+
+    def get_help(self, ctx):
+        formatter = ctx.make_formatter()
+        self.format_usage(ctx, formatter)
+        self.format_help_text(ctx, formatter)
+        self.format_options(ctx, formatter)
+        self.format_epilog(ctx, formatter)
+        return formatter.getvalue()
+
+
+@click.command(cls=RunCommand, epilog=_RUN_COMMAND_EPILOG)
 @click.argument("workflow_key")
 @click.option("--spec", help="Spec 文件路径")
 @click.option("--env", help="目标环境")

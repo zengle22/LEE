@@ -26,8 +26,6 @@ from lee.orchestrator.execution.runners.base import StepRunnerBase, RunnerContex
 from lee.orchestrator.execution.runners.code_executor_scope import build_code_executor_io_config, fail_code_executor_scope_violation, validate_code_executor_write_scope
 from lee.orchestrator.execution.runners.normalization import (
     PmPlannerTaskNormalizer,
-    PrdWriterFeatNormalizer,
-    ProductReviewNormalizer,
     ReviewSemanticValidator,
     SingleSSOTNormalizer,
     WorkflowSemanticValidator,
@@ -1006,10 +1004,7 @@ class LLMRunner(StepRunnerBase):
         step_token: Optional[str],
     ) -> Dict[str, Any]:
         if executor_type in ("codex", "claude_code", "kimi"):
-            # 支持 kimi 和 claude_code 配置键
-            code_config = {}
-            if step.config:
-                code_config = step.config.get("kimi", {}) or step.config.get("claude_code", {})
+            code_config = step.config.get("claude_code", {}) if step.config else {}
             workspace = ctx.resolve_workdir(step, instance.data.get("run_id", workflow_id))
             context_files = self._merge_context_files(
                 self._collect_authoritative_context_files(step, instance.data),
@@ -1035,7 +1030,7 @@ class LLMRunner(StepRunnerBase):
                 step_id=step.id,
                 step=step,
                 configured_write_scope=code_config.get("write_scope", []),
-                params=instance.data.get("params", {}),
+                project_root=ctx.project_root,
             ))
             if code_config.get("allowed_commands"):
                 input_data["allowed_commands"] = code_config.get("allowed_commands")
@@ -5961,7 +5956,6 @@ class LLMRunner(StepRunnerBase):
                 return
 
             department = instance.data.get("department")
-            template_id = instance.template_id or ""
 
             # 创建产出物处理器
             handler = create_artifact_handler(
@@ -6344,7 +6338,7 @@ class ClaudeCodeRunner(StepRunnerBase):
         workflow_id: str,
         step_id: str,
         context_files: List[str],
-        params: Optional[Dict[str, Any]] = None,
+        project_root: Optional[str] = None,
     ) -> Dict[str, Any]:
         input_data = {
             "goal": agent_ctx.user_prompt or claude_config.get("goal", ""),
@@ -6370,7 +6364,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             step_id=step_id,
             step=step,
             configured_write_scope=claude_config.get("write_scope", []),
-            params=params,
+            project_root=project_root,
         ))
         return input_data
 
@@ -6447,7 +6441,7 @@ class ClaudeCodeRunner(StepRunnerBase):
                 workflow_id=workflow_id,
                 step_id=step.id,
                 context_files=context_files,
-                params=instance.data.get("params", {}),
+                project_root=ctx.project_root,
             )
 
             configured_allowed_commands = claude_config.get("allowed_commands")
