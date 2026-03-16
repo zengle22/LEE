@@ -1,10 +1,12 @@
-# Gate Dual-Axis API Contract
-# SRC-041 Gate 双轴模型改造 - API 协议设计
+# Gate Dual-Axis Contract
+# SRC-041 Gate 双轴模型改造 - 内部接口契约
+# 注：本项目为纯 CLI + Spec 项目，无 HTTP API
 
-api_contract_id: API-CONTRACT-GATE-DUAL-AXIS-20260316-001
+contract_id: CONTRACT-GATE-DUAL-AXIS-20260316-001
 version: 1.0.0
-status: draft
+status: pending_freeze
 created_at: '2026-03-16'
+contract_type: internal_python_interface
 source_refs:
   - TECH-FEAT-SRC-041-001
   - ADR-017
@@ -62,29 +64,6 @@ class GateDecisionMode(str, Enum):
 
 在现有 `GateApproval` 数据模型基础上新增双轴字段。
 
-**现有字段** (保持不变):
-```python
-workflow_id: str
-gate_id: str
-step_id: str
-status: GateStatus
-approver: Optional[str]
-comments: Optional[str]
-created_at: datetime
-decided_at: Optional[datetime]
-approval_criteria: List[Dict[str, Any]]
-reviewers: List[Dict[str, str]]
-version: int
-default_reject_action: Optional[str]
-default_reject_target: Optional[str]
-default_revise_target: Optional[str]
-decision_action: Optional[str]
-target_step: Optional[str]
-structured_feedback: Optional[Dict[str, Any]]
-issues: Optional[List[str]]
-invalidated_at: Optional[datetime]
-```
-
 **新增字段** (P0):
 ```python
 purpose: GatePurpose                          # 必填：Gate 目的
@@ -126,225 +105,90 @@ class GateApproval:
 
 ---
 
-## 3. API Endpoints
+## 3. Internal Python Interfaces
 
-### 3.1 创建 Gate Approval
+本项目为纯 CLI + Spec 项目，无 HTTP API。本章节定义内部 Python 接口契约。
 
-**端点**: `POST /api/v1/gate-approvals`
+### 3.1 Store 接口 (SQLiteStore)
 
-**请求 DTO**: `CreateGateApprovalRequest`
-```yaml
-fields:
-  - name: workflow_id
-    type: string
-    required: true
-    description: 工作流 ID
-  - name: gate_id
-    type: string
-    required: true
-    description: 门禁 ID
-  - name: step_id
-    type: string
-    required: true
-    description: 步骤 ID
-  - name: purpose
-    type: string
-    required: true
-    enum: [review, approval]
-    description: Gate 目的
-  - name: decision_mode
-    type: string
-    required: true
-    enum: [auto, conditional_human, human_required]
-    description: 决策方式
-  - name: legacy_gate_type
-    type: string
-    required: false
-    description: 历史分类（可选，用于兼容映射）
-  - name: approval_criteria
-    type: array
-    required: false
-    description: 审批标准列表
-  - name: reviewers
-    type: array
-    required: false
-    description: 审批人列表
+**实现文件**: `src/lee/orchestrator/storage/store.py`
+
+```python
+class SQLiteStore:
+    # === GateApproval 相关方法 ===
+
+    async def create_gate_approval(self, gate: GateApproval) -> None:
+        """
+        创建 GateApproval 记录
+        前置条件：purpose 和 decision_mode 必须通过组合验证
+        """
+
+    async def get_gate_approval(self, workflow_id: str, gate_id: str) -> Optional[GateApproval]:
+        """
+        获取 GateApproval 记录
+        返回：包含 purpose 和 decision_mode 字段的 GateApproval
+        """
+
+    async def update_gate_approval(self, gate: GateApproval) -> bool:
+        """
+        更新 GateApproval 记录（乐观锁，需要 version 字段）
+        返回：是否更新成功
+        """
+
+    async def get_pending_gates(self, workflow_id: str) -> List[GateApproval]:
+        """
+        获取工作流的所有待审批 Gates
+        返回：GateApproval 列表，status=PENDING
+        """
 ```
 
-**响应 DTO**: `CreateGateApprovalResponse`
-```yaml
-fields:
-  - name: gate_approval_id
-    type: string
-    required: true
-    description: 创建的 GateApproval ID
-  - name: status
-    type: string
-    required: true
-    description: 初始状态（PENDING）
-  - name: created_at
-    type: string
-    format: date-time
-    required: true
+### 3.2 Runner 接口 (HumanGateRunner)
+
+**实现文件**: `src/lee/orchestrator/execution/runners/gate_runner.py`
+
+```python
+class HumanGateRunner:
+    async def execute(self, workflow_id: str, step, ctx: RunnerContext) -> StepResult:
+        """
+        处理 Human Gate 步骤
+
+        双轴逻辑:
+        1. 从 step.config 提取 purpose 和 decision_mode
+        2. 验证组合合法性 (APPROVAL + HUMAN_REQUIRED 必须)
+        3. 创建 GateApproval 记录 (包含双轴字段)
+        4. 暂停工作流等待人工审批
+        """
+
+    def _get_purpose_from_config(self, step_config: dict) -> GatePurpose:
+        """
+        从步骤配置解析 purpose
+        默认值：REVIEW
+        """
+
+    def _get_decision_mode_from_config(self, step_config: dict) -> GateDecisionMode:
+        """
+        从步骤配置解析 decision_mode
+        默认值：HUMAN_REQUIRED
+        """
 ```
 
-**错误码**:
-- `400`: 非法组合（如 APPROVAL + AUTO）
-- `409`: 已存在待审批的 Gate
+### 3.3 CLI 接口 (lee gates 命令)
 
----
+**实现文件**: `src/lee/cli/commands/gates_cmd.py`
 
-### 3.2 获取 Gate Approval
+```python
+# === 显示 Gate 信息时增加双轴字段 ===
+@click.option('--show-dual-axis', is_flag=True, help='显示双轴字段')
+def list_gates(show_dual_axis: bool):
+    """
+    列出待审批的 Gates
 
-**端点**: `GET /api/v1/gate-approvals/{gate_id}`
-
-**路径参数**:
-- `gate_id`: string - 门禁 ID
-
-**响应 DTO**: `GetGateApprovalResponse`
-```yaml
-fields:
-  - name: workflow_id
-    type: string
-    required: true
-  - name: gate_id
-    type: string
-    required: true
-  - name: step_id
-    type: string
-    required: true
-  - name: purpose
-    type: string
-    required: true
-    enum: [review, approval]
-  - name: decision_mode
-    type: string
-    required: true
-    enum: [auto, conditional_human, human_required]
-  - name: legacy_gate_type
-    type: string
-    required: false
-  - name: status
-    type: string
-    required: true
-    enum: [pending, approved, rejected, revised, flagged, invalidated]
-  - name: approver
-    type: string
-    required: false
-  - name: comments
-    type: string
-    required: false
-  - name: created_at
-    type: string
-    format: date-time
-    required: true
-  - name: decided_at
-    type: string
-    format: date-time
-    required: false
-  - name: decision_action
-    type: string
-    required: false
-  - name: target_step
-    type: string
-    required: false
+    输出字段:
+    - gate_id, workflow_id, step_id
+    - status, approver, created_at
+    - purpose, decision_mode (当 show_dual_axis=True)
+    """
 ```
-
-**错误码**:
-- `404`: Gate 不存在
-
----
-
-### 3.3 列出工作流的所有 Gates
-
-**端点**: `GET /api/v1/workflows/{workflow_id}/gates`
-
-**路径参数**:
-- `workflow_id`: string - 工作流 ID
-
-**查询参数**:
-- `status`: string (可选) - 按状态过滤
-- `purpose`: string (可选) - 按 purpose 过滤
-- `decision_mode`: string (可选) - 按 decision_mode 过滤
-
-**响应 DTO**: `ListGatesResponse`
-```yaml
-fields:
-  - name: workflow_id
-    type: string
-    required: true
-  - name: total_count
-    type: integer
-    required: true
-  - name: gates
-    type: array
-    required: true
-    items:
-      $ref: GetGateApprovalResponse
-```
-
----
-
-### 3.4 决策 Gate
-
-**端点**: `POST /api/v1/gate-approvals/{gate_id}/decide`
-
-**路径参数**:
-- `gate_id`: string - 门禁 ID
-
-**请求 DTO**: `DecideGateRequest`
-```yaml
-fields:
-  - name: status
-    type: string
-    required: true
-    enum: [approved, rejected, revised, flagged]
-    description: 决策结果
-  - name: approver
-    type: string
-    required: true
-    description: 审批人 ID
-  - name: comments
-    type: string
-    required: false
-    description: 审批意见
-  - name: decision_action
-    type: string
-    required: false
-    description: 执行的 action（如 rollback, retry）
-  - name: target_step
-    type: string
-    required: false
-    description: 目标步骤 ID
-  - name: structured_feedback
-    type: object
-    required: false
-    description: 结构化反馈
-```
-
-**响应 DTO**: `DecideGateResponse`
-```yaml
-fields:
-  - name: gate_id
-    type: string
-    required: true
-  - name: new_status
-    type: string
-    required: true
-  - name: decided_at
-    type: string
-    format: date-time
-    required: true
-  - name: next_step_id
-    type: string
-    required: false
-    description: 下一步骤 ID（根据决策结果计算）
-```
-
-**错误码**:
-- `400`: 决策无效（如审批人不在 reviewers 列表中）
-- `404`: Gate 不存在
-- `409`: Gate 已决策
 
 ---
 
@@ -439,7 +283,19 @@ def map_legacy_to_dual_axis(legacy_gate_type: Optional[str]) -> Tuple[GatePurpos
 
 ---
 
-## 7. Open Questions
+## 7. Implementation Locations
+
+| 组件 | 文件路径 | 负责内容 |
+|------|---------|---------|
+| 枚举定义 | `src/lee/orchestrator/storage/models.py` | GatePurpose, GateDecisionMode |
+| 数据模型 | `src/lee/orchestrator/storage/models.py` | GateApproval 扩展 |
+| 持久化 | `src/lee/orchestrator/storage/store.py` | SQLiteStore 方法 |
+| Runner | `src/lee/orchestrator/execution/runners/gate_runner.py` | HumanGateRunner 双轴逻辑 |
+| CLI | `src/lee/cli/commands/gates_cmd.py` | gates 命令双轴字段展示 |
+
+---
+
+## 8. Open Questions
 
 1. 是否需要为 `legacy_gate_type` 字段添加索引以优化查询性能？
 2. 是否需要提供批量迁移脚本将现有 GateApproval 记录迁移到双轴模型？
