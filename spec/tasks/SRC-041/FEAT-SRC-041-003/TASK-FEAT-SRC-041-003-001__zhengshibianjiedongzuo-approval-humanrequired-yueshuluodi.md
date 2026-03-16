@@ -12,7 +12,6 @@ derived_from_ids:
   required: true
 source_refs:
 - FEAT-SRC-041-003#delivery
-- TECH-FEAT-SRC-041-001
 - ADR-017#Decision
 owner: null
 tags:
@@ -52,7 +51,7 @@ properties:
 
 - 双轴语义与 legacy 收敛规则
 - `human_gate_context` 前置完整性规则
-- TECH-FEAT-SRC-041-016 中 `boundary_action`、审批策略与 fail-closed 约束
+- ADR-017 中 `boundary_action`、审批策略与 fail-closed 约束
 
 ## Outputs
 
@@ -90,7 +89,6 @@ audit_fields:
 ```yaml
 required_refs:
 - FEAT-SRC-041-003
-- TECH-FEAT-SRC-041-016
 - ADR-017
 review_required: true
 ```
@@ -101,7 +99,7 @@ review_required: true
 mode: revert
 restore_targets:
 - spec/requirements/SRC-041/FEAT-SRC-041-003__zhengshibianjiedongzuode-approval-plus-human-requi.md
-- spec/tech/TECH-FEAT-SRC-041-016__adr-017-gate-shuangzhou-yurenjueshenpi-frozen-jishujiagou.md
+- spec/adr/ADR-017__gate-zhizeyujuecemoshifencengyurenjishenpipinshenjiaohu.md
 - src/lee/orchestrator/execution/gate_operations.py
 - src/lee/orchestrator/execution/gate_policy.py
 preconditions:

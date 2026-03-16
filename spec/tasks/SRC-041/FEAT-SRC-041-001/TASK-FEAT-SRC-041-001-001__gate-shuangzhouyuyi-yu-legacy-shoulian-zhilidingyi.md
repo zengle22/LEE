@@ -2,7 +2,7 @@
 id: TASK-FEAT-SRC-041-001-001
 ssot_type: task
 title: Gate 双轴语义与 legacy 收敛治理定义
-status: draft
+status: frozen
 version: v1
 workflow_instance_id: adr-017-gate-governance-impl
 parent_id: FEAT-SRC-041-001
@@ -12,7 +12,6 @@ derived_from_ids:
   required: true
 source_refs:
 - FEAT-SRC-041-001#delivery
-- TECH-FEAT-SRC-041-001
 - ADR-017#Allowed Combinations
 owner: null
 tags:
@@ -22,6 +21,7 @@ tags:
 properties:
   contract_key: task_feat_src_041_001_001_semantics_governance
   identity_kind: ssot
+frozen_at: '2026-03-16T11:38:58.441429'
 ---
 
 # Objective
@@ -50,7 +50,7 @@ properties:
 ## Inputs
 
 - FEAT-SRC-041-001 冻结的目标语义与 acceptance
-- TECH-FEAT-SRC-041-016 中的 `gate_definition`、允许组合与 legacy 映射边界
+- ADR-017 中的 `gate_definition`、允许组合与 legacy 映射边界
 - ADR-017 关于 allowed combinations、legacy 兼容与人工审批前置语义的硬约束
 
 ## Outputs
@@ -88,7 +88,6 @@ audit_fields:
 ```yaml
 required_refs:
 - FEAT-SRC-041-001
-- TECH-FEAT-SRC-041-016
 - ADR-017
 review_required: true
 ```
@@ -99,7 +98,7 @@ review_required: true
 mode: revert
 restore_targets:
 - spec/requirements/SRC-041/FEAT-SRC-041-016-001__gate-purpose-yu-decision-mode-mubiaoyuyidongjie.md
-- spec/tech/TECH-FEAT-SRC-041-016__adr-017-gate-shuangzhou-yurenjueshenpi-frozen-jishujiagou.md
+- spec/adr/ADR-017__gate-zhizeyujuecemoshifencengyurenjishenpipinshenjiaohu.md
 - src/lee/orchestrator/execution/gate_semantics.py
 preconditions:
 - 先备份当前 legacy gate 映射消费点与 validator 入口

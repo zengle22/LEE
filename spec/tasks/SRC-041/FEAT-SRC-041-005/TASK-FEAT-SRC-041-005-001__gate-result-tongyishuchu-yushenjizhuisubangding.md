@@ -12,7 +12,6 @@ derived_from_ids:
   required: true
 source_refs:
 - FEAT-SRC-041-005#delivery
-- TECH-FEAT-SRC-041-001
 - ADR-017#Decision
 owner: null
 tags:
@@ -53,7 +52,7 @@ properties:
 
 - 双轴语义与正式边界动作审批政策
 - `human_gate_context` 最小字段与引用边界
-- TECH-FEAT-SRC-041-016 中 `gate_result` 对象、`result_ref` 与 trace/audit 接线约束
+- ADR-017 中 `gate_result` 对象、`result_ref` 与 trace/audit 接线约束
 
 ## Outputs
 
@@ -91,7 +90,6 @@ audit_fields:
 ```yaml
 required_refs:
 - FEAT-SRC-041-005
-- TECH-FEAT-SRC-041-016
 - ADR-017
 review_required: true
 ```
@@ -102,7 +100,7 @@ review_required: true
 mode: revert
 restore_targets:
 - spec/requirements/SRC-041/FEAT-SRC-041-005__rengong-gate-juecejieguodetongyi-gate-result-shuch.md
-- spec/tech/TECH-FEAT-SRC-041-016__adr-017-gate-shuangzhou-yurenjueshenpi-frozen-jishujiagou.md
+- spec/adr/ADR-017__gate-zhizeyujuecemoshifencengyurenjishenpipinshenjiaohu.md
 - src/lee/orchestrator/execution/gate_operations.py
 - src/lee/orchestrator/execution/trace.py
 - src/lee/orchestrator/execution/gate_result.py
