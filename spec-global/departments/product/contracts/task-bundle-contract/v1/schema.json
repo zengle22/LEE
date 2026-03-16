@@ -17,14 +17,14 @@
   "properties": {
     "parent_epic": {
       "type": "string",
-      "pattern": "^EPIC-\\d{3}$"
+      "pattern": "^EPIC-([A-Z]+-)?\\d{3}(-\\d+)?$"
     },
     "source_feats": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "string",
-        "pattern": "^FEAT-\\d{3}$"
+        "pattern": "^FEAT-([A-Z]+-)?\\d{3}(-\\d+)?$"
       }
     },
     "planning_metadata": {

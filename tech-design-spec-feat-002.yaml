@@ -1,0 +1,8 @@
+formal_ssot_id: FEAT-SRC-056-002
+source_refs:
+  - spec/requirements/SRC-056/FEAT-SRC-056-002__artifact-placement-reviewer-agent-implementation.md
+governing_adrs:
+  - ADR-021
+repo_context:
+  repo_id: LEE
+  type: backend

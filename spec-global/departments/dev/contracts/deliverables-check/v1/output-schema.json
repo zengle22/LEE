@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "deliverables-check-output-v1",
+  "title": "Deliverables Check Output Schema",
+  "description": "Output schema for agent.dev.deliverables_reviewer",
+  "type": "object",
+  "required": [
+    "deliverables_check_report_ref",
+    "deliverables_gate_result",
+    "completeness_percentage",
+    "complete_count",
+    "missing_count",
+    "total_count",
+    "issues"
+  ],
+  "properties": {
+    "deliverables_check_report_ref": {
+      "type": "string",
+      "description": "Path to JSON report file"
+    },
+    "deliverables_report_md": {
+      "type": "string",
+      "description": "Path to Markdown report file"
+    },
+    "deliverables_gate_result": {
+      "type": "string",
+      "enum": ["pass", "fail"],
+      "description": "Gate decision: pass if all deliverables complete, fail otherwise"
+    },
+    "completeness_percentage": {
+      "type": "number",
+      "description": "Completeness percentage (0-100)",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "complete_count": {
+      "type": "integer",
+      "description": "Number of complete deliverables",
+      "minimum": 0
+    },
+    "missing_count": {
+      "type": "integer",
+      "description": "Number of missing deliverables",
+      "minimum": 0
+    },
+    "total_count": {
+      "type": "integer",
+      "description": "Total number of required deliverables",
+      "minimum": 0
+    },
+    "issues": {
+      "type": "array",
+      "description": "List of missing deliverable issues",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "title", "file"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Issue ID (e.g., DELIVERABLE-GAP-001)"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"],
+            "description": "Issue severity"
+          },
+          "title": {
+            "type": "string",
+            "description": "Issue title"
+          },
+          "file": {
+            "type": "string",
+            "description": "Missing deliverable filename"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the missing deliverable"
+          }
+        }
+      }
+    },
+    "required_deliverables": {
+      "type": "array",
+      "description": "List of all required deliverables with their status",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "status"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Deliverable filename"
+          },
+          "description": {
+            "type": "string",
+            "description": "Deliverable description"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["complete", "missing"],
+            "description": "Delivery status"
+          },
+          "path": {
+            "type": "string",
+            "description": "Path to the deliverable if found"
+          },
+          "expected_location": {
+            "type": "string",
+            "description": "Expected location pattern"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

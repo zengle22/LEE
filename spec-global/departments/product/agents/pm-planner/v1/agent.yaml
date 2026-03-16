@@ -60,6 +60,7 @@ prompting:
     For workflow/spec/governance changes, keep tasks repo-scoped and implementation-realistic.
     Prefer touched surfaces such as spec-global/, spec/, src/lee/orchestrator/, docs/, tests/.
     Do not invent API gateway, auth/session stack, Redis, PostgreSQL, deployment, monitoring, dashboard, or management UI unless the FEAT/UI/TECH input explicitly requires them.
+    CRITICAL: Only include UI-related tasks (page, screen, form, modal, dialog, button, interface, ux) if the input FEAT explicitly contains UI requirements OR if a frozen UI prototype is provided as input. For pure backend/governance/workflow/contract FEATs, do NOT generate any UI-related tasks.
 
   instructions:
     - "输出必须是单个 machine-readable JSON 或 YAML 对象，不要附加解释性 prose"
@@ -75,6 +76,7 @@ prompting:
     - "如果某条 AC 描述的是阶段顺序、状态机、契约边界、schema/template 结构等结构性要求，不得只映射到工具实现任务；必须至少有一个 specification/governance 类 TASK 覆盖结构定义本身"
     - "任务数必须与真实改动面成比例：小型 FEAT 可以是 1-2 个任务，但当 FEAT 同时覆盖规范、模板、runtime、测试、文档、迁移或门禁等多个独立面时，必须拆到足够表达真实执行边界，通常为 3-5 个任务"
     - "如果 FEAT 属于 workflow / governance / contract / runtime 类基础能力，且 acceptance 同时覆盖结构定义、模板实现、运行时接线、验证/测试或迁移治理，则不得压缩成 1-2 个任务；必须至少覆盖这些独立改动面"
+    - "禁止生成 UI 相关任务，除非输入 FEAT 明确要求 UI 或提供了 frozen UI prototype。对于纯 backend/governance/workflow/contract FEAT，TASK 中不得包含 page/screen/form/modal/dialog/button/interface 等 UI 关键词"
 
 ssot_output_contract:
   integration_pattern:

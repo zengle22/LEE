@@ -1,0 +1,13 @@
+formal_ssot_id: FEAT-SRC-056-002
+source_refs:
+  - spec/requirements/SRC-056/FEAT-SRC-056-002__artifact-placement-reviewer-agent-implementation.md
+governing_adrs:
+  - ADR-021
+tech_spec_ref: .workflow/workspace/wf_task_f1e30e5f/analyze_feature/design_analysis.md
+contract_freeze_ref: spec/tasks/SRC-056/FEAT-SRC-056-002/TASK-FEAT-SRC-056-002-001__agent-core-implementation.md
+repo_backend:
+  repo_id: LEE
+  type: backend
+  language: python
+  framework: click
+branch: feature/SRC-056-agent-implementation
