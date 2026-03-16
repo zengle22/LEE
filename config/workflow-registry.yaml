@@ -117,6 +117,37 @@ workflows:
       - env_ref
       - human_gate_required
 
+  dev.feature-contract-l3:
+    path: spec-global/departments/dev/workflows/templates/feature-contract-l3-template.yaml
+    kind: l3_workflow_template
+    description: "Dev canonical Feature Contract Design 工作流 (L3) - TECH -> CONTRACT (API/Data/Event) -> FREEZE"
+    load_spec_as_params: true
+    required_params:
+      - formal_ssot_id
+      - source_refs
+      - governing_adrs
+      - tech_spec_ref
+    optional_params:
+      - existing_contract_refs
+      - review_context
+      - decision_constraints
+
+  dev.feature_contract_l3:
+    path: spec-global/departments/dev/workflows/templates/feature-contract-l3-template.yaml
+    canonical_workflow: dev.feature-contract-l3
+    kind: l3_workflow_template
+    description: "Feature Contract L3 兼容入口 -> canonical dev.feature-contract-l3"
+    load_spec_as_params: true
+    required_params:
+      - formal_ssot_id
+      - source_refs
+      - governing_adrs
+      - tech_spec_ref
+    optional_params:
+      - existing_contract_refs
+      - review_context
+      - decision_constraints
+
   dev.bugfix:
     path: spec-global/departments/dev/workflows/templates/bugfix-delivery-l2-template.yaml
     canonical_workflow: dev.bugfix-delivery
