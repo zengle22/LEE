@@ -1,0 +1,514 @@
+# Dev Smoke L3 Template
+# Dev 部门轻量级 Smoke Test 流程（L3）
+#
+# 职责：在本地 dev 环境执行 Smoke Test，作为 merge 前的强制门禁
+# 这是一个 L3 蓝本，5 Steps，专注于快速反馈
+#
+# 设计原则:
+# - 快速：只执行必要步骤，无冗余 Phase
+# - 本地：使用 dev 本地环境，无需独立测试环境
+# - 强制：Smoke Gate 是 blocker 优先级，不过不能 merge
+
+kind: l3_workflow_template
+version: "1.0"
+id: template.dev.smoke_l3
+name: Dev Smoke Test L3 Template
+description: |
+  L3 template for executing Smoke Test in local dev environment.
+
+  This template defines the 5-step workflow for rapid feedback:
+  - Step 1: Environment Check - Verify local dev environment is ready
+  - Step 2: Case Generation - Generate test cases from Test Set dynamically
+  - Step 3: Script Execution - Execute test scripts and collect evidence
+  - Step 4: Result Judgment - Judge test results (Pass/Fail)
+  - Step 5: Evidence Packaging - Package evidence for Smoke Gate
+
+  Design Principles:
+  - Fast: Only essential steps, no redundant phases
+  - Local: Use dev local environment, no separate test environment needed
+  - Mandatory: Smoke Gate is blocker priority, cannot merge without passing
+
+owner: dev-governance
+tags: [template, dev, smoke-test, l3, mandatory-gate]
+
+# SSOT Integration
+ssot_integration:
+  input_types:
+    - feat_freeze
+    - test_set
+  output_types:
+    - smoke_result
+    - evidence_pack
+
+# Phase definitions (L3 uses phases directly, no stages)
+phases:
+  - id: env_check
+    name: "Environment Check"
+    description: |
+      Verify local dev environment is ready for Smoke Test execution.
+      Check availability of:
+      - Python runtime and dependencies
+      - Test framework (pytest)
+      - Database connection (if applicable)
+      - Service endpoints (if applicable)
+    depends_on: []
+
+  - id: case_generation
+    name: "Test Case Generation"
+    description: |
+      Generate test cases dynamically from Test Set YAML.
+      Test cases are ephemeral (generated at runtime).
+      Test Set is the persistent design asset.
+    depends_on: [env_check]
+
+  - id: script_execution
+    name: "Script Execution"
+    description: |
+      Execute test scripts and collect evidence.
+      Role: EXECUTOR (can only execute, cannot judge)
+      Collects evidence_bundle for each test case.
+    depends_on: [case_generation]
+
+  - id: result_judgment
+    name: "Result Judgment"
+    description: |
+      Judge test results based on evidence.
+      Role: JUDGE (can only read evidence, cannot modify)
+      Gate: human_review (optional, for failed cases)
+    depends_on: [script_execution]
+
+  - id: evidence_pack
+    name: "Evidence Packaging"
+    description: |
+      Package all evidence for Smoke Gate handoff.
+      Generates evidence_pack.json as Smoke Gate input.
+    depends_on: [result_judgment]
+
+# Execution steps
+steps:
+  - id: check_local_env
+    name: "Check Local Environment"
+    kind: agent
+    description: "Verify local dev environment readiness"
+    agent_id: agent.dev.env_checker
+    phase: env_check
+    mandatory: true
+    depends_on: []
+    config:
+      implementation_facing: false
+    outputs:
+      - path: env_check_result
+        type: symbol
+        format: json
+        description: "Environment check result"
+        required: true
+
+  - id: generate_test_cases
+    name: "Generate Test Cases"
+    kind: agent
+    description: "Generate test cases dynamically from Test Set YAML"
+    agent_id: agent.qa.case_generator
+    phase: case_generation
+    mandatory: true
+    depends_on: [check_local_env]
+    config:
+      implementation_facing: false
+    inputs:
+      - test_set_path
+    outputs:
+      - path: "{{ tests_dir }}/exec/{{ smoke_run_id }}/cases.yaml"
+        type: file
+        format: yaml
+        description: "Generated test cases (ephemeral)"
+        required: true
+
+  - id: translate_scripts
+    name: "Translate Scripts"
+    kind: agent
+    description: "Translate test cases to executable scripts"
+    agent_id: agent.qa.script_translator
+    phase: script_execution
+    mandatory: true
+    depends_on: [generate_test_cases]
+    config:
+      implementation_facing: false
+    outputs:
+      - path: "{{ tests_dir }}/exec/{{ smoke_run_id }}/scripts/"
+        type: directory
+        format: mixed
+        description: "Executable test scripts"
+        required: true
+
+  - id: execute_scripts
+    name: "Execute Test Scripts"
+    kind: skill
+    description: "Execute test scripts and collect evidence"
+    skill_id: skill.runner.test_e2e
+    phase: script_execution
+    mandatory: true
+    depends_on: [translate_scripts]
+    role: EXECUTOR
+    config:
+      implementation_facing: true
+      collect_evidence: true
+    outputs:
+      - path: "{{ tests_dir }}/exec/{{ smoke_run_id }}/runner-output.json"
+        type: file
+        format: json
+        description: "Test runner output"
+        required: true
+      - path: "{{ tests_dir }}/exec/{{ smoke_run_id }}/bundle/"
+        type: directory
+        format: mixed
+        description: "Evidence bundle"
+        required: true
+
+  - id: check_behavior_compliance
+    name: "Check Behavior Compliance"
+    kind: agent
+    description: "Anti-Mock Gate - verify real execution"
+    agent_id: agent.qa.behavior_compliance_checker
+    phase: script_execution
+    mandatory: true
+    depends_on: [execute_scripts]
+    gate:
+      type: auto_check
+      gate_id: gate.dev.compliance_check
+      on_pass: proceed_to_judgment
+      on_fail: mark_invalid_run
+    outputs:
+      - path: "{{ tests_dir }}/exec/{{ smoke_run_id }}/compliance-result.json"
+        type: file
+        format: json
+        description: "Compliance check result"
+        required: true
+
+  - id: judge_results
+    name: "Judge Test Results"
+    kind: agent
+    description: "Judge test results based on evidence"
+    agent_id: agent.qa.result_judge
+    phase: result_judgment
+    mandatory: true
+    depends_on: [check_behavior_compliance]
+    role: JUDGE
+    config:
+      implementation_facing: false
+    gate:
+      type: human_review
+      gate_id: gate.dev.result_review
+      on_pass: proceed_to_packaging
+      on_fail: mark_failed
+    outputs:
+      - path: "{{ tests_dir }}/exec/{{ smoke_run_id }}/results.yaml"
+        type: file
+        format: yaml
+        description: "Test results with Pass/Fail judgment"
+        required: true
+      - path: smoke_result
+        type: symbol
+        format: json
+        description: "Smoke test result summary"
+        required: true
+
+  - id: draft_bugs
+    name: "Draft Bug Reports"
+    kind: agent
+    description: "Draft bug reports for failed test cases"
+    agent_id: agent.qa.bug_drafter
+    phase: result_judgment
+    mandatory: false
+    depends_on: [judge_results]
+    config:
+      implementation_facing: false
+    condition: "smoke_result.has_failures == true"
+    outputs:
+      - path: "{{ spec_dir }}/testing/bugs/{{ smoke_run_id }}/"
+        type: directory
+        format: yaml
+        description: "Bug drafts for failed cases"
+        required: false
+
+  - id: assemble_tse
+    name: "Assemble Test Set Execution"
+    kind: agent
+    description: "Assemble Test Set Execution (TSE) file"
+    agent_id: agent.qa.tse_assembler
+    phase: evidence_pack
+    mandatory: true
+    depends_on: [judge_results]
+    config:
+      implementation_facing: false
+    outputs:
+      - path: "{{ tests_dir }}/exec/{{ smoke_run_id }}/tse.yaml"
+        type: file
+        format: yaml
+        description: "Test Set Execution record"
+        required: true
+
+  - id: package_evidence
+    name: "Package Evidence for Smoke Gate"
+    kind: agent
+    description: "Package all evidence for Smoke Gate handoff"
+    agent_id: agent.dev.evidence_packager
+    phase: evidence_pack
+    mandatory: true
+    depends_on: [assemble_tse]
+    config:
+      implementation_facing: false
+    outputs:
+      - path: ".workflow/smoke-evidence-{{ smoke_run_id }}/evidence_pack.json"
+        type: file
+        format: json
+        description: "Evidence pack for Smoke Gate input"
+        required: true
+      - path: ".workflow/smoke-evidence-{{ smoke_run_id }}/smoke_summary.json"
+        type: file
+        format: json
+        description: "Smoke test summary"
+        required: true
+      - path: ".workflow/smoke-evidence-{{ smoke_run_id }}/README.md"
+        type: file
+        format: markdown
+        description: "Evidence pack summary report"
+        required: true
+
+# Step order
+step_order:
+  - check_local_env
+  - generate_test_cases
+  - translate_scripts
+  - execute_scripts
+  - check_behavior_compliance
+  - judge_results
+  - draft_bugs
+  - assemble_tse
+  - package_evidence
+
+# Input parameters
+input_params:
+  test_set_path:
+    type: string
+    required: true
+    description: "Path to Test Set YAML (from QA Test Set Production)"
+
+  smoke_run_id:
+    type: string
+    required: false
+    description: "Smoke run identifier (auto-generated if not provided)"
+
+  feat_freeze:
+    type: string
+    required: false
+    description: "Path to FEAT freeze input (for traceability)"
+
+  execution_mode:
+    type: string
+    required: false
+    default: enforce
+    enum: [enforce, warn]
+    description: "Compliance enforcement level"
+
+  priority_filter:
+    type: array
+    required: false
+    default: ["P0", "P1"]
+    description: "Filter test cases by priority"
+
+  coverage_enabled:
+    type: boolean
+    required: false
+    default: true
+    description: "Enable code coverage measurement"
+
+# Output contract
+output_contract:
+  smoke_result:
+    path: ".workflow/smoke-evidence-{smoke_run_id}/smoke_summary.json"
+    schema: ../../contracts/smoke-result/v1/schema.yaml
+    description: "Smoke test result summary"
+
+  evidence_pack:
+    path: ".workflow/smoke-evidence-{smoke_run_id}/evidence_pack.json"
+    schema: ../../contracts/evidence-pack/v1/schema.yaml
+    description: "Evidence pack for Smoke Gate input"
+
+# Output structure
+output_structure: |
+  {{ tests_dir }}/exec/{{ smoke_run_id }}/
+  ├── cases.yaml                    # Generated test cases (ephemeral)
+  ├── scripts/                      # Executable test scripts
+  ├── runner-output.json            # Test runner output
+  ├── bundle/                       # Evidence bundle
+  ├── compliance-result.json        # Compliance check result
+  ├── results.yaml                  # Test results with Pass/Fail
+  └── tse.yaml                      # Test Set Execution record
+
+  {{ spec_dir }}/testing/bugs/{{ smoke_run_id }}/
+  └── *.yaml                        # Bug drafts (if any failures)
+
+  .workflow/smoke-evidence-{{ smoke_run_id }}/
+  ├── evidence_pack.json            # Evidence pack for Smoke Gate
+  ├── smoke_summary.json            # Smoke test summary
+  └── README.md                     # Summary report
+
+# Human gates configuration
+human_gates:
+  result_review:
+    type: human_review
+    timeout: 4h
+    required_approvers:
+      - role: tech_lead
+    prompt: "请审核 Smoke Test 结果，确认失败用例的根本原因"
+    condition: "smoke_result.pass_rate < 100"
+
+  compliance_check:
+    type: auto_check
+    gate_id: gate.dev.compliance_check
+    on_pass: proceed_to_judgment
+    on_fail: mark_invalid_run
+    prompt: "Anti-Mock Gate - 验证测试是否真实执行"
+
+# Smoke Gate handoff
+smoke_gate_handoff:
+  gate_id: gate.dev.smoke_gate
+  trigger_event: smoke_test_complete
+  trigger_source: agent.dev.smoke_tester
+  input_evidence:
+    - ".workflow/smoke-evidence-{smoke_run_id}/evidence_pack.json"
+    - ".workflow/smoke-evidence-{smoke_run_id}/smoke_summary.json"
+
+# Instance schema
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+  context_fields:
+    - test_set_path
+    - smoke_run_id
+    - feat_freeze
+    - execution_mode
+    - priority_filter
+    - coverage_enabled
+  output_fields:
+    - smoke_result_path
+    - evidence_pack_path
+    - pass_rate
+    - coverage
+
+# State machine
+state_machine:
+  states:
+    - INIT: "初始化"
+    - ENV_CHECK: "环境检查"
+    - CASE_GENERATION: "用例生成"
+    - SCRIPT_EXECUTION: "脚本执行"
+    - RESULT_JUDGMENT: "结果判定"
+    - EVIDENCE_PACK: "证据打包"
+    - COMPLETED: "完成 (PASS)"
+    - FAILED: "失败 (FAIL)"
+    - INVALID_RUN: "无效执行"
+
+  transitions:
+    INIT:
+      - to: ENV_CHECK
+        trigger: workflow_started
+
+    ENV_CHECK:
+      - to: CASE_GENERATION
+        trigger: env_check_passed
+      - to: FAILED
+        trigger: env_check_failed
+
+    CASE_GENERATION:
+      - to: SCRIPT_EXECUTION
+        trigger: cases_generated
+
+    SCRIPT_EXECUTION:
+      - to: RESULT_JUDGMENT
+        trigger: scripts_executed
+      - to: INVALID_RUN
+        trigger: compliance_failed
+
+    RESULT_JUDGMENT:
+      - to: EVIDENCE_PACK
+        trigger: results_judged_pass
+      - to: FAILED
+        trigger: results_judged_fail
+
+    EVIDENCE_PACK:
+      - to: COMPLETED
+        trigger: evidence_packaged
+
+# Constraints
+constraints:
+  test_set_required: |
+    Test Set YAML must be provided and must exist.
+    Test Set should be generated by QA Test Set Production workflow.
+
+  local_env_only: |
+    This workflow is designed for local dev environment only.
+    Do not deploy to separate test environment.
+
+  mandatory_execution: |
+    Dev Smoke is a mandatory gate before merge.
+    Cannot merge without passing Smoke Gate.
+
+  ephemeral_test_cases: |
+    Test cases are generated at runtime and are ephemeral.
+    Test Set YAML is the persistent design asset.
+
+  priority_filter_default: |
+    Default priority filter is ["P0", "P1"].
+    Use priority_filter parameter to override.
+
+  coverage_measurement: |
+    Code coverage is measured by default.
+    Use coverage_enabled=false to disable.
+
+# Observability
+observability:
+  metrics:
+    - name: smoke_execution_duration
+      type: histogram
+      description: "Smoke test execution duration in seconds"
+      labels:
+        - smoke_run_id
+        - status
+      buckets: [30, 60, 120, 300, 600]
+
+    - name: test_cases_total
+      type: counter
+      description: "Total test cases executed"
+      labels:
+        - smoke_run_id
+        - priority
+
+    - name: test_cases_passed
+      type: counter
+      description: "Total test cases passed"
+      labels:
+        - smoke_run_id
+        - priority
+
+    - name: test_cases_failed
+      type: counter
+      description: "Total test cases failed"
+      labels:
+        - smoke_run_id
+        - priority
+
+  tracing:
+    description: "Distributed tracing spans for Smoke L3 workflow"
+    spans:
+      - name: smoke_execution
+        description: "Full Smoke test execution"
+        start_step: check_local_env
+        end_step: package_evidence
+
+      - name: test_execution
+        description: "Test script execution"
+        start_step: translate_scripts
+        end_step: judge_results
