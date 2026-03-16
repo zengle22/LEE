@@ -7,7 +7,7 @@ Deliverables Producer Agent - Workflow Adapter
 import os
 from typing import Any, Dict, List, Optional
 
-from .deliverables_producer import produce_deliverables, DeliverablesProducer
+from .deliverables_producer import produce_deliverables
 
 
 def run_deliverables_production(

@@ -127,7 +127,6 @@ class DeliverablesProducer:
     ) -> str:
         """Generate a schema file"""
         feature_id = feat_spec.get('id', 'UNKNOWN')
-        feature_title = feat_spec.get('title', 'Unknown Feature')
 
         # Create a basic JSON schema structure
         schema_content = {
@@ -157,7 +156,6 @@ class DeliverablesProducer:
     ) -> str:
         """Generate an example file"""
         feature_id = feat_spec.get('id', 'UNKNOWN')
-        feature_title = feat_spec.get('title', 'Unknown Feature')
 
         example_content = {
             "# Example file for": f"{feature_id}",
