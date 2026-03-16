@@ -6110,6 +6110,63 @@ class ClaudeCodeRunner(StepRunnerBase):
         return result
 
     @staticmethod
+    def _check_review_result_for_critical_issues(output: Dict[str, Any]) -> Optional[str]:
+        """
+        Check review_result.md content for Critical severity issues.
+
+        Parses the generated_text or structured_payload from the review step output
+        and looks for patterns indicating Critical issues were found.
+
+        Returns:
+            Error message if Critical issues found, None otherwise.
+        """
+        generated_text = str(output.get("generated_text", "") or "")
+        structured_payload = output.get("structured_payload", {})
+
+        # Try to extract from structured payload first
+        if isinstance(structured_payload, dict):
+            business_output = structured_payload.get("business_output", {})
+            if isinstance(business_output, dict):
+                # Check for critical_count field if present
+                critical_count = business_output.get("critical_count", 0)
+                if isinstance(critical_count, int) and critical_count > 0:
+                    return f"Review found {critical_count} Critical severity issue(s) that must be resolved before proceeding"
+
+        # Parse generated_text for Critical issue patterns
+        if generated_text:
+            # Pattern 1: "| Critical (严重) | N |" table format
+            import re
+            critical_table_pattern = r"\|\s*Critical\s*\([^)]*\)\s*\|\s*(\d+)\s*\|"
+            match = re.search(critical_table_pattern, generated_text)
+            if match:
+                count = int(match.group(1))
+                if count > 0:
+                    return f"Review found {count} Critical severity issue(s) that must be resolved before proceeding"
+
+            # Pattern 2: "Critical (严重) | N" without leading pipe
+            critical_alt_pattern = r"Critical\s*\([^)]*\)\s*\|\s*(\d+)"
+            match = re.search(critical_alt_pattern, generated_text)
+            if match:
+                count = int(match.group(1))
+                if count > 0:
+                    return f"Review found {count} Critical severity issue(s) that must be resolved before proceeding"
+
+            # Pattern 3: Explicit "Critical: N" or "Critical issues: N"
+            critical_text_pattern = r"Critical(?:\s*issues)?\s*[:：]\s*(\d+)"
+            match = re.search(critical_text_pattern, generated_text)
+            if match:
+                count = int(match.group(1))
+                if count > 0:
+                    return f"Review found {count} Critical severity issue(s) that must be resolved before proceeding"
+
+            # Pattern 4: Check for status explicitly set to failed due to critical issues
+            if '"status": "failed"' in generated_text or "'status': 'failed'" in generated_text:
+                if "Critical" in generated_text or "critical" in generated_text:
+                    return "Review found Critical severity issue(s) and status was set to failed"
+
+        return None
+
+    @staticmethod
     def _git_head(workspace: str) -> Optional[str]:
         try:
             proc = subprocess.run(
@@ -6295,6 +6352,12 @@ class ClaudeCodeRunner(StepRunnerBase):
                 return "Unable to verify git commit creation (HEAD unavailable)"
             if head_before == head_after:
                 return f"No new commit detected (HEAD unchanged: {head_after[:8]})"
+
+        # Check review_result for Critical issues if configured
+        if bool(criteria.get("check_review_result", False)) or bool(criteria.get("require_no_critical_issues", False)):
+            review_result_error = cls._check_review_result_for_critical_issues(output)
+            if review_result_error:
+                return review_result_error
 
         return None
 
