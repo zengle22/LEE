@@ -16,7 +16,16 @@ from lee.agents.artifact_placement_reviewer import (
     ExpectedArtifact,
 )
 
+from lee.agents.deliverables_reviewer import (
+    check_deliverables,
+    DeliverablesChecker,
+    DeliverablesCheckResult,
+    DeliverablesReportGenerator,
+    DeliverableRequirement,
+)
+
 __all__ = [
+    # Artifact Placement Reviewer
     "audit_directory",
     "ManifestLoader",
     "DirectoryScanner",
@@ -26,4 +35,10 @@ __all__ = [
     "AuditFinding",
     "PlacementManifest",
     "ExpectedArtifact",
+    # Deliverables Reviewer
+    "check_deliverables",
+    "DeliverablesChecker",
+    "DeliverablesCheckResult",
+    "DeliverablesReportGenerator",
+    "DeliverableRequirement",
 ]
