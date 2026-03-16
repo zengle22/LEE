@@ -199,6 +199,7 @@ def list(workflow_id: str | None, all: bool, pending: bool, project_dir: str, sh
 
     不指定 WORKFLOW_ID 时，列出所有工作流的门禁。
     使用 --all 显示已处理的历史门禁。
+    使用 --show-dual-axis 显示 SRC-041 双轴模型字段 (purpose, decision_mode)。
     """
     project_root = Path(project_dir).resolve()
     db_path = project_root / ".workflow" / "orchestrator.db"
