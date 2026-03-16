@@ -12,7 +12,6 @@ derived_from_ids:
   required: true
 source_refs:
 - FEAT-SRC-041-004#delivery
-- TECH-FEAT-SRC-041-001
 - ADR-017#Gate Flow And Workflow State Machine
 owner: null
 tags:
@@ -51,7 +50,7 @@ properties:
 ## Inputs
 
 - 双轴语义与 `human_gate_context` 前置对象
-- TECH-FEAT-SRC-041-016 中 `pending_gate_summary`、CLI 投影视图与 repo_context 边界
+- ADR-017 中 `pending_gate_summary`、CLI 投影视图与 repo_context 边界
 - 现有 CLI `list`、`show`、`decide` 链路的待审批展示需求
 
 ## Outputs
@@ -91,7 +90,6 @@ audit_fields:
 ```yaml
 required_refs:
 - FEAT-SRC-041-004
-- TECH-FEAT-SRC-041-016
 - ADR-017
 review_required: true
 ```
@@ -102,7 +100,7 @@ review_required: true
 mode: revert
 restore_targets:
 - spec/requirements/SRC-041/FEAT-SRC-041-004__daishenpi-gate-dezuixiaokepanduanzhaiyaotongyi.md
-- spec/tech/TECH-FEAT-SRC-041-016__adr-017-gate-shuangzhou-yurenjueshenpi-frozen-jishujiagou.md
+- spec/adr/ADR-017__gate-zhizeyujuecemoshifencengyurenjishenpipinshenjiaohu.md
 - src/lee/cli/commands/gates_cmd.py
 - src/lee/orchestrator/execution/gate_projection.py
 preconditions:
