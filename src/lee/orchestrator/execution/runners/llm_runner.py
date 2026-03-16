@@ -1006,7 +1006,10 @@ class LLMRunner(StepRunnerBase):
         step_token: Optional[str],
     ) -> Dict[str, Any]:
         if executor_type in ("codex", "claude_code", "kimi"):
-            code_config = step.config.get("claude_code", {}) if step.config else {}
+            # 支持 kimi 和 claude_code 配置键
+            code_config = {}
+            if step.config:
+                code_config = step.config.get("kimi", {}) or step.config.get("claude_code", {})
             workspace = ctx.resolve_workdir(step, instance.data.get("run_id", workflow_id))
             context_files = self._merge_context_files(
                 self._collect_authoritative_context_files(step, instance.data),
@@ -1979,6 +1982,7 @@ class LLMRunner(StepRunnerBase):
                 generated_text=generated_text,
                 structured_payload=structured_payload,
                 written_files=written_files,
+                workflow_context=workflow_context,
             )
             if ssot_materialized:
                 materialized_files = ssot_materialized.get("materialized_files", [])
@@ -2120,6 +2124,7 @@ class LLMRunner(StepRunnerBase):
         generated_text: str,
         structured_payload: Optional[Any] = None,
         written_files: Optional[List[str]] = None,
+        workflow_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         If the agent spec declares ssot_output_schema, validate and materialize it.
@@ -2199,7 +2204,17 @@ class LLMRunner(StepRunnerBase):
             manager = ArtifactManager(
                 project_root=Path(ctx.project_root or ".").resolve(),
             )
-            materializer = SSOTContractMaterializer(manager, schema_path=Path(schema_path))
+            # Pass upstream step outputs for symbol resolution in SSOT materializer
+            upstream_outputs = {}
+            if isinstance(workflow_context, dict):
+                instance_data = workflow_context.get("data", {})
+                if isinstance(instance_data, dict):
+                    upstream_outputs = instance_data.get("step_outputs", {})
+            materializer = SSOTContractMaterializer(
+                manager,
+                schema_path=Path(schema_path),
+                upstream_step_outputs=upstream_outputs,
+            )
             if validate_only:
                 materializer.validate_contract(contract_data)
                 return None

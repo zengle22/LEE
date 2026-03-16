@@ -48,12 +48,39 @@ stages:
     description: "从原始输入收敛、评审并冻结 SRC"
     depends_on: []
     steps:
+      - id: input_validation
+        name: 输入合法性校验
+        kind: agent
+        agent_id: agent.governance.input_validator
+        mandatory: true
+        depends_on: []
+        description: >
+          校验输入文件是否已在 SSOT 链上。如果输入文件已经具有 ssot_type 且 status 为
+          frozen/active/deprecated，则拒绝执行，避免重复生成 SRC。
+          同时校验输入不能是 gate-materialize 等占位对象。
+        inputs:
+          - source: external
+            type: [adr, raw_requirement, business_opportunity, business_opportunity_freeze]
+            required: true
+        outputs:
+          - symbol: input_validation_result
+            contract: departments/product/contracts/validation-result-contract/v1/schema.json
+            freeze: false
+        config:
+          validation:
+            rules:
+              - name: check_not_ssot_object
+                description: "输入不能是已存在的 SSOT 对象"
+              - name: check_not_gate_materialize
+                description: "输入不能是 gate-materialize 占位对象"
+          on_failure: fail  # 输入校验失败直接终止，不重试
+
       - id: raw_input_intake
         name: 原始输入接入
         kind: agent
         agent_id: agent.analysis.product_goal
         mandatory: true
-        depends_on: []
+        depends_on: [input_validation]
         description: >
           接收一句话、文章、客户反馈、会议结论、治理 ADR 或商业机会输入，
           保存原始内容和来源引用，形成待归一化输入对象。
@@ -150,11 +177,50 @@ stages:
           gate:
             type: human_approval
             gate_id: gate.product.src_freeze
+
+      - id: output_validation
+        name: 输出完整性校验
+        kind: agent
+        agent_id: agent.governance.output_validator
+        mandatory: true
+        depends_on: [source_freeze]
+        description: >
+          对落盘的 SRC 文件进行全面校验，确保 SSOT 字段完整有效。
+          校验失败则拒绝放行，触发重跑（最多3次），3次失败则整体流程失败。
+        inputs:
+          - source: source_freeze
+            required: true
+        outputs:
+          - symbol: output_validation_result
+            contract: departments/product/contracts/validation-result-contract/v1/schema.json
+            freeze: false
+        config:
+          validation:
+            rules:
+              - name: check_ssot_header
+                description: "SSOT Header 完整性校验"
+              - name: check_workflow_instance_id
+                description: "workflow_instance_id 真实性校验"
+              - name: check_content_integrity
+                description: "内容完整性校验"
+              - name: check_source_refs
+                description: "来源引用校验"
+              - name: check_id_consistency
+                description: "ID 一致性校验"
+          retry_policy:
+            max_attempts: 3
+          backoff: exponential  # 指数退避
+          on_retry: "重新执行 source_normalization + source_review + source_freeze"
+          on_max_retry_exceeded: fail  # 3次失败则整体流程失败
+        on_failure: retry  # 校验失败触发重试
+
     step_order:
+      - input_validation
       - raw_input_intake
       - source_normalization
       - source_review
       - source_freeze
+      - output_validation
 
 stage_order:
   - raw_to_src_flow
@@ -184,6 +250,27 @@ constraints:
   src_root_scope_required: |
     source_freeze 完成后必须产出稳定的 src_root_id。
     下游需求链对象必须通过该作用域建立目录路由和正式身份。
+
+  input_ssot_guard: |
+    输入文件必须是原始需求，不能是已在 SSOT 链上的对象。
+    如果输入文件具有 ssot_type 字段且 status 为 frozen/active/deprecated，
+    必须立即拒绝执行，返回明确的错误信息指引用户使用正确的下游流程。
+
+  output_validation_required: |
+    落盘的 SRC 文件必须通过全面的输出校验，包括：
+    - SSOT Header 完整性（id, ssot_type, status, version, title, workflow_instance_id）
+    - workflow_instance_id 真实性（非占位符，数据库中存在）
+    - 内容完整性（必须包含问题陈述、目标用户、业务动因、关键约束）
+    - 来源引用完整性（source_refs 非空）
+    - ID 一致性（文件内 id 与文件名一致）
+    校验失败触发重试（最多3次），3次失败后整体流程失败。
+
+  retry_policy: |
+    output_validation 失败时的重试策略：
+    - 最大重试次数：3次
+    - 重试范围：从 source_normalization 步骤重新执行
+    - 退避策略：指数退避（1min, 2min, 4min）
+    - 超过最大重试次数：标记整个 raw_to_src workflow 为失败状态
 
 instance_schema:
   required_fields:

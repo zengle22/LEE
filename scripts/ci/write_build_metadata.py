@@ -26,7 +26,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--release-kind", required=True, choices=["candidate", "release"])
+    parser.add_argument("--release-kind", required=True, choices=["candidate", "release", "main-release"])
     args = parser.parse_args()
 
     output_path = pathlib.Path(args.output)
