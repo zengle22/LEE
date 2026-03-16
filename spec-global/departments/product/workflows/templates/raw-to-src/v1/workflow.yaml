@@ -50,33 +50,30 @@ stages:
     steps:
       - id: input_validation
         name: 输入合法性校验
-        kind: validation
+        kind: agent
+        agent_id: agent.governance.input_validator
         mandatory: true
         depends_on: []
         description: >
-          校验输入文件是否已在 SSOT 链上。如果输入文件已经具有 ssot_type 且 status 为 
+          校验输入文件是否已在 SSOT 链上。如果输入文件已经具有 ssot_type 且 status 为
           frozen/active/deprecated，则拒绝执行，避免重复生成 SRC。
+          同时校验输入不能是 gate-materialize 等占位对象。
         inputs:
           - source: external
             type: [adr, raw_requirement, business_opportunity, business_opportunity_freeze]
             required: true
-        validation_rules:
-          - name: check_not_ssot_object
-            description: "输入不能是已存在的 SSOT 对象"
-            check: |
-              1. 读取输入文件的 frontmatter
-              2. 如果存在 `ssot_type` 字段（如 src, epic, feat 等）
-              3. 且 `status` 为 `frozen`、`active` 或 `deprecated`
-              4. 则校验失败，返回错误：
-                 "输入文件 ${filename} 已经是 SSOT 链上的 ${ssot_type} 对象（status: ${status}），
-                  不能作为 raw requirement 输入。如需推进，请使用 src_to_epic 流程。"
-          - name: check_not_gate_materialize
-            description: "输入不能是 gate-materialize 占位对象"
-            check: |
-              1. 如果 workflow_instance_id 为 'gate-materialize' 或其他占位符
-              2. 则校验失败，返回错误：
-                 "输入文件 ${filename} 是占位对象，不是有效的原始需求输入"
-        on_failure: fail  # 输入校验失败直接终止，不重试
+        outputs:
+          - symbol: input_validation_result
+            contract: departments/product/contracts/validation-result-contract/v1/schema.json
+            freeze: false
+        config:
+          validation:
+            rules:
+              - name: check_not_ssot_object
+                description: "输入不能是已存在的 SSOT 对象"
+              - name: check_not_gate_materialize
+                description: "输入不能是 gate-materialize 占位对象"
+          on_failure: fail  # 输入校验失败直接终止，不重试
 
       - id: raw_input_intake
         name: 原始输入接入
@@ -183,7 +180,8 @@ stages:
 
       - id: output_validation
         name: 输出完整性校验
-        kind: validation
+        kind: agent
+        agent_id: agent.governance.output_validator
         mandatory: true
         depends_on: [source_freeze]
         description: >
@@ -192,45 +190,25 @@ stages:
         inputs:
           - source: source_freeze
             required: true
-        validation_rules:
-          - name: check_ssot_header
-            description: "SSOT Header 完整性校验"
-            check: |
-              必须包含以下字段：
-              - id: 格式为 SRC-XXX，与文件名一致
-              - ssot_type: 必须为 "src"
-              - status: 必须为 "frozen"
-              - version: 必须为 v1/v2 等格式
-              - title: 不能为空
-              - workflow_instance_id: 必须为真实的 workflow 实例 ID，不能为 "gate-materialize"
-          - name: check_workflow_instance_id
-            description: "workflow_instance_id 真实性校验"
-            check: |
-              1. workflow_instance_id 不能为 null/空字符串
-              2. 不能为 "gate-materialize" 或其他占位符
-              3. 必须在 orchestrator 数据库中存在对应的 workflow_instance 记录
-              4. 对应的 workflow_instance 状态必须为 completed 或 running
-          - name: check_content_integrity
-            description: "内容完整性校验"
-            check: |
-              必须包含以下章节：
-              - 问题陈述 (Problem Statement)
-              - 目标用户 (Target Users)
-              - 业务动因 (Business Motivation)  
-              - 关键约束 (Constraints)
-              每个章节内容不能为空（至少100字符）
-          - name: check_source_refs
-            description: "来源引用校验"
-            check: |
-              - source_refs 不能为空数组
-              - 必须引用原始输入文件或 ADR
-          - name: check_id_consistency
-            description: "ID 一致性校验"
-            check: |
-              - 文件中的 id 字段必须与文件名中的 ID 一致
-              - 例如：id: SRC-046 对应文件名 SRC-046__xxx.md
-        retry_policy:
-          max_attempts: 3
+        outputs:
+          - symbol: output_validation_result
+            contract: departments/product/contracts/validation-result-contract/v1/schema.json
+            freeze: false
+        config:
+          validation:
+            rules:
+              - name: check_ssot_header
+                description: "SSOT Header 完整性校验"
+              - name: check_workflow_instance_id
+                description: "workflow_instance_id 真实性校验"
+              - name: check_content_integrity
+                description: "内容完整性校验"
+              - name: check_source_refs
+                description: "来源引用校验"
+              - name: check_id_consistency
+                description: "ID 一致性校验"
+          retry_policy:
+            max_attempts: 3
           backoff: exponential  # 指数退避
           on_retry: "重新执行 source_normalization + source_review + source_freeze"
           on_max_retry_exceeded: fail  # 3次失败则整体流程失败
