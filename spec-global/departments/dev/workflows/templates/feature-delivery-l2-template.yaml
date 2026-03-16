@@ -1,0 +1,248 @@
+# Feature Delivery L2 Template
+# Canonical Dev feature delivery template constrained by ADR-008 and FEAT-SRC-009-001.
+
+kind: l2_workflow_template
+version: "3.0"
+id: template.dev.feature_delivery_l2
+name: Feature Delivery L2 Template
+description: |
+  Canonical L2 template for Dev feature delivery.
+
+  This checked-in file is a reusable workflow template, not a fixed runtime instance.
+  Runtime instances are rendered from this template by the orchestrator.
+
+  Canonical stage flow:
+  - tech_design
+  - contract_design
+  - frontend_dev
+  - backend_dev
+  - integration
+  - evidence_pack
+  - smoke_gate
+
+owner: development
+tags: [template, dev, feature, l2, canonical, adr-008]
+contracts:
+  shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
+
+phases:
+  - id: tech_design
+    name: "Tech Design"
+    description: "Derive the TECH bridge object from the formal feature source"
+    default_complexity: L
+    depends_on: []
+    spawns_l3: true
+    l3_template_id: template.dev.tech_design_l3
+
+  - id: contract_design
+    name: "Contract Design"
+    description: "Design and freeze the structural truth source after TECH"
+    default_complexity: L
+    depends_on: [tech_design]
+    spawns_l3: true
+    l3_template_id: template.dev.feature_contract_l3
+    gate_id: gate.dev.contract_freeze_gate
+
+  - id: backend_dev
+    name: "Backend Development"
+    description: "Backend implementation constrained by TECH and frozen contract"
+    default_complexity: L
+    depends_on: [contract_design]
+    spawns_l3: true
+    l3_template_id: template.dev.feature_be_l3
+
+  - id: frontend_dev
+    name: "Frontend Development"
+    description: "Frontend implementation constrained by TECH and frozen contract"
+    default_complexity: L
+    depends_on: [contract_design]
+    spawns_l3: true
+    l3_template_id: template.dev.feature_fe_l3
+
+  - id: integration
+    name: "Integration"
+    description: "Cross-surface verification after frontend and backend outputs exist"
+    default_complexity: L
+    depends_on: [backend_dev, frontend_dev]
+    spawns_l3: true
+    l3_template_id: template.dev.feature_integration_l3
+
+  - id: evidence_pack
+    name: "Evidence Pack"
+    description: "Formal evidence-axis closure for the feature delivery chain"
+    default_complexity: L
+    depends_on: [integration]
+    spawns_l3: true
+    l3_template_id: template.dev.evidence_pack_l3
+
+  - id: smoke_gate
+    name: "Smoke Gate"
+    description: "Blocking downstream gate after evidence pack is produced"
+    default_complexity: S
+    depends_on: [evidence_pack]
+    spawns_l3: false
+    gate_id: gate.dev.smoke_gate
+
+execution_strategies:
+  S:
+    description: "Direct execution inside the L2 runtime"
+    spawns_l3: false
+  L:
+    description: "Spawn an L3 sub-workflow"
+    spawns_l3: true
+
+shared_input_contract:
+  description: "Canonical L2 shared input contract from ADR-008"
+  required_fields:
+    - formal_ssot_id
+    - source_refs
+    - governing_adrs
+    - repo_context
+    - repo_frontend
+    - repo_backend
+  optional_fields:
+    - task_refs
+    - acceptance_brief_ref
+    - decision_refs
+    - decision_constraints
+    - architecture_constraints
+    - process_constraints
+    - env_ref
+  rules:
+    - rule: frozen_formal_source_required
+      description: "formal_ssot_id must reference a frozen FEAT object"
+    - rule: source_trace_required
+      description: "source_refs must preserve requirement-chain traceability"
+    - rule: adr_constraints_mandatory
+      description: "governing_adrs constrain execution but do not replace business source"
+    - rule: repo_context_execution_only
+      description: "repo_context is execution context and must not replace SSOT business input"
+    - rule: repo_ids_required_for_impl
+      description: "repo_frontend and repo_backend must be explicit so FE/BE child workflows can bind to concrete repos"
+
+l3_input_schema:
+  description: "Shared data propagated from L2 into L3 phases"
+  required_fields:
+    - formal_ssot_id
+    - source_refs
+    - governing_adrs
+    - repo_context
+    - repo_frontend
+    - repo_backend
+  optional_fields:
+    - task_refs
+    - acceptance_brief_ref
+    - decision_refs
+    - decision_constraints
+    - architecture_constraints
+    - process_constraints
+    - env_ref
+    - upstream_artifacts
+
+l3_output_schema:
+  description: "Shared data returned from L3 phases back into the L2 chain"
+  required_fields:
+    - phase_id
+    - status
+    - artifacts
+  optional_fields:
+    - tech_spec_ref
+    - contract_freeze_ref
+    - fe_artifact_ref
+    - be_artifact_ref
+    - integration_report_ref
+    - evidence_pack_ref
+    - rollback_request
+    - structural_issue_ref
+
+phase_data_flow:
+  description: "Canonical handoff chain for phase outputs"
+  handoffs:
+    - from: tech_design
+      to: contract_design
+      outputs:
+        - tech_spec_ref
+    - from: contract_design
+      to: backend_dev
+      outputs:
+        - tech_spec_ref
+        - contract_freeze_ref
+    - from: contract_design
+      to: frontend_dev
+      outputs:
+        - tech_spec_ref
+        - contract_freeze_ref
+    - from: backend_dev
+      to: integration
+      outputs:
+        - be_artifact_ref
+    - from: frontend_dev
+      to: integration
+      outputs:
+        - fe_artifact_ref
+    - from: integration
+      to: evidence_pack
+      outputs:
+        - integration_outputs
+        - verification_results
+        - integration_report_ref
+    - from: evidence_pack
+      to: smoke_gate
+      outputs:
+        - evidence_pack_ref
+
+status_hooks:
+  description: "State transition hooks for the canonical L2 lifecycle"
+  states:
+    - Ready
+    - In Progress
+    - Evidence Pack Produced
+    - Closed
+  transitions:
+    - from: Ready
+      to: In Progress
+      on: workflow_started
+    - from: In Progress
+      to: Evidence Pack Produced
+      on: evidence_pack_completed
+    - from: Evidence Pack Produced
+      to: Closed
+      on: smoke_gate_passed
+
+constitution:
+  id: feature_delivery_l2_constitution_v1
+  name: "Feature Delivery L2 Constitution"
+  version: "1.0"
+  principles:
+    - id: no_bypass_tech
+      rule: "Implementation phases must not start before tech_design completes"
+    - id: no_bypass_contract
+      rule: "Implementation phases must not bypass contract_design"
+    - id: evidence_required_for_closure
+      rule: "Workflow must not close without evidence_pack"
+    - id: smoke_after_evidence
+      rule: "smoke_gate is only valid after evidence_pack"
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+    - context
+    - phases
+  context_fields:
+    - formal_ssot_id
+    - source_refs
+    - governing_adrs
+    - repo_context
+    - repo_frontend
+    - repo_backend
+    - task_refs
+    - acceptance_brief_ref
+  phase_fields:
+    - id
+    - complexity
+    - status
+    - l3_instance_ids
+    - depends_on

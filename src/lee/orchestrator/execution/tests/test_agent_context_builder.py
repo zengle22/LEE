@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from lee.orchestrator.execution.agent_context_builder import AgentContextBuilder
+from lee.orchestrator.execution.agent_loader import AgentLoader
 
 
 @pytest.fixture
@@ -91,6 +92,35 @@ def test_build_output_contract_guidance_for_file_plus_ssot(builder):
     assert "test_set_id" in rendered
 
 
+def test_build_output_contract_guidance_for_business_schema_only_real_agent(builder):
+    agent_spec = {
+        "_spec_path": str(
+            Path.cwd()
+            / "spec-global"
+            / "departments"
+            / "product"
+            / "agents"
+            / "product-goal-analyzer"
+            / "v1"
+            / "agent.yaml"
+        ),
+        "_raw_data": {
+            "contracts": {
+                "output_schema": "../../../../departments/stg/contracts/product-goal-contract/v1/schema.json",
+            },
+        },
+    }
+    step = SimpleNamespace(outputs=[SimpleNamespace(path=None, type="symbol")])
+
+    guidance = builder._build_output_contract_guidance(agent_spec, step)
+    rendered = "\n".join(guidance)
+
+    assert "Product Goal Contract Schema" in rendered
+    assert "machine-readable JSON or YAML object only" in rendered
+    assert "Do not add greetings" in rendered
+    assert "\"contract_type\": \"product-goal-contract\"" in rendered
+
+
 @pytest.mark.asyncio
 async def test_default_prompt_includes_upstream_step_outputs(builder):
     step = SimpleNamespace(
@@ -133,3 +163,554 @@ async def test_default_prompt_includes_upstream_step_outputs(builder):
     assert "## Upstream Step Outputs" in prompt
     assert "feat_spec_generation" in prompt
     assert "FEAT-042" in prompt
+    assert "authoritative derived inputs" in prompt
+
+
+@pytest.mark.asyncio
+async def test_build_applies_qwen_prompt_adapter_when_executor_override_is_qwen(tmp_path):
+    agent_loader = AgentLoader(str(Path.cwd()))
+    builder = AgentContextBuilder(agent_loader=agent_loader, project_root=str(Path.cwd()))
+    step = SimpleNamespace(
+        id="raw_input_intake",
+        agent_id="agent.analysis.product_goal",
+        input=[{"source": "external", "type": ["raw_requirement"], "required": True}],
+        depends_on=[],
+        outputs=[SimpleNamespace(symbol="raw_source_input", path=None, type="symbol")],
+    )
+    workflow_context = {
+        "workflow_id": "wf-qwen-adapter",
+        "data": {
+            "executor_override": "qwen",
+            "raw_requirement": "支持 qwen cli 作为通用执行器",
+        },
+    }
+
+    context = await builder.build(step, workflow_context)
+
+    assert "workflow step" in context.system_prompt
+    assert "Task Packet:" in context.user_prompt
+    assert "\"output_format\": \"exactly one JSON or YAML object\"" in context.user_prompt
+    assert "\"no_clarifying_questions\": true" in context.user_prompt
+    assert "## Workflow Context" in context.user_prompt
+    assert "workflow_id: wf-qwen-adapter" in context.user_prompt
+    assert "step_id: raw_input_intake" in context.user_prompt
+    assert "agent_id: agent.analysis.product_goal" in context.user_prompt
+
+
+@pytest.mark.asyncio
+async def test_build_applies_qwen_prompt_adapter_when_executor_override_is_qwen_chat(tmp_path):
+    agent_loader = AgentLoader(str(Path.cwd()))
+    builder = AgentContextBuilder(agent_loader=agent_loader, project_root=str(Path.cwd()))
+    step = SimpleNamespace(
+        id="raw_input_intake",
+        agent_id="agent.analysis.product_goal",
+        input=[{"source": "external", "type": ["raw_requirement"], "required": True}],
+        depends_on=[],
+        outputs=[SimpleNamespace(symbol="raw_source_input", path=None, type="symbol")],
+    )
+    workflow_context = {
+        "workflow_id": "wf-qwen-chat-adapter",
+        "data": {
+            "executor_override": "qwen_chat",
+            "raw_requirement": "支持 qwen chat 作为对话执行器",
+        },
+    }
+
+    context = await builder.build(step, workflow_context)
+
+    assert "Task Packet:" in context.user_prompt
+    assert "\"no_clarifying_questions\": true" in context.user_prompt
+    assert "workflow_id: wf-qwen-chat-adapter" in context.user_prompt
+
+
+@pytest.mark.asyncio
+async def test_build_qwen_prompt_inlines_upstream_workspace_artifact_preview(tmp_path):
+    artifact_path = (
+        tmp_path
+        / ".workflow"
+        / "workspace"
+        / "wf-qwen-inline"
+        / "raw_input_intake"
+        / "business_output.yaml"
+    )
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(
+        "contract_type: product-goal-contract\nrequirement_overview:\n  description: qwen executor integration\n",
+        encoding="utf-8",
+    )
+
+    agent_loader = AgentLoader(str(Path.cwd()))
+    builder = AgentContextBuilder(agent_loader=agent_loader, project_root=str(tmp_path))
+    step = SimpleNamespace(
+        id="source_normalization",
+        agent_id="agent.analysis.product_goal",
+        input=[{"source": "raw_source_input", "required": True}],
+        depends_on=["raw_input_intake"],
+        outputs=[SimpleNamespace(symbol="normalized_src", path=None, type="symbol")],
+        config={"name": "源文档归一化"},
+    )
+    workflow_context = {
+        "workflow_id": "wf-qwen-inline",
+        "data": {
+            "executor_override": "qwen",
+            "step_outputs": {
+                "raw_input_intake": {
+                    "status": "completed",
+                    "workspace_artifacts": [str(artifact_path)],
+                }
+            },
+        },
+    }
+
+    context = await builder.build(step, workflow_context)
+
+    assert "workspace_artifact_previews" in context.user_prompt
+    assert "qwen executor integration" in context.user_prompt
+    assert "step_name: 源文档归一化" in context.user_prompt
+
+
+@pytest.mark.asyncio
+async def test_upstream_step_outputs_drop_executor_wrapper_noise(builder):
+    step = SimpleNamespace(
+        id="source_review",
+        agent_id="agent.analysis.source_review",
+        input=[{"source": "normalized_src", "required": True}],
+        depends_on=["source_normalization"],
+        outputs=[],
+    )
+    workflow_context = {
+        "data": {
+            "step_outputs": {
+                "source_normalization": {
+                    "status": "success",
+                    "generated_text": "very long prose",
+                    "debug_log_path": "/tmp/debug.log",
+                    "prompt_user_path": "/tmp/prompt.user.txt",
+                    "business_output": {
+                        "metadata": {"src_id": "SRC-001"},
+                        "core_goal": {"primary_statement": "build requirement chain tests"},
+                    },
+                }
+            }
+        }
+    }
+    agent_spec = {"_raw_data": {"description": "Review normalized SRC only."}}
+
+    prompt = await builder._build_user_prompt(
+        agent_spec,
+        context_files={},
+        workflow_context=workflow_context,
+        step=step,
+    )
+
+    assert "SRC-001" in prompt
+    assert "generated_text" not in prompt
+    assert "debug_log_path" not in prompt
+    assert "prompt_user_path" not in prompt
+
+
+def test_sanitize_prompt_payload_can_fall_back_to_generated_text_by_default(builder):
+    sanitized = builder._sanitize_prompt_payload(
+        {
+            "status": "success",
+            "generated_text": "ADR-011 raw analysis summary with requirement-chain testing focus",
+            "structured_payload": {"status": "success"},
+            "debug_log_path": "/tmp/debug.log",
+        }
+    )
+
+    assert sanitized["generated_text"].startswith("ADR-011 raw analysis summary")
+    assert "debug_log_path" not in sanitized
+
+
+@pytest.mark.asyncio
+async def test_upstream_step_outputs_skip_generated_text_only_payloads(builder):
+    step = SimpleNamespace(
+        id="task_planning",
+        agent_id="agent.product.pm_planner",
+        input=[{"source": "tech_specs", "required": True}],
+        depends_on=["tech_design"],
+        outputs=[],
+    )
+    workflow_context = {
+        "data": {
+            "step_outputs": {
+                "tech_design": {
+                    "status": "success",
+                    "generated_text": "SQLite plus cache layer summary that should not leak downstream",
+                    "debug_log_path": "/tmp/debug.log",
+                }
+            }
+        }
+    }
+    agent_spec = {"_raw_data": {"description": "Plan tasks from FEAT and TECH only."}}
+
+    prompt = await builder._build_user_prompt(
+        agent_spec,
+        context_files={},
+        workflow_context=workflow_context,
+        step=step,
+    )
+
+    assert "## Upstream Step Outputs" not in prompt
+    assert "SQLite plus cache layer" not in prompt
+
+
+def test_collect_step_inputs_accepts_freeze_ref_alias(builder):
+    step = SimpleNamespace(
+        id="feat_boundary_design",
+        inputs=[{"source": "epic_freeze", "required": True}],
+        depends_on=[],
+    )
+    workflow_context = {
+        "data": {
+            "params": {
+                "epic_freeze_ref": {
+                    "artifact_id": "EPIC-001",
+                    "path": "spec/requirements/epics/EPIC-001__demo.md",
+                }
+            }
+        }
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["epic_freeze"]["artifact_id"] == "EPIC-001"
+
+
+def test_collect_step_inputs_sanitizes_gate_frozen_inputs(builder):
+    step = SimpleNamespace(
+        id="delivery_plan_validation",
+        inputs=[{"source": "feat_freeze", "required": True}],
+        depends_on=[],
+    )
+    workflow_context = {
+        "data": {
+            "params": {
+                "feat_freeze": {
+                    "gate_approved": True,
+                    "business_output": {
+                        "epic_ref": "EPIC-030",
+                    },
+                    "frozen_inputs": {
+                        "feat_specs": {
+                            "ssot_materialized": {
+                                "feat_001": {
+                                    "path": "spec/requirements/features/FEAT-159__hexinceshiyinqing.md"
+                                }
+                            }
+                        }
+                    },
+                }
+            }
+        }
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["feat_freeze"]["business_output"]["epic_ref"] == "EPIC-030"
+    assert "frozen_inputs" not in resolved["feat_freeze"]
+
+
+@pytest.mark.asyncio
+async def test_build_user_prompt_hydrates_ref_path_content(tmp_path):
+    epic_path = tmp_path / "spec" / "requirements" / "epics" / "EPIC-003__demo.md"
+    epic_path.parent.mkdir(parents=True, exist_ok=True)
+    epic_path.write_text("# Goal\n\nCLI workflow-first\n", encoding="utf-8")
+
+    builder = AgentContextBuilder(agent_loader=None, project_root=str(tmp_path))
+    step = SimpleNamespace(
+        id="feat_boundary_design",
+        agent_id="agent.product.requirement_decomposer",
+        inputs=[{"source": "epic_freeze", "required": True}],
+        depends_on=[],
+        outputs=[],
+    )
+    workflow_context = {
+        "data": {
+            "params": {
+                "epic_freeze_ref": {
+                    "artifact_id": "EPIC-003",
+                    "path": "spec/requirements/epics/EPIC-003__demo.md",
+                }
+            }
+        }
+    }
+    agent_spec = {
+        "_raw_data": {
+            "description": "Decompose EPIC into FEAT candidates.",
+        }
+    }
+
+    prompt = await builder._build_user_prompt(
+        agent_spec,
+        context_files={},
+        workflow_context=workflow_context,
+        step=step,
+    )
+
+    assert "EPIC-003" in prompt
+    assert "spec/requirements/epics/EPIC-003__demo.md" in prompt
+    assert "CLI workflow-first" in prompt
+    assert "authoritative truth source" in prompt
+
+
+def test_collect_step_inputs_resolves_external_input_types(builder):
+    step = SimpleNamespace(
+        id="raw_input_intake",
+        inputs=[
+            {
+                "source": "external",
+                "type": ["raw_requirement", "business_opportunity"],
+                "required": True,
+            }
+        ],
+        depends_on=[],
+    )
+    workflow_context = {
+        "data": {
+            "params": {
+                "raw_requirement": "Gate 三分类治理模型重构需求",
+            }
+        }
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["external"] == "Gate 三分类治理模型重构需求"
+
+
+def test_collect_step_inputs_prefers_adr_external_payload_when_declared_first(builder):
+    step = SimpleNamespace(
+        id="raw_input_intake",
+        inputs=[
+            {
+                "source": "external",
+                "type": ["adr", "raw_requirement"],
+                "required": True,
+            }
+        ],
+        depends_on=[],
+    )
+    workflow_context = {
+        "data": {
+            "params": {
+                "raw_requirement": "fallback raw requirement",
+                "adr": {
+                    "artifact_id": "ADR-019",
+                    "path": "spec/adr/ADR-019__demo.md",
+                    "decision_summary": "所有正式 EPIC 都必须经 SRC 进入主链。",
+                },
+            }
+        }
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["external"]["artifact_id"] == "ADR-019"
+    assert resolved["external"]["decision_summary"].startswith("所有正式 EPIC")
+
+
+def test_get_step_input_definition_prefers_structured_inputs_over_runtime_input(builder):
+    step = SimpleNamespace(
+        id="raw_input_intake",
+        input={
+            "step_id": "raw_input_intake",
+            "name": "原始输入接入",
+            "description": "runtime metadata shell",
+        },
+        inputs=[
+            {
+                "source": "external",
+                "type": ["business_opportunity"],
+                "required": True,
+            }
+        ],
+    )
+
+    resolved = builder._get_step_input_definition(step)
+
+    assert isinstance(resolved, list)
+    assert resolved[0]["source"] == "external"
+
+
+def test_collect_step_inputs_resolves_specs_from_declared_output_symbols(tmp_path):
+    rendered_workflow = tmp_path / ".workflow" / "rendered" / "workflow-symbols.yaml"
+    rendered_workflow.parent.mkdir(parents=True, exist_ok=True)
+    rendered_workflow.write_text(
+        """
+stages:
+  - id: flow
+    steps:
+      - id: ui_design
+        outputs:
+          - symbol: ui_specs
+      - id: tech_design
+        outputs:
+          - symbol: tech_specs
+      - id: task_planning
+        depends_on: [ui_design, tech_design]
+        inputs:
+          - source: ui_specs
+          - source: tech_specs
+""".strip(),
+        encoding="utf-8",
+    )
+
+    builder = AgentContextBuilder(agent_loader=None, project_root=str(tmp_path))
+    step = SimpleNamespace(
+        id="task_planning",
+        inputs=[
+            {"source": "ui_specs", "required": False},
+            {"source": "tech_specs", "required": True},
+        ],
+        depends_on=["ui_design", "tech_design"],
+    )
+    workflow_context = {
+        "template_id": str(rendered_workflow),
+        "data": {
+            "step_outputs": {
+                "ui_design": {
+                    "business_output": {
+                        "applicable": False,
+                        "skip_reason": "ui not needed",
+                    }
+                },
+                "tech_design": {
+                    "business_output": {
+                        "metadata": {"tech_id": "TECH-SRC-009"},
+                        "system_overview": {"description": "dev workflow architecture"},
+                    }
+                },
+            }
+        },
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["ui_specs"]["skip_reason"] == "ui not needed"
+    assert resolved["tech_specs"]["metadata"]["tech_id"] == "TECH-SRC-009"
+
+
+def test_collect_step_inputs_resolves_specs_from_structured_payload_symbols(tmp_path):
+    rendered_workflow = tmp_path / ".workflow" / "rendered" / "workflow-symbols.yaml"
+    rendered_workflow.parent.mkdir(parents=True, exist_ok=True)
+    rendered_workflow.write_text(
+        """
+stages:
+  - id: flow
+    steps:
+      - id: tech_design
+        outputs:
+          - symbol: tech_specs
+      - id: task_planning
+        depends_on: [tech_design]
+        inputs:
+          - source: tech_specs
+""".strip(),
+        encoding="utf-8",
+    )
+
+    builder = AgentContextBuilder(agent_loader=None, project_root=str(tmp_path))
+    step = SimpleNamespace(
+        id="task_planning",
+        inputs=[{"source": "tech_specs", "required": True}],
+        depends_on=["tech_design"],
+    )
+    workflow_context = {
+        "template_id": str(rendered_workflow),
+        "data": {
+            "step_outputs": {
+                "tech_design": {
+                    "status": "success",
+                    "generated_text": "noisy summary mentioning unrelated infra",
+                    "structured_payload": {
+                        "metadata": {"feat_id": "FEAT-143", "tech_id": "TECH-FEAT-143-001"},
+                        "system_overview": {"description": "entry routing and validation"},
+                    },
+                }
+            }
+        },
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["tech_specs"]["metadata"]["feat_id"] == "FEAT-143"
+    assert "generated_text" not in resolved["tech_specs"]
+
+
+def test_collect_step_inputs_resolves_general_symbols_from_declared_outputs(tmp_path):
+    rendered_workflow = tmp_path / ".workflow" / "rendered" / "workflow-symbols.yaml"
+    rendered_workflow.parent.mkdir(parents=True, exist_ok=True)
+    rendered_workflow.write_text(
+        """
+stages:
+  - id: flow
+    steps:
+      - id: source_normalization
+        outputs:
+          - symbol: normalized_src
+      - id: source_review
+        depends_on: [source_normalization]
+        inputs:
+          - source: normalized_src
+""".strip(),
+        encoding="utf-8",
+    )
+
+    builder = AgentContextBuilder(agent_loader=None, project_root=str(tmp_path))
+    step = SimpleNamespace(
+        id="source_review",
+        inputs=[{"source": "normalized_src", "required": True}],
+        depends_on=["source_normalization"],
+    )
+    workflow_context = {
+        "template_id": str(rendered_workflow),
+        "data": {
+            "step_outputs": {
+                "source_normalization": {
+                    "status": "success",
+                    "generated_text": "noisy summary that should not win over structured payload",
+                    "business_output": {
+                        "source_id": "SRC-024",
+                        "title": "Qwen CLI 执行器集成",
+                        "problem_statement": "支持 qwen cli 作为可选执行器组件。",
+                    },
+                    "structured_payload": {
+                        "business_output": {
+                            "source_id": "SRC-024",
+                            "title": "Qwen CLI 执行器集成",
+                            "problem_statement": "支持 qwen cli 作为可选执行器组件。",
+                        }
+                    },
+                }
+            }
+        },
+    }
+
+    resolved = builder._collect_step_inputs(step, workflow_context)
+
+    assert resolved["normalized_src"]["source_id"] == "SRC-024"
+    assert resolved["normalized_src"]["problem_statement"] == "支持 qwen cli 作为可选执行器组件。"
+    assert "generated_text" not in resolved["normalized_src"]
+
+
+def test_agent_loader_scans_spec_global_by_agent_id(tmp_path):
+    spec_root = tmp_path / "spec-global"
+    agent_dir = spec_root / "departments" / "product" / "agents" / "product-goal-analyzer" / "v1"
+    agent_dir.mkdir(parents=True, exist_ok=True)
+    (agent_dir / "agent.yaml").write_text(
+        """
+kind: agent
+version: 1.0
+id: agent.analysis.product_goal
+name: Product Goal Analyzer
+""".strip(),
+        encoding="utf-8",
+    )
+
+    loader = AgentLoader(str(tmp_path), spec_root=str(spec_root))
+    spec = loader.load("agent.analysis.product_goal")
+
+    assert spec.id == "agent.analysis.product_goal"
+    assert spec.spec_path == str((agent_dir / "agent.yaml"))

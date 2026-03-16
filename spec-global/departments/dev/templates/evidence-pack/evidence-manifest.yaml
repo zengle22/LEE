@@ -1,0 +1,19 @@
+formal_ssot_id: "<workflow-or-feature-id>"
+source_refs:
+  - "<upstream-source-ref>"
+governing_adrs:
+  - "ADR-008"
+delivery_outputs:
+  - artifact_id: "<artifact-id>"
+    artifact_type: "contract"
+    ref: "<artifact-ref>"
+verification_results:
+  - result_type: "test_report"
+    status: "passed"
+    ref: "<report-ref>"
+evidence_types:
+  - code_diff
+  - test_report
+  - review_record
+  - deployment_record
+  - integration_report

@@ -22,11 +22,21 @@ contracts:
   input_schema:
     type: object
     required:
+      - release_ref
+      - task_refs
       - test_run
       - l3_results
       - confirmed_bugs
       - test_plan
     properties:
+      release_ref:
+        type: string
+        description: "Release ID"
+      task_refs:
+        type: array
+        description: "Task IDs covered by this report"
+        items:
+          type: string
       test_run:
         type: object
         description: "Test Run 数据"
@@ -106,16 +116,18 @@ prompting:
     - Exit Recommendation: Pass/Conditional pass/Fail with reasoning
 
   instructions:
+    - "输入必须保留 release_ref 和 task_refs，确保 REPORT 可回溯到 canonical delivery chain"
     - "汇总所有 L3 的执行结果"
     - "计算各项统计指标"
     - "分析功能覆盖情况"
     - "评估风险等级"
     - "提供可执行的建议"
     - "输出符合 test-report contract 的结构化数据"
+    - "最终报告应由调用方物化到 spec/testing/reports/ 下的 canonical 路径"
 
   output_format:
-    - yaml: "test-report.yaml"
-    - markdown: "test-report.md"
+    - yaml: "spec/testing/reports/{release_ref}-test-report.yaml"
+    - markdown: "spec/testing/reports/{release_ref}-test-report.md"
 
   examples:
     - input:

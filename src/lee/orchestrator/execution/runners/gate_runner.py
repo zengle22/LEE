@@ -70,8 +70,26 @@ class HumanGateRunner(StepRunnerBase):
             default_revise_target = on_revise.get("target_step")
 
         # 创建门禁审批记录（包含默认动作）
-        # Include workflow_id in gate_id to make it unique across multiple workflows
         gate_id_base = step.gate_id or f"gate_{workflow_id}_{step.id}"
+        pending_gates = await ctx.store.get_pending_gates(workflow_id)
+        existing_pending_gate = next(
+            (
+                gate
+                for gate in pending_gates
+                if gate.step_id == step.id and gate.status == GateStatus.PENDING
+            ),
+            None,
+        )
+        if existing_pending_gate is not None:
+            return StepResult(
+                status="blocked",
+                blocked_reason="human_gate",
+                step_id=step.id,
+                workflow_id=workflow_id,
+                message=f"Waiting for human approval at gate: {existing_pending_gate.gate_id}",
+                next_steps=[],
+            )
+
         gate_id_value = gate_id_base
         existing_gate = await ctx.store.get_gate_approval(workflow_id, gate_id_base)
         if existing_gate is not None:

@@ -14,11 +14,45 @@ from lee.cli.commands.workflow_registry import (
     load_workflow_registry,
     resolve_workflow_template_path,
 )
+from lee.cli.commands.workflow_compat import adapt_params_for_workflow, resolve_registry_entry
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
+from lee.orchestrator.execution.workflow_bootstrap import hydrate_l2_bootstrap
+from lee.orchestrator.execution.workflow_runner import derive_workflow_creation_metadata
+from lee.orchestrator.storage.models import WorkflowLevel
+
+
+def _param_aliases(name: str) -> list[str]:
+    if not isinstance(name, str):
+        return []
+    if name.endswith("_freeze"):
+        return [f"{name}_ref"]
+    if name.endswith("_freeze_ref"):
+        return [name[:-4]]
+    return []
+
+
+def _has_param_with_aliases(params: Dict[str, Any], name: str) -> bool:
+    for candidate in [name, *_param_aliases(name)]:
+        if candidate in params:
+            return True
+    return False
+
 
 def _load_registry() -> Dict[str, Any]:
     return load_workflow_registry()
+
+
+def _workflow_exists(registry: Dict[str, Any], workflow_key: str) -> bool:
+    workflows = registry.get("workflows", {}) or {}
+    return workflow_key in workflows
+
+
+def _select_workflow_key(registry: Dict[str, Any], candidates: list[str]) -> str | None:
+    for workflow_key in candidates:
+        if _workflow_exists(registry, workflow_key):
+            return workflow_key
+    return None
 
 
 def _render_workflow_template(template_path: Path, params: Dict[str, Any], project_root: Path) -> Path:
@@ -80,28 +114,61 @@ def _create_and_run(
     approve: bool,
     approver: str,
     comments: str,
+    dry_run: bool = False,
 ) -> Tuple[str, Dict[str, Any]]:
     workflows = registry.get("workflows", {})
     if workflow_key not in workflows:
         raise click.ClickException(f"Unknown workflow: {workflow_key}")
 
-    entry = workflows[workflow_key]
+    effective_workflow_key, entry, effective_entry = resolve_registry_entry(workflows, workflow_key)
+    params = adapt_params_for_workflow(workflow_key, params, project_root=project_root)
     required = entry.get("required_params", []) or []
-    missing = [p for p in required if p not in params]
+    missing = [p for p in required if not _has_param_with_aliases(params, p)]
     if missing:
         raise click.ClickException(f"Missing required params for {workflow_key}: {', '.join(missing)}")
+    effective_required = effective_entry.get("required_params", []) or []
+    effective_missing = [p for p in effective_required if not _has_param_with_aliases(params, p)]
+    if effective_missing:
+        raise click.ClickException(
+            f"Missing canonical params after adapting '{workflow_key}' -> '{effective_workflow_key}': "
+            f"{', '.join(effective_missing)}"
+        )
 
-    template_path = resolve_workflow_template_path(entry.get("path", ""))
+    template_path = resolve_workflow_template_path(effective_entry.get("path", ""))
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
     rendered_path = _render_workflow_template(template_path, params, project_root)
+    workflow_level, workflow_bootstrap = derive_workflow_creation_metadata(rendered_path)
+    if workflow_level == WorkflowLevel.DEPARTMENT:
+        workflow_bootstrap = hydrate_l2_bootstrap(workflow_bootstrap, params)
+
+    if dry_run:
+        click.echo(
+            f"[dry-run] {workflow_key} -> {effective_workflow_key} "
+            f"level={workflow_level.value} template={template_path}"
+        )
+        return (
+            "dry-run",
+            {
+                "status": "dry-run",
+                "blocked_at": None,
+                "template": str(template_path),
+                "effective_workflow_key": effective_workflow_key,
+            },
+        )
+
     create_result = pm_workflow(
         "create",
         project_dir=str(project_root),
-        level="task",
+        level=workflow_level.value,
         template_id=str(rendered_path),
-        data={"params": params, "workflow_key": workflow_key},
+        data={
+            "params": params,
+            "workflow_key": effective_workflow_key,
+            "invoked_workflow_key": workflow_key,
+            **workflow_bootstrap,
+        },
     )
 
     workflow_id = create_result.get("workflow_id")
@@ -150,6 +217,7 @@ def _create_and_run(
 @click.option("--approver", default="demo-user", show_default=True, help="审批人")
 @click.option("--comments", default="demo approval", show_default=True, help="审批意见")
 @click.option("--init-specs/--no-init-specs", default=True, show_default=True, help="自动生成 demo spec")
+@click.option("--dry-run", is_flag=True, help="只解析和渲染 demo workflows，不创建/执行实例")
 def demo(
     project_dir: str,
     branch: str,
@@ -163,8 +231,9 @@ def demo(
     approver: str,
     comments: str,
     init_specs: bool,
+    dry_run: bool,
 ) -> None:
-    """运行 L3 demo（Dev/QA/DevOps）并自动审批 gate"""
+    """运行 demo workflows（Dev/QA/DevOps）并自动审批 gate"""
     os.environ.setdefault("LEE_DEMO_MODE", "1")
 
     project_root = Path(project_dir).resolve()
@@ -177,23 +246,83 @@ def demo(
 
     registry = _load_registry()
 
-    click.echo("Running L3 demo workflows...")
+    click.echo("Running demo workflows...")
     results = []
 
-    dev_params = {"spec": feature_spec, "branch": branch}
-    results.append(("dev.feature",) + _create_and_run(
-        project_root, registry, "dev.feature", dev_params, max_steps, approve, approver, comments
-    ))
+    dev_workflow = _select_workflow_key(registry, ["dev.feature-delivery", "dev.feature"])
+    if dev_workflow == "dev.feature-delivery":
+        dev_params = {
+            "formal_ssot_id": "FEAT-DEMO-001",
+            "source_refs": [str(project_root / feature_spec)],
+            "governing_adrs": ["ADR-008"],
+            "repo_context": {"repo_id": "lee-backend", "type": "backend", "branch": branch},
+            "repo_frontend": "lee-frontend",
+            "repo_backend": "lee-backend",
+        }
+    elif dev_workflow == "dev.feature":
+        dev_params = {
+            "project": "lee",
+            "module": "dev",
+            "feature_point_id": "FEAT-DEMO-001",
+            "feature_spec": str(project_root / feature_spec),
+            "repo_frontend": "lee-frontend",
+            "repo_backend": "lee-backend",
+            "branch": branch,
+        }
+    else:
+        dev_params = None
 
-    qa_params = {"spec": test_plan, "env": env, "version": version}
-    results.append(("qa.regression",) + _create_and_run(
-        project_root, registry, "qa.regression", qa_params, max_steps, approve, approver, comments
-    ))
+    if dev_workflow and dev_params:
+        results.append(
+            (dev_workflow,)
+            + _create_and_run(
+                project_root, registry, dev_workflow, dev_params, max_steps, approve, approver, comments, dry_run
+            )
+        )
+    else:
+        click.echo("Skipping Dev demo: no registered dev demo workflow found.")
 
-    devops_params = {"env": env, "version": version}
-    results.append(("devops.deploy",) + _create_and_run(
-        project_root, registry, "devops.deploy", devops_params, max_steps, approve, approver, comments
-    ))
+    qa_workflow = _select_workflow_key(registry, ["qa.test-plan-execution", "qa.regression"])
+    if qa_workflow == "qa.test-plan-execution":
+        qa_params = {
+            "test_plan_id": "TESTPLAN-DEMO-001",
+            "build_version": version,
+            "build_commit": version,
+            "environment": env,
+        }
+    elif qa_workflow == "qa.regression":
+        qa_params = {"spec": str(project_root / test_plan), "env": env, "version": version}
+    else:
+        qa_params = None
+
+    if qa_workflow and qa_params:
+        results.append(
+            (qa_workflow,)
+            + _create_and_run(
+                project_root, registry, qa_workflow, qa_params, max_steps, approve, approver, comments, dry_run
+            )
+        )
+    else:
+        click.echo("Skipping QA demo: no registered QA demo workflow found.")
+
+    if _workflow_exists(registry, "devops.deploy"):
+        devops_params = {"env": env, "version": version}
+        results.append(
+            ("devops.deploy",)
+            + _create_and_run(
+                project_root, registry, "devops.deploy", devops_params, max_steps, approve, approver, comments, dry_run
+            )
+        )
+    else:
+        click.echo("Skipping DevOps demo: workflow `devops.deploy` is not registered.")
 
     for workflow_key, workflow_id, summary in results:
-        click.echo(f"{workflow_key}: {workflow_id} status={summary.get('status')} blocked_at={summary.get('blocked_at')}")
+        status = summary.get("status")
+        blocked_at = summary.get("blocked_at")
+        if workflow_id == "dry-run":
+            click.echo(
+                f"{workflow_key}: dry-run status={status} "
+                f"template={summary.get('template')}"
+            )
+            continue
+        click.echo(f"{workflow_key}: {workflow_id} status={status} blocked_at={blocked_at}")

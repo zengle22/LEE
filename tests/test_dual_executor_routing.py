@@ -54,7 +54,7 @@ class TestTemplateParserClaudeCode:
         assert step.executor_type == "patch_apply"
 
     def test_parse_agent_type_unchanged(self):
-        """type: agent 应保持 kind=agent, executor_type=llm"""
+        """type: agent 应保持 kind=agent, executor_type=claude_code"""
         from lee.orchestrator.execution.template_manager import TemplateManager
 
         manager = TemplateManager("specs/workflows")
@@ -64,7 +64,7 @@ class TestTemplateParserClaudeCode:
             "inputs": {"prompt": "test"},
         })
         assert step.kind == "agent"
-        assert step.executor_type == "llm"
+        assert step.executor_type == "claude_code"
 
     def test_parse_agent_with_executor_override(self):
         """type: agent + executor: claude_code 应保持 kind=agent, executor_type=claude_code"""
@@ -103,7 +103,7 @@ class TestExecutorConfig:
 
         config = ExecutorConfig()
         assert config.coding_executor == "claude_code"
-        assert config.coding_fallback == "llm_patch"
+        assert config.coding_fallback == "kimi"
 
     def test_from_dict_coding_executor(self):
         """从字典创建配置时读取 coding_executor"""
@@ -111,10 +111,10 @@ class TestExecutorConfig:
 
         config = ExecutorConfig.from_dict({
             "coding_executor": "llm",
-            "coding_fallback": "manual",
+            "coding_fallback": "kimi",
         })
         assert config.coding_executor == "llm"
-        assert config.coding_fallback == "manual"
+        assert config.coding_fallback == "kimi"
 
     def test_from_dict_defaults(self):
         """从空字典创建配置时使用默认值"""
@@ -122,8 +122,8 @@ class TestExecutorConfig:
 
         config = ExecutorConfig.from_dict({})
         assert config.coding_executor == "claude_code"
-        assert config.coding_fallback == "llm_patch"
-        assert config.default_type == "llm"
+        assert config.coding_fallback == "kimi"
+        assert config.default_type == "claude_code"
 
     def test_full_config_load(self):
         """LeeConfig 应正确加载嵌套的 executor 配置"""
@@ -133,13 +133,42 @@ class TestExecutorConfig:
             "executor": {
                 "default_type": "llm",
                 "coding_executor": "claude_code",
-                "coding_fallback": "llm_patch",
+                "coding_fallback": "kimi",
                 "timeout_seconds": 600,
             }
         })
         assert config.executor.coding_executor == "claude_code"
-        assert config.executor.coding_fallback == "llm_patch"
+        assert config.executor.coding_fallback == "kimi"
         assert config.executor.timeout_seconds == 600
+
+
+def test_code_runner_rejects_qwen_chat_as_coding_executor(tmp_path):
+    from lee.orchestrator.execution.runners.llm_runner import LLMRunner
+
+    config_dir = tmp_path / ".lee"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text(
+        "executor:\n  coding_executor: codex\n",
+        encoding="utf-8",
+    )
+
+    resolved = LLMRunner._resolve_code_executor_type(
+        instance_data={"executor_override": "qwen_chat"},
+        project_root=str(tmp_path),
+    )
+
+    assert resolved == "codex"
+
+
+def test_code_runner_accepts_kimi_as_coding_executor_override(tmp_path):
+    from lee.orchestrator.execution.runners.llm_runner import LLMRunner
+
+    resolved = LLMRunner._resolve_code_executor_type(
+        instance_data={"executor_override": "kimi"},
+        project_root=str(tmp_path),
+    )
+
+    assert resolved == "kimi"
 
 
 class TestRunnerRegistryDualExecutor:

@@ -1,0 +1,47 @@
+kind: governance_spec
+version: "1.0"
+id: bugfix_granularity_control_spec
+status: frozen
+owner: development
+
+governing_refs:
+  - ADR-008
+  - FEAT-SRC-009-012
+  - TECH-FEAT-SRC-009-012-001
+
+default_rule:
+  mode: single_bug
+  statement: "1 bug -> 1 bugfix workflow instance"
+  rationale:
+    - keep root-cause and verification closure auditable
+    - prevent unrelated bug scope from being merged into a false batch
+
+five_same_rule:
+  description: batch mode is allowed only when all five dimensions pass
+  dimensions:
+    - id: same_module
+      label: same module
+      judgment: all bugs are located in the same canonical module boundary
+    - id: same_root_cause_class
+      label: same root cause
+      judgment: all bugs map to the same root-cause category
+    - id: same_fix_strategy
+      label: same fix strategy
+      judgment: all bugs are resolved by one shared remediation approach
+    - id: same_verification_surface
+      label: same verification surface
+      judgment: all bugs can be verified by one shared validation surface
+    - id: same_release_window
+      label: same release window
+      judgment: all bugs belong to the same release and deployment window
+
+batch_mode:
+  allowed_when: all_five_same
+  forbidden_when:
+    - any_dimension_is_false
+    - bug_scope_is_unclear
+    - root_cause_is_not_confirmed
+  required_outputs:
+    - granularity_decision_ref
+    - bug_refs
+    - verification_scope_ref

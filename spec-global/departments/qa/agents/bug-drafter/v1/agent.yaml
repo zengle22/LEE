@@ -23,6 +23,15 @@ contracts:
       - failures
       - tse
     properties:
+      release_ref:
+        type: string
+        description: "Release ID"
+      test_plan_id:
+        type: string
+        description: "Test Plan ID"
+      task_ref:
+        type: string
+        description: "Task ID"
       failures:
         type: array
         description: "失败用例列表"
@@ -92,6 +101,7 @@ prompting:
     Each bug draft must include:
     - Unique bug ID
     - Clear title and description
+    - Trace to release_ref / test_plan_id / task_ref when available
     - Reproduction steps
     - Expected vs actual behavior
     - Severity and priority
@@ -102,6 +112,7 @@ prompting:
     but NOT merged - merging happens at L2 bug_summary phase.
 
   instructions:
+    - "保留 release_ref / test_plan_id / task_ref / tse 的溯源信息"
     - "分析每个失败用例"
     - "编写清晰的复现步骤"
     - "引用证据文件"

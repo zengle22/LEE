@@ -47,7 +47,6 @@ yarn-debug.log*
 evidence/
 
 # Claude Code
-.claude/
 .mcp/
 
 # Demo and examples
@@ -59,7 +58,6 @@ examples/*/*/*/__pycache__/
 demo_l3_orchestration/output/
 
 # Generated files
-contracts/
 nul
 
 # Backup files
@@ -91,3 +89,13 @@ demo-test-artifacts
 docs/reports/governance
 test-temp-system
 tmp_epic_to_feat_sample.yaml
+.tmp/
+tmp_*.yaml
+tmp_*.txt
+tmp_*.json
+tmp_*.log
+tmp_*.md
+tmp_*.py
+vibe-kanban/
+.tmp*
+.claude/scheduled_tasks.lock

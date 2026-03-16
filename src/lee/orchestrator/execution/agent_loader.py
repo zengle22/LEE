@@ -334,6 +334,32 @@ class AgentLoader:
                     print(f"[DEBUG] Found agent spec at LEE path: {path}")
                 return path
 
+        scanned = self._scan_lee_agents_by_id(agent_ref)
+        if scanned is not None:
+            if self._debug:
+                print(f"[DEBUG] Found agent spec by id scan: {scanned}")
+            return scanned
+
+        return None
+
+    def _scan_lee_agents_by_id(self, agent_ref: str) -> Optional[Path]:
+        candidate_roots = [self.spec_root]
+        spec_global_root = self.project_root / "spec-global"
+        if spec_global_root not in candidate_roots and spec_global_root.exists():
+            candidate_roots.append(spec_global_root)
+
+        for root in candidate_roots:
+            departments_dir = root / "departments"
+            if not departments_dir.exists():
+                continue
+            for spec_path in departments_dir.glob("*/agents/*/v*/agent.yaml"):
+                try:
+                    with open(spec_path, "r", encoding="utf-8") as f:
+                        data = yaml.safe_load(f) or {}
+                except (OSError, yaml.YAMLError):
+                    continue
+                if data.get("id") == agent_ref:
+                    return spec_path
         return None
 
     def load_from_path(self, spec_path: Path) -> AgentSpec:

@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/spec-global/core/contracts/reverse-system-map/v1/schema.json",
+  "title": "Reverse System Map",
+  "type": "object",
+  "required": ["modules", "entry_points", "core_flows", "evidence_refs"],
+  "additionalProperties": false,
+  "properties": {
+    "modules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "responsibility", "evidence_refs"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "responsibility": { "type": "string" },
+          "evidence_refs": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "entry_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "name"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "type": "string", "enum": ["page", "api", "job", "cli", "event"] },
+          "name": { "type": "string" },
+          "path": { "type": "string" }
+        }
+      }
+    },
+    "core_flows": { "type": "array", "items": { "type": "string" } },
+    "boundaries": { "type": "array", "items": { "type": "string" } },
+    "evidence_refs": { "type": "array", "items": { "type": "string" } }
+  }
+}

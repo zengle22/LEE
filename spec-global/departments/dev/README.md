@@ -1,116 +1,145 @@
-# Development Specification System (v1.0)
+# Development Specification System
 # 研发部门规范体系
 
-本目录包含了研发部门在开发阶段的核心规范、Agent 定义、工作流及质量门禁。遵循 **Phase 驱动、契约先行、持续反馈** 的原则，通过 OpenSpec 作为 Phase 级运行时工作空间实现规范驱动开发。
+本目录描述 Dev 部门当前的 canonical 工作流、模板、Gate 与 Agent 定义。
 
-## 核心理念
+## 当前主入口
 
-1. **Phase 驱动**: 将大项目拆分为可管理的 Phase，每个 Phase 有独立的契约和闭环。
-2. **OpenSpec 嵌入**: OpenSpec 作为 Phase 级子流程，而非项目级方法论。
-3. **契约先行**: Test Contract 先于实现，确保需求可验证。
-4. **知识沉淀**: 每个 Phase 复盘产出可复用的 Pattern/Anti-pattern。
+Dev 部门当前只保留两个主入口：
 
-## 目录结构
+1. `template.dev.feature_delivery_l2`
+   作用：新功能从 `FEAT -> TECH -> CONTRACT -> FE/BE -> INTEGRATION -> EVIDENCE -> SMOKE`
+2. `template.dev.bugfix_delivery_l2`
+   作用：缺陷修复与验证闭环
 
-```text
-specs/org/development/
-├── agents/                 # 研发相关 Agent 定义 (YAML v1.0)
-│   ├── phase-retrospector/         # Phase 复盘 Agent
-│   ├── openspec-proposal-creator/  # OpenSpec 提案创建 Agent
-│   ├── requirement-calibrator/     # 需求校准 Agent
-│   ├── test-contract-generator/    # 测试契约生成 Agent
-│   ├── implementation-executor/    # 实现执行 Agent
-│   ├── code-reviewer/              # 代码评审 Agent
-│   ├── acceptance-reviewer/        # 验收评审 Agent
-│   └── ...
-├── contracts/              # 研发阶段特有的契约定义 (JSON Schema)
-│   └── phase-contract/             # Phase 契约定义
-├── skills/                 # 研发技能定义
-│   ├── openspec-integration/       # OpenSpec CLI 集成
-│   ├── test-driven-development/    # TDD 方法论
-│   ├── knowledge-extraction/       # 知识提炼
-│   └── phase-contract-management/  # Phase 契约管理
-├── gates/                  # 质量门禁定义
-│   ├── phase-gate/                 # Phase 内门禁
-│   ├── dev-gate/                   # 开发门禁 (PR)
-│   └── release-gate/               # 发布门禁
-├── workflows/              # 工作流定义
-│   ├── development-pipeline/       # 研发主流程 (L0)
-│   └── phase-openspec-flow/        # Phase OpenSpec 子流程 (L1)
-└── README.md               # 本说明文件
-```
+其中，**Feature 主入口的 canonical 模板** 为：
+`workflows/templates/feature-delivery-l2-template.yaml`
 
-## 三层架构
+**Bugfix 主入口的 canonical 模板** 为：
+`workflows/templates/bugfix-delivery-l2-template.yaml`
 
-### L0: Project Flow (主流程)
+## Feature Delivery L2
 
-研发主流程定义在 `workflows/development-pipeline/` 中：
+当前现役阶段顺序为：
 
-```
-Dev Kickoff → Phase Execution → Integration → E2E Testing → Acceptance → Retrospective
-```
+1. `tech_design`
+2. `contract_design`
+3. `backend_dev` / `frontend_dev` 并行
+5. `integration`
+6. `evidence_pack`
+7. `smoke_gate`
 
-### L1: Phase OpenSpec Flow (子流程)
+治理规则：
 
-每个 Phase 内部运行 OpenSpec 子流程：
+- `formal_ssot_id`、`source_refs`、`governing_adrs`、`repo_context` 是共享输入契约
+- `repo_frontend`、`repo_backend` 必须显式提供，不能靠运行时猜测
+- `contract_design` 绑定 `gate.dev.contract_freeze_gate`
+- `smoke_gate` 绑定 `gate.dev.smoke_gate`
+- 生命周期状态按 `Ready -> In Progress -> Evidence Pack Produced -> Closed` 收口
 
-```
-Init → Calibration → Test Contract → Proposal → Implementation → Unit Test → Review → Retrospective → Archive
-```
+共享输入规范说明见：
+`docs/shared-input-spec.md`
 
-### L2: Agent/Skill Execution (执行层)
+## 现役 L3 模板
 
-具体的 Agent 和 Skill 执行特定任务。
+- `template.dev.tech_design_l3`
+- `template.dev.feature_contract_l3`
+- `template.dev.feature_fe_l3`
+- `template.dev.feature_be_l3`
+- `template.dev.feature_integration_l3`
+- `template.dev.evidence_pack_l3`
+- `template.dev.bugfix_triage_l3`
+- `template.dev.bugfix_root_cause_l3`
+- `template.dev.bugfix_fix_design_l3`
+- `template.dev.bugfix_fix_impl_l3`
+- `template.dev.bugfix_verification_l3`
+- `template.dev.bugfix_evidence_pack_l3`
 
-## Phase Contract
+### Contract Design L3
 
-Phase Contract 是主流程与子流程的边界协议，定义在 `contracts/phase-contract/v1/schema.json`。
+`template.dev.feature_contract_l3` 是 `contract_design` 阶段的唯一现役 L3 模板。
 
-核心字段:
-- `phase_id`: Phase 唯一标识
-- `inputs`: 输入声明 (需求、UI、架构来源)
-- `outputs`: 输出契约 (交付物、接口、测试)
-- `quality_gates`: 质量门禁配置
-- `openspec`: OpenSpec 子流程配置
-- `handover`: 交接信息
+它的 canonical 约束是：
 
-## 质量门禁
+- 输入锚点必须包含 `formal_ssot_id`、`source_refs`、`governing_adrs`、`tech_spec_ref`
+- 任务族必须覆盖 `api_contract_design`、`data_contract_design`、`event_contract_design`
+- 评审产物必须输出 `contract_review_ref`
+- 冻结阶段必须通过 `gate.dev.contract_freeze_gate`
+- 下游 Backend/Frontend 只允许消费 `contract_freeze_ref`，不得消费草稿契约
 
-### Phase Gate
-- 触发: Phase 完成请求
-- 检查: 需求校准、测试契约、代码质量、测试覆盖、Code Review、复盘完成
-- 通过条件: 0 blocker, ≤2 major
+使用说明见：
+`docs/contract-design-l3-usage-guide.md`
 
-### Dev Gate
-- 触发: PR 创建/更新
-- 检查: 构建、单元测试、覆盖率、Storybook、可访问性、类型检查
-- 通过条件: 0 blocker, ≤3 major
+### Backend Development L3
 
-### Release Gate
-- 触发: Release 分支就绪
-- 检查: E2E 测试、功能完整性、埋点、性能、安全扫描、API 健康
-- 通过条件: 0 blocker, 0 major
+`template.dev.feature_be_l3` 是 `backend_dev` 阶段的唯一现役 L3 模板。
 
-## 知识提炼
+它的 canonical 约束是：
 
-每个 Phase 复盘产出:
-- **Patterns**: 成功的实践方法
-- **Anti-Patterns**: 失败的做法及原因
-- **Checklists**: 预防问题的检查清单
-- **Guidelines**: 特定场景的指南
+- 输入锚点必须包含 `tech_spec_ref`、`contract_freeze_ref`、`repo_backend`
+- 执行顺序必须是 `write_ut -> implement_backend -> refactor_backend -> coverage_gate -> publish_backend`
+- `coverage_gate` 的最低阈值固定为 `80%`
+- 低于阈值时运行时必须回退到 `write_ut`
+- Frontend / Integration 只能消费发布后的 backend handoff 产物
 
-知识存储在 `07-knowledge/` 目录下，按类型分类。
+旧的“DTO Implementation / API Handler Implementation / Self-Check / Code Diff Output”阶段叙事已被 canonical UTDD 模板取代，不再作为推荐入口说明。
 
-## 后续衔接
+### Frontend Development L3
 
-当 **Release Gate** 通过后，系统进入发布流程，由 Release 团队执行生产环境部署。
+`template.dev.feature_fe_l3` 是 `frontend_dev` 阶段的唯一现役 L3 模板。
 
-## 维护与扩展
+它的 canonical 约束是：
 
-- **新增 Agent**: 遵循 `common/agents/_template` 规范，放置于 `agents/` 目录下。
-- **修改契约**: 修改 `contracts/` 下的 JSON Schema，并同步更新相关 Agent 的 `input_schema/output_schema`。
-- **更新门禁**: 修改 `gates/` 下的 gate.yaml 文件。
-- **更新流程**: 修改 `workflows/` 下的 workflow.yaml 文件。
+- 输入锚点必须包含 `tech_spec_ref`、`contract_freeze_ref`、`repo_frontend`
+- 执行顺序必须是 `write_ut -> implement_ui -> refactor_ui -> coverage_gate -> publish_frontend`
+- 运行时可以携带 `env_ref`、`base_url`、`runtime_config_ref`
+- Evidence handoff 至少包含 `fe_artifact_ref`、`unit_test_ref`、`coverage_report_ref`、`contract_usage_verification_ref`
 
----
-*Generated by Antigravity AI Spec Maintainer*
+旧的“Type Generation / UI Implementation / Self-Check / Code Diff Output”阶段叙事已被 canonical UTDD 模板取代，不再作为推荐入口说明。
+
+## Bugfix Delivery L2
+
+当前现役阶段顺序为：
+
+1. `triage`
+2. `root_cause`
+3. `fix_design`
+4. `fix_implementation`
+5. `verification`
+6. `evidence_pack`
+7. `merge_or_reject`
+
+治理规则：
+
+- `bug_ssot_id`、`severity`、`reproduction_evidence` 是共享输入契约
+- 默认 `1 bug -> 1 workflow instance`
+- 只有满足五同原则时才允许 `batch_mode`
+- `merge_or_reject` 前必须完成 `evidence_pack`
+
+粒度控制规范见：
+`governance/bugfix-granularity-control-spec.yaml`
+
+## Deprecated / Draft
+
+以下资产不再作为新任务入口：
+
+- `workflows/phase-openspec-flow/v1/workflow.yaml`
+  状态：`deprecated`
+  说明：保留为历史参考，不再作为 Dev 部门 canonical 主路径
+
+- 旧 `feature-l2-template.yaml`
+  状态：`compat`
+  说明：保留兼容窗口，但新功能统一收口到 `feature-delivery-l2-template.yaml`
+
+- 旧 `bug-fix-l3-template.yaml`
+  状态：`deprecated`
+  说明：保留历史参考，不再作为 Bugfix 主入口；Bugfix 统一收口到 `bugfix-delivery-l2-template.yaml`
+
+迁移指南：
+`docs/deprecated-path-migration-guide.md`
+
+## 维护规则
+
+- 修改现役 Dev workflow 时，优先更新 canonical 模板，不要新建平级实现
+- Phase 级执行路径必须走 runtime 可消费的 `l3_template_id`
+- 证据轴 closure 必须通过 `evidence_pack` 与 `smoke_gate`

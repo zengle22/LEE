@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-spec.example.com/contracts/raw-source-input-contract/v1/schema.json",
+  "title": "Raw Source Input Contract",
+  "description": "原始来源输入契约 - 接收一句话、文章、会议记录、客户反馈等非结构化输入",
+  "type": "object",
+  "required": [
+    "input_id",
+    "title",
+    "input_type",
+    "raw_content",
+    "captured_at",
+    "captured_by"
+  ],
+  "properties": {
+    "input_id": {
+      "type": "string",
+      "description": "原始输入唯一标识"
+    },
+    "title": {
+      "type": "string",
+      "description": "输入标题"
+    },
+    "input_type": {
+      "type": "string",
+      "enum": ["one_liner", "article", "customer_request", "meeting_note", "idea", "adr_decision", "other"],
+      "description": "输入类型"
+    },
+    "raw_content": {
+      "type": "string",
+      "description": "原始内容"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "来源引用"
+    },
+    "captured_from": {
+      "type": "string",
+      "description": "采集来源"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "采集时间"
+    },
+    "captured_by": {
+      "type": "string",
+      "description": "采集人"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

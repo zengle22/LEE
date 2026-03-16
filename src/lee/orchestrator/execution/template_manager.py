@@ -814,6 +814,19 @@ class TemplateManager:
         """
         steps = []
 
+        def resolve_executor_type(kind: str) -> Optional[str]:
+            if kind == "agent":
+                return self.config.executor.default_type
+            if kind == "claude_code":
+                return "claude_code"
+            if kind == "patch_apply":
+                return "patch_apply"
+            if kind == "skill":
+                return "shell"
+            if kind in ("gate", "human_gate", "workflow_spawn", "subworkflow", "orchestrator_cli", "compliance_gate"):
+                return None
+            return "shell"
+
         # 格式1: 嵌套格式: stages -> steps (v1.2 新格式)
         if "stages" in doc:
             for stage in doc.get("stages", []):
@@ -832,36 +845,17 @@ class TemplateManager:
                     # 解析 agent_id（支持 agent_id 或 run 字段）
                     agent_id = step_data.get("agent_id") or step_data.get("run", "")
 
-                    # 解析 outputs（内联解析，参考 _dict_to_step 中的逻辑）
-                    from lee.orchestrator.storage.models import OutputSpec
-                    outputs = []
-                    for output_item in step_data.get("outputs", []):
-                        if isinstance(output_item, str):
-                            path = output_item
-                            output_type = "dir" if path.endswith("/") else "file"
-                            outputs.append(OutputSpec(
-                                type=output_type,
-                                path=path,
-                                format=self._infer_format(path),
-                                required=True,
-                                description="",
-                            ))
-                        elif isinstance(output_item, dict):
-                            path = output_item.get("path", "")
-                            output_type = output_item.get("type") or ("dir" if path.endswith("/") else "file")
-                            outputs.append(OutputSpec(
-                                type=output_type,
-                                path=path,
-                                format=output_item.get("format") or self._infer_format(path),
-                                required=output_item.get("required", True),
-                                description=output_item.get("description", ""),
-                            ))
+                    outputs = [
+                        parsed
+                        for parsed in (self._parse_output_spec(output_item) for output_item in step_data.get("outputs", []))
+                        if parsed is not None
+                    ]
 
                     steps.append(Step(
                         id=step_id,
                         kind=kind,
                         agent_id=agent_id,
-                        executor_type="llm" if kind == "agent" else "shell",
+                        executor_type=resolve_executor_type(kind),
                         depends_on=combined_deps,
                         input={
                             "step_id": step_id,
@@ -877,6 +871,7 @@ class TemplateManager:
                             "stage_id": stage_id,
                         },
                     ))
+                    steps[-1].inputs = step_data.get("inputs", [])
 
         # 格式2: 扁平 steps (旧格式)
         elif "steps" in doc:
@@ -890,36 +885,17 @@ class TemplateManager:
                 # 解析 agent_id（支持 agent_id 或 run 字段）
                 agent_id = step_data.get("agent_id") or step_data.get("run", "")
 
-                # 解析 outputs（内联解析）
-                from lee.orchestrator.storage.models import OutputSpec
-                outputs = []
-                for output_item in step_data.get("outputs", []):
-                    if isinstance(output_item, str):
-                        path = output_item
-                        output_type = "dir" if path.endswith("/") else "file"
-                        outputs.append(OutputSpec(
-                            type=output_type,
-                            path=path,
-                            format=self._infer_format(path),
-                            required=True,
-                            description="",
-                        ))
-                    elif isinstance(output_item, dict):
-                        path = output_item.get("path", "")
-                        output_type = output_item.get("type") or ("dir" if path.endswith("/") else "file")
-                        outputs.append(OutputSpec(
-                            type=output_type,
-                            path=path,
-                            format=output_item.get("format") or self._infer_format(path),
-                            required=output_item.get("required", True),
-                            description=output_item.get("description", ""),
-                        ))
+                outputs = [
+                    parsed
+                    for parsed in (self._parse_output_spec(output_item) for output_item in step_data.get("outputs", []))
+                    if parsed is not None
+                ]
 
                 steps.append(Step(
                     id=step_id,
                     kind=kind,
                     agent_id=agent_id,
-                    executor_type="llm" if kind == "agent" else "shell",
+                    executor_type=resolve_executor_type(kind),
                     depends_on=depends_on,
                     input={
                         "step_id": step_id,
@@ -934,6 +910,7 @@ class TemplateManager:
                         "mandatory": step_data.get("mandatory", True),
                     },
                 ))
+                steps[-1].inputs = step_data.get("inputs", [])
 
         return WorkflowTemplate(
             id=doc.get("id", template_id),
@@ -951,6 +928,41 @@ class TemplateManager:
                 "execution_order": doc.get("execution_order", [s.id for s in steps]),
                 "stages": doc.get("stages", []),
             },
+        )
+
+    def _parse_output_spec(self, output_item: Any):
+        from lee.orchestrator.storage.models import OutputSpec
+
+        if isinstance(output_item, str):
+            path = output_item
+            output_type = "dir" if path.endswith("/") else "file"
+            return OutputSpec(
+                type=output_type,
+                path=path,
+                format=self._infer_format(path),
+                required=True,
+                description="",
+            )
+
+        if not isinstance(output_item, dict):
+            return None
+
+        symbol = output_item.get("symbol")
+        path = output_item.get("path") or symbol or ""
+        output_type = output_item.get("type")
+        if not output_type:
+            output_type = "symbol" if symbol else ("dir" if path.endswith("/") else "file")
+
+        return OutputSpec(
+            type=output_type,
+            path=path,
+            format=output_item.get("format") or self._infer_format(path),
+            required=output_item.get("required", True),
+            description=output_item.get("description", ""),
+            symbol=symbol,
+            contract=output_item.get("contract"),
+            freeze=bool(output_item.get("freeze", False)),
+            ssot=output_item.get("ssot") if isinstance(output_item.get("ssot"), dict) else None,
         )
 
     def _parse_spec_global_format(
@@ -1018,44 +1030,15 @@ class TemplateManager:
 
     def _dict_to_step(self, step_dict: Dict[str, Any]) -> Step:
         """将字典转换为 Step 对象"""
-        from lee.orchestrator.storage.models import OutputSpec
-
         # 解析 outputs（支持旧/新格式）
         outputs_raw = step_dict.get("outputs", [])
         outputs = []
         for output_item in outputs_raw:
-            if isinstance(output_item, str):
-                # 字符串格式：直接作为路径
-                path = output_item
-                output_type = "dir" if path.endswith("/") else "file"
-                outputs.append(OutputSpec(
-                    type=output_type,
-                    path=path,
-                    format=self._infer_format(path),
-                    required=True,
-                    description="",
-                ))
-            elif isinstance(output_item, dict):
-                if "type" not in output_item:
-                    path = output_item.get("path", "")
-                    output_type = "dir" if path.endswith("/") else "file"
-                    outputs.append(OutputSpec(
-                        type=output_type,
-                        path=path,
-                        format=self._infer_format(path),
-                        required=output_item.get("required", True),
-                        description=output_item.get("description", ""),
-                    ))
-                else:
-                    outputs.append(OutputSpec(
-                        type=output_item.get("type", "file"),
-                        path=output_item.get("path", ""),
-                        format=output_item.get("format", "text"),
-                        required=output_item.get("required", True),
-                        description=output_item.get("description", ""),
-                    ))
+            parsed = self._parse_output_spec(output_item)
+            if parsed is not None:
+                outputs.append(parsed)
 
-        return Step(
+        step = Step(
             id=step_dict["id"],
             kind=step_dict.get("kind", "agent"),
             executor_type=step_dict.get("executor_type"),
@@ -1068,6 +1051,8 @@ class TemplateManager:
             config=step_dict.get("config", {}),
             on_failure=step_dict.get("on_failure", (step_dict.get("config", {}) or {}).get("on_failure")),
         )
+        step.inputs = step_dict.get("inputs", [])
+        return step
 
     def _parse_step(self, step_data: Dict[str, Any]) -> Step:
         """
@@ -1115,8 +1100,8 @@ class TemplateManager:
             pass  # 保持原值
 
         # 解析 agent/skill/gate 引用
-        agent_id = step_data.get("agent")  # kind=agent 时
-        skill_id = step_data.get("skill")  # kind=skill 时
+        agent_id = step_data.get("agent_id") or step_data.get("agent")  # kind=agent 时
+        skill_id = step_data.get("skill_id") or step_data.get("skill")  # kind=skill 时
 
         # 解析 gate_id（从 human_gate、post_gate 或独立的 gate）
         gate_id = None
@@ -1150,7 +1135,7 @@ class TemplateManager:
 
         # 解析 executor_type（v3.5：使用配置中的 default_type）
         # 保留兼容性：如果指定了 executor 则使用，否则根据 kind 和配置决定
-        executor_type = step_data.get("executor")
+        executor_type = step_data.get("executor_type") or step_data.get("executor")
         if not executor_type:
             if kind == "agent":
                 # v3.5: 从配置读取默认执行器类型
@@ -1170,47 +1155,9 @@ class TemplateManager:
         outputs_raw = step_data.get("outputs", [])
         outputs = []
         for output_item in outputs_raw:
-            if isinstance(output_item, str):
-                # 字符串格式：直接作为路径
-                path = output_item
-                if path.endswith("/"):
-                    output_type = "dir"
-                else:
-                    output_type = "file"
-
-                outputs.append(OutputSpec(
-                    type=output_type,
-                    path=path,
-                    format=self._infer_format(path),
-                    required=True,
-                    description="",
-                ))
-            elif isinstance(output_item, dict):
-                # 兼容旧格式：{path, required, description}
-                if "type" not in output_item:
-                    # 根据 path 判断类型
-                    path = output_item.get("path", "")
-                    if path.endswith("/"):
-                        output_type = "dir"
-                    else:
-                        output_type = "file"
-
-                    outputs.append(OutputSpec(
-                        type=output_type,
-                        path=path,
-                        format=self._infer_format(path),
-                        required=output_item.get("required", True),
-                        description=output_item.get("description", ""),
-                    ))
-                else:
-                    # 新格式：{type, path, format, required, description}
-                    outputs.append(OutputSpec(
-                        type=output_item.get("type", "file"),
-                        path=output_item.get("path", ""),
-                        format=output_item.get("format", "text"),
-                        required=output_item.get("required", True),
-                        description=output_item.get("description", ""),
-                    ))
+            parsed = self._parse_output_spec(output_item)
+            if parsed is not None:
+                outputs.append(parsed)
 
         # 兼容 dependencies/depends_on 两种写法
         depends_on = step_data.get("depends_on")
@@ -1493,7 +1440,7 @@ class BuiltinTemplates:
                 {
                     "id": "fix",
                     "kind": "agent",
-                    "executor": "metagpt",
+                    "executor": "llm",
                     "depends_on": ["analyze"],
                     "config": {"task_type": "code_implementation"},
                 },

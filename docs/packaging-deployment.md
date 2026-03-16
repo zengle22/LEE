@@ -10,6 +10,8 @@ date: 2026-03-05
 
 ## 背景
 
+版本号规则见 [LEE 版本号规则](/E:/ai/LEE/docs/guides/technical/LEE-VERSIONING.md)。
+
 ### 问题陈述
 
 LEE 是一个 AI 驱动的研发框架，用于生成和驱动其他目标项目的开发。传统方式将 LEE 代码与目标项目混在一起，导致：
@@ -123,7 +125,7 @@ executor:
 | 配置项 | 说明 | 可选值 |
 |--------|------|--------|
 | `spec_root` | 规范模板根目录 | `builtin`（默认包内）、`./my-spec`（项目内）、`/absolute/path`（绝对路径） |
-| `executor.default_type` | 默认执行器 | `claude_code`、`llm`、`metagpt` 等 |
+| `executor.default_type` | 默认执行器 | `claude_code`、`llm`、`legacy_executor` 等 |
 
 ### .lee/lee.lock
 

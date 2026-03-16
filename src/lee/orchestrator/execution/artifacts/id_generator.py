@@ -3,8 +3,9 @@ SSOT ID Generator
 
 SSOT ID 生成器 - 提供 ID 生成、Slug 生成功能。
 
-ID 生成规则 (v1.4):
-- 独立顺序型: SRC, EPIC, FEAT, ADR - 全局序号
+ID 生成规则 (v1.5):
+- 独立顺序型: SRC, ADR - 全局序号
+- SRC 作用域独立型: EPIC, FEAT
 - Release 型: REL-<semver>
 - 单父唯一型: TECH, TESTSET, DEVPLAN, TESTPLAN
 - 单父多实例型: UI, TASK
@@ -26,7 +27,7 @@ except ImportError:
     HAS_PINYIN = False
 
 from .types import SSOTType, ObjectCategory
-from .placement import resolve_ssot_relative_dir
+from .placement import resolve_ssot_relative_dir, resolve_src_root_id
 
 
 class SSOTIDGenerator:
@@ -58,6 +59,12 @@ class SSOTIDGenerator:
         """获取类型对应的序号文件"""
         return self.root_path / f"{self.SEQUENCE_FILE_PREFIX}{ssot_type.value}"
 
+    def _resolve_project_root(self) -> Path:
+        """Resolve the project root used for filesystem scans."""
+        if self.root_path.name == ".artifacts":
+            return self.root_path.parent
+        return self.root_path
+
     def _load_sequences(self) -> None:
         """从文件加载序号"""
         for ssot_type in SSOTType:
@@ -74,19 +81,35 @@ class SSOTIDGenerator:
 
     def _scan_existing_sequence(self, ssot_type: SSOTType) -> int:
         """扫描正式 SSOT 文件，推断当前已占用的最大独立序号。"""
-        if not SSOTType.is_independent(ssot_type) or ssot_type == SSOTType.RELEASE:
+        if ssot_type not in (SSOTType.SRC, SSOTType.ADR) or ssot_type == SSOTType.RELEASE:
             return 0
 
-        project_root = self.root_path.parent if self.root_path.name == ".artifacts" else Path.cwd()
+        project_root = self._resolve_project_root()
         target_dir = project_root / resolve_ssot_relative_dir(ssot_type)
         if not target_dir.exists():
             return 0
 
         prefix = f"{ssot_type.value.upper()}-"
         max_seq = 0
-        for path in target_dir.glob(f"{prefix}*__*.md"):
+        for path in target_dir.rglob(f"{prefix}*__*.md"):
             object_id = path.name.split("__", 1)[0]
             match = re.fullmatch(rf"{prefix}(\d+)", object_id)
+            if match:
+                max_seq = max(max_seq, int(match.group(1)))
+        return max_seq
+
+    def _scan_scoped_sequence(self, ssot_type: SSOTType, src_root_id: str) -> int:
+        """扫描指定 SRC 作用域内的正式序号。"""
+        project_root = self._resolve_project_root()
+        target_dir = project_root / resolve_ssot_relative_dir(ssot_type, source_refs=[src_root_id], properties={"src_root_id": src_root_id})
+        if not target_dir.exists():
+            return 0
+
+        prefix = f"{ssot_type.value.upper()}-{src_root_id}-"
+        max_seq = 0
+        for path in target_dir.rglob(f"{ssot_type.value.upper()}-*__*.md"):
+            object_id = path.name.split("__", 1)[0]
+            match = re.fullmatch(rf"{ssot_type.value.upper()}-{re.escape(src_root_id)}-(\d+)", object_id)
             if match:
                 max_seq = max(max_seq, int(match.group(1)))
         return max_seq
@@ -117,6 +140,14 @@ class SSOTIDGenerator:
         else:
             cache_key = ssot_type.value
 
+        if parent_scope and cache_key not in self._sequences:
+            seq_file = self.root_path / "sequences" / parent_scope / f"{ssot_type.value}.seq"
+            if seq_file.exists():
+                try:
+                    self._sequences[cache_key] = int(seq_file.read_text().strip())
+                except (ValueError, IOError):
+                    self._sequences[cache_key] = 0
+
         # 获取当前序号
         current = self._sequences.get(cache_key, 0)
         current += 1
@@ -136,11 +167,26 @@ class SSOTIDGenerator:
 
         return current
 
+    def _get_next_scoped_sequence(self, ssot_type: SSOTType, scope: str) -> int:
+        cache_key = f"{ssot_type.value}_{scope}"
+        if cache_key not in self._sequences:
+            self._sequences[cache_key] = self._scan_scoped_sequence(ssot_type, scope)
+
+        current = self._sequences.get(cache_key, 0) + 1
+        self._sequences[cache_key] = current
+
+        parent_dir = self.root_path / "sequences" / scope
+        parent_dir.mkdir(parents=True, exist_ok=True)
+        seq_file = parent_dir / f"{ssot_type.value}.seq"
+        seq_file.write_text(str(current))
+        return current
+
     def generate_id(
         self,
         ssot_type: SSOTType,
         parent_id: Optional[str] = None,
-        suffix: Optional[str] = None
+        suffix: Optional[str] = None,
+        src_root_id: Optional[str] = None,
     ) -> str:
         """
         生成 SSOT ID
@@ -161,15 +207,21 @@ class SSOTIDGenerator:
             return f"REL-{suffix}"
 
         if category == ObjectCategory.INDEPENDENT:
-            # 独立型: TYPE-001
+            if ssot_type in (SSOTType.SRC, SSOTType.ADR):
+                seq = self.get_next_sequence(ssot_type)
+                return f"{ssot_type.value.upper()}-{seq:03d}"
+
+            src_scope = src_root_id or resolve_src_root_id(parent_id=parent_id)
+            if src_scope:
+                seq = self._get_next_scoped_sequence(ssot_type, src_scope)
+                return f"{ssot_type.value.upper()}-{src_scope}-{seq:03d}"
+
+            # 回退到旧版独立序号格式（不带 SRC 作用域）
             seq = self.get_next_sequence(ssot_type)
             return f"{ssot_type.value.upper()}-{seq:03d}"
 
         elif category == ObjectCategory.DIRECT_PARENT:
             # 直接父对象一致型
-            # 两种子类型：
-            # 1. 单父唯一型: TECH-FEAT-001, TESTSET-FEAT-001 (需要 sequence)
-            # 2. 单父多实例型: UI-FEAT-001-01, TASK-FEAT-001-FE-01 (sequence 在 scope 中)
             if not parent_id:
                 raise ValueError(f"类型 {ssot_type.value} 需要 parent_id")
 
@@ -185,7 +237,6 @@ class SSOTIDGenerator:
                 seq = self.get_next_sequence(ssot_type, f"{parent_id}_{report_kind}")
                 return f"REPORT-{parent_id}-{report_kind}-{seq:03d}"
 
-            # 解析 parent_id 获取范围
             parent_scope = self._extract_scope(parent_id)
             if not parent_scope:
                 raise ValueError(f"无法从 parent_id {parent_id} 提取范围")
@@ -193,12 +244,18 @@ class SSOTIDGenerator:
             if ssot_type in (SSOTType.DEVPLAN, SSOTType.TESTPLAN):
                 return f"{ssot_type.value.upper()}-{parent_scope}"
 
-            is_multi_instance = ssot_type in (SSOTType.UI, SSOTType.TASK)
+            if ssot_type in (SSOTType.TECH, SSOTType.TESTSET):
+                if suffix:
+                    return f"{ssot_type.value.upper()}-{parent_scope}-{suffix}"
+                return f"{ssot_type.value.upper()}-{parent_scope}"
 
-            if is_multi_instance and suffix:
+            if ssot_type == SSOTType.REPORT:
+                return self.generate_report_id(parent_scope)
+
+            if suffix:
                 return f"{ssot_type.value.upper()}-{parent_scope}-{suffix}"
 
-            seq = self.get_next_sequence(ssot_type, parent_scope)
+            seq = self.get_next_sequence(ssot_type)
             return f"{ssot_type.value.upper()}-{parent_scope}-{seq:03d}"
 
         elif category == ObjectCategory.SCOPE_BOUNDED:
@@ -236,7 +293,10 @@ class SSOTIDGenerator:
 
         # 如果 parent_id 已经是 FEAT-XXX 或 REL-x.y.z 格式
         if parts[0].upper() == "FEAT":
-            return f"FEAT-{parts[1]}"
+            if len(parts) >= 4 and parts[1].upper() == "SRC":
+                return "-".join(parts[:4])
+            if len(parts) >= 2:
+                return parent_id
         if parts[0].upper() == "REL":
             return parent_id
 
@@ -258,8 +318,10 @@ class SSOTIDGenerator:
         if parts[0].upper() in ("TECH", "TESTSET", "UI", "TASK", "REPORT", "TC", "BUG", "EVI"):
             try:
                 feat_idx = parts.index("FEAT")
-                if feat_idx + 1 < len(parts):
-                    return f"FEAT-{parts[feat_idx + 1]}"
+                if feat_idx + 3 < len(parts) and parts[feat_idx + 1].upper() == "SRC":
+                    return "-".join(parts[feat_idx:feat_idx + 4])
+                if feat_idx + 1 < len(parts) and parts[feat_idx + 1].isdigit():
+                    return "-".join(parts[feat_idx:feat_idx + 2])
             except ValueError:
                 pass
 
@@ -361,6 +423,7 @@ class SSOTIDGenerator:
         title: str,
         parent_id: Optional[str] = None,
         suffix: Optional[str] = None,
+        src_root_id: Optional[str] = None,
         ext: str = "md"
     ) -> str:
         """
@@ -379,7 +442,7 @@ class SSOTIDGenerator:
             文件名，如 FEAT-001__generate-plan.md
         """
         # 生成 ID
-        artifact_id = self.generate_id(ssot_type, parent_id, suffix)
+        artifact_id = self.generate_id(ssot_type, parent_id, suffix, src_root_id=src_root_id)
 
         # 生成 slug
         slug = self.generate_slug(title)

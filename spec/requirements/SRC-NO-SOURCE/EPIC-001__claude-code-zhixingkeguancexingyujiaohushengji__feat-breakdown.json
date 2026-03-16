@@ -1,0 +1,47 @@
+{
+  "breakdown_id": "FEAT-BD-20260310-001",
+  "epic_ref": "EPIC-001__claude-code-zhixingkeguancexingyujiaohushengji",
+  "feat_candidates": [
+    {
+      "title": "FEAT-026: Claude Code 执行实时输出暴露",
+      "user_value": "用户在使用 lee run 或等价 CLI 路径执行 claude_code 步骤时，可以实时看到持续输出，不再需要等待执行完成后才能看到结果",
+      "acceptance_boundary": "给定用户在 CLI 执行 claude_code 步骤，当执行进行时，CLI 应持续输出执行过程中的 stdout/stderr 内容，直到执行完成；输出延迟不超过 5 秒；执行完成后输出完整的 exit code",
+      "dependencies": [],
+      "non_goals": [
+        "不处理执行失败的具体错误恢复逻辑",
+        "不包含执行进度百分比或 ETA 预测",
+        "不改变执行结果本身的返回格式"
+      ],
+      "priority": "P0"
+    },
+    {
+      "title": "FEAT-027: Live Log 结构化输出",
+      "user_value": "执行证据路径可被 runner/CLI 稳定定位，用户可以通过指定路径找到结构化的执行日志，无需人工猜测路径",
+      "acceptance_boundary": "给定一次 claude_code 执行，执行完成后应在标准证据目录下生成结构化的 live log 文件（JSON 格式）；文件路径可从执行上下文稳定获取；live log 包含 timestamp、output type、content 等标准字段",
+      "dependencies": [
+        "FEAT-026"
+      ],
+      "non_goals": [
+        "不包含日志的自动清理或归档策略",
+        "不实现日志的实时流式传输到外部系统",
+        "不处理日志文件的并发写入冲突"
+      ],
+      "priority": "P0"
+    },
+    {
+      "title": "FEAT-028: 流式交互协议演进边界",
+      "user_value": "为后续切换 stream-json 协议预留演进边界，后续协议升级不会要求替换整个 executor 路径，平滑过渡",
+      "acceptance_boundary": "给定现有 executor 实现，当需要切换到 stream-json 协议时，应可通过配置或接口替换实现，而无需改动调用方代码；应提供抽象接口定义，支持多种协议实现；最小改动原则，单个文件或模块替换即可完成协议切换",
+      "dependencies": [
+        "FEAT-026",
+        "FEAT-027"
+      ],
+      "non_goals": [
+        "本阶段不实现完整的 stream-json 协议",
+        "不迁移现有的 Rust runtime 模块",
+        "不包含前端事件总线对接"
+      ],
+      "priority": "P1"
+    }
+  ]
+}

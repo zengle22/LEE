@@ -69,6 +69,7 @@ def is_l3_template_related(file_path: str) -> bool:
         return True
     
     # 仅检查 LEE 规范目录下的 workflow 模板，避免误伤 .github/workflows。
+    # 同时排除 L2 模板（包含 l2 或 l2_workflow 路径）
     if (
         is_yaml
         and "workflows" in normalized_parts
@@ -76,6 +77,7 @@ def is_l3_template_related(file_path: str) -> bool:
             {"spec-global", "departments"} <= normalized_parts
             or {"spec-global", "core"} <= normalized_parts
         )
+        and "l2" not in file_path.lower()
     ):
         return True
     
@@ -154,7 +156,7 @@ def main():
     ssot_related = [file_path for file_path in changed_files if is_ssot_related_path(file_path)]
     if ssot_related:
         print("🔍 运行 SSOT lint (Pre-push Hook)...")
-        lint_ok, lint_errors = run_ssot_lint()
+        lint_ok, lint_errors = run_ssot_lint(ssot_related)
         if not lint_ok:
             print("❌ SSOT lint 失败")
             for err in lint_errors:

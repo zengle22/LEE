@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-spec.example.com/contracts/product-epic-contract/v1/schema.json",
+  "title": "Product Epic Contract",
+  "description": "产品 EPIC 契约 - 正式 EPIC 对象或其冻结视图",
+  "type": "object",
+  "required": [
+    "epic_id",
+    "title",
+    "goal",
+    "scope",
+    "non_goals",
+    "success_metrics",
+    "priority",
+    "feat_split_principles",
+    "ssot"
+  ],
+  "properties": {
+    "epic_id": { "type": "string" },
+    "title": { "type": "string" },
+    "goal": { "type": "string" },
+    "scope": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "non_goals": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "success_metrics": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["P0", "P1", "P2"]
+    },
+    "feat_split_principles": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "source_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "ssot": {
+      "type": "object",
+      "required": ["identity_kind", "ssot_type"],
+      "properties": {
+        "identity_kind": { "type": "string", "enum": ["ssot"] },
+        "ssot_type": { "type": "string", "enum": ["EPIC"] },
+        "parent": { "type": "string" },
+        "derived_from": { "type": "string" }
+      }
+    }
+  }
+}

@@ -12,7 +12,7 @@
 **之前** (错误):
 ```python
 from flowcore.orchestrator.runner import run_workflow
-from flowcore.engines.metagpt.adapter import run_lee_unit
+from flowcore.engines.legacy_executor.adapter import run_lee_unit
 ```
 
 **之后** (正确):

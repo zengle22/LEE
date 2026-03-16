@@ -716,6 +716,7 @@ class TestOrchestratorArtifactRecording:
         orch = Orchestrator(store=mock_store, project_root=self.temp_dir)
 
         workflow_id = "test-workflow-001"
+        run_id = "RUN-test-workflow-001"
         step_id = "implement"
 
         # 模拟包含 patch_file 的输出
@@ -726,14 +727,14 @@ class TestOrchestratorArtifactRecording:
 
         # Mock artifact_manager.adopt 以避免实际文件操作
         with patch.object(orch.artifact_manager, 'adopt') as mock_adopt:
-            orch._record_step_artifacts(workflow_id, step_id, output)
+            orch._record_step_artifacts(workflow_id, step_id, output, run_id=run_id)
 
             # 验证 adopt 被调用
             mock_adopt.assert_called_once()
             call_args = mock_adopt.call_args
 
             # 验证参数
-            assert call_args.kwargs['run_id'] == workflow_id
+            assert call_args.kwargs['run_id'] == run_id
             assert call_args.kwargs['file_path'] == str(self.test_patch_file)
             assert call_args.kwargs['category'] == f"step_{step_id}"
             assert 'step_id' in call_args.kwargs['metadata']

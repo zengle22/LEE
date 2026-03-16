@@ -1,0 +1,79 @@
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:44.011866
+kind: l3_workflow_template
+version: '1.0'
+id: template.dev.bugfix_triage_l3
+name: Bugfix Triage L3 Template
+description: 'Canonical L3 workflow for validating bug input and deciding single-bug or
+
+  batch routing before root-cause analysis begins.
+
+  '
+owner: development
+tags:
+- template
+- dev
+- bugfix
+- triage
+- l3
+- canonical
+instance_schema:
+  required_fields:
+  - id
+  - template_id
+  - parent_phase_id
+  output_fields:
+  - triage_decision_ref
+  - granularity_decision_ref
+  - batch_approval_record
+  - triage_package_ref
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
+  - id: validate_bug_input
+    name: Validate Bug Input
+    kind: agent
+    description: Validate bug SSOT, severity, and reproduction evidence.
+    agent_id: agent.dev.bug_triage
+    mandatory: true
+    depends_on: []
+    outputs:
+    - input_validation_ref
+    - triage_notes
+  - id: classify_bug_path
+    name: Classify Bug Path
+    kind: agent
+    description: Determine whether the issue is implementation or contract related.
+    agent_id: agent.dev.bug_triage
+    mandatory: true
+    depends_on:
+    - validate_bug_input
+    outputs:
+    - triage_decision_ref
+    - suggested_flow
+  - id: review_batch_eligibility
+    name: Review Batch Eligibility
+    kind: gate
+    description: Validate five-same rule for batch mode.
+    mandatory: true
+    depends_on:
+    - classify_bug_path
+    config:
+      gate:
+        type: human_approval
+        gate_id: gate.dev.bugfix_plan_gate
+    outputs:
+    - granularity_decision_ref
+    - batch_approval_record
+  - id: publish_triage
+    name: Publish Triage Package
+    kind: agent
+    description: Publish triage package for the next bugfix phase.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on:
+    - review_batch_eligibility
+    outputs:
+    - triage_package_ref

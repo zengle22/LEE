@@ -1,156 +1,68 @@
 # Product SRC to EPIC Template v1.0
-# 产品部门 L3 模板 - 从市场机会/原始需求生成 EPIC
+# 产品部门 L3 模板 - 从冻结 SRC 生成 EPIC
 
 kind: l3_workflow_template
 version: "1.0"
 id: workflow.product.task.src_to_epic
 name: Product SRC to EPIC
 description: >
-  将任意原始输入先收敛并冻结为 SRC，
-  再将冻结后的 SRC 收敛为产品建设层的 EPIC。
+  将冻结后的 SRC 收敛为产品建设层的 EPIC。
   适用于多个 FEAT 共享同一业务目标、边界和优先级的场景。
+  EPIC 的正式身份必须在对应 SRC 作用域内完成准备和定版。
   该文件是 checked-in workflow template，运行时实例由 Python runtime 动态生成。
 owner: product-ai
 tags: [product, workflow, l3, ssot, epic]
 
 roles:
   agents:
-    - agent.analysis.product_goal
     - agent.product.requirement_alignment
     - agent.product.epic_designer
-    - agent.review.requirement_reviewer
+    - agent.product.epic_reviewer
     - agent.governance.approval_reviewer
   skills: []
   gates:
-    - gate.product.src_freeze
     - gate.product.epic_freeze
 
 overview:
   input_types:
-    - type: raw_requirement
-      description: 原始需求描述
-    - type: business_opportunity
-      description: 商业机会或其冻结视图
+    - type: src
+      description: canonical SRC 主对象
+      ssot_type: SRC
+    - type: source_freeze
+      description: 已冻结的 SRC 或其冻结视图
       ssot_type: SRC
 
   output:
     type: epic_freeze
     ssot_type: EPIC
     description: 冻结后的 EPIC 主对象或其冻结视图
+    preferred_ref: epic_freeze_ref
 
 stages:
   - id: src_to_epic_flow
     name: "SRC to EPIC Flow"
     kind: stage
-    description: "从原始输入收敛 SRC，再设计并冻结 EPIC"
+    description: "从冻结 SRC 设计并冻结 EPIC"
     depends_on: []
     steps:
-      - id: raw_input_intake
-        name: 原始输入接入
-        kind: agent
-        agent_id: agent.analysis.product_goal
-        mandatory: true
-        depends_on: []
-        description: >
-          接收一句话、文章、客户反馈、会议结论或商业机会输入，
-          保存原始内容和来源引用，形成待归一化输入对象。
-        inputs:
-          - source: external
-            type: [raw_requirement, business_opportunity]
-            required: true
-        outputs:
-          - symbol: raw_source_input
-            contract: departments/product/contracts/raw-source-input-contract/v1/schema.json
-            freeze: false
-      - id: source_normalization
-        name: 来源归一化
-        kind: agent
-        agent_id: agent.analysis.product_goal
-        mandatory: true
-        depends_on: [raw_input_intake]
-        description: >
-          将原始输入归一化为可审阅的 SRC candidate，
-          提炼问题陈述、目标用户、触发场景、业务动因和关键约束。
-        inputs:
-          - source: raw_source_input
-            required: true
-        outputs:
-          - symbol: normalized_src
-            contract: departments/product/contracts/source-freeze-contract/v1/schema.json
-            freeze: false
-            ssot:
-              identity_kind: ssot
-              ssot_type: SRC
-      - id: source_review
-        name: SRC 对齐评审
-        kind: agent
-        agent_id: agent.review.requirement_reviewer
-        mandatory: true
-        depends_on: [source_normalization]
-        description: >
-          校验 SRC candidate 是否已具备足够稳定的问题定义和来源可追溯性，
-          可作为后续 EPIC 的正式输入。
-        inputs:
-          - source: normalized_src
-            required: true
-        outputs:
-          - symbol: source_review_report
-            contract: departments/product/contracts/product-review-contract/v1/schema.json
-            freeze: false
-      - id: source_freeze
-        name: SRC 冻结
-        kind: gate
-        mandatory: true
-        depends_on: [source_review]
-        description: >
-          由产品负责人冻结正式 SRC。
-          冻结后，后续 EPIC 设计只能引用该 SRC 版本，不允许直接回到原始输入。
-        inputs:
-          - source: normalized_src
-            required: true
-          - source: source_review_report
-            required: true
-        outputs:
-          - path: output/design-frozen/{project}-src-freeze.yaml
-            required: true
-            freeze: true
-            contract: departments/product/contracts/source-freeze-contract/v1/schema.json
-            ssot:
-              identity_kind: ssot
-              ssot_type: SRC
-              derived_from: normalized_src
-        gate_rules:
-          reviewers:
-            - role: product_owner
-          approval_criteria:
-            - label: "来源可追溯"
-              criteria: "原始输入来源和引用关系明确"
-              required: true
-            - label: "问题定义稳定"
-              criteria: "问题陈述、目标用户、业务动因和关键约束完整"
-              required: true
-            - label: "适合进入 EPIC"
-              criteria: "信息足以支撑后续 EPIC 设计"
-              required: true
-        config:
-          gate:
-            type: human_approval
-            gate_id: gate.product.src_freeze
       - id: problem_alignment
         name: 问题空间对齐
         kind: agent
         agent_id: agent.product.requirement_alignment
         mandatory: true
-        depends_on: [source_freeze]
+        depends_on: []
         description: >
           将冻结后的 SRC 翻译为问题空间，明确边界、非目标和关键约束。
         inputs:
-          - source: source_freeze
+          - source: external
+            type: [src, source_freeze]
             required: true
         outputs:
           - symbol: problem_definition
             contract: departments/product/contracts/problem-definition/v1/schema.json
             freeze: false
+        config:
+          strict_output_validation: true
       - id: epic_design
         name: EPIC 设计
         kind: agent
@@ -170,31 +82,82 @@ stages:
             ssot:
               identity_kind: ssot
               ssot_type: EPIC
-              source_refs: [source_freeze]
-      - id: epic_review
-        name: EPIC 对齐评审
+              source_refs: [external]
+        config:
+          strict_output_validation: true
+      - id: epic_identity_prepare
+        name: EPIC 身份准备
         kind: agent
-        agent_id: agent.review.requirement_reviewer
+        agent_id: agent.governance.approval_reviewer
         mandatory: true
         depends_on: [epic_design]
         description: >
-          校验 EPIC 是否满足 SSOT 规则、价值边界和拆分合理性。
+          在非 main 分支上为 EPIC candidate 建立 provisional identity，
+          并绑定 source_freeze 提供的 src_root_id，形成稳定的评审输入。
         inputs:
           - source: epic_candidate
+            required: true
+          - source: external
+            type: [source_freeze]
+            required: true
+        outputs:
+          - symbol: epic_scoped_candidate
+            contract: departments/product/contracts/epic-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: EPIC
+              source_refs: [external]
+      - id: epic_review
+        name: EPIC 对齐评审
+        kind: agent
+        agent_id: agent.product.epic_reviewer
+        mandatory: true
+        depends_on: [epic_identity_prepare]
+        description: >
+          校验 EPIC 是否满足 SSOT 规则、价值边界和拆分合理性。
+        inputs:
+          - source: epic_scoped_candidate
             required: true
         outputs:
           - symbol: epic_review_report
             contract: departments/product/contracts/product-review-contract/v1/schema.json
             freeze: false
+        config:
+          strict_output_validation: true
+          claude_code:
+            read_only: true
+      - id: epic_identity_formalize
+        name: EPIC 身份定版
+        kind: agent
+        agent_id: agent.governance.approval_reviewer
+        mandatory: true
+        depends_on: [epic_review]
+        description: >
+          在 EPIC freeze 前，将 provisional EPIC 定版为 SRC scoped 正式身份，
+          并完成同批次内的引用重写。
+        inputs:
+          - source: epic_scoped_candidate
+            required: true
+          - source: epic_review_report
+            required: true
+        outputs:
+          - symbol: epic_formalized_candidate
+            contract: departments/product/contracts/epic-contract/v1/schema.json
+            freeze: false
+            ssot:
+              identity_kind: ssot
+              ssot_type: EPIC
+              source_refs: [external]
       - id: epic_freeze
         name: EPIC 冻结
         kind: gate
         mandatory: true
-        depends_on: [epic_review]
+        depends_on: [epic_identity_formalize]
         description: >
           由产品负责人冻结 EPIC，确认业务目标、范围边界与拆分原则。
         inputs:
-          - source: epic_candidate
+          - source: epic_formalized_candidate
             required: true
           - source: epic_review_report
             required: true
@@ -224,22 +187,24 @@ stages:
             type: human_approval
             gate_id: gate.product.epic_freeze
     step_order:
-      - raw_input_intake
-      - source_normalization
-      - source_review
-      - source_freeze
       - problem_alignment
       - epic_design
+      - epic_identity_prepare
       - epic_review
+      - epic_identity_formalize
       - epic_freeze
 
 stage_order:
   - src_to_epic_flow
 
 constraints:
-  src_freeze_first: |
-    任意原始输入必须先完成 SRC freeze，
-    才能进入 EPIC 设计。
+  frozen_src_only: |
+    src_to_epic 只接受已冻结 SRC 或其 canonical ref。
+    不得在本流程中直接接收 raw requirement。
+
+  src_scoped_epic_rule: |
+    EPIC 必须绑定 source_freeze 提供的 src_root_id。
+    freeze 前必须完成 EPIC 的 SRC 作用域 identity formalize。
 
   epic_rule_binding: |
     若范围只包含单一可交付功能，不得创建 EPIC，
@@ -252,22 +217,55 @@ instance_schema:
     - name
     - status
   context_fields:
-    - raw_requirement
-    - business_opportunity
-  output_fields:
     - source_freeze
+    - source_freeze_ref
+    - src_root_id
+    - epic_freeze_ref
+  output_fields:
     - epic_freeze
 
 state_machine:
   states:
     - INIT: "初始化"
-    - RAW_INPUT_INTAKE: "原始输入接入"
-    - SOURCE_NORMALIZATION: "来源归一化"
-    - SOURCE_REVIEW: "SRC 评审"
-    - SOURCE_FREEZE: "SRC 冻结"
     - PROBLEM_ALIGNMENT: "问题空间对齐"
     - EPIC_DESIGN: "EPIC 设计"
+    - EPIC_IDENTITY_PREPARE: "EPIC 身份准备"
     - EPIC_REVIEW: "EPIC 评审"
+    - EPIC_IDENTITY_FORMALIZE: "EPIC 身份定版"
     - EPIC_FREEZE: "EPIC 冻结"
     - COMPLETED: "完成"
     - FAILED: "失败"
+  transitions:
+    INIT:
+      - to: PROBLEM_ALIGNMENT
+        trigger: workflow_started
+    PROBLEM_ALIGNMENT:
+      - to: EPIC_DESIGN
+        trigger: problem_alignment_completed
+      - to: FAILED
+        trigger: problem_alignment_failed
+    EPIC_DESIGN:
+      - to: EPIC_IDENTITY_PREPARE
+        trigger: epic_design_completed
+      - to: FAILED
+        trigger: epic_design_failed
+    EPIC_IDENTITY_PREPARE:
+      - to: EPIC_REVIEW
+        trigger: epic_identity_prepare_completed
+      - to: FAILED
+        trigger: epic_identity_prepare_failed
+    EPIC_REVIEW:
+      - to: EPIC_IDENTITY_FORMALIZE
+        trigger: epic_review_completed
+      - to: FAILED
+        trigger: epic_review_failed
+    EPIC_IDENTITY_FORMALIZE:
+      - to: EPIC_FREEZE
+        trigger: epic_identity_formalize_completed
+      - to: FAILED
+        trigger: epic_identity_formalize_failed
+    EPIC_FREEZE:
+      - to: COMPLETED
+        trigger: epic_freeze_completed
+      - to: FAILED
+        trigger: epic_freeze_failed

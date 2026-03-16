@@ -11,6 +11,10 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 import yaml
 
+from .placement import resolve_ssot_relative_dir
+from .types import SSOTType
+from .id_parser import parse_src_root
+
 
 def parse_front_matter(path: Path) -> Tuple[Dict[str, Any], str]:
     """
@@ -52,21 +56,23 @@ def is_formal_ssot_file(path: Path) -> bool:
         return True
     try:
         front_matter, _ = parse_front_matter(path)
-    except ValueError:
+    except Exception:
         return False
     return bool(front_matter.get("ssot_type"))
 
 
-def lint_ssot_front_matter(project_root: Path) -> List[str]:
+def lint_ssot_front_matter(project_root: Path, paths: Iterable[Path] | None = None) -> List[str]:
     """Validate formal SSOT markdown files only."""
     errors: List[str] = []
     required_fields = {"id", "ssot_type", "title", "status", "version"}
-    for path in iter_ssot_markdown_files(project_root):
+    seen_ids: Dict[str, List[Path]] = {}
+    candidates = list(paths) if paths is not None else list(iter_ssot_markdown_files(project_root))
+    for path in candidates:
         if not is_formal_ssot_file(path):
             continue
         try:
             front_matter, _ = parse_front_matter(path)
-        except ValueError as exc:
+        except Exception as exc:
             errors.append(str(exc))
             continue
 
@@ -76,4 +82,73 @@ def lint_ssot_front_matter(project_root: Path) -> List[str]:
         file_id = path.name.split("__", 1)[0]
         if front_matter.get("id") and file_id != front_matter["id"]:
             errors.append(f"{path}: filename ID {file_id} != front matter id {front_matter['id']}")
+        artifact_id = front_matter.get("id")
+        if artifact_id:
+            seen_ids.setdefault(str(artifact_id), []).append(path)
+
+        ssot_type_value = front_matter.get("ssot_type")
+        if artifact_id and ssot_type_value:
+            try:
+                ssot_type = SSOTType(str(ssot_type_value))
+            except ValueError:
+                ssot_type = None
+            if ssot_type is not None:
+                properties = front_matter.get("properties") or {}
+                requires_scoped_placement = bool(properties.get("src_root_id")) or bool(parse_src_root(str(artifact_id)))
+                expected_dir = resolve_ssot_relative_dir(
+                    ssot_type,
+                    parent_id=front_matter.get("parent_id"),
+                    source_refs=front_matter.get("source_refs") if requires_scoped_placement else None,
+                    artifact_id=str(artifact_id),
+                    properties=properties,
+                )
+                actual_dir = path.relative_to(project_root).parent.as_posix()
+                if actual_dir != expected_dir.as_posix():
+                    errors.append(
+                        f"{path}: expected placement {expected_dir.as_posix()} for {artifact_id}, got {actual_dir}"
+                    )
+
+    for artifact_id, paths in sorted(seen_ids.items()):
+        if len(paths) > 1:
+            rendered = ", ".join(str(path) for path in sorted(paths))
+            errors.append(f"duplicate SSOT id {artifact_id}: {rendered}")
+    return errors
+
+
+GOVERNED_SSOT_TYPES = {
+    "src",
+    "epic",
+    "feat",
+    "adr",
+    "ui",
+    "tech",
+    "task",
+    "testset",
+    "tc",
+    "bug",
+    "report",
+}
+
+
+def lint_ssot_workflow_provenance(project_root: Path, paths: Iterable[Path]) -> List[str]:
+    """Validate workflow provenance on changed formal SSOT files only."""
+    errors: List[str] = []
+    for raw_path in paths:
+        path = raw_path if raw_path.is_absolute() else (project_root / raw_path)
+        if not path.exists() or path.suffix.lower() != ".md":
+            continue
+        if not is_formal_ssot_file(path):
+            continue
+        try:
+            front_matter, _ = parse_front_matter(path)
+        except Exception as exc:
+            errors.append(str(exc))
+            continue
+        ssot_type = str(front_matter.get("ssot_type") or "").strip().lower()
+        if ssot_type not in GOVERNED_SSOT_TYPES:
+            continue
+        if not front_matter.get("workflow_instance_id"):
+            errors.append(
+                f"{path}: missing workflow_instance_id for governed SSOT {front_matter.get('id')}"
+            )
     return errors

@@ -1,0 +1,6 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+COPY . /app
+RUN pip install --no-cache-dir -e .[dev]
+CMD ["python", "-m", "lee.cli.main", "ssot", "chain-test", "--tester", "schema", "--tester", "trace", "--tester", "semantic", "--tester", "overlap", "--tester", "replay", "--tester", "executable"]

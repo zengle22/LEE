@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 import yaml
 
 from lee.orchestrator.verifiers.base import VerifyResult, VerifyStatus
@@ -29,7 +30,8 @@ class SchemaVerifier:
     """验证 YAML 输出是否符合 schema"""
 
     def verify(self, context: Dict[str, Any]) -> VerifyResult:
-        schema_path = context.get("config", {}).get("schema_path")
+        config = context.get("config", {}) or {}
+        schema_path = config.get("schema_path")
         if not schema_path:
             return VerifyResult(
                 status=VerifyStatus.FAILED,
@@ -37,56 +39,143 @@ class SchemaVerifier:
                 message="schema_path is required",
             )
 
-        # 尝试多个可能的路径
-        possible_paths = []
-        project_root = context.get("project_root", ".")
-
-        # 获取包内 spec-global 路径
-        spec_global = _get_spec_global_path()
-
-        # 1. 相对于项目根目录
-        possible_paths.append(Path(project_root) / schema_path)
-
-        # 2. 查找 spec-global 中所有匹配的文件
-        # 处理相对路径如 ../../contracts/xxx
-        if spec_global and schema_path.startswith("../"):
-            # 提取文件名和可能的子路径
-            basename = schema_path.split("/")[-1]
-            # 在 spec-global 中递归查找
-            try:
-                for match in spec_global.rglob(basename):
-                    possible_paths.append(match)
-            except Exception:
-                pass  # spec-global 可能不存在
-
-        # 3. 相对于 LEE 框架根目录（使用包内路径）
-        if spec_global:
-            possible_paths.append(spec_global.parent / schema_path)
-
-        # 4. 作为绝对路径
-        if Path(schema_path).is_absolute():
-            possible_paths.append(Path(schema_path))
-
-        found_path = None
-        for p in possible_paths:
-            if p.exists() and p.is_file():
-                found_path = p
-                break
-
-        if not found_path:
+        schema_file = self._resolve_schema_path(schema_path, context.get("project_root", "."))
+        if not schema_file:
             return VerifyResult(
                 status=VerifyStatus.FAILED,
                 verifier_id="schema",
                 message=f"Schema file not found: {schema_path}",
             )
 
-        # Schema 验证暂时跳过（需要 jsonschema 库），只检查文件存在
-        # TODO: 实现完整的 schema 验证
+        try:
+            import jsonschema
+            from jsonschema.exceptions import ValidationError as JSONSchemaValidationError
+        except ImportError:
+            return VerifyResult(
+                status=VerifyStatus.FAILED,
+                verifier_id="schema",
+                message="jsonschema dependency is required for schema verifier",
+            )
+
+        payload, payload_desc = self._resolve_payload(config, context.get("project_root", "."))
+        if payload_desc is None:
+            return VerifyResult(
+                status=VerifyStatus.FAILED,
+                verifier_id="schema",
+                message=(
+                    "schema verifier needs one of config.file_path/config.output_path/"
+                    "config.data to validate payload"
+                ),
+            )
+        if isinstance(payload_desc, str) and payload_desc.startswith("payload file not found:"):
+            return VerifyResult(
+                status=VerifyStatus.FAILED,
+                verifier_id="schema",
+                message=payload_desc,
+            )
+        if isinstance(payload_desc, str) and payload_desc.startswith("failed to load payload file"):
+            return VerifyResult(
+                status=VerifyStatus.FAILED,
+                verifier_id="schema",
+                message=payload_desc,
+            )
+        if payload is None:
+            return VerifyResult(
+                status=VerifyStatus.FAILED,
+                verifier_id="schema",
+                message="Resolved schema payload is empty",
+            )
+
+        try:
+            raw_schema = self._load_data_file(schema_file)
+        except Exception as exc:
+            return VerifyResult(
+                status=VerifyStatus.FAILED,
+                verifier_id="schema",
+                message=f"Failed to load schema file '{schema_file}': {exc}",
+            )
+
+        schema_doc = raw_schema.get("schema") if isinstance(raw_schema, dict) and isinstance(raw_schema.get("schema"), dict) else raw_schema
+        if not isinstance(schema_doc, dict):
+            return VerifyResult(
+                status=VerifyStatus.FAILED,
+                verifier_id="schema",
+                message=f"Invalid schema structure in '{schema_file}'",
+            )
+
+        try:
+            jsonschema.validate(instance=payload, schema=schema_doc)
+        except JSONSchemaValidationError as exc:
+            path = ".".join(str(p) for p in exc.path) if exc.path else "$"
+            return VerifyResult(
+                status=VerifyStatus.FAILED,
+                verifier_id="schema",
+                message=f"Schema validation failed at {path}: {exc.message}",
+            )
+        except Exception as exc:
+            return VerifyResult(
+                status=VerifyStatus.FAILED,
+                verifier_id="schema",
+                message=f"Schema validation error: {exc}",
+            )
+
         return VerifyResult(
             status=VerifyStatus.PASSED,
             verifier_id="schema",
-            message=f"Schema file exists: {found_path}",
+            message=f"Schema validation passed: {payload_desc} against {schema_file}",
         )
+
+    @staticmethod
+    def _load_data_file(path: Path) -> Any:
+        with open(path, "r", encoding="utf-8") as f:
+            if path.suffix.lower() == ".json":
+                return json.load(f)
+            return yaml.safe_load(f)
+
+    def _resolve_schema_path(self, schema_path: str, project_root: str) -> Optional[Path]:
+        possible_paths: List[Path] = []
+        spec_global = _get_spec_global_path()
+        project_root_path = Path(project_root)
+        schema_ref = Path(schema_path)
+
+        if schema_ref.is_absolute():
+            possible_paths.append(schema_ref)
+        else:
+            possible_paths.append(project_root_path / schema_path)
+
+            if spec_global:
+                possible_paths.append(spec_global.parent / schema_path)
+
+            if spec_global and schema_path.startswith("../"):
+                basename = schema_path.split("/")[-1]
+                try:
+                    possible_paths.extend(spec_global.rglob(basename))
+                except Exception:
+                    pass
+
+        for candidate in possible_paths:
+            if candidate.exists() and candidate.is_file():
+                return candidate
+        return None
+
+    def _resolve_payload(self, config: Dict[str, Any], project_root: str) -> Tuple[Any, Optional[str]]:
+        if "data" in config:
+            return config.get("data"), "inline config.data"
+
+        payload_path = config.get("file_path") or config.get("output_path")
+        if not payload_path:
+            return None, None
+
+        candidate = Path(payload_path)
+        if not candidate.is_absolute():
+            candidate = Path(project_root) / payload_path
+        if not candidate.exists() or not candidate.is_file():
+            return None, f"payload file not found: {candidate}"
+
+        try:
+            return self._load_data_file(candidate), str(candidate)
+        except Exception as exc:
+            return None, f"failed to load payload file '{candidate}': {exc}"
 
 
 class VerifierEngine:

@@ -62,7 +62,7 @@ last_updated: 2026-02-19
 ┌─────────────────────────────┐
 │      Engine / Executor      │
 │  - LLMExecutor               │
-│  - MetaGPTExecutor           │
+│  - Legacy ExecutorExecutor           │
 │  - ShellSkillExecutor        │
 └─────────────────────────────┘
 ```

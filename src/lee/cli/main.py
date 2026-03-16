@@ -3,8 +3,13 @@ LEE CLI
 
 提供统一命令入口：
 - lee run <dept>.<workflow>
+- lee src new --spec <raw.md>
 - lee status [workflow_id]
 - lee approve <workflow_id> <gate_id>
+- lee epic new --spec <frozen-src.md>
+- lee feat new --spec <frozen-epic.md>
+- lee delivery-prep new --spec <frozen-feat.md>
+- lee chain validate --source-freeze <src> --epic-freeze-bundle <epic> --feat-freeze-bundle <feat> --delivery-prep-bundle <prep>
 - lee workflow create/list/pause/resume/run-step/reject
 - lee test-runner run-e2e ...
 - lee check-env qa-e2e ...
@@ -24,30 +29,7 @@ from typing import Optional
 
 import click
 
-from lee.cli.commands.run import run
-from lee.cli.commands.status import status
-from lee.cli.commands.approve import approve
-from lee.cli.commands.init import init
-from lee.cli.commands.demo import demo
-from lee.cli.commands.qa import qa
-from lee.cli.commands.test_runner import test_runner
-from lee.cli.commands.check_env import check_env
-from lee.cli.commands.behavior_compliance_checker import behavior_compliance_checker
-from lee.cli.commands.diagram_gen import diagram_gen
-from lee.cli.commands.diagram_insert import diagram_insert
-from lee.cli.commands.md_to_wechat import md_to_wechat
-from lee.cli.commands.orchestrator_cmds import wf
-from lee.cli.commands.repo import repo
-from lee.cli.commands.verify import verify
-from lee.cli.commands.chat import chat
-from lee.cli.commands.watch import watch
-from lee.cli.commands import gates_cmd as gates
-from lee.cli.commands.artifacts import artifacts
-from lee.cli.commands.ssot import ssot
-from lee.cli.commands.context import context
-from lee.cli.commands.task_brief import task_brief
-from lee.cli.commands.doctor import doctor
-from lee.cli.commands.governance import governance
+from lee import __version__
 from lee.orchestrator.core.io_guard import init_path_guard
 
 try:
@@ -66,6 +48,21 @@ logger = logging.getLogger(__name__)
 READONLY_COMMANDS = {"status", "watch"}
 GATES_READONLY_SUBCOMMANDS = {"list", "show"}
 GATES_DECISION_SUBCOMMANDS = {"approve", "reject", "decide", "revise", "flag"}
+LIGHTWEIGHT_ARGS = {"-v", "--version"}
+WORKFLOW_COMMANDS = {
+    "run",
+    "adr",
+    "src",
+    "epic",
+    "feat",
+    "delivery-prep",
+    "chain",
+    "approve",
+    "status",
+    "watch",
+    "gates",
+}
+SYSTEM_COMMANDS = {"ssot", "workflow", "artifacts", "repo", "verify", "doctor", "context", "governance"}
 
 
 def _should_lock(argv: list[str]) -> bool:
@@ -101,6 +98,10 @@ def _should_lock(argv: list[str]) -> bool:
     if first == "approve":
         return False
 
+    # `lee run` 使用 workflow-scope 互斥，不再使用项目级 CLI 锁
+    if first == "run":
+        return False
+
     # gates 子命令需要特殊处理
     if first == "gates" and len(argv) >= 2:
         subcommand = argv[1]
@@ -110,6 +111,11 @@ def _should_lock(argv: list[str]) -> bool:
 
     # 其他命令需要锁
     return True
+
+
+def _is_lightweight_invocation(argv: list[str]) -> bool:
+    """Whether the invocation only needs top-level CLI metadata."""
+    return not argv or argv[0] in LIGHTWEIGHT_ARGS
 
 
 def _resolve_project_dir(argv: list[str]) -> Path:
@@ -203,41 +209,124 @@ def _release_cli_lock(fd: Optional[int]) -> None:
         os.close(fd)
 
 
-@click.group()
+class WorkflowFirstGroup(click.Group):
+    """Top-level CLI group with workflow-first help sections."""
+
+    def format_commands(self, ctx, formatter):
+        commands = []
+        for subcommand in self.list_commands(ctx):
+            command = self.get_command(ctx, subcommand)
+            if command is None or getattr(command, "hidden", False):
+                continue
+            commands.append((subcommand, command))
+
+        sections = [
+            ("Workflow Commands", [item for item in commands if item[0] in WORKFLOW_COMMANDS]),
+            ("System Commands", [item for item in commands if item[0] in SYSTEM_COMMANDS]),
+            (
+                "Other Commands",
+                [item for item in commands if item[0] not in WORKFLOW_COMMANDS and item[0] not in SYSTEM_COMMANDS],
+            ),
+        ]
+
+        for section_name, section_commands in sections:
+            if not section_commands:
+                continue
+            rows = []
+            for subcommand, command in section_commands:
+                rows.append((subcommand, command.get_short_help_str(formatter.width) or ""))
+            with formatter.section(section_name):
+                formatter.write_dl(rows)
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]}, cls=WorkflowFirstGroup)
+@click.version_option(__version__, "-v", "--version", message="%(prog)s %(version)s")
 def cli():
-    """LEE 命令行工具"""
+    """LEE 命令行工具
+
+    Workflow-first 常用入口：
+    - `lee src new --spec <raw.md>`: 原始输入进入 product.raw-to-src
+    - `lee epic new --spec <frozen-src.md>`: 冻结 SRC 进入 product.src-to-epic
+    - `lee feat new --spec <frozen-epic.md>`: 冻结 EPIC 进入 product.epic-to-feat
+    - `lee delivery-prep new --spec <frozen-feat.md>`: 冻结 FEAT 进入 product.feat-to-delivery-prep
+    - `lee chain validate --source-freeze <src> --epic-freeze-bundle <epic> --feat-freeze-bundle <feat> --delivery-prep-bundle <prep>`:
+      直接校验需求链，无需先手写 YAML spec
+
+    也可使用底层入口：
+    - `lee run <dept>.<workflow> --spec <input.yaml>`
+    """
     pass
 
 
-cli.add_command(run)
-cli.add_command(status)
-cli.add_command(approve)
-cli.add_command(init)
-cli.add_command(demo)
-cli.add_command(qa)
-cli.add_command(test_runner, "test-runner")
-cli.add_command(check_env, "check-env")
-cli.add_command(behavior_compliance_checker, "behavior-check")
-cli.add_command(diagram_gen, "diagram-gen")
-cli.add_command(diagram_insert, "diagram-insert")
-cli.add_command(md_to_wechat, "md-to-wechat")
-cli.add_command(wf, "workflow")
-cli.add_command(repo)
-cli.add_command(verify)
-cli.add_command(chat)
-cli.add_command(watch)
-cli.add_command(gates.gates)
-cli.add_command(artifacts)
-cli.add_command(ssot)
-cli.add_command(context)
-cli.add_command(task_brief)
-cli.add_command(doctor)
-cli.add_command(governance)
+def _register_commands() -> None:
+    if getattr(cli, "_lee_commands_registered", False):
+        return
+
+    from lee.cli.commands.run import run
+    from lee.cli.commands.status import status
+    from lee.cli.commands.approve import approve
+    from lee.cli.commands.init import init
+    from lee.cli.commands.demo import demo
+    from lee.cli.commands.qa import qa
+    from lee.cli.commands.test_runner import test_runner
+    from lee.cli.commands.check_env import check_env
+    from lee.cli.commands.behavior_compliance_checker import behavior_compliance_checker
+    from lee.cli.commands.diagram_gen import diagram_gen
+    from lee.cli.commands.diagram_insert import diagram_insert
+    from lee.cli.commands.md_to_wechat import md_to_wechat
+    from lee.cli.commands.orchestrator_cmds import wf
+    from lee.cli.commands.repo import repo
+    from lee.cli.commands.verify import verify
+    from lee.cli.commands.chat import chat
+    from lee.cli.commands.watch import watch
+    from lee.cli.commands import gates_cmd as gates
+    from lee.cli.commands.artifacts import artifacts
+    from lee.cli.commands.ssot import ssot
+    from lee.cli.commands.context import context
+    from lee.cli.commands.task_brief import task_brief
+    from lee.cli.commands.doctor import doctor
+    from lee.cli.commands.governance import governance
+    from lee.cli.commands.workflow_entrypoints import adr, src, epic, feat, delivery_prep, chain
+
+    cli.add_command(run)
+    cli.add_command(status)
+    cli.add_command(approve)
+    cli.add_command(init)
+    cli.add_command(demo)
+    cli.add_command(qa)
+    cli.add_command(test_runner, "test-runner")
+    cli.add_command(check_env, "check-env")
+    cli.add_command(behavior_compliance_checker, "behavior-check")
+    cli.add_command(diagram_gen, "diagram-gen")
+    cli.add_command(diagram_insert, "diagram-insert")
+    cli.add_command(md_to_wechat, "md-to-wechat")
+    cli.add_command(wf, "workflow")
+    cli.add_command(repo)
+    cli.add_command(verify)
+    cli.add_command(chat)
+    cli.add_command(watch)
+    cli.add_command(gates.gates)
+    cli.add_command(artifacts)
+    cli.add_command(ssot)
+    cli.add_command(context)
+    cli.add_command(task_brief)
+    cli.add_command(doctor)
+    cli.add_command(governance)
+    cli.add_command(adr)
+    cli.add_command(src)
+    cli.add_command(epic)
+    cli.add_command(feat)
+    cli.add_command(delivery_prep)
+    cli.add_command(chain)
+    cli._lee_commands_registered = True
 
 
 def main():
     lock_fd: Optional[int] = None
     try:
+        if not _is_lightweight_invocation(sys.argv[1:]):
+            _register_commands()
+
         # 初始化路径守卫（只在 dev/CI 模式下启用）
         project_root = _resolve_project_dir(sys.argv[1:])
         init_path_guard(str(project_root))

@@ -27,6 +27,7 @@ import os
 import queue
 import re
 import signal
+import shutil
 import subprocess
 import threading
 import time
@@ -35,6 +36,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .error_hints import append_executor_hints
 from .executors import BaseExecutor
 
 logger = logging.getLogger(__name__)
@@ -76,7 +78,7 @@ class CodexExecutor(BaseExecutor):
     DEFAULT_SILENCE_GRACE_SECONDS = 20
     DEFAULT_ALLOWED_COMMANDS = ["cat", "ls", "find", "grep"]
     DEFAULT_HEARTBEAT_SECONDS = 5
-    DEFAULT_MODEL = "gpt-4o"
+    DEFAULT_MODEL = ""
     DEFAULT_MAX_BASH_CALLS = 60
     DEFAULT_RESUME_ON_RETRY = True
     DEFAULT_SANDBOX_MODE = "workspace-write"  # Codex sandbox: read-only, workspace-write, danger-full-access
@@ -100,12 +102,15 @@ class CodexExecutor(BaseExecutor):
         Args:
             **kwargs: 额外参数（保留扩展性）
         """
-        self._codex_binary = os.getenv("CODEX_BINARY", "codex")
+        self._codex_binary = self._resolve_binary(
+            os.getenv("CODEX_BINARY", "codex")
+        )
         self._model = (
             kwargs.get("model")
             or os.getenv("CODEX_MODEL", "").strip()
             or self.DEFAULT_MODEL
         )
+        self._prefer_local_auth = self._has_local_auth_file()
         self._extra_env = self._load_codex_env_settings()
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -165,6 +170,7 @@ class CodexExecutor(BaseExecutor):
         )
         stop_conditions = input_data.get("stop_conditions", {})
         system_prompt_extra = input_data.get("system_prompt_extra", "")
+        structured_output_only = bool(input_data.get("structured_output_only", False))
         evidence_base = input_data.get("evidence_base", "")
         model = str(input_data.get("model") or self._model or "").strip()
         max_bash_calls = self._coerce_non_negative_int(
@@ -189,6 +195,7 @@ class CodexExecutor(BaseExecutor):
             max_bash_calls=max_bash_calls,
             stop_conditions=stop_conditions,
             system_prompt_extra=system_prompt_extra,
+            structured_output_only=structured_output_only,
         )
 
         # ========== 4. 构建用户 prompt ==========
@@ -265,8 +272,10 @@ class CodexExecutor(BaseExecutor):
             )
         except FileNotFoundError:
             return self._build_error_result(
-                f"Codex CLI binary not found: {self._codex_binary}. "
-                "Install with: npm install -g @openai/codex",
+                append_executor_hints(
+                    f"Codex CLI binary not found: {self._codex_binary}. "
+                    "Install with: npm install -g @openai/codex"
+                ),
                 evidence_dir=str(evidence_dir),
                 conversation_log_path=conversation_live_log_path,
                 debug_log_path=codex_debug_log_path,
@@ -275,7 +284,7 @@ class CodexExecutor(BaseExecutor):
             )
         except Exception as e:
             return self._build_error_result(
-                f"Codex CLI invocation failed: {e}",
+                append_executor_hints(f"Codex CLI invocation failed: {e}"),
                 evidence_dir=str(evidence_dir),
                 conversation_log_path=conversation_live_log_path,
                 debug_log_path=codex_debug_log_path,
@@ -314,7 +323,7 @@ class CodexExecutor(BaseExecutor):
             "prompt_system_path": prompt_system_path,
             "prompt_user_path": prompt_user_path,
             "generated_text": parsed.get("result_text", ""),
-            "error": parsed.get("error"),
+            "error": append_executor_hints(parsed.get("error")),
             "cost_usd": parsed.get("cost_usd", 0),
             "tokens_used": parsed.get("tokens_used", 0),
             "thread_id": parsed.get("thread_id", ""),
@@ -496,11 +505,7 @@ class CodexExecutor(BaseExecutor):
                         pass
 
         try:
-            env = {
-                **os.environ,
-                **self._extra_env,
-                "CODEX_ENTRYPOINT": "lee-executor",
-            }
+            env = self._build_subprocess_env()
 
             _append_meta(f"cmd={' '.join(cmd)}")
             _append_meta(f"cwd={cwd}")
@@ -620,14 +625,56 @@ class CodexExecutor(BaseExecutor):
         """构建 subprocess 额外环境变量"""
         extra: Dict[str, str] = {}
 
-        # Codex 使用 ChatGPT 账户或 API Key
-        # 从 ~/.codex/config.toml 或环境变量读取
-        for var in ("OPENAI_API_KEY", "CODEX_API_KEY"):
+        # 优先使用 Codex 专属环境变量，避免被仓库内 .env 的通用 OpenAI
+        # 兼容层配置污染到底层 Codex CLI。
+        for var in ("CODEX_API_KEY", "CODEX_HOME"):
             val = os.getenv(var)
             if val:
                 extra[var] = val
 
         return extra
+
+    @staticmethod
+    def _has_local_auth_file() -> bool:
+        codex_home = Path(
+            os.getenv("CODEX_HOME") or (Path.home() / ".codex")
+        )
+        return (codex_home / "auth.json").exists()
+
+    def _build_subprocess_env(self) -> Dict[str, str]:
+        env = {
+            **os.environ,
+            **self._extra_env,
+            "CODEX_ENTRYPOINT": "lee-executor",
+        }
+        if self._prefer_local_auth and not env.get("CODEX_API_KEY"):
+            for var in (
+                "OPENAI_API_KEY",
+                "OPENAI_BASE_URL",
+                "OPENAI_API_BASE",
+                "OPENAI_MODEL",
+            ):
+                env.pop(var, None)
+        return env
+
+    @staticmethod
+    def _resolve_binary(binary_name: str) -> str:
+        """
+        解析可执行文件路径。
+
+        Windows 上优先传递解析后的 .cmd/.bat 包装器路径，避免 CreateProcess
+        将裸命令解析到 WindowsApps 中不可直接启动的 App Execution Alias。
+        """
+        candidate = str(binary_name or "codex").strip() or "codex"
+        direct = shutil.which(candidate)
+        if direct:
+            return direct
+        if os.name == "nt" and "." not in Path(candidate).name:
+            for suffix in (".cmd", ".bat", ".exe", ".ps1"):
+                resolved = shutil.which(f"{candidate}{suffix}")
+                if resolved:
+                    return resolved
+        return candidate
 
     # ================================================================
     # 内部方法 - 输出解析
@@ -660,9 +707,12 @@ class CodexExecutor(BaseExecutor):
         main_output = parts[0]
 
         # 解析 JSONL 事件
-        events = []
         items = []
         usage = {}
+        fatal_error_messages: List[str] = []
+        transient_error_messages: List[str] = []
+        saw_turn_completed = False
+        saw_turn_failed = False
 
         for line in main_output.strip().split("\n"):
             line = line.strip()
@@ -670,15 +720,26 @@ class CodexExecutor(BaseExecutor):
                 continue
             try:
                 event = json.loads(line)
-                events.append(event)
 
                 # 提取关键事件
-                if event.get("type") == "thread.started":
+                event_type = event.get("type")
+                if event_type == "thread.started":
                     parsed["thread_id"] = event.get("thread_id", "")
-                elif event.get("type") == "item.completed":
-                    items.append(event.get("item", {}))
-                elif event.get("type") == "turn.completed":
+                elif event_type == "item.completed":
+                    item = event.get("item", {})
+                    items.append(item)
+                    if item.get("type") == "error" and item.get("message"):
+                        transient_error_messages.append(str(item.get("message")))
+                elif event_type == "turn.completed":
+                    saw_turn_completed = True
                     usage = event.get("usage", {})
+                elif event_type == "turn.failed":
+                    saw_turn_failed = True
+                    error = event.get("error", {})
+                    if isinstance(error, dict) and error.get("message"):
+                        fatal_error_messages.append(str(error.get("message")))
+                elif event_type == "error" and event.get("message"):
+                    transient_error_messages.append(str(event.get("message")))
 
             except json.JSONDecodeError:
                 # 跳过无效的 JSON 行
@@ -690,7 +751,7 @@ class CodexExecutor(BaseExecutor):
         output_tokens = usage.get("output_tokens", 0)
         parsed["tokens_used"] = input_tokens + output_tokens
         parsed["cost_usd"] = self._calculate_cost(
-            self._model, input_tokens - cached_tokens, output_tokens
+            self._model or "gpt-4o", input_tokens - cached_tokens, output_tokens
         )
 
         # 从 items 中提取信息
@@ -722,20 +783,34 @@ class CodexExecutor(BaseExecutor):
             self._extract_test_results(parsed["result_text"], parsed)
 
         # 检查错误
-        if not parsed["error"] and raw_output:
+        if saw_turn_failed and fatal_error_messages:
+            parsed["error"] = "; ".join(
+                dict.fromkeys(msg for msg in fatal_error_messages if msg)
+            )
+        elif not saw_turn_completed:
+            combined_errors = fatal_error_messages + transient_error_messages
+            if combined_errors:
+                parsed["error"] = "; ".join(
+                    dict.fromkeys(msg for msg in combined_errors if msg)
+                )
+
+        if not parsed["error"] and raw_output and not saw_turn_completed:
             error_patterns = [
                 r"^Error:",
                 r"^fatal:",
                 r"command not found",
             ]
             for pattern in error_patterns:
-                if re.search(pattern, raw_output, re.MULTILINE | re.IGNORECASE):
-                    lines = raw_output.split('\n')
-                    for line in lines:
-                        line = line.strip()
-                        if line:
-                            parsed["error"] = line
-                            break
+                matched_line = next(
+                    (
+                        line.strip()
+                        for line in raw_output.splitlines()
+                        if re.search(pattern, line, re.IGNORECASE)
+                    ),
+                    None,
+                )
+                if matched_line:
+                    parsed["error"] = matched_line
                     break
 
         return parsed
@@ -802,6 +877,7 @@ class CodexExecutor(BaseExecutor):
         max_bash_calls: int,
         stop_conditions: Dict[str, str],
         system_prompt_extra: str,
+        structured_output_only: bool = False,
     ) -> str:
         """构建系统 prompt（注入治理约束）"""
         constraints = [
@@ -831,18 +907,31 @@ class CodexExecutor(BaseExecutor):
         prompt = f"""## Governance Constraints
 
 {constraints_text}
+"""
+
+        if structured_output_only:
+            prompt += """
+
+## Output Requirements
+
+This run is in structured repair mode.
+Return only the final machine-readable JSON object body.
+Do not output executor wrapper fields such as status, changed_files, commands_run, test_results, or error.
+Do not output prose, headings, code fences, or any extra wrapper."""
+        else:
+            prompt += """
 
 ## Output Requirements
 
 After completing the task, output a JSON code block with the following format:
 ```json
-{{
+{
   "status": "success or fail",
   "changed_files": ["list of modified files"],
-  "commands_run": [{{"cmd": "command", "exit_code": 0}}],
-  "test_results": {{"passed": 0, "failed": 0}},
+  "commands_run": [{"cmd": "command", "exit_code": 0}],
+  "test_results": {"passed": 0, "failed": 0},
   "error": null
-}}
+}
 ```
 """
 

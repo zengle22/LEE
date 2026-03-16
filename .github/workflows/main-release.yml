@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build-and-publish:
-    name: Build And Publish Candidate
+    name: Build And Publish Release Package
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -48,7 +48,7 @@ jobs:
             --ignore tests/unit/test_artifacts/test_cleanup.py \
             --ignore tests/unit/test_artifacts/test_install_git_hooks.py
 
-      - name: Compute candidate version
+      - name: Compute release package version
         id: version
         run: |
           python scripts/ci/compute_version.py --mode candidate --sha "${GITHUB_SHA}" --write-pyproject
@@ -59,9 +59,9 @@ jobs:
 
       - name: Write build metadata
         run: |
-          python scripts/ci/write_build_metadata.py --version "${{ steps.version.outputs.lee_version }}" --release-kind candidate --output dist/build-metadata.json
+          python scripts/ci/write_build_metadata.py --version "${{ steps.version.outputs.lee_version }}" --release-kind main-release --output dist/build-metadata.json
 
-      - name: Upload candidate artifact
+      - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
           name: lee-dist-${{ steps.version.outputs.lee_version }}

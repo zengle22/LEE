@@ -211,6 +211,17 @@ steps:
 """
         (framework_dir / "l3").mkdir(exist_ok=True)
         (framework_dir / "l3" / "task-l3-v3-template.yaml").write_text(l3_template_content)
+        (framework_dir / "tech-design-l3-template.yaml").write_text("""
+kind: l3_workflow_template
+version: "1.0"
+id: template.dev.tech_design_l3
+steps:
+  - id: analyze_feature
+    name: "Analyze"
+    kind: agent
+    mandatory: true
+    depends_on: []
+""")
 
         # Create orchestrator
         orch = Orchestrator(
@@ -225,6 +236,12 @@ steps:
                 "repos": [
                     {"id": "test-repo", "type": "frontend"}
                 ]
+            },
+            "params": {
+                "tech_spec_ref": "TECH-001",
+            },
+            "artifacts": {
+                "tech_spec_ref": "TECH-001",
             },
             "phases": [
                 {"id": "frontend_dev", "status": "running", "complexity": "M"}
@@ -312,6 +329,8 @@ steps:
         assert instance_data["point_id"] == point.id
         assert instance_data["parent_l2_id"] == "l2-parent-test"
         assert instance_data["parent_phase_id"] == "frontend_dev"
+        assert instance_data["params"]["tech_spec_ref"] == "TECH-001"
+        assert instance_data["artifacts"]["tech_spec_ref"] == "TECH-001"
 
         # Verify L3_SPAWNED event was published
         assert len(events_captured) > 0
@@ -419,6 +438,101 @@ steps:
 
         # All complexities should spawn successfully
         assert len(spawned_ids) == 3
+
+    @pytest.mark.asyncio
+    async def test_spawn_l3_uses_phase_template_id(self, setup_orchestrator, tmp_path):
+        """Test phase-resolved L3 template ID is used for generation and spawn."""
+        orch, store = setup_orchestrator
+
+        point = Point(
+            id="tech-point",
+            title="Tech Design",
+            desc="Resolve TECH baseline",
+            layer="service",
+            estimated_complexity=Complexity.M,
+        )
+
+        captured = {}
+
+        async def mock_spawn(**kwargs):
+            captured["template_id"] = kwargs.get("template_id")
+            wf = WorkflowInstance(
+                id="l3-tech-point",
+                level=WorkflowLevel.TASK,
+                template_id=kwargs.get("template_id"),
+                status=WorkflowStatus.PENDING,
+                data=kwargs.get("data", {}),
+            )
+            await store.create_workflow(wf)
+            return wf
+
+        orch.spawn_workflow = mock_spawn
+
+        l3_id = await orch._spawn_l3_for_point(
+            parent_l2_id="l2-parent-test",
+            parent_phase_id="tech_design",
+            point=point,
+            repo_id="test-repo",
+            l3_template_id="template.dev.tech_design_l3",
+        )
+
+        assert l3_id == "l3-tech-point"
+        assert captured["template_id"] == "template.dev.tech_design_l3"
+
+        runtime_instance_path = tmp_path / ".workflow" / "instances" / "l3" / f"{point.id}.yaml"
+        assert runtime_instance_path.exists()
+
+        import yaml
+        with open(runtime_instance_path, encoding="utf-8") as f:
+            instance_data = yaml.safe_load(f)
+        assert instance_data["template_id"] == "template.dev.tech_design_l3"
+        # Support both stages and legacy steps format
+        if "stages" in instance_data:
+            steps = []
+            for stage in instance_data["stages"]:
+                steps.extend(stage.get("steps", []))
+        else:
+            steps = instance_data["steps"]
+        assert steps[0]["id"] == "analyze_feature"
+
+    @pytest.mark.asyncio
+    async def test_resolve_bugfix_l3_template_path(self, setup_orchestrator, tmp_path):
+        """Test bugfix L3 template IDs resolve to checked-in template files."""
+        orch, store = setup_orchestrator
+
+        framework_dir = tmp_path / "spec-global" / "departments" / "dev" / "workflows" / "templates"
+        framework_dir.mkdir(parents=True, exist_ok=True)
+        template_file = framework_dir / "bugfix-triage-l3-template.yaml"
+        template_file.write_text("""
+kind: l3_workflow_template
+version: "1.0"
+id: template.dev.bugfix_triage_l3
+steps:
+  - id: validate_bug_input
+    name: "Validate"
+    kind: agent
+    mandatory: true
+    depends_on: []
+  - id: classify_bug_path
+    name: "Classify"
+    kind: agent
+    mandatory: true
+    depends_on: ["validate_bug_input"]
+  - id: review_batch_eligibility
+    name: "Gate"
+    kind: stage
+    mandatory: true
+    depends_on: ["classify_bug_path"]
+  - id: publish_triage
+    name: "Publish"
+    kind: agent
+    mandatory: true
+    depends_on: ["review_batch_eligibility"]
+""")
+
+        orch.project_root = str(tmp_path)
+        resolved = orch._resolve_l3_template_path("template.dev.bugfix_triage_l3")
+        assert resolved.name == "bugfix-triage-l3-template.yaml"
 
 
 class TestL3V3Template:

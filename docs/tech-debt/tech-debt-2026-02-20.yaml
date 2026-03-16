@@ -689,7 +689,7 @@ dependencies:
       category: "兼容性"
       severity: "medium"
       description: |
-        MetaGPT 需要 Python 3.9-3.10，但框架支持 3.8+
+        Legacy Executor 需要 Python 3.9-3.10，但框架支持 3.8+
       impact: |
         - 用户困惑
         - 部署问题

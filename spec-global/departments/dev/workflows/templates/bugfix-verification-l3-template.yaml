@@ -1,0 +1,71 @@
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:44.019939
+kind: l3_workflow_template
+version: '1.0'
+id: template.dev.bugfix_verification_l3
+name: Bugfix Verification L3 Template
+description: 'Canonical L3 workflow for verifying the bugfix and checking regressions.
+
+  '
+owner: development
+tags:
+- template
+- dev
+- bugfix
+- verification
+- l3
+- canonical
+instance_schema:
+  required_fields:
+  - id
+  - template_id
+  - parent_phase_id
+  output_fields:
+  - verification_report_ref
+  - regression_result_ref
+  - verification_package_ref
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
+  - id: prepare_verification
+    name: Prepare Verification
+    kind: agent
+    description: Prepare verification scope and testcase inputs.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on: []
+    outputs:
+    - verification_plan_ref
+  - id: execute_verification
+    name: Execute Verification
+    kind: agent
+    description: Execute bugfix verification and collect evidence.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on:
+    - prepare_verification
+    outputs:
+    - verification_report_ref
+    - regression_result_ref
+  - id: review_verification
+    name: Review Verification
+    kind: agent
+    description: Review verification completeness and regression coverage.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on:
+    - execute_verification
+    outputs:
+    - verification_review_ref
+  - id: publish_verification
+    name: Publish Verification Package
+    kind: agent
+    description: Publish verification package for evidence closure.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on:
+    - review_verification
+    outputs:
+    - verification_package_ref

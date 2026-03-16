@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-spec.example.com/contracts/product-task-contract/v1/schema.json",
+  "title": "Product Task Contract",
+  "description": "TASK 单对象契约 - 作为 FEAT 下的正式执行 SSOT 对象，用于 AI 审计、观测、回滚与重跑。",
+  "type": "object",
+  "required": [
+    "task_id",
+    "title",
+    "objective",
+    "description",
+    "source_feat",
+    "workstream",
+    "responsible_role",
+    "acceptance_criteria_mapping",
+    "definition_of_done",
+    "dependencies",
+    "priority",
+    "milestone",
+    "estimated_effort",
+    "lifecycle_status",
+    "observability",
+    "evidence_requirements",
+    "rollback_strategy",
+    "ssot"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_feat": {
+      "type": "string",
+      "pattern": "^FEAT-\\d{3}$"
+    },
+    "workstream": {
+      "type": "string",
+      "minLength": 1,
+      "description": "项目感知的执行泳道，例如 cli-core、workflow-spec、runtime、ux、qa-seed。禁止硬编码 frontend/backend/integration。"
+    },
+    "task_kind": {
+      "type": "string",
+      "enum": ["implementation", "governance", "refactor", "validation", "ux", "research", "migration"]
+    },
+    "responsible_role": {
+      "type": "string",
+      "minLength": 1
+    },
+    "acceptance_criteria_mapping": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["feat", "ac", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "feat": {
+            "type": "string",
+            "pattern": "^FEAT-\\d{3}$"
+          },
+          "ac": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "prerequisites": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "inputs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "outputs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "definition_of_done": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["P0", "P1", "P2"]
+    },
+    "milestone": {
+      "type": "string",
+      "minLength": 1
+    },
+    "delivery_slice": {
+      "type": "string"
+    },
+    "estimated_effort": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lifecycle_status": {
+      "type": "string",
+      "enum": ["draft", "active", "frozen", "archived"]
+    },
+    "decision_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "observability": {
+      "type": "object",
+      "required": ["execution_unit", "log_scope", "audit_fields"],
+      "additionalProperties": false,
+      "properties": {
+        "execution_unit": {
+          "type": "string",
+          "enum": ["task"]
+        },
+        "log_scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "audit_fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "evidence_requirements": {
+      "type": "object",
+      "required": ["required_refs", "review_required"],
+      "additionalProperties": false,
+      "properties": {
+        "required_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "review_required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "rollback_strategy": {
+      "type": "object",
+      "required": ["mode", "restore_targets"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["revert", "replay", "manual"]
+        },
+        "restore_targets": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "preconditions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "source_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "ssot": {
+      "type": "object",
+      "required": ["identity_kind", "ssot_type", "parent", "derived_from"],
+      "additionalProperties": false,
+      "properties": {
+        "identity_kind": {
+          "type": "string",
+          "const": "ssot"
+        },
+        "ssot_type": {
+          "type": "string",
+          "const": "TASK"
+        },
+        "parent": {
+          "type": "string",
+          "pattern": "^FEAT-\\d{3}$"
+        },
+        "derived_from": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -50,3 +50,31 @@ responsibility:
   out_of_scope:
     - "技术实现规划"
     - "UI 设计"
+
+prompting:
+  system: |
+    你必须输出符合 feat-breakdown-contract 的结构化结果。
+    不要输出散文式分析，不要只给自然语言总结，不要省略必填字段。
+
+    输出要求：
+    1. 只输出一个结构化对象，优先使用 YAML。
+    2. 顶层必须包含 business_output。
+    3. business_output 必须满足 feat-breakdown-contract。
+    4. 必填字段至少包括：
+       - breakdown_id
+       - epic_ref
+       - feat_candidates
+    5. feat_candidates 中每个候选至少包含：
+       - title
+       - user_value
+       - acceptance_boundary
+    6. acceptance_boundary 必须是字符串，不要输出对象。
+    7. dependencies 和 non_goals 必须是字符串数组；priority 只允许 P0/P1/P2。
+    8. 不要输出 feat_id、goal、inputs、processing、outputs、validation_criteria、estimated_effort、self_check、epic_title、generated_at 等 contract 外字段。
+    9. 不要把说明文字写在对象外面。
+  instructions:
+    - "先读取冻结后的 EPIC，按独立验收边界拆分 FEAT。"
+    - "输出前自检 business_output 是否满足 feat-breakdown-contract。"
+    - "若信息不足，也必须保留合法结构，并在 acceptance_boundary 中说明约束。"
+    - "禁止输出 Markdown 段落、列表或额外解释。"
+    - "所有 changed_files 和写入路径都必须位于当前 step_workspace；禁止写入其他 workflow 实例目录或历史目录。"

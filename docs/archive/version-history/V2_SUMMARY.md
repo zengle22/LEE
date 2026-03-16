@@ -41,7 +41,7 @@ flowcore/
 │   ├── base.py             # LEE 接口定义
 │   ├── python_exec.py
 │   ├── single_agent.py
-│   └── metagpt/            # MetaGPT 适配层
+│   └── legacy_executor/            # Legacy Executor 适配层
 │       └── README.md
 ├── utils/                  # 工具模块
 │   └── README.md
@@ -58,7 +58,7 @@ from flowcore.orchestrator.state_machine import StateMachine
 
 # 引擎
 from flowcore.engines.base import LEERequest, LEEResult
-from flowcore.engines.metagpt.adapter import run_lee_unit
+from flowcore.engines.legacy_executor.adapter import run_lee_unit
 
 # 工具
 from flowcore.utils.logging import setup_logger
@@ -204,7 +204,7 @@ flowcore/
 ├── engines/
 │   ├── README.md
 │   ├── ARCHITECTURE.md
-│   └── metagpt/
+│   └── legacy_executor/
 │       └── README.md
 ├── utils/
 │   └── README.md
@@ -222,7 +222,7 @@ docs/
 ├── Workflow-Spec-Guide.md       # Workflow 编写指南
 ├── Orchestrator-Guide.md        # 编排器指南
 ├── Integration-Guide.md         # 集成指南
-├── MetaGPT-Integration.md       # MetaGPT 集成
+├── Legacy Executor-Integration.md       # Legacy Executor 集成
 ├── Workspace-Config.md          # Workspace 配置
 └── Spec-Organization.md         # Spec 组织结构说明
 ```
@@ -254,14 +254,14 @@ changelogs/
 
 ```python
 from orchestrator.core.state_machine import StateMachine
-from metagpt.lee.protocol import LEERequest
+from legacy_executor.lee.protocol import LEERequest
 ```
 
 ### 目标
 
 ```python
 from flowcore.orchestrator.state_machine import StateMachine
-from flowcore.engines.metagpt.protocol import LEERequest
+from flowcore.engines.legacy_executor.protocol import LEERequest
 ```
 
 ---
@@ -308,7 +308,7 @@ python tools/update_imports.py
 python -m py_compile flowcore/**/*.py
 
 # 5. 清理（确认无误后）
-rm -rf orchestrator ai-spec MetaGPT/metagpt/lee
+rm -rf orchestrator ai-spec Legacy Executor/legacy_executor/lee
 ```
 
 ---

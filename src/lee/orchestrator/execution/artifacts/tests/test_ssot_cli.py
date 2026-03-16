@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+import yaml
 from click.testing import CliRunner
 
 from lee.cli.commands.ssot import ssot
@@ -14,6 +15,7 @@ from lee.orchestrator.execution.artifacts import (
     ArtifactManager,
     ArtifactType,
     GovernanceKind,
+    SSOTType,
 )
 
 
@@ -253,6 +255,60 @@ class TestSSOTBuildIndexCommand:
         assert Path(custom_path).exists()
 
 
+class TestSSOTCreateCommand:
+    """测试 lee ssot create 命令"""
+
+    def test_create_feat_with_epic_parent_passes_p0(self, runner, artifact_manager):
+        src = artifact_manager.create_ssot(
+            ssot_type="src",
+            title="增长基础设施来源",
+            content="# Source\n",
+            run_id="test-run-create-feat-parent",
+        )
+        epic = artifact_manager.create_ssot(
+            ssot_type="epic",
+            title="增长基础设施",
+            content="# Epic\n",
+            run_id="test-run-create-feat-parent",
+            parent_id=src.id,
+            source_refs=[src.id],
+        )
+
+        feat_body = artifact_manager.project_root / "feat-body.md"
+        feat_body.write_text("# 用户注册\n", encoding="utf-8")
+
+        result = runner.invoke(
+            ssot,
+            [
+                "create",
+                "--type",
+                "feat",
+                "--title",
+                "用户注册",
+                "--content-file",
+                str(feat_body),
+                "--run-id",
+                "test-run-create-feat-parent",
+                "--status",
+                "draft",
+                "--version",
+                "v1",
+                "--parent-id",
+                epic.id,
+                "--source-ref",
+                f"{src.id}#scope",
+                "--source-ref",
+                epic.id,
+            ],
+        )
+        assert result.exit_code == 0
+        assert "created FEAT-SRC-001-001" in result.output
+
+        validate_result = runner.invoke(ssot, ["validate-p0", "FEAT-SRC-001-001"])
+        assert validate_result.exit_code == 0
+        assert "P0 validation passed for FEAT-SRC-001-001" in validate_result.output
+
+
 class TestSSOTImpactCommand:
     """测试 lee ssot impact 命令"""
 
@@ -395,3 +451,62 @@ class TestSSOTShowChainCommand:
         data = json.loads(result.output)
         assert isinstance(data, list)
         assert len(data) == 2  # PRD 和 API
+
+
+class TestSSOTFormalizeCommand:
+    def test_formalize_command_rewrites_ids(self, runner, artifact_manager):
+        src = artifact_manager.create_ssot(
+            ssot_type=SSOTType.SRC,
+            title="会员来源",
+            content="# Source\n",
+            run_id="run-cli-formalize-src",
+        )
+        legacy_epic = artifact_manager.project_root / "spec/requirements/epics/EPIC-001__huiyuanshishi.md"
+        legacy_feat = artifact_manager.project_root / "spec/requirements/features/FEAT-001__huiyuannengli.md"
+        legacy_epic.parent.mkdir(parents=True, exist_ok=True)
+        legacy_feat.parent.mkdir(parents=True, exist_ok=True)
+        legacy_epic.write_text(
+            "---\n{}\n---\n\n# Epic\n".format(
+                yaml.safe_dump(
+                    {
+                        "id": "EPIC-001",
+                        "ssot_type": "epic",
+                        "title": "会员史诗",
+                        "status": "draft",
+                        "version": "v1",
+                        "parent_id": src.id,
+                        "source_refs": [src.id],
+                        "properties": {},
+                    },
+                    allow_unicode=True,
+                    sort_keys=False,
+                ).strip()
+            ),
+            encoding="utf-8",
+        )
+        legacy_feat.write_text(
+            "---\n{}\n---\n\n# Feature\n".format(
+                yaml.safe_dump(
+                    {
+                        "id": "FEAT-001",
+                        "ssot_type": "feat",
+                        "title": "会员能力",
+                        "status": "draft",
+                        "version": "v1",
+                        "parent_id": "EPIC-001",
+                        "source_refs": [f"{src.id}#scope", "EPIC-001"],
+                        "properties": {},
+                    },
+                    allow_unicode=True,
+                    sort_keys=False,
+                ).strip()
+            ),
+            encoding="utf-8",
+        )
+        artifact_manager.rebuild_ssot_registry()
+
+        result = runner.invoke(ssot, ["formalize", "--id", "EPIC-001", "--id", "FEAT-001"])
+
+        assert result.exit_code == 0
+        assert "formalized 2 artifacts" in result.output
+        assert f"EPIC-001 -> EPIC-{src.id}-" in result.output

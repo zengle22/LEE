@@ -52,6 +52,17 @@ class SkillRunner(StepRunnerBase):
         return step_kind == "skill"
 
     @staticmethod
+    def _resolve_skill_executor_type(step, workflow_data: Optional[Dict[str, Any]]) -> str:
+        """
+        Skill steps execute shell-style commands and must not inherit workflow-level
+        coding/LLM executor overrides.
+        """
+        step_executor = str(getattr(step, "executor_type", "") or "").strip()
+        if step_executor:
+            return step_executor
+        return "shell"
+
+    @staticmethod
     def _extract_params(raw_input: Any) -> Dict[str, Any]:
         """归一化 step.input -> params 字典"""
         if isinstance(raw_input, dict):
@@ -577,9 +588,7 @@ class SkillRunner(StepRunnerBase):
         input_data = {**params, **execution_config}
 
         # 解析 executor_type：CLI 参数优先级最高
-        executor_type = workflow_data.get("executor_override") if workflow_data else None
-        if not executor_type:
-            executor_type = step.executor_type or "shell"
+        executor_type = self._resolve_skill_executor_type(step, workflow_data)
 
         # 自动加载 skill 规范并注入默认值/命令
         skill_spec = None

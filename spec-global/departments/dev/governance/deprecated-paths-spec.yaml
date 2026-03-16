@@ -1,0 +1,47 @@
+kind: governance_spec
+version: "1.0"
+id: dev.deprecated_paths_spec
+status: frozen
+owner: development
+governing_adrs:
+  - ADR-008
+
+deprecated_paths:
+  - path: spec-global/departments/dev/workflows/phase-openspec-flow/v1/workflow.yaml
+    status: deprecated
+    replacement: template.dev.feature_delivery_l2
+    rationale: historical draft workflow, not canonical runtime path
+  - path: spec-global/departments/dev/workflows/templates/feature-l2-template.yaml
+    status: compat
+    replacement: template.dev.feature_delivery_l2
+    rationale: legacy feature entry retained only for migration window
+  - path: spec-global/departments/dev/workflows/templates/bug-fix-l3-template.yaml
+    status: deprecated
+    replacement: template.dev.bugfix_delivery_l2
+    rationale: legacy bugfix entry superseded by canonical bugfix L2
+
+marking_rules:
+  readme_notice:
+    required: true
+    format: "Status: deprecated|compat plus replacement reference"
+  workflow_header_notice:
+    required: true
+    fields:
+      - lifecycle_status
+      - replacement
+      - migration_deadline
+  migration_guide:
+    required: true
+    fields:
+      - old_path
+      - new_entry
+      - migration_notes
+
+monitoring:
+  metrics:
+    - reference_count
+    - workflow_instance_count
+    - last_seen_at
+  alerts:
+    stale_reference_threshold: 1
+    report_frequency: weekly

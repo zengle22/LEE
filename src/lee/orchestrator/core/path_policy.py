@@ -48,6 +48,7 @@ SPEC_SUBDIRS = {
 ALLOWED_WRITE_PREFIXES: FrozenSet[str] = frozenset({
     ".artifacts/",      # 产出物
     ".workflow/",       # 工作流运行态
+    ".lee/",            # CLI 锁目录
     "tools/",          # 项目工具
     "deploy/",         # 部署配置
 })

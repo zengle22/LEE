@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee.dev/spec-global/core/contracts/reverse-epic-feat-drafts/v2/schema.json",
+  "title": "Reverse EPIC FEAT Drafts",
+  "type": "object",
+  "required": ["epics", "feats"],
+  "additionalProperties": false,
+  "properties": {
+    "epics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "summary", "evidence_refs", "primary_refs", "evidence_layers", "evidence_strategy"],
+        "additionalProperties": false,
+        "properties": {
+          "title": { "type": "string" },
+          "summary": { "type": "string" },
+          "capability_refs": { "type": "array", "items": { "type": "string" } },
+          "evidence_refs": { "type": "array", "items": { "type": "string" } },
+          "primary_refs": { "type": "array", "items": { "type": "string" } },
+          "evidence_layers": {
+            "type": "object",
+            "required": ["impl_refs", "api_refs", "test_refs", "doc_refs"],
+            "additionalProperties": false,
+            "properties": {
+              "impl_refs": { "type": "array", "items": { "type": "string" } },
+              "api_refs": { "type": "array", "items": { "type": "string" } },
+              "test_refs": { "type": "array", "items": { "type": "string" } },
+              "doc_refs": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "evidence_strategy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "primary_selection": { "type": "string", "enum": ["ordered_impl_api_first"] },
+              "ranking_signals": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["path_quality", "semantic_path_match", "page_content_match", "onboarding_local_rerank"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "feats": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "title",
+          "summary",
+          "goal",
+          "user_value",
+          "scope",
+          "preconditions",
+          "main_flow",
+          "processing",
+          "inputs",
+          "outputs",
+          "business_rules",
+          "dependencies",
+          "non_goals",
+          "edge_cases",
+          "state_updates",
+          "acceptance_criteria",
+          "acceptance_checks",
+          "priority",
+          "delivery_slice",
+          "lifecycle_status",
+          "code_refs",
+          "evidence_refs",
+          "primary_refs",
+          "evidence_layers"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "title": { "type": "string" },
+          "summary": { "type": "string" },
+          "goal": { "type": "string" },
+          "user_value": { "type": "string" },
+          "epic_ref": { "type": "string" },
+          "capability_ref": { "type": "string" },
+          "scope": {
+            "type": "object",
+            "required": ["in_scope", "out_of_scope"],
+            "additionalProperties": false,
+            "properties": {
+              "in_scope": { "type": "array", "items": { "type": "string" } },
+              "out_of_scope": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "preconditions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "main_flow": { "type": "array", "minItems": 2, "items": { "type": "string" } },
+          "processing": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "inputs": { "type": "array", "items": { "type": "string" } },
+          "outputs": { "type": "array", "items": { "type": "string" } },
+          "business_rules": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "dependencies": { "type": "array", "items": { "type": "string" } },
+          "non_goals": { "type": "array", "items": { "type": "string" } },
+          "edge_cases": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "state_updates": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "acceptance_criteria": { "type": "array", "minItems": 2, "items": { "type": "string" } },
+          "acceptance_checks": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "required": ["id", "scenario", "given", "when", "then", "trace_hints"],
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string" },
+                "scenario": { "type": "string" },
+                "given": { "type": "string" },
+                "when": { "type": "string" },
+                "then": { "type": "string" },
+                "trace_hints": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          },
+          "priority": { "type": "string", "enum": ["P0", "P1", "P2"] },
+          "delivery_slice": { "type": "string" },
+          "lifecycle_status": { "type": "string", "enum": ["draft", "active", "frozen", "archived"] },
+          "derived_object_expectations": {
+            "type": "object",
+            "properties": {
+              "task_required": { "type": "boolean" },
+              "testset_required": { "type": "boolean" },
+              "testset_owner": { "type": "string" },
+              "qa_seed_required": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          },
+          "code_refs": { "type": "array", "items": { "type": "string" } },
+          "primary_refs": { "type": "array", "items": { "type": "string" } },
+          "evidence_refs": { "type": "array", "items": { "type": "string" } },
+          "evidence_layers": {
+            "type": "object",
+            "required": ["impl_refs", "api_refs", "test_refs", "doc_refs"],
+            "additionalProperties": false,
+            "properties": {
+              "impl_refs": { "type": "array", "items": { "type": "string" } },
+              "api_refs": { "type": "array", "items": { "type": "string" } },
+              "test_refs": { "type": "array", "items": { "type": "string" } },
+              "doc_refs": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "evidence_strategy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "primary_selection": { "type": "string", "enum": ["ordered_impl_api_first"] },
+              "ranking_signals": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["path_quality", "semantic_path_match", "page_content_match", "onboarding_local_rerank"]
+                }
+              }
+            }
+          },
+          "inference": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

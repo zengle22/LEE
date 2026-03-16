@@ -50,9 +50,10 @@ class BaseExecutor(ABC):
 # 导入实际的执行器实现
 from lee.orchestrator.execution.llm_executor import LLMExecutor as RealLLMExecutor
 from lee.orchestrator.execution.mock_executor import MockLLMExecutor
-from lee.orchestrator.execution.metagpt_executor import MetaGPTExecutor as RealMetaGPTExecutor
 from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor
 from lee.orchestrator.execution.codex_executor import CodexExecutor
+from lee.orchestrator.execution.kimi_code_executor import KimiCodeExecutor
+from lee.orchestrator.execution.qwen_executor import QwenExecutor as QwenChatExecutor
 from lee.orchestrator.execution.llm_executor import LLMConfig
 
 
@@ -72,7 +73,7 @@ class LLMExecutor(BaseExecutor):
     配置文件: flowcore/engines/llm/config.yaml
     """
 
-    def __init__(self, profile: str = "antigravity", config_path: str = None,
+    def __init__(self, profile: str = None, config_path: str = None,
                  fallback_providers: list = None, **kwargs):
         self._executor = RealLLMExecutor(
             profile=profile,
@@ -83,6 +84,15 @@ class LLMExecutor(BaseExecutor):
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """执行 LLM 任务"""
         return await self._executor.execute(input_data)
+
+
+class KimiExecutor(KimiCodeExecutor):
+    """兼容旧导入名的 Kimi code executor 别名。"""
+
+
+# QwenExecutor 是 qwen_executor.QwenExecutor 的别名
+# 在 executors.py 中不创建新的子类，直接导出原始类
+QwenExecutor = QwenChatExecutor
 
 
 class ShellExecutor(BaseExecutor):
@@ -149,26 +159,6 @@ class ShellExecutor(BaseExecutor):
             }
 
 
-class MetaGPTExecutor(BaseExecutor):
-    """
-    MetaGPT 执行器（代理类）
-
-    实际实现见: metagpt_executor.py
-
-    支持的任务类型：
-    - code_implementation: 代码实现（使用 SoftwareCompany）
-    - bug_autofix: Bug 自动修复
-    - custom_team: 自定义团队配置
-    """
-
-    def __init__(self, role: str = "Developer", llm_config: Dict = None, **kwargs):
-        self._executor = RealMetaGPTExecutor(role=role, llm_config=llm_config)
-
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """执行 MetaGPT 任务"""
-        return await self._executor.execute(input_data)
-
-
 # 导入 asyncio（ShellExecutor 需要）
 import asyncio
 
@@ -182,13 +172,14 @@ class ExecutorFactory:
     支持的执行器类型：
     - llm: LLM 执行器（支持 OpenAI/Claude/自定义等）
     - shell: Shell 命令执行器
-    - metagpt: MetaGPT 执行器
     """
 
     _executors = {
         "llm": LLMExecutor,
+        "qwen_chat": QwenChatExecutor,
+        "qwen": QwenChatExecutor,
+        "kimi": KimiExecutor,
         "shell": ShellExecutor,
-        "metagpt": MetaGPTExecutor,
         "claude_code": ClaudeCodeExecutor,
         "codex": CodexExecutor,
     }
@@ -199,16 +190,12 @@ class ExecutorFactory:
         创建执行器实例
 
         Args:
-            executor_type: 执行器类型（llm/shell/metagpt）
+            executor_type: 执行器类型（llm/shell/claude_code/codex/langgraph）
             **kwargs: 传递给执行器的额外参数
 
                 对于 llm:
                     profile: 配置文件名称（default, antigravity, zhipu, agent.prd, agent.dev）
                     config_path: 配置文件路径（可选）
-
-                对于 metagpt:
-                    role: MetaGPT 角色名称（默认: Developer）
-                    llm_config: LLM 配置字典
 
         Returns:
             执行器实例

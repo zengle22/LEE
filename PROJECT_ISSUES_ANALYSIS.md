@@ -152,7 +152,7 @@ lee-test-set-production/
 src/lee/orchestrator/execution/
 ├── executors.py           # ExecutorFactory (统一工厂)
 ├── llm_executor.py        # LLMExecutor
-├── metagpt_executor.py    # MetaGPTExecutor
+├── legacy_executor_executor.py    # Legacy ExecutorExecutor
 ├── mock_executor.py       # MockExecutor
 ├── langgraph_executor.py  # LangGraphExecutor
 ├── claude_code_executor.py # ClaudeCodeExecutor
@@ -273,7 +273,7 @@ spec-global/departments/qa/workflows/templates/
 - ❌ `flowcore.orchestrator.runner` - 不存在
 - ❌ `flowcore.orchestrator.state_machine` - 不存在
 - ❌ `flowcore.engines.base` - 不存在
-- ❌ `flowcore.engines.metagpt.adapter` - 不存在
+- ❌ `flowcore.engines.legacy_executor.adapter` - 不存在
 - ❌ `flowcore.utils.logging` - 不存在
 - ❌ `flowcore.utils.ids` - 不存在
 

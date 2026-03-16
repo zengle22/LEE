@@ -241,6 +241,14 @@ class StepRunnerBase(StepRunnerStrategy):
             execution_config = config.get("execution", {})
             schema_path = execution_config.get("output_contract") if isinstance(execution_config, dict) else None
         if not schema_path:
+            for output_spec in getattr(step, "outputs", []) or []:
+                if hasattr(output_spec, "contract"):
+                    schema_path = getattr(output_spec, "contract", None)
+                elif isinstance(output_spec, dict):
+                    schema_path = output_spec.get("contract")
+                if schema_path:
+                    break
+        if not schema_path:
             return None
 
         try:
@@ -262,6 +270,49 @@ class StepRunnerBase(StepRunnerStrategy):
             return fenced.group(1).strip()
         return text
 
+    @staticmethod
+    def _strip_leading_think_block(content: str) -> str:
+        """Strip a leading <think>...</think> block emitted before structured output."""
+        if not isinstance(content, str):
+            return content
+        return re.sub(r"^\s*<think>[\s\S]*?</think>\s*", "", content, count=1).strip()
+
+    @classmethod
+    def _structured_output_candidates(cls, output_text: str) -> List[str]:
+        if not isinstance(output_text, str):
+            return []
+
+        text = output_text.strip()
+        if not text:
+            return []
+
+        candidates: List[str] = []
+        seen: set[str] = set()
+
+        def add(candidate: str) -> None:
+            value = (candidate or "").strip()
+            if not value or value in seen:
+                return
+            seen.add(value)
+            candidates.append(value)
+
+        add(cls._strip_leading_think_block(cls._strip_code_fence(text)))
+
+        first_fence = re.search(r"\n```(?:json|yaml|yml)?\s*\n", text, re.IGNORECASE)
+        if first_fence:
+            add(cls._strip_leading_think_block(text[:first_fence.start()]))
+
+        for match in re.finditer(r"```(?:json|yaml|yml)?\s*\n([\s\S]*?)\n```", text, re.IGNORECASE):
+            add(cls._strip_leading_think_block(match.group(1)))
+
+        for opener, closer in (("{", "}"), ("[", "]")):
+            start = text.find(opener)
+            end = text.rfind(closer)
+            if start != -1 and end != -1 and end > start:
+                add(cls._strip_leading_think_block(text[start:end + 1]))
+
+        return candidates
+
     @classmethod
     def _parse_structured_output(cls, output_text: str) -> Any:
         """
@@ -269,23 +320,124 @@ class StepRunnerBase(StepRunnerStrategy):
         """
         import yaml
 
-        text = cls._strip_code_fence(output_text)
-        if not text:
+        candidates = cls._structured_output_candidates(output_text)
+        if not candidates:
             raise ValueError("Structured output is empty")
 
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
+        last_error: Optional[Exception] = None
+        for text in candidates:
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError as exc:
+                last_error = exc
 
-        try:
-            data = yaml.safe_load(text)
-        except Exception as exc:
-            raise ValueError(f"Failed to parse structured output: {exc}") from exc
+            try:
+                data = yaml.safe_load(text)
+            except Exception as exc:
+                last_error = exc
+                continue
 
-        if data is None:
-            raise ValueError("Structured output is empty")
-        return data
+            if isinstance(data, (dict, list)):
+                return data
+            if data is not None:
+                last_error = ValueError("Structured output must be a JSON/YAML object or array")
+
+        if last_error is not None:
+            raise ValueError(f"Failed to parse structured output: {last_error}") from last_error
+        raise ValueError("Structured output is empty")
+
+    @staticmethod
+    def _workflow_workspace_dir(
+        *,
+        project_root: Optional[str],
+        workflow_id: str,
+        step_id: str,
+    ) -> Path:
+        base_root = Path(project_root or ".").resolve()
+        return base_root / ".workflow" / "workspace" / workflow_id / step_id
+
+    @staticmethod
+    def _dump_structured_output_text(payload: Any, preferred_format: str = "yaml") -> str:
+        normalized_format = (preferred_format or "yaml").lower()
+        if normalized_format == "json":
+            return json.dumps(payload, ensure_ascii=False, indent=2)
+        if isinstance(payload, str):
+            return payload
+        return yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+
+    @classmethod
+    def _materialize_workspace_payload(
+        cls,
+        *,
+        project_root: Optional[str],
+        workflow_id: str,
+        step_id: str,
+        file_stem: str,
+        payload: Any,
+        preferred_format: str = "yaml",
+    ) -> Optional[str]:
+        if payload is None:
+            return None
+        if not isinstance(payload, (dict, list, str)):
+            return None
+
+        workspace_dir = cls._workflow_workspace_dir(
+            project_root=project_root,
+            workflow_id=workflow_id,
+            step_id=step_id,
+        )
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+
+        ext = ".json" if (preferred_format or "").lower() == "json" else ".yaml"
+        target_path = workspace_dir / f"{file_stem}{ext}"
+        target_path.write_text(
+            cls._dump_structured_output_text(payload, preferred_format=preferred_format),
+            encoding="utf-8",
+        )
+        return str(target_path)
+
+    @classmethod
+    def _materialize_symbolic_workspace_outputs(
+        cls,
+        *,
+        step,
+        workflow_id: str,
+        project_root: Optional[str],
+        business_output: Any,
+        structured_payload: Any,
+    ) -> List[str]:
+        if not getattr(step, "outputs", None):
+            return []
+
+        has_explicit_paths = any(getattr(output_spec, "path", None) for output_spec in step.outputs)
+        if has_explicit_paths:
+            return []
+
+        written_files: List[str] = []
+        business_path = cls._materialize_workspace_payload(
+            project_root=project_root,
+            workflow_id=workflow_id,
+            step_id=step.id,
+            file_stem="business_output",
+            payload=business_output,
+            preferred_format="yaml",
+        )
+        if business_path:
+            written_files.append(business_path)
+
+        if isinstance(structured_payload, dict) and structured_payload != business_output:
+            structured_path = cls._materialize_workspace_payload(
+                project_root=project_root,
+                workflow_id=workflow_id,
+                step_id=step.id,
+                file_stem="structured_payload",
+                payload=structured_payload,
+                preferred_format="yaml",
+            )
+            if structured_path:
+                written_files.append(structured_path)
+
+        return written_files
 
     @staticmethod
     def _resolve_contract_path(

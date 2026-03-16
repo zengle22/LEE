@@ -1,0 +1,326 @@
+{
+  "business_output": {
+    "epic_ref": "EPIC-001__claude-code-zhixingkeguancexingyujiaohushengji",
+    "feat_specs": [
+      {
+        "feat_id": "FEAT-026",
+        "title": "Claude Code 执行实时输出暴露",
+        "goal": "实现 CLI 执行 claude_code 步骤时的 stdout/stderr 实时输出，使用户能够在执行过程中持续看到输出内容",
+        "user_value": "用户在使用 lee run 或等价 CLI 路径执行 claude_code 步骤时，可以实时看到持续输出，不再需要等待执行完成后才能看到结果",
+        "inputs": [
+          "lee run 命令参数",
+          "目标步骤标识 (step_id)",
+          "执行上下文 (execution context)"
+        ],
+        "processing": [
+          "启动子进程执行 claude_code",
+          "建立 stdout/stderr 流式读取通道",
+          "按批次将输出内容推送到终端",
+          "捕获并记录 exit code"
+        ],
+        "outputs": [
+          "实时 stdout 输出流",
+          "实时 stderr 输出流",
+          "执行完成后的 exit code"
+        ],
+        "user_stories": [
+          {
+            "as_a": "LEE CLI 用户",
+            "i_want": "在执行 claude_code 步骤时实时看到输出",
+            "so_that": "我可以监控执行状态，无需等待执行完成后再查看结果"
+          }
+        ],
+        "acceptance_criteria": [
+          "执行过程中持续输出 stdout 内容，延迟不超过 5 秒",
+          "执行过程中持续输出 stderr 内容，延迟不超过 5 秒",
+          "执行完成后输出完整的 exit code",
+          "输出格式与原始 subprocess 输出保持一致"
+        ],
+        "acceptance_checks": [
+          {
+            "id": "AC-026-001",
+            "scenario": "执行过程中实时输出 stdout",
+            "given": "用户执行 lee run 命令且 claude_code 步骤正在运行",
+            "when": "claude_code 步骤产生 stdout 输出",
+            "then": "CLI 在 5 秒内将输出显示在终端",
+            "trace_hints": ["UI", "TECH"]
+          },
+          {
+            "id": "AC-026-002",
+            "scenario": "执行过程中实时输出 stderr",
+            "given": "用户执行 lee run 命令且 claude_code 步骤产生错误",
+            "when": "claude_code 步骤产生 stderr 输出",
+            "then": "CLI 在 5 秒内将错误显示在终端",
+            "trace_hints": ["UI", "TECH"]
+          },
+          {
+            "id": "AC-026-003",
+            "scenario": "执行完成后返回 exit code",
+            "given": "claude_code 步骤执行完成",
+            "when": "进程退出",
+            "then": "CLI 输出完整的 exit code 并以对应状态码退出",
+            "trace_hints": ["TECH", "TESTSET"]
+          },
+          {
+            "id": "AC-026-004",
+            "scenario": "长时运行任务的输出流式展示",
+            "given": "claude_code 步骤执行时间超过 30 秒",
+            "when": "持续产生多批次输出",
+            "then": "输出内容按批次流式显示，无内存堆积",
+            "trace_hints": ["TECH", "TASK"]
+          }
+        ],
+        "dependencies": [],
+        "non_goals": [
+          "不处理执行失败的具体错误恢复逻辑",
+          "不包含执行进度百分比或 ETA 预测",
+          "不改变执行结果本身的返回格式"
+        ],
+        "priority": "P0",
+        "delivery_slice": "mvp",
+        "lifecycle_status": "draft",
+        "derived_object_expectations": {
+          "task_required": true,
+          "testset_required": true,
+          "testset_owner": "qa",
+          "qa_seed_required": true
+        },
+        "source_refs": [
+          "EPIC-001#scope"
+        ],
+        "ssot": {
+          "identity_kind": "ssot",
+          "ssot_type": "FEAT",
+          "parent": "EPIC-001__claude-code-zhixingkeguancexingyujiaohushengji",
+          "derived_from": "FEAT-BD-20260310-001#FEAT-026"
+        }
+      },
+      {
+        "feat_id": "FEAT-027",
+        "title": "Live Log 结构化输出",
+        "goal": "在标准证据目录下生成结构化的 live log 文件，提供可定位、可解析的执行日志",
+        "user_value": "执行证据路径可被 runner/CLI 稳定定位，用户可以通过指定路径找到结构化的执行日志，无需人工猜测路径",
+        "inputs": [
+          "执行上下文 (execution context)",
+          "步骤标识 (step_id)",
+          "执行输出内容 (stdout/stderr)"
+        ],
+        "processing": [
+          "构建标准证据目录路径",
+          "序列化执行输出为 JSON 格式",
+          "写入 live log 文件",
+          "生成文件路径元数据"
+        ],
+        "outputs": [
+          "结构化 live log 文件 (JSON 格式)",
+          "文件路径元数据"
+        ],
+        "user_stories": [
+          {
+            "as_a": "LEE CLI 用户",
+            "i_want": "执行完成后能够通过稳定路径找到日志文件",
+            "so_that": "我可以方便地获取执行证据用于调试或审计"
+          }
+        ],
+        "acceptance_criteria": [
+          "执行完成后在标准证据目录下生成 JSON 格式的 live log",
+          "live log 包含 timestamp、output type、content 等标准字段",
+          "文件路径可从执行上下文稳定获取",
+          "live log 包含完整的 stdout 和 stderr 内容"
+        ],
+        "acceptance_checks": [
+          {
+            "id": "AC-027-001",
+            "scenario": "执行完成后生成 live log 文件",
+            "given": "claude_code 步骤执行完成",
+            "when": "执行上下文关闭",
+            "then": "在标准证据目录下生成 live log 文件",
+            "trace_hints": ["TECH", "TESTSET"]
+          },
+          {
+            "id": "AC-027-002",
+            "scenario": "live log 包含标准字段",
+            "given": "live log 文件已生成",
+            "when": "读取 live log 文件内容",
+            "then": "文件包含 timestamp、output type、content 字段",
+            "trace_hints": ["TECH", "TESTSET"]
+          },
+          {
+            "id": "AC-027-003",
+            "scenario": "文件路径可稳定获取",
+            "given": "用户需要定位 live log",
+            "when": "提供执行上下文标识",
+            "then": "系统返回稳定的文件路径",
+            "trace_hints": ["TASK", "UI"]
+          },
+          {
+            "id": "AC-027-004",
+            "scenario": "live log 包含完整执行内容",
+            "given": "claude_code 执行产生 stdout 和 stderr",
+            "when": "生成 live log",
+            "then": "live log 包含完整的 stdout 和 stderr 内容",
+            "trace_hints": ["TECH", "TESTSET"]
+          }
+        ],
+        "dependencies": [
+          "FEAT-026"
+        ],
+        "non_goals": [
+          "不包含日志的自动清理或归档策略",
+          "不实现日志的实时流式传输到外部系统",
+          "不处理日志文件的并发写入冲突"
+        ],
+        "priority": "P0",
+        "delivery_slice": "mvp",
+        "lifecycle_status": "draft",
+        "derived_object_expectations": {
+          "task_required": true,
+          "testset_required": true,
+          "testset_owner": "qa",
+          "qa_seed_required": true
+        },
+        "source_refs": [
+          "EPIC-001#scope"
+        ],
+        "ssot": {
+          "identity_kind": "ssot",
+          "ssot_type": "FEAT",
+          "parent": "EPIC-001__claude-code-zhixongkeguancexingyujiaohushengji",
+          "derived_from": "FEAT-BD-20260310-001#FEAT-027"
+        }
+      },
+      {
+        "feat_id": "FEAT-028",
+        "title": "流式交互协议演进边界",
+        "goal": "提供协议抽象层，支持未来平滑切换到 stream-json 协议，最小化升级影响",
+        "user_value": "为后续切换 stream-json 协议预留演进边界，后续协议升级不会要求替换整个 executor 路径，平滑过渡",
+        "inputs": [
+          "现有 executor 实现",
+          "协议配置",
+          "抽象接口定义"
+        ],
+        "processing": [
+          "设计并定义协议抽象接口",
+          "实现当前协议的适配器",
+          "提供配置切换机制",
+          "隔离协议实现与调用方代码"
+        ],
+        "outputs": [
+          "协议抽象接口定义",
+          "当前协议适配器实现",
+          "可配置的协议切换机制"
+        ],
+        "user_stories": [
+          {
+            "as_a": "LEE 开发者",
+            "i_want": "在需要升级协议时能够平滑切换",
+            "so_that": "协议升级不会破坏现有功能或要求大规模重构"
+          }
+        ],
+        "acceptance_criteria": [
+          "提供抽象接口定义，支持多种协议实现",
+          "可通过配置或接口替换切换协议实现",
+          "切换协议时无需改动调用方代码",
+          "单个文件或模块替换即可完成协议切换"
+        ],
+        "acceptance_checks": [
+          {
+            "id": "AC-028-001",
+            "scenario": "协议抽象接口可用",
+            "given": "需要实现新的协议支持",
+            "when": "定义协议抽象接口",
+            "then": "接口包含协议切换所需的所有方法签名",
+            "trace_hints": ["TECH"]
+          },
+          {
+            "id": "AC-028-002",
+            "scenario": "可通过配置切换协议",
+            "given": "系统已实现协议抽象层",
+            "when": "修改配置切换到新协议",
+            "then": "系统使用新协议执行，无需代码改动",
+            "trace_hints": ["TECH", "TESTSET"]
+          },
+          {
+            "id": "AC-028-003",
+            "scenario": "调用方代码无感知",
+            "given": "存在调用 executor 的业务代码",
+            "when": "切换底层协议实现",
+            "then": "业务代码无需任何修改",
+            "trace_hints": ["TECH"]
+          },
+          {
+            "id": "AC-028-004",
+            "scenario": "最小改动原则",
+            "given": "需要从当前协议切换到 stream-json",
+            "when": "执行协议切换",
+            "then": "改动范围限制在单个模块文件内",
+            "trace_hints": ["TASK", "TECH"]
+          }
+        ],
+        "dependencies": [
+          "FEAT-026",
+          "FEAT-027"
+        ],
+        "non_goals": [
+          "本阶段不实现完整的 stream-json 协议",
+          "不迁移现有的 Rust runtime 模块",
+          "不包含前端事件总线对接"
+        ],
+        "priority": "P1",
+        "delivery_slice": "mvp",
+        "lifecycle_status": "draft",
+        "derived_object_expectations": {
+          "task_required": true,
+          "testset_required": true,
+          "testset_owner": "qa",
+          "qa_seed_required": true
+        },
+        "source_refs": [
+          "EPIC-001#scope"
+        ],
+        "ssot": {
+          "identity_kind": "ssot",
+          "ssot_type": "FEAT",
+          "parent": "EPIC-001__claude-code-zhixongkeguancexingyujiaohushengji",
+          "derived_from": "FEAT-BD-20260310-001#FEAT-028"
+        }
+      }
+    ]
+  },
+  "ssot_output_contract": {
+    "contract_version": "1.0",
+    "run_id": "feat-spec-generation-001",
+    "outputs": [
+      {
+        "key": "feat-026",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "Claude Code 执行实时输出暴露",
+        "parent": "EPIC-001__claude-code-zhixongkeguancexingyujiaohushengji",
+        "source_refs": [
+          "FEAT-BD-20260310-001#FEAT-026"
+        ]
+      },
+      {
+        "key": "feat-027",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "Live Log 结构化输出",
+        "parent": "EPIC-001__claude-code-zhixongkeguancexingyujiaohushengji",
+        "source_refs": [
+          "FEAT-BD-20260310-001#FEAT-027"
+        ]
+      },
+      {
+        "key": "feat-028",
+        "identity_kind": "ssot",
+        "ssot_type": "feat",
+        "title": "流式交互协议演进边界",
+        "parent": "EPIC-001__claude-code-zhixongkeguancexingyujiaohushengji",
+        "source_refs": [
+          "FEAT-BD-20260310-001#FEAT-028"
+        ]
+      }
+    ]
+  }
+}

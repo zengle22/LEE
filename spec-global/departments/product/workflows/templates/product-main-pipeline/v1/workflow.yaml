@@ -7,10 +7,12 @@ id: workflow.product.product_main_pipeline
 name: Product Main Pipeline
 description: >
   产品部门新的 L2 主编排模板。
-  负责将上游 SRC 输入串联为 EPIC、FEAT，以及研发准备包。
+  负责将上游输入先收敛为 SRC，再串联为 EPIC、FEAT，以及研发准备包。
+  在全套 SSOT 生成完成后，必须先执行 requirement chain validation，
+  再进入最终完成态与下游 handoff。
   该文件定义的是 checked-in workflow template，不是运行时 workflow instance。
   实际执行实例由 Python runtime 根据模板动态生成。
-  该模板本身不承载全部细节，而是调度 3 条 L3 子模板。
+  该模板本身不承载全部细节，而是调度 5 条 L3 子模板。
 owner: product-ai
 tags: [product, workflow, l2, ssot, canonical]
 
@@ -21,6 +23,8 @@ roles:
 
 overview:
   input_types:
+    - type: adr
+      description: 需要桥接进入需求链的治理 ADR
     - type: raw_requirement
       description: 原始需求描述
     - type: business_opportunity_freeze
@@ -28,31 +32,64 @@ overview:
       contract: departments/stg/contracts/business_opportunity/v1/schema.yaml
 
   output_types:
+    - type: source_freeze
+      description: 冻结后的 SRC 主对象或其冻结视图
     - type: epic_freeze_bundle
       description: 冻结后的 EPIC 集合
     - type: feat_freeze_bundle
       description: 冻结后的 FEAT 集合
     - type: delivery_prep_bundle
       description: 面向研发和 QA 的准备包，包含 UI / TECH / TASK 以及 TESTSET seed
+    - type: requirement_chain_validation_report
+      description: 需求链一致性验证报告与最终交付前质量结论
 
 phases:
+  - id: raw_to_src
+    name: Raw to SRC
+    level: task
+    workflow: workflow.product.task.raw_to_src
+    depends_on: []
+    output_map:
+      source_freeze: "$child_data.step_outputs.source_freeze"
+      source_freeze_ref: "$child_data.step_outputs.source_freeze.source_freeze_ref"
+      src_root_id: "$child_data.step_outputs.source_freeze.src_root_id"
+
   - id: src_to_epic
     name: SRC to EPIC
     level: task
     workflow: workflow.product.task.src_to_epic
-    depends_on: []
+    depends_on: [raw_to_src]
+    input_map:
+      source_freeze: "$params.source_freeze"
+      source_freeze_ref: "$params.source_freeze_ref"
+      src_root_id: "$params.src_root_id"
+    output_map:
+      epic_freeze: "$child_data.step_outputs.epic_freeze"
+      epic_freeze_ref: "$child_data.step_outputs.epic_freeze.epic_freeze_ref"
 
   - id: epic_to_feat
     name: EPIC to FEAT
     level: task
     workflow: workflow.product.task.epic_to_feat
     depends_on: [src_to_epic]
+    output_map:
+      feat_freeze: "$child_data.step_outputs.feat_freeze"
+      feat_freeze_ref: "$child_data.step_outputs.feat_freeze.feat_freeze_ref"
 
   - id: feat_to_delivery_prep
     name: FEAT to Delivery Prep
     level: task
     workflow: workflow.product.task.feat_to_delivery_prep
     depends_on: [epic_to_feat]
+    output_map:
+      delivery_prep_bundle: "$child_data.step_outputs.delivery_prep_freeze"
+      delivery_prep_freeze_ref: "$child_data.step_outputs.delivery_prep_freeze.delivery_prep_freeze_ref"
+
+  - id: requirement_chain_validation
+    name: Requirement Chain Validation
+    level: task
+    workflow: workflow.product.task.requirement_chain_validation
+    depends_on: [feat_to_delivery_prep]
 
 handoff:
   to:
@@ -63,7 +100,7 @@ handoff:
     - feat_freeze_bundle
     - delivery_prep_bundle
   description: >
-    产品部门完成 FEAT 冻结与研发准备后，
+    产品部门完成 FEAT 冻结、研发准备以及 requirement chain validation 后，
     Dev 按 FEAT 粒度消费 UI / TECH / TASK，
     QA 按同一 FEAT 粒度派生 TESTSET。
 
@@ -74,8 +111,9 @@ constraints:
 
   ssot_chain_binding: |
     主链必须遵循：
-    SRC -> EPIC -> FEAT -> UI / TECH / TASK
-    并确保 TESTSET 可由 QA 基于 FEAT 派生。
+    raw input -> SRC -> EPIC -> FEAT -> UI / TECH / TASK
+    并确保在最终 handoff 前已完成 requirement chain validation，
+    TESTSET 可由 QA 基于 FEAT 派生。
 
   no_direct_prd_centric_design: |
     不再以 PRD 文档作为唯一中心对象。
@@ -90,7 +128,9 @@ instance_schema:
   context_fields:
     - raw_requirement
     - business_opportunity_freeze
+    - source_freeze_ref
   output_fields:
+    - source_freeze
     - epic_freeze_bundle
     - feat_freeze_bundle
     - delivery_prep_bundle
@@ -98,15 +138,23 @@ instance_schema:
 state_machine:
   states:
     - INIT: "初始化"
+    - RAW_TO_SRC: "Raw 到 SRC"
+    - RAW_TO_SRC: "Raw 到 SRC"
     - SRC_TO_EPIC: "SRC 到 EPIC"
     - EPIC_TO_FEAT: "EPIC 到 FEAT"
     - FEAT_TO_DELIVERY_PREP: "FEAT 到研发准备"
+    - REQUIREMENT_CHAIN_VALIDATION: "需求链一致性验证"
     - COMPLETED: "完成"
     - FAILED: "失败"
   transitions:
     INIT:
-      - to: SRC_TO_EPIC
+      - to: RAW_TO_SRC
         trigger: workflow_started
+    RAW_TO_SRC:
+      - to: SRC_TO_EPIC
+        trigger: raw_to_src_completed
+      - to: FAILED
+        trigger: raw_to_src_failed
     SRC_TO_EPIC:
       - to: EPIC_TO_FEAT
         trigger: src_to_epic_completed
@@ -118,7 +166,12 @@ state_machine:
       - to: FAILED
         trigger: epic_to_feat_failed
     FEAT_TO_DELIVERY_PREP:
-      - to: COMPLETED
+      - to: REQUIREMENT_CHAIN_VALIDATION
         trigger: delivery_prep_completed
       - to: FAILED
         trigger: delivery_prep_failed
+    REQUIREMENT_CHAIN_VALIDATION:
+      - to: COMPLETED
+        trigger: requirement_chain_validation_completed
+      - to: FAILED
+        trigger: requirement_chain_validation_failed

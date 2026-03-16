@@ -126,6 +126,47 @@ class TestTimeoutHandling:
             assert "timed out" in result["error"].lower()
 
     @pytest.mark.asyncio
+    async def test_timeout_recovers_written_step_workspace_files(self, executor, base_input, workspace):
+        """超时时若 step workspace 已有产物，应回收 changed_files 并返回 success。"""
+        step_workspace = workspace / ".workflow" / "workspace" / "wf-task-1" / "tech_design"
+        step_workspace.mkdir(parents=True)
+        artifact = step_workspace / "tech-architecture.yaml"
+        artifact.write_text("architecture: ready\n", encoding="utf-8")
+
+        recover_input = dict(base_input)
+        recover_input["step_workspace"] = str(step_workspace)
+
+        with patch.object(executor, "_invoke_claude", side_effect=asyncio.TimeoutError("stalled")):
+            with patch.object(
+                executor,
+                "_collect_diff_summary",
+                new=AsyncMock(return_value={"files_changed": 1, "lines_added": 1, "lines_deleted": 0}),
+            ):
+                result = await executor.execute(recover_input)
+
+        assert result["status"] == "success"
+        assert result["recovered_from_timeout"] is True
+        assert any(
+            path.replace("\\", "/") == ".workflow/workspace/wf-task-1/tech_design/tech-architecture.yaml"
+            for path in result["changed_files"]
+        )
+        assert result["error"] is None
+
+    @pytest.mark.asyncio
+    async def test_timeout_without_step_workspace_artifacts_stays_timeout(self, executor, base_input, workspace):
+        """超时且 step workspace 无文件时，仍应返回 timeout。"""
+        empty_step_workspace = workspace / ".workflow" / "workspace" / "wf-task-2" / "tech_design"
+        empty_step_workspace.mkdir(parents=True)
+
+        recover_input = dict(base_input)
+        recover_input["step_workspace"] = str(empty_step_workspace)
+
+        with patch.object(executor, "_invoke_claude", side_effect=asyncio.TimeoutError("stalled")):
+            result = await executor.execute(recover_input)
+
+        assert result["status"] == "timeout"
+
+    @pytest.mark.asyncio
     async def test_cli_not_found(self, executor, base_input):
         """claude CLI 不存在应返回 failed"""
         with patch.object(executor, '_invoke_claude', side_effect=FileNotFoundError()):
@@ -587,6 +628,7 @@ class TestSystemPrompt:
             workspace="/my/project",
             allowed_commands=["pytest"],
             write_scope=["src/**"],
+            forbidden_read_paths=[],
             max_iterations=5,
             max_bash_calls=12,
             stop_conditions={},
@@ -604,12 +646,34 @@ class TestSystemPrompt:
             workspace="/my/project",
             allowed_commands=[],
             write_scope=[],
+            forbidden_read_paths=[],
             max_iterations=5,
             max_bash_calls=0,
             stop_conditions={},
             system_prompt_extra="不允许修改 go.mod",
         )
         assert "不允许修改 go.mod" in prompt
+
+    def test_includes_forbidden_read_paths(self, executor):
+        """system prompt 应显式禁止读取历史产物目录"""
+        prompt = executor._build_system_prompt(
+            goal="test",
+            workspace="/my/project",
+            allowed_commands=["cat"],
+            write_scope=["spec/**"],
+            forbidden_read_paths=["output/", "evidence/", ".workflow/claude-code/", "pytest-temp/", ".codex-worktrees/"],
+            max_iterations=5,
+            max_bash_calls=0,
+            stop_conditions={},
+            system_prompt_extra="",
+        )
+        assert "禁止读取或引用的路径" in prompt
+        assert "output/" in prompt
+        assert "evidence/" in prompt
+        assert ".workflow/claude-code/" in prompt
+        assert "pytest-temp/" in prompt
+        assert ".codex-worktrees/" in prompt
+        assert "不要扫描仓库寻找相似的 EPIC、FEAT、SRC、ADR" in prompt
 
     def test_scan_bash_calls_from_debug_log(self, tmp_path):
         """debug 日志增量扫描应能统计 Bash 调用次数。"""
@@ -624,7 +688,7 @@ class TestSystemPrompt:
             0,
         )
         assert count == 2
-        assert offset == len(debug_file.read_text(encoding="utf-8"))
+        assert offset == debug_file.stat().st_size
 
 
 # ========================================================================

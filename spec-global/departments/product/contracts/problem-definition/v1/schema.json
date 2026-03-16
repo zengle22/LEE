@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-spec.example.com/contracts/product-problem-definition/v1/schema.json",
+  "title": "Product Problem Definition Contract",
+  "description": "产品问题定义契约 - 将冻结后的 SRC 翻译为问题空间定义",
+  "type": "object",
+  "required": [
+    "problem_id",
+    "title",
+    "problem_statement",
+    "target_users",
+    "scenarios",
+    "non_goals",
+    "constraints"
+  ],
+  "properties": {
+    "problem_id": { "type": "string" },
+    "title": { "type": "string" },
+    "problem_statement": { "type": "string" },
+    "target_users": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "scenarios": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "non_goals": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "constraints": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "source_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

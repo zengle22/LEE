@@ -171,7 +171,7 @@ def main():
     ssot_related = [file_path for file_path in staged_files if is_ssot_related_path(file_path)]
     if ssot_related:
         print("🔍 运行 SSOT lint (Pre-commit Hook)...")
-        passed, errors = run_ssot_lint()
+        passed, errors = run_ssot_lint(ssot_related)
         if not passed:
             print("❌ SSOT lint 失败")
             for err in errors:

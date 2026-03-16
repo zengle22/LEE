@@ -11,9 +11,10 @@ Workflow Runner - Plan → Instance → Execute 流程控制器
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import yaml
 
@@ -22,9 +23,60 @@ logger = logging.getLogger(__name__)
 from lee.orchestrator.core.template_engine import TemplateEngine
 from lee.orchestrator.core.template_resolver import TemplateResolver
 from lee.orchestrator.core.instance_generator import InstanceGenerator
+from lee.orchestrator.config import ConfigResolver
+from lee.orchestrator.config_loader import load_config
 from lee.orchestrator.execution.plan_agent import PlanAgent, PlanConfig, create_plan
 from lee.orchestrator.execution.llm_executor import LLMExecutor
 from lee.orchestrator.execution.review_gate import ReviewGate, check_review_gate
+from lee.orchestrator.execution.concurrency_scope import derive_concurrency_scope
+from lee.orchestrator.storage.models import WorkflowLevel
+from lee.orchestrator.execution.workflow_bootstrap import hydrate_l2_bootstrap
+
+
+def derive_workflow_creation_metadata(instance_path: Path) -> Tuple[WorkflowLevel, Dict[str, Any]]:
+    """Infer workflow level and bootstrap data from a workflow template or instance YAML."""
+    try:
+        with open(instance_path, encoding="utf-8") as f:
+            doc = yaml.safe_load(f) or {}
+    except Exception:
+        return WorkflowLevel.TASK, {}
+
+    kind = str(doc.get("kind") or "").strip()
+    if kind == "l2_workflow_instance":
+        phases = doc.get("phases") if isinstance(doc.get("phases"), list) else []
+        return WorkflowLevel.DEPARTMENT, {
+            "kind": "l2_workflow_instance",
+            "context": doc.get("context", {}),
+            "phases": phases,
+            "pma_splits": doc.get("pma_splits", []),
+        }
+
+    if kind == "l2_workflow_template":
+        phases = []
+        for phase in doc.get("phases", []) if isinstance(doc.get("phases"), list) else []:
+            if not isinstance(phase, dict):
+                continue
+            phases.append({
+                "id": phase.get("id", ""),
+                "name": phase.get("name", ""),
+                "description": phase.get("description", ""),
+                "complexity": phase.get("default_complexity", "M"),
+                "status": "pending",
+                "depends_on": phase.get("depends_on", []),
+                "workflow": phase.get("workflow"),
+                "level": phase.get("level"),
+                "spawns_l3": phase.get("spawns_l3", False),
+                "l3_template_id": phase.get("l3_template_id"),
+                "l3_instance_ids": [],
+            })
+        return WorkflowLevel.DEPARTMENT, {
+            "kind": "l2_workflow_instance",
+            "context": {},
+            "phases": phases,
+            "pma_splits": [],
+        }
+
+    return WorkflowLevel.TASK, {}
 
 
 def _get_pm_workflow():
@@ -45,6 +97,8 @@ class WorkflowRunConfig:
     instance_id: Optional[str] = None  # 指定从 Instance 运行
     auto_approve: bool = False  # 自动批准（测试用，生产环境应为 False）
     ssot_root_id: Optional[str] = None  # SSOT Root ID (任务立项 ID)
+    executor_override: Optional[str] = None  # CLI 显式指定执行器
+    executor_selection_source: Optional[str] = None  # 执行器来源标记
 
 
 @dataclass
@@ -68,6 +122,7 @@ class WorkflowRunner:
 
     def __init__(self, config: WorkflowRunConfig):
         self.config = config
+        self.project_config = load_config(str(config.project_root))
         self.plan_agent: Optional[PlanAgent] = None
         self.instance_generator: Optional[InstanceGenerator] = None
 
@@ -101,6 +156,15 @@ class WorkflowRunner:
         # 1. 加载和渲染模板
         template = await self._load_template()
 
+        if self._should_bypass_plan(template):
+            workflow_id = await self._create_workflow(self.config.template_path)
+            return WorkflowRunResult(
+                workflow_id=workflow_id,
+                instance_path=self.config.template_path,
+                plan_summary="Bypassed PlanAgent for phase-based workflow template.",
+                success=True,
+            )
+
         # 2. 调用 Plan Agent
         plan_config = PlanConfig(
             mode=self.config.plan_mode,
@@ -108,7 +172,7 @@ class WorkflowRunner:
             review_criteria=["complexity == high", "gate_count > 0"]
         )
 
-        llm = LLMExecutor()
+        llm = self._create_plan_executor()
         plan_result = await create_plan(
             template=template,
             params=self.config.params,
@@ -146,13 +210,18 @@ class WorkflowRunner:
             phase_id=self.config.params.get("phase_id", ""),
             tier="l2"
         )
+        instance_path = (
+            self.instance_generator.instances_dir
+            / "l2"
+            / f"{instance_meta.workflow_id}-v{instance_meta.version}.yaml"
+        )
 
         # 5. 创建工作流实例
-        workflow_id = await self._create_workflow(instance_meta.instance_path)
+        workflow_id = await self._create_workflow(instance_path)
 
         return WorkflowRunResult(
             workflow_id=workflow_id,
-            instance_path=instance_meta.instance_path,
+            instance_path=instance_path,
             plan_summary=plan_result.summary,
             success=True
         )
@@ -318,22 +387,70 @@ class WorkflowRunner:
     async def _create_workflow(self, instance_path: Path) -> str:
         """创建工作流实例"""
         pm_workflow = _get_pm_workflow()
-        result = pm_workflow(
+        workflow_level, extra_data = self._derive_workflow_creation_metadata(instance_path)
+        if workflow_level == WorkflowLevel.DEPARTMENT:
+            extra_data = hydrate_l2_bootstrap(extra_data, self.config.params)
+        scope_info = derive_concurrency_scope(
+            self.config.workflow_key,
+            self.config.params,
+            self.config.project_root,
+        )
+        workflow_data = {
+            "params": self.config.params,
+            "workflow_key": self.config.workflow_key,
+            "instance_path": str(instance_path),
+            "concurrency_scope": scope_info.concurrency_scope,
+            "concurrency_key": scope_info.concurrency_key,
+            "scope_source": scope_info.scope_source,
+            **extra_data,
+        }
+        executor_resolution = None
+        if self.config.executor_override and self.config.executor_selection_source:
+            workflow_data["executor_override"] = self.config.executor_override
+            workflow_data["executor_selection_source"] = self.config.executor_selection_source
+        else:
+            executor_resolution = ConfigResolver(
+                project_root=self.config.project_root,
+                config=self.project_config,
+            ).resolve(cli_executor=self.config.executor_override)
+            if not executor_resolution.is_valid or not executor_resolution.value:
+                raise ValueError(executor_resolution.error_message or "Executor resolution failed")
+            workflow_data["executor_override"] = executor_resolution.value
+            workflow_data["executor_selection_source"] = executor_resolution.source_marker
+        if self.config.ssot_root_id:
+            workflow_data["ssot_root_id"] = self.config.ssot_root_id
+        result = await asyncio.to_thread(
+            pm_workflow,
             "create",
             project_dir=str(self.config.project_root),
-            level="task",
+            level=workflow_level.value,
             template_id=str(instance_path),
-            data={
-                "params": self.config.params,
-                "workflow_key": self.config.workflow_key,
-                "instance_path": str(instance_path)
-            }
+            data=workflow_data,
         )
 
         if "error" in result:
             raise Exception(result.get("error"))
 
         return result.get("workflow_id", "")
+
+    def _derive_workflow_creation_metadata(self, instance_path: Path) -> Tuple[WorkflowLevel, Dict[str, Any]]:
+        """Infer workflow level and bootstrap data from the source YAML."""
+        return derive_workflow_creation_metadata(instance_path)
+
+    def _create_plan_executor(self) -> LLMExecutor:
+        """Create the plan-stage LLM executor without relying on deprecated antigravity defaults."""
+        return LLMExecutor(profile=os.getenv("LLM_PROFILE") or None)
+
+    @staticmethod
+    def _should_bypass_plan(template: Dict[str, Any]) -> bool:
+        """PlanAgent 目前仅适配 root step-based template。"""
+        kind = str(template.get("kind") or "").strip()
+        phases = template.get("phases")
+        stages = template.get("stages")
+        steps = template.get("steps")
+        if kind in {"l2_workflow_template", "l2_workflow_instance"} and isinstance(phases, list) and not steps:
+            return True
+        return isinstance(stages, list) and not steps
 
 
 async def run_workflow(
@@ -344,7 +461,9 @@ async def run_workflow(
     plan_mode: str = "suggest",
     skip_plan: bool = False,
     instance_id: Optional[str] = None,
-    ssot_root_id: Optional[str] = None
+    ssot_root_id: Optional[str] = None,
+    executor_override: Optional[str] = None,
+    executor_selection_source: Optional[str] = None,
 ) -> WorkflowRunResult:
     """
     便捷函数：运行工作流
@@ -370,7 +489,9 @@ async def run_workflow(
         plan_mode=plan_mode,
         skip_plan=skip_plan,
         instance_id=instance_id,
-        ssot_root_id=ssot_root_id
+        ssot_root_id=ssot_root_id,
+        executor_override=executor_override,
+        executor_selection_source=executor_selection_source,
     )
 
     runner = WorkflowRunner(config)

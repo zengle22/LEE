@@ -34,7 +34,7 @@ last_updated: 2026-02-19
 | Orchestrator 核心 | ✅ 完成 | v3.0，SQLite 状态管理，Gate 系统 |
 | spec-global 结构 | ✅ 完成 | 7 部门组织，100+ agents，50+ contracts |
 | bug-fix workflow | ✅ 完成 | 7 阶段，30+ 步骤 |
-| Executor 层 | ✅ 完成 | LLM/MetaGPT/Shell |
+| Executor 层 | ✅ 完成 | LLM/Legacy Executor/Shell |
 | dev_feature_l3 | ❌ 缺失 | 核心开发工作流 |
 | qa_regression_l3 | ❌ 缺失 | 核心测试工作流 |
 | devops_deploy_l3 | ❌ 缺失 | 核心部署工作流 |

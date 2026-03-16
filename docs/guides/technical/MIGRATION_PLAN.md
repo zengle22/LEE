@@ -79,9 +79,9 @@ LEE/                                    # ★ LEE 框架根目录（本项目）
 │   │   ├── base.py                     # LEE 接口定义（新建）
 │   │   ├── python_exec.py              # Python/CLI 执行引擎（新建）
 │   │   ├── single_agent.py             # 单 Agent 引擎（新建）
-│   │   └── metagpt/                    # MetaGPT 适配层
+│   │   └── legacy_executor/                    # Legacy Executor 适配层
 │   │       ├── __init__.py
-│   │       ├── README.md               # MetaGPT 集成文档
+│   │       ├── README.md               # Legacy Executor 集成文档
 │   │       ├── protocol.py             # LEE 协议类型
 │   │       ├── adapter.py              # 核心适配器
 │   │       ├── scenarios.py            # 场景实现
@@ -297,7 +297,7 @@ LEE/                                    # ★ LEE 框架根目录（本项目）
 │   ├── Workflow-Spec-Guide.md          # Workflow 编写指南
 │   ├── Orchestrator-Guide.md           # 编排器指南
 │   ├── Integration-Guide.md            # 集成指南
-│   ├── MetaGPT-Integration.md          # MetaGPT 集成
+│   ├── Legacy Executor-Integration.md          # Legacy Executor 集成
 │   ├── Workspace-Config.md             # Workspace 配置说明
 │   └── Spec-Organization.md            # Spec 组织结构说明
 │
@@ -317,7 +317,7 @@ LEE/                                    # ★ LEE 框架根目录（本项目）
 │
 └── tests/                              # 框架测试
     ├── test_orchestrator.py
-    ├── test_engines_metagpt.py
+    ├── test_engines_legacy_executor.py
     └── test_spec_validation.py
 ```
 
@@ -413,7 +413,7 @@ departments/{dept}/
 cp -r . ../LEE-backup-$(date +%Y%m%d)
 
 # 2. 创建新目录结构
-mkdir -p flowcore/{orchestrator,engines/metagpt,utils,cli}
+mkdir -p flowcore/{orchestrator,engines/legacy_executor,utils,cli}
 mkdir -p spec-global/core/{workflows,work_items,gates,contracts,teams}
 mkdir -p spec-global/departments/{stg,prd,ui,dev,qa,ops,office}/{workflows,gates,agents,skills,contracts}
 mkdir -p spec-global/cross/{workflows,interfaces,teams}
@@ -440,14 +440,14 @@ cp orchestrator/INTEGRATION.md docs/Integration-Guide.md
 cp -r orchestrator/examples/* examples/ 2>/dev/null || true
 ```
 
-### 阶段 3：迁移 MetaGPT 适配层
+### 阶段 3：迁移 Legacy Executor 适配层
 
 ```bash
 # 3.1 移动适配器代码
-cp -r MetaGPT/metagpt/lee/*.py flowcore/engines/metagpt/
+cp -r Legacy Executor/legacy_executor/lee/*.py flowcore/engines/legacy_executor/
 
 # 3.2 移动文档
-cp MetaGPT/LEE_ADAPTER_SUMMARY.md docs/MetaGPT-Integration.md
+cp Legacy Executor/LEE_ADAPTER_SUMMARY.md docs/Legacy Executor-Integration.md
 ```
 
 ### 阶段 4：迁移 ai-spec（按部门重组）
@@ -655,14 +655,14 @@ find . -type d -empty -delete
 
 ```python
 from orchestrator.core.state_machine import StateMachine
-from metagpt.lee.protocol import LEERequest
+from legacy_executor.lee.protocol import LEERequest
 ```
 
 ### 目标
 
 ```python
 from flowcore.orchestrator.state_machine import StateMachine
-from flowcore.engines.metagpt.protocol import LEERequest
+from flowcore.engines.legacy_executor.protocol import LEERequest
 ```
 
 ## 七、后续工作

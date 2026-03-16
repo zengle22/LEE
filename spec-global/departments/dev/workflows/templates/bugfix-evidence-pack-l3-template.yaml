@@ -1,0 +1,81 @@
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:43.976223
+kind: l3_workflow_template
+version: '1.0'
+id: template.dev.bugfix_evidence_pack_l3
+name: Bugfix Evidence Pack L3 Template
+description: 'Canonical L3 workflow for assembling the evidence package before merge or reject.
+
+  '
+owner: development
+tags:
+- template
+- dev
+- bugfix
+- evidence-pack
+- l3
+- canonical
+contracts:
+  input_schema: ../../contracts/evidence-pack/v1/schema.json
+  integration_spec: ../../contracts/evidence-pack/v1/integration-spec.md
+instance_schema:
+  required_fields:
+  - id
+  - template_id
+  - parent_phase_id
+  - bug_ssot_id
+  - severity
+  - reproduction_evidence
+  - verification_report_ref
+  output_fields:
+  - evidence_pack_ref
+  - closure_summary_ref
+  - evidence_pack_review_ref
+  - merge_or_reject_input
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
+  - id: collect_bugfix_evidence
+    name: Collect Bugfix Evidence
+    kind: agent
+    description: Gather fix, verification, and review references for closure.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on: []
+    outputs:
+    - evidence_index_ref
+  - id: audit_bugfix_evidence
+    name: Audit Bugfix Evidence
+    kind: agent
+    description: Audit the evidence package against bugfix acceptance.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on:
+    - collect_bugfix_evidence
+    outputs:
+    - evidence_audit_ref
+    - coverage_gap_ref
+  - id: package_bugfix_evidence
+    name: Package Bugfix Evidence
+    kind: agent
+    description: Produce the formal bugfix evidence pack.
+    agent_id: agent.dev.bug_fix_verifier
+    mandatory: true
+    depends_on:
+    - audit_bugfix_evidence
+    outputs:
+    - evidence_pack_ref
+    - closure_summary_ref
+  - id: review_evidence_pack
+    name: Review Evidence Pack
+    kind: agent
+    description: Final review before merge or reject decision.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on:
+    - package_bugfix_evidence
+    outputs:
+    - evidence_pack_review_ref
+    - merge_or_reject_input

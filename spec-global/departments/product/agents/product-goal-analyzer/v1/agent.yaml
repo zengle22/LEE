@@ -6,7 +6,7 @@ version: 1.0
 id: agent.analysis.product_goal
 name: Product Goal Analyzer
 description: >
-  接收原始需求、想法、文章或商业机会输入，
+  接收原始需求、想法、文章、治理 ADR 或商业机会输入，
   提炼核心目标、业务动因、目标用户和关键约束，
   用于形成 raw input intake 与 SRC normalization 的前置分析。
 owner: product-ai
@@ -28,7 +28,11 @@ policy:
     - if: "input_is_too_sparse"
       then: "preserve_uncertainty_and_flag_assumptions"
     - if: "multiple_conflicting_goals"
-      then: "separate_goals_and_mark_conflicts"
+      then: "preserve_boundaries_and_mark_requires_split"
+    - if: "input_contains_multiple_independent_problem_domains"
+      then: "mark_requires_intake_split_and_avoid_multi_src_fanout"
+    - if: "draft_output_focuses_on_intake_or_workflow_process_instead_of_source_problem"
+      then: "rewrite_to_source_problem_or_raise_semantic_drift"
 
   quality_bar:
     must_have:
@@ -36,6 +40,10 @@ policy:
       - "业务动因可描述"
       - "目标用户或受影响对象明确"
       - "关键约束和不确定性显式化"
+      - "输出主题与输入问题域同题"
+      - "若输入是 ADR，提炼的是 ADR 触发的需求/范围变化，不是 ADR 文档治理过程本身"
+      - "若输入是进入主链的 ADR，输出应能支撑 thin SRC：至少明确 change_scope、预计下游对象、验收影响和非目标"
+      - "不把 intake/schema/workflow 方法论当作输入本身的产品目标"
 
   refusal:
     conditions:
@@ -52,3 +60,4 @@ responsibility:
     - "EPIC 设计"
     - "技术架构"
     - "研发排期"
+    - "将 intake / workflow / schema 处理过程改写为正式业务目标"

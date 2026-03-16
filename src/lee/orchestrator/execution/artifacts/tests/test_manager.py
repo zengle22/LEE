@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+import yaml
 
 from lee.orchestrator.execution.artifacts.manager import ArtifactManager
 from lee.orchestrator.execution.artifacts.models import ArtifactMetadata
@@ -258,7 +259,37 @@ class TestArtifactManager:
         assert frozen.status == ArtifactStatus.FROZEN
         assert frozen.frozen_at is not None
         assert frozen.path.startswith("frozen/")
-        assert frozen.absolute_path.exists()
+
+    def test_create_ssot_rerun_replaces_existing_checked_in_file(self, manager):
+        """测试同一 formal_id 重跑时覆盖旧文件而不是生成重复文件"""
+        first = manager.create_ssot(
+            ssot_type=SSOTType.TASK,
+            formal_id="TASK-FEAT-SRC-009-001-001",
+            parent_id="FEAT-SRC-009-001",
+            title="旧标题",
+            content="# First\n",
+            run_id="test-run-001",
+        )
+
+        second = manager.create_ssot(
+            ssot_type=SSOTType.TASK,
+            formal_id="TASK-FEAT-SRC-009-001-001",
+            parent_id="FEAT-SRC-009-001",
+            title="新标题",
+            content="# Second\n",
+            run_id="test-run-002",
+        )
+
+        task_dir = manager.project_root / "spec" / "tasks" / "SRC-009" / "FEAT-SRC-009-001"
+        matching_files = sorted(task_dir.glob("TASK-FEAT-SRC-009-001-001__*.md"))
+
+        assert len(matching_files) == 1
+        assert matching_files[0] == second.absolute_path
+        assert not first.absolute_path.exists()
+        assert second.absolute_path.read_text(encoding="utf-8").startswith("---\n")
+        assert manager.registry.get("TASK-FEAT-SRC-009-001-001").path == (
+            second.absolute_path.relative_to(manager.project_root).as_posix()
+        )
 
     def test_freeze_already_frozen_idempotent(self, manager):
         """测试冻结已冻结的产出物是幂等的"""
@@ -309,11 +340,27 @@ class TestArtifactManager:
 
     def test_create_ssot_uses_project_placement(self, manager):
         """测试正式 SSOT 文件落在项目目录而不是 .artifacts/ssot"""
+        src = manager.create_ssot(
+            ssot_type=SSOTType.SRC,
+            title="用户注册来源",
+            content="# Source\n",
+            run_id="run-ssot-src",
+        )
+        epic = manager.create_ssot(
+            ssot_type=SSOTType.EPIC,
+            title="用户注册史诗",
+            content="# Epic\n",
+            run_id="run-ssot-epic",
+            parent_id=src.id,
+            source_refs=[src.id],
+        )
         feat = manager.create_ssot(
             ssot_type=SSOTType.FEAT,
             title="用户注册",
             content="# Feature\n",
             run_id="run-ssot-feat",
+            parent_id=epic.id,
+            source_refs=[f"{src.id}#scope", epic.id],
         )
 
         testset = manager.create_ssot(
@@ -325,19 +372,86 @@ class TestArtifactManager:
         )
 
         assert feat.path_root == "."
-        assert feat.path.startswith("spec/requirements/features/")
+        assert feat.path.startswith(f"spec/requirements/{src.id}/")
         assert feat.absolute_path.exists()
         assert ".artifacts\\ssot" not in str(feat.absolute_path)
-        assert testset.path.startswith("spec/testing/testsets/")
-        assert testset.properties["placement_dir"] == "spec/testing/testsets"
+        assert testset.path.startswith(f"spec/testing/testsets/{src.id}/")
+        assert testset.properties["placement_dir"] == f"spec/testing/testsets/{src.id}"
+
+    def test_create_ssot_writes_workflow_instance_id_front_matter(self, manager):
+        metadata = manager.create_ssot(
+            ssot_type=SSOTType.FEAT,
+            title="Workflow First CLI",
+            content="# FEAT\n",
+            run_id="wf_task_123",
+        )
+
+        text = metadata.absolute_path.read_text(encoding="utf-8")
+
+        assert "workflow_instance_id: wf_task_123" in text
+
+    def test_create_ssot_merges_workflow_instance_id_into_existing_front_matter(self, manager):
+        metadata = manager.create_ssot(
+            ssot_type=SSOTType.TECH,
+            title="Workflow First CLI Tech",
+            content="---\nid: FTA-FEAT-001-001\nssot_type: frozen_technical_architecture\ntitle: Legacy\n---\n\n# Body\n",
+            run_id="wf_task_456",
+            parent_id="FEAT-001",
+        )
+
+        text = metadata.absolute_path.read_text(encoding="utf-8")
+
+        assert "workflow_instance_id: wf_task_456" in text
+        assert "id: TECH-FEAT-001-001" in text
+
+    def test_create_ssot_infers_parent_and_lineage_from_source_ref(self, manager):
+        manager.create_ssot(
+            ssot_type=SSOTType.EPIC,
+            formal_id="EPIC-003",
+            title="Workflow First CLI",
+            content="# EPIC-003\n",
+            run_id="wf_task_parent",
+            source_refs=["SRC-001#scope"],
+            version="v2",
+        )
+
+        metadata = manager.create_ssot(
+            ssot_type=SSOTType.FEAT,
+            formal_id="FEAT-082",
+            title="Metadata Inheritance Engine",
+            content="# FEAT-082\n",
+            run_id="wf_task_child",
+            source_refs=["EPIC-003#scope"],
+        )
+
+        assert metadata.properties["parent_id"] == "EPIC-003"
+        assert metadata.properties["source_refs"] == ["EPIC-003#scope"]
+        assert metadata.properties["derived_from_ids"][0]["id"] == "EPIC-003"
+        assert metadata.properties["derived_from_ids"][0]["version"] == "v2"
 
     def test_list_ssot_by_parent_uses_parent_index(self, manager):
         """测试按父对象查询 SSOT 子对象"""
+        src = manager.create_ssot(
+            ssot_type=SSOTType.SRC,
+            title="支付来源",
+            content="# Source\n",
+            run_id="run-parent-src",
+        )
+        epic = manager.create_ssot(
+            ssot_type=SSOTType.EPIC,
+            title="支付史诗",
+            content="# Epic\n",
+            run_id="run-parent-epic",
+            parent_id=src.id,
+            source_refs=[src.id],
+        )
         feat = manager.create_ssot(
             ssot_type=SSOTType.FEAT,
             title="支付能力",
             content="# Feature\n",
             run_id="run-parent-feat",
+            parent_id=epic.id,
+            source_refs=[f"{src.id}#scope", epic.id],
         )
         testset = manager.create_ssot(
             ssot_type=SSOTType.TESTSET,
@@ -353,11 +467,27 @@ class TestArtifactManager:
 
     def test_freeze_ssot_keeps_project_path(self, manager):
         """测试正式 SSOT 冻结时保留项目目录主文件"""
+        src = manager.create_ssot(
+            ssot_type=SSOTType.SRC,
+            title="训练计划来源",
+            content="# Source\n",
+            run_id="run-freeze-src",
+        )
+        epic = manager.create_ssot(
+            ssot_type=SSOTType.EPIC,
+            title="训练计划史诗",
+            content="# Epic\n",
+            run_id="run-freeze-epic",
+            parent_id=src.id,
+            source_refs=[src.id],
+        )
         feat = manager.create_ssot(
             ssot_type=SSOTType.FEAT,
             title="训练计划",
             content="# Feature\n",
             run_id="run-freeze-ssot",
+            parent_id=epic.id,
+            source_refs=[f"{src.id}#scope", epic.id],
         )
 
         original_path = feat.path
@@ -376,16 +506,135 @@ class TestArtifactManager:
             project_root=custom_root,
         )
 
+        src = custom_manager.create_ssot(
+            ssot_type=SSOTType.SRC,
+            title="自定义来源",
+            content="# Source\n",
+            run_id="run-custom-src",
+        )
+        epic = custom_manager.create_ssot(
+            ssot_type=SSOTType.EPIC,
+            title="自定义史诗",
+            content="# Epic\n",
+            run_id="run-custom-epic",
+            parent_id=src.id,
+            source_refs=[src.id],
+        )
         feat = custom_manager.create_ssot(
             ssot_type=SSOTType.FEAT,
             title="自定义项目",
             content="# Feature\n",
             run_id="run-custom-project-root",
+            parent_id=epic.id,
+            source_refs=[f"{src.id}#scope", epic.id],
         )
 
         assert feat.path_root in {"custom-project", str(custom_root)}
-        assert feat.absolute_path == custom_root / "spec/requirements/features" / Path(feat.path).name
+        assert feat.absolute_path == custom_root / "spec/requirements" / src.id / Path(feat.path).name
         assert feat.absolute_path.exists()
+
+    def test_formalize_ssot_ids_rewrites_paths_and_refs(self, manager):
+        src = manager.create_ssot(
+            ssot_type=SSOTType.SRC,
+            title="消息中心来源",
+            content="# Source\n",
+            run_id="run-formalize-src",
+        )
+        legacy_docs = {
+            "EPIC-001": (
+                manager.project_root / "spec/requirements/epics/EPIC-001__xiaoxizhongxinshishi.md",
+                {
+                    "id": "EPIC-001",
+                    "ssot_type": "epic",
+                    "title": "消息中心史诗",
+                    "status": "draft",
+                    "version": "v1",
+                    "parent_id": src.id,
+                    "source_refs": [src.id],
+                    "properties": {},
+                },
+                "# Epic\n",
+            ),
+            "FEAT-001": (
+                manager.project_root / "spec/requirements/features/FEAT-001__zhanneixin.md",
+                {
+                    "id": "FEAT-001",
+                    "ssot_type": "feat",
+                    "title": "站内信",
+                    "status": "draft",
+                    "version": "v1",
+                    "parent_id": "EPIC-001",
+                    "source_refs": [f"{src.id}#scope", "EPIC-001"],
+                    "properties": {},
+                },
+                "# Feature\nSee EPIC-001\n",
+            ),
+            "TECH-FEAT-001": (
+                manager.project_root / "spec/design/tech/TECH-FEAT-001__zhanneixinjishufangan.md",
+                {
+                    "id": "TECH-FEAT-001",
+                    "ssot_type": "tech",
+                    "title": "站内信技术方案",
+                    "status": "draft",
+                    "version": "v1",
+                    "parent_id": "FEAT-001",
+                    "source_refs": ["FEAT-001"],
+                    "properties": {},
+                },
+                "# Tech\nDepends on FEAT-001\n",
+            ),
+            "TASK-FEAT-001-001": (
+                manager.project_root / "spec/tasks/FEAT-001/TASK-FEAT-001-001__zhanneixinrenwu.md",
+                {
+                    "id": "TASK-FEAT-001-001",
+                    "ssot_type": "task",
+                    "title": "站内信任务",
+                    "status": "draft",
+                    "version": "v1",
+                    "parent_id": "FEAT-001",
+                    "source_refs": ["FEAT-001"],
+                    "properties": {},
+                },
+                "# Task\nTrace to FEAT-001\n",
+            ),
+        }
+        for path, front_matter, body in legacy_docs.values():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                "---\n{}\n---\n\n{}".format(
+                    yaml.safe_dump(front_matter, allow_unicode=True, sort_keys=False).strip(),
+                    body,
+                ),
+                encoding="utf-8",
+            )
+
+        manager.rebuild_ssot_registry()
+        old_tech_path = legacy_docs["TECH-FEAT-001"][0]
+        replacements = manager.formalize_ssot_ids(list(legacy_docs.keys()))
+
+        new_epic_id = replacements["EPIC-001"]
+        new_feat_id = replacements["FEAT-001"]
+        new_tech_id = replacements["TECH-FEAT-001"]
+        new_task_id = replacements["TASK-FEAT-001-001"]
+
+        assert new_epic_id.startswith(f"EPIC-{src.id}-")
+        assert new_feat_id.startswith(f"FEAT-{src.id}-")
+        assert new_tech_id == f"TECH-{new_feat_id}"
+        assert new_task_id.startswith(f"TASK-{new_feat_id}-")
+        assert not old_tech_path.exists()
+
+        rebuilt_feat = manager.get_ssot(new_feat_id)
+        rebuilt_tech = manager.get_ssot(new_tech_id)
+        rebuilt_task = manager.get_ssot(new_task_id)
+
+        assert rebuilt_feat is not None
+        assert rebuilt_tech is not None
+        assert rebuilt_task is not None
+        assert rebuilt_feat.path.startswith(f"spec/requirements/{src.id}/")
+        assert rebuilt_tech.path.startswith(f"spec/tech/{src.id}/")
+        assert rebuilt_task.path.startswith(f"spec/tasks/{src.id}/{new_feat_id}/")
+        assert "FEAT-001" not in rebuilt_task.absolute_path.read_text(encoding="utf-8")
+        assert new_feat_id in rebuilt_task.absolute_path.read_text(encoding="utf-8")
 
 
 class TestArtifactManagerReferences:

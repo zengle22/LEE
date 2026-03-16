@@ -32,7 +32,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .claude_code_result_resilience import should_retry_empty_tool_use_result
+from .error_hints import append_executor_hints
 from .executors import BaseExecutor
+from .output_seed import normalize_declared_output_files, seed_declared_output_files
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +77,12 @@ class ClaudeCodeExecutor(BaseExecutor):
     DEFAULT_STRICT_MCP_CONFIG = True
     DEFAULT_ALLOWED_COMMANDS = ["cat", "ls", "find", "grep"]
     DEFAULT_HEARTBEAT_SECONDS = 5
-    DEFAULT_MODEL = "claude-sonnet-4-6"
+    DEFAULT_MODEL = "sonnet"
+    DEFAULT_EMPTY_RESULT_RETRIES = 1
+    LEGACY_MODEL_ALIASES = {
+        "claude-sonnet-4-6": "sonnet",
+        "claude-sonnet-4.6": "sonnet",
+    }
     DEFAULT_MAX_BASH_CALLS = 60
     DEFAULT_RESUME_ON_RETRY = True
     BASH_PRE_TOOL_HOOK_PATTERN = re.compile(
@@ -89,7 +97,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             **kwargs: 额外参数（保留扩展性）
         """
         self._claude_binary = os.getenv("CLAUDE_CODE_BINARY", "claude")
-        self._model = (
+        self._model = self._normalize_model_name(
             kwargs.get("model")
             or os.getenv("CLAUDE_CODE_MODEL", "").strip()
             or self.DEFAULT_MODEL
@@ -124,6 +132,10 @@ class ClaudeCodeExecutor(BaseExecutor):
         goal = input_data["goal"]
         workspace = input_data["workspace"]
         context_files = input_data.get("context_files") or []
+        declared_output_files = normalize_declared_output_files(
+            input_data.get("declared_output_files")
+        )
+        step_workspace = str(input_data.get("step_workspace") or "").strip()
 
         configured_commands = input_data.get("allowed_commands")
         if isinstance(configured_commands, list):
@@ -136,6 +148,8 @@ class ClaudeCodeExecutor(BaseExecutor):
             allowed_commands = list(self.DEFAULT_ALLOWED_COMMANDS)
 
         write_scope = input_data.get("write_scope") or []
+        read_only = bool(input_data.get("read_only", False))
+        forbidden_read_paths = input_data.get("forbidden_read_paths") or []
         max_iterations = self._coerce_positive_int(
             input_data.get("max_iterations"),
             self.DEFAULT_MAX_ITERATIONS,
@@ -166,11 +180,16 @@ class ClaudeCodeExecutor(BaseExecutor):
         setting_sources = input_data.get("setting_sources", "")
         stop_conditions = input_data.get("stop_conditions", {})
         system_prompt_extra = input_data.get("system_prompt_extra", "")
+        structured_output_only = bool(input_data.get("structured_output_only", False))
         evidence_base = input_data.get("evidence_base", "")
-        model = str(input_data.get("model") or self._model or "").strip()
+        model = self._normalize_model_name(input_data.get("model") or self._model or "")
         max_bash_calls = self._coerce_non_negative_int(
             input_data.get("max_bash_calls"),
             self.DEFAULT_MAX_BASH_CALLS,
+        )
+        empty_result_retries = self._coerce_non_negative_int(
+            input_data.get("empty_result_retries"),
+            self.DEFAULT_EMPTY_RESULT_RETRIES,
         )
         resume_on_retry = bool(
             input_data.get("resume_on_retry", self.DEFAULT_RESUME_ON_RETRY)
@@ -178,6 +197,13 @@ class ClaudeCodeExecutor(BaseExecutor):
 
         # ========== 2. 构建 evidence bundle 目录 ==========
         evidence_dir = self._prepare_evidence_dir(evidence_base, workspace)
+        seeded_output_files = seed_declared_output_files(
+            workspace=workspace,
+            output_files=declared_output_files,
+        )
+        for output_file in seeded_output_files:
+            if output_file not in context_files:
+                context_files.append(output_file)
 
         # ========== 3. 构建 system prompt（治理约束注入） ==========
         system_prompt = self._build_system_prompt(
@@ -185,16 +211,20 @@ class ClaudeCodeExecutor(BaseExecutor):
             workspace=workspace,
             allowed_commands=allowed_commands,
             write_scope=write_scope,
+            read_only=read_only,
+            forbidden_read_paths=forbidden_read_paths,
             max_iterations=max_iterations,
             max_bash_calls=max_bash_calls,
             stop_conditions=stop_conditions,
             system_prompt_extra=system_prompt_extra,
+            structured_output_only=structured_output_only,
         )
 
         # ========== 4. 构建用户 prompt ==========
         user_prompt = self._build_user_prompt(
             goal=goal,
             context_files=context_files,
+            output_files=seeded_output_files,
         )
 
         # 调试输出文件（即使失败也可用于排障）
@@ -227,33 +257,51 @@ class ClaudeCodeExecutor(BaseExecutor):
             conversation_live_log_path,
             f"model={model or '(default)'}",
         )
+        self._append_live_log_meta(
+            conversation_live_log_path,
+            f"empty_result_retries={empty_result_retries}",
+        )
 
         # ========== 5. 调用 claude CLI ==========
         try:
-            raw_output = await self._invoke_claude(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                workspace=workspace,
-                allowed_commands=allowed_commands,
-                timeout_seconds=timeout_seconds,
-                max_iterations=max_iterations,
-                timeout_retries=timeout_retries,
-                retry_backoff_seconds=retry_backoff_seconds,
-                silence_timeout_seconds=silence_timeout_seconds,
-                silence_grace_seconds=silence_grace_seconds,
-                strict_mcp_config=strict_mcp_config,
-                setting_sources=setting_sources,
-                mcp_config_path=mcp_config_path,
-                model=model,
-                debug_file_path=claude_debug_log_path,
-                live_log_path=conversation_live_log_path,
-                max_bash_calls=max_bash_calls,
-                resume_on_retry=resume_on_retry,
-            )
+            invoke_kwargs = {
+                "prompt": user_prompt,
+                "system_prompt": system_prompt,
+                "workspace": workspace,
+                "allowed_commands": allowed_commands,
+                "timeout_seconds": timeout_seconds,
+                "max_iterations": max_iterations,
+                "timeout_retries": timeout_retries,
+                "retry_backoff_seconds": retry_backoff_seconds,
+                "silence_timeout_seconds": silence_timeout_seconds,
+                "silence_grace_seconds": silence_grace_seconds,
+                "strict_mcp_config": strict_mcp_config,
+                "setting_sources": setting_sources,
+                "mcp_config_path": mcp_config_path,
+                "model": model,
+                "debug_file_path": claude_debug_log_path,
+                "live_log_path": conversation_live_log_path,
+                "max_bash_calls": max_bash_calls,
+                "resume_on_retry": resume_on_retry,
+                "read_only": read_only,
+            }
+            raw_output = await self._invoke_claude(**invoke_kwargs)
         except asyncio.TimeoutError as e:
             detail = str(e).strip()
             if not detail:
                 detail = "timeout"
+            recovered = await self._recover_timeout_result(
+                workspace=workspace,
+                step_workspace=step_workspace,
+                evidence_dir=str(evidence_dir),
+                conversation_log_path=conversation_live_log_path,
+                debug_log_path=claude_debug_log_path,
+                prompt_system_path=prompt_system_path,
+                prompt_user_path=prompt_user_path,
+                detail=detail,
+            )
+            if recovered is not None:
+                return recovered
             return self._build_result(
                 status="timeout",
                 error=(
@@ -282,8 +330,10 @@ class ClaudeCodeExecutor(BaseExecutor):
         except FileNotFoundError:
             return self._build_result(
                 status="failed",
-                error=f"Claude CLI binary not found: {self._claude_binary}. "
-                      "Install with: npm install -g @anthropic-ai/claude-code",
+                error=append_executor_hints(
+                    f"Claude CLI binary not found: {self._claude_binary}. "
+                    "Install with: npm install -g @anthropic-ai/claude-code"
+                ),
                 evidence_dir=str(evidence_dir),
                 conversation_log_path=conversation_live_log_path,
                 debug_log_path=claude_debug_log_path,
@@ -293,7 +343,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         except Exception as e:
             return self._build_result(
                 status="failed",
-                error=f"Claude CLI invocation failed: {e}",
+                error=append_executor_hints(f"Claude CLI invocation failed: {e}"),
                 evidence_dir=str(evidence_dir),
                 conversation_log_path=conversation_live_log_path,
                 debug_log_path=claude_debug_log_path,
@@ -303,6 +353,23 @@ class ClaudeCodeExecutor(BaseExecutor):
 
         # ========== 6. 解析输出 ==========
         parsed = self._parse_claude_output(raw_output)
+        empty_result_retry_count = 0
+        while (
+            empty_result_retry_count < empty_result_retries
+            and should_retry_empty_tool_use_result(parsed)
+        ):
+            empty_result_retry_count += 1
+            self._append_live_log_meta(
+                conversation_live_log_path,
+                (
+                    "retrying empty tool_use result "
+                    f"(attempt={empty_result_retry_count + 1}/{empty_result_retries + 1})"
+                ),
+            )
+            raw_output = await self._invoke_claude(**invoke_kwargs)
+            parsed = self._parse_claude_output(raw_output)
+        if empty_result_retry_count > 0:
+            parsed["empty_result_retries"] = empty_result_retry_count
 
         # ========== 7. 收集 diff 摘要 ==========
         diff_summary = await self._collect_diff_summary(workspace)
@@ -332,7 +399,49 @@ class ClaudeCodeExecutor(BaseExecutor):
             "prompt_system_path": prompt_system_path,
             "prompt_user_path": prompt_user_path,
             "generated_text": parsed.get("result_text", ""),
-            "error": parsed.get("error"),
+            "empty_result_retries": parsed.get("empty_result_retries", 0),
+            "error": append_executor_hints(parsed.get("error")),
+        }
+
+    async def _recover_timeout_result(
+        self,
+        *,
+        workspace: str,
+        step_workspace: str,
+        evidence_dir: str,
+        conversation_log_path: str,
+        debug_log_path: str,
+        prompt_system_path: str,
+        prompt_user_path: str,
+        detail: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Recover success from timeout when step workspace already contains outputs."""
+        changed_files = self._collect_step_workspace_files(
+            workspace=workspace,
+            step_workspace=step_workspace,
+        )
+        if not changed_files:
+            return None
+        diff_summary = await self._collect_diff_summary(workspace)
+        return {
+            "status": "success",
+            "iterations_used": 0,
+            "changed_files": changed_files,
+            "commands_run": [],
+            "test_results": {},
+            "diff_summary": diff_summary,
+            "evidence_bundle_path": evidence_dir,
+            "conversation_log_path": conversation_log_path,
+            "debug_log_path": debug_log_path,
+            "prompt_system_path": prompt_system_path,
+            "prompt_user_path": prompt_user_path,
+            "generated_text": "",
+            "error": None,
+            "recovered_from_timeout": True,
+            "recovery_note": (
+                "Recovered from timeout using files already written under step workspace "
+                f"after executor stalled: {detail}"
+            ),
         }
 
     # ================================================================
@@ -368,16 +477,46 @@ class ClaudeCodeExecutor(BaseExecutor):
         evidence_dir.mkdir(parents=True, exist_ok=True)
         return evidence_dir
 
+    @staticmethod
+    def _collect_step_workspace_files(
+        *,
+        workspace: str,
+        step_workspace: str,
+    ) -> List[str]:
+        step_dir = Path(step_workspace)
+        if not step_workspace or not step_dir.exists() or not step_dir.is_dir():
+            return []
+
+        workspace_path = Path(workspace).resolve()
+        recovered: List[str] = []
+        for file_path in sorted(step_dir.rglob("*")):
+            if not file_path.is_file():
+                continue
+            name = file_path.name
+            if name == "latest":
+                continue
+            if name.endswith(".tmp") or ".tmp." in name:
+                continue
+            resolved = file_path.resolve()
+            try:
+                recovered.append(str(resolved.relative_to(workspace_path)))
+            except ValueError:
+                recovered.append(str(resolved))
+        return recovered
+
     def _build_system_prompt(
         self,
         goal: str,
         workspace: str,
         allowed_commands: List[str],
         write_scope: List[str],
+        read_only: bool,
+        forbidden_read_paths: List[str],
         max_iterations: int,
         max_bash_calls: int,
         stop_conditions: Dict[str, str],
         system_prompt_extra: str,
+        structured_output_only: bool = False,
     ) -> str:
         """构建系统 prompt（注入治理约束）"""
         constraints = [
@@ -389,12 +528,22 @@ class ClaudeCodeExecutor(BaseExecutor):
         if max_bash_calls > 0:
             constraints.append(f"Bash 工具调用上限: {max_bash_calls}")
 
-        if write_scope:
+        if read_only:
+            constraints.append("只读模式: 禁止使用 Write/Edit/MultiEdit 修改任何文件")
+        elif write_scope:
             constraints.append(
                 f"允许写入的路径: {', '.join(write_scope)}"
             )
         else:
             constraints.append("允许写入工作目录内的任何文件")
+
+        if forbidden_read_paths:
+            constraints.append(
+                f"禁止读取或引用的路径: {', '.join(forbidden_read_paths)}"
+            )
+            constraints.append(
+                "这些路径中的文件不能作为需求事实源、示例源、回填源或 ID/标题参考源"
+            )
 
         if stop_conditions:
             cond_desc = "; ".join(
@@ -407,25 +556,40 @@ class ClaudeCodeExecutor(BaseExecutor):
         prompt = f"""## 治理约束
 
 {constraints_text}
+"""
+
+        if structured_output_only:
+            prompt += """
+
+## 输出要求
+
+本次任务处于结构化修复模式。
+只允许返回最终 machine-readable JSON 对象本体。
+不要输出执行器包装层，不要输出 status/changed_files/commands_run/test_results/error 这类执行摘要字段。
+不要输出解释、标题、代码块或额外包裹层。"""
+        else:
+            prompt += """
 
 ## 输出要求
 
 完成任务后，请在最后输出一个 JSON 代码块，格式如下：
 ```json
-{{
+{
   "status": "success 或 fail",
   "changed_files": ["修改的文件列表"],
-  "commands_run": [{{"cmd": "执行的命令", "exit_code": 0, "stdout_tail": "输出尾部"}}],
-  "test_results": {{"passed": 0, "failed": 0}},
+  "commands_run": [{"cmd": "执行的命令", "exit_code": 0, "stdout_tail": "输出尾部"}],
+  "test_results": {"passed": 0, "failed": 0},
   "error": null
-}}
+}
 ```
 
 重要提示 (BUG-2026-0061):
 - 任务完成后立即退出：完成任务后请立即输出 JSON 结果，不要进行额外的检查或验证操作。
 - 避免重复操作：不要重复执行已经成功的命令。
 - 在执行过程中完成验证：如果需要验证文件存在，请在任务执行过程中完成。
-- 提前退出是成功的：任务已完成时输出成功并退出是正确的行为。"""
+- 提前退出是成功的：任务已完成时输出成功并退出是正确的行为。
+- 只允许把当前 workspace 和显式提供的 context_files 当作权威输入；不要扫描仓库寻找相似的 EPIC、FEAT、SRC、ADR。
+- 不要读取或引用任何历史运行目录、历史证据目录或历史输出目录中的文件来替代当前输入。"""
 
         if system_prompt_extra:
             prompt += f"\n\n## 额外约束\n\n{system_prompt_extra}"
@@ -433,7 +597,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         return prompt
 
     def _build_user_prompt(
-        self, goal: str, context_files: List[str]
+        self, goal: str, context_files: List[str], output_files: Optional[List[str]] = None
     ) -> str:
         """构建用户 prompt"""
         prompt = f"## 任务目标\n\n{goal}"
@@ -441,6 +605,14 @@ class ClaudeCodeExecutor(BaseExecutor):
         if context_files:
             files_list = "\n".join(f"- {f}" for f in context_files)
             prompt += f"\n\n## 上下文文件\n\n请先阅读以下文件：\n{files_list}"
+
+        if output_files:
+            files_list = "\n".join(f"- {f}" for f in output_files)
+            prompt += (
+                "\n\n## 目标输出文件\n\n"
+                "以下目标文件已经预创建。第一次写入前，必须先用 Read 读取这些文件，即使它们当前为空：\n"
+                f"{files_list}"
+            )
 
         return prompt
 
@@ -464,6 +636,7 @@ class ClaudeCodeExecutor(BaseExecutor):
         live_log_path: str = "",
         max_bash_calls: int = DEFAULT_MAX_BASH_CALLS,
         resume_on_retry: bool = DEFAULT_RESUME_ON_RETRY,
+        read_only: bool = False,
     ) -> str:
         """
         调用 claude CLI (v2.x)
@@ -501,9 +674,10 @@ class ClaudeCodeExecutor(BaseExecutor):
 
         # 构建工具白名单
         # claude CLI --allowedTools 接受空格/逗号分隔的工具名
-        allowed_tools = ["Read", "Write", "Edit", "MultiEdit"]
-        if allowed_commands:
-            allowed_tools.append("Bash")
+        allowed_tools = self._build_allowed_tools(
+            allowed_commands=allowed_commands,
+            read_only=read_only,
+        )
 
         base_cmd.extend(["--allowedTools", ",".join(allowed_tools)])
 
@@ -624,6 +798,20 @@ class ClaudeCodeExecutor(BaseExecutor):
                 extra[var] = val
 
         return extra
+
+    @classmethod
+    def _normalize_model_name(cls, model: Any) -> str:
+        normalized = str(model or "").strip()
+        if not normalized:
+            return cls.DEFAULT_MODEL
+        rewritten = cls.LEGACY_MODEL_ALIASES.get(normalized.lower(), normalized)
+        if rewritten != normalized:
+            logger.warning(
+                "Normalizing unsupported Claude model alias '%s' -> '%s'",
+                normalized,
+                rewritten,
+            )
+        return rewritten
 
     def _setup_sandbox_home(self, project_root: str) -> Optional[str]:
         """
@@ -1116,6 +1304,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             "test_results": {},
             "iterations_used": data.get("num_turns", 1),
             "error": None,
+            "stop_reason": data.get("stop_reason", ""),
             # 额外元数据
             "cost_usd": data.get("total_cost_usd", 0),
             "session_id": data.get("session_id", ""),
@@ -1205,6 +1394,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             "test_results": {},
             "iterations_used": 1,
             "error": None,
+            "stop_reason": "",
         }
 
         changed_files_set = set()
@@ -1217,6 +1407,7 @@ class ClaudeCodeExecutor(BaseExecutor):
             # result 类型消息（最终结果）
             if msg_type == "result":
                 parsed["iterations_used"] = msg.get("num_turns", 1)
+                parsed["stop_reason"] = msg.get("stop_reason", "") or parsed.get("stop_reason", "")
                 result_text = msg.get("result", "")
                 if result_text:
                     result_texts.append(result_text)
@@ -1335,6 +1526,17 @@ class ClaudeCodeExecutor(BaseExecutor):
 
         return None
 
+    @staticmethod
+    def _build_allowed_tools(
+        *, allowed_commands: List[str], read_only: bool
+    ) -> List[str]:
+        allowed_tools = ["Read"]
+        if not read_only:
+            allowed_tools.extend(["Write", "Edit", "MultiEdit"])
+        if allowed_commands:
+            allowed_tools.append("Bash")
+        return allowed_tools
+
     async def _collect_diff_summary(
         self, workspace: str
     ) -> Dict[str, Any]:
@@ -1436,6 +1638,11 @@ class ClaudeCodeExecutor(BaseExecutor):
             action = stop_conditions.get("on_test_fail", "fail")
             if action == "stop_needs_human":
                 return "needs_human"
+            return "fail"
+
+        stop_reason = str(parsed.get("stop_reason") or "").strip().lower()
+        result_text = str(parsed.get("result_text") or "").strip()
+        if stop_reason == "tool_use" and not result_text:
             return "fail"
 
         return "success"

@@ -231,6 +231,10 @@ class IRConverter:
                 format=out.format,
                 required=out.required,
                 description=out.description or "",
+                symbol=getattr(out, "symbol", None),
+                contract=getattr(out, "contract", None),
+                freeze=bool(getattr(out, "freeze", False)),
+                ssot=getattr(out, "ssot", None) if isinstance(getattr(out, "ssot", None), dict) else None,
             ))
         return result
 
@@ -252,6 +256,10 @@ class IRConverter:
                 "format": out.format,
                 "required": out.required,
                 "description": out.description or "",
+                "symbol": getattr(out, "symbol", None),
+                "contract": getattr(out, "contract", None),
+                "freeze": bool(getattr(out, "freeze", False)),
+                "ssot": getattr(out, "ssot", None) if isinstance(getattr(out, "ssot", None), dict) else None,
             })
         return result
 
@@ -367,6 +375,20 @@ class TemplateToIRConverter:
             skill_id=step.skill_id,
             executor_type=step.executor_type,
             depends_on=step.depends_on,
+            outputs=[
+                StepOutputIR(
+                    path=output.path,
+                    type=output.type,
+                    format=output.format,
+                    required=output.required,
+                    description=output.description or None,
+                    symbol=output.symbol,
+                    contract=output.contract,
+                    freeze=bool(output.freeze),
+                    ssot=output.ssot if isinstance(output.ssot, dict) else None,
+                )
+                for output in (step.outputs or [])
+            ],
             config=step.config,
             human_gate=step.gate_id,
         )

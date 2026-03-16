@@ -23,7 +23,7 @@ on_failure:
   default_fallback: human_review
 
 executor:
-  default_type: llm
+  default_type: claude_code
   llm_model: gpt-4
   timeout_seconds: 600
 
@@ -82,18 +82,71 @@ class OnFailureConfig:
 @dataclass
 class ExecutorConfig:
     """执行器配置"""
-    default_type: str = "llm"
+    default_type: str = "claude_code"
     coding_executor: str = "claude_code"       # 编码步骤首选执行器
-    coding_fallback: str = "llm_patch"         # 编码步骤降级执行器
+    coding_fallback: str = "kimi"              # 编码步骤降级执行器
+    coding_second_fallback: str = "codex"      # 编码步骤次级降级执行器
+    coding_fallbacks: list[str] = field(default_factory=lambda: ["kimi", "codex"])
     llm_model: Optional[str] = None
     timeout_seconds: int = 600
 
+    _ALIASES = {
+        "qwen": "qwen_chat",
+        "kimi-cli": "kimi",
+    }
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ExecutorConfig":
+    def _normalize_executor_name(cls, raw_value: Any, default: str) -> str:
+        value = str(raw_value or "").strip().lower()
+        if not value:
+            return default
+        return cls._ALIASES.get(value, value)
+
+    @classmethod
+    def _normalize_executor_names(cls, raw_value: Any) -> list[str]:
+        if isinstance(raw_value, str):
+            raw_items = [item.strip() for item in raw_value.split(",")]
+        elif isinstance(raw_value, (list, tuple)):
+            raw_items = [str(item).strip() for item in raw_value]
+        else:
+            raw_items = []
+
+        normalized: list[str] = []
+        for item in raw_items:
+            value = cls._normalize_executor_name(item, "")
+            if value and value not in normalized:
+                normalized.append(value)
+        return normalized
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "ExecutorConfig":
+        if isinstance(data, str):
+            return cls(default_type=cls._normalize_executor_name(data, "claude_code"))
+        if not isinstance(data, dict):
+            data = {}
+
+        explicit_fallbacks = cls._normalize_executor_names(data.get("coding_fallbacks"))
+        legacy_fallback = cls._normalize_executor_name(data.get("coding_fallback"), "kimi")
+        legacy_second_fallback = cls._normalize_executor_name(
+            data.get("coding_second_fallback"),
+            "codex",
+        )
+        if explicit_fallbacks:
+            fallback_chain = explicit_fallbacks
+        else:
+            fallback_chain = []
+            for candidate in (legacy_fallback, legacy_second_fallback):
+                if candidate and candidate not in fallback_chain:
+                    fallback_chain.append(candidate)
+
         return cls(
-            default_type=data.get("default_type", "llm"),
-            coding_executor=data.get("coding_executor", "claude_code"),
-            coding_fallback=data.get("coding_fallback", "llm_patch"),
+            default_type=cls._normalize_executor_name(data.get("default_type"), "claude_code"),
+            coding_executor=cls._normalize_executor_name(data.get("coding_executor"), "claude_code"),
+            coding_fallback=fallback_chain[0] if fallback_chain else "kimi",
+            coding_second_fallback=(
+                fallback_chain[1] if len(fallback_chain) > 1 else "codex"
+            ),
+            coding_fallbacks=fallback_chain or ["kimi", "codex"],
             llm_model=data.get("llm_model"),
             timeout_seconds=data.get("timeout_seconds", 600),
         )
@@ -250,6 +303,13 @@ class ConfigLoader:
         spec_root_env = os.getenv("LEE_SPEC_ROOT")
         if spec_root_env:
             config.spec_root = spec_root_env
+
+        executor_env = os.getenv("LEE_EXECUTOR") or os.getenv("LEE_EXECUTOR_TYPE")
+        if executor_env:
+            config.executor.default_type = ExecutorConfig._normalize_executor_name(
+                executor_env,
+                config.executor.default_type,
+            )
 
         # LEE_REPO_REGISTRY
         repo_registry_env = os.getenv("LEE_REPO_REGISTRY")

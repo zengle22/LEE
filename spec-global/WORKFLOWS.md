@@ -54,24 +54,47 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ### Dev 部门
 
-#### 1. Development Pipeline（研发流水线）
+#### 1. Feature Delivery L2（研发主流程）
 
-**ID**: `workflow.dev.development_pipeline`
-**路径**: `departments/dev/workflows/development-pipeline/v1/workflow.yaml`
-**版本**: 1.2
+**ID**: `template.dev.feature_delivery_l2`
+**路径**: `departments/dev/workflows/templates/feature-delivery-l2-template.yaml`
+**版本**: 3.0
 
 **阶段**: 7 个
-- `s3_0`: 项目初始化
-- `s3_1`: 研发规划
-- `s3_2`: 研发调度执行
-- `s3_3`: 集成
-- `s3_4`: E2E 测试 + 安全扫描
-- `s3_5`: 交付门禁
-- `s3_6`: 复盘与知识沉淀
+- `tech_design`
+- `contract_design`
+- `backend_dev`
+- `frontend_dev`
+- `integration`
+- `evidence_pack`
+- `smoke_gate`
 
-**Human Gates**: 4 个
+**Gates**: `gate.dev.contract_freeze_gate`, `gate.dev.smoke_gate`
 
-**用途**: Stage 3 研发阶段的主流程
+**用途**: Dev 部门当前 canonical Feature 主入口
+
+**备注**: checked-in 文件为 template，运行时 instance 动态生成。
+
+---
+
+#### 2. Bugfix Delivery L2（缺陷修复主流程）
+
+**ID**: `template.dev.bugfix_delivery_l2`
+**路径**: `departments/dev/workflows/templates/bugfix-delivery-l2-template.yaml`
+**版本**: 3.0
+
+**阶段**: 7 个
+- `triage`
+- `root_cause`
+- `fix_design`
+- `fix_implementation`
+- `verification`
+- `evidence_pack`
+- `merge_or_reject`
+
+**用途**: Dev 部门当前 canonical Bugfix 主入口
+
+**备注**: checked-in 文件为 template，运行时 instance 动态生成。
 
 ---
 
@@ -118,7 +141,7 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 **ID**: `workflow.product.product_main_pipeline`
 **路径**: `departments/product/workflows/templates/product-main-pipeline/v1/workflow.yaml`
 
-**用途**: Product 部门新的 SSOT 主编排流程，串联 `SRC -> EPIC -> FEAT -> Delivery Prep`
+**用途**: Product 部门新的 SSOT 主编排流程，串联 `SRC -> EPIC -> FEAT -> Delivery Prep -> Requirement Chain Validation`
 
 ---
 
@@ -147,6 +170,13 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 **用途**: 基于冻结后的 FEAT 生成 UI / TECH / TASK 准备包
 
+#### 9. Requirement Chain Validation（需求链一致性验证）
+
+**ID**: `workflow.product.task.requirement_chain_validation`
+**路径**: `departments/product/workflows/templates/requirement-chain-validation/v1/workflow.yaml`
+
+**用途**: 在最终 handoff 前运行 requirement chain test，验证正式 SSOT 主链质量
+
 ---
 
 #### Deprecated: PRD Workflows
@@ -160,7 +190,7 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ### STG 部门
 
-#### 9. Opportunity Discovery（商业机会发现）
+#### 10. Opportunity Discovery（商业机会发现）
 
 **ID**: `workflow.stg.opportunity_discovery`
 **路径**: `departments/stg/workflows/opportunity_discovery/v1/workflow.yaml`
@@ -185,7 +215,7 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ### DevOps 部门（新增）
 
-#### 8. DevOps Deployment（DevOps 部署工作流）
+#### 11. DevOps Deployment（DevOps 部署工作流）
 
 **ID**: `workflow.devops.deployment`
 **路径**: `departments/devops/workflows/devops-deployment/v1/workflow.yaml`
@@ -216,6 +246,69 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ### Dev 部门
 
+#### 0. Feature Contract Design L3（契约设计子流程）
+
+**ID**: `template.dev.feature_contract_l3`
+**路径**: `departments/dev/workflows/templates/feature-contract-l3-template.yaml`
+**版本**: 2.0
+
+**步骤**: 5 个
+- `api_contract_design`
+- `data_contract_design`
+- `event_contract_design`
+- `contract_self_review`
+- `contract_freeze`
+
+**Gate**: `gate.dev.contract_freeze_gate`
+
+**用途**: Dev 部门 `contract_design` 阶段的唯一现役 L3，实现 TECH 到冻结契约的结构收口。
+
+**备注**: Backend / Frontend 下游只允许消费 `contract_freeze_ref`。
+
+---
+
+#### 0.1. Feature Backend Development L3（后端开发子流程）
+
+**ID**: `template.dev.feature_be_l3`
+**路径**: `departments/dev/workflows/templates/feature-be-l3-template.yaml`
+**版本**: 2.0
+
+**步骤**: 5 个
+- `write_ut`
+- `implement_backend`
+- `refactor_backend`
+- `coverage_gate`
+- `publish_backend`
+
+**用途**: Dev 部门 `backend_dev` 阶段的唯一现役 L3，实现后端 UTDD、覆盖率门禁和 handoff 发布。
+
+**状态**: Canonical
+
+**备注**: 旧的 DTO/Handler 分段叙事不再作为推荐入口。
+
+---
+
+#### 0.2. Feature Frontend Development L3（前端开发子流程）
+
+**ID**: `template.dev.feature_fe_l3`
+**路径**: `departments/dev/workflows/templates/feature-fe-l3-template.yaml`
+**版本**: 2.0
+
+**步骤**: 5 个
+- `write_ut`
+- `implement_ui`
+- `refactor_ui`
+- `coverage_gate`
+- `publish_frontend`
+
+**用途**: Dev 部门 `frontend_dev` 阶段的唯一现役 L3，实现前端 UTDD、覆盖率门禁和 Evidence handoff。
+
+**状态**: Canonical
+
+**备注**: 旧的 Type Generation / UI Implementation / Self-Check 叙事不再作为推荐入口。
+
+---
+
 #### 1. Phase OpenSpec Flow（Phase 内 OpenSpec 子流程）
 
 **ID**: `workflow.dev.phase_openspec_flow`
@@ -239,16 +332,24 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 **Human Gates**: 3 个
 
-**用途**: 最小执行单元，Phase 级别的完整开发循环
+**用途**: 历史参考流程
+
+**状态**: Deprecated，不再作为 Dev 部门新任务入口
+
+**迁移**: 参见 `departments/dev/docs/deprecated-path-migration-guide.md`
 
 ---
 
-#### 2. Dev Retest（Dev 代码修复流程）
+#### 2. Bugfix Delivery（代码修复流程）
 
-**ID**: `workflow.dev.dev_retest`
-**路径**: `departments/dev/workflows/dev-retest/v1/workflow.yaml`
+**ID**: `template.dev.bug_fix_l3`
+**路径**: `departments/dev/workflows/templates/bug-fix-l3-template.yaml`
 
-**用途**: Dev 部门的代码修复流程
+**用途**: 当前保留的缺陷修复模板
+
+**状态**: Deprecated，新的缺陷修复任务统一收口到 `template.dev.bugfix_delivery_l2`
+
+**迁移**: 参见 `departments/dev/docs/deprecated-path-migration-guide.md`
 
 ---
 

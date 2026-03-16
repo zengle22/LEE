@@ -15,7 +15,7 @@ last_updated: 2026-02-19
 | 组件 | Python 版本 | 说明 |
 |------|------------|------|
 | **LEE 核心功能** | Python 3.8+ | 推荐使用 3.10 或 3.11 |
-| **MetaGPT 引擎** | Python 3.9-3.10 | ⚠️ **不支持 3.11+**（faiss-cpu 依赖限制） |
+| **Legacy Executor 引擎** | Python 3.9-3.10 | ⚠️ **不支持 3.11+**（faiss-cpu 依赖限制） |
 
 ### 推荐环境
 
@@ -52,7 +52,7 @@ pip install -e .
 python -c "import flowcore; print(flowcore.__version__)"
 ```
 
-### 方式 2：使用 Conda 安装（推荐用于 MetaGPT）
+### 方式 2：使用 Conda 安装（推荐用于 Legacy Executor）
 
 #### Windows/Linux/Mac
 
@@ -64,12 +64,12 @@ conda activate lee-env
 # 进入 LEE 项目目录
 cd /path/to/LEE
 
-# 安装包含 MetaGPT 的完整版本
-pip install -e ".[metagpt]"
+# 安装包含 Legacy Executor 的完整版本
+pip install -e ".[legacy_executor]"
 
 # 验证安装
-python -c "import metagpt; print(metagpt.__version__)"
-python -c "from flowcore.engines.metagpt.adapter import run_lee_unit; print('✓ MetaGPT 适配层正常')"
+python -c "import legacy_executor; print(legacy_executor.__version__)"
+python -c "from flowcore.engines.legacy_executor.adapter import run_lee_unit; print('✓ Legacy Executor 适配层正常')"
 ```
 
 ### 方式 3：Docker 安装（推荐用于生产）
@@ -91,11 +91,11 @@ COPY . /app/LEE
 
 # 安装 LEE 框架
 WORKDIR /app/LEE
-RUN pip install -e ".[metagpt]"
+RUN pip install -e ".[legacy_executor]"
 
 # 验证安装
 RUN python -c "import flowcore; print(flowcore.__version__)" && \
-    python -c "import metagpt; print(metagpt.__version__)"
+    python -c "import legacy_executor; print(legacy_executor.__version__)"
 
 CMD ["/bin/bash"]
 ```
@@ -125,7 +125,7 @@ ERROR: No matching distribution found for faiss-cpu==1.7.4
 ```
 
 **原因**：
-- MetaGPT 依赖 `faiss-cpu==1.7.4`
+- Legacy Executor 依赖 `faiss-cpu==1.7.4`
 - 该版本不支持 Python 3.11+ 和某些平台
 
 **解决方案**：
@@ -149,10 +149,10 @@ docker pull python:3.10-slim
 docker run -it -v $(pwd):/app python:3.10-slim bash
 ```
 
-#### 选项 3：仅安装核心功能（跳过 MetaGPT）
+#### 选项 3：仅安装核心功能（跳过 Legacy Executor）
 
 ```bash
-# 不包含 [metagpt]
+# 不包含 [legacy_executor]
 pip install -e .
 ```
 
@@ -174,18 +174,18 @@ python -c "from flowcore.utils.template_resolver import TemplateResolver; print(
 python -m flowcore.cli.main --help
 ```
 
-### MetaGPT 引擎验证（如果已安装）
+### Legacy Executor 引擎验证（如果已安装）
 
 ```bash
-# 1. 检查 MetaGPT 版本
-python -c "import metagpt; print('MetaGPT 版本:', metagpt.__version__)"
+# 1. 检查 Legacy Executor 版本
+python -c "import legacy_executor; print('Legacy Executor 版本:', legacy_executor.__version__)"
 
 # 2. 测试适配层
-python -c "from flowcore.engines.metagpt.protocol import LEERequest; print('✓ 协议层正常')"
-python -c "from flowcore.engines.metagpt.adapter import run_lee_unit; print('✓ 适配器正常')"
+python -c "from flowcore.engines.legacy_executor.protocol import LEERequest; print('✓ 协议层正常')"
+python -c "from flowcore.engines.legacy_executor.adapter import run_lee_unit; print('✓ 适配器正常')"
 
 # 3. 初始化配置
-metagpt --init-config
+legacy_executor --init-config
 ```
 
 ---
@@ -218,9 +218,9 @@ conda create -n lee-py39 python=3.9 -y
 conda activate lee-py310
 ```
 
-### Q3: MetaGPT 可以不安装吗？
+### Q3: Legacy Executor 可以不安装吗？
 
-**A**: 可以！LEE 框架的核心功能不依赖 MetaGPT：
+**A**: 可以！LEE 框架的核心功能不依赖 Legacy Executor：
 
 ```bash
 # 只安装核心
@@ -240,10 +240,10 @@ pip install -e .
 
 ```bash
 # 在有网络的机器上
-pip download -d ./packages lee-framework[metagpt]
+pip download -d ./packages lee-framework[legacy_executor]
 
 # 在离线机器上
-pip install --no-index --find-links=./packages lee-framework[metagpt]
+pip install --no-index --find-links=./packages lee-framework[legacy_executor]
 ```
 
 ---
@@ -264,8 +264,8 @@ pip install -e ".[dev]"
 # 3. 验证安装
 pytest tests/ -v
 
-# 4. 初始化 MetaGPT 配置
-metagpt --init-config
+# 4. 初始化 Legacy Executor 配置
+legacy_executor --init-config
 ```
 
 ### 最小开发环境
@@ -302,7 +302,7 @@ conda env remove -n lee-env
 ## 相关文档
 
 - **依赖管理**：[Dependency-Management.md](Dependency-Management.md)
-- **MetaGPT 验证**：[MetaGPT-Installation-Verification.md](MetaGPT-Installation-Verification.md)
+- **Legacy Executor 验证**：[Legacy Executor-Installation-Verification.md](Legacy Executor-Installation-Verification.md)
 - **快速开始**：[GETTING_STARTED.md](../GETTING_STARTED.md)
 
 ---
@@ -310,5 +310,5 @@ conda env remove -n lee-env
 **最后更新**：2026-01-22
 **测试状态**：
 - ✅ Python 3.10 + Conda：完全支持
-- ⚠️ Python 3.11+：核心功能支持，MetaGPT 引擎不支持
-- ⚠️ Python 3.13：核心功能支持，MetaGPT 引擎不支持
+- ⚠️ Python 3.11+：核心功能支持，Legacy Executor 引擎不支持
+- ⚠️ Python 3.13：核心功能支持，Legacy Executor 引擎不支持

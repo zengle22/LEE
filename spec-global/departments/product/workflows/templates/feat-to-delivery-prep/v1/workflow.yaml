@@ -7,7 +7,7 @@ id: workflow.product.task.feat_to_delivery_prep
 name: Product FEAT to Delivery Prep
 description: >
   基于冻结后的 FEAT 生成研发准备包。
-  输出 UI、TECH(API included)、TASK(frontend/backend/integration) 的冻结视图，
+  输出 UI、TECH、TASK 的冻结视图，
   并形成可执行的实施计划与依赖关系图。
   该准备包同时作为 QA 派生 TESTSET 的 seed 输入。
   该文件是 checked-in workflow template，运行时实例由 Python runtime 动态生成。
@@ -19,7 +19,7 @@ roles:
     - agent.design.ui_designer
     - agent.dev.tech_architect
     - agent.product.pm_planner
-    - agent.governance.approval_reviewer
+    - agent.product.delivery_plan_reviewer
   skills: []
   gates:
     - gate.product.delivery_prep_freeze
@@ -28,6 +28,7 @@ overview:
   input:
     type: feat_freeze
     ssot_type: FEAT
+    preferred_ref: feat_freeze_ref
     decision_context:
       - governing_adrs
       - decision_refs
@@ -53,11 +54,12 @@ stages:
         name: UI 设计
         kind: agent
         agent_id: agent.design.ui_designer
-        mandatory: true
+        mandatory: false
         depends_on: []
         description: >
-          基于 FEAT 生成页面、交互流程和组件视图。
-          UI 是前端实现的直接设计依赖。
+          仅在 FEAT 明确包含页面、交互或组件边界时生成 UI 设计。
+          对纯 workflow、contract、governance、backend 或文档类 FEAT，
+          该步骤应视为 not applicable，不得阻塞后续 TECH / TASK。
         inputs:
           - source: feat_freeze
             required: true
@@ -109,14 +111,18 @@ stages:
         depends_on: [ui_design, tech_design]
         description: >
           生成实施任务规划。
-          任务以 frontend / backend / integration 为主，不把 API 或 UI 当作 task 平级对象。
+          任务必须按项目实际结构拆分执行泳道，不允许默认硬编码为 frontend / backend / integration。
+          TASK.workstream 和 responsible_role 都必须使用项目原生职责命名，禁止 backend-developer/frontend-developer 等旧标签。
+          每个 TASK 都必须是 FEAT 下的正式 SSOT 对象，并单独落盘到 spec/tasks/<FEAT-ID>/。
           规划结果必须可执行，包含责任人角色、任务顺序、依赖关系、里程碑和关键路径。
           每个任务都应可追溯回对应 FEAT 的 Acceptance Criteria。
+          当 FEAT 同时覆盖规范、模板、runtime、测试、文档、迁移或门禁等多个独立改动面时，
+          必须拆分为足够表达真实执行边界的多个 TASK，而不是压缩成 1-2 个笼统任务。
         inputs:
           - source: feat_freeze
             required: true
           - source: ui_specs
-            required: true
+            required: false
           - source: tech_specs
             required: true
           - source: governing_adrs
@@ -131,7 +137,7 @@ stages:
             required: false
         outputs:
           - symbol: task_plan
-            contract: departments/dev/contracts/development-plan-contract/v1/schema.json
+            contract: departments/product/contracts/task-bundle-contract/v1/schema.json
             freeze: false
             ssot:
               identity_kind: ssot
@@ -140,18 +146,18 @@ stages:
       - id: delivery_plan_validation
         name: 实施计划校验
         kind: agent
-        agent_id: agent.governance.approval_reviewer
+        agent_id: agent.product.delivery_plan_reviewer
         mandatory: true
         depends_on: [task_planning]
         description: >
           校验 Delivery Prep 是否已经形成可执行实施计划。
           重点检查任务分工、依赖图、关键路径、里程碑、风险与开工前置条件，
-          同时确认输出足以支持 QA 派生 TESTSET。
+          同时确认输出足以支持 QA 派生 TESTSET，并且 TASK 已作为正式 SSOT 对象落盘。
         inputs:
           - source: feat_freeze
             required: true
           - source: ui_specs
-            required: true
+            required: false
           - source: tech_specs
             required: true
           - source: task_plan
@@ -170,6 +176,9 @@ stages:
           - symbol: delivery_plan_review
             contract: departments/product/contracts/product-review-contract/v1/schema.json
             freeze: false
+        config:
+          claude_code:
+            read_only: true
       - id: delivery_prep_freeze
         name: 研发准备冻结
         kind: gate
@@ -181,7 +190,7 @@ stages:
           该冻结不只是设计准备完成，还要求形成可执行实施计划。
         inputs:
           - source: ui_specs
-            required: true
+            required: false
           - source: tech_specs
             required: true
           - source: task_plan
@@ -198,17 +207,20 @@ stages:
             - role: tech_lead
             - role: design_lead
           approval_criteria:
-            - label: "UI 依赖完备"
-              criteria: "前端实施所需 UI 信息完整"
-              required: true
+            - label: "UI 依赖完备（如适用）"
+              criteria: "仅当 FEAT 存在前端页面、交互或组件边界时，才要求 UI 信息完整"
+              required: false
             - label: "TECH 依赖完备"
               criteria: "API 与技术边界足以支撑前后端实现"
               required: true
             - label: "TASK 可执行"
-              criteria: "frontend / backend / integration 任务边界与顺序清晰"
+              criteria: "任务泳道和职责划分符合项目实际结构，且每个 TASK 都是独立可执行的 SSOT 对象"
               required: true
             - label: "TASK 可追溯"
               criteria: "任务与 FEAT 的 Acceptance Criteria 存在明确映射"
+              required: true
+            - label: "TASK 已落盘"
+              criteria: "每个 TASK 已写入 spec/tasks/<FEAT-ID>/ 并可独立审计"
               required: true
             - label: "实施计划完整"
               criteria: "具备责任分工、依赖图、关键路径、里程碑与开工前置条件"
@@ -236,6 +248,7 @@ handoff:
     - workflow.qa.testing_pipeline
   with:
     - feat_freeze
+    - feat_freeze_ref
     - ui_specs
     - tech_specs
     - task_plan
@@ -268,6 +281,7 @@ constraints:
     - milestones
     - entry conditions
     - main risks and fallback order
+    - task-level SSOT files under spec/tasks/<FEAT-ID>/
 
   qa_seed_required: |
     Delivery Prep Freeze 必须同时提供 QA 派生 TESTSET 的最小输入：
@@ -295,6 +309,7 @@ instance_schema:
     - status
   context_fields:
     - feat_freeze
+    - feat_freeze_ref
     - governing_adrs
     - decision_refs
     - decision_constraints

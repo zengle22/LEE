@@ -1,0 +1,71 @@
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:44.002183
+kind: l3_workflow_template
+version: '1.0'
+id: template.dev.bugfix_root_cause_l3
+name: Bugfix Root Cause L3 Template
+description: 'Canonical L3 workflow for identifying the defect source and affected scope.
+
+  '
+owner: development
+tags:
+- template
+- dev
+- bugfix
+- root-cause
+- l3
+- canonical
+instance_schema:
+  required_fields:
+  - id
+  - template_id
+  - parent_phase_id
+  output_fields:
+  - root_cause_ref
+  - affected_scope_ref
+  - root_cause_package_ref
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
+  - id: reproduce_issue
+    name: Reproduce Issue
+    kind: agent
+    description: Reproduce the bug using the provided evidence.
+    agent_id: agent.dev.bug_root_cause_analyst
+    mandatory: true
+    depends_on: []
+    outputs:
+    - reproduction_result_ref
+  - id: analyze_root_cause
+    name: Analyze Root Cause
+    kind: agent
+    description: Identify the real defect source and affected scope.
+    agent_id: agent.dev.bug_root_cause_analyst
+    mandatory: true
+    depends_on:
+    - reproduce_issue
+    outputs:
+    - root_cause_ref
+    - affected_scope_ref
+  - id: review_root_cause
+    name: Review Root Cause
+    kind: agent
+    description: Review the analysis before planning begins.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on:
+    - analyze_root_cause
+    outputs:
+    - root_cause_review_ref
+  - id: publish_root_cause
+    name: Publish Root Cause Package
+    kind: agent
+    description: Publish root cause package for fix design.
+    agent_id: agent.dev.bug_root_cause_analyst
+    mandatory: true
+    depends_on:
+    - review_root_cause
+    outputs:
+    - root_cause_package_ref

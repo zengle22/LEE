@@ -24,6 +24,9 @@ tags: [contract, qa, retrospective, l2]
 schema:
   type: object
   required:
+    - release_ref
+    - test_plan_id
+    - task_refs
     - test_run_id
     - generated_at
     - participants
@@ -34,6 +37,20 @@ schema:
     - lessons_learned
 
   properties:
+    release_ref:
+      type: string
+      description: "Release ID"
+
+    test_plan_id:
+      type: string
+      description: "Test Plan ID"
+
+    task_refs:
+      type: array
+      description: "Task IDs covered by this retrospective"
+      items:
+        type: string
+
     test_run_id:
       type: string
       description: "Test Run ID"
@@ -317,6 +334,10 @@ schema:
 # 示例数据
 # ============================================
 example:
+  release_ref: "REL-1.4.0"
+  test_plan_id: "TESTPLAN-REL-1.4.0"
+  task_refs:
+    - "TASK-TESTPLAN-REL-1.4.0-001"
   test_run_id: "TR-2026-0224-abc123"
   generated_at: "2026-02-24T16:00:00Z"
 

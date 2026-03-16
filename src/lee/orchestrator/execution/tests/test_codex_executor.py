@@ -3,6 +3,7 @@ Codex Executor 单元测试
 """
 
 import asyncio
+import os
 import pytest
 from pathlib import Path
 from lee.orchestrator.execution.codex_executor import CodexExecutor
@@ -17,9 +18,47 @@ class TestCodexExecutor:
 
     def test_initialization(self):
         """测试初始化"""
-        assert self.executor._codex_binary == "codex"
-        assert self.executor._model == "gpt-4o"
+        assert self.executor._codex_binary
+        assert self.executor._model == ""
         assert self.executor.DEFAULT_SANDBOX_MODE == "workspace-write"
+
+    def test_resolve_binary_prefers_windows_wrapper(self, monkeypatch):
+        """测试 Windows 下解析 cmd 包装器，避免命中 WindowsApps alias"""
+        seen = []
+
+        def fake_which(name):
+            seen.append(name)
+            mapping = {
+                "codex": None,
+                "codex.cmd": r"C:\Users\tester\AppData\Roaming\npm\codex.cmd",
+            }
+            return mapping.get(name)
+
+        monkeypatch.setattr(os, "name", "nt")
+        monkeypatch.setattr(
+            "lee.orchestrator.execution.codex_executor.shutil.which",
+            fake_which,
+        )
+
+        resolved = CodexExecutor._resolve_binary("codex")
+
+        assert resolved == r"C:\Users\tester\AppData\Roaming\npm\codex.cmd"
+        assert seen[:2] == ["codex", "codex.cmd"]
+
+    def test_build_subprocess_env_prefers_local_auth_over_repo_openai_env(self, monkeypatch):
+        """测试存在本地 auth.json 时剥离仓库 .env 注入的 OpenAI 路由变量"""
+        monkeypatch.setenv("OPENAI_API_KEY", "repo-key")
+        monkeypatch.setenv("OPENAI_BASE_URL", "https://open.bigmodel.cn/api/coding/paas/v4")
+        monkeypatch.setenv("OPENAI_MODEL", "glm-4.7")
+        self.executor._prefer_local_auth = True
+        self.executor._extra_env = {}
+
+        env = self.executor._build_subprocess_env()
+
+        assert "OPENAI_API_KEY" not in env
+        assert "OPENAI_BASE_URL" not in env
+        assert "OPENAI_MODEL" not in env
+        assert env["CODEX_ENTRYPOINT"] == "lee-executor"
 
     def test_validate_input_missing_goal(self):
         """测试输入验证 - 缺少 goal"""
@@ -76,6 +115,33 @@ class TestCodexExecutor:
 
         assert parsed["test_results"]["passed"] == 5
         assert parsed["test_results"]["failed"] == 1
+
+    def test_parse_jsonl_with_turn_failed_error(self):
+        """测试解析顶层错误事件，避免把失败误判为成功"""
+        sample_jsonl = '''
+{"type":"thread.started","thread_id":"test-thread-123"}
+{"type":"error","message":"Reconnecting... 1/5 (401 Unauthorized)"}
+{"type":"turn.failed","error":{"message":"401 Unauthorized"}}
+'''
+        parsed = self.executor._parse_codex_output(sample_jsonl)
+
+        assert parsed["thread_id"] == "test-thread-123"
+        assert "401 Unauthorized" in parsed["error"]
+
+    def test_parse_jsonl_ignores_transient_errors_after_turn_completed(self):
+        """测试 turn.completed 存在时忽略重连/降级等瞬时错误"""
+        sample_jsonl = '''
+{"type":"thread.started","thread_id":"test-thread-456"}
+{"type":"error","message":"Reconnecting... 2/5 (stream disconnected before completion)"}
+{"type":"item.completed","item":{"type":"error","message":"Falling back from WebSockets to HTTPS transport."}}
+{"type":"item.completed","item":{"type":"agent_message","text":"Finished successfully."}}
+{"type":"turn.completed","usage":{"input_tokens":120,"cached_input_tokens":0,"output_tokens":40}}
+'''
+        parsed = self.executor._parse_codex_output(sample_jsonl)
+
+        assert parsed["thread_id"] == "test-thread-456"
+        assert parsed["result_text"] == "Finished successfully."
+        assert parsed["error"] is None
 
     def test_calculate_cost(self):
         """测试成本计算"""

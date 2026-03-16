@@ -1,0 +1,17 @@
+#!/bin/bash
+# pre-commit hook - 本地路径与 SSOT 治理门禁
+# 安装方法: cp .githooks/pre-commit .git/hooks/pre-commit
+
+cd "$(git rev-parse --show-toplevel)"
+
+python scripts/git-pre-commit-hook.py
+exit_code=$?
+
+if [ $exit_code -ne 0 ]; then
+    echo ""
+    echo "🚫 本仓库禁止通过跳过本地 hooks 来提交。"
+    echo "   请先修复本地检查失败项，再重新执行 git commit。"
+    exit $exit_code
+fi
+
+exit 0

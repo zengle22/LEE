@@ -1,0 +1,71 @@
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:43.993731
+kind: l3_workflow_template
+version: '1.0'
+id: template.dev.bugfix_fix_impl_l3
+name: Bugfix Fix Implementation L3 Template
+description: 'Canonical L3 workflow for implementing the approved bugfix.
+
+  '
+owner: development
+tags:
+- template
+- dev
+- bugfix
+- fix-implementation
+- l3
+- canonical
+instance_schema:
+  required_fields:
+  - id
+  - template_id
+  - parent_phase_id
+  output_fields:
+  - fix_artifact_ref
+  - fix_diff_ref
+  - fix_impl_package_ref
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
+  - id: prepare_fix_workspace
+    name: Prepare Fix Workspace
+    kind: agent
+    description: Prepare implementation context and impacted files.
+    agent_id: agent.dev.bug_fix_implementer
+    mandatory: true
+    depends_on: []
+    outputs:
+    - implementation_scope_ref
+  - id: implement_fix
+    name: Implement Fix
+    kind: agent
+    description: Implement the approved bugfix.
+    agent_id: agent.dev.bug_fix_implementer
+    mandatory: true
+    depends_on:
+    - prepare_fix_workspace
+    outputs:
+    - fix_artifact_ref
+    - fix_diff_ref
+  - id: self_review_fix
+    name: Self Review Fix
+    kind: agent
+    description: Review the implementation before verification.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on:
+    - implement_fix
+    outputs:
+    - implementation_review_ref
+  - id: publish_fix_impl
+    name: Publish Fix Implementation
+    kind: agent
+    description: Publish implementation package for verification.
+    agent_id: agent.dev.bug_fix_implementer
+    mandatory: true
+    depends_on:
+    - self_review_fix
+    outputs:
+    - fix_impl_package_ref

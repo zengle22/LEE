@@ -107,7 +107,6 @@ def main():
     print("\n💡 下一步:")
     print("  1. 运行测试: python scripts/test_env.py")
     print("  2. 测试 LLM: python scripts/test_llm.py")
-    print("  3. 测试 MetaGPT: python scripts/test_metagpt.py")
 
 
 if __name__ == "__main__":

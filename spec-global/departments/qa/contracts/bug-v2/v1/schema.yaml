@@ -10,6 +10,7 @@ description: |
   - 首发绑定 + 多关联
   - FIXED = 有 commit
   - VERIFIED = 在后续 TSE 中未复现
+  - Canonical trace 必须能回到 release_ref / test_plan_id / task_ref
 
 schema:
   type: object
@@ -60,6 +61,18 @@ schema:
         - test_run_id
         - version
       properties:
+        release_ref:
+          type: string
+          description: "首次发现对应的 Release ID"
+
+        test_plan_id:
+          type: string
+          description: "首次发现对应的 Test Plan ID"
+
+        task_ref:
+          type: string
+          description: "首次发现对应的 Task ID"
+
         tse_id:
           type: string
           description: "首次发现的 TSE ID"
@@ -247,6 +260,9 @@ examples:
       module: "daily-plan"
 
       detected_in:
+        release_ref: "REL-1.4.0"
+        test_plan_id: "TESTPLAN-REL-1.4.0"
+        task_ref: "TASK-TESTPLAN-REL-1.4.0-001"
         tse_id: "TSE-TR-2026-02-07-TS-DAILY-PLAN"
         test_run_id: "TR-2026-02-07-rc1"
         version: "0.1.3"

@@ -8,7 +8,6 @@ version = "0.2.0"
 description = "通用 AI 工作流编排框架"
 readme = "README.md"
 requires-python = ">=3.8"
-# 注意：MetaGPT 引擎需要 Python 3.9-3.10（faiss-cpu 依赖限制）
 dependencies = [
     "pyyaml>=6.0",
     "jsonschema>=4.0",
@@ -21,10 +20,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# 开发依赖（不含 metagpt）
+# 开发依赖
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "playwright>=1.40",
     "black>=23.0",
     "flake8>=6.0",
     "mypy>=1.0",
@@ -69,7 +69,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
-pythonpath = "."
+pythonpath = [".", "src"]
 
 [tool.mypy]
 python_version = "3.8"

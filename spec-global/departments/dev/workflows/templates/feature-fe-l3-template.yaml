@@ -1,25 +1,11 @@
-# Migrated by lint_l3_templates.py on 2026-03-05T16:41:22.412660
+# Migrated by lint_l3_templates.py on 2026-03-15T00:01:44.066103
 kind: l3_workflow_template
-version: '1.0'
+version: '2.0'
 id: template.dev.feature_fe_l3
 name: Feature Frontend Development L3 Template
-description: 'L3 template for frontend implementation following frozen contract.
+description: 'Canonical L3 frontend workflow for implementing frontend behavior under TECH
 
-
-  This template defines the workflow for implementing frontend code
-
-  that strictly adheres to the frozen API contract.
-
-
-  Key Design:
-
-  - Stage 1: Generate types from contract
-
-  - Stage 2: Implement UI components
-
-  - Stage 3: Self-check against contract
-
-  - Stage 4: Code diff output
+  and frozen contract constraints with an explicit UTDD loop.
 
   '
 owner: development
@@ -29,74 +15,99 @@ tags:
 - feature
 - frontend
 - l3
-- contract-first
-stages:
-- id: type_generation
-  name: Type Generation
-  kind: stage
-  description: Generate TypeScript types from frozen contract
-  agent_id: agent.dev.uniapp_frontend_engineer
-  mandatory: true
-  depends_on: []
-  outputs:
-  - types_file
-  - api_client_stub
-- id: implementation
-  name: UI Implementation
-  kind: stage
-  description: Implement UI components and logic
-  agent_id: agent.dev.uniapp_frontend_engineer
-  mandatory: true
-  depends_on:
-  - type_generation
-  outputs:
-  - component_files
-  - view_files
-- id: selfcheck
-  name: Contract Self-Check
-  kind: stage
-  description: Verify implementation matches contract
-  agent_id: agent.dev.code_self_reviewer
-  mandatory: true
-  depends_on:
-  - implementation
-  outputs:
-  - selfcheck_result
-  - contract_violations
-- id: code_output
-  name: Code Diff Output
-  kind: stage
-  description: Generate code diff for review
-  skill_id: skill.git.diff
-  mandatory: true
-  depends_on:
-  - selfcheck
-  outputs:
-  - code_diff_path
-contract_binding:
-  description: Frontend must follow frozen contract
-  type_generation:
-    rule: Types must be generated from contract, not hand-written
-    violation_action: fail_selfcheck
-  field_usage:
-    rule: Only use fields defined in contract
-    violation_action: flag_contract_violation
-  endpoint_calls:
-    rule: API calls must match contract endpoints
-    violation_action: flag_contract_violation
+- canonical
+- adr-008
+- utdd
+contracts:
+  shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
+  stage_definition: ../../stages/l3-frontend-development.yaml
+  utdd_guide: ../../docs/frontend-utdd-execution-guide.md
+  output_spec: ../../contracts/frontend-output-spec/v1/spec.md
 instance_schema:
   required_fields:
   - id
   - template_id
-  - name
-  - status
-  - phase_id
-  context_fields:
-  - api_contract
-  - feature_spec
+  - parent_phase_id
+  - formal_ssot_id
+  - source_refs
+  - governing_adrs
+  - tech_spec_ref
+  - contract_freeze_ref
   - repo_frontend
-  - feature_point_id
+  optional_fields:
+  - env_ref
+  - base_url
+  - runtime_config_ref
+  - acceptance_brief_ref
+  - decision_constraints
   output_fields:
-  - code_diff_path
-  - selfcheck_status
-  - contract_violations
+  - unit_test_ref
+  - fe_artifact_ref
+  - refactor_report_ref
+  - contract_usage_verification_ref
+  - coverage_report_ref
+  - coverage_gate_result
+  - fe_handoff_package_ref
+stages:
+- id: execution
+  name: Execution Pipeline
+  kind: stage
+  description: Auto-migrated from root-level steps
+  steps:
+  - id: write_ut
+    name: Write or Update Frontend Tests
+    kind: agent
+    description: Add or update unit/component tests before changing implementation.
+    agent_id: agent.dev.uniapp_frontend_engineer
+    mandatory: true
+    depends_on: []
+    outputs:
+    - unit_test_ref
+    - test_scope_ref
+  - id: implement_ui
+    name: Implement Frontend UI
+    kind: agent
+    description: Implement UI and state behavior until the test target passes.
+    agent_id: agent.dev.uniapp_frontend_engineer
+    mandatory: true
+    depends_on:
+    - write_ut
+    outputs:
+    - fe_artifact_ref
+    - ui_change_notes
+  - id: refactor_ui
+    name: Refactor Frontend UI
+    kind: agent
+    description: Refactor implementation without breaking tests or contract field usage.
+    agent_id: agent.dev.uniapp_frontend_engineer
+    mandatory: true
+    depends_on:
+    - implement_ui
+    outputs:
+    - refactor_report_ref
+    - contract_usage_verification_ref
+  - id: coverage_gate
+    name: Frontend Coverage Gate
+    kind: agent
+    description: Check frontend test coverage against the canonical threshold.
+    agent_id: agent.dev.code_self_reviewer
+    config:
+      coverage_threshold: 80
+      coverage_retry_target: write_ut
+    mandatory: true
+    depends_on:
+    - refactor_ui
+    outputs:
+    - coverage_report_ref
+    - coverage_gate_result
+  - id: publish_frontend
+    name: Publish Frontend Handoff
+    kind: agent
+    description: Publish frontend handoff artifacts for integration and evidence collection.
+    agent_id: agent.dev.code_self_reviewer
+    mandatory: true
+    depends_on:
+    - coverage_gate
+    outputs:
+    - fe_handoff_package_ref
+    - handoff_notes

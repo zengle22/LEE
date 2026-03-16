@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -33,19 +34,166 @@ def test_workflow_registry_contains_product_templates() -> None:
     workflows = registry["workflows"]
 
     assert "product.main" in workflows
+    assert "product.raw-to-src" in workflows
     assert "product.src-to-epic" in workflows
     assert "product.epic-to-feat" in workflows
     assert "product.feat-to-delivery-prep" in workflows
+    assert "product.requirement-chain-validation" in workflows
 
     assert workflows["product.main"]["path"] == (
         "spec-global/departments/product/workflows/templates/product-main-pipeline/v1/workflow.yaml"
     )
     assert workflows["product.main"]["kind"] == "l2_workflow_template"
     assert workflows["product.main"]["load_spec_as_params"] is True
+    assert workflows["product.raw-to-src"]["path"] == (
+        "spec-global/departments/product/workflows/templates/raw-to-src/v1/workflow.yaml"
+    )
+    assert workflows["product.raw-to-src"]["load_spec_as_params"] is True
+    assert "adr" in workflows["product.main"]["optional_params"]
+    assert "adr" in workflows["product.raw-to-src"]["optional_params"]
+    assert "raw_requirement" in workflows["product.raw-to-src"]["optional_params"]
+    assert "business_opportunity_freeze" in workflows["product.raw-to-src"]["optional_params"]
+    assert workflows["product.src-to-epic"]["description"] == "Product L3 - frozen SRC to EPIC"
+    assert "src" in workflows["product.src-to-epic"]["optional_params"]
+    assert "source_freeze" in workflows["product.src-to-epic"]["optional_params"]
+    assert "source_freeze_ref" in workflows["product.src-to-epic"]["optional_params"]
     assert workflows["product.epic-to-feat"]["load_spec_as_params"] is True
     assert workflows["product.feat-to-delivery-prep"]["load_spec_as_params"] is True
+    assert workflows["product.requirement-chain-validation"]["load_spec_as_params"] is True
     assert workflows["product.epic-to-feat"]["required_params"] == ["epic_freeze"]
     assert workflows["product.feat-to-delivery-prep"]["required_params"] == ["feat_freeze"]
+    assert "delivery_prep_bundle" in workflows["product.requirement-chain-validation"]["optional_params"]
+
+def test_product_main_pipeline_template_uses_validation_stage_before_completion() -> None:
+    template_path = (
+        Path(__file__).resolve().parents[1]
+        / "spec-global"
+        / "departments"
+        / "product"
+        / "workflows"
+        / "templates"
+        / "product-main-pipeline"
+        / "v1"
+        / "workflow.yaml"
+    )
+    doc = yaml.safe_load(template_path.read_text(encoding="utf-8"))
+    phases = doc["phases"]
+
+    assert [phase["id"] for phase in phases] == [
+        "raw_to_src",
+        "src_to_epic",
+        "epic_to_feat",
+        "feat_to_delivery_prep",
+        "requirement_chain_validation",
+    ]
+    assert phases[0]["workflow"] == "workflow.product.task.raw_to_src"
+    assert phases[1]["depends_on"] == ["raw_to_src"]
+    assert phases[-1]["workflow"] == "workflow.product.task.requirement_chain_validation"
+    assert phases[-1]["depends_on"] == ["feat_to_delivery_prep"]
+
+
+def test_product_pipeline_handoff_contracts_are_aligned() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    main_doc = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "product"
+            / "workflows"
+            / "templates"
+            / "product-main-pipeline"
+            / "v1"
+            / "workflow.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    raw_doc = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "product"
+            / "workflows"
+            / "templates"
+            / "raw-to-src"
+            / "v1"
+            / "workflow.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    src_doc = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "product"
+            / "workflows"
+            / "templates"
+            / "src-to-epic"
+            / "v1"
+            / "workflow.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    main_input_types = {item["type"] for item in main_doc["overview"]["input_types"]}
+    raw_input_types = {item["type"] for item in raw_doc["overview"]["input_types"]}
+    raw_external_types = set(raw_doc["stages"][0]["steps"][0]["inputs"][0]["type"])
+    src_input_types = {item["type"] for item in src_doc["overview"]["input_types"]}
+    src_external_types = set(src_doc["stages"][0]["steps"][0]["inputs"][0]["type"])
+
+    assert "adr" in main_input_types
+    assert "adr" in raw_input_types
+    assert "adr" in raw_external_types
+    assert "business_opportunity_freeze" in main_input_types
+    assert "business_opportunity_freeze" in raw_input_types
+    assert "business_opportunity_freeze" in raw_external_types
+    assert {"src", "source_freeze"}.issubset(src_input_types)
+    assert {"src", "source_freeze"}.issubset(src_external_types)
+
+
+def test_requirement_chain_validation_template_requires_delivery_outputs() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    validation_doc = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "product"
+            / "workflows"
+            / "templates"
+            / "requirement-chain-validation"
+            / "v1"
+            / "workflow.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    steps = validation_doc["stages"][0]["steps"]
+
+    assert validation_doc["id"] == "workflow.product.task.requirement_chain_validation"
+    assert [step["id"] for step in steps] == [
+        "requirement_chain_test_execution",
+        "requirement_chain_review",
+        "requirement_chain_validation_gate",
+    ]
+    execution_inputs = {item["source"] for item in steps[0]["inputs"]}
+    assert {"source_freeze", "epic_freeze_bundle", "feat_freeze_bundle", "delivery_prep_bundle"} == execution_inputs
+
+
+def test_source_freeze_contract_supports_governance_bridge_src() -> None:
+    contract_path = (
+        Path(__file__).resolve().parents[1]
+        / "spec-global"
+        / "departments"
+        / "product"
+        / "contracts"
+        / "source-freeze-contract"
+        / "v1"
+        / "schema.json"
+    )
+    doc = json.loads(contract_path.read_text(encoding="utf-8"))
+
+    assert "source_kind" in doc["properties"]
+    assert "bridge_context" in doc["properties"]
+    assert "governance_bridge_src" in doc["properties"]["source_kind"]["enum"]
+    assert "bridge_context" in doc["allOf"][0]["then"]["required"]
 
 
 def test_workflow_registry_updates_qa_test_set_production_inputs() -> None:
@@ -57,6 +205,265 @@ def test_workflow_registry_updates_qa_test_set_production_inputs() -> None:
     assert "feat_freeze" in entry["required_params"]
     assert "requirement_doc" in entry["optional_params"]
     assert "delivery_prep_bundle" in entry["optional_params"]
+
+
+def test_workflow_registry_updates_qa_test_plan_execution_inputs() -> None:
+    registry = _load_registry()
+    entry = registry["workflows"]["qa.test-plan-execution"]
+
+    assert entry["path"] == "spec-global/departments/qa/workflows/templates/test-plan-l2-template.yaml"
+    assert entry["required_params"] == ["test_plan_id", "build_version", "build_commit"]
+    assert "release_ref" in entry["optional_params"]
+    assert "task_ref" in entry["optional_params"]
+    assert "base_url" in entry["optional_params"]
+
+
+def test_qa_test_plan_template_declares_canonical_delivery_context() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    template_doc = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "workflows"
+            / "templates"
+            / "test-plan-l2-template.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    context_fields = template_doc["instance_schema"]["context_fields"]
+    metrics = {metric["name"]: metric["labels"] for metric in template_doc["observability"]["metrics"]}
+
+    assert "release_ref" in context_fields
+    assert "task_ref" in context_fields
+    assert metrics["l2_execution_duration"][:2] == ["release_ref", "test_plan_id"]
+    assert metrics["test_set_execution_duration"] == ["release_ref", "test_plan_id"]
+
+
+def test_qa_test_set_execution_template_declares_delivery_trace_context() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    template_doc = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "workflows"
+            / "templates"
+            / "test-set-execute-l3-template.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    context_fields = template_doc["instance_schema"]["context_fields"]
+    output_fields = template_doc["instance_schema"]["output_fields"]
+    metrics = {metric["name"]: metric["labels"] for metric in template_doc["observability"]["metrics"]}
+    steps = {
+        step["id"]: step
+        for stage in template_doc["stages"]
+        for step in stage["steps"]
+    }
+
+    assert "release_ref" in context_fields
+    assert "test_plan_id" in context_fields
+    assert "task_ref" in context_fields
+    assert "testset_ref" in context_fields
+    assert output_fields[:3] == ["release_ref", "test_plan_id", "task_ref"]
+    assert metrics["l3_execution_duration"][:4] == ["release_ref", "test_plan_id", "task_ref", "test_set_id"]
+    assert steps["case_generation"]["outputs"][0]["path"] == "spec/testing/evidence/{{ test_run_id }}/cases.yaml"
+    assert steps["script_translation"]["outputs"][0]["path"] == "spec/testing/evidence/{{ test_run_id }}/scripts/"
+    assert steps["script_execution"]["outputs"][0]["path"] == "spec/testing/evidence/{{ test_run_id }}/runner-output.json"
+    assert steps["script_execution"]["outputs"][1]["path"] == "spec/testing/evidence/{{ test_run_id }}/bundle/"
+    assert steps["behavior_compliance"]["outputs"][0]["path"] == "spec/testing/evidence/{{ test_run_id }}/compliance-result.json"
+    assert steps["result_judgment"]["outputs"][0]["path"] == "spec/testing/evidence/{{ test_run_id }}/results.yaml"
+    assert steps["tse_assembly"]["outputs"][0]["path"] == "spec/testing/evidence/{{ test_run_id }}/tse.yaml"
+    assert steps["bug_drafting"]["outputs"][0]["path"] == "spec/testing/bugs/{{ test_run_id }}/"
+
+
+def test_qa_l2_template_declares_canonical_l3_output_trace() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    template_path = (
+        repo_root
+        / "spec-global"
+        / "departments"
+        / "qa"
+        / "workflows"
+        / "templates"
+        / "test-plan-l2-template.yaml"
+    )
+    template_text = template_path.read_text(encoding="utf-8")
+    template_doc = yaml.safe_load(template_text)
+
+    l3_output_schema = template_doc["l3_output_schema"]
+    required_fields = l3_output_schema["required_fields"]
+    optional_fields = l3_output_schema["optional_fields"]
+
+    assert required_fields[:3] == ["release_ref", "test_plan_id", "task_ref"]
+    assert "Canonical execution artifacts must be materialized under `spec/testing/*`" in template_text
+    assert "tse_path  # Canonical TSE evidence path under spec/testing/evidence/" in template_text
+    assert "bug_drafts  # Canonical bug artifact paths under spec/testing/bugs/" in template_text
+    assert "compliance_result_path  # Canonical evidence path under spec/testing/evidence/" in template_text
+    assert optional_fields == ["skip_reason", "failure_reason", "invalid_run_reason", "compliance_result_path"]
+
+
+def test_qa_tse_and_bug_agents_require_delivery_trace_inputs() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    tse_agent = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "agents"
+            / "tse-assembler"
+            / "v1"
+            / "agent.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    bug_agent = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "agents"
+            / "bug-drafter"
+            / "v1"
+            / "agent.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    tse_input_names = [item["name"] for item in tse_agent["inputs"]]
+    bug_properties = bug_agent["contracts"]["input_schema"]["properties"]
+
+    assert tse_input_names[:3] == ["release_ref", "test_plan_id", "task_ref"]
+    assert "release_ref" in bug_properties
+    assert "test_plan_id" in bug_properties
+    assert "task_ref" in bug_properties
+
+
+def test_qa_bug_summary_and_report_agents_require_canonical_delivery_inputs() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    bug_summary_agent = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "agents"
+            / "bug-summarizer"
+            / "v1"
+            / "agent.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    report_agent = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "agents"
+            / "report-generator"
+            / "v1"
+            / "agent.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    bug_summary_contract = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "contracts"
+            / "bug-summary"
+            / "v1"
+            / "schema.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    bug_required = bug_summary_agent["contracts"]["input_schema"]["required"]
+    report_required = report_agent["contracts"]["input_schema"]["required"]
+    bug_summary_required = bug_summary_contract["schema"]["required"]
+    instructions = bug_summary_agent["prompting"]["instructions"]
+
+    assert bug_required[:3] == ["release_ref", "test_plan_id", "task_ref"]
+    assert report_required[:2] == ["release_ref", "task_refs"]
+    assert bug_summary_required[:3] == ["release_ref", "test_plan_id", "task_refs"]
+    assert any("spec/testing/bugs/" in instruction for instruction in instructions)
+
+
+def test_qa_report_generator_declares_canonical_report_outputs() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    report_agent = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "agents"
+            / "report-generator"
+            / "v1"
+            / "agent.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    output_formats = report_agent["prompting"]["output_format"]
+    instructions = report_agent["prompting"]["instructions"]
+
+    assert output_formats[0]["yaml"] == "spec/testing/reports/{release_ref}-test-report.yaml"
+    assert output_formats[1]["markdown"] == "spec/testing/reports/{release_ref}-test-report.md"
+    assert any("spec/testing/reports/" in instruction for instruction in instructions)
+
+
+def test_qa_exit_and_retrospective_agents_require_delivery_trace_inputs() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    exit_agent = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "agents"
+            / "exit-evaluator"
+            / "v1"
+            / "agent.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    retrospective_agent = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "agents"
+            / "retrospective-generator"
+            / "v1"
+            / "agent.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    retrospective_contract = yaml.safe_load(
+        (
+            repo_root
+            / "spec-global"
+            / "departments"
+            / "qa"
+            / "contracts"
+            / "retrospective"
+            / "v1"
+            / "schema.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    exit_required = exit_agent["contracts"]["input_schema"]["required"]
+    retrospective_required = retrospective_agent["contracts"]["input_schema"]["required"]
+    retrospective_schema_required = retrospective_contract["schema"]["required"]
+    retrospective_output_format = retrospective_agent["prompting"]["output_format"]
+
+    assert exit_required[:3] == ["release_ref", "test_plan_id", "task_refs"]
+    assert retrospective_required[:3] == ["release_ref", "test_plan_id", "task_refs"]
+    assert retrospective_schema_required[:3] == ["release_ref", "test_plan_id", "task_refs"]
+    assert retrospective_output_format[0]["yaml"] == "spec/testing/reports/{release_ref}-retrospective.yaml"
+    assert retrospective_output_format[1]["markdown"] == "spec/testing/reports/{release_ref}-retrospective.md"
 
 
 def test_workflow_registry_is_resolved_from_framework_root(monkeypatch, tmp_path: Path) -> None:

@@ -1,0 +1,80 @@
+kind: stage_definition
+version: "1.0"
+id: stage.dev.l3_frontend_development
+name: L3 Frontend Development Stage
+status: frozen
+owner: development
+governing_adrs:
+  - ADR-008
+business_source:
+  - FEAT-SRC-009-007
+
+purpose: >
+  Canonical L3 frontend development stage definition for implementing frontend
+  behavior under TECH and frozen contract constraints.
+
+input_contract:
+  required_fields:
+    - formal_ssot_id
+    - source_refs
+    - governing_adrs
+    - tech_spec_ref
+    - contract_freeze_ref
+    - repo_frontend
+  optional_fields:
+    - env_ref
+    - base_url
+    - runtime_config_ref
+    - acceptance_brief_ref
+    - decision_constraints
+  rules:
+    - rule: no_frontend_without_frozen_contract
+      description: Frontend implementation must not start before contract freeze completes.
+    - rule: frontend_consumes_published_backend_refs
+      description: Frontend may consume backend handoff refs but may not redefine backend contract shape.
+
+utdd_cycle:
+  stages:
+    - id: write_ut
+      description: Add or update frontend unit or component tests for intended behavior.
+    - id: implement_ui
+      description: Implement frontend UI and state behavior until tests pass.
+    - id: refactor_ui
+      description: Refactor UI implementation without breaking tests or contract usage.
+  invariants:
+    - tests_define_behavior_first
+    - frontend_types_must_follow_contract
+    - refactor_must_not_reduce_coverage
+
+outputs:
+  required:
+    - fe_artifact_ref
+    - unit_test_ref
+    - coverage_report_ref
+    - contract_usage_verification_ref
+  optional:
+    - ui_handoff_notes
+    - rollback_request
+
+completion_criteria:
+  coverage_threshold: ">=80%"
+  required_conditions:
+    - frontend unit or component tests pass
+    - coverage threshold is met
+    - no unresolved contract usage violation remains
+    - frontend handoff package is published
+
+handoff_rules:
+  integration:
+    required_inputs:
+      - tech_spec_ref
+      - contract_freeze_ref
+      - fe_artifact_ref
+      - unit_test_ref
+      - coverage_report_ref
+  evidence_pack:
+    required_inputs:
+      - fe_artifact_ref
+      - unit_test_ref
+      - coverage_report_ref
+      - contract_usage_verification_ref

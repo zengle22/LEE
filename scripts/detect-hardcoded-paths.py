@@ -66,11 +66,26 @@ ALLOWED_CONTEXTS: List[re.Pattern] = [
     re.compile(r'^\s+TOKENS?_[A-Z_]+ = [".\'](\.artifacts|\.workflow)/'),  # class attribute
     re.compile(r'^\s+LOG_[A-Z_]+ = [".\'](\.artifacts|\.workflow)/'),  # LOG_FILE
     re.compile(r'^\s+SECRET_[A-Z_]+ = [".\'](\.artifacts|\.workflow)/'),  # SECRET_FILE
+    # 类属性列表中的路径（不算硬编码）- 如 DEFAULT_..._PATHS = ["..."]
+    re.compile(r'^\s+["\'][^"\']*["\'],?\s*$'),  # 列表项（配合下面的列表上下文检测）
+    re.compile(r'=\s*\['),  # 列表开始
     # dataclass 默认值（不算硬编码）- 如 output_dir: str = ".workflow/traces"
     re.compile(r':\s*(str|Optional\[str\])\s*=\s*["\'](\.artifacts|\.workflow)/'),  # field default
     re.compile(r'data\.get\([^)]+,\s*["\'](\.artifacts|\.workflow)/'),  # data.get() fallback
+    # f-string 动态路径拼接（如 prompt 生成）- 如 f".workflow/workspace/{workflow_id}/"
+    re.compile(r'f["\'].*\.workflow/.*\{.*\}.*["\']'),  # f-string with .workflow/ and {}
+    re.compile(r'f["\'].*\.artifacts/.*\{.*\}.*["\']'),  # f-string with .artifacts/ and {}
     # 字典键中的路径（文档说明）- 如 ".workflow/runs": "description"
     re.compile(r'["\'](\.artifacts|\.workflow)/[^"\'\s]+["\']:\s*["\']'),  # dict key with description
+    # JSON/字典中的路径描述（如 docstring 说明输出路径）
+    re.compile(r'"outputs":\s*\[[^]]*(\.workflow|\.artifacts)[^]]*\]'),  # "outputs": [".workflow/..."]
+]
+
+# 豁免的配置列表模式（列表中的路径字符串不算硬编码）
+ALLOWED_LIST_CONTEXTS: List[re.Pattern] = [
+    re.compile(r'[A-Z_]+_DIRS?\s*[:=]\s*\{'),  # _DIRS = { 或 _DIRS: Set = {
+    re.compile(r'[A-Z_]+_PATHS?\s*[:=]\s*\['),  # _PATHS = [
+    re.compile(r'[A-Z_]+_LISTS?\s*[:=]\s*\['),  # _LISTS = [
 ]
 
 
@@ -92,11 +107,18 @@ def is_in_excluded_dir(file_path: Path) -> bool:
     return False
 
 
-def is_allowed_context(line: str) -> bool:
+def is_allowed_context(line: str, in_list_context: bool = False) -> bool:
     """检查行是否在允许的上下文中"""
     for pattern in ALLOWED_CONTEXTS:
         if pattern.search(line):
             return True
+
+    # 如果在列表上下文中（配置列表），豁免路径字符串
+    if in_list_context:
+        # 匹配列表项中的路径字符串，如 "path/to/dir",
+        if re.search(r'^\s*["\'][^"\']+["\']', line):
+            return True
+
     return False
 
 
@@ -142,14 +164,24 @@ def detect_hardcoded_paths(
             continue
 
         lines = content.splitlines()
+        in_list_context = False
         for line_num, line in enumerate(lines, start=1):
             # 跳过注释行
             stripped = line.strip()
             if stripped.startswith("#"):
                 continue
 
+            # 检查是否进入/退出列表上下文
+            for list_pattern in ALLOWED_LIST_CONTEXTS:
+                if list_pattern.search(line):
+                    in_list_context = True
+                    break
+            # 空行或右括号结束列表上下文
+            if in_list_context and (not stripped.strip() or stripped.startswith("]") or stripped.startswith("}")):
+                in_list_context = False
+
             # 检查是否在允许的上下文中
-            if is_allowed_context(line):
+            if is_allowed_context(line, in_list_context):
                 continue
 
             # 检查是否匹配硬编码模式
@@ -163,6 +195,23 @@ def detect_hardcoded_paths(
                     break
 
     return findings
+
+
+def detect_hardcoded_paths_for_file(file_path: Path) -> List[Tuple[Path, int, str]]:
+    """
+    检测单个文件中的硬编码路径。
+
+    返回值中的 Path 仍然是相对于该文件父目录的相对路径，
+    便于与目录模式的输出结构保持一致。
+    """
+    file_path = Path(file_path)
+    findings = detect_hardcoded_paths(file_path.parent)
+    target_name = file_path.name
+    return [
+        (relative_path, line_num, content)
+        for relative_path, line_num, content in findings
+        if relative_path.name == target_name
+    ]
 
 
 def main():
@@ -197,12 +246,7 @@ def main():
             findings = detect_hardcoded_paths(p)
             all_findings.extend(findings)
         elif p.is_file():
-            findings = detect_hardcoded_paths(p.parent)
-            all_findings.extend(
-                (Path(p.name) / f.relative_to(p.parent), ln, content)
-                for f, ln, content in findings
-                if f.name == p.name
-            )
+            all_findings.extend(detect_hardcoded_paths_for_file(p))
 
     if all_findings:
         print("=" * 70)

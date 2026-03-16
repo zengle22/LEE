@@ -103,7 +103,7 @@ class SplitCache:
 
             # Check TTL
             cached_at = datetime.fromisoformat(cache_entry["cached_at"])
-            if datetime.now() - cached_at > self.ttl:
+            if self.ttl <= timedelta(0) or datetime.now() - cached_at >= self.ttl:
                 logger.info(f"Split cache expired for {phase_id}")
                 cache_file.unlink()  # Remove expired cache
                 return None

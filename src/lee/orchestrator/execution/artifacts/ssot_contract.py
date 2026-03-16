@@ -7,6 +7,7 @@ SSOT agent output contract materializer.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -15,6 +16,7 @@ from lee.orchestrator.execution.validators.schema_validator import SchemaValidat
 
 from .manager import ArtifactManager
 from .models import ArtifactMetadata
+from .placement import resolve_src_root_id
 from .types import ArtifactType, GovernanceKind, SSOTType
 
 
@@ -50,6 +52,7 @@ class SSOTContractMaterializer:
         self.manager = manager
         self.schema_path = Path(schema_path or DEFAULT_SSOT_CONTRACT_SCHEMA)
         self._validator = SchemaValidator(project_dir=str(FRAMEWORK_ROOT))
+        self._legacy_sequences: Dict[str, int] = {}
 
     def validate_contract(self, contract_data: Dict[str, Any]) -> None:
         """Validate a contract payload against the SSOT output schema."""
@@ -101,7 +104,7 @@ class SSOTContractMaterializer:
         refs.extend(self._extract_local_keys(output.get("source_refs", [])))
         refs.extend(output.get("verifies", []))
         refs.extend(output.get("implements", []))
-        local_refs = [ref for ref in refs if ref in self._output_keys_hint(output, refs) or ref.isidentifier()]
+        local_refs = [ref for ref in refs if isinstance(ref, str) and ref.isidentifier()]
 
         for ref in local_refs:
             if ref in materialized:
@@ -111,10 +114,6 @@ class SSOTContractMaterializer:
             if ref not in materialized:
                 return False
         return True
-
-    def _output_keys_hint(self, output: Dict[str, Any], refs: List[str]) -> set[str]:
-        del output
-        return {ref for ref in refs if not self._is_literal_id(ref)}
 
     def _materialize_one(
         self,
@@ -132,11 +131,23 @@ class SSOTContractMaterializer:
         }
 
         if identity_kind == "ssot":
+            formal_id = None
+            raw_properties = output.get("properties")
+            if isinstance(raw_properties, dict):
+                for candidate_key in ("formal_id", "task_id"):
+                    candidate_value = raw_properties.get(candidate_key)
+                    if isinstance(candidate_value, str) and candidate_value.strip():
+                        formal_id = candidate_value.strip()
+                        break
+            formal_id = self._normalize_explicit_formal_id(output, formal_id)
+            if formal_id is None and self._should_use_legacy_formal_id(output):
+                formal_id = self._next_legacy_formal_id(output)
             artifact = self.manager.create_ssot(
                 ssot_type=SSOTType(output["ssot_type"]),
                 title=title,
                 content=content,
                 run_id=run_id,
+                formal_id=formal_id,
                 parent_id=self._resolve_optional_id(output.get("parent"), materialized),
                 derived_from=self._resolve_versioned_refs(
                     output.get("derived_from_ids"),
@@ -172,6 +183,83 @@ class SSOTContractMaterializer:
             identity_kind=identity_kind,
             artifact=artifact,
         )
+
+    def _normalize_explicit_formal_id(
+        self,
+        output: Dict[str, Any],
+        formal_id: Optional[str],
+    ) -> Optional[str]:
+        if not isinstance(formal_id, str) or not formal_id.strip():
+            return None
+        if output.get("identity_kind") != "ssot":
+            return formal_id.strip()
+        try:
+            ssot_type = SSOTType(output["ssot_type"])
+        except Exception:
+            return formal_id.strip()
+        if ssot_type not in (SSOTType.EPIC, SSOTType.FEAT):
+            return formal_id.strip()
+
+        normalized_formal_id = formal_id.strip()
+        src_root_id = resolve_src_root_id(
+            artifact_id=None,
+            parent_id=output.get("parent"),
+            source_refs=output.get("source_refs"),
+            properties=output.get("properties"),
+        )
+        if not src_root_id:
+            return normalized_formal_id
+
+        if resolve_src_root_id(artifact_id=normalized_formal_id) == src_root_id:
+            return normalized_formal_id
+
+        return None
+
+    def _should_use_legacy_formal_id(self, output: Dict[str, Any]) -> bool:
+        if output.get("identity_kind") != "ssot":
+            return False
+        try:
+            ssot_type = SSOTType(output["ssot_type"])
+        except Exception:
+            return False
+        if ssot_type not in (SSOTType.EPIC, SSOTType.FEAT):
+            return True
+
+        src_root_id = resolve_src_root_id(
+            artifact_id=None,
+            parent_id=output.get("parent"),
+            source_refs=output.get("source_refs"),
+            properties=output.get("properties"),
+        )
+        return not bool(src_root_id)
+
+    def _next_legacy_formal_id(self, output: Dict[str, Any]) -> Optional[str]:
+        if output.get("identity_kind") != "ssot":
+            return None
+        try:
+            ssot_type = SSOTType(output["ssot_type"])
+        except Exception:
+            return None
+        if ssot_type not in (SSOTType.EPIC, SSOTType.FEAT):
+            return None
+
+        cache_key = ssot_type.value
+        if cache_key not in self._legacy_sequences:
+            base_dir = self.manager.project_root / (
+                "spec/requirements/epics" if ssot_type == SSOTType.EPIC else "spec/requirements/features"
+            )
+            max_seq = 0
+            if base_dir.exists():
+                prefix = ssot_type.value.upper()
+                for path in base_dir.glob(f"{prefix}-*__*.md"):
+                    object_id = path.name.split("__", 1)[0]
+                    match = re.fullmatch(rf"{prefix}-(\d+)", object_id)
+                    if match:
+                        max_seq = max(max_seq, int(match.group(1)))
+            self._legacy_sequences[cache_key] = max_seq
+
+        self._legacy_sequences[cache_key] += 1
+        return f"{ssot_type.value.upper()}-{self._legacy_sequences[cache_key]:03d}"
 
     def _resolve_optional_id(
         self,

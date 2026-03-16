@@ -1,19 +1,23 @@
 """
 SSOT ID Parser.
 
-ID 格式规范 (v1.4):
-- 独立顺序型: SRC-001, EPIC-001, FEAT-001, ADR-001
+ID 格式规范 (v1.5):
+- 独立顺序型: SRC-001, ADR-001
+- SRC 作用域独立型: EPIC-SRC-001-001, FEAT-SRC-001-001
 - Release 型: REL-1.4.0
-- 单父唯一型: TECH-FEAT-001, TESTSET-FEAT-001, DEVPLAN-REL-1.4.0
+- 单父唯一型: TECH-FEAT-SRC-001-001, TESTSET-FEAT-SRC-001-001
 - 单父多实例型:
-  - UI-FEAT-001-01
-  - TASK-FEAT-001-FE-01
+  - UI-FEAT-SRC-001-001-01
+  - TASK-FEAT-SRC-001-001-01
   - TASK-DEVPLAN-REL-1.4.0-001
   - TASK-TESTPLAN-REL-1.4.0-001
 - 运行/报告型:
-  - REPORT-FEAT-001-20260306
+  - REPORT-FEAT-SRC-001-001-20260306
   - REPORT-REL-1.4.0-TEST-001
-- 范围归属型: TC-FEAT-001-001, BUG-FEAT-001-001, EVI-FEAT-001-001
+- 范围归属型:
+  - TC-FEAT-SRC-001-001-001
+  - BUG-FEAT-SRC-001-001-001
+  - EVI-FEAT-SRC-001-001-001
 """
 
 from __future__ import annotations
@@ -26,15 +30,71 @@ from .types import ObjectCategory, SSOTType
 
 
 REL_VERSION_PATTERN = r"(\d+\.\d+\.\d+)"
-INDEPENDENT_PATTERN = re.compile(r"^(SRC|EPIC|FEAT|ADR)-(\d{3})$")
+SRC_PATTERN = re.compile(r"^(SRC)-(\d{3})$")
+ADR_PATTERN = re.compile(r"^(ADR)-(\d{3})$")
+SRC_SCOPED_INDEPENDENT_PATTERN = re.compile(r"^(EPIC|FEAT)-(SRC-\d{3})-(\d{3})$")
+SRC_SCOPED_INDEPENDENT_NO_SEQUENCE_PATTERN = re.compile(r"^(EPIC|FEAT)-(SRC-\d{3})$")
+LEGACY_INDEPENDENT_PATTERN = re.compile(r"^(EPIC|FEAT)-(\d{3})$")
 RELEASE_PATTERN = re.compile(rf"^(REL-{REL_VERSION_PATTERN})$")
 DEVPLAN_PATTERN = re.compile(rf"^(DEVPLAN)-(REL-{REL_VERSION_PATTERN})$")
 TESTPLAN_PATTERN = re.compile(rf"^(TESTPLAN)-(REL-{REL_VERSION_PATTERN})$")
 TASK_PLAN_PATTERN = re.compile(rf"^(TASK)-((DEVPLAN|TESTPLAN)-(REL-{REL_VERSION_PATTERN}))-(.+)$")
-TASK_FEAT_PATTERN = re.compile(r"^(TASK)-(FEAT-\d{3})-(.+)$")
-DIRECT_FEAT_PATTERN = re.compile(r"^(UI|TECH|TESTSET|REPORT)-(FEAT-\d{3})(?:-(.+))?$")
+TASK_FEAT_PATTERN = re.compile(r"^(TASK)-(FEAT-(SRC-\d{3})-(\d{3}))-(.+)$")
+DIRECT_FEAT_PATTERN = re.compile(r"^(UI|TECH|TESTSET|REPORT)-(FEAT-(SRC-\d{3})-(\d{3}))(?:-(.+))?$")
 REPORT_REL_PATTERN = re.compile(rf"^(REPORT)-(REL-{REL_VERSION_PATTERN})-([A-Z0-9_]+)-(.+)$")
-SCOPE_PATTERN = re.compile(r"^(TC|BUG|EVI)-(FEAT-\d{3})-(.+)$")
+SCOPE_PATTERN = re.compile(r"^(TC|BUG|EVI)-(FEAT-(SRC-\d{3})-(\d{3}))-(.+)$")
+LEGACY_TASK_FEAT_PATTERN = re.compile(r"^(TASK)-(FEAT-\d{3})-(.+)$")
+LEGACY_DIRECT_FEAT_PATTERN = re.compile(r"^(UI|TECH|TESTSET|REPORT)-(FEAT-\d{3})(?:-(.+))?$")
+LEGACY_SCOPE_PATTERN = re.compile(r"^(TC|BUG|EVI)-(FEAT-\d{3})-(.+)$")
+
+
+def parse_src_root(id: str) -> Optional[str]:
+    """从 ID 中解析所属 SRC 根作用域。"""
+    if not id:
+        return None
+
+    match = SRC_PATTERN.match(id)
+    if match:
+        return f"SRC-{match.group(2)}"
+
+    match = SRC_SCOPED_INDEPENDENT_PATTERN.match(id)
+    if match:
+        return match.group(2)
+
+    # SRC-scoped independent type without sequence (e.g., EPIC-SRC-009)
+    match = SRC_SCOPED_INDEPENDENT_NO_SEQUENCE_PATTERN.match(id)
+    if match:
+        return match.group(2)
+
+    match = LEGACY_INDEPENDENT_PATTERN.match(id)
+    if match:
+        return None
+
+    match = TASK_FEAT_PATTERN.match(id)
+    if match:
+        return match.group(3)
+
+    match = LEGACY_TASK_FEAT_PATTERN.match(id)
+    if match:
+        return None
+
+    match = DIRECT_FEAT_PATTERN.match(id)
+    if match:
+        return match.group(3)
+
+    match = LEGACY_DIRECT_FEAT_PATTERN.match(id)
+    if match:
+        return None
+
+    match = SCOPE_PATTERN.match(id)
+    if match:
+        return match.group(3)
+
+    match = LEGACY_SCOPE_PATTERN.match(id)
+    if match:
+        return None
+
+    return None
 
 
 @dataclass
@@ -59,7 +119,7 @@ def parse_parent(id: str) -> Optional[str]:
     if not id:
         return None
 
-    if RELEASE_PATTERN.match(id) or INDEPENDENT_PATTERN.match(id):
+    if RELEASE_PATTERN.match(id) or SRC_PATTERN.match(id) or ADR_PATTERN.match(id) or SRC_SCOPED_INDEPENDENT_PATTERN.match(id) or LEGACY_INDEPENDENT_PATTERN.match(id):
         return None
 
     match = DEVPLAN_PATTERN.match(id)
@@ -78,11 +138,19 @@ def parse_parent(id: str) -> Optional[str]:
     if match:
         return match.group(2)
 
+    match = LEGACY_TASK_FEAT_PATTERN.match(id)
+    if match:
+        return match.group(2)
+
     match = REPORT_REL_PATTERN.match(id)
     if match:
         return match.group(2)
 
     match = DIRECT_FEAT_PATTERN.match(id)
+    if match:
+        return match.group(2)
+
+    match = LEGACY_DIRECT_FEAT_PATTERN.match(id)
     if match:
         return match.group(2)
 
@@ -98,6 +166,10 @@ def parse_scope(id: str) -> Optional[str]:
     if match:
         return match.group(2)
 
+    match = LEGACY_SCOPE_PATTERN.match(id)
+    if match:
+        return match.group(2)
+
     return None
 
 
@@ -110,14 +182,23 @@ def resolve_scope(parent_id: str) -> Optional[str]:
     if not parent_id:
         return None
 
+    if re.match(r"^FEAT-(SRC-\d{3})-\d{3}$", parent_id):
+        return parent_id
+
     if re.match(r"^FEAT-\d{3}$", parent_id):
         return parent_id
+
+    if re.match(r"^(TC|BUG|EVI)-(FEAT-(SRC-\d{3})-\d{3})-", parent_id):
+        return parse_scope(parent_id)
 
     if re.match(r"^(TC|BUG|EVI)-(FEAT-\d{3})-", parent_id):
         return parse_scope(parent_id)
 
     parent = parse_parent(parent_id)
-    if parent and re.match(r"^FEAT-\d{3}$", parent):
+    if parent and (
+        re.match(r"^FEAT-(SRC-\d{3})-\d{3}$", parent)
+        or re.match(r"^FEAT-\d{3}$", parent)
+    ):
         return parent
 
     return None
@@ -128,10 +209,31 @@ def parse_id(id: str) -> IDParseResult:
     if not id:
         return IDParseResult("", "", None, None, None, False, "ID cannot be empty")
 
-    independent_match = INDEPENDENT_PATTERN.match(id)
-    if independent_match:
-        prefix, sequence = independent_match.groups()
+    src_match = SRC_PATTERN.match(id)
+    if src_match:
+        prefix, sequence = src_match.groups()
         return IDParseResult(id, prefix, None, sequence, None, True)
+
+    adr_match = ADR_PATTERN.match(id)
+    if adr_match:
+        prefix, sequence = adr_match.groups()
+        return IDParseResult(id, prefix, None, sequence, None, True)
+
+    scoped_independent_match = SRC_SCOPED_INDEPENDENT_PATTERN.match(id)
+    if scoped_independent_match:
+        prefix, src_root, sequence = scoped_independent_match.groups()
+        return IDParseResult(id, prefix, src_root, sequence, None, True)
+
+    legacy_independent_match = LEGACY_INDEPENDENT_PATTERN.match(id)
+    if legacy_independent_match:
+        prefix, sequence = legacy_independent_match.groups()
+        return IDParseResult(id, prefix, None, sequence, None, True)
+
+    # SRC-scoped independent type without sequence (e.g., EPIC-SRC-009)
+    src_scoped_no_seq_match = SRC_SCOPED_INDEPENDENT_NO_SEQUENCE_PATTERN.match(id)
+    if src_scoped_no_seq_match:
+        prefix, src_root = src_scoped_no_seq_match.groups()
+        return IDParseResult(id, prefix, src_root, src_root, None, True)
 
     release_match = RELEASE_PATTERN.match(id)
     if release_match:
@@ -152,6 +254,10 @@ def parse_id(id: str) -> IDParseResult:
 
     match = TASK_FEAT_PATTERN.match(id)
     if match:
+        return IDParseResult(id, "TASK", match.group(2), match.group(4), match.group(5), True)
+
+    match = LEGACY_TASK_FEAT_PATTERN.match(id)
+    if match:
         return IDParseResult(id, "TASK", match.group(2), match.group(2).split("-")[1], match.group(3), True)
 
     match = REPORT_REL_PATTERN.match(id)
@@ -160,17 +266,32 @@ def parse_id(id: str) -> IDParseResult:
 
     match = DIRECT_FEAT_PATTERN.match(id)
     if match:
+        prefix, parent_scope, _, sequence, suffix = match.groups()
+        return IDParseResult(id, prefix, parent_scope, sequence, suffix, True)
+
+    match = LEGACY_DIRECT_FEAT_PATTERN.match(id)
+    if match:
         prefix, parent_scope, suffix = match.groups()
         sequence = parent_scope.split("-")[1]
         return IDParseResult(id, prefix, parent_scope, sequence, suffix, True)
 
     match = SCOPE_PATTERN.match(id)
     if match:
+        prefix, parent_scope, _, sequence, suffix = match.groups()
+        return IDParseResult(id, prefix, parent_scope, sequence, suffix, True)
+
+    match = LEGACY_SCOPE_PATTERN.match(id)
+    if match:
         prefix, parent_scope, suffix = match.groups()
         sequence = parent_scope.split("-")[1]
         return IDParseResult(id, prefix, parent_scope, sequence, suffix, True)
 
     prefix = id.split("-", 1)[0].upper()
+    known_prefixes = {"REL"} | {item.value.upper() for item in SSOTType}
+    if prefix not in known_prefixes:
+        error = f"Invalid prefix: {prefix}"
+    else:
+        error = f"Unsupported SSOT ID format: {id}"
     return IDParseResult(
         id=id,
         prefix=prefix,
@@ -178,7 +299,7 @@ def parse_id(id: str) -> IDParseResult:
         sequence=None,
         suffix=None,
         is_valid=False,
-        error=f"Unsupported SSOT ID format: {id}",
+        error=error,
     )
 
 
@@ -204,6 +325,36 @@ def validate_parent_consistency(
     category = ObjectCategory.for_type(ssot_type)
 
     if category == ObjectCategory.INDEPENDENT:
+        if ssot_type == SSOTType.FEAT:
+            if not parent_id:
+                return None
+            # EPIC-SRC-xxx-xxx (3-segment SRC-scoped)
+            if re.match(r"^EPIC-(SRC-\d{3})-\d{3}$", parent_id):
+                id_src_root = parse_src_root(id)
+                parent_src_root = parse_src_root(parent_id)
+                if id_src_root and parent_src_root and id_src_root != parent_src_root:
+                    return f"ID {id} 所属 SRC {id_src_root}，但 parent_id {parent_id} 所属 SRC {parent_src_root}"
+                return None
+            # EPIC-SRC-xxx (2-segment SRC-scoped without sequence, e.g., EPIC-SRC-009)
+            if re.match(r"^EPIC-(SRC-\d{3})$", parent_id):
+                id_src_root = parse_src_root(id)
+                parent_src_root = parse_src_root(parent_id)
+                if id_src_root and parent_src_root and id_src_root != parent_src_root:
+                    return f"ID {id} 所属 SRC {id_src_root}，但 parent_id {parent_id} 所属 SRC {parent_src_root}"
+                return None
+            # Legacy EPIC-xxx
+            if re.match(r"^EPIC-\d{3}$", parent_id):
+                return None
+            return f"类型 {ssot_type.value} 的 parent_id 若提供，必须为 EPIC，当前为 {parent_id}"
+        if ssot_type == SSOTType.EPIC:
+            if not parent_id:
+                return None
+            if re.match(r"^SRC-\d{3}$", parent_id):
+                id_src_root = parse_src_root(id)
+                if id_src_root and id_src_root != parent_id:
+                    return f"ID {id} 所属 SRC {id_src_root}，但 parent_id 设置为 {parent_id}"
+                return None
+            return f"类型 {ssot_type.value} 的 parent_id 必须为 SRC，当前为 {parent_id}"
         if parent_id:
             return f"类型 {ssot_type.value} 不应设置 parent_id，当前为 {parent_id}"
         return None

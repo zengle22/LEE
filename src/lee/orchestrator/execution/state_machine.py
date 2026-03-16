@@ -11,10 +11,14 @@ LEE Orchestrator v3.0 - 工作流状态机
 5. 支持暂停/恢复
 """
 
+import json
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
+
+import yaml
 
 from lee.orchestrator.storage.models import (
     WorkflowStatus,
@@ -281,6 +285,22 @@ class WorkflowStateMachine(IStateMachine):
             # P0-5: 记录步骤添加到已完成列表日志
             logging.info(f"[StateMachine] Step {step_id} added to completed_steps")
 
+        if step_outputs is None and self.template_manager and instance.template_id:
+            try:
+                template = self.template_manager.get_template(instance.template_id)
+                step_info = template.get_step_info(step_id) if template else None
+                if step_info and getattr(step_info, "outputs", None):
+                    step_outputs = step_info.outputs
+            except Exception:
+                step_outputs = step_outputs
+
+        materialized_paths = self._materialize_declared_outputs(
+            instance=instance,
+            step_id=step_id,
+            output=output,
+            step_outputs=step_outputs or [],
+        )
+
         # 更新 step_outputs 映射
         step_outputs_map = dict(instance.data.get("step_outputs", {}))
         step_output_entry = dict(step_outputs_map.get(step_id, {}))
@@ -290,10 +310,15 @@ class WorkflowStateMachine(IStateMachine):
             # 提取输出路径（支持 OutputSpec dataclass, dict, str）
             output_paths = []
             for out in step_outputs:
+                output_type = getattr(out, "type", None)
+                if output_type == "symbol":
+                    continue
                 if hasattr(out, 'path'):
                     # OutputSpec dataclass
                     output_paths.append(out.path)
                 elif isinstance(out, dict) and out.get("path"):
+                    if out.get("type") == "symbol":
+                        continue
                     output_paths.append(out["path"])
                 elif isinstance(out, str):
                     output_paths.append(out)
@@ -303,9 +328,17 @@ class WorkflowStateMachine(IStateMachine):
                 existing = step_output_entry.get("paths", [])
                 merged_paths = list(dict.fromkeys(existing + output_paths))  # Preserve order, remove dupes
                 step_output_entry["paths"] = merged_paths
+        if materialized_paths:
+            existing = step_output_entry.get("paths", [])
+            step_output_entry["paths"] = list(dict.fromkeys(existing + materialized_paths))
 
         if step_output_entry:
             step_outputs_map[step_id] = step_output_entry
+        self._register_symbol_output_aliases(
+            step_outputs_map=step_outputs_map,
+            output=output,
+            step_outputs=step_outputs or [],
+        )
 
         # P0-3: 优先使用原子性更新；旧 store 接口回退为两步更新。
         updated_data = {
@@ -342,6 +375,223 @@ class WorkflowStateMachine(IStateMachine):
 
         return result
 
+    @staticmethod
+    def _register_symbol_output_aliases(
+        *,
+        step_outputs_map: Dict[str, Any],
+        output: Dict[str, Any],
+        step_outputs: List[Any],
+    ) -> None:
+        if not isinstance(step_outputs_map, dict) or not step_outputs:
+            return
+
+        alias_payload = output if isinstance(output, dict) else {"value": output}
+        aliases: List[str] = []
+        for output_spec in step_outputs:
+            output_type = getattr(output_spec, "type", None)
+            output_symbol = getattr(output_spec, "symbol", None)
+            output_path = getattr(output_spec, "path", None)
+            if isinstance(output_symbol, str) and output_symbol.strip():
+                aliases.append(output_symbol.strip())
+            elif output_type == "symbol" and isinstance(output_path, str) and output_path.strip():
+                aliases.append(output_path.strip())
+
+        for alias in aliases:
+            step_outputs_map[alias] = alias_payload
+
+    def _materialize_declared_outputs(
+        self,
+        *,
+        instance,
+        step_id: str,
+        output: Dict[str, Any],
+        step_outputs: List[Any],
+    ) -> List[str]:
+        materialized: List[str] = []
+        if not step_outputs:
+            return materialized
+
+        project_root = self._infer_project_root(instance)
+        step_output_map = instance.data.get("step_outputs", {}) if isinstance(instance.data, dict) else {}
+
+        for output_spec in step_outputs:
+            raw_path = getattr(output_spec, "path", None)
+            output_type = getattr(output_spec, "type", None)
+            if output_type == "symbol" or not raw_path:
+                continue
+            rendered_path = self._render_output_path(raw_path, instance)
+            target_path = Path(rendered_path)
+            if not target_path.is_absolute():
+                target_path = project_root / target_path
+
+            if self._should_preserve_existing_output(target_path=target_path, output=output):
+                materialized.append(str(target_path))
+                continue
+
+            payload = self._build_declared_output_payload(
+                step_id=step_id,
+                output=output,
+                instance=instance,
+                step_output_map=step_output_map,
+            )
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(
+                self._serialize_declared_output_payload(target_path, payload),
+                encoding="utf-8",
+            )
+            materialized.append(str(target_path))
+
+        return materialized
+
+    @staticmethod
+    def _should_preserve_existing_output(*, target_path: Path, output: Dict[str, Any]) -> bool:
+        """
+        Preserve files that were already created by shell/skill steps instead of
+        overwriting them with a synthetic gate_output wrapper.
+        """
+        if not target_path.exists() or not isinstance(output, dict):
+            return False
+        if "gate_approved" in output or "business_output" in output or "structured_payload" in output:
+            return False
+        return any(key in output for key in ("stdout", "stderr", "return_code", "commands_run"))
+
+    def _infer_project_root(self, instance) -> Path:
+        template_id = getattr(instance, "template_id", "") or ""
+        template_path = Path(template_id)
+        if template_path.is_absolute():
+            parents = template_path.parts
+            if ".workflow" in parents:
+                idx = parents.index(".workflow")
+                return Path(*parents[:idx]).resolve()
+            return template_path.parent.resolve()
+        return Path.cwd().resolve()
+
+    def _render_output_path(self, raw_path: str, instance) -> str:
+        rendered = str(raw_path)
+        params = instance.data.get("params", {}) if isinstance(instance.data, dict) else {}
+        project_value = (
+            params.get("project")
+            or instance.data.get("project_name")
+            or self._infer_project_root(instance).name
+        )
+        rendered = rendered.replace("{project}", str(project_value))
+        return rendered
+
+    def _build_declared_output_payload(
+        self,
+        *,
+        step_id: str,
+        output: Dict[str, Any],
+        instance,
+        step_output_map: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        instance_data = instance.data if isinstance(instance.data, dict) else {}
+        if isinstance(output, dict):
+            if isinstance(output.get("business_output"), (dict, list)):
+                payload["business_output"] = output["business_output"]
+            elif isinstance(output.get("structured_payload"), dict):
+                payload["business_output"] = output["structured_payload"]
+            else:
+                gate_business_payload = self._extract_gate_business_payload(output)
+                if gate_business_payload is not None:
+                    payload["business_output"] = gate_business_payload
+            payload["gate_output"] = output
+
+        step_inputs = self._resolve_step_inputs_for_freeze(step_id, instance)
+        if step_inputs:
+            frozen_inputs: Dict[str, Any] = {}
+            for source in step_inputs:
+                if source in step_output_map:
+                    frozen_inputs[source] = step_output_map[source]
+                elif source in instance_data.get("params", {}):
+                    frozen_inputs[source] = instance_data["params"][source]
+            if frozen_inputs:
+                payload["frozen_inputs"] = frozen_inputs
+
+        payload.setdefault("frozen_at", datetime.now().isoformat())
+        payload.setdefault("step_id", step_id)
+        return payload
+
+    @staticmethod
+    def _extract_gate_business_payload(output: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if not isinstance(output, dict) or "gate_approved" not in output:
+            return None
+
+        noise_keys = {
+            "gate_approved",
+            "approver",
+            "comments",
+            "frozen_at",
+            "step_id",
+            "frozen_inputs",
+            "freeze_meta",
+            "gate_evaluation",
+            "rules_overridden",
+        }
+        business_payload = {
+            key: value
+            for key, value in output.items()
+            if key not in noise_keys
+        }
+        return business_payload or None
+
+    def _resolve_step_inputs_for_freeze(self, step_id: str, instance) -> List[str]:
+        if not self.template_manager:
+            return []
+        try:
+            template = self.template_manager.get_template(getattr(instance, "template_id", "") or "")
+        except Exception:
+            template = None
+        if template is None:
+            return []
+        step_info = template.get_step_info(step_id)
+        if not step_info:
+            return []
+        raw_inputs = getattr(step_info, "input", None) or getattr(step_info, "inputs", None) or []
+        sources: List[str] = []
+        if isinstance(raw_inputs, list):
+            for item in raw_inputs:
+                if isinstance(item, dict):
+                    source = item.get("source")
+                    if isinstance(source, str):
+                        sources.append(source)
+                        sources.extend(self._freeze_source_aliases(source))
+        elif isinstance(raw_inputs, dict):
+            for _, value in raw_inputs.items():
+                if isinstance(value, dict):
+                    source = value.get("source")
+                    if isinstance(source, str):
+                        sources.append(source)
+                        sources.extend(self._freeze_source_aliases(source))
+        deduped: List[str] = []
+        for source in sources:
+            if source not in deduped:
+                deduped.append(source)
+        return deduped
+
+    @staticmethod
+    def _freeze_source_aliases(source: str) -> List[str]:
+        if not isinstance(source, str):
+            return []
+        if source.endswith("_freeze_ref"):
+            return [source[:-4]]
+        if source.endswith("_freeze"):
+            return [f"{source}_ref"]
+        return []
+
+    @staticmethod
+    def _serialize_declared_output_payload(target_path: Path, payload: Dict[str, Any]) -> str:
+        suffix = target_path.suffix.lower()
+        if suffix == ".json":
+            return json.dumps(payload, ensure_ascii=False, indent=2)
+        if suffix in {".yaml", ".yml"}:
+            return yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+        if suffix == ".md":
+            body = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+            return f"```yaml\n{body}```\n"
+        return yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+
     async def fail_step(
         self,
         workflow_id: str,
@@ -354,11 +604,12 @@ class WorkflowStateMachine(IStateMachine):
         操作：
         1. 更新 TaskExecution 状态
         2. 记录错误信息
-        3. 更新工作流状态为 FAILED
+        3. 更新工作流状态为 FAILED，并清除 current_step
         """
         await self.store.update_workflow_status(
             workflow_id,
-            WorkflowStatus.FAILED
+            WorkflowStatus.FAILED,
+            clear_current_step=True,
         )
 
     async def pause_workflow(

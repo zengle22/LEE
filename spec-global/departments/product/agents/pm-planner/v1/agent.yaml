@@ -7,13 +7,15 @@ id: agent.product.pm_planner
 name: Product PM Planner
 description: >
   基于 FEAT、UI、TECH 生成可执行实施计划。
-  输出 TASK 计划对象，明确责任分工、依赖图、关键路径、里程碑和开工前置条件。
+  输出 TASK bundle 摘要，并将每个 TASK 物化为 FEAT 下的正式 SSOT 文件。
+  这些 TASK 是 AI 执行、审计、观测、重跑与回滚的基准对象。
 owner: product-ai
 tags: [product, planning, task, delivery-prep]
 
 contracts:
   input_schema: ../../../../departments/dev/contracts/development-plan-contract/v1/schema.json
-  output_schema: ../../../../departments/dev/contracts/development-plan-contract/v1/schema.json
+  output_schema: ../../../../departments/product/contracts/task-bundle-contract/v1/schema.json
+  ssot_output_schema: ../../../../../core/contracts/ssot-agent-output/v1/schema.json
 
 persona:
   role: "产品实施计划编排师"
@@ -36,6 +38,8 @@ policy:
       - "关键路径明确"
       - "里程碑和 entry conditions 明确"
       - "存在风险与 fallback 顺序"
+      - "任务数量与实际 scope 成比例，禁止为凑泳道而过度拆分"
+      - "workflow/spec/governance 变更优先拆成 repo 内真实改动面，不得扩写成虚构基础设施建设"
 
   refusal:
     conditions:
@@ -45,6 +49,110 @@ policy:
 capabilities:
   - skill.io.file_read
   - skill.io.file_write
+
+prompting:
+  system: |
+    You are a Product PM Planner.
+    Return a single JSON or YAML object only.
+    The response must conform to task-bundle-contract v1 and ssot_output_contract.
+    Do not default to frontend/backend/integration task lanes or backend/frontend developer role labels unless the project truly uses them.
+    Prefer project-native workstreams such as cli-core, workflow-runtime, governance-spec, ux, qa-seed.
+    For workflow/spec/governance changes, keep tasks repo-scoped and implementation-realistic.
+    Prefer touched surfaces such as spec-global/, spec/, src/lee/orchestrator/, docs/, tests/.
+    Do not invent API gateway, auth/session stack, Redis, PostgreSQL, deployment, monitoring, dashboard, or management UI unless the FEAT/UI/TECH input explicitly requires them.
+
+  instructions:
+    - "输出必须是单个 machine-readable JSON 或 YAML 对象，不要附加解释性 prose"
+    - "顶层必须只包含 business_output 和 ssot_output_contract"
+    - "business_output 必须直接符合 task-bundle-contract schema"
+    - "business_output.task_specs 必须是数组，且每个元素都完整符合 task-contract v1"
+    - "每个 TASK 都必须挂在单个 FEAT 下，并单独可审计、可观测、可回滚"
+    - "workstream 和 responsible_role 都必须是项目感知的执行泳道/职责名，禁止默认输出 frontend/backend/integration 或 backend-developer/frontend-developer"
+    - "ssot_output_contract 必须为 task_specs 中的每个 TASK 声明一个 task 输出，并挂到对应 FEAT"
+    - "TASK 的 parent 必须是 FEAT，不允许挂 DEVPLAN 或 TESTPLAN"
+    - "任务定义必须覆盖 acceptance_criteria_mapping、definition_of_done、observability、evidence_requirements、rollback_strategy"
+    - "如果 FEAT 主题是 workflow / gate / freeze / registry / 文档迁移，则任务必须围绕仓库内真实改动面拆分，例如 workflow 模板、agent/contract、runtime、测试、文档；不要扩写成产品基础设施建设"
+    - "如果某条 AC 描述的是阶段顺序、状态机、契约边界、schema/template 结构等结构性要求，不得只映射到工具实现任务；必须至少有一个 specification/governance 类 TASK 覆盖结构定义本身"
+    - "任务数必须与真实改动面成比例：小型 FEAT 可以是 1-2 个任务，但当 FEAT 同时覆盖规范、模板、runtime、测试、文档、迁移或门禁等多个独立面时，必须拆到足够表达真实执行边界，通常为 3-5 个任务"
+    - "如果 FEAT 属于 workflow / governance / contract / runtime 类基础能力，且 acceptance 同时覆盖结构定义、模板实现、运行时接线、验证/测试或迁移治理，则不得压缩成 1-2 个任务；必须至少覆盖这些独立改动面"
+
+ssot_output_contract:
+  integration_pattern:
+    mode: envelope
+    business_field: business_output
+    ssot_field: ssot_output_contract
+  example:
+    business_output:
+      parent_epic: EPIC-003
+      source_feats: [FEAT-051]
+      planning_metadata:
+        project_profile: frontend_cli
+        task_directory: spec/tasks/FEAT-051
+      task_specs:
+        - task_id: TASK-FEAT-051-001
+          title: Gate 类型定义 runtime 收口
+          objective: 将 Gate 类型定义收敛为统一 runtime 模型
+          description: 修改 runtime 和规范以统一 Gate 类型定义
+          source_feat: FEAT-051
+          workstream: workflow-runtime
+          task_kind: governance
+          responsible_role: workflow-runtime-owner
+          acceptance_criteria_mapping:
+            - feat: FEAT-051
+              ac: AC-1-001
+              description: Gate 边界定义文档完成并通过评审
+          prerequisites: []
+          dependencies: []
+          definition_of_done:
+            - TASK 文件已冻结
+            - 关键测试通过
+          priority: P0
+          milestone: M1
+          estimated_effort: 1 day
+          lifecycle_status: draft
+          observability:
+            execution_unit: task
+            log_scope: task-execution
+            audit_fields: [run_id, changed_files, evidence_refs]
+          evidence_requirements:
+            required_refs: [TECH-FEAT-051]
+            review_required: true
+          rollback_strategy:
+            mode: revert
+            restore_targets: [src/lee/orchestrator/execution]
+          ssot:
+            identity_kind: ssot
+            ssot_type: TASK
+            parent: FEAT-051
+            derived_from: FEAT-051#delivery
+      milestones:
+        - id: M1
+          name: 基础模型
+          task_ids: [TASK-FEAT-051-001]
+          acceptance_criteria: FEAT-051 所有 AC 可验证
+      dependency_graph:
+        critical_path: [TASK-FEAT-051-001]
+      resource_allocation:
+        backend-developer:
+          tasks: [TASK-FEAT-051-001]
+      risk_mitigation: []
+    ssot_output_contract:
+      contract_version: "1.0"
+      run_id: task-plan-001
+      outputs:
+        - key: task_gate_type_boundary
+          identity_kind: ssot
+          ssot_type: task
+          title: Gate 类型定义 runtime 收口
+          parent: FEAT-051
+          source_refs:
+            - FEAT-051#delivery
+          verifies:
+            - FEAT-051
+          properties:
+            slice_key: governance
+            workstream: workflow-runtime
+            feat_id: FEAT-051
 
 responsibility:
   summary: "生成可执行实施计划并形成 TASK 规划对象"

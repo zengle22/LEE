@@ -1,0 +1,121 @@
+"""
+SSOT alignment tests for feature delivery.
+
+Tests only cover the canonical SRC-009 series structure.
+Tests for FEAT-1xx series files that were removed during SSOT reorganization
+have been deleted as they are no longer relevant.
+"""
+from pathlib import Path
+
+
+def test_feature_delivery_feat_doc_matches_canonical_l2_contract():
+    feat_doc = Path(
+        "spec/requirements/SRC-009/FEAT-SRC-009-001__feature-delivery-l2-gongzuoliudingyi.md"
+    )
+    text = feat_doc.read_text(encoding="utf-8")
+
+    assert "repo_frontend" in text
+    assert "repo_backend" in text
+    assert "Contract → Backend / Frontend 并行 → Integration → Evidence Pack" in text
+
+
+def test_feature_delivery_tech_doc_matches_canonical_l2_contract():
+    tech_doc = Path(
+        "spec/tech/SRC-009/TECH-FEAT-SRC-009-001-001__feature-delivery-l2-gongzuoliudingyi-frozenjizhuji.md"
+    )
+    text = tech_doc.read_text(encoding="utf-8")
+
+    assert "repo_frontend/repo_backend" in text
+    assert "contract_design -> backend_dev / frontend_dev 并行 -> integration" in text
+
+
+def test_feature_delivery_task_doc_matches_canonical_l2_contract():
+    task_doc = Path(
+        "spec/tasks/FEAT-SRC-009-001/"
+        "TASK-FEAT-SRC-009-001-001__l2gongzuoliuguifanyujiegoudingyi.md"
+    )
+    text = task_doc.read_text(encoding="utf-8")
+
+    assert "repo_frontend" in text
+    assert "repo_backend" in text
+    assert "Contract" in text and "Backend" in text and "Frontend" in text
+
+
+def test_feature_delivery_epic_scope_matches_canonical_l2_contract():
+    epic_doc = Path(
+        "spec/requirements/SRC-009/EPIC-SRC-009__dev-department-ssot-alignment-delivery-governance.md"
+    )
+    text = epic_doc.read_text(encoding="utf-8")
+
+    assert "repo_frontend" in text
+    assert "repo_backend" in text
+
+
+def test_feature_delivery_followup_tasks_match_canonical_l2_contract():
+    task_impl_doc = Path(
+        "spec/tasks/FEAT-SRC-009-001/"
+        "TASK-FEAT-SRC-009-001-002__l2gongzuoliumobanshixian.md"
+    )
+    task_governance_doc = Path(
+        "spec/tasks/FEAT-SRC-009-001/"
+        "TASK-FEAT-SRC-009-001-004__yanzhengceshiyuwendangzhili.md"
+    )
+    impl_text = task_impl_doc.read_text(encoding="utf-8")
+    governance_text = task_governance_doc.read_text(encoding="utf-8")
+
+    assert "repo_frontend" in impl_text
+    assert "repo_backend" in impl_text
+    assert "Contract" in impl_text
+    assert "repo_frontend" in governance_text
+    assert "repo_backend" in governance_text
+
+
+def test_bugfix_tech_doc_matches_exception_approval_contract():
+    tech_doc = Path(
+        "spec/tech/SRC-009/TECH-FEAT-SRC-009-002-001__bugfix-delivery-l2-gongzuoliudingyi-frozenjizhujia.md"
+    )
+    text = tech_doc.read_text(encoding="utf-8")
+
+    assert "batch_approval_record" in text
+    assert "五同失败后的审批例外" in text or "审批例外路径" in text
+
+
+def test_bugfix_followup_tasks_match_exception_approval_contract():
+    template_task = Path(
+        "spec/tasks/FEAT-SRC-009-002/"
+        "TASK-FEAT-SRC-009-002-002__bugfix-l2-gongzuoliumobanshixian.md"
+    )
+    policy_task = Path(
+        "spec/tasks/FEAT-SRC-009-002/"
+        "TASK-FEAT-SRC-009-002-004__bugfix-lidukongzhicelveyuzhuangtaijishixian.md"
+    )
+    governance_task = Path(
+        "spec/tasks/FEAT-SRC-009-002/"
+        "TASK-FEAT-SRC-009-002-005__yanzhengceshiyuwendangzhili.md"
+    )
+    template_text = template_task.read_text(encoding="utf-8")
+    policy_text = policy_task.read_text(encoding="utf-8")
+    governance_text = governance_task.read_text(encoding="utf-8")
+
+    assert "batch_approval_record" in template_text
+    assert "审批例外" in template_text
+    assert "batch_approval_record" in policy_text
+    assert "审批例外路径" in policy_text
+    assert "审批例外 batch 模式" in governance_text
+
+
+def test_bugfix_main_lineage_matches_canonical_stage_model():
+    feat_src = Path("spec/requirements/SRC-009/FEAT-SRC-009-002__bugfix-delivery-l2-gongzuoliudingyi.md")
+    tech = Path("spec/tech/SRC-009/TECH-FEAT-SRC-009-002-001__bugfix-delivery-l2-gongzuoliudingyi-frozenjizhujia.md")
+    task = Path(
+        "spec/tasks/FEAT-SRC-009-002/"
+        "TASK-FEAT-SRC-009-002-001__bugfix-l2-gongzuoliuguifanyujiegoudingyi.md"
+    )
+    feat_text = feat_src.read_text(encoding="utf-8")
+    tech_text = tech.read_text(encoding="utf-8")
+    task_text = task.read_text(encoding="utf-8")
+
+    assert "batch_approval_record" in feat_text
+    assert "Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack" in feat_text
+    assert "Triage → Root Cause → Fix Design → Fix Implementation → Verification → Evidence Pack" in tech_text
+    assert "输入规范五字段定义" in task_text

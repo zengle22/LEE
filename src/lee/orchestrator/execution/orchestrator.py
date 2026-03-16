@@ -25,9 +25,11 @@ v3.1 重构：
 - 抽取 SubworkflowMixin  → subworkflow_ops.py
 """
 
+import asyncio
 import uuid
 import json
 import hashlib
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -64,6 +66,7 @@ from lee.runtime.repo_registry import RepoRegistry
 from lee.orchestrator.execution.patch_output import PatchCollector
 from lee.orchestrator.execution.receipt import ReceiptStore, ExecutionReceipt
 from lee.orchestrator.execution.context_index import ContextIndex
+from lee.orchestrator.config import is_coding_executor_type
 from lee.orchestrator.core.event_bus import get_event_bus, Event, EventType
 # Mixin 模块
 from lee.orchestrator.execution.step_runners import StepRunnerMixin
@@ -103,6 +106,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
     - GateOperationsMixin: 门禁审批/拒绝/查询
     - SubworkflowMixin: 子工作流 spawn/执行/回填
     """
+
+    RUNNING_EXECUTION_POLL_SECONDS = 1.0
 
     def __init__(
         self,
@@ -226,8 +231,18 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # 生成唯一 ID
         workflow_id = f"wf_{level.value}_{uuid.uuid4().hex[:8]}"
 
+        template_ref = template_id
+
         # 验证模板存在
-        template = self.template_manager.get_template(template_id)
+        template = self.template_manager.get_template(template_ref)
+        if not template and template_id.startswith("template."):
+            try:
+                resolved_template_path = self._resolve_l3_template_path(template_id)
+            except FileNotFoundError:
+                resolved_template_path = None
+            if resolved_template_path is not None:
+                template_ref = str(resolved_template_path)
+                template = self.template_manager.get_template(template_ref)
         if not template:
             raise ValueError(f"Template not found: {template_id}")
 
@@ -247,11 +262,14 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # 创建 WorkflowInstance
         data = data or {}
         data.setdefault("run_id", self._generate_run_id())
+        parent = await self.store.get_workflow(parent_id) if parent_id else None
+        if parent and isinstance(parent.data, dict):
+            data.setdefault("root_run_id", parent.data.get("root_run_id") or parent.data.get("run_id"))
         instance = WorkflowInstance(
             id=workflow_id,
             level=level,
             parent_id=parent_id,
-            template_id=template_id,
+            template_id=template_ref,
             status=WorkflowStatus.PENDING,
             data=data,
         )
@@ -262,6 +280,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # v3.6: 创建产出物 Manifest
         try:
             run_id = data.get("run_id", workflow_id)
+            parent_run_id = parent.data.get("run_id") if parent and isinstance(parent.data, dict) else None
             department = data.get("department") or (
                 template.owner if hasattr(template, "owner") else None
             )
@@ -271,7 +290,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 department=department,
                 executor=data.get("executor"),
                 executor_version=data.get("executor_version"),
-                parent_run_id=parent_id,
+                parent_run_id=parent_run_id,
                 root_run_id=data.get("root_run_id")
             )
         except Exception as e:
@@ -590,6 +609,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # v3.6: Check for L2 instance with complexity routing
         # If this is an L2 instance, route phases through complexity-based execution
         if self._is_l2_instance(instance):
+            instance = await self._reconcile_l2_subworkflow_phases(instance)
             # For L2 instances, phases act as steps
             # Find the first pending phase
             pending_phase = self._get_next_pending_phase(instance)
@@ -600,7 +620,24 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     workflow_id, phase_id, complexity
                 )
             else:
+                failed_phase = self._get_failed_phase(instance)
+                if failed_phase:
+                    failed_phase_id = failed_phase.get("id") or "<unknown-phase>"
+                    failed_reason = failed_phase.get("error") or "L2 phase failed"
+                    await self.store.update_workflow_status(
+                        workflow_id,
+                        WorkflowStatus.FAILED,
+                        completed_at=datetime.now(),
+                    )
+                    return StepResult(
+                        status="failed",
+                        step_id=failed_phase_id,
+                        workflow_id=workflow_id,
+                        message=f"L2 phase {failed_phase_id} failed: {failed_reason}",
+                    )
                 # All phases completed
+                instance.data["lifecycle_state"] = "Closed"
+                await self.store.update_workflow_data(workflow_id, instance.data)
                 await self.store.update_workflow_status(
                     workflow_id, WorkflowStatus.COMPLETED,
                     completed_at=datetime.now()
@@ -719,6 +756,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # v1.5: 新增 orchestrator_cli 和 compliance_gate 类型
         # v3.5: on_failure 策略包裹
         try:
+            run_id = instance.data.get("run_id", workflow_id)
+
             # 构建步骤执行器
             async def _dispatch_step() -> StepResult:
                 if step_to_execute.kind in ("workflow_spawn", "subworkflow"):
@@ -730,7 +769,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     gate_type = step_to_execute.config.get("gate", {}).get("type", "auto_check") if step_to_execute.config else "auto_check"
                     if gate_type == "auto_check":
                         return await self._run_auto_check_gate_step(workflow_id, step_to_execute)
-                    elif gate_type in ("human_review", "human_decision"):
+                    elif gate_type in ("human_review", "human_decision", "human_approval"):
                         return await self._handle_human_gate(workflow_id, step_to_execute)
                     else:
                         # 默认当作 auto_check 处理
@@ -744,19 +783,24 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 elif step_to_execute.kind == "patch_apply":
                     return await self._run_patch_apply_step(workflow_id, step_to_execute)
                 elif step_to_execute.kind == "agent":
-                    if step_to_execute.executor_type == "claude_code":
+                    executor_override = str(
+                        (instance.data or {}).get("executor_override") or ""
+                    ).strip().lower()
+                    if (
+                        step_to_execute.executor_type == "claude_code"
+                        and (not executor_override or is_coding_executor_type(executor_override))
+                    ):
                         return await self._run_claude_code_step(workflow_id, step_to_execute)
                     else:
                         return await self._run_agent_step(workflow_id, step_to_execute)
                 elif step_to_execute.kind == "skill":
                     return await self._run_skill_step(workflow_id, step_to_execute)
                 else:
-                    executor = self.executor_factory.create(step_to_execute.executor_type or "llm")
+                    executor = self.executor_factory.create(step_to_execute.executor_type or "claude_code")
                     input_data = step_to_execute.input or {}
 
                     # v3.5: worktree 强制隔离
                     if getattr(step_to_execute, "repo_scope", None):
-                        run_id = instance.data.get("run_id", workflow_id)
                         repo_id = step_to_execute.repo_scope
                         
                         # 并行安全：检查是否有其他活跃 run 使用同一 repo
@@ -778,7 +822,6 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     patch_bundle = None
                     if getattr(step_to_execute, "repo_scope", None):
                         try:
-                            run_id = instance.data.get("run_id", workflow_id)
                             repo_id = step_to_execute.repo_scope
                             # 收集 patch 三件套
                             patch_bundle = self.patch_collector.collect(
@@ -822,7 +865,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                                 patch_hash=patch_bundle.patch_hash if patch_bundle else "",
                                 exit_code=0,
                                 timestamp=datetime.now(timezone.utc).isoformat(),
-                                executor_type=step_to_execute.executor_type or "llm",
+                                executor_type=step_to_execute.executor_type or "claude_code",
                             )
                             self.receipt_store.save(receipt)
 
@@ -840,7 +883,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
                     # v3.6: 记录步骤产出物到 ArtifactManager
                     try:
-                        self._record_step_artifacts(workflow_id, step_to_execute.id, output)
+                        self._record_step_artifacts(
+                            workflow_id,
+                            step_to_execute.id,
+                            output,
+                            run_id=run_id,
+                        )
                     except Exception as e:
                         import logging
                         logging.getLogger(__name__).warning(f"Failed to record artifacts: {e}")
@@ -1191,15 +1239,18 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         blocked_at = None
         final_status = "completed"
 
-        for _ in range(max_steps):
+        step_attempts = 0
+        while step_attempts < max_steps:
             # 执行一个步骤
             result = await self.run_step(workflow_id)
 
-            total_steps += 1
-
             if result.status == "success":
+                step_attempts += 1
+                total_steps += 1
                 completed_steps += 1
             elif result.status in ("waiting_approval", "blocked"):
+                step_attempts += 1
+                total_steps += 1
                 blocked_at = result.step_id
                 final_status = "blocked"
                 break
@@ -1208,10 +1259,18 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 instance = await self.store.get_workflow(workflow_id)
                 if instance.status == WorkflowStatus.COMPLETED:
                     break
+                if instance.status == WorkflowStatus.FAILED:
+                    final_status = "failed"
+                    break
+                if await self._has_running_task_executions(workflow_id):
+                    await asyncio.sleep(self.RUNNING_EXECUTION_POLL_SECONDS)
+                    continue
                 blocked_at = None  # 没有步骤可执行
                 final_status = "blocked"
                 break
             elif result.status == "failed":
+                step_attempts += 1
+                total_steps += 1
                 final_status = "failed"
                 break
 
@@ -1258,6 +1317,10 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             status=final_status,
             duration_seconds=duration,
         )
+
+    async def _has_running_task_executions(self, workflow_id: str) -> bool:
+        executions = await self.store.get_task_executions(workflow_id)
+        return any(exe.status == TaskExecutionStatus.RUNNING for exe in executions)
 
     # ============ 暂停/恢复 ============
 
@@ -1497,6 +1560,218 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 return phase
         return {}
 
+    async def _update_l2_phase(
+        self,
+        workflow_id: str,
+        phase_id: str,
+        *,
+        status: Optional[str] = None,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Update one L2 phase payload and persist the workflow data."""
+        instance = await self.store.get_workflow(workflow_id)
+        if not instance:
+            return {}
+
+        phases = instance.data.get("phases", [])
+        updated_phase: Dict[str, Any] = {}
+        for phase in phases:
+            if phase.get("id") != phase_id:
+                continue
+            if status is not None:
+                phase["status"] = status
+            if extra:
+                phase.update(extra)
+            updated_phase = dict(phase)
+            break
+
+        instance.data["lifecycle_state"] = self._derive_l2_lifecycle_state(instance.data)
+        await self.store.update_workflow_data(workflow_id, instance.data)
+        return updated_phase
+
+    def _derive_l2_lifecycle_state(self, workflow_data: Dict[str, Any]) -> str:
+        """Derive canonical L2 lifecycle state from phase progression."""
+        phases = workflow_data.get("phases", [])
+        if not phases:
+            return "Ready"
+
+        phase_status = {phase.get("id"): phase.get("status") for phase in phases}
+        if phase_status.get("smoke_gate") == "completed":
+            return "Closed"
+        if phase_status.get("merge_or_reject") == "completed":
+            return "Closed"
+        if phase_status.get("evidence_pack") == "completed":
+            return "Evidence Pack Produced"
+        if any(status in {"running", "completed", "blocked"} for status in phase_status.values()):
+            return "In Progress"
+        return "Ready"
+
+    async def _merge_l2_phase_outputs(
+        self,
+        workflow_id: str,
+        phase_id: str,
+        output: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Merge canonical L3 handoff refs back into the parent L2 params/artifacts."""
+        instance = await self.store.get_workflow(workflow_id)
+        if not instance or not isinstance(output, dict):
+            return {}
+
+        parent_data = dict(instance.data or {})
+        params = dict(parent_data.get("params", {}) or {})
+        artifacts = dict(parent_data.get("artifacts", {}) or {})
+        phase_outputs = dict(parent_data.get("phase_outputs", {}) or {})
+
+        handoff_refs = dict(output.get("handoff_refs", {}) or {})
+        for key in self.L3_HANDOFF_KEYS:
+            value = output.get(key)
+            if value is not None:
+                handoff_refs.setdefault(key, value)
+
+        for key, value in handoff_refs.items():
+            params[key] = value
+            artifacts[key] = value
+
+        phase_outputs[phase_id] = output
+        parent_data["params"] = params
+        parent_data["artifacts"] = artifacts
+        parent_data["phase_outputs"] = phase_outputs
+        parent_data["last_output"] = {phase_id: output}
+
+        await self.store.update_workflow_data(workflow_id, parent_data)
+        return handoff_refs
+
+    async def _run_l2_phase_subworkflow(
+        self,
+        workflow_id: str,
+        phase_id: str,
+        phase_info: Dict[str, Any],
+    ) -> StepResult:
+        """Execute an L2 phase by delegating to its explicit subworkflow."""
+        parent = await self.store.get_workflow(workflow_id)
+        if not parent:
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Parent workflow not found: {workflow_id}",
+            )
+
+        subworkflow_ref = phase_info.get("workflow")
+        if not isinstance(subworkflow_ref, str) or not subworkflow_ref.strip():
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Phase {phase_id} missing workflow ref",
+            )
+
+        parent_data = dict(parent.data or {})
+        subworkflow_children = dict(parent_data.get("subworkflow_children", {}))
+        child_workflow_id = subworkflow_children.get(phase_id)
+        child = await self.store.get_workflow(child_workflow_id) if child_workflow_id else None
+
+        await self._update_l2_phase(workflow_id, phase_id, status="running")
+
+        if not child:
+            requested_level = phase_info.get("level")
+            child_level = self._resolve_subworkflow_level(requested_level, parent.level)
+            child_data = {
+                "params": dict(parent_data.get("params", {})),
+                "parent_workflow_id": parent.id,
+                "parent_step_id": phase_id,
+                "parent_template_id": parent.template_id,
+                "parent_run_id": parent_data.get("run_id"),
+            }
+            executor_override = parent_data.get("executor_override")
+            if executor_override:
+                child_data["executor_override"] = executor_override
+            executor_selection_source = parent_data.get("executor_selection_source")
+            if executor_selection_source:
+                child_data["executor_selection_source"] = executor_selection_source
+            llm_profile = parent_data.get("llm_profile") or os.getenv("LLM_PROFILE")
+            if llm_profile:
+                child_data["llm_profile"] = llm_profile
+
+            child = await self.spawn_workflow(
+                parent_id=workflow_id,
+                level=child_level,
+                template_id=subworkflow_ref,
+                data=child_data,
+            )
+
+            subworkflow_children[phase_id] = child.id
+            parent_data["subworkflow_children"] = subworkflow_children
+            await self.store.update_workflow_data(workflow_id, parent_data)
+
+        if child.status in (WorkflowStatus.PENDING, WorkflowStatus.RUNNING):
+            await self.run_until_blocked(child.id, max_steps=20)
+            child = await self.store.get_workflow(child.id)
+
+        if not child:
+            await self._update_l2_phase(workflow_id, phase_id, status="failed")
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Child workflow disappeared for phase {phase_id}",
+            )
+
+        if child.status == WorkflowStatus.COMPLETED:
+            step = Step(
+                id=phase_id,
+                kind="subworkflow",
+                config={
+                    "subworkflow_ref": subworkflow_ref,
+                    "subworkflow_level": phase_info.get("level"),
+                    "output_map": phase_info.get("output_map", {}),
+                },
+            )
+            backfill_output = await self._backfill_subworkflow_output(workflow_id, step, child)
+            await self._update_l2_phase(
+                workflow_id,
+                phase_id,
+                status="completed",
+                extra={"last_output": backfill_output, "child_workflow_id": child.id},
+            )
+            return StepResult(
+                status="success",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Phase {phase_id} completed via subworkflow {child.id}",
+                output=backfill_output,
+            )
+
+        if child.status == WorkflowStatus.FAILED:
+            error_message = child.data.get("error", "Child workflow failed")
+            await self._update_l2_phase(
+                workflow_id,
+                phase_id,
+                status="failed",
+                extra={"error": error_message, "child_workflow_id": child.id},
+            )
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Subworkflow {child.id} failed: {error_message}",
+            )
+
+        await self._update_l2_phase(
+            workflow_id,
+            phase_id,
+            status="pending",
+            extra={"child_workflow_id": child.id},
+        )
+        return StepResult(
+            status="blocked",
+            blocked_reason="subworkflow_blocked",
+            step_id=phase_id,
+            workflow_id=workflow_id,
+            message=f"Subworkflow {child.id} waiting (status={child.status.value})",
+            output={"child_workflow_id": child.id, "child_status": child.status.value},
+        )
+
     def _get_next_pending_phase(
         self,
         instance: WorkflowInstance
@@ -1573,6 +1848,112 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         return ready_phases
 
+    def _get_failed_phase(
+        self,
+        instance: WorkflowInstance,
+    ) -> Optional[Dict[str, Any]]:
+        """Return the first failed L2 phase, if any."""
+        phases = instance.data.get("phases", [])
+        for phase in phases:
+            if phase.get("status") == "failed":
+                return phase
+        return None
+
+    async def _reconcile_l2_subworkflow_phases(
+        self,
+        instance: WorkflowInstance,
+    ) -> WorkflowInstance:
+        """Reconcile persisted L2 phase state with the latest child workflow state.
+
+        This lets a parent L2 workflow recover when a previously failed child
+        subworkflow is rerun to completion out-of-band.
+        """
+        if not self._is_l2_instance(instance):
+            return instance
+
+        phases = instance.data.get("phases", [])
+        if not isinstance(phases, list) or not phases:
+            return instance
+
+        parent_data = dict(instance.data or {})
+        subworkflow_children = parent_data.get("subworkflow_children")
+        if not isinstance(subworkflow_children, dict) or not subworkflow_children:
+            return instance
+
+        mutated = False
+        for phase in phases:
+            if not isinstance(phase, dict):
+                continue
+            phase_id = phase.get("id")
+            if not isinstance(phase_id, str) or not phase_id.strip():
+                continue
+
+            child_workflow_id = subworkflow_children.get(phase_id)
+            if not isinstance(child_workflow_id, str) or not child_workflow_id.strip():
+                continue
+
+            child = await self.store.get_workflow(child_workflow_id)
+            if not child:
+                continue
+
+            if child.status == WorkflowStatus.COMPLETED and phase.get("status") != "completed":
+                step = Step(
+                    id=phase_id,
+                    kind="subworkflow",
+                    config={
+                        "subworkflow_ref": phase.get("workflow"),
+                        "subworkflow_level": phase.get("level"),
+                        "output_map": phase.get("output_map", {}),
+                    },
+                )
+                backfill_output = await self._backfill_subworkflow_output(instance.id, step, child)
+                await self._update_l2_phase(
+                    instance.id,
+                    phase_id,
+                    status="completed",
+                    extra={"last_output": backfill_output, "child_workflow_id": child.id},
+                )
+                mutated = True
+                continue
+
+            if child.status == WorkflowStatus.FAILED and phase.get("status") != "failed":
+                error_message = child.data.get("error", "Child workflow failed")
+                await self._update_l2_phase(
+                    instance.id,
+                    phase_id,
+                    status="failed",
+                    extra={"error": error_message, "child_workflow_id": child.id},
+                )
+                mutated = True
+
+        if not mutated:
+            return instance
+
+        refreshed = await self.store.get_workflow(instance.id)
+        if not refreshed:
+            return instance
+
+        refreshed_failed_phase = self._get_failed_phase(refreshed)
+        refreshed_pending_phase = self._get_next_pending_phase(refreshed)
+        target_status = WorkflowStatus.RUNNING
+        completed_at = None
+        if refreshed_failed_phase:
+            target_status = WorkflowStatus.FAILED
+            completed_at = datetime.now()
+        elif refreshed_pending_phase is None:
+            target_status = WorkflowStatus.COMPLETED
+            completed_at = datetime.now()
+
+        if refreshed.status != target_status:
+            await self.store.update_workflow_status(
+                refreshed.id,
+                target_status,
+                completed_at=completed_at,
+            )
+            refreshed = await self.store.get_workflow(refreshed.id) or refreshed
+
+        return refreshed
+
     async def _execute_l2_phase_with_complexity(
         self,
         workflow_id: str,
@@ -1589,6 +1970,11 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         Returns:
             StepResult from phase execution
         """
+        instance = await self.store.get_workflow(workflow_id)
+        phase_info = self._get_phase_info(instance, phase_id) if instance else {}
+        if phase_info.get("workflow"):
+            return await self._run_l2_phase_subworkflow(workflow_id, phase_id, phase_info)
+
         if complexity == Complexity.S:
             return await self._execute_complexity_s(workflow_id, phase_id)
         elif complexity == Complexity.M:
@@ -1613,24 +1999,145 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         Returns:
             StepResult indicating success/failure
         """
-        # P0: Mark phase as completed with a simple success result
-        # In full implementation, this would run phase-specific steps
         instance = await self.store.get_workflow(workflow_id)
+        if not instance:
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Workflow not found: {workflow_id}",
+            )
 
-        # Update phase status
-        phases = instance.data.get("phases", [])
-        for phase in phases:
-            if phase.get("id") == phase_id:
-                phase["status"] = "completed"
-                break
+        phase_info = self._get_phase_info(instance, phase_id)
+        direct_output = self._build_direct_phase_output(instance.data or {}, phase_id)
+        gate_id = self._resolve_direct_phase_gate_id(phase_id, phase_info)
+        if gate_id:
+            return await self._trigger_l2_phase_gate(
+                workflow_id=workflow_id,
+                phase_id=phase_id,
+                gate_id=gate_id,
+                output=direct_output,
+            )
 
-        await self.store.update_workflow_data(workflow_id, instance.data)
+        await self._merge_l2_phase_outputs(workflow_id, phase_id, direct_output)
+        await self._update_l2_phase(
+            workflow_id,
+            phase_id,
+            status="completed",
+            extra={"last_output": direct_output},
+        )
 
         return StepResult(
             status="success",
             step_id=phase_id,
             workflow_id=workflow_id,
-            message=f"Phase {phase_id} (complexity=S) executed directly"
+            message=f"Phase {phase_id} (complexity=S) executed directly",
+            output=direct_output,
+        )
+
+    @staticmethod
+    def _resolve_direct_phase_gate_id(phase_id: str, phase_info: Dict[str, Any]) -> Optional[str]:
+        gate_id = phase_info.get("gate_id")
+        if gate_id:
+            return gate_id
+        if phase_id == "merge_or_reject":
+            return "gate.dev.merge_approval"
+        return None
+
+    def _build_direct_phase_output(
+        self,
+        workflow_data: Dict[str, Any],
+        phase_id: str,
+    ) -> Dict[str, Any]:
+        params = dict(workflow_data.get("params", {}) or {})
+        if phase_id == "smoke_gate":
+            return {
+                "phase_id": phase_id,
+                "status": "passed",
+                "evidence_pack_ref": params.get("evidence_pack_ref"),
+                "smoke_gate_inputs": params.get("smoke_gate_inputs"),
+            }
+        if phase_id == "merge_or_reject":
+            merge_input = params.get("merge_or_reject_input")
+            return {
+                "phase_id": phase_id,
+                "status": "approved",
+                "evidence_pack_ref": params.get("evidence_pack_ref"),
+                "closure_summary_ref": params.get("closure_summary_ref"),
+                "merge_or_reject_input": merge_input,
+                "merge_decision_ref": self._derive_merge_decision_ref(merge_input),
+            }
+        return {"phase_id": phase_id, "status": "completed"}
+
+    @staticmethod
+    def _derive_merge_decision_ref(merge_input: Any) -> Optional[str]:
+        if isinstance(merge_input, str) and merge_input:
+            return merge_input
+        if isinstance(merge_input, dict):
+            for key in ("merge_decision_ref", "decision_ref", "ref", "id"):
+                value = merge_input.get(key)
+                if isinstance(value, str) and value:
+                    return value
+        return None
+
+    async def _trigger_l2_phase_gate(
+        self,
+        *,
+        workflow_id: str,
+        phase_id: str,
+        gate_id: str,
+        output: Dict[str, Any],
+    ) -> StepResult:
+        from lee.orchestrator.storage.models import GateApproval, GateStatus, WorkflowStatus
+
+        instance = await self.store.get_workflow(workflow_id)
+        if not instance:
+            return StepResult(
+                status="failed",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Workflow not found: {workflow_id}",
+            )
+
+        existing_gate = await self.store.get_gate_approval(workflow_id, gate_id)
+        if existing_gate and existing_gate.status == GateStatus.PENDING:
+            await self._update_l2_phase(workflow_id, phase_id, status="blocked")
+            return StepResult(
+                status="blocked",
+                blocked_reason="human_gate",
+                step_id=phase_id,
+                workflow_id=workflow_id,
+                message=f"Waiting for human approval at gate: {gate_id}",
+                output=output,
+            )
+
+        gate_approval = GateApproval(
+            workflow_id=workflow_id,
+            gate_id=gate_id,
+            step_id=phase_id,
+            status=GateStatus.PENDING,
+        )
+        await self.store.create_gate_approval(gate_approval)
+        await self.store.update_workflow_status(workflow_id, WorkflowStatus.PAUSED)
+
+        phase_gate_outputs = dict((instance.data or {}).get("phase_gate_outputs", {}) or {})
+        phase_gate_outputs[phase_id] = output
+        instance.data["phase_gate_outputs"] = phase_gate_outputs
+        await self.store.update_workflow_data(workflow_id, instance.data)
+        await self._update_l2_phase(workflow_id, phase_id, status="blocked")
+        self.event_log.log_gate_triggered(
+            gate_id=gate_id,
+            step_id=phase_id,
+            gate_type="human",
+            blocking=True,
+        )
+        return StepResult(
+            status="blocked",
+            blocked_reason="human_gate",
+            step_id=phase_id,
+            workflow_id=workflow_id,
+            message=f"Waiting for human approval at gate: {gate_id}",
+            output=output,
         )
 
     async def _execute_complexity_m(
@@ -1673,7 +2180,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             point=point,
             parent_l2_id=workflow_id,
             parent_phase_id=phase_id,
-            repo_id=repo_id
+            repo_id=repo_id,
+            l3_template_id=phase_info.get("l3_template_id"),
         )
 
         # Update phase with L3 reference
@@ -1681,18 +2189,18 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         for phase in phases:
             if phase.get("id") == phase_id:
                 phase["l3_instance_ids"] = [l3_id]
+                phase["status"] = "running"
                 break
 
         await self.store.update_workflow_data(workflow_id, instance.data)
 
-        # Wait for L3 completion
-        await self._wait_for_l3_completion([l3_id])
-
         return StepResult(
-            status="success",
+            status="blocked",
+            blocked_reason="waiting_for_l3_completion",
             step_id=phase_id,
             workflow_id=workflow_id,
-            message=f"Phase {phase_id} (complexity=M) spawned L3 {l3_id}"
+            message=f"Phase {phase_id} (complexity=M) spawned L3 {l3_id}",
+            output={"l3_instance_ids": [l3_id]},
         )
 
     async def _execute_complexity_l(
@@ -1781,7 +2289,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     point=point,
                     parent_l2_id=workflow_id,
                     parent_phase_id=phase_id,
-                    repo_id=repo_id
+                    repo_id=repo_id,
+                    l3_template_id=phase_info.get("l3_template_id"),
                 )
                 spawn_tasks.append(task)
 
@@ -1805,6 +2314,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             if phase.get("id") == phase_id:
                 phase["l3_instance_ids"] = all_l3_ids
                 phase["l3_results"] = all_l3_results
+                phase["status"] = "running" if all_l3_ids else phase.get("status", "pending")
                 if failed_points:
                     phase["failed_points"] = failed_points
                 break
@@ -1820,19 +2330,18 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             logger = logging.getLogger(__name__)
             logger.warning(f"Phase {phase_id}: {len(failed_points)} points failed to spawn L3")
 
-        # Wait for all L3s to complete
-        await self._wait_for_l3_completion(all_l3_ids)
-
-        # Collect outputs from completed L3s
-        outputs = await self._collect_l3_outputs(all_l3_ids)
-
         return StepResult(
-            status="success" if not failed_points else "partial_success",
+            status="blocked" if all_l3_ids else "partial_success",
+            blocked_reason="waiting_for_l3_completion" if all_l3_ids else None,
             step_id=phase_id,
             workflow_id=workflow_id,
             message=f"Phase {phase_id} (complexity=L) split into {len(all_l3_ids)} L3s" +
                     (f", {len(failed_points)} failed" if failed_points else ""),
-            output=outputs,
+            output={
+                "l3_count": len(all_l3_ids),
+                "l3_results": all_l3_results,
+                "failed_points": failed_points,
+            },
         )
 
     def _group_points_by_dependency(self, points: List) -> List[List]:
@@ -1887,16 +2396,42 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             "l3_count": len(l3_ids),
             "l3_outputs": {},
         }
+        aggregated_handoffs: Dict[str, Any] = {}
 
         for l3_id in l3_ids:
             l3_instance = await self.store.get_workflow(l3_id)
             if l3_instance:
+                handoff_refs = self._extract_l3_handoff_refs(l3_instance.data)
+                aggregated_handoffs.update(handoff_refs)
                 outputs["l3_outputs"][l3_id] = {
                     "status": l3_instance.status.value,
                     "data": l3_instance.data,
+                    "handoff_refs": handoff_refs,
                 }
 
+        if aggregated_handoffs:
+            outputs["handoff_refs"] = aggregated_handoffs
+
         return outputs
+
+    @staticmethod
+    def _extract_l3_handoff_refs(instance_data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Extract canonical handoff refs from an L3 instance payload."""
+        if not isinstance(instance_data, dict):
+            return {}
+
+        collected: Dict[str, Any] = {}
+        step_outputs = instance_data.get("step_outputs", {}) or {}
+
+        for key in Orchestrator.L3_HANDOFF_KEYS:
+            if key in instance_data:
+                collected[key] = instance_data[key]
+                continue
+            for step_payload in step_outputs.values():
+                if isinstance(step_payload, dict) and key in step_payload:
+                    collected[key] = step_payload[key]
+                    break
+        return collected
 
     # ============ L2/L3 Progress Tracking (P2) ============
 
@@ -2028,7 +2563,13 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         except Exception:
             pass
 
-    def _record_step_artifacts(self, workflow_id: str, step_id: str, output: Any) -> None:
+    def _record_step_artifacts(
+        self,
+        workflow_id: str,
+        step_id: str,
+        output: Any,
+        run_id: Optional[str] = None,
+    ) -> None:
         """Record step output as artifacts.
 
         Args:
@@ -2038,7 +2579,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         """
         from lee.orchestrator.execution.artifacts import ArtifactType
 
-        run_id = workflow_id  # 简化：使用 workflow_id 作为 run_id
+        run_id = run_id or workflow_id
 
         # 记录文件类型产出物
         if isinstance(output, dict):
@@ -2123,11 +2664,24 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             ValueError: If repos list is empty or no matching repo found
         """
         if not repos:
-            raise ValueError(f"No repos configured for phase {phase_id}")
+            import logging
+            logging.getLogger(__name__).warning(
+                "No repos configured for phase %s; falling back to empty repo context",
+                phase_id,
+            )
+            return ""
 
-        # Simple mapping for P0
-        frontend_phases = {"frontend_dev", "integration"}
-        backend_phases = {"backend_dev", "api_align"}
+        frontend_phases = {"frontend_dev"}
+        backend_phases = {
+            "backend_dev",
+            "api_align",
+            "contract_design",
+            "root_cause",
+            "fix_design",
+            "fix_implementation",
+            "verification",
+        }
+        shared_phases = {"tech_design", "integration", "evidence_pack", "smoke_gate", "triage", "merge_or_reject"}
 
         for repo in repos:
             repo_id = repo.get("id", "")
@@ -2136,6 +2690,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             if phase_id in frontend_phases and repo_type == "frontend":
                 return repo_id
             elif phase_id in backend_phases and repo_type == "backend":
+                return repo_id
+            elif phase_id in shared_phases and repo_type in {"backend", "frontend"}:
                 return repo_id
 
         # Fallback to first repo with warning
@@ -2153,9 +2709,19 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         layer_map = {
             "plan": "ui",
             "api_align": "api",
+            "tech_design": "service",
+            "contract_design": "api",
             "frontend_dev": "ui",
             "backend_dev": "service",
-            "integration": "ui",
+            "integration": "api",
+            "evidence_pack": "service",
+            "smoke_gate": "ui",
+            "triage": "service",
+            "root_cause": "service",
+            "fix_design": "service",
+            "fix_implementation": "service",
+            "verification": "service",
+            "merge_or_reject": "service",
         }
         return layer_map.get(phase_id, "ui")
 
@@ -2173,7 +2739,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             ValueError: If repos list is empty or no matching repo found
         """
         if not repos:
-            raise ValueError(f"No repos configured for layer {layer}")
+            import logging
+            logging.getLogger(__name__).warning(
+                "No repos configured for layer %s; falling back to empty repo context",
+                layer,
+            )
+            return ""
 
         # Map layers to repo types
         frontend_layers = {"ui", "state"}
@@ -2189,12 +2760,75 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # Fallback to first repo with warning
         return repos[0].get("id", "")
 
+    def _resolve_l3_template_path(self, l3_template_id: str) -> Path:
+        """Resolve a canonical L3 template ID to an on-disk template path."""
+        dev_template_roots = []
+        qa_template_roots = []
+        framework_root = Path(__file__).resolve().parents[4]
+        if self.project_root:
+            project_root_path = Path(self.project_root)
+            dev_template_roots.extend([
+                project_root_path / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+                project_root_path / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+            ])
+            qa_template_roots.extend([
+                project_root_path / "lee" / "spec-global" / "departments" / "qa" / "workflows" / "templates",
+                project_root_path / "spec-global" / "departments" / "qa" / "workflows" / "templates",
+            ])
+        else:
+            dev_template_roots.extend([
+                Path("lee/spec-global/departments/dev/workflows/templates"),
+                Path("spec-global/departments/dev/workflows/templates"),
+            ])
+            qa_template_roots.extend([
+                Path("lee/spec-global/departments/qa/workflows/templates"),
+                Path("spec-global/departments/qa/workflows/templates"),
+            ])
+        dev_template_roots.extend([
+            framework_root / "spec-global" / "departments" / "dev" / "workflows" / "templates",
+        ])
+        qa_template_roots.extend([
+            framework_root / "spec-global" / "departments" / "qa" / "workflows" / "templates",
+        ])
+
+        template_file_map = {
+            "template.dev.task_l3_v3": ("dev", "l3/task-l3-v3-template.yaml"),
+            "template.dev.tech_design_l3": ("dev", "tech-design-l3-template.yaml"),
+            "template.dev.feature_contract_l3": ("dev", "feature-contract-l3-template.yaml"),
+            "template.dev.feature_fe_l3": ("dev", "feature-fe-l3-template.yaml"),
+            "template.dev.feature_be_l3": ("dev", "feature-be-l3-template.yaml"),
+            "template.dev.feature_integration_l3": ("dev", "feature-integration-l3-template.yaml"),
+            "template.dev.evidence_pack_l3": ("dev", "evidence-pack-l3-template.yaml"),
+            "template.dev.bugfix_triage_l3": ("dev", "bugfix-triage-l3-template.yaml"),
+            "template.dev.bugfix_root_cause_l3": ("dev", "bugfix-root-cause-l3-template.yaml"),
+            "template.dev.bugfix_fix_design_l3": ("dev", "bugfix-fix-design-l3-template.yaml"),
+            "template.dev.bugfix_fix_impl_l3": ("dev", "bugfix-fix-impl-l3-template.yaml"),
+            "template.dev.bugfix_verification_l3": ("dev", "bugfix-verification-l3-template.yaml"),
+            "template.dev.bugfix_evidence_pack_l3": ("dev", "bugfix-evidence-pack-l3-template.yaml"),
+            "template.qa.test_set_execute": ("qa", "test-set-execute-l3-template.yaml"),
+            "template.qa.test_set_production": ("qa", "test-set-production-l3-template.yaml"),
+        }
+        template_spec = template_file_map.get(l3_template_id)
+        if template_spec is None:
+            raise FileNotFoundError(f"Unsupported L3 template ID: {l3_template_id}")
+        domain, relative_path = template_spec
+        template_roots = qa_template_roots if domain == "qa" else dev_template_roots
+
+        for template_root in template_roots:
+            candidate = template_root / relative_path
+            if candidate.exists():
+                return candidate
+
+        search_roots = ", ".join(str(root / relative_path) for root in template_roots)
+        raise FileNotFoundError(f"L3 template {l3_template_id} not found under: {search_roots}")
+
     async def _spawn_l3_for_point(
         self,
         point: Point,
         parent_l2_id: str,
         parent_phase_id: str,
-        repo_id: str
+        repo_id: str,
+        l3_template_id: Optional[str] = None,
     ) -> str:
         """Generate and spawn L3 instance for a single point.
 
@@ -2214,6 +2848,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         # Get parent context
         parent = await self.store.get_workflow(parent_l2_id)
         context = parent.data.get("context", {})
+        parent_params = dict(parent.data.get("params", {}) or {})
+        parent_artifacts = dict(parent.data.get("artifacts", {}) or {})
 
         # Generate L3 instance
         config = L3InstanceConfig(
@@ -2221,39 +2857,16 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             parent_l2_id=parent_l2_id,
             parent_phase_id=parent_phase_id,
             repo_id=repo_id,
-            prd_path=context.get("prd_path", "")
+            prd_path=context.get("prd_path", ""),
+            template_id=l3_template_id or "template.dev.task_l3_v3",
+            metadata={
+                "params": dict(parent_params),
+                "artifacts": dict(parent_artifacts),
+            },
         )
 
-        # Find L3 template path across supported framework layouts
-        template_roots = []
-        if self.project_root:
-            project_root_path = Path(self.project_root)
-            template_roots.extend([
-                project_root_path / "lee" / "spec-global" / "departments" / "dev" / "workflows" / "templates",
-                project_root_path / "spec-global" / "departments" / "dev" / "workflows" / "templates",
-            ])
-        else:
-            template_roots.extend([
-                Path("lee/spec-global/departments/dev/workflows/templates"),
-                Path("spec-global/departments/dev/workflows/templates"),
-            ])
-
-        l3_template_path = None
-        for template_base in template_roots:
-            v3_candidate = template_base / "l3" / "task-l3-v3-template.yaml"
-            if v3_candidate.exists():
-                l3_template_path = v3_candidate
-                break
-
-            legacy_candidate = template_base / "task-l3-template.yaml"
-            if legacy_candidate.exists():
-                l3_template_path = legacy_candidate
-                break
-
-        if l3_template_path is None:
-            search_roots = ", ".join(str(root) for root in template_roots)
-            raise FileNotFoundError(f"L3 template not found under: {search_roots}")
-
+        l3_template_id = config.template_id
+        l3_template_path = self._resolve_l3_template_path(l3_template_id)
         generator = WorkflowGenerator(template_path=str(l3_template_path))
 
         # Instance files go to runtime directory (.workflow/instances/l3/), NOT in framework directory
@@ -2267,22 +2880,23 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         if not result.success:
             raise RuntimeError(f"Failed to generate L3 instance: {result.errors}")
 
-        # Spawn L3 workflow using existing spawn_workflow
-        # v3: Use the L3 v3 template_id
-        l3_template_id = "template.dev.task_l3_v3"
         l3_instance = await self.spawn_workflow(
             parent_id=parent_l2_id,
             level=WorkflowLevel.TASK,
             template_id=l3_template_id,
             data={
                 "kind": "l3_workflow_instance",
+                "params": dict(parent_params),
+                "artifacts": dict(parent_artifacts),
                 "point_id": point.id,
                 "point_title": point.title,
                 "point_desc": point.desc,
                 "point_layer": point.layer,
                 "point_complexity": point.estimated_complexity.value,
                 "parent_phase_id": parent_phase_id,
+                "parent_l2_id": parent_l2_id,
                 "repo_id": repo_id,
+                "l3_template_id": l3_template_id,
                 "step_index": 0,  # Current step in L3 flow
             }
         )
@@ -2324,3 +2938,33 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 raise TimeoutError(f"L3 completion timeout after {max_wait_seconds}s")
 
             await asyncio.sleep(check_interval)
+    L3_HANDOFF_KEYS = (
+        "tech_spec_ref",
+        "decision_refs",
+        "api_contract_ref",
+        "data_contract_ref",
+        "event_contract_ref",
+        "contract_review_ref",
+        "contract_freeze_ref",
+        "contract_hash",
+        "be_artifact_ref",
+        "fe_artifact_ref",
+        "integration_outputs",
+        "verification_results",
+        "integration_report_ref",
+        "evidence_pack_ref",
+        "smoke_gate_inputs",
+        "merge_or_reject_input",
+        "triage_decision_ref",
+        "granularity_decision_ref",
+        "batch_approval_record",
+        "root_cause_ref",
+        "affected_scope_ref",
+        "verification_scope_ref",
+        "rollback_strategy_ref",
+        "fix_design_ref",
+        "fix_artifact_ref",
+        "verification_report_ref",
+        "closure_summary_ref",
+        "merge_decision_ref",
+    )

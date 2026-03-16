@@ -24,7 +24,9 @@ class TestParseParent:
         """独立型类型应返回 None"""
         assert parse_parent("SRC-001") is None
         assert parse_parent("EPIC-001") is None
+        assert parse_parent("EPIC-SRC-009") is None
         assert parse_parent("FEAT-001") is None
+        assert parse_parent("FEAT-SRC-009-001") is None
         assert parse_parent("ADR-001") is None
 
     def test_direct_parent_types(self):
@@ -34,6 +36,7 @@ class TestParseParent:
         assert parse_parent("UI-FEAT-001-01") == "FEAT-001"
         assert parse_parent("TASK-FEAT-001-FE-01") == "FEAT-001"
         assert parse_parent("REPORT-FEAT-001-20260306") == "FEAT-001"
+        assert parse_parent("TASK-FEAT-SRC-009-001-001") == "FEAT-SRC-009-001"
 
     def test_scope_bounded_types_return_none(self):
         """范围归属型应返回 None (应使用 parse_scope)"""
@@ -53,6 +56,7 @@ class TestParseScope:
     def test_independent_types_return_none(self):
         """独立型应返回 None"""
         assert parse_scope("FEAT-001") is None
+        assert parse_scope("FEAT-SRC-009-001") is None
 
     def test_direct_parent_types_return_none(self):
         """直接父对象一致型应返回 None"""
@@ -63,6 +67,7 @@ class TestParseScope:
         assert parse_scope("TC-FEAT-001-001") == "FEAT-001"
         assert parse_scope("BUG-FEAT-001-001") == "FEAT-001"
         assert parse_scope("EVI-FEAT-001-001") == "FEAT-001"
+        assert parse_scope("BUG-FEAT-SRC-009-001-001") == "FEAT-SRC-009-001"
 
     def test_invalid_id(self):
         """无效 ID 应返回 None"""
@@ -76,6 +81,7 @@ class TestResolveScope:
     def test_feats_direct(self):
         """FEAT 直接返回"""
         assert resolve_scope("FEAT-001") == "FEAT-001"
+        assert resolve_scope("FEAT-SRC-009-001") == "FEAT-SRC-009-001"
 
     def test_scope_bounded_types(self):
         """范围归属型应解析到 FEAT"""
@@ -90,6 +96,7 @@ class TestResolveScope:
         assert resolve_scope("UI-FEAT-001-01") == "FEAT-001"
         assert resolve_scope("TASK-FEAT-001-FE-01") == "FEAT-001"
         assert resolve_scope("REPORT-FEAT-001-20260306") == "FEAT-001"
+        assert resolve_scope("TASK-FEAT-SRC-009-001-001") == "FEAT-SRC-009-001"
 
     def test_empty_returns_none(self):
         """空输入应返回 None"""
@@ -108,6 +115,17 @@ class TestParseID:
         assert result.parent_scope is None
         assert result.sequence == "001"
 
+    def test_source_scoped_independent_types(self):
+        """解析 source-scoped 独立型 ID"""
+        epic = parse_id("EPIC-SRC-009")
+        feat = parse_id("FEAT-SRC-009-001")
+        assert epic.is_valid
+        assert epic.prefix == "EPIC"
+        assert epic.sequence == "SRC-009"
+        assert feat.is_valid
+        assert feat.prefix == "FEAT"
+        assert feat.sequence == "SRC-009-001"
+
     def test_direct_parent_type(self):
         """解析直接父对象一致型 ID"""
         result = parse_id("TECH-FEAT-001")
@@ -124,6 +142,15 @@ class TestParseID:
         assert result.parent_scope == "FEAT-001"
         assert result.sequence == "001"
         assert result.suffix == "01"
+
+    def test_direct_parent_type_with_source_scoped_feat(self):
+        """解析带 source-scoped FEAT 父对象的 ID"""
+        result = parse_id("TASK-FEAT-SRC-009-001-001")
+        assert result.is_valid
+        assert result.prefix == "TASK"
+        assert result.parent_scope == "FEAT-SRC-009-001"
+        assert result.sequence == "SRC-009-001"
+        assert result.suffix == "001"
 
     def test_scope_bounded_type(self):
         """解析范围归属型 ID"""
@@ -152,11 +179,16 @@ class TestValidateIDFormat:
         """验证有效 ID (不指定类型)"""
         assert validate_id_format("FEAT-001")
         assert validate_id_format("TC-FEAT-001-001")
+        assert validate_id_format("EPIC-SRC-009")
+        assert validate_id_format("FEAT-SRC-009-001")
+        assert validate_id_format("TASK-FEAT-SRC-009-001-001")
 
     def test_valid_id_with_type(self):
         """验证有效 ID (指定类型)"""
         assert validate_id_format("FEAT-001", SSOTType.FEAT)
         assert validate_id_format("TC-FEAT-001-001", SSOTType.TC)
+        assert validate_id_format("EPIC-SRC-009", SSOTType.EPIC)
+        assert validate_id_format("FEAT-SRC-009-001", SSOTType.FEAT)
 
     def test_invalid_type_mismatch(self):
         """类型不匹配应返回 False"""
@@ -176,12 +208,29 @@ class TestValidateParentConsistency:
         result = validate_parent_consistency("FEAT-001", None, SSOTType.FEAT)
         assert result is None
 
+    def test_feat_parent_allows_epic(self):
+        """FEAT 可选挂到 EPIC"""
+        result = validate_parent_consistency("FEAT-001", "EPIC-001", SSOTType.FEAT)
+        assert result is None
+        scoped_result = validate_parent_consistency("FEAT-SRC-009-001", "EPIC-SRC-009", SSOTType.FEAT)
+        assert scoped_result is None
+
+    def test_feat_parent_rejects_non_epic(self):
+        """FEAT parent_id 若提供必须为 EPIC"""
+        result = validate_parent_consistency("FEAT-001", "ADR-001", SSOTType.FEAT)
+        assert result is not None
+        assert "必须为 EPIC" in result
+
     def test_direct_parent_consistent(self):
         """直接父对象一致型应一致"""
         result = validate_parent_consistency(
             "TECH-FEAT-001", "FEAT-001", SSOTType.TECH
         )
         assert result is None
+        scoped_result = validate_parent_consistency(
+            "TASK-FEAT-SRC-009-001-001", "FEAT-SRC-009-001", SSOTType.TASK
+        )
+        assert scoped_result is None
 
     def test_direct_parent_inconsistent(self):
         """直接父对象不一致应返回错误"""
@@ -197,6 +246,10 @@ class TestValidateParentConsistency:
             "TC-FEAT-001-001", "TESTSET-FEAT-001", SSOTType.TC
         )
         assert result is None
+        scoped_result = validate_parent_consistency(
+            "BUG-FEAT-SRC-009-001-001", "TESTSET-FEAT-SRC-009-001", SSOTType.BUG
+        )
+        assert scoped_result is None
 
     def test_scope_bounded_inconsistent(self):
         """范围归属型不一致应返回错误"""

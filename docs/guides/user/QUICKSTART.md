@@ -127,8 +127,8 @@ python scripts/test_llm.py
 # MCP 测试
 python scripts/test_mcp.py
 
-# MetaGPT 测试
-python scripts/test_metagpt.py
+# Legacy Executor 测试
+python scripts/test_legacy_executor.py
 
 # PM Gate 集成测试
 python examples/pm-gate-integration-demo/test_pm_gate_integration.py

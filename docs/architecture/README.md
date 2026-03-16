@@ -149,7 +149,7 @@ WorkflowInstance:
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                        执行器层（Executors）                     │
-│  LLM │ Shell │ MCP │ MetaGPT │ Custom                     │
+│  LLM │ Shell │ MCP │ Legacy Executor │ Custom                     │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -186,7 +186,7 @@ WorkflowInstance:
 - **`executors.py`** - 执行器工厂（v3 原有）
 - **`llm_executor.py`** - LLM 执行器（v3 原有）
 - **`shell_executor.py`** - Shell 执行器（v3 原有）
-- **`metagpt_executor.py`** - MetaGPT 执行器（v3 原有）
+- **`legacy_executor_executor.py`** - Legacy Executor 执行器（v3 原有）
 - **`gate_api.py`** - Gate API（v3 原有）
 
 ### Agent 系统（v1 迁移）✅
@@ -253,7 +253,7 @@ WorkflowInstance:
 ### 功能指标
 
 - [x] 支持 L1/L2/L3 workflow
-- [x] 支持 LLM/Shell/MetaGPT 执行器
+- [x] 支持 LLM/Shell/Legacy Executor 执行器
 - [x] Agent 系统完整迁移
 - [x] 可观测性系统完整迁移
 - [x] 验证器系统完整迁移
@@ -277,8 +277,8 @@ WorkflowInstance:
 ### 版本对比
 - [../../examples/version_comparison_report.md](../../examples/version_comparison_report.md)
 
-### LLM/MetaGPT 集成
-- [../../examples/llm_metagpt_final_report.md](../../examples/llm_metagpt_final_report.md)
+### LLM/Legacy Executor 集成
+- [../../examples/llm_legacy_executor_final_report.md](../../examples/llm_legacy_executor_final_report.md)
 
 ### 迁移记录
 - `flowcore.backup/` - v1 (flowcore) 备份目录

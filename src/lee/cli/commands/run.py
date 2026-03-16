@@ -2,23 +2,39 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 import threading
 import time
+import hashlib
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 import click
 import yaml
 
+from lee.cli.commands.spec_input_loader import (
+    load_spec_option as _load_spec_option,
+    load_spec_option_as_params as _load_spec_option_as_params,
+    load_spec_option_for_workflow as _load_spec_option_for_workflow,
+)
 from lee.cli.commands.workflow_registry import load_workflow_registry, resolve_workflow_template_path
+from lee.cli.commands.workflow_compat import adapt_params_for_workflow, resolve_registry_entry
+from lee.orchestrator.config import ConfigResolver
+from lee.orchestrator.config_loader import load_config
 from lee.orchestrator.api import pm_workflow
 from lee.orchestrator.core.template_engine import TemplateEngine
+from lee.orchestrator.execution.error_hints import diagnose_executor_error
 from lee.orchestrator.execution.artifacts import ArtifactManager, ManifestManager
 from lee.orchestrator.execution.artifacts.types import ArtifactType, GovernanceKind
+from lee.orchestrator.storage.models import WorkflowLevel
+from lee.orchestrator.execution.concurrency_scope import (
+    ConcurrencyScopeInfo,
+    derive_concurrency_scope,
+    describe_conflict_scope,
+)
+from lee.orchestrator.execution.workflow_bootstrap import hydrate_l2_bootstrap
 
 try:
     import fcntl
@@ -28,43 +44,58 @@ except ImportError:  # pragma: no cover
 TERMINAL_WORKFLOW_STATUSES = {"completed", "failed", "superseded"}
 
 
-def _load_registry() -> Dict[str, Any]:
-    return load_workflow_registry()
-
-
-def _load_spec_option_as_params(spec_path: str) -> Dict[str, Any]:
-    """Load --spec file as params payload when the workflow opts into it."""
-    path = Path(spec_path).resolve()
-    if not path.exists():
-        raise click.ClickException(f"Spec file not found: {path}")
+def _print_failed_step_details(project_root: Path, workflow_id: str) -> None:
+    db_path = project_root / ".workflow" / "orchestrator.db"
+    if not db_path.exists():
+        return
 
     try:
-        if path.suffix.lower() == ".json":
-            return json.loads(path.read_text(encoding="utf-8"))
-        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception as exc:
-        raise click.ClickException(f"Failed to parse spec file '{path}': {exc}") from exc
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT step_name, error_message
+               FROM task_executions
+               WHERE workflow_id = ? AND status = 'failed'
+               ORDER BY started_at DESC""",
+            (workflow_id,),
+        )
+        failed_steps = cursor.fetchall()
+        conn.close()
+    except Exception:
+        return
+
+    if not failed_steps:
+        return
+
+    click.echo("\n❌ 失败原因:")
+    for step_name, error in failed_steps:
+        click.echo(f"  - {step_name}: {error}")
+        hints = diagnose_executor_error(error)
+        if hints:
+            click.echo("    环境提示:")
+            for hint in hints:
+                click.echo(f"    - {hint}")
 
 
-def _load_spec_option(spec_path: str) -> Dict[str, Any]:
-    """
-    Resolve --spec into workflow params.
+def _param_aliases(name: str) -> List[str]:
+    if not isinstance(name, str):
+        return []
+    if name.endswith("_freeze"):
+        return [f"{name}_ref"]
+    if name.endswith("_freeze_ref"):
+        return [name[:-4]]
+    return []
 
-    Default behavior:
-    - object-like YAML/JSON -> merge as params
-    - everything else -> keep as {"spec": "<absolute-path>"}
-    """
-    path = Path(spec_path).resolve()
-    if not path.exists():
-        raise click.ClickException(f"Spec file not found: {path}")
 
-    if path.suffix.lower() not in {".json", ".yaml", ".yml"}:
-        return {"spec": str(path)}
+def _has_param_with_aliases(params: Dict[str, Any], name: str) -> bool:
+    for candidate in [name, *_param_aliases(name)]:
+        if candidate in params:
+            return True
+    return False
 
-    loaded = _load_spec_option_as_params(str(path))
-    if isinstance(loaded, dict):
-        return loaded
-    return {"spec": str(path)}
+
+def _load_registry() -> Dict[str, Any]:
+    return load_workflow_registry()
 
 
 def _render_workflow_template(template_path: Path, params: Dict[str, Any], project_dir: Path) -> Path:
@@ -95,6 +126,51 @@ def _render_workflow_template(template_path: Path, params: Dict[str, Any], proje
     out_path = out_dir / f"{template_path.stem}-{stamp}.yaml"
     out_path.write_text(rendered, encoding="utf-8")
     return out_path
+
+
+def _derive_workflow_creation_metadata(rendered_path: Path) -> Tuple[WorkflowLevel, Dict[str, Any]]:
+    try:
+        doc = yaml.safe_load(rendered_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return WorkflowLevel.TASK, {}
+
+    kind = str(doc.get("kind") or "").strip()
+    if kind == "l2_workflow_instance":
+        phases = doc.get("phases") if isinstance(doc.get("phases"), list) else []
+        return WorkflowLevel.DEPARTMENT, {
+            "kind": "l2_workflow_instance",
+            "context": doc.get("context", {}),
+            "phases": phases,
+            "pma_splits": doc.get("pma_splits", []),
+        }
+
+    if kind == "l2_workflow_template":
+        phases = []
+        for phase in doc.get("phases", []) if isinstance(doc.get("phases"), list) else []:
+            if not isinstance(phase, dict):
+                continue
+            phases.append(
+                {
+                    "id": phase.get("id", ""),
+                    "name": phase.get("name", ""),
+                    "description": phase.get("description", ""),
+                    "complexity": phase.get("default_complexity", "M"),
+                    "status": "pending",
+                    "depends_on": phase.get("depends_on", []),
+                    "workflow": phase.get("workflow"),
+                    "level": phase.get("level"),
+                    "output_map": phase.get("output_map", {}),
+                    "l3_instance_ids": [],
+                }
+            )
+        return WorkflowLevel.DEPARTMENT, {
+            "kind": "l2_workflow_instance",
+            "context": {},
+            "phases": phases,
+            "pma_splits": [],
+        }
+
+    return WorkflowLevel.TASK, {}
 
 
 def _load_directory_context(project_dir: Path) -> Dict[str, Any]:
@@ -166,9 +242,14 @@ def _load_template_param_defaults(template_path: Path) -> Dict[str, Any]:
     return defaults
 
 
-def _list_existing_same_workflows(project_root: Path, workflow_key: str) -> List[Dict[str, Any]]:
+def _list_conflicting_workflows(
+    project_root: Path,
+    workflow_key: str,
+    concurrency_scope: str,
+) -> List[Dict[str, Any]]:
     """
-    查询同项目目录下、同 workflow_key 的旧流程（running/paused/pending）。
+    查询同项目目录下、同 workflow_key + concurrency_scope 的旧流程。
+    对缺少 concurrency_scope 的历史实例，保守视为冲突。
     """
     db_path = project_root / ".workflow" / "orchestrator.db"
     if not db_path.exists():
@@ -193,12 +274,17 @@ def _list_existing_same_workflows(project_root: Path, workflow_key: str) -> List
                 data = {}
             if data.get("workflow_key") != workflow_key:
                 continue
+            existing_scope = data.get("concurrency_scope")
+            if existing_scope and existing_scope != concurrency_scope:
+                continue
             rows.append(
                 {
                     "id": workflow_id,
                     "status": status,
                     "current_step": current_step,
                     "created_at": created_at,
+                    "concurrency_scope": existing_scope or "<legacy-unspecified>",
+                    "scope_source": data.get("scope_source") or "<legacy>",
                 }
             )
     finally:
@@ -251,6 +337,9 @@ def _print_summary(project_root: Path, workflow_id: str, summary: Dict[str, Any]
         raise click.ClickException(f"Missing status in summary: {summary}")
 
     click.echo(f"\n最终状态: {status}")
+
+    if status == "failed":
+        _print_failed_step_details(project_root, workflow_id)
 
     if summary.get("blocked_at"):
         click.echo(f"阻塞在: {summary.get('blocked_at')}")
@@ -320,20 +409,27 @@ def _refresh_summary_from_store(
     return refreshed
 
 
-def _select_existing_workflow_action(existing: List[Dict[str, Any]]) -> tuple[str, str]:
+def _select_existing_workflow_action(
+    existing: List[Dict[str, Any]],
+    scope_info: ConcurrencyScopeInfo,
+    *,
+    noninteractive_default_action: str | None = "continue",
+) -> tuple[str, str]:
     """
     让用户在“继续旧流程”与“结束旧流程后开新流程”之间做选择。
     返回 (action, selected_workflow_id)
     """
-    click.echo("\n检测到同目录下存在相同 workflow_key 的旧流程:")
+    click.echo(f"\n{describe_conflict_scope(scope_info)}:")
     for item in existing:
         click.echo(
             f"  - {item['id']} [{item['status']}] "
             f"current_step={item.get('current_step') or '-'} "
-            f"created_at={item.get('created_at') or '-'}"
+            f"created_at={item.get('created_at') or '-'} "
+            f"concurrency_scope={item.get('concurrency_scope') or '-'}"
         )
 
-    if click.get_text_stream("stdin").isatty():
+    stdin = click.get_text_stream("stdin")
+    if stdin.isatty():
         action = click.prompt(
             "\n请选择操作",
             type=click.Choice(["continue", "restart"], case_sensitive=False),
@@ -341,12 +437,22 @@ def _select_existing_workflow_action(existing: List[Dict[str, Any]]) -> tuple[st
             show_choices=True,
         ).lower()
     else:
-        # 非交互场景无法提问，默认 continue 防止重复创建。
-        action = "continue"
-        click.echo("非交互模式：默认继续旧流程（continue）。")
+        supplied = (stdin.read() or "").strip().lower()
+        if supplied in {"continue", "restart"}:
+            action = supplied
+            click.echo(f"非交互模式：使用 stdin 指令 {action}。")
+        elif noninteractive_default_action in {"continue", "restart"}:
+            action = noninteractive_default_action
+            click.echo(f"非交互模式：默认选择 {action}。")
+        else:
+            raise click.ClickException(
+                "检测到同并发域内已有 workflow。当前命令携带显式新运行参数，"
+                "非交互模式下不会默认续接旧流程。请改用 --instance 指定实例继续，"
+                "或通过 stdin 明确传入 continue / restart。"
+            )
 
     selected_workflow_id = existing[0]["id"]
-    if action == "continue" and len(existing) > 1 and click.get_text_stream("stdin").isatty():
+    if action == "continue" and len(existing) > 1 and stdin.isatty():
         selected_workflow_id = click.prompt(
             "选择要继续的 workflow_id",
             type=click.Choice([item["id"] for item in existing], case_sensitive=True),
@@ -602,13 +708,21 @@ def _run_until_settled_with_gates(
         click.echo("✅ 门禁已决策，继续执行后续步骤...")
 
 
-def _acquire_project_run_lock(project_root: Path):
+def _scope_lock_name(lock_key: str) -> str:
+    digest = hashlib.sha1(lock_key.encode("utf-8")).hexdigest()[:16]
+    return f"run-scope-{digest}.lock"
+
+
+def _acquire_run_scope_lock(
+    project_root: Path,
+    scope_info: ConcurrencyScopeInfo,
+):
     """
-    单项目并发锁：同一 project_dir 只允许一个 `lee run` 进程。
+    同 scope 并发锁：只阻止同一并发作用域上的并发 `lee run`。
     """
-    lock_dir = project_root / ".workflow"
+    lock_dir = project_root / ".workflow" / "locks"
     lock_dir.mkdir(parents=True, exist_ok=True)
-    lock_path = lock_dir / "run.lock"
+    lock_path = lock_dir / _scope_lock_name(scope_info.concurrency_key)
     lock_fp = open(lock_path, "a+", encoding="utf-8")
 
     if fcntl is None:
@@ -621,15 +735,21 @@ def _acquire_project_run_lock(project_root: Path):
         owner = lock_fp.read().strip() or "unknown owner"
         lock_fp.close()
         raise click.ClickException(
-            "Detected another active `lee run` in this project. "
-            f"Lock info: {owner}"
+            "Detected another active `lee run` in the same concurrency scope. "
+            f"workflow_key={scope_info.workflow_key} "
+            f"concurrency_scope={scope_info.concurrency_scope} "
+            f"lock_info={owner}"
         )
 
     lock_fp.seek(0)
     lock_fp.truncate()
-    lock_fp.write(
-        f"pid={os.getpid()} started_at={datetime.now().isoformat()} project={project_root}"
-    )
+    lock_fp.write(json.dumps({
+        "pid": os.getpid(),
+        "started_at": datetime.now().isoformat(),
+        "workflow_key": scope_info.workflow_key,
+        "concurrency_scope": scope_info.concurrency_scope,
+        "concurrency_key": scope_info.concurrency_key,
+    }, ensure_ascii=False))
     lock_fp.flush()
     return lock_fp
 
@@ -652,8 +772,8 @@ def _release_project_run_lock(lock_fp) -> None:
 @click.option("--branch", help="目标分支")
 @click.option("--project-dir", default=".", help="项目目录")
 @click.option("--max-steps", default=10, show_default=True, help="最大执行步数")
-@click.option("--executor", help="强制指定执行器类型（覆盖 spec 中的配置）", type=click.Choice([
-    "llm", "shell", "metagpt", "claude_code", "codex", "langgraph"
+@click.option("--executor", default=None, help="强制指定执行器类型（覆盖环境变量和 .lee/config.yaml）", type=click.Choice([
+    "llm", "qwen_chat", "qwen", "kimi", "shell", "claude_code", "codex", "langgraph"
 ]))
 @click.option("--plan-only", is_flag=True, help="只生成 Plan，不执行")
 @click.option("--skip-plan", is_flag=True, help="跳过 Plan，直接执行")
@@ -671,14 +791,14 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
     if workflow_key not in workflows:
         raise click.ClickException(f"Unknown workflow: {workflow_key}")
 
-    entry = workflows[workflow_key]
-    template_path = resolve_workflow_template_path(entry.get("path", ""))
+    effective_workflow_key, entry, effective_entry = resolve_registry_entry(workflows, workflow_key)
+    template_path = resolve_workflow_template_path(effective_entry.get("path", ""))
     if not template_path.exists():
         raise click.ClickException(f"Workflow template not found: {template_path}")
 
     params: Dict[str, Any] = {}
     if spec:
-        params.update(_load_spec_option(spec))
+        params.update(_load_spec_option_for_workflow(spec, entry))
     if env:
         params["env"] = env
     if version:
@@ -686,17 +806,34 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
     if branch:
         params["branch"] = branch
 
+    params = adapt_params_for_workflow(workflow_key, params, project_root=Path(project_dir).resolve())
+
     # 为未显式传入的参数填充模板默认值，避免渲染为空字符串。
     default_params = _load_template_param_defaults(template_path)
     for k, v in default_params.items():
         params.setdefault(k, v)
 
     required = entry.get("required_params", []) or []
-    missing = [p for p in required if p not in params]
+    missing = [p for p in required if not _has_param_with_aliases(params, p)]
     if missing:
         raise click.ClickException(f"Missing required params: {', '.join(missing)}")
 
+    effective_required = effective_entry.get("required_params", []) or []
+    effective_missing = [p for p in effective_required if not _has_param_with_aliases(params, p)]
+    if effective_missing:
+        raise click.ClickException(
+            f"Missing canonical params after adapting '{workflow_key}' -> '{effective_workflow_key}': "
+            f"{', '.join(effective_missing)}"
+        )
+
     project_root = Path(project_dir).resolve()
+    scope_info = derive_concurrency_scope(effective_workflow_key, params, project_root)
+    config = load_config(str(project_root))
+    executor_resolution = ConfigResolver(project_root=project_root, config=config).resolve(
+        cli_executor=executor,
+    )
+    if not executor_resolution.is_valid or not executor_resolution.value:
+        raise click.ClickException(executor_resolution.error_message or "Executor resolution failed")
 
     # SSOT Root 确认 (v1 简化版)
     ssot_root_id = task_id
@@ -724,7 +861,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             f"   lee run {workflow_key} --new-task \"任务描述\"\n"
         )
 
-    lock_fp = _acquire_project_run_lock(project_root)
+    lock_fp = _acquire_run_scope_lock(project_root, scope_info)
     try:
         if instance:
             workflow_id = instance
@@ -740,9 +877,21 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             _print_summary(project_root, workflow_id, summary)
             return
 
-        existing = _list_existing_same_workflows(project_root, workflow_key)
+        existing = _list_conflicting_workflows(
+            project_root,
+            effective_workflow_key,
+            scope_info.concurrency_scope,
+        )
         if existing:
-            action, existing_workflow_id = _select_existing_workflow_action(existing)
+            explicit_new_run_intent = any(
+                value is not None and value != ""
+                for value in (spec, env, version, branch, task_id, new_task, executor)
+            )
+            action, existing_workflow_id = _select_existing_workflow_action(
+                existing,
+                scope_info,
+                noninteractive_default_action=None if explicit_new_run_intent else "continue",
+            )
             if action == "continue":
                 selected = next((item for item in existing if item["id"] == existing_workflow_id), existing[0])
                 if selected["status"] == "paused":
@@ -785,14 +934,16 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             click.echo(f"[Plan Mode] 生成执行计划...")
 
             result = asyncio.run(run_workflow(
-                workflow_key=workflow_key,
+                workflow_key=effective_workflow_key,
                 template_path=template_path,
                 params=params,
                 project_root=project_root,
                 plan_mode=plan_mode,
                 skip_plan=False,
                 instance_id=instance,
-                ssot_root_id=ssot_root_id
+                ssot_root_id=ssot_root_id,
+                executor_override=executor_resolution.value,
+                executor_selection_source=executor_resolution.source_marker,
             ))
 
             if not result.success:
@@ -823,23 +974,38 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
                 monitor.join(timeout=1)
             summary = _refresh_summary_from_store(project_root, workflow_id, summary)
             _print_summary(project_root, workflow_id, summary)
-            _release_project_run_lock(lock_fp)
             return
 
         # 原有逻辑: 直接执行
         rendered_path = _render_workflow_template(template_path, params, project_root)
 
-        # Create workflow instance (L3 task)
+        workflow_level, workflow_bootstrap = _derive_workflow_creation_metadata(rendered_path)
+        if workflow_level == WorkflowLevel.DEPARTMENT:
+            workflow_bootstrap = hydrate_l2_bootstrap(workflow_bootstrap, params)
+
+        # Create workflow instance
         # 如果指定了 executor override，将其加入 data 中传递给 workflow
-        workflow_data: Dict[str, Any] = {"params": params, "workflow_key": workflow_key}
+        workflow_data: Dict[str, Any] = {
+            "params": params,
+            "workflow_key": effective_workflow_key,
+            "invoked_workflow_key": workflow_key,
+            "concurrency_scope": scope_info.concurrency_scope,
+            "concurrency_key": scope_info.concurrency_key,
+            "scope_source": scope_info.scope_source,
+            **workflow_bootstrap,
+        }
+        llm_profile = os.getenv("LLM_PROFILE")
+        if llm_profile:
+            workflow_data["llm_profile"] = llm_profile
+        workflow_data["executor_override"] = executor_resolution.value
+        workflow_data["executor_selection_source"] = executor_resolution.source_marker
         if executor:
-            workflow_data["executor_override"] = executor
-            click.echo(f"Executor override: {executor}")
+            click.echo(f"Executor override: {executor_resolution.value}")
 
         create_result = pm_workflow(
             "create",
             project_dir=str(project_root),
-            level="task",
+            level=workflow_level.value,
             template_id=str(rendered_path),
             data=workflow_data,
         )

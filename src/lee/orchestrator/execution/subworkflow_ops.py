@@ -594,11 +594,15 @@ class SubworkflowMixin:
         output_map = (step.config or {}).get("output_map")
         if isinstance(output_map, dict):
             artifacts = dict(parent_data.get("artifacts", {}))
+            params = dict(parent_data.get("params", {}))
             for target_key, source in output_map.items():
                 if not isinstance(target_key, str):
                     continue
-                artifacts[target_key] = self._resolve_output_map_value(source, backfill_output, child_data)
+                resolved_value = self._resolve_output_map_value(source, backfill_output, child_data)
+                artifacts[target_key] = resolved_value
+                params[target_key] = resolved_value
             parent_data["artifacts"] = artifacts
+            parent_data["params"] = params
 
         parent_data["last_output"] = {parent_step_id: backfill_output}
         await self.store.update_workflow_data(parent_workflow_id, parent_data)

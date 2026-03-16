@@ -1,0 +1,57 @@
+kind: stage_definition
+version: "1.0"
+id: stage.dev.l3_evidence_pack
+name: L3 Evidence Pack Stage
+status: frozen
+owner: development
+governing_adrs:
+  - ADR-008
+business_source:
+  - FEAT-SRC-009-009
+
+purpose: >
+  Canonical L3 evidence-pack stage definition for collecting, validating, and
+  packaging delivery evidence before smoke-gate closure.
+
+input_contract:
+  required_fields:
+    - formal_ssot_id
+    - source_refs
+    - governing_adrs
+    - integration_outputs
+    - verification_results
+  optional_fields:
+    - acceptance_brief_ref
+    - decision_refs
+    - review_result_refs
+    - gate_result_refs
+  rules:
+    - rule: integration_outputs_required
+      description: Evidence Pack can start only after integration artifacts exist.
+    - rule: evidence_axis_closure
+      description: The stage must produce auditable evidence, not just file copies.
+
+task_family:
+  required_tasks:
+    - evidence_collection
+    - evidence_validation
+    - evidence_packaging
+
+outputs:
+  required:
+    - evidence_index_ref
+    - verification_summary_ref
+    - evidence_pack_ref
+    - delivery_candidate_ref
+    - audit_declaration_ref
+  optional:
+    - coverage_gap_ref
+    - smoke_gate_inputs
+
+completion_criteria:
+  required_conditions:
+    - evidence collection is complete
+    - schema validation passed
+    - acceptance coverage gaps are reported
+    - audit declaration is attached
+    - smoke gate handoff package is ready

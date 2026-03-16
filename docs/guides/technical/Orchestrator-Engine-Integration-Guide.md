@@ -24,7 +24,7 @@ last_updated: 2026-02-19
 2. ✅ **统一的执行协议**：定义了 `StepExecutionRequest/Result` 标准接口
 3. ✅ **Engine 注册机制**：支持可插拔的 Engine 架构
 4. ✅ **LLMExecutor 作为默认引擎**：直接调用大模型 API
-5. ✅ **MetaGPTExecutor 符合统一接口**：可插拔的"重型引擎"
+5. ✅ **Legacy ExecutorExecutor 符合统一接口**：可插拔的"重型引擎"
 
 ---
 
@@ -69,7 +69,7 @@ last_updated: 2026-02-19
 │                ┌───────────────┴─────────────┐                       │
 │                ▼                               ▼                       │
 │  ┌─────────────────────┐         ┌─────────────────────┐           │
-│  │   LLMExecutor        │         │ MetaGPTExecutor     │           │
+│  │   LLMExecutor        │         │ Legacy ExecutorExecutor     │           │
 │  │   (默认引擎)         │         │ (可选引擎)          │           │
 │  └─────────────────────┘         └─────────────────────┘           │
 │                                                                      │
@@ -88,8 +88,8 @@ flowcore/
 │   ├── llm/
 │   │   ├── executor.py          # LLM Executor（新增）
 │   │   └── __init__.py          # LLM Engine 模块（新增）
-│   └── metagpt/
-│       ├── executor_v2.py        # MetaGPT Executor v2（新增）
+│   └── legacy_executor/
+│       ├── executor_v2.py        # Legacy Executor Executor v2（新增）
 │       └── __init__.py          # 更新（同时支持新旧接口）
 └── orchestrator/
     └── engine_commands.py       # 新的 CLI 命令（新增）
@@ -170,9 +170,9 @@ engine:
   api_key: ${OPENAI_API_KEY}
 ```
 
-### 4. MetaGPTExecutor (engines/metagpt/executor_v2.py)
+### 4. Legacy ExecutorExecutor (engines/legacy_executor/executor_v2.py)
 
-使用 MetaGPT 框架的"重型引擎"：
+使用 Legacy Executor 框架的"重型引擎"：
 
 **特性**：
 - 支持多角色协作
@@ -182,7 +182,7 @@ engine:
 **配置示例**：
 ```yaml
 engine:
-  type: metagpt
+  type: legacy_executor
   role: Developer
   config:
     llm:
@@ -276,7 +276,7 @@ Orchestrator ──► 注入上下文 ──► [Claude Code] ──► 调用�
 ### 新架构（统一 Engine 接口）
 
 ```
-Orchestrator ──► EngineRegistry ──► [LLMExecutor/MetaGPTExecutor] ──► 调用大模型
+Orchestrator ──► EngineRegistry ──► [LLMExecutor/Legacy ExecutorExecutor] ──► 调用大模型
      │                                                              │
      │                                                              │
      └──────────────────────────────── 验证产物 ◄─────────────────────┘
@@ -302,7 +302,7 @@ Orchestrator ──► EngineRegistry ──► [LLMExecutor/MetaGPTExecutor] �
 
 **不负责**：
 - 知道具体的 Engine 实现
-- 理解 MetaGPT 或 OpenAI 的概念
+- 理解 Legacy Executor 或 OpenAI 的概念
 - 管理大模型 API 调用
 
 ### 2. Engine 接口统一
@@ -384,7 +384,7 @@ engine:
 - [x] 设计统一执行协议
 - [x] 实现 EngineRegistry
 - [x] 实现 LLMExecutor
-- [x] 改写 MetaGPTExecutor
+- [x] 改写 Legacy ExecutorExecutor
 - [x] 创建完整示例
 - [x] 创建端到端 Demo
 
@@ -412,12 +412,12 @@ engine:
 2. **统一的接口**：所有 Engine 实现相同协议
 3. **可插拔架构**：轻松添加新的 Engine
 4. **开箱即用**：LLMExecutor 作为默认引擎
-5. **向后兼容**：保留旧的 MetaGPT Adapter
+5. **向后兼容**：保留旧的 Legacy Executor Adapter
 
 现在 Orchestrator 可以：
 - ✅ 完全独立运行（不需要 Claude Code）
 - ✅ 直接调用大模型（OpenAI、Claude 等）
-- ✅ 可选集成 MetaGPT（更强大的功能）
+- ✅ 可选集成 Legacy Executor（更强大的功能）
 - ✅ 支持自定义 Engine（灵活扩展）
 
 ---

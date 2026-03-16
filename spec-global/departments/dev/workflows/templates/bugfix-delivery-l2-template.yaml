@@ -1,0 +1,258 @@
+# Bugfix Delivery L2 Template
+# Canonical Dev bugfix delivery template constrained by ADR-008 and FEAT-SRC-009-002.
+
+kind: l2_workflow_template
+version: "3.0"
+id: template.dev.bugfix_delivery_l2
+name: Bugfix Delivery L2 Template
+description: |
+  Canonical L2 template for Dev bugfix delivery.
+
+  This checked-in file is a reusable workflow template, not a fixed runtime instance.
+  Runtime instances are rendered from this template by the orchestrator.
+
+  Canonical stage flow:
+  - triage
+  - root_cause
+  - fix_design
+  - fix_implementation
+  - verification
+  - evidence_pack
+  - merge_or_reject
+
+owner: development
+tags: [template, dev, bugfix, l2, canonical, adr-008]
+contracts:
+  shared_input_schema: ../../../../../spec/contracts/shared-input-schema/v1/schema.json
+
+phases:
+  - id: triage
+    name: "Triage"
+    description: "Validate bug input and decide single-bug or batch routing"
+    default_complexity: L
+    depends_on: []
+    spawns_l3: true
+    l3_template_id: template.dev.bugfix_triage_l3
+
+  - id: root_cause
+    name: "Root Cause"
+    description: "Identify the real defect source and affected scope"
+    default_complexity: L
+    depends_on: [triage]
+    spawns_l3: true
+    l3_template_id: template.dev.bugfix_root_cause_l3
+
+  - id: fix_design
+    name: "Fix Design"
+    description: "Constrain the remediation boundary before code changes"
+    default_complexity: L
+    depends_on: [root_cause]
+    spawns_l3: true
+    l3_template_id: template.dev.bugfix_fix_design_l3
+
+  - id: fix_implementation
+    name: "Fix Implementation"
+    description: "Implement the approved bug fix"
+    default_complexity: L
+    depends_on: [fix_design]
+    spawns_l3: true
+    l3_template_id: template.dev.bugfix_fix_impl_l3
+
+  - id: verification
+    name: "Verification"
+    description: "Verify the bugfix and prevent regression"
+    default_complexity: L
+    depends_on: [fix_implementation]
+    spawns_l3: true
+    l3_template_id: template.dev.bugfix_verification_l3
+
+  - id: evidence_pack
+    name: "Evidence Pack"
+    description: "Package bugfix closure evidence before merge decision"
+    default_complexity: L
+    depends_on: [verification]
+    spawns_l3: true
+    l3_template_id: template.dev.bugfix_evidence_pack_l3
+
+  - id: merge_or_reject
+    name: "Merge Or Reject"
+    description: "Finalize merge or rejection decision from bugfix evidence"
+    default_complexity: S
+    depends_on: [evidence_pack]
+    spawns_l3: false
+    gate_id: gate.dev.merge_approval
+
+execution_strategies:
+  S:
+    description: "Direct execution inside the L2 runtime"
+    spawns_l3: false
+  L:
+    description: "Spawn an L3 sub-workflow"
+    spawns_l3: true
+
+shared_input_contract:
+  description: "Canonical L2 shared input contract for bugfix delivery"
+  required_fields:
+    - bug_ssot_id
+    - severity
+    - reproduction_evidence
+  optional_fields:
+    - source_refs
+    - repo_context
+    - test_case_refs
+    - batch_mode
+    - batch_context
+    - batch_approval_record
+  rules:
+    - rule: frozen_bug_required
+      description: "bug_ssot_id must reference a frozen BUG object"
+    - rule: severity_required
+      description: "severity must be one of P0/P1/P2"
+    - rule: evidence_required
+      description: "reproduction_evidence must be actionable and replayable"
+    - rule: batch_requires_five_same
+      description: "batch_mode is valid only when five-same rule passes"
+    - rule: batch_exception_requires_approval
+      description: "five-same failures may proceed only with an approved batch_approval_record"
+
+l3_input_schema:
+  description: "Shared data propagated from L2 into bugfix L3 phases"
+  required_fields:
+    - bug_ssot_id
+    - severity
+    - reproduction_evidence
+  optional_fields:
+    - source_refs
+    - repo_context
+    - test_case_refs
+    - batch_mode
+    - batch_context
+    - batch_approval_record
+    - upstream_artifacts
+
+l3_output_schema:
+  description: "Shared data returned from bugfix L3 phases back into the L2 chain"
+  required_fields:
+    - phase_id
+    - status
+    - artifacts
+  optional_fields:
+    - triage_decision_ref
+    - granularity_decision_ref
+    - root_cause_ref
+    - batch_approval_record
+    - verification_scope_ref
+    - rollback_strategy_ref
+    - fix_design_ref
+    - fix_artifact_ref
+    - verification_report_ref
+    - evidence_pack_ref
+    - merge_decision_ref
+
+phase_data_flow:
+  description: "Canonical handoff chain for bugfix phase outputs"
+  handoffs:
+    - from: triage
+      to: root_cause
+      outputs:
+        - triage_decision_ref
+        - granularity_decision_ref
+    - from: root_cause
+      to: fix_design
+      outputs:
+        - root_cause_ref
+        - affected_scope_ref
+        - batch_approval_record
+    - from: fix_design
+      to: fix_implementation
+      outputs:
+        - fix_design_ref
+        - verification_scope_ref
+        - rollback_strategy_ref
+    - from: fix_implementation
+      to: verification
+      outputs:
+        - fix_artifact_ref
+    - from: verification
+      to: evidence_pack
+      outputs:
+        - verification_report_ref
+    - from: evidence_pack
+      to: merge_or_reject
+      outputs:
+        - evidence_pack_ref
+        - closure_summary_ref
+
+granularity_control:
+  description: "Default single-bug rule with five-same batch exception"
+  default_mode: single_bug
+  batch_mode:
+    allowed_when:
+      - same_module
+      - same_root_cause_class
+      - same_fix_strategy
+      - same_verification_surface
+      - same_release_window
+    rejection_action: split_into_single_bug_runs
+
+status_hooks:
+  description: "State transition hooks for the canonical bugfix L2 lifecycle"
+  states:
+    - Ready
+    - Triaged
+    - Fix In Progress
+    - Verification Passed
+    - Evidence Pack Produced
+    - Closed
+  transitions:
+    - from: Ready
+      to: Triaged
+      on: triage_completed
+    - from: Triaged
+      to: Fix In Progress
+      on: fix_design_approved
+    - from: Fix In Progress
+      to: Verification Passed
+      on: verification_passed
+    - from: Verification Passed
+      to: Evidence Pack Produced
+      on: evidence_pack_completed
+    - from: Evidence Pack Produced
+      to: Closed
+      on: merge_or_reject_completed
+
+constitution:
+  id: bugfix_delivery_l2_constitution_v1
+  name: "Bugfix Delivery L2 Constitution"
+  version: "1.0"
+  principles:
+    - id: no_fix_without_triage
+      rule: "Fix implementation must not start before triage and root cause complete"
+    - id: no_batch_without_five_same
+      rule: "Batch mode is forbidden unless the five-same rule passes, or an approved batch_approval_record is present"
+    - id: evidence_required_for_merge
+      rule: "Workflow must not close without evidence_pack"
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+    - context
+    - phases
+  context_fields:
+    - bug_ssot_id
+    - severity
+    - reproduction_evidence
+    - source_refs
+    - repo_context
+    - test_case_refs
+    - batch_mode
+    - batch_approval_record
+  phase_fields:
+    - id
+    - complexity
+    - status
+    - l3_instance_ids
+    - depends_on

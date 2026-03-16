@@ -66,7 +66,7 @@ v3.0 存在两个分叉的版本：
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    执行器层（Executors）                      │
-│  LLM │ Shell │ MCP │ MetaGPT │ Custom                     │
+│  LLM │ Shell │ MCP │ Legacy Executor │ Custom                     │
 └─────────────────────────────┬───────────────────────────────┘
                               │
                               ▼
@@ -101,7 +101,7 @@ v3.0 存在两个分叉的版本：
 │  - LLMExecutor                                             │
 │  - ShellExecutor                                           │
 │  - MCPSkillExecutor                                        │
-│  - MetaGPTExecutor                                         │
+│  - Legacy ExecutorExecutor                                         │
 ├───────────────────────────────────────────────────────────────┤
 │ ④ Interface Layer（客户端）                                  │  ← 入口层
 │  - CLI / FastAPI                                           │
@@ -224,7 +224,7 @@ v3.1 在 Core 之外新增四个外圈能力层：
 |------|------|------|------|
 | LLMExecutor | `llm_executor.py` | LLM 执行器 | ✅ 已有 |
 | ShellExecutor | `shell_executor.py` | Shell 执行器 | ✅ 已有 |
-| MetaGPTExecutor | `metagpt_executor.py` | MetaGPT 执行器 | ✅ 已有 |
+| Legacy ExecutorExecutor | `legacy_executor_executor.py` | Legacy Executor 执行器 | ✅ 已有 |
 | ExecutorFactory | `executors.py` | 执行器工厂 | ✅ 已有 |
 
 ---
@@ -473,7 +473,7 @@ src/lee/orchestrator/
 │   ├── executors.py           # 执行器工厂（v3 原有）
 │   ├── llm_executor.py        # LLM 执行器（v3 原有）
 │   ├── shell_executor.py      # Shell 执行器（v3 原有）
-│   ├── metagpt_executor.py    # MetaGPT 执行器（v3 原有）
+│   ├── legacy_executor_executor.py    # Legacy Executor 执行器（v3 原有）
 │   ├── gate_api.py           # Gate API（v3 原有）
 │   ├── retry.py              # 重试机制（v1 迁移）
 │   │
@@ -688,8 +688,8 @@ v3.1 已完成从 flowcore 到 v3.0 的增量演进：
 ### 版本对比
 - [../../examples/version_comparison_report.md](../../examples/version_comparison_report.md)
 
-### LLM/MetaGPT 集成
-- [../../examples/llm_metagpt_final_report.md](../../examples/llm_metagpt_final_report.md)
+### LLM/Legacy Executor 集成
+- [../../examples/llm_legacy_executor_final_report.md](../../examples/llm_legacy_executor_final_report.md)
 
 ### 迁移记录
 - `flowcore.backup/` - v1 (flowcore) 备份目录

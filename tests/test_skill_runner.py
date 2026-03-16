@@ -227,6 +227,40 @@ async def test_skill_runner_uses_skill_defaults_when_workflow_params_missing():
     assert any("git push origin $(git branch --show-current)" in cmd for cmd in commands)
 
 
+@pytest.mark.asyncio
+async def test_skill_runner_ignores_workflow_executor_override_for_shell_skill(tmp_path: Path):
+    shell_executor = MagicMock()
+    shell_executor.execute = AsyncMock(
+        return_value={"status": "completed", "return_code": 0, "stdout": "", "stderr": ""}
+    )
+
+    ctx = _make_ctx(
+        shell_executor=shell_executor,
+        params={"workspace_path": str(tmp_path), "remote": "origin", "branch": "main"},
+        project_root=Path.cwd(),
+    )
+    ctx.store.get_workflow.return_value = SimpleNamespace(
+        data={
+            "params": {"workspace_path": str(tmp_path), "remote": "origin", "branch": "main"},
+            "run_id": "RUN-TEST",
+            "executor_override": "qwen_chat",
+        }
+    )
+    step = MockStep(
+        input={
+            "workspace_path": "${{ params.workspace_path }}",
+            "remote": "${{ params.remote }}",
+            "branch": "${{ params.branch }}",
+        }
+    )
+
+    runner = SkillRunner()
+    result = await runner.execute("wf-test", step, ctx)
+
+    assert result.status == "success"
+    assert ctx.executor_factory.create.call_args_list[0].args[0] == "shell"
+
+
 def test_skill_runner_resolve_param_value_handles_variable_ir():
     value = VariableIR(
         reference="$outputs.s1_1_analyze_files.gitignore_recommendations",

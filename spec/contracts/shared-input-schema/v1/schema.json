@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lee.local/contracts/shared-input-schema/v1/schema.json",
+  "title": "Shared Dev Input Schema",
+  "type": "object",
+  "required": [
+    "formal_ssot_id",
+    "source_refs",
+    "governing_adrs",
+    "repo_context"
+  ],
+  "properties": {
+    "formal_ssot_id": {
+      "type": "string",
+      "pattern": "^(FEAT|TASK|TECH|BUG|TESTSET|REPORT|SRC|EPIC|ADR)-[A-Z0-9-]+$"
+    },
+    "source_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z]+-[A-Z0-9-]+(#[-_a-zA-Z0-9]+)?$"
+      }
+    },
+    "governing_adrs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^ADR-[0-9A-Z_-]+$"
+      }
+    },
+    "repo_context": {
+      "type": "object",
+      "required": ["repo_id", "branch"],
+      "properties": {
+        "repo_id": { "type": "string", "minLength": 2 },
+        "branch": {
+          "type": "string",
+          "pattern": "^(main|master|develop|codex/.+|feature/.+|bugfix/.+)$"
+        },
+        "module": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
