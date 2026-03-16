@@ -125,6 +125,12 @@
         }
       }
     },
+    "workflow_instance_id": {
+      "type": "string",
+      "description": "生成该 SRC 的 workflow 实例 ID。必须为真实有效的实例 ID，不能为 null、空字符串或 'gate-materialize' 等占位符。",
+      "pattern": "^(?!gate-materialize$).+$",
+      "minLength": 1
+    },
     "ssot": {
       "type": "object",
       "required": ["identity_kind", "ssot_type"],
