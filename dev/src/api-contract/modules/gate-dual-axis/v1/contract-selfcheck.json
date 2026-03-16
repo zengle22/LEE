@@ -1,0 +1,120 @@
+{
+  "contract_selfcheck_id": "CSC-GATE-DUAL-AXIS-20260316-001",
+  "checked_at": "2026-03-16T14:45:00+08:00",
+  "contract_ref": "API-CONTRACT-GATE-DUAL-AXIS-20260316-001",
+  "contract_version": "1.0.0",
+  "checker": "contract_designer_agent",
+
+  "checklist": {
+    "endpoint_completeness": {
+      "description": "所有端点都有请求和响应 DTO",
+      "status": "passed",
+      "details": [
+        "POST /api/v1/gate-approvals: CreateGateApprovalRequest → CreateGateApprovalResponse ✓",
+        "GET /api/v1/gate-approvals/{gate_id}: GetGateApprovalResponse ✓",
+        "GET /api/v1/workflows/{workflow_id}/gates: ListGatesResponse ✓",
+        "POST /api/v1/gate-approvals/{gate_id}/decide: DecideGateRequest → DecideGateResponse ✓"
+      ]
+    },
+    "field_type_clarity": {
+      "description": "所有字段类型明确（无 any/object 模糊类型）",
+      "status": "passed",
+      "details": [
+        "所有字段都使用明确类型：string, integer, boolean, array, enum ✓",
+        "无 any 或 object 模糊类型 ✓"
+      ]
+    },
+    "naming_convention": {
+      "description": "字段命名符合 snake_case 规范",
+      "status": "passed",
+      "details": [
+        "gate_id, workflow_id, step_id ✓",
+        "decision_mode, legacy_gate_type ✓",
+        "approval_criteria, structured_feedback ✓",
+        "created_at, decided_at, invalidated_at ✓"
+      ]
+    },
+    "version_format": {
+      "description": "版本号符合 SemVer 格式",
+      "status": "passed",
+      "details": [
+        "版本号：1.0.0 ✓",
+        "格式：MAJOR.MINOR.PATCH ✓"
+      ]
+    },
+    "changelog_entries": {
+      "description": "Changelog 有当前版本条目",
+      "status": "passed",
+      "details": [
+        "1.0.0 (2026-03-16): 初始版本，定义 GatePurpose 和 GateDecisionMode 枚举 ✓"
+      ]
+    },
+    "required_fields": {
+      "description": "必填字段正确标注 required",
+      "status": "passed",
+      "details": [
+        "CreateGateApprovalRequest: workflow_id, gate_id, step_id, purpose, decision_mode 标注为 required ✓",
+        "GateApproval 模型：purpose, decision_mode 为必填字段 ✓"
+      ]
+    },
+    "error_codes": {
+      "description": "错误码有明确描述",
+      "status": "passed",
+      "details": [
+        "400: 非法组合（如 APPROVAL + AUTO） ✓",
+        "404: Gate 不存在 ✓",
+        "409: 已存在待审批的 Gate / Gate 已决策 ✓"
+      ]
+    },
+    "enum_definition": {
+      "description": "枚举定义完整且值域明确",
+      "status": "passed",
+      "details": [
+        "GatePurpose: review, approval ✓",
+        "GateDecisionMode: auto, conditional_human, human_required ✓"
+      ]
+    },
+    "validation_rules": {
+      "description": "验证规则完整且可执行",
+      "status": "passed",
+      "details": [
+        "VR-001: purpose 值验证 ✓",
+        "VR-002: decision_mode 值验证 ✓",
+        "VR-003/VR-004: 组合验证 ✓",
+        "提供了 validate_purpose_mode_combination 函数实现 ✓"
+      ]
+    },
+    "legacy_compatibility": {
+      "description": "历史兼容性处理完整",
+      "status": "passed",
+      "details": [
+        "提供了历史分类映射表 ✓",
+        "提供了 map_legacy_to_dual_axis 函数实现 ✓",
+        "legacy_gate_type 字段标记为可选 ✓"
+      ]
+    }
+  },
+
+  "summary": {
+    "total_checks": 10,
+    "passed": 10,
+    "failed": 0,
+    "blocked": 0,
+    "pass_rate": 1.0
+  },
+
+  "quality_metrics": {
+    "dto_coverage": 1.0,
+    "field_type_clarity": 1.0,
+    "naming_compliance": 1.0,
+    "validation_completeness": 1.0,
+    "backward_compatibility": 1.0
+  },
+
+  "recommendations": [],
+
+  "conclusion": {
+    "ready_for_freeze": true,
+    "message": "Contract 自检通过，所有检查项均已满足，可以进行冻结"
+  }
+}

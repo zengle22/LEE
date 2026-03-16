@@ -1,0 +1,157 @@
+# Gate Dual-Axis Contract Analysis
+# SRC-041 Gate 双轴模型改造 - 需求分析
+
+contract_analysis_id: CA-GATE-DUAL-AXIS-20260316-001
+created_at: '2026-03-16'
+analyst: contract_designer_agent
+source_refs:
+  - TECH-FEAT-SRC-041-001
+  - ADR-017
+  - FEAT-SRC-041-001
+
+---
+
+## 1. 需求来源分析
+
+### 1.1 技术架构需求 (来自 TECH-FEAT-SRC-041-001)
+
+**AD-001**: 引入 purpose 和 decision_mode 双轴模型
+- 影响：GateApproval 数据模型需扩展双轴字段
+- 影响：Runner 路由逻辑需支持双轴解析
+- 影响：历史配置需提供兼容映射
+
+**AD-002**: approval purpose 只能与 human_required decision_mode 组合
+- 影响：需在 Runner 层和 Store 层双重验证组合合法性
+- 影响：工作流模板配置需校验
+
+**AD-003**: 历史分类仅作为映射到双轴模型的兼容入口
+- 影响：需提供完整的默认值映射表
+- 影响：legacy_gate_type 字段标记为废弃中
+
+### 1.2 治理约束 (来自 ADR-017)
+
+- 正式责任确认、freeze、release 必须由人类决策
+- approval 默认必须 human_required
+- human_gate_context 是所有人工 gate 的强制前置物
+
+### 1.3 功能需求 (来自 FEAT-SRC-041-001)
+
+- 将 gate 的分类从单一 gate_type 轴收敛到二维模型
+- purpose 轴定义为 review（质量判断）和 approval（正式责任确认）
+- decision_mode 轴定义为 auto、conditional_human、human_required
+- 禁止 approval + auto 的非法组合
+
+---
+
+## 2. API 需求提取
+
+### 2.1 新增枚举定义
+
+| 枚举名称 | 用途 | 值域 |
+|---------|------|------|
+| GatePurpose | 定义 Gate 职责语义 | review, approval |
+| GateDecisionMode | 定义 Gate 决策方式 | auto, conditional_human, human_required |
+
+### 2.2 数据模型扩展
+
+| 模型 | 新增字段 | 类型 | 必填 |
+|------|---------|------|------|
+| GateApproval | purpose | GatePurpose | 是 |
+| GateApproval | decision_mode | GateDecisionMode | 是 |
+| GateApproval | legacy_gate_type | Optional[str] | 否 |
+
+### 2.3 API 端点需求
+
+| 端点 | Method | 用途 | 新增/修改 |
+|------|--------|------|----------|
+| /api/v1/gate-approvals | POST | 创建 Gate Approval | 修改（添加双轴字段） |
+| /api/v1/gate-approvals/{gate_id} | GET | 获取 Gate Approval | 修改（返回双轴字段） |
+| /api/v1/workflows/{workflow_id}/gates | GET | 列出 Gates | 修改（支持双轴过滤） |
+| /api/v1/gate-approvals/{gate_id}/decide | POST | 决策 Gate | 不变 |
+
+### 2.4 验证规则需求
+
+| 规则 ID | 规则描述 | 严重性 | 验证时机 |
+|--------|---------|--------|---------|
+| VR-001 | purpose 必须是 REVIEW 或 APPROVAL | blocker | 创建/更新时 |
+| VR-002 | decision_mode 必须是 AUTO/CONDITIONAL_HUMAN/HUMAN_REQUIRED | blocker | 创建/更新时 |
+| VR-003 | APPROVAL + AUTO 组合非法 | blocker | 创建/更新时 |
+| VR-004 | APPROVAL + CONDITIONAL_HUMAN 组合非法 | blocker | 创建/更新时 |
+| VR-005 | 历史配置必须能映射到双轴模型 | major | 迁移时 |
+
+---
+
+## 3. 依赖分析
+
+### 3.1 内部依赖
+
+| 模块 | 依赖内容 | 影响范围 |
+|------|---------|---------|
+| src/lee/orchestrator/storage/models.py | GateApproval 模型 | 核心数据模型修改 |
+| src/lee/orchestrator/storage/store.py | SQLiteStore 方法 | 需添加双轴字段持久化 |
+| src/lee/orchestrator/execution/runners/gate_runner.py | HumanGateRunner | 需支持双轴解析 |
+
+### 3.2 外部依赖
+
+| 依赖 | 状态 | 说明 |
+|------|------|------|
+| ADR-017 | frozen | 治理约束来源 |
+| TECH-FEAT-SRC-041-001 | active | 技术架构规格 |
+
+### 3.3 兼容性依赖
+
+| 兼容对象 | 兼容策略 | 风险等级 |
+|---------|---------|---------|
+| 现有 GateApproval 记录 | 默认值映射 | low |
+| 现有 workflow.yaml 配置 | 自动推导双轴字段 | medium |
+| 历史 gate_type 配置 | 映射表转换 | low |
+
+---
+
+## 4. 合同边界定义
+
+### 4.1 合同内（本 Contract 范围）
+
+- GatePurpose 和 GateDecisionMode 枚举定义
+- GateApproval 模型扩展
+- API 端点请求/响应 DTO
+- 组合验证逻辑
+- 历史分类映射
+
+### 4.2 合同外（后续阶段范围）
+
+- CLI 双轴信息展示（P1）
+- 审计日志扩展（P1）
+- 数据库迁移脚本（P1）
+- Workflow 模板示例更新（P1）
+- 历史数据自动迁移（P2）
+- 运行时执行逻辑改造（P2）
+
+---
+
+## 5. 风险评估
+
+| 风险 ID | 风险描述 | 缓解措施 | 剩余风险 |
+|--------|---------|---------|---------|
+| R-001 | 历史数据迁移问题 | 在 row_to_gate_approval 中提供默认值 | low |
+| R-002 | 组合验证遗漏 | 在 HumanGateRunner 和 SQLiteStore 两处验证 | low |
+| R-003 | 旧配置兼容性问题 | 提供完整的默认值映射 | medium |
+
+---
+
+## 6. 输出清单
+
+| 输出物 | 路径 | 状态 |
+|-------|------|------|
+| API Contract | dev/src/api-contract/modules/gate-dual-axis/v1/api-contract.yaml | draft |
+| Contract Self-Check | dev/src/api-contract/modules/gate-dual-axis/v1/contract-selfcheck.json | pending |
+| README | dev/src/api-contract/modules/gate-dual-axis/README.md | pending |
+
+---
+
+## 7. 下一步行动
+
+1. 完成 API Contract 设计（当前）
+2. 执行 Contract Self-Check
+3. 冻结 Contract（需要人工批准）
+4. 基于 Contract 进行后端实现

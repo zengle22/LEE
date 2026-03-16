@@ -1,0 +1,446 @@
+# Gate Dual-Axis API Contract
+# SRC-041 Gate 双轴模型改造 - API 协议设计
+
+api_contract_id: API-CONTRACT-GATE-DUAL-AXIS-20260316-001
+version: 1.0.0
+status: draft
+created_at: '2026-03-16'
+source_refs:
+  - TECH-FEAT-SRC-041-001
+  - ADR-017
+  - FEAT-SRC-041-001
+
+---
+
+## 1. Enum Definitions
+
+### 1.1 GatePurpose
+
+枚举 Gate 的目的，用于区分 Gate 的职责语义。
+
+```python
+class GatePurpose(str, Enum):
+    REVIEW = "review"        # 质量判断，不表达正式责任确认
+    APPROVAL = "approval"    # 正式责任确认，必须与 human_required 组合
+```
+
+**字段说明**:
+- `REVIEW`: 用于质量把关、代码审核、测试验证等非正式确认场景
+- `APPROVAL`: 用于 freeze、release、merge、risk acceptance 等正式责任确认场景
+
+**约束规则**:
+- `APPROVAL` purpose 只能与 `HUMAN_REQUIRED` decision_mode 组合
+- `REVIEW` purpose 可以与任意 decision_mode 组合
+
+### 1.2 GateDecisionMode
+
+枚举 Gate 的决策方式，用于定义 Gate 的触发条件。
+
+```python
+class GateDecisionMode(str, Enum):
+    AUTO = "auto"                    # 自动通过，无需人工干预
+    CONDITIONAL_HUMAN = "conditional_human"  # 条件触发人工审批
+    HUMAN_REQUIRED = "human_required"        # 必须人工审批
+```
+
+**字段说明**:
+- `AUTO`: 满足条件后自动通过，适用于低风险场景
+- `CONDITIONAL_HUMAN`: 根据配置条件（如金额阈值、风险等级）决定是否触发人工审批
+- `HUMAN_REQUIRED`: 必须由人工明确批准，适用于正式责任确认场景
+
+**约束规则**:
+- `APPROVAL + AUTO` 组合非法
+- `APPROVAL + CONDITIONAL_HUMAN` 组合非法
+- `APPROVAL + HUMAN_REQUIRED` 组合合法（强制）
+- `REVIEW + AUTO/CONDITIONAL_HUMAN/HUMAN_REQUIRED` 组合均合法
+
+---
+
+## 2. Data Model Extensions
+
+### 2.1 GateApproval 扩展
+
+在现有 `GateApproval` 数据模型基础上新增双轴字段。
+
+**现有字段** (保持不变):
+```python
+workflow_id: str
+gate_id: str
+step_id: str
+status: GateStatus
+approver: Optional[str]
+comments: Optional[str]
+created_at: datetime
+decided_at: Optional[datetime]
+approval_criteria: List[Dict[str, Any]]
+reviewers: List[Dict[str, str]]
+version: int
+default_reject_action: Optional[str]
+default_reject_target: Optional[str]
+default_revise_target: Optional[str]
+decision_action: Optional[str]
+target_step: Optional[str]
+structured_feedback: Optional[Dict[str, Any]]
+issues: Optional[List[str]]
+invalidated_at: Optional[datetime]
+```
+
+**新增字段** (P0):
+```python
+purpose: GatePurpose                          # 必填：Gate 目的
+decision_mode: GateDecisionMode               # 必填：决策方式
+legacy_gate_type: Optional[str]               # 可选：历史分类映射（废弃中）
+```
+
+**完整模型**:
+```python
+@dataclass
+class GateApproval:
+    workflow_id: str
+    gate_id: str
+    step_id: str
+    status: GateStatus = GateStatus.PENDING
+    approver: Optional[str] = None
+    comments: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.now)
+    decided_at: Optional[datetime] = None
+    approval_criteria: List[Dict[str, Any]] = field(default_factory=list)
+    reviewers: List[Dict[str, str]] = field(default_factory=list)
+    version: int = 1
+
+    # === 双轴模型新增字段 ===
+    purpose: GatePurpose
+    decision_mode: GateDecisionMode
+    legacy_gate_type: Optional[str] = None  # 历史分类映射
+
+    # v1.1 原有字段
+    default_reject_action: Optional[str] = None
+    default_reject_target: Optional[str] = None
+    default_revise_target: Optional[str] = None
+    decision_action: Optional[str] = None
+    target_step: Optional[str] = None
+    structured_feedback: Optional[Dict[str, Any]] = None
+    issues: Optional[List[str]] = None
+    invalidated_at: Optional[datetime] = None
+```
+
+---
+
+## 3. API Endpoints
+
+### 3.1 创建 Gate Approval
+
+**端点**: `POST /api/v1/gate-approvals`
+
+**请求 DTO**: `CreateGateApprovalRequest`
+```yaml
+fields:
+  - name: workflow_id
+    type: string
+    required: true
+    description: 工作流 ID
+  - name: gate_id
+    type: string
+    required: true
+    description: 门禁 ID
+  - name: step_id
+    type: string
+    required: true
+    description: 步骤 ID
+  - name: purpose
+    type: string
+    required: true
+    enum: [review, approval]
+    description: Gate 目的
+  - name: decision_mode
+    type: string
+    required: true
+    enum: [auto, conditional_human, human_required]
+    description: 决策方式
+  - name: legacy_gate_type
+    type: string
+    required: false
+    description: 历史分类（可选，用于兼容映射）
+  - name: approval_criteria
+    type: array
+    required: false
+    description: 审批标准列表
+  - name: reviewers
+    type: array
+    required: false
+    description: 审批人列表
+```
+
+**响应 DTO**: `CreateGateApprovalResponse`
+```yaml
+fields:
+  - name: gate_approval_id
+    type: string
+    required: true
+    description: 创建的 GateApproval ID
+  - name: status
+    type: string
+    required: true
+    description: 初始状态（PENDING）
+  - name: created_at
+    type: string
+    format: date-time
+    required: true
+```
+
+**错误码**:
+- `400`: 非法组合（如 APPROVAL + AUTO）
+- `409`: 已存在待审批的 Gate
+
+---
+
+### 3.2 获取 Gate Approval
+
+**端点**: `GET /api/v1/gate-approvals/{gate_id}`
+
+**路径参数**:
+- `gate_id`: string - 门禁 ID
+
+**响应 DTO**: `GetGateApprovalResponse`
+```yaml
+fields:
+  - name: workflow_id
+    type: string
+    required: true
+  - name: gate_id
+    type: string
+    required: true
+  - name: step_id
+    type: string
+    required: true
+  - name: purpose
+    type: string
+    required: true
+    enum: [review, approval]
+  - name: decision_mode
+    type: string
+    required: true
+    enum: [auto, conditional_human, human_required]
+  - name: legacy_gate_type
+    type: string
+    required: false
+  - name: status
+    type: string
+    required: true
+    enum: [pending, approved, rejected, revised, flagged, invalidated]
+  - name: approver
+    type: string
+    required: false
+  - name: comments
+    type: string
+    required: false
+  - name: created_at
+    type: string
+    format: date-time
+    required: true
+  - name: decided_at
+    type: string
+    format: date-time
+    required: false
+  - name: decision_action
+    type: string
+    required: false
+  - name: target_step
+    type: string
+    required: false
+```
+
+**错误码**:
+- `404`: Gate 不存在
+
+---
+
+### 3.3 列出工作流的所有 Gates
+
+**端点**: `GET /api/v1/workflows/{workflow_id}/gates`
+
+**路径参数**:
+- `workflow_id`: string - 工作流 ID
+
+**查询参数**:
+- `status`: string (可选) - 按状态过滤
+- `purpose`: string (可选) - 按 purpose 过滤
+- `decision_mode`: string (可选) - 按 decision_mode 过滤
+
+**响应 DTO**: `ListGatesResponse`
+```yaml
+fields:
+  - name: workflow_id
+    type: string
+    required: true
+  - name: total_count
+    type: integer
+    required: true
+  - name: gates
+    type: array
+    required: true
+    items:
+      $ref: GetGateApprovalResponse
+```
+
+---
+
+### 3.4 决策 Gate
+
+**端点**: `POST /api/v1/gate-approvals/{gate_id}/decide`
+
+**路径参数**:
+- `gate_id`: string - 门禁 ID
+
+**请求 DTO**: `DecideGateRequest`
+```yaml
+fields:
+  - name: status
+    type: string
+    required: true
+    enum: [approved, rejected, revised, flagged]
+    description: 决策结果
+  - name: approver
+    type: string
+    required: true
+    description: 审批人 ID
+  - name: comments
+    type: string
+    required: false
+    description: 审批意见
+  - name: decision_action
+    type: string
+    required: false
+    description: 执行的 action（如 rollback, retry）
+  - name: target_step
+    type: string
+    required: false
+    description: 目标步骤 ID
+  - name: structured_feedback
+    type: object
+    required: false
+    description: 结构化反馈
+```
+
+**响应 DTO**: `DecideGateResponse`
+```yaml
+fields:
+  - name: gate_id
+    type: string
+    required: true
+  - name: new_status
+    type: string
+    required: true
+  - name: decided_at
+    type: string
+    format: date-time
+    required: true
+  - name: next_step_id
+    type: string
+    required: false
+    description: 下一步骤 ID（根据决策结果计算）
+```
+
+**错误码**:
+- `400`: 决策无效（如审批人不在 reviewers 列表中）
+- `404`: Gate 不存在
+- `409`: Gate 已决策
+
+---
+
+## 4. Validation Rules
+
+### 4.1 组合验证
+
+```python
+def validate_purpose_mode_combination(purpose: GatePurpose, decision_mode: GateDecisionMode) -> bool:
+    """验证 purpose 和 decision_mode 的组合合法性"""
+    if purpose == GatePurpose.APPROVAL:
+        # approval 只能与 human_required 组合
+        return decision_mode == GateDecisionMode.HUMAN_REQUIRED
+    elif purpose == GatePurpose.REVIEW:
+        # review 可以与任意 decision_mode 组合
+        return decision_mode in [GateDecisionMode.AUTO, GateDecisionMode.CONDITIONAL_HUMAN, GateDecisionMode.HUMAN_REQUIRED]
+    return False
+```
+
+**验证时机**:
+- 创建 GateApproval 时
+- 更新 purpose 或 decision_mode 时
+- SQLiteStore 写入前
+
+**错误信息**:
+```
+Invalid combination: purpose=APPROVAL with decision_mode=AUTO is not allowed.
+APPROVAL purpose must be paired with HUMAN_REQUIRED decision_mode only.
+```
+
+---
+
+### 4.2 字段验证
+
+| 字段 | 验证规则 | 错误信息 |
+|------|---------|---------|
+| purpose | 必须是 REVIEW 或 APPROVAL | Invalid purpose value |
+| decision_mode | 必须是 AUTO/CONDITIONAL_HUMAN/HUMAN_REQUIRED | Invalid decision_mode value |
+| purpose + decision_mode | 必须通过组合验证 | Invalid combination |
+
+---
+
+## 5. Legacy Compatibility
+
+### 5.1 历史分类映射表
+
+| 历史 gate_type | purpose | decision_mode | 说明 |
+|---------------|---------|---------------|------|
+| code_review | REVIEW | HUMAN_REQUIRED | 代码审核 |
+| quality_gate | REVIEW | HUMAN_REQUIRED | 质量门禁 |
+| security_review | REVIEW | HUMAN_REQUIRED | 安全审查 |
+| compliance_check | REVIEW | CONDITIONAL_HUMAN | 合规检查 |
+| auto_test | REVIEW | AUTO | 自动化测试 |
+| freeze | APPROVAL | HUMAN_REQUIRED | 冻结操作 |
+| release | APPROVAL | HUMAN_REQUIRED | 发布操作 |
+| merge | APPROVAL | HUMAN_REQUIRED | 合并操作 |
+| risk_acceptance | APPROVAL | HUMAN_REQUIRED | 风险接受 |
+
+### 5.2 映射函数
+
+```python
+def map_legacy_to_dual_axis(legacy_gate_type: Optional[str]) -> Tuple[GatePurpose, GateDecisionMode]:
+    """将历史分类映射到双轴模型"""
+    MAPPING = {
+        # REVIEW purposes
+        "code_review": (GatePurpose.REVIEW, GateDecisionMode.HUMAN_REQUIRED),
+        "quality_gate": (GatePurpose.REVIEW, GateDecisionMode.HUMAN_REQUIRED),
+        "security_review": (GatePurpose.REVIEW, GateDecisionMode.HUMAN_REQUIRED),
+        "compliance_check": (GatePurpose.REVIEW, GateDecisionMode.CONDITIONAL_HUMAN),
+        "auto_test": (GatePurpose.REVIEW, GateDecisionMode.AUTO),
+        # APPROVAL purposes
+        "freeze": (GatePurpose.APPROVAL, GateDecisionMode.HUMAN_REQUIRED),
+        "release": (GatePurpose.APPROVAL, GateDecisionMode.HUMAN_REQUIRED),
+        "merge": (GatePurpose.APPROVAL, GateDecisionMode.HUMAN_REQUIRED),
+        "risk_acceptance": (GatePurpose.APPROVAL, GateDecisionMode.HUMAN_REQUIRED),
+    }
+
+    if legacy_gate_type and legacy_gate_type in MAPPING:
+        return MAPPING[legacy_gate_type]
+
+    # 默认值：REVIEW + HUMAN_REQUIRED
+    return (GatePurpose.REVIEW, GateDecisionMode.HUMAN_REQUIRED)
+```
+
+---
+
+## 6. Changelog
+
+| 版本 | 日期 | 变更说明 |
+|------|------|---------|
+| 1.0.0 | 2026-03-16 | 初始版本，定义 GatePurpose 和 GateDecisionMode 枚举，扩展 GateApproval 模型 |
+
+---
+
+## 7. Open Questions
+
+1. 是否需要为 `legacy_gate_type` 字段添加索引以优化查询性能？
+2. 是否需要提供批量迁移脚本将现有 GateApproval 记录迁移到双轴模型？
+3. CLI 展示层是否需要同时显示双轴字段和历史分类？

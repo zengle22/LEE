@@ -1,0 +1,67 @@
+# SRC-041 Gate 双轴模型改造 - Feature Contract 设计输入
+# 用于 lee run dev.feature-contract-l3
+
+feature_name: gate-dual-axis
+feature_spec: spec/tech/SRC-041/TECH-FEAT-SRC-041-001__gate-dual-axis-tech-design.md
+
+# 关联的 TASK 文件
+task_bundle:
+  - spec/tasks/SRC-041/FEAT-SRC-041-001/TASK-FEAT-SRC-041-001-001__gate-shuangzhouyuyi-yu-legacy-shoulian-zhilidingyi.md
+  - spec/tasks/SRC-041/FEAT-SRC-041-002/TASK-FEAT-SRC-041-002-001__human-gate-context-qianzhi-duixiang-yuwanzhengxingxiaoyan.md
+  - spec/tasks/SRC-041/FEAT-SRC-041-003/TASK-FEAT-SRC-041-003-001__zhengshibianjiedongzuo-approval-humanrequired-yueshuluodi.md
+  - spec/tasks/SRC-041/FEAT-SRC-041-004/TASK-FEAT-SRC-041-004-001__daishenpi-zhaiyaotouying-yu-cli-yuyitongyi.md
+  - spec/tasks/SRC-041/FEAT-SRC-041-005/TASK-FEAT-SRC-041-005-001__gate-result-tongyishuchu-yushenji-zhuisubangding.md
+
+# 技术架构约束
+tech_spec_ref: spec/tech/SRC-041/TECH-FEAT-SRC-041-001__gate-dual-axis-tech-design.md
+governing_adrs:
+  - ADR-017  # Gate 治理语义归一化
+
+# Contract 设计范围
+contract_scope:
+  - api_contract: GateApproval 数据模型接口
+  - data_contract: GatePurpose/GateDecisionMode 枚举与持久化
+  - event_contract: Gate 决策事件定义
+
+# 现有 Contract（用于增量设计）
+existing_contracts:
+  - src/lee/orchestrator/storage/models.py:GateApproval
+  - src/lee/orchestrator/execution/runners/gate_runner.py:HumanGateRunner
+
+# 输出配置
+output_config:
+  is_main_contract: false
+  module_dir: dev/src/api-contract/modules/gate-dual-axis/v1/
+  auto_mode: false  # 需要人工确认冻结
+
+# 核心改造需求（来自 TECH AD-001 ~ AD-003）
+design_requirements:
+  - id: DR-001
+    description: 新增 GatePurpose 枚举（REVIEW, APPROVAL）
+    type: api_contract
+  - id: DR-002
+    description: 新增 GateDecisionMode 枚举（AUTO, CONDITIONAL_HUMAN, HUMAN_REQUIRED）
+    type: api_contract
+  - id: DR-003
+    description: 扩展 GateApproval 模型，添加 purpose 和 decision_mode 必填字段
+    type: data_contract
+  - id: DR-004
+    description: 验证 approval + auto/conditional_human 为非法组合
+    type: api_contract
+  - id: DR-005
+    description: 历史 gate_type 映射到双轴模型的兼容逻辑
+    type: data_contract
+  - id: DR-006
+    description: Gate 决策事件包含双轴字段
+    type: event_contract
+
+# 验证规则（来自 TECH Validation Rules）
+validation_rules:
+  - rule: purpose 必须是 REVIEW 或 APPROVAL
+    severity: blocker
+  - rule: decision_mode 必须是 AUTO/CONDITIONAL_HUMAN/HUMAN_REQUIRED
+    severity: blocker
+  - rule: APPROVAL + AUTO 或 APPROVAL + CONDITIONAL_HUMAN 禁止
+    severity: blocker
+  - rule: 历史配置必须能映射到双轴模型
+    severity: major
