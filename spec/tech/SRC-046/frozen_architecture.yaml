@@ -1,0 +1,689 @@
+# Frozen Architecture - 交付主链建立与 RELEASE 起点治理
+# 机器可读的 TECH 伴侣文件
+# 版本：v1
+# 生成时间：2026-03-16
+
+metadata:
+  tech_id: TECH-FEAT-SRC-046-001
+  parent_feat: FEAT-SRC-046-001
+  src_root: SRC-046
+  version: v1
+  status: draft
+  governed_by:
+    - ADR-001
+    - ADR-003
+    - ADR-007
+    - ADR-008
+    - ADR-017
+    - ADR-022
+
+# ============================================================================
+# 1. SSOT 类型系统
+# ============================================================================
+
+ssot_types:
+  independent:
+    - name: src
+      description: 原始需求来源
+      parent_required: false
+    - name: epic
+      description: 较大的业务目标集合
+      parent_required: false
+    - name: feat
+      description: 最小可独立验收业务单元
+      parent_required: false
+    - name: adr
+      description: 架构或业务决策
+      parent_required: false
+    - name: release
+      description: 版本范围与发布基线 (交付轴根对象)
+      parent_required: false
+      directory: spec/delivery/releases
+
+  direct_parent:
+    - name: ui
+      description: UI 原型/交互设计
+      parent_type: FEAT
+      directory: spec/tech
+    - name: tech
+      description: 技术设计
+      parent_type: FEAT
+      directory: spec/tech
+    - name: devplan
+      description: 开发计划
+      parent_type: RELEASE
+      directory: spec/delivery/devplans
+    - name: testplan
+      description: 测试计划
+      parent_type: RELEASE
+      directory: spec/delivery/testplans
+    - name: task
+      description: 实施任务
+      parent_type: [DEVPLAN, TESTPLAN]
+      directory: spec/tasks
+    - name: testset
+      description: 测试集
+      parent_type: FEAT
+      directory: spec/testing
+    - name: report
+      description: 测试/验收/分析报告
+      parent_type: [RELEASE, FEAT, TASK]
+      directory: docs/reports
+
+  scope_bounded:
+    - name: tc
+      description: 测试用例
+      parent_type: TESTSET
+      directory: tests/cases
+    - name: bug
+      description: 缺陷
+      parent_type: [FEAT, TC]
+      directory: tests/bugs
+    - name: evi
+      description: 证据包/附件证据
+      parent_type: [FEAT, TC, BUG, TASK, TECH, REPORT]
+      directory: docs/reports/evidence
+
+# ============================================================================
+# 2. ID Grammar
+# ============================================================================
+
+id_grammar:
+  release:
+    pattern: "REL-^(\\\\d+)\\\\.(\\\\d+)\\\\.(\\\\d+)$"
+    example: REL-1.4.0
+    parse_parent: null
+
+  devplan:
+    pattern: "^DEVPLAN-REL-(\\\\d+)\\\\.(\\\\d+)\\\\.(\\\\d+)$"
+    example: DEVPLAN-REL-1.4.0
+    parse_parent: "REL-{semver}"
+
+  testplan:
+    pattern: "^TESTPLAN-REL-(\\\\d+)\\\\.(\\\\d+)\\\\.(\\\\d+)$"
+    example: TESTPLAN-REL-1.4.0
+    parse_parent: "REL-{semver}"
+
+  task_devplan:
+    pattern: "^TASK-DEVPLAN-REL-(\\\\d+)\\\\.(\\\\d+)\\\\.(\\\\d+)-(\\\\d+)$"
+    example: TASK-DEVPLAN-REL-1.4.0-001
+    parse_parent: "DEVPLAN-REL-{semver}"
+
+  task_testplan:
+    pattern: "^TASK-TESTPLAN-REL-(\\\\d+)\\\\.(\\\\d+)\\\\.(\\\\d+)-(\\\\d+)$"
+    example: TASK-TESTPLAN-REL-1.4.0-001
+    parse_parent: "TESTPLAN-REL-{semver}"
+
+  report:
+    pattern: "^REPORT-REL-(\\\\d+)\\\\.(\\\\d+)\\\\.(\\\\d+)-(\\\\w+)-(\\\\d+)$"
+    example: REPORT-REL-1.4.0-TEST-001
+    parse_parent: "REL-{semver}"
+
+  bug:
+    pattern: "^BUG-FEAT-(\\\\d+)-(\\\\d+)$"
+    example: BUG-FEAT-023-001
+    parse_parent: "FEAT-{seq}"
+
+# ============================================================================
+# 3. 状态机定义
+# ============================================================================
+
+state_machines:
+  release:
+    states:
+      - draft
+      - planned
+      - scope_frozen
+      - in_dev
+      - in_test
+      - go_no_go
+      - released
+      - aborted
+    transitions:
+      - from: draft
+        to: planned
+        condition: "至少包含一个已冻结 FEAT@version"
+        actor: release_manager
+        command: "lee ssot release cut"
+      - from: planned
+        to: scope_frozen
+        condition: "scope pin 完成，变更窗口关闭"
+        actor: release_manager
+        command: "lee ssot release freeze"
+      - from: scope_frozen
+        to: in_dev
+        condition: "DEVPLAN 已生成并通过 coverage 校验"
+        actor: delivery
+        command: "lee ssot plan commit"
+      - from: in_dev
+        to: in_test
+        condition: "开发侧 blocker task 已完成，提测报告已存在"
+        actor: qa
+        command: "lee ssot task verify"
+      - from: in_test
+        to: go_no_go
+        condition: "TESTPLAN 主体完成，blocker bug 清零或被显式豁免"
+        actor: qa
+        command: "lee ssot plan check"
+      - from: go_no_go
+        to: released
+        condition: "release check --enforce 通过，发布报告与部署证据齐备"
+        actor: release_gate
+        command: "lee ssot release close"
+      - from: [draft, planned, scope_frozen, in_dev, in_test, go_no_go]
+        to: aborted
+        condition: "版本取消、策略变化、scope 作废"
+        actor: release_manager
+        command: "lee ssot release abort"
+
+  devplan_testplan:
+    states:
+      - draft
+      - committed
+      - in_progress
+      - blocked
+      - completed
+      - cancelled
+    transitions:
+      - from: draft
+        to: committed
+        condition: "任务分解完成、覆盖范围通过校验、owner 和依赖完整"
+        actor: planner
+        command: "lee ssot plan check --commit"
+      - from: committed
+        to: in_progress
+        condition: "至少一个子 TASK 进入 doing"
+        actor: executor
+        command: "lee ssot task start"
+      - from: in_progress
+        to: blocked
+        condition: "存在 blocker 依赖或上游 scope 变化"
+        actor: executor
+        command: "lee ssot task block"
+      - from: blocked
+        to: in_progress
+        condition: "阻断消除且重校验通过"
+        actor: executor
+        command: "lee ssot task unblock"
+      - from: in_progress
+        to: completed
+        condition: "所有必需 TASK 达到 done/verified"
+        actor: planner
+        command: "lee ssot plan complete"
+      - from: [draft, committed, in_progress, blocked]
+        to: cancelled
+        condition: "release 取消或计划被新版本替代"
+        actor: release_manager
+        command: "lee ssot plan cancel"
+
+  task:
+    states:
+      - todo
+      - doing
+      - blocked
+      - done
+      - verified
+      - dropped
+    transitions:
+      - from: todo
+        to: doing
+        command: "lee ssot task start"
+      - from: doing
+        to: blocked
+        command: "lee ssot task block"
+      - from: blocked
+        to: doing
+        command: "lee ssot task unblock"
+      - from: doing
+        to: done
+        condition: "最小证据、结果摘要"
+        command: "lee ssot task close"
+      - from: done
+        to: verified
+        condition: "review result 或 plan gate 通过"
+        command: "lee ssot task verify"
+      - from: [todo, doing, blocked]
+        to: dropped
+        command: "lee ssot task drop"
+
+  bug:
+    # bug_state 字段的状态流转
+    states:
+      - open
+      - triaged
+      - in_fix
+      - fixed
+      - verified
+      - closed
+      - waived
+    transitions:
+      - from: open
+        to: triaged
+        condition: "已完成严重性评估和分配"
+      - from: triaged
+        to: in_fix
+        condition: "已分配给开发者修复"
+      - from: in_fix
+        to: fixed
+        condition: "代码修复完成"
+      - from: fixed
+        to: verified
+        condition: "QA 验证通过"
+      - from: verified
+        to: closed
+        condition: "确认修复有效"
+      - from: [triaged, in_fix, fixed, verified]
+        to: waived
+        condition: "豁免批准，需 waiver_reason 和 waiver_approved_by"
+
+# ============================================================================
+# 4. 对象 Schema 定义
+# ============================================================================
+
+object_schemas:
+  release:
+    required_fields:
+      - id
+      - ssot_type
+      - title
+      - status
+      - version
+      - derived_from_ids
+      - properties
+    optional_fields:
+      - parent_id
+      - source_refs
+      - owner
+      - tags
+    properties:
+      required:
+        - scope_frozen_at
+      optional:
+        - target_env
+        - rollback_plan
+        - recuts
+
+  devplan:
+    required_fields:
+      - id
+      - ssot_type
+      - title
+      - status
+      - version
+      - parent_id
+      - derived_from_ids
+      - properties
+    optional_fields:
+      - source_refs
+      - owner
+      - tags
+    properties:
+      required:
+        - slices
+      optional:
+        - coverage_summary
+
+  testplan:
+    required_fields:
+      - id
+      - ssot_type
+      - title
+      - status
+      - version
+      - parent_id
+      - derived_from_ids
+      - properties
+    optional_fields:
+      - source_refs
+      - owner
+      - tags
+    properties:
+      required:
+        - slices
+        - environment_matrix
+      optional:
+        - coverage_summary
+
+  task:
+    required_fields:
+      - id
+      - ssot_type
+      - title
+      - status
+      - version
+      - parent_id
+      - properties
+    optional_fields:
+      - derived_from_ids
+      - source_refs
+      - owner
+      - tags
+    properties:
+      required:
+        - slice_key
+      optional:
+        - acceptance
+        - estimate
+
+  bug:
+    required_fields:
+      - id
+      - ssot_type
+      - title
+      - status
+      - version
+      - properties
+    optional_fields:
+      - parent_id
+      - derived_from_ids
+      - source_refs
+      - owner
+      - tags
+    properties:
+      required:
+        - bug_state
+        - severity
+        - found_in_release
+        - source_report_id
+      conditional:
+        - field: waiver_reason
+          required_when: "bug_state == waived"
+        - field: waiver_approved_by
+          required_when: "bug_state == waived"
+
+  report:
+    required_fields:
+      - id
+      - ssot_type
+      - title
+      - status
+      - version
+      - parent_id
+      - properties
+    optional_fields:
+      - derived_from_ids
+      - source_refs
+      - owner
+      - tags
+    properties:
+      required:
+        - report_kind
+        - subject_id
+        - result
+        - evidence_refs
+      optional:
+        - summary
+        - slice_key
+
+# ============================================================================
+# 5. P0 校验规则
+# ============================================================================
+
+p0_rules:
+  - id: P0-001
+    description: "ID 唯一性"
+    check: "registry 中不存在重复 ID"
+
+  - id: P0-002
+    description: "路径唯一性 (active)"
+    check: "active 对象的路径不与其他 active 对象冲突"
+
+  - id: P0-003
+    description: "Metadata 完整性"
+    check: "id/ssot_type/title/status/version 必填"
+
+  - id: P0-004
+    description: "类型合法性"
+    check: "ssot_type 属于正式枚举"
+
+  - id: P0-005
+    description: "引用存在性"
+    check: "derived_from_ids 引用的对象必须存在"
+
+  - id: P0-006
+    description: "文件名与 ID 一致性"
+    check: "文件名前缀与 ID 匹配"
+
+  - id: P0-007
+    description: "ID 格式合法且可解析"
+    check: "validate_id_format() 返回 true"
+
+  - id: P0-008
+    description: "parse_parent(id) == parent_id"
+    check: "从 ID 推断的 parent 与声明的 parent_id 一致"
+
+  - id: P0-009
+    description: "parse_scope(id) == resolve_scope(parent_id)"
+    check: "范围归属正确"
+
+  - id: P0-010
+    description: "parent_id 必填检查"
+    check: "非独立型对象必须有 parent_id"
+
+  - id: P0-011
+    description: "TC.parent_id 必须为 TESTSET"
+    check: "TC 对象的 parent_id 前缀为 TESTSET"
+
+  - id: P0-012
+    description: "RELEASE 必须声明 derived_from_ids"
+    check: "RELEASE.derived_from_ids 非空且只包含 FEAT"
+
+  - id: P0-013
+    description: "DEVPLAN.derived_from_ids 至少包含一个 FEAT"
+    check: "DEVPLAN.derived_from_ids 中存在 FEAT-*"
+
+  - id: P0-014
+    description: "TESTPLAN.derived_from_ids 至少包含 FEAT 和 TESTSET"
+    check: "TESTPLAN.derived_from_ids 中同时存在 FEAT-* 和 TESTSET-*"
+
+  - id: P0-015
+    description: "RELEASE 必须声明 scope_frozen_at 后才能进入 in_dev"
+    check: "status == in_dev 时 scope_frozen_at 必填"
+
+  - id: P0-016
+    description: "RELEASE 中每个 FEAT@version 必须可解析且真实存在"
+    check: "derived_from_ids 中每个引用都通过 registry.exists()"
+
+  - id: P0-017
+    description: "RELEASE 内每个 FEAT 必须至少被一个 DEVPLAN 覆盖"
+    check: "release_check() coverage 校验"
+
+  - id: P0-018
+    description: "RELEASE 内每个 FEAT 必须至少被一个 TESTPLAN 覆盖"
+    check: "release_check() coverage 校验"
+
+  - id: P0-019
+    description: "REPORT/EVI/BUG必须能追溯到TASK、PLAN或RELEASE"
+    check: "derived_from_ids 或 parent_id 形成有效追溯链"
+
+  - id: P0-020
+    description: "released 状态的 RELEASE 必须具备发布报告、测试报告和部署证据"
+    check: "release_check() evidence 校验"
+
+  - id: P0-021
+    description: "存在未关闭 blocker bug 的 RELEASE 不允许进入 released"
+    check: "release_check() blocker bug 校验"
+
+  - id: P0-022
+    description: "已冻结 FEAT 不允许原地修改，只允许新增版本或新增 FEAT"
+    check: "frozen FEAT 的状态不允许回退"
+
+  - id: P0-023
+    description: "RELEASE recut 后，受影响的 DEVPLAN/TESTPLAN/release check 必须重新通过"
+    check: "release_check() recut 审计"
+
+# ============================================================================
+# 6. CLI 命令注册
+# ============================================================================
+
+cli_commands:
+  - name: "lee ssot validate"
+    description: "校验 SSOT 对象完整性"
+    options:
+      - "--changed-only: 只校验变更的文件"
+      - "--p0-only: 只执行 P0 blocking 校验"
+    service: "SSOTValidator.validate_all()"
+
+  - name: "lee ssot build-index"
+    description: "构建 SSOT 索引"
+    options:
+      - "--output: 输出路径"
+      - "--format: json|yaml"
+    service: "RegistryManager.build_index()"
+
+  - name: "lee ssot release check"
+    description: "执行 release 级聚合校验"
+    arguments:
+      - "release_id: RELEASE 对象 ID"
+    options:
+      - "--enforce: 执行严格校验，用于发布 gate"
+      - "--output: 输出格式 detail|summary"
+    service: "SSOTService.release_check()"
+
+  - name: "lee ssot release cut"
+    description: "创建 RELEASE scope"
+    arguments:
+      - "release_id: RELEASE 对象 ID"
+    options:
+      - "--feat: 添加 FEAT@version 到 scope"
+      - "--target-env: 目标环境"
+    service: "SSOTService.derive_plans()"
+
+  - name: "lee ssot release close"
+    description: "关闭 RELEASE 为 released 状态"
+    arguments:
+      - "release_id: RELEASE 对象 ID"
+    options:
+      - "--force: 跳过部分校验 (仅限紧急情况)"
+    service: "SSOTService.release_check() + 状态转换"
+
+  - name: "lee ssot plan derive"
+    description: "从 RELEASE 派生 DEVPLAN/TESTPLAN 骨架"
+    arguments:
+      - "release_id: RELEASE 对象 ID"
+    options:
+      - "--dry-run: 只预览不写入"
+    service: "SSOTService.derive_plans()"
+
+  - name: "lee ssot plan check"
+    description: "校验计划 coverage"
+    arguments:
+      - "plan_id: DEVPLAN 或 TESTPLAN ID"
+    options:
+      - "--commit: 提交计划为 committed 状态"
+    service: "SSOTValidator.validate_delivery_rules()"
+
+# ============================================================================
+# 7. 交付链关系图
+# ============================================================================
+
+delivery_chain:
+  root: RELEASE
+  children:
+    - type: DEVPLAN
+      relationship: parent
+      children:
+        - type: TASK
+          relationship: parent
+          implements: [FEAT, TECH]
+
+    - type: TESTPLAN
+      relationship: parent
+      children:
+        - type: TASK
+          relationship: parent
+          verifies: [FEAT, TESTSET, TC]
+
+  reports:
+    - type: REPORT
+      relationship: derived_from
+      kinds: [release, test_execution, go_no_go, recut_audit]
+
+  bugs:
+    - type: BUG
+      relationship: found_in_release
+      gates:
+        - "blocker bug 未 closed/waived 时阻断 released"
+
+# ============================================================================
+# 8. 实施检查清单
+# ============================================================================
+
+implementation_checklist:
+  phase_1_id_grammar:
+    - task: "扩展 SSOTType 枚举"
+      file: "src/lee/orchestrator/execution/artifacts/types.py"
+      status: pending
+
+    - task: "实现 parse_parent() 新 grammar"
+      file: "src/lee/orchestrator/execution/artifacts/id_parser.py"
+      status: pending
+
+    - task: "更新 validate_parent_consistency()"
+      file: "src/lee/orchestrator/execution/artifacts/id_parser.py"
+      status: pending
+
+  phase_2_placement_schema:
+    - task: "扩展 SSOT_PLACEMENT"
+      file: "src/lee/orchestrator/execution/artifacts/placement.py"
+      status: pending
+
+    - task: "扩展 schema.json ssot_type 枚举"
+      file: "spec-global/core/contracts/ssot-agent-output/v1/schema.json"
+      status: pending
+
+    - task: "添加 release/plan 的 properties 定义"
+      file: "spec-global/core/contracts/ssot-agent-output/v1/schema.json"
+      status: pending
+
+  phase_3_materializer:
+    - task: "扩展 create_ssot() 支持新类型"
+      file: "src/lee/orchestrator/execution/artifacts/manager.py"
+      status: pending
+
+    - task: "扩展 SSOTContractMaterializer"
+      file: "src/lee/orchestrator/execution/artifacts/ssot_contract.py"
+      status: pending
+
+  phase_4_validator:
+    - task: "实现 SSOTValidator._validate_delivery_rules()"
+      file: "src/lee/orchestrator/execution/artifacts/ssot_service.py"
+      status: pending
+
+    - task: "实现 SSOTService.release_check()"
+      file: "src/lee/orchestrator/execution/artifacts/ssot_service.py"
+      status: pending
+
+    - task: "实现 SSOTService.derive_plans()"
+      file: "src/lee/orchestrator/execution/artifacts/ssot_service.py"
+      status: pending
+
+  phase_5_cli:
+    - task: "添加 release check 命令"
+      file: "src/lee/cli/commands/ssot.py"
+      status: pending
+
+    - task: "添加 release cut 命令"
+      file: "src/lee/cli/commands/ssot.py"
+      status: pending
+
+    - task: "添加 release close 命令"
+      file: "src/lee/cli/commands/ssot.py"
+      status: pending
+
+    - task: "添加 plan derive 命令"
+      file: "src/lee/cli/commands/ssot.py"
+      status: pending
+
+    - task: "添加 plan check 命令"
+      file: "src/lee/cli/commands/ssot.py"
+      status: pending
+
+  phase_6_ci:
+    - task: "配置 pre-commit hook"
+      file: ".git/hooks/pre-commit"
+      status: pending
+
+    - task: "配置 PR CI 校验"
+      file: ".github/workflows/ssot-validate.yml"
+      status: pending

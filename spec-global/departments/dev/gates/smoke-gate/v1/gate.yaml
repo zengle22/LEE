@@ -1,8 +1,14 @@
-# Smoke Gate v1.0
-# 冒烟测试门禁
+# Smoke Gate v2.0
+# 冒烟测试门禁（Dev Smoke 架构）
+#
+# 变更说明 (v2.0):
+# - 根据 ADR-023 更新为 Dev Smoke Gate 架构
+# - 简化检查项，聚焦于 Dev Smoke L3 输出
+# - 单元测试和集成测试合并到 Feature Dev L2 内部，不再作为独立检查项
+# - Smoke Test 基于 Test Set 执行，全量运行不区分 smoke/full
 
 kind: gate
-version: 1.0
+version: 2.0
 
 # ============================================
 # Dev 部门宪法引用 (强制)
@@ -12,13 +18,27 @@ constitution:
   version: "1.0"
   mandatory: true
 
+# ============================================
+# ADR 引用
+# ============================================
+governing_adrs:
+  - ADR-005: Gate 三分类治理模型
+  - ADR-023: Dev Smoke Gate 架构与测试职责分层
+
 id: gate.dev.smoke_gate
 name: Smoke Gate
 description: >
-  冒烟测试门禁。单测、集成测试、主流程 smoke 全部通过才允许 merge。
+  冒烟测试门禁（Dev Smoke 架构）。
+  基于 Test Set 执行 Smoke Test，全量通过才允许 merge。
   冒烟失败优先级最高，不允许绕过。
+
+  职责分层:
+  - QA 负责 Test Set 设计（/lee-qa-test-set）
+  - Dev 负责 Smoke 执行（/lee-dev-smoke）
+  - Smoke Gate 是强制门禁（blocker）
+
 owner: dev-governance
-tags: [gate, dev, smoke, testing, quality, merge]
+tags: [gate, dev, smoke, testing, quality, merge, adr-023]
 
 # ============================================
 # 门禁类型
@@ -34,40 +54,61 @@ trigger:
   source: "agent.dev.smoke_tester"
 
 # ============================================
+# 输入证据
+# ============================================
+input_evidence:
+  - ".workflow/smoke-evidence-*/smoke_summary.json"
+  - ".workflow/smoke-evidence-*/evidence_pack.json"
+
+# ============================================
 # 检查项
 # ============================================
 checks:
-  - id: unit_test_pass
-    name: "单元测试通过"
-    description: "单元测试通过率必须 100%"
-    type: metric_check
-    rule: "unit_test_result.pass_rate == 100"
-    severity: blocker
-    required: true
-
-  - id: integration_test_pass
-    name: "集成测试通过"
-    description: "集成测试必须全部通过"
-    type: metric_check
-    rule: "integration_test_result.pass_rate == 100"
-    severity: blocker
-    required: true
-
   - id: smoke_test_pass
-    name: "主流程 Smoke 通过"
-    description: "主流程冒烟测试必须全部通过"
+    name: "Smoke Test 通过"
+    description: "Smoke Test 必须 100% 通过"
     type: metric_check
-    rule: "smoke_result.flows_failed == 0"
+    rule: "smoke_result.execution_summary.pass_rate == 100"
     severity: blocker
     required: true
+    input_field: "smoke_summary.execution_summary"
+
+  - id: smoke_result_pass
+    name: "Smoke 结果判定"
+    description: "Smoke 整体结果必须为 PASS"
+    type: metric_check
+    rule: "smoke_result.result == 'PASS'"
+    severity: blocker
+    required: true
+    input_field: "smoke_summary.result"
 
   - id: coverage_threshold
     name: "覆盖率达标"
-    description: "单元测试覆盖率不低于 80%"
+    description: "代码覆盖率不低于 80%"
     type: metric_check
-    rule: "unit_test_result.coverage >= 80"
+    rule: "smoke_result.coverage_summary.line_coverage >= 80"
     severity: major
     required: true
+    input_field: "smoke_summary.coverage_summary"
+    condition: "smoke_result.coverage_enabled == true"
+
+  - id: evidence_completeness
+    name: "证据完整性"
+    description: "证据包必须完整"
+    type: completeness_check
+    rule: "evidence_pack.verification_summary.completeness_rate == 100"
+    severity: blocker
+    required: true
+    input_field: "evidence_pack.verification_summary"
+
+  - id: gate_handoff_ready
+    name: "门禁移交就绪"
+    description: "证据包必须标记为就绪"
+    type: flag_check
+    rule: "evidence_pack.gate_evaluation.ready_for_gate == true"
+    severity: blocker
+    required: true
+    input_field: "evidence_pack.gate_evaluation"
 
 # ============================================
 # 通过条件
@@ -76,7 +117,7 @@ pass_criteria:
   all_required: true
   max_blocker: 0
   max_major: 0
-  description: "所有测试必须通过，冒烟失败不允许 merge"
+  description: "所有检查必须通过，Smoke 失败不允许 merge"
 
 # ============================================
 # 失败处理
@@ -84,7 +125,7 @@ pass_criteria:
 on_fail:
   action: "block_merge"
   priority: highest
-  message: "冒烟门禁未通过，不允许 merge。冒烟失败优先级最高。"
+  message: "Smoke Gate 未通过，不允许 merge。请修复失败后重新执行 /lee-dev-smoke。"
   escalation:
     - role: tech_lead
       description: "通知技术负责人"
@@ -95,9 +136,16 @@ on_fail:
 metadata:
   created_by: "dev-workflow-architect"
   created_at: "2026-02-11"
-  version: "1.0"
+  version: "2.0"
   changelog:
     - version: "1.0"
       date: "2026-02-11"
       changes:
         - "新建冒烟测试门禁"
+    - version: "2.0"
+      date: "2026-03-16"
+      changes:
+        - "根据 ADR-023 更新为 Dev Smoke Gate 架构"
+        - "简化检查项，聚焦于 Dev Smoke L3 输出"
+        - "单元测试和集成测试合并到 Feature Dev L2 内部"
+        - "基于 Test Set 执行，全量运行不区分 smoke/full"

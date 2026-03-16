@@ -170,11 +170,21 @@ stages:
           - review result -> {{ params.review_result_path }}
           - risk register -> {{ params.risk_register_path }}
           If you find issues, keep them scoped to the current FEAT and TECH files.
+
+          **CRITICAL GATING RULE**:
+          - If you find ANY Critical severity issues, you MUST set status to "failed" in your output
+          - Critical issues block downstream work and must be resolved before proceeding
+          - Major issues should be recorded but do not block the workflow
+          - Minor issues are informational only
         context_files:
           - "{{ params.tech_spec_path }}"
           - "{{ params.decision_refs_path }}"
           - "{{ params.formal_ssot_path | default('') }}"
           - "{{ params.governing_adr_paths | default([]) }}"
+      success_criteria:
+        # Parse review_result.md for Critical issues - fail if any found
+        check_review_result: true
+        require_no_critical_issues: true
     inputs:
       formal_ssot_id: "{{ params.formal_ssot_id }}"
       tech_spec_path: "{{ params.tech_spec_path }}"

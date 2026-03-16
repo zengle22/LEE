@@ -1,0 +1,212 @@
+# Smoke Result Schema v1.0
+# 冒烟测试结果模式定义
+
+kind: schema
+version: 1.0
+id: schema.dev.smoke_result.v1
+name: Smoke Result Schema
+description: |
+  Schema for Smoke Test result summary.
+  Used as output from Dev Smoke L3 and input to Smoke Gate.
+
+# Data structure
+data_structure:
+  smoke_run_id:
+    type: string
+    required: true
+    description: "Unique identifier for this smoke run"
+    format: "smoke-{YYYYMMDD}-{counter}"
+
+  test_set_ref:
+    type: string
+    required: true
+    description: "Reference to Test Set YAML used for this smoke"
+
+  feat_ref:
+    type: string
+    required: false
+    description: "Reference to FEAT being verified"
+
+  executed_at:
+    type: string
+    required: true
+    description: "ISO 8601 timestamp of execution"
+    format: date-time
+
+  executed_by:
+    type: string
+    required: true
+    description: "Agent or user who executed the smoke"
+
+  environment:
+    type: object
+    required: true
+    description: "Environment information"
+    properties:
+      type:
+        type: string
+        enum: [local-dev, ci, staging]
+        description: "Environment type"
+      host:
+        type: string
+        description: "Host machine identifier"
+      python_version:
+        type: string
+        description: "Python runtime version"
+      os:
+        type: string
+        description: "Operating system"
+
+  execution_summary:
+    type: object
+    required: true
+    description: "Execution statistics"
+    properties:
+      total_cases:
+        type: integer
+        description: "Total test cases executed"
+      passed_cases:
+        type: integer
+        description: "Test cases passed"
+      failed_cases:
+        type: integer
+        description: "Test cases failed"
+      skipped_cases:
+        type: integer
+        description: "Test cases skipped"
+      pass_rate:
+        type: number
+        description: "Pass rate percentage (0-100)"
+
+  coverage_summary:
+    type: object
+    required: false
+    description: "Code coverage statistics"
+    properties:
+      line_coverage:
+        type: number
+        description: "Line coverage percentage (0-100)"
+      branch_coverage:
+        type: number
+        description: "Branch coverage percentage (0-100)"
+      function_coverage:
+        type: number
+        description: "Function coverage percentage (0-100)"
+
+  result:
+    type: string
+    required: true
+    description: "Overall smoke result"
+    enum: [PASS, FAIL, INVALID_RUN]
+
+  failure_details:
+    type: array
+    required: false
+    description: "Details of failed test cases"
+    items:
+      type: object
+      properties:
+        test_id:
+          type: string
+          description: "Test case identifier"
+        title:
+          type: string
+          description: "Test case title"
+        failure_reason:
+          type: string
+          description: "Reason for failure"
+        error_message:
+          type: string
+          description: "Error message from test execution"
+        stack_trace:
+          type: string
+          description: "Stack trace (if applicable)"
+        evidence_path:
+          type: string
+          description: "Path to evidence bundle"
+
+  invalid_run_details:
+    type: object
+    required: false
+    description: "Details if marked as INVALID_RUN"
+    properties:
+      reason:
+        type: string
+        description: "Reason for invalid run"
+        enum: [compliance_failed, env_error, script_error, judgment_error]
+      details:
+        type: string
+        description: "Detailed explanation"
+
+  evidence_refs:
+    type: array
+    required: true
+    description: "References to evidence artifacts"
+    items:
+      type: string
+      format: path
+
+  bug_refs:
+    type: array
+    required: false
+    description: "References to drafted bugs"
+    items:
+      type: string
+      format: "BUG-{id}"
+
+  gate_handoff_ready:
+    type: boolean
+    required: true
+    description: "Whether evidence pack is ready for Smoke Gate"
+
+# Validation rules
+validation_rules:
+  - id: pass_rate_calculation
+    description: "Pass rate must match passed_cases / total_cases * 100"
+    rule: "pass_rate == (passed_cases / total_cases) * 100"
+
+  - id: case_count_consistency
+    description: "Total cases must equal sum of passed + failed + skipped"
+    rule: "total_cases == passed_cases + failed_cases + skipped_cases"
+
+  - id: result_consistency
+    description: "Result must be PASS if pass_rate == 100"
+    rule: "IF pass_rate == 100 THEN result == 'PASS'"
+
+  - id: failure_details_required
+    description: "Failure details required if any failures"
+    rule: "IF failed_cases > 0 THEN failure_details is not empty"
+
+  - id: evidence_required
+    description: "Evidence refs required for completed runs"
+    rule: "IF result IN ['PASS', 'FAIL'] THEN evidence_refs is not empty"
+
+# Example
+example:
+  smoke_run_id: "smoke-20260316-001"
+  test_set_ref: "qa_specs_dir/test-sets/ts-user-auth.yaml"
+  feat_ref: "FEAT-023"
+  executed_at: "2026-03-16T10:30:00Z"
+  executed_by: "agent.dev.smoke_tester"
+  environment:
+    type: "local-dev"
+    host: "dev-machine-01"
+    python_version: "3.11.5"
+    os: "Windows 11"
+  execution_summary:
+    total_cases: 25
+    passed_cases: 25
+    failed_cases: 0
+    skipped_cases: 0
+    pass_rate: 100
+  coverage_summary:
+    line_coverage: 85.5
+    branch_coverage: 78.2
+    function_coverage: 92.0
+  result: "PASS"
+  evidence_refs:
+    - "tests_dir/exec/smoke-20260316-001/cases.yaml"
+    - "tests_dir/exec/smoke-20260316-001/runner-output.json"
+    - "tests_dir/exec/smoke-20260316-001/bundle/"
+    - "tests_dir/exec/smoke-20260316-001/tse.yaml"
+  gate_handoff_ready: true

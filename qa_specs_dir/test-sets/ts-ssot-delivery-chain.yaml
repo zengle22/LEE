@@ -1,0 +1,182 @@
+# Test Set: SSOT 交付链验证
+# 测试 SSOT 服务的核心功能
+
+suite_id: TS-SSOT-001
+type: smoke
+module: ssot-delivery-chain
+description: SSOT 交付链核心功能测试集
+owner: dev-team
+version: "1.0"
+
+# 测试策略
+strategy:
+  focus:
+    - SSOT 验证器 p0 检查
+    - SSOT Service release_check
+    - SSOT Service derive_plans
+    - SSOT Service render_view
+    - CLI 命令集成
+  test_types:
+    - unit
+    - integration
+  priority: P0
+
+# 测试重点
+test_focus:
+  positive:
+    - SSOTValidator.validate_p0() 正常返回
+    - SSOTService.release_check() 通过校验
+    - SSOTService.derive_plans() 正确创建计划
+    - SSOTService.render_view() 渲染视图
+  negative:
+    - blocker bug 存在时 release_check 失败
+    - 缺失 waiver 元数据时正确处理
+
+# 可追溯性
+traceability:
+  feature_ids:
+    - SRC-046
+  acceptance_criteria_refs:
+    - AC1: SSOT 验证器 p0 检查
+    - AC2: release_check 聚合校验
+    - AC3: derive_plans 创建计划
+    - AC4: render_view 渲染视图
+
+# 执行配置
+execution:
+  mode: sequential
+  fail_fast: true
+  timeout_seconds: 600
+
+# 验证规则
+validation_rules:
+  - rule: "smoke_must_be_p0_p1"
+    check: "IF type == 'smoke' THEN ALL test_cases HAVE priority IN [P0, P1]"
+
+# 测试用例
+test_cases:
+  - case_id: TC-SSOT-001
+    title: SSOTValidator.validate_p0() - 正常路径
+    priority: P0
+    feature_id: SRC-046
+    acceptance_criteria_id: AC1
+    scenario: 验证一个有效的 FEAT 对象通过 p0 检查
+    steps:
+      - step_number: 1
+        action: 创建一个完整的 FEAT 对象（包含 id, title, acceptance_criteria）
+        expected_result: FEAT 对象创建成功
+      - step_number: 2
+        action: 调用 SSOTValidator.validate_p0(feat)
+        expected_result: 返回空列表（无错误）
+    expected_result: validate_p0() 返回空列表，验证通过
+
+  - case_id: TC-SSOT-002
+    title: SSOTValidator.validate_p0() - 缺失 id
+    priority: P0
+    feature_id: SRC-046
+    acceptance_criteria_id: AC1
+    scenario: 验证缺失 id 的 FEAT 对象失败
+    steps:
+      - step_number: 1
+        action: 创建一个缺失 id 的 FEAT 对象
+        expected_result: FEAT 对象创建成功
+      - step_number: 2
+        action: 调用 SSOTValidator.validate_p0(feat)
+        expected_result: 返回包含错误的列表
+    expected_result: validate_p0() 返回错误：缺失 id
+
+  - case_id: TC-SSOT-003
+    title: SSOTService.release_check() - 通过校验
+    priority: P0
+    feature_id: SRC-046
+    acceptance_criteria_id: AC2
+    scenario: 验证一个完整的 release 通过检查
+    steps:
+      - step_number: 1
+        action: 创建 RELEASE 对象及其关联的 FEAT
+        expected_result: RELEASE 和 FEAT 创建成功
+      - step_number: 2
+        action: 调用 SSOTService.release_check(release_id)
+        expected_result: 返回 {"passed": true, "errors": [], "warnings": []}
+    expected_result: release_check() 返回 passed=true
+
+  - case_id: TC-SSOT-004
+    title: SSOTService.release_check() - blocker bug 存在
+    priority: P0
+    feature_id: SRC-046
+    acceptance_criteria_id: AC2
+    scenario: 验证存在 blocker bug 时 release_check 失败
+    steps:
+      - step_number: 1
+        action: 创建 RELEASE 对象及关联的 blocker bug
+        expected_result: RELEASE 和 bug 创建成功
+      - step_number: 2
+        action: 调用 SSOTService.release_check(release_id)
+        expected_result: 返回 {"passed": false, "errors": [...], "warnings": []}
+    expected_result: release_check() 返回 passed=false，包含 blocker 错误
+
+  - case_id: TC-SSOT-005
+    title: SSOTService.derive_plans() - 创建计划
+    priority: P0
+    feature_id: SRC-046
+    acceptance_criteria_id: AC3
+    scenario: 从 RELEASE 创建 DEVPLAN 和 TESTPLAN
+    steps:
+      - step_number: 1
+        action: 创建 RELEASE 对象及其关联的 FEAT
+        expected_result: RELEASE 和 FEAT 创建成功
+      - step_number: 2
+        action: 调用 SSOTService.derive_plans(release_id)
+        expected_result: 返回 {"devplan_id": "...", "testplan_id": "..."}
+    expected_result: derive_plans() 返回有效的计划 ID
+
+  - case_id: TC-SSOT-006
+    title: SSOTService.render_view() - 渲染 FEAT 视图
+    priority: P0
+    feature_id: SRC-046
+    acceptance_criteria_id: AC4
+    scenario: 渲染 FEAT 的完整视图
+    steps:
+      - step_number: 1
+        action: 创建完整的 FEAT 对象
+        expected_result: FEAT 创建成功
+      - step_number: 2
+        action: 调用 SSOTService.render_view(feat)
+        expected_result: 返回包含所有字段的视图字典
+    expected_result: render_view() 返回完整的视图
+
+  - case_id: TC-SSOT-007
+    title: CLI SSOT 命令 - list 命令
+    priority: P1
+    feature_id: SRC-046
+    acceptance_criteria_id: AC5
+    scenario: 测试 CLI ssot list 命令
+    steps:
+      - step_number: 1
+        action: 运行 `lee ssot list --type feat`
+        expected_result: 返回当前 FEAT 列表
+    expected_result: CLI 命令正常执行并返回结果
+
+  - case_id: TC-SSOT-008
+    title: CLI SSOT 命令 - show 命令
+    priority: P1
+    feature_id: SRC-046
+    acceptance_criteria_id: AC5
+    scenario: 测试 CLI ssot show 命令
+    steps:
+      - step_number: 1
+        action: 运行 `lee ssot show SRC-046`
+        expected_result: 返回 SRC-046 详情
+    expected_result: CLI 命令正常执行并返回详情
+
+  - case_id: TC-SSOT-009
+    title: CLI SSOT 命令 - validate 命令
+    priority: P1
+    feature_id: SRC-046
+    acceptance_criteria_id: AC5
+    scenario: 测试 CLI ssot validate 命令
+    steps:
+      - step_number: 1
+        action: 运行 `lee ssot validate SRC-046 --level p0`
+        expected_result: 返回验证结果
+    expected_result: CLI 命令正常执行并返回验证结果

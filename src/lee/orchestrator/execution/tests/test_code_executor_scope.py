@@ -53,6 +53,7 @@ def test_build_code_executor_io_config_defaults_to_step_workspace(temp_project_r
         step_id="spec_maintenance",
         step=step,
         configured_write_scope=[],
+        params={},
         project_root=str(temp_project_root),
     )
 
