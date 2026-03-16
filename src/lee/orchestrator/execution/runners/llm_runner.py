@@ -1978,6 +1978,7 @@ class LLMRunner(StepRunnerBase):
                 generated_text=generated_text,
                 structured_payload=structured_payload,
                 written_files=written_files,
+                workflow_context=workflow_context,
             )
             if ssot_materialized:
                 materialized_files = ssot_materialized.get("materialized_files", [])
@@ -2119,6 +2120,7 @@ class LLMRunner(StepRunnerBase):
         generated_text: str,
         structured_payload: Optional[Any] = None,
         written_files: Optional[List[str]] = None,
+        workflow_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         If the agent spec declares ssot_output_schema, validate and materialize it.
@@ -2198,7 +2200,17 @@ class LLMRunner(StepRunnerBase):
             manager = ArtifactManager(
                 project_root=Path(ctx.project_root or ".").resolve(),
             )
-            materializer = SSOTContractMaterializer(manager, schema_path=Path(schema_path))
+            # Pass upstream step outputs for symbol resolution in SSOT materializer
+            upstream_outputs = {}
+            if isinstance(workflow_context, dict):
+                instance_data = workflow_context.get("data", {})
+                if isinstance(instance_data, dict):
+                    upstream_outputs = instance_data.get("step_outputs", {})
+            materializer = SSOTContractMaterializer(
+                manager,
+                schema_path=Path(schema_path),
+                upstream_step_outputs=upstream_outputs,
+            )
             if validate_only:
                 materializer.validate_contract(contract_data)
                 return None
