@@ -1,0 +1,14 @@
+# SSOT Chain Validation Spec
+source_freeze:
+  src_file: spec/requirements/SRC-056/EPIC-SRC-056-001__run-scoped-artifact-placement-governance-and-direc.md
+
+epic_freeze_bundle:
+  - spec/requirements/SRC-056/EPIC-SRC-056-001__run-scoped-artifact-placement-governance-and-direc.md
+
+feat_freeze_bundle:
+  - spec/requirements/SRC-056/FEAT-SRC-056-001__run-scoped-placement-manifest-contract-design.md
+  - spec/requirements/SRC-056/FEAT-SRC-056-002__artifact-placement-reviewer-agent-implementation.md
+
+delivery_prep_bundle:
+  - spec/tasks/SRC-056/FEAT-SRC-056-001/TASK-FEAT-SRC-056-001-001__placement-manifest-schema-definition.md
+  - spec/tasks/SRC-056/FEAT-SRC-056-002/TASK-FEAT-SRC-056-002-001__agent-core-implementation.md

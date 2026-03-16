@@ -131,6 +131,7 @@ def _args(
         feature_registry_schema_path=feature_registry_schema_path,
         max_capabilities=12,
         max_features_per_capability=8,
+        prd_paths="",
     )
 
 

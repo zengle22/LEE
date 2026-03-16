@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "deliverables-check-input-v1",
+  "title": "Deliverables Check Input Schema",
+  "description": "Input schema for agent.dev.deliverables_reviewer",
+  "type": "object",
+  "required": ["feat_spec_ref", "output_dir"],
+  "properties": {
+    "feat_spec_ref": {
+      "type": "string",
+      "description": "Path to FEAT specification file (relative to project root)"
+    },
+    "output_dir": {
+      "type": "string",
+      "description": "Directory for output reports"
+    },
+    "search_dirs": {
+      "type": "array",
+      "description": "List of directories to search for deliverables",
+      "items": {
+        "type": "string"
+      },
+      "default": ["src", "spec", "docs", "examples", "output"]
+    },
+    "project_root": {
+      "type": "string",
+      "description": "Project root directory (defaults to current dir)"
+    }
+  },
+  "additionalProperties": false
+}

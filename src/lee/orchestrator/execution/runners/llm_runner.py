@@ -26,8 +26,6 @@ from lee.orchestrator.execution.runners.base import StepRunnerBase, RunnerContex
 from lee.orchestrator.execution.runners.code_executor_scope import build_code_executor_io_config, fail_code_executor_scope_violation, validate_code_executor_write_scope
 from lee.orchestrator.execution.runners.normalization import (
     PmPlannerTaskNormalizer,
-    PrdWriterFeatNormalizer,
-    ProductReviewNormalizer,
     ReviewSemanticValidator,
     SingleSSOTNormalizer,
     WorkflowSemanticValidator,
@@ -1006,10 +1004,7 @@ class LLMRunner(StepRunnerBase):
         step_token: Optional[str],
     ) -> Dict[str, Any]:
         if executor_type in ("codex", "claude_code", "kimi"):
-            # 支持 kimi 和 claude_code 配置键
-            code_config = {}
-            if step.config:
-                code_config = step.config.get("kimi", {}) or step.config.get("claude_code", {})
+            code_config = step.config.get("claude_code", {}) if step.config else {}
             workspace = ctx.resolve_workdir(step, instance.data.get("run_id", workflow_id))
             context_files = self._merge_context_files(
                 self._collect_authoritative_context_files(step, instance.data),
@@ -1035,6 +1030,7 @@ class LLMRunner(StepRunnerBase):
                 step_id=step.id,
                 step=step,
                 configured_write_scope=code_config.get("write_scope", []),
+                project_root=ctx.project_root,
             ))
             if code_config.get("allowed_commands"):
                 input_data["allowed_commands"] = code_config.get("allowed_commands")
@@ -1981,7 +1977,6 @@ class LLMRunner(StepRunnerBase):
                 generated_text=generated_text,
                 structured_payload=structured_payload,
                 written_files=written_files,
-                workflow_context=workflow_context,
             )
             if ssot_materialized:
                 materialized_files = ssot_materialized.get("materialized_files", [])
@@ -2123,7 +2118,6 @@ class LLMRunner(StepRunnerBase):
         generated_text: str,
         structured_payload: Optional[Any] = None,
         written_files: Optional[List[str]] = None,
-        workflow_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         If the agent spec declares ssot_output_schema, validate and materialize it.
@@ -2203,17 +2197,7 @@ class LLMRunner(StepRunnerBase):
             manager = ArtifactManager(
                 project_root=Path(ctx.project_root or ".").resolve(),
             )
-            # Pass upstream step outputs for symbol resolution in SSOT materializer
-            upstream_outputs = {}
-            if isinstance(workflow_context, dict):
-                instance_data = workflow_context.get("data", {})
-                if isinstance(instance_data, dict):
-                    upstream_outputs = instance_data.get("step_outputs", {})
-            materializer = SSOTContractMaterializer(
-                manager,
-                schema_path=Path(schema_path),
-                upstream_step_outputs=upstream_outputs,
-            )
+            materializer = SSOTContractMaterializer(manager, schema_path=Path(schema_path))
             if validate_only:
                 materializer.validate_contract(contract_data)
                 return None
@@ -5972,7 +5956,6 @@ class LLMRunner(StepRunnerBase):
                 return
 
             department = instance.data.get("department")
-            template_id = instance.template_id or ""
 
             # 创建产出物处理器
             handler = create_artifact_handler(
@@ -6355,6 +6338,7 @@ class ClaudeCodeRunner(StepRunnerBase):
         workflow_id: str,
         step_id: str,
         context_files: List[str],
+        project_root: Optional[str] = None,
     ) -> Dict[str, Any]:
         input_data = {
             "goal": agent_ctx.user_prompt or claude_config.get("goal", ""),
@@ -6380,6 +6364,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             step_id=step_id,
             step=step,
             configured_write_scope=claude_config.get("write_scope", []),
+            project_root=project_root,
         ))
         return input_data
 
@@ -6456,6 +6441,7 @@ class ClaudeCodeRunner(StepRunnerBase):
                 workflow_id=workflow_id,
                 step_id=step.id,
                 context_files=context_files,
+                project_root=ctx.project_root,
             )
 
             configured_allowed_commands = claude_config.get("allowed_commands")
