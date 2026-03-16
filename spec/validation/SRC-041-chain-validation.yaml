@@ -1,0 +1,29 @@
+# SRC-041 需求链验证输入规格
+# 用于 lee run product.requirement-chain-validation
+
+# === Source Freeze (SRC-041) ===
+source_freeze: spec/source/SRC-041__adr-017-gate-zhilimubiaoyujiazhifenxi.md
+
+# === EPIC Freeze Bundle (EPIC-SRC-041-016) ===
+epic_freeze_bundle: spec/requirements/SRC-041/EPIC-SRC-041-016__adr-017-gate-zhiliyuyiguiyihuayurengongshenpishang.md
+
+# === FEAT Freeze Bundle (FEAT-SRC-041-001 ~ 005) ===
+feat_freeze_bundle:
+  - spec/requirements/SRC-041/FEAT-SRC-041-001__gate-purpose-yu-decision-mode-mubiaoyuyidongjie.md
+  - spec/requirements/SRC-041/FEAT-SRC-041-002__human-gate-context-rengongjueceqianzhishangxiawenq.md
+  - spec/requirements/SRC-041/FEAT-SRC-041-003__zhengshibianjiedongzuode-approval-plus-human-requi.md
+  - spec/requirements/SRC-041/FEAT-SRC-041-004__daishenpi-gate-dezuixiaokepanduanzhaiyaotongyi.md
+  - spec/requirements/SRC-041/FEAT-SRC-041-005__rengong-gate-juecejieguodetongyi-gate-result-shuch.md
+
+# === Delivery Prep Bundle (UI/TECH/TASK) ===
+delivery_prep_bundle:
+  # TECH specs
+  - spec/tech/SRC-041/TECH-FEAT-SRC-041-001__gate-dual-axis-tech-design.md
+  # TASK files
+  - spec/tasks/SRC-041/FEAT-SRC-041-001/TASK-FEAT-SRC-041-001-001__gate-shuangzhouyuyi-yu-legacy-shoulian-zhilidingyi.md
+  # Tech design analysis (from workflow output)
+  - output/tech-packages/FEAT-SRC-041-001/design_analysis.md
+  - output/tech-packages/FEAT-SRC-041-001/tech_spec.md
+  - output/tech-packages/FEAT-SRC-041-001/implementation_scope.md
+  - output/tech-packages/FEAT-SRC-041-001/decision_refs.md
+  - output/tech-packages/FEAT-SRC-041-001/frozen_architecture.json

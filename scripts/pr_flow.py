@@ -6,9 +6,17 @@ Prerequisites:
   - git is installed and configured for the repo remote
   - GITHUB_TOKEN is available in the environment
 
+PR Body Priority (highest to lowest):
+  1. --body text (explicit inline body)
+  2. --body-file content (explicit file)
+  3. Auto-generated from git history (default)
+
+Note: .pr_description.md is NOT used by default to avoid stale descriptions.
+
 Examples:
   python scripts/pr_flow.py --base dev
   python scripts/pr_flow.py --base main --body-file .pr_description.md
+  python scripts/pr_flow.py --base dev --body "Custom PR description"
 """
 
 from __future__ import annotations
@@ -83,20 +91,103 @@ def github_request(
         raise RuntimeError(f"GitHub API {exc.code}: {body}") from exc
 
 
-def get_pr_body(body_file: str | None, body_text: str | None) -> str:
+def get_pr_body(body_file: str | None, body_text: str | None, auto_body: bool) -> str:
+    """
+    Get PR body with the following priority:
+    1. --body text (highest priority)
+    2. --body-file content
+    3. Auto-generated from git history (default)
+
+    .pr_description.md is NOT used by default to avoid stale descriptions.
+    """
     if body_text is not None:
         return body_text.strip()
 
-    if not body_file:
-        default_body = Path(".pr_description.md")
-        if default_body.exists():
-            return default_body.read_text(encoding="utf-8").strip()
-        return ""
+    if body_file:
+        path = Path(body_file)
+        if not path.exists():
+            raise FileNotFoundError(f"body file not found: {path}")
+        return path.read_text(encoding="utf-8").strip()
 
-    path = Path(body_file)
-    if not path.exists():
-        raise FileNotFoundError(f"body file not found: {path}")
-    return path.read_text(encoding="utf-8").strip()
+    # Default: auto-generate from git history
+    return generate_auto_body()
+
+
+def generate_auto_body() -> str:
+    """Generate PR body from git commit history and changed files."""
+    body_lines = ["# PR Description\n"]
+
+    # Get the base branch to compare against
+    base_branch = "dev"
+
+    # Try to get merge base with base branch
+    try:
+        merge_base = subprocess.run(
+            ["git", "merge-base", f"origin/{base_branch}", "HEAD"],
+            capture_output=True, text=True, check=False, timeout=10
+        ).stdout.strip()
+        if merge_base:
+            compare_ref = merge_base
+        else:
+            compare_ref = f"origin/{base_branch}"
+    except Exception:
+        compare_ref = "HEAD~1"
+
+    # Get commit messages since last merge base
+    try:
+        commits_output = subprocess.run(
+            ["git", "log", "--oneline", "--no-merges", f"{compare_ref}..HEAD"],
+            capture_output=True, text=True, check=False, timeout=10
+        ).stdout.strip()
+        if commits_output:
+            body_lines.append("## Commits\n")
+            body_lines.append("```")
+            body_lines.append(commits_output)
+            body_lines.append("```\n")
+    except Exception:
+        pass
+
+    # Get changed files with status
+    try:
+        diff_output = subprocess.run(
+            ["git", "diff", "--name-status", f"{compare_ref}..HEAD"],
+            capture_output=True, text=True, check=False, timeout=10
+        ).stdout.strip()
+        if diff_output:
+            body_lines.append("## Changed Files\n")
+            body_lines.append("```")
+            body_lines.append(diff_output)
+            body_lines.append("```\n")
+    except Exception:
+        pass
+
+    # Get detailed diff summary
+    try:
+        diff_stat = subprocess.run(
+            ["git", "diff", "--stat", f"{compare_ref}..HEAD"],
+            capture_output=True, text=True, check=False, timeout=10
+        ).stdout.strip()
+        if diff_stat:
+            body_lines.append("## Summary\n")
+            body_lines.append("```")
+            body_lines.append(diff_stat)
+            body_lines.append("```\n")
+    except Exception:
+        pass
+
+    # Try to detect LEE workflow artifacts and add context
+    try:
+        workflow_files = subprocess.run(
+            ["git", "diff", "--name-only", f"{compare_ref}..HEAD", "--", "spec/", "dev/src/", "contracts/"],
+            capture_output=True, text=True, check=False, timeout=10
+        ).stdout.strip()
+        if workflow_files:
+            body_lines.append("## LEE Artifacts\n")
+            body_lines.append("This PR includes LEE workflow artifacts (specs, contracts, or implementations).\n")
+    except Exception:
+        pass
+
+    return "\n".join(body_lines).strip()
 
 
 def infer_repo() -> tuple[str, str]:
@@ -244,8 +335,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--remote", default="origin", help="Git remote to push")
     parser.add_argument("--branch", help="Branch to push and open as PR; defaults to current branch")
     parser.add_argument("--title", help="PR title; defaults to HEAD commit subject")
-    parser.add_argument("--body", help="Inline PR body text; overrides --body-file")
-    parser.add_argument("--body-file", help="Markdown file for the PR body; defaults to .pr_description.md")
+    parser.add_argument("--body", help="Inline PR body text; overrides --body-file and --auto-body")
+    parser.add_argument("--body-file", help="Markdown file for the PR body; overrides --auto-body")
+    parser.add_argument("--auto-body", action="store_true", help="Auto-generate PR body from git commit history (default behavior)")
     parser.add_argument("--no-push", action="store_true", help="Skip git push")
     parser.add_argument("--no-watch", action="store_true", help="Skip check polling")
     parser.add_argument("--poll-seconds", type=int, default=15, help="Seconds between check polls")
@@ -263,7 +355,7 @@ def main() -> int:
     owner, repo = infer_repo()
     branch = args.branch or current_branch()
     title = args.title or current_title()
-    body = get_pr_body(args.body_file, args.body)
+    body = get_pr_body(args.body_file, args.body, args.auto_body)
 
     if not args.no_push:
         print(f"Pushing {branch} to {args.remote}...")

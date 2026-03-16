@@ -1,0 +1,150 @@
+{
+  "contract_selfcheck_id": "CSC-GATE-DUAL-AXIS-20260316-001",
+  "checked_at": "2026-03-16T14:45:00+08:00",
+  "contract_ref": "CONTRACT-GATE-DUAL-AXIS-20260316-001",
+  "contract_type": "internal_python_interface",
+  "contract_version": "1.0.0",
+  "checker": "contract_designer_agent",
+
+  "checklist": {
+    "interface_definition": {
+      "description": "所有 Python 接口定义完整",
+      "status": "passed",
+      "details": [
+        "SQLiteStore: create_gate_approval, get_gate_approval, update_gate_approval, get_pending_gates ✓",
+        "HumanGateRunner: execute, _get_purpose_from_config, _get_decision_mode_from_config ✓",
+        "CLI Commands: list_gates (--show-dual-axis flag) ✓"
+      ]
+    },
+    "no_http_api": {
+      "description": "确认无 HTTP API 端点（纯 CLI + Spec 项目）",
+      "status": "passed",
+      "details": [
+        "无 POST/GET/PUT/DELETE REST 端点定义 ✓",
+        "contract_type: internal_python_interface ✓",
+        "接口均为内部 Python 类方法 ✓"
+      ]
+    },
+    "interface_signature": {
+      "description": "接口签名清晰，参数和返回值类型明确",
+      "status": "passed",
+      "details": [
+        "SQLiteStore 方法：参数和返回值类型标注完整 ✓",
+        "HumanGateRunner 方法：RunnerContext 和 StepResult 类型明确 ✓",
+        "CLI 命令：--show-dual-axis flag 定义清晰 ✓"
+      ]
+    },
+    "model_extension": {
+      "description": "GateApproval 模型扩展正确",
+      "status": "passed",
+      "details": [
+        "purpose: GatePurpose (必填) ✓",
+        "decision_mode: GateDecisionMode (必填) ✓",
+        "legacy_gate_type: Optional[str] (可选) ✓"
+      ]
+    },
+    "field_type_clarity": {
+      "description": "所有字段类型明确（无 any/object 模糊类型）",
+      "status": "passed",
+      "details": [
+        "所有字段都使用明确类型：string, integer, boolean, array, enum ✓",
+        "无 any 或 object 模糊类型 ✓"
+      ]
+    },
+    "naming_convention": {
+      "description": "字段命名符合 snake_case 规范",
+      "status": "passed",
+      "details": [
+        "gate_id, workflow_id, step_id ✓",
+        "decision_mode, legacy_gate_type ✓",
+        "approval_criteria, structured_feedback ✓",
+        "created_at, decided_at, invalidated_at ✓"
+      ]
+    },
+    "version_format": {
+      "description": "版本号符合 SemVer 格式",
+      "status": "passed",
+      "details": [
+        "版本号：1.0.0 ✓",
+        "格式：MAJOR.MINOR.PATCH ✓"
+      ]
+    },
+    "changelog_entries": {
+      "description": "Changelog 有当前版本条目",
+      "status": "passed",
+      "details": [
+        "1.0.0 (2026-03-16): 初始版本，定义 GatePurpose 和 GateDecisionMode 枚举 ✓"
+      ]
+    },
+    "data_model_fields": {
+      "description": "数据模型字段定义完整",
+      "status": "passed",
+      "details": [
+        "GateApproval: purpose, decision_mode 为必填字段 ✓",
+        "GatePurpose 枚举：review, approval ✓",
+        "GateDecisionMode 枚举：auto, conditional_human, human_required ✓"
+      ]
+    },
+    "module_locations": {
+      "description": "模块位置标注正确",
+      "status": "passed",
+      "details": [
+        "SQLiteStore: src/lee/orchestrator/storage/store.py ✓",
+        "HumanGateRunner: src/lee/orchestrator/execution/runners/gate_runner.py ✓",
+        "CLI Commands: src/lee/cli/commands/gates_cmd.py ✓"
+      ]
+    },
+    "required_fields": {
+      "description": "必填字段正确标注 required",
+      "status": "passed",
+      "details": [
+        "GateApproval 模型：purpose, decision_mode 为必填字段 ✓",
+        "枚举值域明确，无模糊类型 ✓"
+      ]
+    },
+    "validation_rules": {
+      "description": "验证规则完整且可执行",
+      "status": "passed",
+      "details": [
+        "VR-001: purpose 值验证 ✓",
+        "VR-002: decision_mode 值验证 ✓",
+        "VR-003/VR-004: 组合验证（APPROVAL + AUTO/CONDITIONAL_HUMAN 非法） ✓",
+        "提供了 validate_purpose_mode_combination 函数实现 ✓",
+        "Store 层和 Runner 层双重验证 ✓"
+      ]
+    },
+    "legacy_compatibility": {
+      "description": "历史兼容性处理完整",
+      "status": "passed",
+      "details": [
+        "提供了历史分类映射表 ✓",
+        "提供了 map_legacy_to_dual_axis 函数实现 ✓",
+        "legacy_gate_type 字段标记为可选 ✓"
+      ]
+    }
+  },
+
+  "summary": {
+    "total_checks": 11,
+    "passed": 11,
+    "failed": 0,
+    "blocked": 0,
+    "pass_rate": 1.0
+  },
+
+  "quality_metrics": {
+    "interface_definition": 1.0,
+    "field_type_clarity": 1.0,
+    "naming_compliance": 1.0,
+    "validation_completeness": 1.0,
+    "backward_compatibility": 1.0,
+    "cli_project_compliance": 1.0
+  },
+
+  "recommendations": [],
+
+  "conclusion": {
+    "ready_for_freeze": true,
+    "message": "Contract 自检通过，所有检查项均已满足，可以进行冻结"
+  }
+}

@@ -117,6 +117,75 @@ workflows:
       - env_ref
       - human_gate_required
 
+  dev.feature-contract-l3:
+    path: spec-global/departments/dev/workflows/templates/feature-contract-l3-template.yaml
+    kind: l3_workflow_template
+    description: "Dev canonical Feature Contract Design 工作流 (L3) - TECH -> CONTRACT (API/Data/Event) -> FREEZE"
+    load_spec_as_params: true
+    required_params:
+      - formal_ssot_id
+      - source_refs
+      - governing_adrs
+      - tech_spec_ref
+    optional_params:
+      - existing_contract_refs
+      - review_context
+      - decision_constraints
+
+  dev.feature_contract_l3:
+    path: spec-global/departments/dev/workflows/templates/feature-contract-l3-template.yaml
+    canonical_workflow: dev.feature-contract-l3
+    kind: l3_workflow_template
+    description: "Feature Contract L3 兼容入口 -> canonical dev.feature-contract-l3"
+    load_spec_as_params: true
+    required_params:
+      - formal_ssot_id
+      - source_refs
+      - governing_adrs
+      - tech_spec_ref
+    optional_params:
+      - existing_contract_refs
+      - review_context
+      - decision_constraints
+
+  # ========== Dev Backend Implementation 工作流 ==========
+  dev.feature-be-l3:
+    path: spec-global/departments/dev/workflows/templates/feature-be-l3-template.yaml
+    kind: l3_workflow_template
+    description: "Dev canonical Feature Backend Development 工作流 (L3) - TECH + CONTRACT -> UT -> IMPLEMENT -> REFACTOR -> COVERAGE"
+    load_spec_as_params: true
+    required_params:
+      - formal_ssot_id
+      - source_refs
+      - governing_adrs
+      - tech_spec_ref
+      - contract_freeze_ref
+      - repo_backend
+    optional_params:
+      - acceptance_brief_ref
+      - repo_context
+      - decision_constraints
+      - architecture_constraints
+
+  dev.feature_be_l3:
+    path: spec-global/departments/dev/workflows/templates/feature-be-l3-template.yaml
+    canonical_workflow: dev.feature-be-l3
+    kind: l3_workflow_template
+    description: "Feature Backend Development L3 兼容入口 -> canonical dev.feature-be-l3"
+    load_spec_as_params: true
+    required_params:
+      - formal_ssot_id
+      - source_refs
+      - governing_adrs
+      - tech_spec_ref
+      - contract_freeze_ref
+      - repo_backend
+    optional_params:
+      - acceptance_brief_ref
+      - repo_context
+      - decision_constraints
+      - architecture_constraints
+
   dev.bugfix:
     path: spec-global/departments/dev/workflows/templates/bugfix-delivery-l2-template.yaml
     canonical_workflow: dev.bugfix-delivery
