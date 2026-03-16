@@ -80,10 +80,24 @@ class DeliverablesChecker:
         return {}
 
     def extract_required_outputs(self, feat_spec: Dict[str, Any]) -> List[str]:
-        """Extract required outputs from FEAT spec"""
+        """Extract required outputs from FEAT spec
+
+        Looks for outputs in two locations:
+        1. Root level 'outputs' key (standard location)
+        2. 'properties.outputs' key (alternative location for FEAT specs)
+        """
+        # Try root level first
         outputs = feat_spec.get('outputs', [])
-        if isinstance(outputs, list):
+        if isinstance(outputs, list) and outputs:
             return [str(o) for o in outputs if o]
+
+        # Fall back to properties.outputs for FEAT specs
+        properties = feat_spec.get('properties', {})
+        if isinstance(properties, dict):
+            outputs = properties.get('outputs', [])
+            if isinstance(outputs, list):
+                return [str(o) for o in outputs if o]
+
         return []
 
     def find_deliverable_path(
