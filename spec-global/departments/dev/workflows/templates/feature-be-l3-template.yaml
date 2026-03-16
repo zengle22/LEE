@@ -154,9 +154,10 @@ stages:
     name: Deliverables Completeness Gate
     kind: gate
     description: Human gate to review deliverables completeness before handoff.
-    gate_type: human
     mandatory: true
     depends_on:
     - deliverables_check
-    condition:
-      deliverables_gate_result: pass
+    config:
+      gate:
+        type: human_approval
+        gate_id: gate.dev.deliverables_gate
