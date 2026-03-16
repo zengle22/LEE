@@ -33,6 +33,7 @@ REL_VERSION_PATTERN = r"(\d+\.\d+\.\d+)"
 SRC_PATTERN = re.compile(r"^(SRC)-(\d{3})$")
 ADR_PATTERN = re.compile(r"^(ADR)-(\d{3})$")
 SRC_SCOPED_INDEPENDENT_PATTERN = re.compile(r"^(EPIC|FEAT)-(SRC-\d{3})-(\d{3})$")
+SRC_SCOPED_INDEPENDENT_NO_SEQUENCE_PATTERN = re.compile(r"^(EPIC|FEAT)-(SRC-\d{3})$")
 LEGACY_INDEPENDENT_PATTERN = re.compile(r"^(EPIC|FEAT)-(\d{3})$")
 RELEASE_PATTERN = re.compile(rf"^(REL-{REL_VERSION_PATTERN})$")
 DEVPLAN_PATTERN = re.compile(rf"^(DEVPLAN)-(REL-{REL_VERSION_PATTERN})$")
@@ -57,6 +58,11 @@ def parse_src_root(id: str) -> Optional[str]:
         return f"SRC-{match.group(2)}"
 
     match = SRC_SCOPED_INDEPENDENT_PATTERN.match(id)
+    if match:
+        return match.group(2)
+
+    # SRC-scoped independent type without sequence (e.g., EPIC-SRC-009)
+    match = SRC_SCOPED_INDEPENDENT_NO_SEQUENCE_PATTERN.match(id)
     if match:
         return match.group(2)
 
@@ -223,6 +229,12 @@ def parse_id(id: str) -> IDParseResult:
         prefix, sequence = legacy_independent_match.groups()
         return IDParseResult(id, prefix, None, sequence, None, True)
 
+    # SRC-scoped independent type without sequence (e.g., EPIC-SRC-009)
+    src_scoped_no_seq_match = SRC_SCOPED_INDEPENDENT_NO_SEQUENCE_PATTERN.match(id)
+    if src_scoped_no_seq_match:
+        prefix, src_root = src_scoped_no_seq_match.groups()
+        return IDParseResult(id, prefix, src_root, src_root, None, True)
+
     release_match = RELEASE_PATTERN.match(id)
     if release_match:
         release_id = _release_id_from_match(release_match)
@@ -316,12 +328,21 @@ def validate_parent_consistency(
         if ssot_type == SSOTType.FEAT:
             if not parent_id:
                 return None
+            # EPIC-SRC-xxx-xxx (3-segment SRC-scoped)
             if re.match(r"^EPIC-(SRC-\d{3})-\d{3}$", parent_id):
                 id_src_root = parse_src_root(id)
                 parent_src_root = parse_src_root(parent_id)
                 if id_src_root and parent_src_root and id_src_root != parent_src_root:
                     return f"ID {id} 所属 SRC {id_src_root}，但 parent_id {parent_id} 所属 SRC {parent_src_root}"
                 return None
+            # EPIC-SRC-xxx (2-segment SRC-scoped without sequence, e.g., EPIC-SRC-009)
+            if re.match(r"^EPIC-(SRC-\d{3})$", parent_id):
+                id_src_root = parse_src_root(id)
+                parent_src_root = parse_src_root(parent_id)
+                if id_src_root and parent_src_root and id_src_root != parent_src_root:
+                    return f"ID {id} 所属 SRC {id_src_root}，但 parent_id {parent_id} 所属 SRC {parent_src_root}"
+                return None
+            # Legacy EPIC-xxx
             if re.match(r"^EPIC-\d{3}$", parent_id):
                 return None
             return f"类型 {ssot_type.value} 的 parent_id 若提供，必须为 EPIC，当前为 {parent_id}"
