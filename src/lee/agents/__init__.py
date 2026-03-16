@@ -24,6 +24,12 @@ from lee.agents.deliverables_reviewer import (
     DeliverableRequirement,
 )
 
+from lee.agents.deliverables_producer import (
+    produce_deliverables,
+    DeliverablesProducer,
+    DeliverableProductionResult,
+)
+
 __all__ = [
     # Artifact Placement Reviewer
     "audit_directory",
@@ -41,4 +47,8 @@ __all__ = [
     "DeliverablesCheckResult",
     "DeliverablesReportGenerator",
     "DeliverableRequirement",
+    # Deliverables Producer
+    "produce_deliverables",
+    "DeliverablesProducer",
+    "DeliverableProductionResult",
 ]

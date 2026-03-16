@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "deliverables-production-output-v1",
+  "title": "Deliverables Production Output Schema",
+  "description": "Output schema for agent.dev.deliverables_producer",
+  "type": "object",
+  "required": [
+    "produced_deliverables",
+    "production_notes",
+    "deliverables_production_result"
+  ],
+  "properties": {
+    "produced_deliverables": {
+      "type": "array",
+      "description": "List of produced deliverables with paths",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "type", "status"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Deliverable filename"
+          },
+          "path": {
+            "type": "string",
+            "description": "Full path to produced file"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["schema", "example", "guide", "other"],
+            "description": "Deliverable type"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["produced", "failed"],
+            "description": "Production status"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if failed"
+          }
+        }
+      }
+    },
+    "production_notes": {
+      "type": "string",
+      "description": "Notes about the production process"
+    },
+    "deliverables_production_result": {
+      "type": "string",
+      "enum": ["pass", "fail"],
+      "description": "Overall production result"
+    }
+  },
+  "additionalProperties": false
+}
