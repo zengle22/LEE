@@ -1,0 +1,29 @@
+# Feature Integration Spec for FEAT-SRC-056-002
+
+## Feature Info
+- **feature_spec**: `spec/requirements/SRC-056/FEAT-SRC-056-002__artifact-placement-reviewer-agent-implementation.md`
+- **api_contract**: `spec/contracts/placement-manifest-contract.md` (待创建)
+- **be_artifact**: `src/lee/agents/artifact_placement_reviewer.py`
+
+## Integration Scope
+验证 Artifact Placement Reviewer Agent 的以下集成场景：
+
+1. **CLI 集成**: `lee audit` 命令能否正常调用
+2. **API 集成**: Python 模块能否被其他 workflow 导入调用
+3. **Manifest 集成**: 能否正确读取 placement manifest
+
+## Missing Deliverables Check
+
+根据 FEAT-SRC-056-002 规范，以下交付物必须存在：
+
+- [x] `artifact_placement_reviewer.py` - agent 核心模块
+- [ ] `placement_audit_report_schema.yaml` - 审计结果 schema
+- [ ] `example-audit-report.yaml` - 示例审计报告
+- [ ] `agent-usage-guide.md` - 使用指南文档
+
+## Expected Integration Tests
+
+1. CLI 调用测试
+2. Python API 导入测试
+3. Manifest 加载测试
+4. 目录审计端到端测试
