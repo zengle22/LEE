@@ -1,14 +1,49 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from lee.orchestrator.execution.runners.base import StepRunnerBase
 from lee.orchestrator.storage.models import StepResult, TaskExecutionStatus
 
 
-def collect_declared_output_paths(step) -> List[str]:
+def _render_template_path(path: str, params: Dict[str, Any]) -> str:
+    """
+    Render Jinja2-style template variables in a path string.
+
+    Supports:
+    - {{ params.xxx }} -> params['xxx']
+    - {{ params.xxx | default('yyy') }} -> params['xxx'] or 'yyy'
+    """
+    if not isinstance(path, str):
+        return str(path) if path else ""
+
+    # Pattern to match {{ params.xxx }} or {{ params.xxx | default('yyy') }}
+    template_pattern = r'\{\{\s*params\.(\w+)(?:\s*\|\s*default\(\s*[\'"]([^\'"]*)[\'"]\s*\))?\s*\}\}'
+
+    def replace_param(match):
+        param_name = match.group(1)
+        default_value = match.group(2)
+        value = params.get(param_name, default_value)
+        return str(value) if value is not None else (default_value or '')
+
+    rendered = re.sub(template_pattern, replace_param, path)
+    return rendered
+
+
+def collect_declared_output_paths(step, params: Optional[Dict[str, Any]] = None) -> List[str]:
+    """
+    Collect declared output file paths from step outputs.
+
+    Args:
+        step: Step object with outputs attribute
+        params: Optional params dict for rendering template variables
+
+    Returns:
+        List of normalized output paths (with template variables rendered if params provided)
+    """
     declared_output_files: List[str] = []
     for output in (getattr(step, "outputs", None) or []):
         if isinstance(output, dict):
@@ -17,6 +52,11 @@ def collect_declared_output_paths(step) -> List[str]:
         else:
             output_type = getattr(output, "type", None)
             output_path = getattr(output, "path", "")
+
+        # Render template variables if params provided
+        if params and isinstance(output_path, str):
+            output_path = _render_template_path(output_path, params)
+
         normalized_path = str(output_path or "").strip()
         if output_type in {"file", "dir"} and normalized_path:
             declared_output_files.append(normalized_path)
@@ -53,9 +93,10 @@ def build_code_executor_io_config(
     step_id: str,
     step,
     configured_write_scope: Any,
+    params: Optional[Dict[str, Any]] = None,
 ) -> dict[str, Any]:
     step_workspace = str(Path(workspace) / ".workflow" / "workspace" / workflow_id / step_id)
-    declared_output_files = collect_declared_output_paths(step)
+    declared_output_files = collect_declared_output_paths(step, params)
     return {
         "step_workspace": step_workspace,
         "declared_output_files": declared_output_files,

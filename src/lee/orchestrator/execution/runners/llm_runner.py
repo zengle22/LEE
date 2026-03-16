@@ -1032,6 +1032,7 @@ class LLMRunner(StepRunnerBase):
                 step_id=step.id,
                 step=step,
                 configured_write_scope=code_config.get("write_scope", []),
+                params=instance.data.get("params", {}),
             ))
             if code_config.get("allowed_commands"):
                 input_data["allowed_commands"] = code_config.get("allowed_commands")
@@ -6340,6 +6341,7 @@ class ClaudeCodeRunner(StepRunnerBase):
         workflow_id: str,
         step_id: str,
         context_files: List[str],
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         input_data = {
             "goal": agent_ctx.user_prompt or claude_config.get("goal", ""),
@@ -6365,6 +6367,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             step_id=step_id,
             step=step,
             configured_write_scope=claude_config.get("write_scope", []),
+            params=params,
         ))
         return input_data
 
@@ -6441,6 +6444,7 @@ class ClaudeCodeRunner(StepRunnerBase):
                 workflow_id=workflow_id,
                 step_id=step.id,
                 context_files=context_files,
+                params=instance.data.get("params", {}),
             )
 
             configured_allowed_commands = claude_config.get("allowed_commands")
