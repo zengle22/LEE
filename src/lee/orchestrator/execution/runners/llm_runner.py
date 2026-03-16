@@ -1006,10 +1006,7 @@ class LLMRunner(StepRunnerBase):
         step_token: Optional[str],
     ) -> Dict[str, Any]:
         if executor_type in ("codex", "claude_code", "kimi"):
-            # 支持 kimi 和 claude_code 配置键
-            code_config = {}
-            if step.config:
-                code_config = step.config.get("kimi", {}) or step.config.get("claude_code", {})
+            code_config = step.config.get("claude_code", {}) if step.config else {}
             workspace = ctx.resolve_workdir(step, instance.data.get("run_id", workflow_id))
             context_files = self._merge_context_files(
                 self._collect_authoritative_context_files(step, instance.data),
@@ -1035,6 +1032,7 @@ class LLMRunner(StepRunnerBase):
                 step_id=step.id,
                 step=step,
                 configured_write_scope=code_config.get("write_scope", []),
+                params=instance.data.get("params", {}),
             ))
             if code_config.get("allowed_commands"):
                 input_data["allowed_commands"] = code_config.get("allowed_commands")
@@ -1981,7 +1979,6 @@ class LLMRunner(StepRunnerBase):
                 generated_text=generated_text,
                 structured_payload=structured_payload,
                 written_files=written_files,
-                workflow_context=workflow_context,
             )
             if ssot_materialized:
                 materialized_files = ssot_materialized.get("materialized_files", [])
@@ -2123,7 +2120,6 @@ class LLMRunner(StepRunnerBase):
         generated_text: str,
         structured_payload: Optional[Any] = None,
         written_files: Optional[List[str]] = None,
-        workflow_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         If the agent spec declares ssot_output_schema, validate and materialize it.
@@ -2203,17 +2199,7 @@ class LLMRunner(StepRunnerBase):
             manager = ArtifactManager(
                 project_root=Path(ctx.project_root or ".").resolve(),
             )
-            # Pass upstream step outputs for symbol resolution in SSOT materializer
-            upstream_outputs = {}
-            if isinstance(workflow_context, dict):
-                instance_data = workflow_context.get("data", {})
-                if isinstance(instance_data, dict):
-                    upstream_outputs = instance_data.get("step_outputs", {})
-            materializer = SSOTContractMaterializer(
-                manager,
-                schema_path=Path(schema_path),
-                upstream_step_outputs=upstream_outputs,
-            )
+            materializer = SSOTContractMaterializer(manager, schema_path=Path(schema_path))
             if validate_only:
                 materializer.validate_contract(contract_data)
                 return None
@@ -6110,63 +6096,6 @@ class ClaudeCodeRunner(StepRunnerBase):
         return result
 
     @staticmethod
-    def _check_review_result_for_critical_issues(output: Dict[str, Any]) -> Optional[str]:
-        """
-        Check review_result.md content for Critical severity issues.
-
-        Parses the generated_text or structured_payload from the review step output
-        and looks for patterns indicating Critical issues were found.
-
-        Returns:
-            Error message if Critical issues found, None otherwise.
-        """
-        generated_text = str(output.get("generated_text", "") or "")
-        structured_payload = output.get("structured_payload", {})
-
-        # Try to extract from structured payload first
-        if isinstance(structured_payload, dict):
-            business_output = structured_payload.get("business_output", {})
-            if isinstance(business_output, dict):
-                # Check for critical_count field if present
-                critical_count = business_output.get("critical_count", 0)
-                if isinstance(critical_count, int) and critical_count > 0:
-                    return f"Review found {critical_count} Critical severity issue(s) that must be resolved before proceeding"
-
-        # Parse generated_text for Critical issue patterns
-        if generated_text:
-            # Pattern 1: "| Critical (严重) | N |" table format
-            import re
-            critical_table_pattern = r"\|\s*Critical\s*\([^)]*\)\s*\|\s*(\d+)\s*\|"
-            match = re.search(critical_table_pattern, generated_text)
-            if match:
-                count = int(match.group(1))
-                if count > 0:
-                    return f"Review found {count} Critical severity issue(s) that must be resolved before proceeding"
-
-            # Pattern 2: "Critical (严重) | N" without leading pipe
-            critical_alt_pattern = r"Critical\s*\([^)]*\)\s*\|\s*(\d+)"
-            match = re.search(critical_alt_pattern, generated_text)
-            if match:
-                count = int(match.group(1))
-                if count > 0:
-                    return f"Review found {count} Critical severity issue(s) that must be resolved before proceeding"
-
-            # Pattern 3: Explicit "Critical: N" or "Critical issues: N"
-            critical_text_pattern = r"Critical(?:\s*issues)?\s*[:：]\s*(\d+)"
-            match = re.search(critical_text_pattern, generated_text)
-            if match:
-                count = int(match.group(1))
-                if count > 0:
-                    return f"Review found {count} Critical severity issue(s) that must be resolved before proceeding"
-
-            # Pattern 4: Check for status explicitly set to failed due to critical issues
-            if '"status": "failed"' in generated_text or "'status': 'failed'" in generated_text:
-                if "Critical" in generated_text or "critical" in generated_text:
-                    return "Review found Critical severity issue(s) and status was set to failed"
-
-        return None
-
-    @staticmethod
     def _git_head(workspace: str) -> Optional[str]:
         try:
             proc = subprocess.run(
@@ -6353,12 +6282,6 @@ class ClaudeCodeRunner(StepRunnerBase):
             if head_before == head_after:
                 return f"No new commit detected (HEAD unchanged: {head_after[:8]})"
 
-        # Check review_result for Critical issues if configured
-        if bool(criteria.get("check_review_result", False)) or bool(criteria.get("require_no_critical_issues", False)):
-            review_result_error = cls._check_review_result_for_critical_issues(output)
-            if review_result_error:
-                return review_result_error
-
         return None
 
     @classmethod
@@ -6418,6 +6341,7 @@ class ClaudeCodeRunner(StepRunnerBase):
         workflow_id: str,
         step_id: str,
         context_files: List[str],
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         input_data = {
             "goal": agent_ctx.user_prompt or claude_config.get("goal", ""),
@@ -6443,6 +6367,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             step_id=step_id,
             step=step,
             configured_write_scope=claude_config.get("write_scope", []),
+            params=params,
         ))
         return input_data
 
@@ -6519,6 +6444,7 @@ class ClaudeCodeRunner(StepRunnerBase):
                 workflow_id=workflow_id,
                 step_id=step.id,
                 context_files=context_files,
+                params=instance.data.get("params", {}),
             )
 
             configured_allowed_commands = claude_config.get("allowed_commands")

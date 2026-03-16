@@ -53,6 +53,7 @@ def test_build_code_executor_io_config_defaults_to_step_workspace(temp_project_r
         step_id="spec_maintenance",
         step=step,
         configured_write_scope=[],
+        params={},
     )
 
     assert config["step_workspace"].endswith(".workflow\\workspace\\wf-001\\spec_maintenance")
