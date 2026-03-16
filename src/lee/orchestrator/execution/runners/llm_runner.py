@@ -1004,7 +1004,10 @@ class LLMRunner(StepRunnerBase):
         step_token: Optional[str],
     ) -> Dict[str, Any]:
         if executor_type in ("codex", "claude_code", "kimi"):
-            code_config = step.config.get("claude_code", {}) if step.config else {}
+            # 支持 kimi 和 claude_code 配置键
+            code_config = {}
+            if step.config:
+                code_config = step.config.get("kimi", {}) or step.config.get("claude_code", {})
             workspace = ctx.resolve_workdir(step, instance.data.get("run_id", workflow_id))
             context_files = self._merge_context_files(
                 self._collect_authoritative_context_files(step, instance.data),
