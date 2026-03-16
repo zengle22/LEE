@@ -30,7 +30,6 @@ workflows:
     required_params:
       - request_id
       - repo_root
-      - objective
     optional_params:
       - include_paths
       - exclude_paths
