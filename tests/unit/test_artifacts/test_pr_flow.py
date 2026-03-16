@@ -46,7 +46,8 @@ def test_get_pr_body_prefers_default_description_file(tmp_path, monkeypatch) -> 
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".pr_description.md").write_text("hello\n", encoding="utf-8")
 
-    assert module.get_pr_body(None, None) == "hello"
+    # Pass the file path explicitly since function doesn't auto-read .pr_description.md
+    assert module.get_pr_body(str(tmp_path / ".pr_description.md"), None, False) == "hello"
 
 
 def test_get_pr_body_prefers_inline_text_over_file(tmp_path, monkeypatch) -> None:
@@ -54,4 +55,4 @@ def test_get_pr_body_prefers_inline_text_over_file(tmp_path, monkeypatch) -> Non
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".pr_description.md").write_text("file-body\n", encoding="utf-8")
 
-    assert module.get_pr_body(None, "inline-body") == "inline-body"
+    assert module.get_pr_body(None, "inline-body", False) == "inline-body"
