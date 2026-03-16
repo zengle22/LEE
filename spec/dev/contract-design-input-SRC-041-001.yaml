@@ -1,6 +1,15 @@
 # SRC-041 Gate 双轴模型改造 - Feature Contract 设计输入
 # 用于 lee run dev.feature-contract-l3
 
+# SSOT Root (FEAT freeze)
+formal_ssot_id: FEAT-SRC-041-001
+
+# 源引用
+source_refs:
+  - SRC-041
+  - EPIC-SRC-041-016
+  - FEAT-SRC-041-001
+
 feature_name: gate-dual-axis
 feature_spec: spec/tech/SRC-041/TECH-FEAT-SRC-041-001__gate-dual-axis-tech-design.md
 
