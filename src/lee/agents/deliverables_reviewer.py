@@ -454,7 +454,8 @@ def check_command(
 
     if fail_on_missing and result.gate_decision == 'fail':
         click.echo("\n❌ Gate: FAILED")
-        raise click.Exit(1)
+        import sys
+        sys.exit(1)
     else:
         click.echo(f"\nGate: {result.gate_decision.upper()}")
 
