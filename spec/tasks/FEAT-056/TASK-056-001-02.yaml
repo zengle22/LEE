@@ -1,0 +1,71 @@
+# TASK-056-001-02: Manifest Generator 实现
+# Parent: FEAT-056-001 | Workstream: workflow-runtime | Priority: P0
+
+task_id: TASK-056-001-02
+title: "Manifest Generator 实现"
+objective: "实现 placement manifest 生成逻辑"
+description: >
+  在 src/lee/orchestrator/execution/artifacts/ 下新增 manifest.py，
+  解析 workflow 运行上下文并生成 run-scoped placement manifest，落于 .artifacts/trace/placement/ 目录。
+source_feat: FEAT-056-001
+workstream: workflow-runtime
+task_kind: implementation
+responsible_role: workflow-runtime-owner
+
+acceptance_criteria_mapping:
+  - feat: FEAT-056-001
+    ac: AC-056-001-01
+    description: "给定 workflow 运行，能生成完整的 placement manifest"
+
+prerequisites:
+  - TASK-056-001-01
+dependencies:
+  - TASK-056-001-01
+inputs:
+  - placement_manifest_schema
+  - workflow_run_context
+outputs:
+  - src/lee/orchestrator/execution/artifacts/manifest.py
+  - artifacts/trace/placement/*.yaml
+
+definition_of_done:
+  - TASK 文件已冻结
+  - Manifest 生成单元测试通过
+  - 集成测试覆盖 workflow 运行场景
+
+priority: P0
+milestone: M2-Implementation
+estimated_effort: 1 day
+lifecycle_status: draft
+
+observability:
+  execution_unit: task
+  log_scope: task-execution
+  audit_fields:
+    - run_id
+    - changed_files
+    - evidence_refs
+    - generated_manifest_path
+
+evidence_requirements:
+  required_refs:
+    - TECH-FEAT-056-001
+    - TASK-056-001-01
+  review_required: true
+
+rollback_strategy:
+  mode: revert
+  restore_targets:
+    - src/lee/orchestrator/execution/artifacts/manifest.py
+  preconditions:
+    - 备份已生成 manifest 文件
+
+source_refs:
+  - FEAT-056-001#delivery
+  - TECH-FEAT-056-001
+
+ssot:
+  identity_kind: ssot
+  ssot_type: TASK
+  parent: FEAT-056-001
+  derived_from: FEAT-056-001#delivery

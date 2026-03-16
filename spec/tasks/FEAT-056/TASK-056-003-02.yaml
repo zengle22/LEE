@@ -1,0 +1,72 @@
+# TASK-056-003-02: Gate Blocker 判定逻辑
+# Parent: FEAT-056-003 | Workstream: workflow-runtime | Priority: P0
+
+task_id: TASK-056-003-02
+title: "Gate Blocker 判定逻辑"
+objective: "实现 audit report 到 gate 阻断的映射逻辑"
+description: >
+  创建 placement_gate_integration.py，解析 audit report 中的 violation severity，
+  将 blocker 级违规映射为 gate 阻断条件，major 映射为警告，minor 映射为提示。
+source_feat: FEAT-056-003
+workstream: workflow-runtime
+task_kind: implementation
+responsible_role: workflow-runtime-owner
+
+acceptance_criteria_mapping:
+  - feat: FEAT-056-003
+    ac: AC-056-003-02
+    description: "blocker 阻断、major 警告、minor 提示的分级行为正确"
+
+prerequisites:
+  - TASK-056-003-01
+dependencies:
+  - TASK-056-003-01
+  - TASK-056-002-02
+inputs:
+  - audit_report
+  - severity_to_gate_mapping
+outputs:
+  - src/lee/orchestrator/gates/placement_gate_integration.py
+
+definition_of_done:
+  - TASK 文件已冻结
+  - 单元测试覆盖所有 severity 场景
+  - 集成测试验证 gate 阻断行为
+
+priority: P0
+milestone: M3-Integration
+estimated_effort: 0.5 day
+lifecycle_status: draft
+
+observability:
+  execution_unit: task
+  log_scope: task-execution
+  audit_fields:
+    - run_id
+    - changed_files
+    - evidence_refs
+    - gate_decision
+    - blocking_reason
+
+evidence_requirements:
+  required_refs:
+    - TECH-FEAT-056-003
+    - TASK-056-003-01
+  review_required: true
+
+rollback_strategy:
+  mode: revert
+  restore_targets:
+    - src/lee/orchestrator/gates/placement_gate_integration.py
+  preconditions:
+    - 确认 gate 未处于 blocking 状态
+
+source_refs:
+  - FEAT-056-003#delivery
+  - TECH-FEAT-056-003
+
+ssot:
+  identity_kind: ssot
+  ssot_type: TASK
+  parent: FEAT-056-003
+  derived_from: FEAT-056-003#delivery

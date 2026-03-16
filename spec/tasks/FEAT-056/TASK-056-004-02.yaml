@@ -1,0 +1,78 @@
+# TASK-056-004-02: Runtime Policy 检查点实现
+# Parent: FEAT-056-004 | Workstream: workflow-runtime | Priority: P1
+
+task_id: TASK-056-004-02
+title: "Runtime Policy 检查点实现"
+objective: "在文件写入前插入 placement policy 检查点"
+description: >
+  扩展 path_policy.py 支持声明式目录策略配置，
+  修改 io_guard.py 在文件写入前执行 policy 检查，支持 fail fast 行为。
+source_feat: FEAT-056-004
+workstream: workflow-runtime
+task_kind: implementation
+responsible_role: workflow-runtime-owner
+
+acceptance_criteria_mapping:
+  - feat: FEAT-056-004
+    ac: AC-056-004-01
+    description: "声明 placement policy 后能成功加载"
+  - feat: FEAT-056-004
+    ac: AC-056-004-02
+    description: "文件写入时正确执行 policy 检查"
+
+prerequisites:
+  - TASK-056-004-01
+dependencies:
+  - TASK-056-004-01
+  - TASK-056-001-02
+inputs:
+  - placement_policy_config
+  - path_policy_module
+  - io_guard_module
+outputs:
+  - src/lee/orchestrator/core/path_policy.py
+  - src/lee/orchestrator/core/io_guard.py
+
+definition_of_done:
+  - TASK 文件已冻结
+  - policy 检查单元测试通过
+  - 性能测试验证 runtime 开销可接受
+
+priority: P1
+milestone: M4-Runtime
+estimated_effort: 1 day
+lifecycle_status: draft
+
+observability:
+  execution_unit: task
+  log_scope: task-execution
+  audit_fields:
+    - run_id
+    - changed_files
+    - evidence_refs
+    - policy_check_result
+    - io_operation_path
+
+evidence_requirements:
+  required_refs:
+    - TECH-FEAT-056-004
+    - TASK-056-004-01
+  review_required: true
+
+rollback_strategy:
+  mode: revert
+  restore_targets:
+    - src/lee/orchestrator/core/path_policy.py
+    - src/lee/orchestrator/core/io_guard.py
+  preconditions:
+    - 确认无 critical IO 操作进行中
+
+source_refs:
+  - FEAT-056-004#delivery
+  - TECH-FEAT-056-004
+
+ssot:
+  identity_kind: ssot
+  ssot_type: TASK
+  parent: FEAT-056-004
+  derived_from: FEAT-056-004#delivery
