@@ -43,7 +43,7 @@ def test_feature_delivery_task_doc_matches_canonical_l2_contract():
 
 def test_feature_delivery_epic_scope_matches_canonical_l2_contract():
     epic_doc = Path(
-        "spec/requirements/epics/EPIC-SRC-009__dev-department-ssot-alignment-delivery-governance.md"
+        "spec/requirements/SRC-009/EPIC-SRC-009__dev-department-ssot-alignment-delivery-governance.md"
     )
     text = epic_doc.read_text(encoding="utf-8")
 

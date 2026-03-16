@@ -1,0 +1,27 @@
+---
+# Tech Design Input Spec for FEAT-SRC-041-001
+formal_ssot_id: FEAT-SRC-041-001
+formal_ssot_path: spec/requirements/SRC-041/FEAT-SRC-041-001__gate-purpose-yu-decision-mode-mubiaoyuyidongjie.md
+source_refs:
+  - spec/requirements/SRC-041/FEAT-SRC-041-001__gate-purpose-yu-decision-mode-mubiaoyuyidongjie.md
+  - spec/requirements/SRC-041/EPIC-SRC-041-016__adr-017-gate-zhiliyuyiguiyihuayurengongshenpishang.md
+governing_adrs:
+  - ADR-017
+governing_adr_paths:
+  - spec/adr/ADR-017__gate-zhizeyujuecemoshifencengyurenjishenpipinshenjiaohu.md
+repo_context:
+  repo_id: LEE
+  type: governance-framework
+  root_dir: .
+
+# Explicit path parameters for tech-design-l3 workflow
+tech_bundle_dir: output/tech-packages/FEAT-SRC-041-001
+design_analysis_path: output/tech-packages/FEAT-SRC-041-001/design_analysis.md
+implementation_scope_path: output/tech-packages/FEAT-SRC-041-001/implementation_scope.md
+tech_spec_path: spec/tech/TECH-FEAT-SRC-041-001__gate-dual-axis-tech-design.md
+decision_refs_path: output/tech-packages/FEAT-SRC-041-001/decision_refs.yaml
+frozen_architecture_path: output/tech-packages/FEAT-SRC-041-001/frozen-technical-architecture.yaml
+review_result_path: output/tech-packages/FEAT-SRC-041-001/review_result.md
+risk_register_path: output/tech-packages/FEAT-SRC-041-001/risk_register.md
+tech_package_path: output/tech-packages/FEAT-SRC-041-001/tech_package.yaml
+handoff_notes_path: output/tech-packages/FEAT-SRC-041-001/handoff_notes.md

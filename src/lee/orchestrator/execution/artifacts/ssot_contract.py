@@ -48,11 +48,13 @@ class SSOTContractMaterializer:
         self,
         manager: ArtifactManager,
         schema_path: Optional[Path] = None,
+        upstream_step_outputs: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.manager = manager
         self.schema_path = Path(schema_path or DEFAULT_SSOT_CONTRACT_SCHEMA)
         self._validator = SchemaValidator(project_dir=str(FRAMEWORK_ROOT))
         self._legacy_sequences: Dict[str, int] = {}
+        self._upstream_step_outputs = upstream_step_outputs or {}
 
     def validate_contract(self, contract_data: Dict[str, Any]) -> None:
         """Validate a contract payload against the SSOT output schema."""
@@ -316,6 +318,23 @@ class SSOTContractMaterializer:
     ) -> str:
         if value in materialized:
             return materialized[value].artifact.id
+        # Also check upstream step outputs for symbol resolution
+        if value in self._upstream_step_outputs:
+            upstream_output = self._upstream_step_outputs[value]
+            # Extract artifact ID from upstream output
+            # Try business_output first, then structured_payload
+            if isinstance(upstream_output, dict):
+                business_output = upstream_output.get("business_output", {})
+                if isinstance(business_output, dict):
+                    artifact_id = business_output.get("src_id") or business_output.get("epic_id") or business_output.get("feat_id")
+                    if artifact_id:
+                        return artifact_id
+                # Try structured_payload
+                structured = upstream_output.get("structured_payload", {})
+                if isinstance(structured, dict):
+                    artifact_id = structured.get("src_id") or structured.get("epic_id") or structured.get("feat_id")
+                    if artifact_id:
+                        return artifact_id
         return value
 
     def _extract_local_keys(self, values: List[str]) -> List[str]:

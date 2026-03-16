@@ -12,7 +12,6 @@ derived_from_ids:
   required: true
 source_refs:
 - FEAT-SRC-041-002#delivery
-- TECH-FEAT-SRC-041-001
 - ADR-017#Human Gate Context Contract
 owner: null
 tags:
@@ -50,7 +49,7 @@ properties:
 ## Inputs
 
 - TASK-FEAT-SRC-041-001-001 冻结的 `purpose` / `decision_mode` 语义
-- TECH-FEAT-SRC-041-016 中的 `human_gate_context` 字段边界与校验时机
+- ADR-017 中的 `human_gate_context` 字段边界与校验时机
 - decision_mode=human_required gate 清单与自动升级场景触发条件
 
 ## Outputs
@@ -88,7 +87,6 @@ audit_fields:
 ```yaml
 required_refs:
 - FEAT-SRC-041-002
-- TECH-FEAT-SRC-041-016
 - ADR-017
 review_required: true
 ```
@@ -99,7 +97,7 @@ review_required: true
 mode: revert
 restore_targets:
 - spec/requirements/SRC-041/FEAT-SRC-041-002__human-gate-context-rengongjueceqianzhishangxiawenq.md
-- spec/tech/TECH-FEAT-SRC-041-016__adr-017-gate-shuangzhou-yurenjueshenpi-frozen-jishujiagou.md
+- spec/adr/ADR-017__gate-zhizeyujuecemoshifencengyurenjishenpipinshenjiaohu.md
 - src/lee/orchestrator/execution/gate_context_builder.py
 - src/lee/orchestrator/execution/gate_api.py
 - src/lee/orchestrator/execution/human_approval.py

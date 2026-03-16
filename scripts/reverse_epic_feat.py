@@ -1476,13 +1476,328 @@ def run_system_map(args: argparse.Namespace) -> int:
     return 0
 
 
-def _selected_capabilities(repo_root: Path, max_capabilities: int, max_features: int) -> List[Dict[str, Any]]:
+def _analyze_code_structure(repo_root: Path) -> Dict[str, Any]:
+    """Analyze code structure to extract business domains and capabilities.
+
+    Scans API endpoints, database schema, and directory structure to identify
+    real business capabilities rather than falling back to framework metadata.
+    """
+    result: Dict[str, Any] = {"domains": {}, "api_endpoints": [], "entities": []}
+
+    # Scan for API documentation and endpoint definitions
+    api_doc_paths = [
+        repo_root / "src" / "backend" / "API_ENDPOINTS.md",
+        repo_root / "API_ENDPOINTS.md",
+        repo_root / "docs" / "api.md",
+        repo_root / "spec" / "api",
+    ]
+    api_content = ""
+    for path in api_doc_paths:
+        if path.exists() and path.is_file():
+            try:
+                api_content = path.read_text(encoding="utf-8")
+                break
+            except Exception:
+                continue
+
+    # Extract API endpoint patterns
+    endpoint_patterns = re.findall(r"(GET|POST|PUT|DELETE|PATCH)\s+(/v?\d*/?[\w/-]+)", api_content)
+    result["api_endpoints"] = [{"method": m, "path": p} for m, p in endpoint_patterns]
+
+    # Extract domain keywords from endpoint paths
+    domain_keywords: Dict[str, List[str]] = {
+        "auth": ["auth", "login", "register", "token", "refresh"],
+        "user_profile": ["user", "profile", "runner-profile"],
+        "training_plan": ["plan", "plans", "weekly-summary", "completion-review"],
+        "race_goal": ["race", "goal", "race-plan"],
+        "ai_chat": ["chat", "session", "message"],
+        "training_session": ["training", "workout", "session", "guide"],
+        "device_sync": ["device", "sync", "watch", "garmin", "healthkit"],
+        "payment": ["payment", "subscription", "order", "callback"],
+        "analytics": ["analytics", "summary", "stats", "trends"],
+    }
+
+    for endpoint in result["api_endpoints"]:
+        path_lower = endpoint["path"].lower()
+        for domain, keywords in domain_keywords.items():
+            if any(kw in path_lower for kw in keywords):
+                if domain not in result["domains"]:
+                    result["domains"][domain] = {"endpoints": [], "keywords": set()}
+                result["domains"][domain]["endpoints"].append(endpoint)
+                result["domains"][domain]["keywords"].update(
+                    [k for k in keywords if k in path_lower]
+                )
+
+    # Scan handler/service directory structure for Go/Java projects
+    handler_paths = [
+        repo_root / "src" / "backend" / "internal" / "handler",
+        repo_root / "src" / "backend" / "handlers",
+        repo_root / "src" / "backend" / "controllers",
+        repo_root / "internal" / "handler",
+        repo_root / "handlers",
+    ]
+
+    for handler_path in handler_paths:
+        if handler_path.exists() and handler_path.is_dir():
+            for file in handler_path.iterdir():
+                if file.suffix in (".go", ".java", ".kt", ".py", ".ts", ".js"):
+                    name = file.stem.replace("_handler", "").replace("_controller", "").replace("Handler", "").replace("Controller", "")
+                    if name not in result["domains"]:
+                        result["domains"][name] = {"from_file": str(file.relative_to(repo_root)), "endpoints": []}
+
+    # Scan for entity/model files
+    model_paths = [
+        repo_root / "src" / "backend" / "internal" / "model",
+        repo_root / "src" / "backend" / "models",
+        repo_root / "internal" / "model",
+        repo_root / "models",
+    ]
+
+    for model_path in model_paths:
+        if model_path.exists() and model_path.is_dir():
+            for file in model_path.iterdir():
+                if file.suffix in (".go", ".java", ".kt", ".py", ".ts", ".js"):
+                    result["entities"].append(file.stem)
+
+    return result
+
+
+def _extract_capabilities_from_code(
+    repo_root: Path, max_capabilities: int, max_features: int, prd_paths: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
+    """Extract capabilities from code structure and optional PRD weak evidence.
+
+    Uses code structure (API endpoints, handlers, models) as primary source,
+    supplemented by PRD/README documents as weak evidence for naming/scope.
+    """
+    code_analysis = _analyze_code_structure(repo_root)
+    src_index = _build_src_index(repo_root)
+
+    # Load PRD weak evidence if provided
+    prd_insights: Dict[str, Any] = {"domain_names": {}, "descriptions": {}}
+    if prd_paths:
+        for prd_path in prd_paths:
+            prd_file = Path(prd_path) if Path(prd_path).is_absolute() else repo_root / prd_path
+            if prd_file.exists():
+                try:
+                    content = prd_file.read_text(encoding="utf-8")
+                    # Extract potential domain names and descriptions from PRD
+                    title_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
+                    if title_match:
+                        prd_insights["domain_names"][prd_file.stem] = title_match.group(1).strip()
+                    # Look for feature descriptions
+                    feature_sections = re.findall(r"^##\s+(.+?)\n(.+?)(?=^##|\Z)", content, re.MULTILINE | re.DOTALL)
+                    for section_name, section_content in feature_sections:
+                        prd_insights["descriptions"][section_name.strip()] = section_content[:200].strip()
+                except Exception:
+                    continue
+
+    # Map detected domains to capabilities
+    domain_capability_map: Dict[str, Dict[str, Any]] = {
+        "auth": {
+            "id": "CAP-AUTH",
+            "name": "用户认证与授权",
+            "summary": "提供用户注册、登录、第三方登录和会话管理能力。",
+            "boundary": "覆盖用户身份验证、Token 管理和会话生命周期，不包含业务数据处理。",
+            "keywords": ["auth", "login", "register", "token"],
+        },
+        "user_profile": {
+            "id": "CAP-USER",
+            "name": "用户画像管理",
+            "summary": "管理用户基础资料、跑者档案和个性化设置。",
+            "boundary": "覆盖用户资料 CRUD、跑者画像构建，不包含训练数据。",
+            "keywords": ["user", "profile", "runner"],
+        },
+        "training_plan": {
+            "id": "CAP-PLAN",
+            "name": "智能训练计划",
+            "summary": "生成、调整和追踪个性化马拉松训练计划。",
+            "boundary": "覆盖计划创建、周总结、完成回顾，不包含实时训练指导。",
+            "keywords": ["plan", "training", "weekly", "summary"],
+        },
+        "race_goal": {
+            "id": "CAP-RACE",
+            "name": "比赛目标与备赛",
+            "summary": "设定比赛目标、生成备赛计划和赛前调整。",
+            "boundary": "覆盖目标设定、比赛计划生成，不包含赛后复盘。",
+            "keywords": ["race", "goal", "plan"],
+        },
+        "ai_chat": {
+            "id": "CAP-AI",
+            "name": "AI 教练对话",
+            "summary": "提供 AI 驱动的训练咨询、建议和自然语言交互。",
+            "boundary": "覆盖对话会话、历史记录，不包含模型训练。",
+            "keywords": ["chat", "ai", "coach", "session"],
+        },
+        "training_session": {
+            "id": "CAP-SESSION",
+            "name": "实时训练指导",
+            "summary": "训练过程中的实时配速、心率指导和反馈。",
+            "boundary": "覆盖训练会话管理、实时指导，不包含历史分析。",
+            "keywords": ["training", "session", "guide", "workout"],
+        },
+        "device_sync": {
+            "id": "CAP-DEVICE",
+            "name": "设备数据同步",
+            "summary": "与运动手表、健康平台的数据同步和集成。",
+            "boundary": "覆盖设备绑定、数据拉取，不包含数据分析。",
+            "keywords": ["device", "sync", "watch", "garmin"],
+        },
+        "payment": {
+            "id": "CAP-PAY",
+            "name": "订阅与支付",
+            "summary": "管理订阅计划、支付流程和订单处理。",
+            "boundary": "覆盖订阅管理、支付回调，不包含金融风控。",
+            "keywords": ["payment", "subscription", "order"],
+        },
+        "analytics": {
+            "id": "CAP-ANALYTICS",
+            "name": "训练数据分析",
+            "summary": "训练数据的可视化、趋势分析和洞察生成。",
+            "boundary": "覆盖数据统计、趋势分析，不包含实时指导。",
+            "keywords": ["analytics", "stats", "trends", "summary"],
+        },
+    }
+
+    capabilities: List[Dict[str, Any]] = []
+    seen_capability_ids: set = set()
+
+    for domain_key, domain_data in code_analysis.get("domains", {}).items():
+        if len(capabilities) >= max_capabilities:
+            break
+
+        # Match to known capability or create generic
+        capability_template = None
+        for known_key, known_cap in domain_capability_map.items():
+            if known_key == domain_key or any(kw in domain_key for kw in known_cap["keywords"]):
+                capability_template = known_cap
+                break
+
+        if not capability_template:
+            # Create generic capability from domain key
+            capability_template = {
+                "id": f"CAP-{domain_key.upper()[:10]}",
+                "name": prd_insights["domain_names"].get(domain_key, domain_key.replace("_", " ").title()),
+                "summary": f"从代码结构提取的 {domain_key} 业务能力。",
+                "boundary": f"覆盖 {domain_key} 相关功能，具体边界需进一步细化。",
+                "keywords": [domain_key],
+            }
+
+        # Find source refs for this domain
+        domain_refs: List[str] = []
+        if "from_file" in domain_data:
+            domain_refs.append(domain_data["from_file"])
+        for endpoint in domain_data.get("endpoints", []):
+            # Find matching source files
+            terms = _feature_query_terms(capability_template["name"], capability_template["summary"], capability_template["keywords"])
+            refs = _find_src_refs(src_index, terms, title=capability_template["name"], summary=capability_template["summary"])
+            domain_refs.extend(refs)
+
+        domain_refs = list(dict.fromkeys(domain_refs))[:8]  # Deduplicate and limit
+
+        # Generate features from endpoints
+        features: List[Dict[str, Any]] = []
+        endpoints = domain_data.get("endpoints", [])
+
+        # Group endpoints by action pattern
+        endpoint_groups: Dict[str, List[Dict[str, str]]] = {}
+        for ep in endpoints[:max_features * 2]:  # Get more to have options
+            path_parts = ep["path"].strip("/").split("/")
+            action = path_parts[-1] if path_parts else "manage"
+            if action.startswith(":") and len(path_parts) > 1:
+                action = path_parts[-2]
+            if action not in endpoint_groups:
+                endpoint_groups[action] = []
+            endpoint_groups[action].append(ep)
+
+        for action, action_endpoints in list(endpoint_groups.items())[:max_features]:
+            methods = [ep["method"] for ep in action_endpoints]
+            feat_id = f"FEAT-{capability_template['id'].split('-')[1]}-{len(features)+1:03d}"
+            feat_title = action.replace("-", " ").replace("_", " ").title()
+
+            # Find feature refs
+            feat_terms = _feature_query_terms(feat_title, f"{action} related functionality", [action])
+            feat_refs = _find_src_refs(src_index, feat_terms, title=feat_title, summary=f"{action} functionality")
+            all_refs = list(dict.fromkeys(domain_refs + feat_refs))[:8]
+
+            features.append({
+                "id": feat_id,
+                "key": f"feat_{domain_key}_{action.lower().replace('-', '_')[:30]}",
+                "title": feat_title,
+                "summary": f"支持 {action} 操作，提供 {', '.join(methods)} 接口。",
+                "scope": [f"处理 {action} 相关业务逻辑"],
+                "inputs": ["用户请求", "必要参数"],
+                "outputs": ["操作结果"],
+                "business_rules": [f"{action} 操作需遵循业务规则"],
+                "acceptance_criteria": [f"能够成功执行 {action} 操作"],
+                "code_refs": all_refs,
+                "all_refs": all_refs,
+                "evidence_layers": _build_evidence_layers(all_refs),
+            })
+
+        if not features:
+            # Create at least one generic feature
+            feat_refs = domain_refs[:5] or [f"src/backend/internal/handler/{domain_key}.go"]
+            features.append({
+                "id": f"FEAT-{capability_template['id'].split('-')[1]}-001",
+                "key": f"feat_{domain_key}_manage",
+                "title": f"{capability_template['name']}管理",
+                "summary": f"{capability_template['summary']}",
+                "scope": [capability_template["boundary"]],
+                "inputs": ["用户输入"],
+                "outputs": ["业务结果"],
+                "business_rules": ["需验证输入合法性"],
+                "acceptance_criteria": ["功能可正常访问"],
+                "code_refs": feat_refs,
+                "all_refs": feat_refs,
+                "evidence_layers": _build_evidence_layers(feat_refs),
+            })
+
+        # Skip if capability ID already seen (prevents duplicates)
+        if capability_template["id"] in seen_capability_ids:
+            continue
+        seen_capability_ids.add(capability_template["id"])
+
+        capabilities.append({
+            "id": capability_template["id"],
+            "name": capability_template["name"],
+            "summary": capability_template["summary"],
+            "boundary": capability_template["boundary"],
+            "code_refs": domain_refs,
+            "features": features[:max_features],
+        })
+
+    return capabilities[:max_capabilities]
+
+
+def _selected_capabilities(
+    repo_root: Path,
+    max_capabilities: int,
+    max_features: int,
+    prd_paths: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Select capabilities from docs, code analysis, or fallback to framework defaults.
+
+    Priority:
+    1. Document-derived capabilities (if PRD/requirements exist)
+    2. Code structure analysis with optional PRD weak evidence
+    3. Fallback to CANDIDATE_CAPABILITIES (framework defaults)
+    """
+    # Try document-derived first
     selected: List[Dict[str, Any]] = _build_doc_derived_capabilities(repo_root, max_capabilities, max_features)
     if selected:
         for capability in selected:
             capability["features"] = [_enrich_feature_with_context(feature, capability=capability) for feature in capability.get("features", [])[:max_features]]
         return selected[:max_capabilities]
 
+    # Try code structure analysis with PRD weak evidence
+    selected = _extract_capabilities_from_code(repo_root, max_capabilities, max_features, prd_paths)
+    if selected:
+        for capability in selected:
+            capability["features"] = [_enrich_feature_with_context(feature, capability=capability) for feature in capability.get("features", [])[:max_features]]
+        return selected[:max_capabilities]
+
+    # Fallback to framework defaults
     selected = []
     for capability in CANDIDATE_CAPABILITIES:
         code_refs = _existing_paths(repo_root, capability["code_refs"])
@@ -1503,7 +1818,8 @@ def _selected_capabilities(repo_root: Path, max_capabilities: int, max_features:
 def run_capability_map(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     paths = _project_paths(repo_root, args.specs_dir, args.docs_dir, args.artifacts_dir)
-    capabilities = _selected_capabilities(repo_root, args.max_capabilities, args.max_features_per_capability)
+    prd_paths = [p.strip() for p in args.prd_paths.split(",") if p.strip()] if args.prd_paths else None
+    capabilities = _selected_capabilities(repo_root, args.max_capabilities, args.max_features_per_capability, prd_paths)
     payload_capabilities = []
     for item in capabilities:
         evidence_layers = _build_evidence_layers(item["code_refs"])
@@ -1550,7 +1866,8 @@ def run_feature_registry(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     framework_root = _resolve_framework_root(args)
     paths = _project_paths(repo_root, args.specs_dir, args.docs_dir, args.artifacts_dir)
-    capabilities = _selected_capabilities(repo_root, args.max_capabilities, args.max_features_per_capability)
+    prd_paths = [p.strip() for p in args.prd_paths.split(",") if p.strip()] if args.prd_paths else None
+    capabilities = _selected_capabilities(repo_root, args.max_capabilities, args.max_features_per_capability, prd_paths)
     features: List[Dict[str, Any]] = []
     for capability in capabilities:
         for feature in capability["features"]:
@@ -1866,7 +2183,8 @@ def run_materialize(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).resolve()
     paths = _project_paths(repo_root, args.specs_dir, args.docs_dir, args.artifacts_dir)
     strict_evidence = str(args.strict_evidence).lower() in {"1", "true", "yes"}
-    capabilities = _selected_capabilities(repo_root, args.max_capabilities, args.max_features_per_capability)
+    prd_paths = [p.strip() for p in args.prd_paths.split(",") if p.strip()] if args.prd_paths else None
+    capabilities = _selected_capabilities(repo_root, args.max_capabilities, args.max_features_per_capability, prd_paths)
     outputs: List[Dict[str, Any]] = []
     written_files: List[str] = []
     source_root = paths["source_root"]
@@ -2251,6 +2569,7 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--docs-dir", default="docs")
         sub.add_argument("--artifacts-dir", default=".artifacts")
         sub.add_argument("--request-id", default="")
+        sub.add_argument("--prd-paths", default="", help="Comma-separated paths to PRD/README files as weak evidence (e.g., docs/prd.md,README.md)")
 
     scan = subparsers.add_parser("scan")
     add_common(scan)
