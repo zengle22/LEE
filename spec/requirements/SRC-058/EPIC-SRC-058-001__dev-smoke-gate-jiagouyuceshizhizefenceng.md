@@ -3,12 +3,12 @@ id: EPIC-SRC-058-001
 ssot_type: epic
 title: Dev Smoke Gate 架构与测试职责分层
 status: frozen
-version: v3
+version: v4
 workflow_instance_id: wf_task_fix-p0p1-issues
 parent_id: SRC-058
 derived_from_ids:
 - id: SRC-058
-  version: v3
+  version: v4
   required: true
 source_refs:
 - SRC-058#scope
@@ -29,7 +29,7 @@ frozen_at: '2026-03-17T12:00:00.000000'
 
 - Dev Smoke 作为 blocker 门禁集成到 merge 流程
 - Dev 和 QA 共享同一套 Test Set 资产
-- 本地 Smoke 执行时间≤30 分钟
+- 分层 Smoke 策略：MR Smoke(P0,3-5min)、Branch Smoke(P0+P1,10-15min)、Nightly Full(全量，30-60min)
 - 通过 priority 字段区分 P0/P1 核心用例与 P2 边缘场景用例
 - 本地环境检测与一致性校验工具集成
 
@@ -41,7 +41,7 @@ frozen_at: '2026-03-17T12:00:00.000000'
 
 ## 成功标准
 
-- Dev Smoke 执行时间≤30 分钟
+- 分层 Smoke 执行时间：MR Smoke≤5min、Branch Smoke≤15min、Nightly Full≤60min
 - Smoke Gate 作为 merge 前置条件 100% 覆盖
 - Dev 与 QA 共享同一 Test Set 资产，无重复维护
 - 测试职责边界清晰，减少跨部门 Handoff
