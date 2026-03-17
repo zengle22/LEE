@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit:*)",
+      "Bash(lee --help:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(pip install:*)",
+      "Bash(python3:*)",
+      "Bash(sqlite3:*)",
+      "Bash(python:*)",
+      "Bash(lee gates list:*)",
+      "Bash(claude config list:*)",
+      "Bash(unset:*)",
+      "Bash(gh auth:*)",
+      "Bash(gh pr:*)",
+      "Bash(git push:*)"
+    ]
+  },
+  "commands": {
+    "directory": ".claude/commands"
+  },
+  "env": {
+    "GH_TOKEN": "ghp_your_github_token_here"
+  }
+}

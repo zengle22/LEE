@@ -645,13 +645,22 @@ class ClaudeCodeExecutor(BaseExecutor):
         工作目录通过 subprocess cwd 参数控制。
         prompt 通过 stdin 传入以避免 shell 转义问题。
         """
-        # 检测嵌套会话：如果已在 Claude Code 会话中，直接返回错误
-        if os.environ.get("CLAUDECODE"):
-            raise RuntimeError(
-                "Cannot launch nested Claude Code session. "
-                "You are already running inside a Claude Code session. "
-                "Please use the current session directly or choose a different executor."
-            )
+        # 检测嵌套会话：如果已在 Claude Code 会话中，根据配置处理
+        # BUG-LEE-EXECUTOR-001 修复：支持 allow_nested 参数
+        if os.environ.get("CLAUDECODE") and not read_only:
+            # 检查是否强制允许嵌套（通过环境变量或参数）
+            allow_nested = os.environ.get("CLAUDE_CODE_ALLOW_NESTED", "").lower() in ("1", "true", "yes")
+            if not allow_nested:
+                raise RuntimeError(
+                    "LEE Executor Error: Cannot launch nested Claude Code session.\n\n"
+                    "You are already running inside a Claude Code session. "
+                    "Nested sessions share runtime resources and will crash all active sessions.\n\n"
+                    "Solutions:\n"
+                    "1. Use the current Claude Code session directly by running workflow without --executor claude_code\n"
+                    "2. Use a different executor: --executor llm or --executor shell\n"
+                    "3. To force nested session (not recommended): export CLAUDE_CODE_ALLOW_NESTED=1\n\n"
+                    "Note: LEE workflows can typically run within the current session without spawning a subprocess."
+                )
 
         base_cmd = [
             self._claude_binary,
