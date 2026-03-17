@@ -1,7 +1,7 @@
 ---
 id: ADR-026
 title: 交付轴设计 - 瀑布 - 敏捷混合模式 (Delivery Axis Design)
-status: accepted
+status: frozen
 version: v1
 workflow_instance_id: wf-adr-026-20260317
 source_refs: []
@@ -11,6 +11,7 @@ tags:
   - waterfall-agile-hybrid
   - workflow-architecture
   - release-management
+ssot_type: adr
 properties:
   design_kind: architecture_decision_record
   supersedes:
