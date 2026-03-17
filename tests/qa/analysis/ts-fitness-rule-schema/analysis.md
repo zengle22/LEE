@@ -1,340 +1,170 @@
 # 需求分析报告: Fitness Rule Schema 模块
 
-**模块 ID**: fitness-rule-schema  
-**来源 FEAT**: FEAT-SRC-059-001 (frozen)  
-**分析日期**: 2026-03-17  
-**分析师**: AI Agent  
+## 文档信息
+
+| 属性 | 值 |
+|------|-----|
+| 模块 | fitness-rule-schema |
+| FEAT ID | FEAT-SRC-059-001 |
+| 分析日期 | 2026-03-18 |
+| 分析师 | QA 自动化 |
+| 状态 | 已完成 |
 
 ---
 
-## 1. 执行摘要
+## 1. 需求概述
 
-本报告基于 FEAT-SRC-059-001 冻结需求和 TECH-FEAT-SRC-059-001 技术设计文档，对 Fitness Rule Schema 模块进行需求分析，提取模块边界和可测试特性，为 Test Set 设计提供输入。
+### 1.1 目标
 
-**核心目标**: 定义 fitness_rule.yaml 的 JSON Schema 及验证工具，为治理团队和 AI 执行器提供统一的 fitness 规则描述语言。
+定义 fitness_rule.yaml 的 JSON schema 及验证工具，为治理团队和 AI 执行器提供统一的 fitness 规则描述语言。
 
----
+### 1.2 用户价值
 
-## 2. 需求文档结构解析
-
-### 2.1 输入工件清单
-
-| 工件类型 | 工件路径 | 状态 | 用途 |
-|---------|---------|------|------|
-| FEAT Freeze | `spec/requirements/SRC-059/FEAT-SRC-059-001__fitness-rule-schema-dingyi.md` | frozen | 核心需求源 |
-| Tech Design | `spec/tech/SRC-059/FEAT-SRC-059-001/TECH-FEAT-SRC-059-001__fitness-rule-schema-jishu-sheji.md` | draft | 技术实现参考 |
-| ADR-024 | 架构决策记录 | frozen | Fitness Function 定义 |
-| ADR-015 | 架构决策记录 | frozen | Schema 验证规范 |
-| ADR-017 | 架构决策记录 | frozen | Gate 语义 |
-| ADR-020 | 架构决策记录 | frozen | Evidence Pack |
-
-### 2.2 验收标准提取
-
-| ID | 场景 | Given | When | Then |
-|----|------|-------|------|------|
-| AC-001 | schema 验证工具验证合法的 fitness rule 文件 | 存在符合 schema 的 fitness_rule.yaml 文件 | 执行 validate_fitness_rule.py 验证该文件 | 验证通过且不输出错误，返回零退出码 |
-| AC-002 | schema 验证工具检测非法 fitness rule 文件 | 存在不符合 schema 的 fitness_rule.yaml 文件 | 执行 validate_fitness_rule.py 验证该文件 | 验证失败并输出结构化错误信息包含行号和字段路径 |
-| AC-003 | schema 支持 YAML 和 JSON 双格式 | 存在分别符合 schema 的 YAML 和 JSON 格式规则文件 | 对两种格式文件分别执行验证 | 两种格式均能通过验证 |
-
-### 2.3 决策约束清单
-
-1. **Fitness Rule 必须支持 YAML 和 JSON 两种输入格式**
-2. **验证失败时必须输出结构化错误信息，包含行号和字段路径**
-3. **rule_type 必须为 hard_gate 或 quality_signal 枚举值**
-4. **Schema 版本必须使用 JSON Schema Draft 2020-12**
+为治理团队和 AI 执行器提供统一的 fitness 规则描述语言，使完成条件可被机器扫描和验证。
 
 ---
 
-## 3. 模块边界定义
+## 2. 模块边界定义
 
-### 3.1 模块概述
+### 2.1 模块范围
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│              Fitness Rule Schema 模块                        │
+│                    Fitness Rule Schema 模块                  │
 ├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────────┐    ┌─────────────────────────────┐    │
-│  │ Schema Definition│    │ Validation Tool             │    │
-│  │                 │    │                             │    │
-│  │ • fitness_rule  │    │ • validate_fitness_rule.py  │    │
-│  │   .schema.json  │───▶│ • YAML/JSON parser          │    │
-│  │                 │    │ • Error formatter           │    │
-│  └─────────────────┘    └─────────────────────────────┘    │
-│           │                         │                       │
-│           ▼                         ▼                       │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │               输出: 结构化验证结果                   │   │
-│  │  {valid: bool, errors: [], line_numbers: [],         │   │
-│  │   field_paths: [], exit_code: int}                  │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │ Schema 定义 │  │ 验证工具    │  │ 示例文件            │ │
+│  │ (JSON)      │  │ (Python)    │  │ (YAML/JSON)         │ │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
+│                                                              │
+│  输入: YAML/JSON fitness rule 文件                          │
+│  输出: 验证结果 (通过/失败 + 结构化错误信息)                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 模块范围
+### 2.2 包含范围
 
-**范围内 (In Scope)**:
-- fitness_rule.schema.json JSON Schema 定义
-- validate_fitness_rule.py 验证工具脚本
-- YAML 格式规则文件验证
-- JSON 格式规则文件验证
-- 结构化错误输出（含行号、字段路径）
-- rule_type 枚举值校验（hard_gate, quality_signal）
-- pass_criteria 多类型条件验证
-- rule_id 格式校验（FIT-[A-Z0-9_-]+）
+- ✅ fitness_rule.yaml 的 JSON Schema 定义
+- ✅ Schema 验证工具实现
+- ✅ YAML 和 JSON 双格式输入支持
+- ✅ 结构化错误信息输出（含行号和字段路径）
+- ✅ 示例规则文件生成
 
-**范围外 (Out of Scope)**:
-- 规则执行逻辑实现
-- 与现有 gate 规则文件的迁移
-- Fitness Function Runner 实现
-- Evidence Pack 生成
+### 2.3 排除范围
 
-### 3.3 接口定义
+- ❌ 规则执行逻辑实现
+- ❌ 与现有 gate 规则文件的迁移
+- ❌ Fitness Function Runner 实现
+- ❌ Evidence Pack 生成逻辑
 
-#### 输入接口
+### 2.4 输入输出规范
 
-| 接口名称 | 格式 | 必需字段 | 约束 |
-|---------|------|---------|------|
-| fitness_rule.yaml | YAML 1.2 | rule_id, rule_type, scan_command, pass_criteria, description | 符合 JSON Schema Draft 2020-12 |
-| fitness_rule.json | JSON | rule_id, rule_type, scan_command, pass_criteria, description | 符合 JSON Schema Draft 2020-12 |
+**必需输入字段**:
+- `rule_id` - 唯一规则标识
+- `rule_type` - 规则类型 (hard_gate/quality_signal)
+- `scan_command` - 扫描命令定义
+- `pass_criteria` - 通过标准
+- `description` - 规则描述
 
-#### 输出接口
-
-| 接口名称 | 类型 | 描述 |
-|---------|------|------|
-| validation_result | JSON | {valid: bool, errors: array, line_numbers: array, field_paths: array} |
-| exit_code | integer | 0 表示成功，非零表示失败 |
-
-### 3.4 字段详细规范
-
-#### 必需字段
-
-| 字段名 | 类型 | 约束 | 描述 |
-|-------|------|------|------|
-| rule_id | string | Pattern: `^FIT-[A-Z0-9_-]+$` | 唯一规则 ID |
-| rule_type | string | Enum: [hard_gate, quality_signal] | 规则类型 |
-| scan_command | object | Required: [command] | 扫描命令定义 |
-| pass_criteria | object | Required: [kind] | 通过标准定义 |
-| description | string | - | 规则描述 |
-
-#### 可选字段
-
-| 字段名 | 类型 | 默认值 | 约束 |
-|-------|------|--------|------|
-| dimension | string | - | Enum: [contract_consistency, testability, integration_closure, evidence_completeness, path_governance] |
-| severity | string | blocker | Enum: [blocker, major, minor, nit] |
-| evidence_binding | object | - | 证据绑定配置 |
-| metadata | object | - | 元数据信息 |
+**输出工件**:
+- `fitness_rule.schema.json` - Schema 定义文件
+- `validate_fitness_rule.py` - 验证工具
+- `fitness_rule_example.yaml` - YAML 示例
+- `fitness_rule_example.json` - JSON 示例
 
 ---
 
-## 4. 可测试特性列表
+## 3. 可测试特性提取
 
-### 4.1 特性总览
+### 3.1 特性矩阵
 
-| 特性 ID | 特性名称 | 优先级 | 验收标准映射 |
-|--------|---------|--------|-------------|
-| TF-001 | Schema 结构完整性验证 | P0 | AC-001 |
-| TF-002 | YAML 格式规则文件验证 | P0 | AC-001, AC-002, AC-003 |
-| TF-003 | JSON 格式规则文件验证 | P0 | AC-001, AC-002, AC-003 |
-| TF-004 | rule_type 枚举值验证 | P0 | AC-002 |
-| TF-005 | pass_criteria 类型条件验证 | P1 | AC-001, AC-002 |
-| TF-006 | 验证结果输出格式 | P0 | AC-001, AC-002 |
-| TF-007 | rule_id 格式验证 | P1 | AC-002 |
-| TF-008 | 可选字段验证 | P2 | AC-001 |
+| ID | 特性名称 | 优先级 | 关联 AC | 测试类型 |
+|----|---------|--------|---------|----------|
+| TF-001 | Schema 结构定义 | P0 | AC-001 | 单元测试 |
+| TF-002 | YAML 格式验证 | P0 | AC-003 | 集成测试 |
+| TF-003 | JSON 格式验证 | P0 | AC-003 | 集成测试 |
+| TF-004 | 验证通过行为 | P0 | AC-001 | 单元测试 |
+| TF-005 | 验证失败行为 | P0 | AC-002 | 单元测试 |
+| TF-006 | pass_criteria 条件验证 | P1 | - | 单元测试 |
+| TF-007 | 可选字段验证 | P1 | - | 单元测试 |
 
-### 4.2 特性详细说明
+### 3.2 详细特性描述
 
-#### TF-001: Schema 结构完整性验证
+#### TF-001: Schema 结构定义
+- **描述**: 验证 fitness_rule.schema.json 正确定义了所有必需字段和类型约束
+- **关键测试点**:
+  - rule_id 必须符合 `^FIT-[A-Z0-9_-]+$` 模式
+  - rule_type 必须是 [hard_gate, quality_signal] 枚举值
+  - scan_command 必须包含 command 字段
+  - pass_criteria 必须包含 kind 字段
 
-**描述**: 验证 fitness_rule.schema.json 定义包含所有必需字段
+#### TF-002: YAML 格式验证
+- **描述**: 验证工具能够正确解析和验证 YAML 格式的 fitness rule 文件
+- **关键测试点**:
+  - 合法 YAML 文件解析成功
+  - YAML 语法错误检测
+  - Schema 合规性验证
 
-**测试要点**:
-1. rule_id 字段存在且符合 FIT-XXX 格式
-2. rule_type 字段存在且为枚举值
-3. scan_command 字段存在且结构正确
-4. pass_criteria 字段存在且支持多类型
-5. description 字段存在
+#### TF-003: JSON 格式验证
+- **描述**: 验证工具能够正确解析和验证 JSON 格式的 fitness rule 文件
+- **关键测试点**:
+  - 合法 JSON 文件解析成功
+  - JSON 语法错误检测
+  - Schema 合规性验证
 
-**预期输入**: 符合 schema 的合法规则文件
-**预期输出**: 验证通过，exit_code = 0
+#### TF-004: 验证通过行为
+- **描述**: 当 fitness rule 文件符合 schema 时，验证工具应正确返回
+- **关键测试点**:
+  - 无错误输出
+  - 返回零退出码
+  - 可选的成功提示
 
-#### TF-002: YAML 格式规则文件验证
-
-**描述**: 验证工具能够正确验证 YAML 格式的 fitness rule 文件
-
-**测试要点**:
-1. 合法的 YAML 文件验证通过
-2. 非法的 YAML 文件验证失败
-3. 错误信息包含行号
-4. 错误信息包含字段路径
-
-**测试场景**:
-- 场景 1: 完整合法的 YAML 文件
-- 场景 2: 缺少必需字段的 YAML 文件
-- 场景 3: 字段类型错误的 YAML 文件
-- 场景 4: 格式错误的 YAML 文件（语法错误）
-
-#### TF-003: JSON 格式规则文件验证
-
-**描述**: 验证工具能够正确验证 JSON 格式的 fitness rule 文件
-
-**测试要点**:
-1. 合法的 JSON 文件验证通过
-2. 非法的 JSON 文件验证失败
-3. 错误信息包含行号
-4. 错误信息包含字段路径
-
-**测试场景**:
-- 场景 1: 完整合法的 JSON 文件
-- 场景 2: 缺少必需字段的 JSON 文件
-- 场景 3: 字段类型错误的 JSON 文件
-- 场景 4: 格式错误的 JSON 文件（语法错误）
-
-#### TF-004: rule_type 枚举值验证
-
-**描述**: 验证 rule_type 字段只接受 hard_gate 或 quality_signal
-
-**测试要点**:
-1. hard_gate 值被接受
-2. quality_signal 值被接受
-3. 其他值被拒绝并报告错误
-
-**测试数据**:
-- 有效值: "hard_gate", "quality_signal"
-- 无效值: "soft_gate", "warning", "error", "", null, 123
-
-#### TF-005: pass_criteria 类型条件验证
-
-**描述**: 验证 pass_criteria 根据 kind 值要求不同的必填字段
-
-**条件矩阵**:
-
-| kind 值 | 必填字段 | 可选字段 |
-|---------|---------|---------|
-| exit_code | exit_code | - |
-| regex_match | pattern | - |
-| json_path | json_path, expected_value | - |
-| file_exists | file_path | - |
-
-**测试要点**:
-1. 每种 kind 值缺少必填字段时验证失败
-2. 每种 kind 值包含所有必填字段时验证通过
-
-#### TF-006: 验证结果输出格式
-
-**描述**: 验证验证工具输出符合预期的结构化格式
-
-**成功输出格式**:
-```json
-{
-  "valid": true,
-  "errors": [],
-  "line_numbers": [],
-  "field_paths": []
-}
-```
-
-**失败输出格式**:
-```json
-{
-  "valid": false,
-  "errors": ["error message 1", "error message 2"],
-  "line_numbers": [10, 25],
-  "field_paths": ["$.rule_type", "$.pass_criteria.kind"]
-}
-```
-
-**测试要点**:
-1. 验证通过时返回零退出码
-2. 验证失败时返回非零退出码
-3. 错误输出为结构化 JSON
-4. 包含行号信息
-5. 包含字段路径信息
-
-#### TF-007: rule_id 格式验证
-
-**描述**: 验证 rule_id 符合 FIT-[A-Z0-9_-]+ 格式规范
-
-**测试数据**:
-- 有效 ID: "FIT-CONTRACT-CHECK", "FIT-001", "FIT_TEST_1"
-- 无效 ID: "fit-lowercase", "ABC-001", "FIT-", "", null
-
-#### TF-008: 可选字段验证
-
-**描述**: 验证可选字段的正确处理
-
-**测试要点**:
-1. dimension 字段可选但必须是枚举值
-2. severity 字段可选且默认为 blocker
-3. evidence_binding 字段可选
-4. metadata 字段可选
+#### TF-005: 验证失败行为
+- **描述**: 当 fitness rule 文件不符合 schema 时，验证工具应输出结构化错误信息
+- **关键测试点**:
+  - 结构化错误信息
+  - 包含行号
+  - 包含字段路径
+  - 返回非零退出码
 
 ---
 
-## 5. 风险识别与缓解
+## 4. 验收标准映射
 
-### 5.1 技术风险
+| AC ID | 场景 | Given | When | Then | 覆盖特性 |
+|-------|------|-------|------|------|----------|
+| AC-001 | schema 验证工具验证合法的 fitness rule 文件 | 存在符合 schema 的 fitness_rule.yaml | 执行 validate_fitness_rule.py | 验证通过且不输出错误，返回零退出码 | TF-001, TF-004 |
+| AC-002 | schema 验证工具检测非法 fitness rule 文件 | 存在不符合 schema 的 fitness_rule.yaml | 执行 validate_fitness_rule.py | 验证失败并输出结构化错误信息包含行号和字段路径 | TF-005 |
+| AC-003 | schema 支持 YAML 和 JSON 双格式 | 存在分别符合 schema 的 YAML 和 JSON 文件 | 对两种格式文件分别执行验证 | 两种格式均能通过验证 | TF-002, TF-003 |
 
-| 风险 ID | 描述 | 可能性 | 影响 | 缓解措施 |
-|--------|------|--------|------|---------|
-| RISK-001 | YAML/JSON 格式边界情况处理不当 | 中 | 高 | 测试空文件、嵌套深度过大、特殊字符等边界情况 |
-| RISK-002 | 结构化错误信息准确性不足 | 中 | 高 | 确保行号和字段路径与实际错误位置一致 |
-| RISK-003 | Schema 条件验证逻辑错误 | 低 | 高 | 验证 if/then/else 条件 schema 的正确应用 |
+---
+
+## 5. 风险评估
+
+### 5.1 高风险区域
+
+1. **双格式兼容性**: YAML 和 JSON 的解析差异可能导致验证行为不一致
+2. **错误信息准确性**: 行号和字段路径的准确性对调试至关重要
+3. **Schema 演进**: 未来 schema 变更需要向后兼容
 
 ### 5.2 测试重点建议
 
-1. **优先测试**: YAML/JSON 双格式验证的正确性
-2. **优先测试**: 错误信息包含准确的行号和字段路径
-3. **重点测试**: 条件 schema（if/then/else）的正确应用
-4. **边界测试**: 空文件、超大文件、特殊字符、嵌套深度
+- 边界值测试: rule_id 格式边界、枚举值边界
+- 异常测试: 损坏的 YAML/JSON、缺失必需字段
+- 性能测试: 大型 fitness rule 文件的验证性能
 
 ---
 
-## 6. 依赖与前置条件
+## 6. 追溯性
 
-### 6.1 外部依赖
-
-| 依赖项 | 用途 | 状态 |
-|-------|------|------|
-| JSON Schema Draft 2020-12 | Schema 定义标准 | 已冻结 |
-| YAML 1.2 specification | YAML 解析标准 | 已冻结 |
-
-### 6.2 内部依赖
-
-| 依赖项 | 类型 | 状态 |
-|-------|------|------|
-| EPIC-SRC-059-001 | Parent | frozen |
-| ADR-024 | Architecture Decision | frozen |
+| 类型 | 引用 |
+|------|------|
+| FEAT | FEAT-SRC-059-001 |
+| EPIC | EPIC-SRC-059-001 |
+| ADR | ADR-024, ADR-015, ADR-017, ADR-020 |
+| Tech Design | TECH-FEAT-SRC-059-001 |
 
 ---
 
-## 7. 结论与建议
-
-### 7.1 关键发现
-
-1. **模块边界清晰**: Fitness Rule Schema 模块专注于 Schema 定义和验证工具，不包含执行逻辑
-2. **验收标准明确**: 3 个验收标准覆盖了核心功能验证点
-3. **格式支持全面**: 同时支持 YAML 和 JSON 两种格式
-4. **错误输出规范**: 要求结构化错误信息包含行号和字段路径
-
-### 7.2 Test Set 设计建议
-
-1. **高优先级测试**:
-   - YAML/JSON 双格式验证
-   - 错误信息准确性（行号、字段路径）
-   - 枚举值验证（rule_type）
-
-2. **中等优先级测试**:
-   - 条件字段验证（pass_criteria）
-   - rule_id 格式验证
-
-3. **低优先级测试**:
-   - 可选字段验证
-   - 边界情况处理
-
----
-
-**报告生成完成**  
-*下一步: 基于本分析报告设计具体测试用例*
+*本报告为 Test Set 设计提供输入基础*
+*Generated by requirement analysis workflow*
