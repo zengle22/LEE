@@ -1,0 +1,21 @@
+kind: feat_freeze_ref
+version: "1.0"
+freeze_id: FEAT-FREEZE-SRC-058-001
+epic_ref: EPIC-SRC-058-001
+workflow_instance_id: wf_task_fdb19191
+frozen_at: 2026-03-17T10:13:48+00:00
+gate_id: gate_wf_task_fdb19191_feat_freeze
+gate_approved: true
+feats:
+  - feat_id: FEAT-SRC-058-001-MERGE-GATE
+    title: Smoke Gate Merge 门禁集成
+    status: frozen
+  - feat_id: FEAT-SRC-058-001-TESTSET-UNIFIED
+    title: 统一 Test Set 资产管理
+    status: frozen
+  - feat_id: FEAT-SRC-058-001-PERF-OPT
+    title: Smoke 执行性能优化
+    status: frozen
+  - feat_id: FEAT-SRC-058-001-ENV-CHECK
+    title: 本地环境检测与一致性校验
+    status: frozen
