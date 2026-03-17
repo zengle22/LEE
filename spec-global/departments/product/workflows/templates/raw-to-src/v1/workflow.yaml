@@ -22,6 +22,7 @@ roles:
     - agent.governance.approval_reviewer
     - agent.governance.acceptance_checker
     - agent.review.acceptance_reviewer
+    - agent.governance.defect_fixer
   skills: []
   gates:
     - gate.product.src_acceptance_approval
@@ -207,11 +208,59 @@ stages:
               - role: product_owner
               - role: tech_lead
 
+      # ========== ADR-025 Fix Loop 开始 ==========
+      - id: src_defect_fix_loop
+        name: SRC 验收 - 缺陷修复 Loop
+        kind: agent
+        agent_id: agent.governance.defect_fixer
+        mandatory: true
+        depends_on: [src_acceptance_review]
+        description: >
+          根据 ADR-025 执行缺陷修复循环。
+          检查 P0/P1 缺陷，如果存在则修复或标记为延期。
+          输出 defect_fix_report 和 updated_defect_list。
+
+          Fix Loop 规则：
+          - P0 缺陷：必须修复，不允许绕过
+          - P1 缺陷：原则必须修复，特殊情况需 PO+Tech Lead 决策可延期
+          - P2/P3 缺陷：记录为技术债务，纳入 backlog，不影响 Approval Gate
+
+          循环退出条件：
+          - P0 缺陷数量 = 0
+          - P1 缺陷数量 = 0 或所有 P1 缺陷都有延期审批
+        inputs:
+          - source: src_acceptance_report
+            required: true
+          - source: src_defect_list
+            required: true
+          - source: normalized_src
+            required: true
+        outputs:
+          - symbol: src_defect_fix_report
+            contract: departments/product/contracts/defect-fix-report-contract/v1/schema.json
+            freeze: false
+          - symbol: src_updated_defect_list
+            contract: departments/product/contracts/defect-list-contract/v1/schema.json
+            freeze: false
+        config:
+          acceptance:
+            version: "1.0"
+            fix_policy:
+              p0_policy: must_fix  # P0 必须修复
+              p1_policy: fix_or_defer_with_approval  # P1 必须修复或经审批延期
+              p2_policy: defer_to_backlog  # P2 纳入 backlog
+              p3_policy: defer_to_backlog  # P3 纳入 backlog
+            exit_conditions:
+              - p0_count_equals_zero
+              - p1_count_equals_zero_or_all_deferred_with_approval
+            max_iterations: 3  # 最多修复 3 轮
+        # ========== ADR-025 Fix Loop 结束 ==========
+
       - id: src_acceptance_approval_gate
         name: SRC 验收 - 审批 Gate
         kind: gate
         mandatory: true
-        depends_on: [src_acceptance_review]
+        depends_on: [src_defect_fix_loop]
         description: >
           根据 ADR-025 执行 SRC 验收审批。
           验证 P0/P1 缺陷已修复，批准验收报告。
@@ -250,7 +299,7 @@ stages:
         name: SRC 冻结
         kind: gate
         mandatory: true
-        depends_on: [src_acceptance_approval_gate]
+        depends_on: [src_acceptance_approval_gate, src_defect_fix_loop]
         description: >
           由产品负责人冻结正式 SRC。
           冻结前必须通过 ADR-025 验收卡点（src_acceptance_approval_gate）。
@@ -264,6 +313,10 @@ stages:
           - source: src_acceptance_approval
             required: true
           - source: src_acceptance_report
+            required: true
+          - source: src_defect_fix_report
+            required: true
+          - source: src_updated_defect_list
             required: true
         outputs:
           - path: output/design-frozen/{project}-src-freeze.yaml
@@ -341,6 +394,7 @@ stages:
       - source_review
       - src_acceptance_auto_check
       - src_acceptance_review
+      - src_defect_fix_loop
       - src_acceptance_approval_gate
       - source_freeze
       - output_validation

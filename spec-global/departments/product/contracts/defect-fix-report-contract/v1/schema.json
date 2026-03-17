@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Defect Fix Report Contract",
+  "description": "ADR-025 缺陷修复报告契约",
+  "type": "object",
+  "required": [
+    "ssot_id",
+    "ssot_type",
+    "ssot_version",
+    "fix_iteration",
+    "fix_summary",
+    "p0_defects_fixed",
+    "p1_defects_fixed",
+    "p1_defects_deferred",
+    "remaining_defects",
+    "exit_condition_met",
+    "next_action"
+  ],
+  "properties": {
+    "ssot_id": {
+      "type": "string",
+      "description": "SSOT 对象 ID"
+    },
+    "ssot_type": {
+      "type": "string",
+      "enum": ["SRC", "EPIC", "FEAT", "UI", "TECH", "TASK"],
+      "description": "SSOT 类型"
+    },
+    "ssot_version": {
+      "type": "string",
+      "description": "SSOT 版本号"
+    },
+    "fix_iteration": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3,
+      "description": "修复迭代轮次（最多 3 轮）"
+    },
+    "fix_summary": {
+      "type": "object",
+      "required": ["started_at", "completed_at", "defects_processed"],
+      "properties": {
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "defects_processed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "p0_defects_fixed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["defect_id", "title", "fix_description", "verification"],
+        "properties": {
+          "defect_id": {"type": "string"},
+          "title": {"type": "string"},
+          "fix_description": {"type": "string"},
+          "verification": {"type": "string"}
+        }
+      },
+      "description": "已修复的 P0 缺陷列表"
+    },
+    "p1_defects_fixed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["defect_id", "title", "fix_description", "verification"],
+        "properties": {
+          "defect_id": {"type": "string"},
+          "title": {"type": "string"},
+          "fix_description": {"type": "string"},
+          "verification": {"type": "string"}
+        }
+      },
+      "description": "已修复的 P1 缺陷列表"
+    },
+    "p1_defects_deferred": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["defect_id", "title", "defer_reason", "defer_approval"],
+        "properties": {
+          "defect_id": {"type": "string"},
+          "title": {"type": "string"},
+          "defer_reason": {"type": "string"},
+          "defer_approval": {
+            "type": "object",
+            "required": ["approved_by", "approved_at", "rationale"],
+            "properties": {
+              "approved_by": {"type": "string"},
+              "approved_at": {"type": "string", "format": "date-time"},
+              "rationale": {"type": "string"}
+            }
+          }
+        }
+      },
+      "description": "延期处理的 P1 缺陷列表（需 PO+Tech Lead 审批）"
+    },
+    "remaining_defects": {
+      "type": "object",
+      "required": ["p0_count", "p1_count", "p2_count", "p3_count"],
+      "properties": {
+        "p0_count": {"type": "integer", "minimum": 0},
+        "p1_count": {"type": "integer", "minimum": 0},
+        "p2_count": {"type": "integer", "minimum": 0},
+        "p3_count": {"type": "integer", "minimum": 0}
+      },
+      "description": "剩余缺陷统计"
+    },
+    "exit_condition_met": {
+      "type": "boolean",
+      "description": "是否满足 Fix Loop 退出条件（P0=0 且 P1=0 或全部延期审批）"
+    },
+    "next_action": {
+      "type": "string",
+      "enum": ["proceed_to_approval_gate", "continue_fix_loop", "escalate"],
+      "description": "下一步行动"
+    }
+  }
+}
