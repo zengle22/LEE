@@ -576,6 +576,158 @@ frozen_at: null
 - 事后补验收期限为 7 天
 - 超期未完成补验收，冻结该团队后续紧急发布申请权限
 
+### 4.9 与 L3 流程集成
+
+验收流程应嵌入产品部门的 L3 工作流，实现自动化触发和卡点控制。
+
+#### 4.9.1 集成架构图
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Product L3 Workflows                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │
+│  │ raw-to-src   │───▶│ src-to-epic  │───▶│ epic-to-feat │          │
+│  │ (产出 SRC)   │    │ (产出 EPIC)  │    │ (产出 FEAT)  │          │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘          │
+│         │                   │                   │                   │
+│         ▼                   ▼                   ▼                   │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │
+│  │ Auto Gate    │    │ Auto Gate    │    │ Auto Gate    │          │
+│  │ SRC 验收     │    │ EPIC 验收    │    │ FEAT 验收    │          │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘          │
+│         │                   │                   │                   │
+│         ▼                   ▼                   ▼                   │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │
+│  │ Review Gate  │    │ Review Gate  │    │ Review Gate  │          │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘          │
+│         │                   │                   │                   │
+│         ▼                   ▼                   ▼                   │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │
+│  │ Approval Gate│    │ Approval Gate│    │ Approval Gate│          │
+│  │ SRC Freeze   │    │ EPIC Freeze  │    │ FEAT Freeze  │          │
+│  └──────────────┘    └──────────────┘    └──────────────┘          │
+│                                                                     │
+│  ┌──────────────┐    ┌──────────────┐                              │
+│  │feat-to-      │───▶│delivery-prep │                              │
+│  │delivery-prep │    │(产出 UI/TECH)│                              │
+│  └──────┬───────┘    └──────┬───────┘                              │
+│         │                   │                                      │
+│         ▼                   ▼                                      │
+│  ┌──────────────┐    ┌──────────────┐                              │
+│  │ Auto Gate    │    │ Auto Gate    │                              │
+│  │ UI/TECH 验收 │    │ UI/TECH 验收 │                              │
+│  └──────┬───────┘    └──────┬───────┘                              │
+│         │                   │                                      │
+│         ▼                   ▼                                      │
+│  ┌──────────────┐    ┌──────────────┐                              │
+│  │ Review Gate  │    │ Review Gate  │                              │
+│  └──────┬───────┘    └──────┬───────┘                              │
+│         │                   │                                      │
+│         ▼                   ▼                                      │
+│  ┌──────────────┐    ┌──────────────┐                              │
+│  │Approval Gate │    │Approval Gate │                              │
+│  │UI/TECH Freeze│    │Delivery Pack │                              │
+│  └──────────────┘    └──────────────┘                              │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 4.9.2 L3 流程验收触发点
+
+| L3 流程 | 产出物 | 触发时机 | 验收类型 | Gate 配置 |
+|---------|--------|----------|----------|-----------|
+| `raw-to-src` | SRC | SRC 生成完成，调用 `src_freeze` 前 | Auto + Review | 同步会议 (60 分钟) |
+| `src-to-epic` | EPIC | EPIC 生成完成，调用 `epic_freeze` 前 | Auto + Review | 同步会议 (90 分钟) |
+| `epic-to-feat` | FEAT Bundle | FEAT 生成完成，调用 `feat_freeze` 前 | Auto + Review | 异步评审 (48 小时) |
+| `feat-to-delivery-prep` | UI | UI 生成完成，调用 `ui_freeze` 前 | Auto + Review | 同步会议 (60 分钟) |
+| `feat-to-delivery-prep` | TECH | TECH 生成完成，调用 `tech_freeze` 前 | Auto + Review | 异步评审 (48 小时) |
+
+#### 4.9.3 L3 流程卡点规则
+
+**卡点实现方式**:
+
+```yaml
+# L3 workflow 中的 freeze 步骤前置条件
+freeze_step:
+  name: src_freeze
+  preconditions:
+    - type: gate_check
+      gate_type: approval
+      subject:
+        ssot_id: ${src_id}
+        ssot_type: SRC
+      required_decision: approve
+
+  on_failure:
+    action: block
+    message: |
+      ❌ 无法冻结 SRC: ${src_id}
+      原因：验收未通过 (Approval Gate 决策：${gate_decision})
+
+      当前状态:
+      - Auto Gate: ${auto_gate_status}
+      - Review Gate: ${review_gate_status}
+      - Approval Gate: ${approval_gate_status}
+
+      操作指引:
+      1. 查看验收报告：lee acceptance report --ssot-id ${src_id}
+      2. 修复缺陷后重新验收：lee acceptance retry --ssot-id ${src_id}
+      3. 查询缺陷列表：lee defect list --ssot-id ${src_id}
+```
+
+**L3 流程与验收流程映射**:
+
+```
+L3 流程步骤                 验收流程步骤
+────────────────────────────────────────────────────
+1. 生成 SSOT Draft    ──▶  2. Auto Check (自动)
+                        3. Review Gate (自动触发评审邀请)
+                        4. Approval Gate (等待审批)
+5. 检查冻结条件       ──▶  验证 Approval Gate 决策
+6. 执行冻结           ──▶  设置 frozen 状态 + 输出 freeze_ref
+```
+
+#### 4.9.4 自动化程度分级
+
+根据 SSOT 类型和风险等级，采用不同的自动化程度：
+
+| 等级 | 适用场景 | Auto Gate | Review Gate | Approval Gate |
+|------|----------|-----------|-------------|---------------|
+| L1 - 全自动 | 低风险小改动 | 自动通过 | 自动通过 | 自动通过 |
+| L2 - 半自动 | 常规 FEAT | 自动检查 | 异步评审 | PO 审批 |
+| L3 - 人工 | 核心 EPIC/SRC | 自动检查 | 同步会议 | 委员会审批 |
+| L4 - 增强 | 高风险需求 | 增强检查 | 多轮评审 | 委员会 + 备案 |
+
+**L1 自动通过条件** (需同时满足):
+
+- SSOT 变更仅涉及文字润色，不改变语义
+- 与上一版本 diff < 10%
+- 无 P0/P1 历史缺陷
+- PO 预先授权自动通过
+
+#### 4.9.5 CLI 与 L3 流程的关系
+
+| 使用场景 | 触发方式 | 说明 |
+|----------|----------|------|
+| L3 流程正常执行 | L3 流程自动触发 | 无需手动干预 |
+| 补验收 | `lee acceptance start` | 历史 SSOT 补验收 |
+| 重新验收 | `lee acceptance retry` | 修复缺陷后重新验收 |
+| 状态查询 | `lee acceptance status` | 查询验收进度 |
+| 紧急发布 | `lee acceptance fast-track` | 申请快速通道 |
+| 独立 SSOT 验收 | `lee acceptance start` | 非 L3 产出的 SSOT |
+
+#### 4.9.6 L3 流程集成责任矩阵
+
+| 角色 | 责任 |
+|------|------|
+| Workflow Owner | 在 L3 流程中集成验收卡点 |
+| SSOT Author | 配合验收评审，修复缺陷 |
+| Reviewer | 按时完成验收评审 |
+| PO | Approval Gate 审批决策 |
+| Governance | 监督验收流程执行，审计合规性 |
+
 ## 5. Acceptance Report Contract
 
 ### 5.1 Report Structure
@@ -1105,7 +1257,34 @@ Gate 系统需要支持：
 .artifacts/active/<department>/<ssot-type>/<ssot-id>/acceptance-report-v1.0.yaml
 ```
 
-### 12.3 Follow-up
+### 12.3 L3 流程集成计划
+
+验收流程与 L3 工作流的集成步骤：
+
+1. **定义验收卡点接口**
+   - 设计 `precondition` 检查接口
+   - 设计 `gate_check` 返回值格式
+
+2. **修改 L3 流程定义**
+   - `raw-to-src`: 在 `src_freeze` 前增加验收检查
+   - `src-to-epic`: 在 `epic_freeze` 前增加验收检查
+   - `epic-to-feat`: 在 `feat_freeze` 前增加验收检查
+   - `feat-to-delivery-prep`: 在 `ui_freeze` / `tech_freeze` 前增加验收检查
+
+3. **实现自动化触发**
+   - SSOT 生成完成后自动触发 Auto Gate
+   - Auto Gate 通过后自动触发 Review Gate
+
+4. **建设工具链**
+   - 实现 Auto Check 工具链
+   - 实现验收报告自动生成
+   - 建立对标对象库
+
+5. **培训与推广**
+   - 培训团队使用新流程
+   - 建立审计机制
+
+### 12.4 Follow-up
 
 需要继续完成的工作：
 
@@ -1113,6 +1292,7 @@ Gate 系统需要支持：
 2. 建立对标对象库
 3. 集成 Gate 系统
 4. 培训团队使用新流程
+5. L3 流程卡点集成（见 12.3 节）
 
 ## 13. References
 
