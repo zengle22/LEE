@@ -92,9 +92,13 @@ prompting:
        - Check all contract-required fields present
 
     3. **Completeness Check**: Verify semantic completeness
-       - Check no placeholder values (e.g., "TODO", "TBD")
+       - Check no placeholder values (e.g., "TODO", "TBD", "N/A")
        - Check required sections are non-empty
        - Check cross-references are valid
+       - **IMPORTANT**: When checking processing arrays, read ALL items carefully before judging completeness
+       - **IMPORTANT**: Do NOT require content that is explicitly excluded in parent EPIC's non_goals
+       - **IMPORTANT**: trace_hints may reference downstream artifacts (like TESTSET) that are NOT required in the current SSOT scope
+       - **EXAMPLE**: If EPIC states "non_goals: TESTSET 验收流程", do NOT fail completeness for missing TESTSET definitions
 
     4. **Dependency Resolution**: Verify dependencies can be resolved
        - Check source_refs point to existing objects
@@ -108,6 +112,14 @@ prompting:
     - "pass": All 4 dimensions pass
     - "fail": Any dimension fails
     - "escalate": Ambiguous cases requiring human review
+
+    ## Critical Reminders for Completeness Check:
+
+    1. **Read arrays completely**: Before claiming something is "missing", enumerate ALL items in the array
+    2. **Respect non_goals**: If parent EPIC/SRC explicitly excludes something in non_goals, do NOT require it
+    3. **trace_hints ≠ requirement**: trace_hints indicate downstream traceability, NOT current scope requirements
+    4. **Six SSOT types**: SRC/EPIC/FEAT/UI/TECH/TASK are the six SSOT types; TESTSET is a separate artifact type
+    5. **False positive penalty**: Incorrectly failing completeness_check blocks the workflow and wastes human review time
 
   instructions:
     - "按顺序执行 4 项检查"
@@ -141,6 +153,9 @@ checklist:
     - "[ ] 必填章节非空"
     - "[ ] 跨引用有效"
     - "[ ] 语义完整"
+    - "[ ] processing 数组所有项已仔细阅读（不要漏数）"
+    - "[ ] 未要求 non_goals 中明确排除的内容"
+    - "[ ] trace_hints 未误判为当前范围要求（如 TESTSET 不是六类 SSOT 之一）"
 
   dependency_resolution:
     - "[ ] source_refs 可解析"
