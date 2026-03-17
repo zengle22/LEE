@@ -3,12 +3,12 @@ id: EPIC-SRC-058-001
 ssot_type: epic
 title: Dev Smoke Gate 架构与测试职责分层
 status: frozen
-version: v2
-workflow_instance_id: SRC-058-v2
+version: v3
+workflow_instance_id: wf_task_fix-p0p1-issues
 parent_id: SRC-058
 derived_from_ids:
 - id: SRC-058
-  version: v2
+  version: v3
   required: true
 source_refs:
 - SRC-058#scope
@@ -16,7 +16,7 @@ owner: null
 tags: []
 properties:
   src_root_id: SRC-058
-frozen_at: '2026-03-17T11:00:00.000000'
+frozen_at: '2026-03-17T12:00:00.000000'
 ---
 
 # Dev Smoke Gate 架构与测试职责分层
@@ -45,3 +45,28 @@ frozen_at: '2026-03-17T11:00:00.000000'
 - Smoke Gate 作为 merge 前置条件 100% 覆盖
 - Dev 与 QA 共享同一 Test Set 资产，无重复维护
 - 测试职责边界清晰，减少跨部门 Handoff
+
+## Blocker 定义
+
+### Blocker (阻塞 merge)
+
+以下情况触发 blocker，自动拒绝 merge：
+
+- **P0 测试用例失败**: 核心功能测试失败，直接影响产品质量
+- **P1 测试用例连续失败 3 次**: 同一用例在 3 次独立执行中均失败，判定为稳定性问题
+- **环境检测失败**: 本地环境与 CI 标准环境不一致
+
+### Critical (建议修复但不阻塞)
+
+以下情况触发 critical 告警，允许 merge 但记录技术债务：
+
+- **P1 测试用例单次失败**: 可能为偶发问题，建议修复但不强制阻塞
+- **P2 测试用例失败**: 边缘场景问题，在 QA 回归阶段处理
+- **Flaky Test 标记用例失败**: 已识别的不稳定测试，不阻塞但自动创建 bug
+
+### 误报处理机制
+
+- 单次失败的 P0/P1 用例自动触发重试 (最多 3 次)
+- 3 次重试全部失败才判定为 blocker
+- 连续 5 次执行通过率<80% 的用例自动标记为 flaky test
+- Flaky test 不阻塞 merge，但生成技术债务工单并通知 QA

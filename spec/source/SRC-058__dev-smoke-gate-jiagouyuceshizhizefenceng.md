@@ -3,9 +3,9 @@ id: SRC-058
 ssot_type: src
 title: Dev Smoke Gate 架构与测试职责分层
 status: frozen
-version: v2
-workflow_instance_id: gate-materialize-v2
-frozen_at: '2026-03-17T11:00:00.000000'
+version: v3
+workflow_instance_id: wf_task_fix-p0p1-issues
+frozen_at: '2026-03-17T12:00:00.000000'
 parent_id: null
 derived_from_ids: []
 source_refs:
@@ -63,10 +63,11 @@ properties:
 
 ## 验收与交付影响
 
-- Dev Smoke 作为 blocker 门禁成功集成到 merge 流程；Dev 和 QA 共享同一套 Test Set 资产；本地 Smoke 执行时间≤30 分钟。
+- Dev Smoke 作为 blocker 门禁成功集成到 merge 流程；Dev 和 QA 共享同一套 Test Set 资产；本地 Smoke 执行时间≤30 分钟（动态超时：基础 15 分钟 + 按用例数增加，最大 45 分钟）；采用分层覆盖策略（增量覆盖变更代码，全量覆盖在 CI 执行）。
 
 ## 非目标
 
 - QA Test Run 不直接阻塞 merge（作为独立发布前质量确认）
 - 不区分 smoke 和 full Test Set（单一 Test Set 原则，通过 priority 字段区分）
 - P2 边缘场景用例为 QA 回归可选，Dev Smoke 默认不执行
+- 全量覆盖测试在本地执行（由 CI 负责）
