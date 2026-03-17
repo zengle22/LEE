@@ -396,9 +396,18 @@ frozen_at: null
 **决策**:
 
 - `approve`: 无 P0/P1，进入 Phase 3
-- `revise`: 有 P0/P1，返回修订
-- `reject`: 存在根本性问题，重新设计
-- `flag`: 有风险但可接受，记录后进入 Phase 3
+- `revise`: 有 P0/P1，返回修订（进入 Fix Loop）
+- `reject`: 存在根本性问题，SSOT 终止或重新设计（返回 Problem Discovery 阶段）
+- `flag`: 有风险但可接受，记录风险后进入 Phase 3
+
+**决策流转说明**:
+
+| 决策 | 下一状态 | 说明 |
+|------|----------|------|
+| `approve` | Phase 3 Approval | 验收通过，进入审批 |
+| `revise` | SSOT Draft v1.x | 修订后重新进入 Phase 1 |
+| `reject` | Problem Discovery | 根本性问题，需重新设计或终止 |
+| `flag` | Phase 3 Approval | 记录风险后进入审批 |
 
 ### 4.4 Phase 3: Approval
 
@@ -426,6 +435,146 @@ frozen_at: null
 
 - `approve`: SSOT 冻结
 - `reject`: 返回修订
+
+### 4.5 Review Gate 评审会议机制
+
+**会议形式**:
+
+| SSOT 类型 | 推荐形式 | 时长 | 参与人 |
+|-----------|----------|------|--------|
+| SRC | 同步会议 | 60 分钟 | PO, Tech Lead, 相关业务方 |
+| EPIC | 同步会议 | 90 分钟 | PO, Tech Lead, Design Lead, QA Lead |
+| FEAT | 异步评审 | 48 小时 | PO, Tech Lead |
+| UI | 同步会议 | 60 分钟 | PO, Design Lead, Frontend Lead |
+| TECH | 异步评审 | 48 小时 | Tech Lead, Architect |
+| TASK | 异步评审 | 24 小时 | Tech Lead |
+
+**同步会议流程**:
+
+```
+1. 作者演示 (10 分钟)
+   └── SSOT 背景、目标、关键设计
+
+2. 维度评审 (30-60 分钟)
+   ├── 功能逻辑闭环 (10 分钟)
+   ├── 用户故事体验 (10 分钟)
+   ├── 功能完整性 (10 分钟)
+   ├── 逻辑漏洞 (10 分钟)
+   └── 行业差距 (10 分钟)
+
+3. 缺陷汇总 (10 分钟)
+   └── 记录 P0/P1/P2/P3 问题
+
+4. 决策宣布 (5 分钟)
+   └── Review Gate 决策人宣布决策
+```
+
+**异步评审流程**:
+
+```
+1. 作者提交评审请求（Day 0）
+   └── 邮件/IM 通知 Reviewers
+
+2. Reviewer 独立评审（Day 0-2）
+   ├── 阅读 SSOT 文档
+   ├── 填写验收报告
+   └── 提交评审意见
+
+3. 意见汇总（Day 2）
+   └── PO 汇总所有 Reviewer 意见
+
+4. 决策宣布（Day 3）
+   └── 如有冲突，进入冲突解决流程
+```
+
+### 4.6 角色职责定义
+
+**Product Owner (PO)**:
+
+| 职责 | 说明 |
+|------|------|
+| 用户故事体验验收 | 确保 User Story 符合 INVEST 原则 |
+| 业务价值确认 | 确保 SSOT 描述的能力有明确业务价值 |
+| 优先级判断 | 判断 P1 问题是否可延期 |
+| 最终决策 | Review Gate 决策权 |
+
+**Tech Lead**:
+
+| 职责 | 说明 |
+|------|------|
+| 功能逻辑闭环验收 | 确保技术方案的逻辑完整性 |
+| 逻辑漏洞扫描 | 识别技术风险和漏洞 |
+| 技术可行性确认 | 确保方案可实施 |
+| 技术债务评估 | 评估 P2 问题的技术债务影响 |
+
+**Design Lead** (如涉及 UI):
+
+| 职责 | 说明 |
+|------|------|
+| 交互体验验收 | 确保交互路径流畅 |
+| 设计规范一致性 | 确保符合设计系统规范 |
+| 可用性评估 | 识别可用性风险 |
+
+**QA Lead** (可选参与):
+
+| 职责 | 说明 |
+|------|------|
+| 可测试性评估 | 确保 AC 可测试 |
+| 测试策略建议 | 提供测试覆盖建议 |
+| 质量风险识别 | 识别潜在质量风险 |
+
+### 4.7 冲突解决机制
+
+当多个 Reviewer 给出不同决策时，按以下规则解决：
+
+**冲突场景 1**: PO approve, Tech Lead revise
+- **解决**: 以 Tech Lead 意见为准（技术风险优先）
+- **流程**: 进入 Fix Loop 修复技术问题后重新评审
+
+**冲突场景 2**: PO revise, Tech Lead approve
+- **解决**: 以 PO 意见为准（业务价值优先）
+- **流程**: 进入 Fix Loop 修复业务问题后重新评审
+
+**冲突场景 3**: 多个 Reviewer 均有 revise 意见，但原因不同
+- **解决**: 汇总所有 revise 意见，一次性修复
+- **流程**: 进入 Fix Loop，修复所有问题后重新评审
+
+**冲突场景 4**: Reviewer 之间对问题严重性有分歧（如 P0 vs P1）
+- **解决**: PO 有最终裁决权
+- **流程**: PO 裁决后记录裁决理由
+
+### 4.8 例外场景：紧急发布流程
+
+**适用场景**:
+
+- 线上 P0 故障修复
+- 安全漏洞紧急修复
+- 业务关键需求（老板特批）
+
+**快速通道流程**:
+
+```
+1. 申请紧急发布
+   └── 申请人 → Governance 委员会（PO + Tech Lead + PM）
+   └── 审批时限：< 2 小时
+
+2. 简化验收（仅验证核心项）
+   ├── 功能逻辑闭环（核心流程）✅
+   ├── 逻辑漏洞（安全/数据风险）✅
+   └── 其他维度可延期评审
+
+3. 紧急发布
+   └── 记录风险，承诺 N 天内补完整验收
+
+4. 事后补验收
+   └── 在承诺期限内完成完整验收流程
+```
+
+**约束**:
+
+- 紧急发布每月不得超过 2 次
+- 事后补验收期限为 7 天
+- 超期未完成补验收，冻结该团队后续紧急发布申请权限
 
 ## 5. Acceptance Report Contract
 
@@ -538,7 +687,27 @@ acceptance_report:
     └── approval-gate-<id>.yaml
 ```
 
-### 5.3 Gate Record Integration
+**模板文件**:
+
+验收报告模板位于 `.templates/acceptance-report-template.yaml`，使用时复制并重命名。
+
+### 5.3 Version Management
+
+验收报告版本与 SSOT 版本的关联规则：
+
+| SSOT 版本变更 | 验收报告处理 |
+|---------------|--------------|
+| v1.0 → v1.1 (小修订) | 生成 acceptance-report-v1.1.yaml，保留 v1.0 历史版本 |
+| v1.x → v2.0 (大修订) | 生成 acceptance-report-v2.0.yaml，保留所有历史版本 |
+| SSOT 冻结后 | 验收报告同步冻结，不可修改 |
+
+**历史版本保留策略**:
+
+- 所有验收报告历史版本永久保留
+- 可通过 `lee acceptance history --ssot-id <id>` 查询
+- 审计时以最新版本的验收报告为准
+
+### 5.4 Gate Record Integration
 
 Gate 记录必须引用验收报告：
 
@@ -621,6 +790,59 @@ ssot_metadata:
           description: "修复 XXX 问题"
       acceptance_report: acceptance-report-v1.1.yaml
 ```
+
+### 6.4 SSOT State Machine
+
+SSOT 在验收流程中的状态流转：
+
+```
+┌─────────────┐
+│   draft     │ ── 作者完成 SSOT 编写
+└──────┬──────┘
+       │
+       │ lee acceptance start
+       ▼
+┌─────────────┐
+│under_review │ ── 等待评审中
+└──────┬──────┘
+       │
+       ├───────┬───────────────┬───────────┐
+       │       │               │           │
+ approve       │ revise        │ reject    │ flag
+       │       │               │           │
+       ▼       ▼               ▼           ▼
+┌─────────┐ ┌─────────┐ ┌─────────────┐ ┌─────────────┐
+│approved │ │revising │ │ terminated  │ │approved     │
+│(待冻结) │ │(修订中) │ │ (已终止)    │ │(有风险)     │
+└────┬────┘ └────┬────┘ └─────────────┘ └──────┬──────┘
+     │           │                              │
+     │ lee freeze│                              │ lee freeze
+     │           └──────────────────────────────┘
+     ▼
+┌─────────────┐
+│   frozen    │ ── 正式冻结
+└─────────────┘
+```
+
+**状态定义**:
+
+| 状态 | 说明 | 允许的操作 |
+|------|------|------------|
+| `draft` | 草稿状态，作者编写中 | 编辑、删除、提交验收 |
+| `under_review` | 评审中 | 查看、评论、决策 |
+| `approved` | 评审通过，待冻结 | 冻结、撤销批准 |
+| `revising` | 修订中 | 编辑、重新提交验收 |
+| `terminated` | 已终止 | 无（只能重新创建） |
+| `frozen` | 已冻结 | 解锁（需审批） |
+
+**状态流转规则**:
+
+- `draft` → `under_review`: 作者提交验收申请
+- `under_review` → `approved`: Review Gate 决策为 approve/flag
+- `under_review` → `revising`: Review Gate 决策为 revise
+- `under_review` → `terminated`: Review Gate 决策为 reject
+- `revising` → `under_review`: 修订完成后重新提交
+- `approved` → `frozen`: Approval Gate 批准后冻结
 
 ## 7. Industry Benchmark Framework
 
@@ -841,7 +1063,49 @@ Gate 系统需要支持：
 3. **指标定期审查**
    - 质量指标纳入团队考核
 
-## 12. Follow-up
+## 12. Operation Guide
+
+### 12.1 如何触发验收流程
+
+验收流程由 SSOT 作者在完成 Draft 后主动触发：
+
+1. **准备阶段**
+   - 完成 SSOT Draft 编写
+   - 自我检查必填字段完整性
+   - 确认 derived_from_ids 引用有效
+
+2. **触发方式**
+   ```bash
+   # 使用 CLI 触发验收流程
+   lee acceptance start --ssot-id ADR-025
+   ```
+
+3. **流程状态查询**
+   ```bash
+   # 查询当前验收状态
+   lee acceptance status --ssot-id ADR-025
+   ```
+
+4. **评审意见提交**
+   ```bash
+   # 提交评审意见
+   lee gate review --gate-id <review-gate-id> --decision approve
+   lee gate review --gate-id <review-gate-id> --decision revise --comment "P1: xxx"
+   ```
+
+### 12.2 验收报告模板位置
+
+验收报告模板文件位于：
+```
+.templates/acceptance-report-template.yaml
+```
+
+使用时复制模板到目标 SSOT 的 artifacts 目录：
+```
+.artifacts/active/<department>/<ssot-type>/<ssot-id>/acceptance-report-v1.0.yaml
+```
+
+### 12.3 Follow-up
 
 需要继续完成的工作：
 
