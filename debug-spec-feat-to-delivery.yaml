@@ -1,0 +1,20 @@
+# Debug spec for feat-to-delivery-prep
+# Using EPIC-SRC-056-001 as parent with all child FEATs
+
+formal_ssot_id: EPIC-SRC-056-001
+feat_freeze_ref:
+  - spec/requirements/SRC-056/FEAT-SRC-056-001__run-scoped-placement-manifest-contract-design.md
+  - spec/requirements/SRC-056/FEAT-SRC-056-002__artifact-placement-reviewer-agent-implementation.md
+governing_adrs:
+  - ADR-021
+decision_refs: []
+architecture_constraints:
+  - manifest 必须采用 YAML 格式作为 machine-readable contract
+  - manifest 在 workflow 初始化阶段生成
+  - manifest 被 audit agent 和 validator 消费
+  - 纯 backend/governance FEAT，不涉及 UI
+process_constraints:
+  - TASK 必须落盘到 spec/tasks/<FEAT-ID>/
+  - 每个 TASK 必须可独立审计和追溯
+  - 禁止生成 UI 相关任务，这两个 FEAT 都是纯 backend/governance
+ui_applicable: false

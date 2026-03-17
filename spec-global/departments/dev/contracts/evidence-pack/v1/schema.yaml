@@ -1,0 +1,240 @@
+# Evidence Pack Schema v1.0
+# 证据包模式定义
+
+kind: schema
+version: 1.0
+id: schema.dev.evidence_pack.v1
+name: Evidence Pack Schema
+description: |
+  Schema for Evidence Pack used as Smoke Gate input.
+  Contains all evidence artifacts required for gate evaluation.
+
+# Data structure
+data_structure:
+  evidence_pack_id:
+    type: string
+    required: true
+    description: "Unique identifier for this evidence pack"
+    format: "ep-{smoke_run_id}"
+
+  pack_type:
+    type: string
+    required: true
+    description: "Type of evidence pack"
+    enum: [smoke_test, integration_test, unit_test, qa_test_run]
+
+  source_workflow:
+    type: string
+    required: true
+    description: "Workflow that generated this evidence pack"
+    enum: [template.dev.smoke_l3, template.qa.test_set_execute, template.dev.feature_integration_l3]
+
+  created_at:
+    type: string
+    required: true
+    description: "ISO 8601 timestamp of creation"
+    format: date-time
+
+  created_by:
+    type: string
+    required: true
+    description: "Agent that created this evidence pack"
+
+  subject_refs:
+    type: object
+    required: true
+    description: "References to subject artifacts"
+    properties:
+      feat_id:
+        type: string
+        description: "FEAT being verified"
+      test_set_id:
+        type: string
+        description: "Test Set used"
+      smoke_run_id:
+        type: string
+        description: "Smoke run identifier"
+
+  evidence_catalog:
+    type: array
+    required: true
+    description: "Catalog of all evidence artifacts"
+    items:
+      type: object
+      properties:
+        artifact_id:
+          type: string
+          description: "Unique artifact identifier"
+        artifact_type:
+          type: string
+          description: "Type of artifact"
+          enum: [test_cases, scripts, runner_output, evidence_bundle, compliance_result, results, tse]
+        path:
+          type: string
+          description: "File or directory path"
+        checksum:
+          type: string
+          description: "SHA-256 checksum (optional)"
+        required:
+          type: boolean
+          description: "Whether this artifact is required"
+
+  verification_summary:
+    type: object
+    required: true
+    description: "Summary of verification results"
+    properties:
+      total_artifacts:
+        type: integer
+        description: "Total artifacts in pack"
+      required_artifacts:
+        type: integer
+        description: "Required artifacts count"
+      present_artifacts:
+        type: integer
+        description: "Present artifacts count"
+      completeness_rate:
+        type: number
+        description: "Completeness percentage (0-100)"
+
+  quality_checks:
+    type: array
+    required: true
+    description: "Quality check results"
+    items:
+      type: object
+      properties:
+        check_id:
+          type: string
+          description: "Check identifier"
+        check_name:
+          type: string
+          description: "Human-readable check name"
+        status:
+          type: string
+          enum: [pass, fail, warning, skipped]
+        message:
+          type: string
+          description: "Check result message"
+
+  gate_evaluation:
+    type: object
+    required: true
+    description: "Pre-evaluation for gate"
+    properties:
+      gate_id:
+        type: string
+        description: "Target gate identifier"
+      ready_for_gate:
+        type: boolean
+        description: "Whether pack is ready for gate evaluation"
+      blocker_issues:
+        type: array
+        items:
+          type: string
+        description: "List of blocker issues"
+      major_issues:
+        type: array
+        items:
+          type: string
+        description: "List of major issues"
+
+  metadata:
+    type: object
+    required: false
+    description: "Additional metadata"
+    properties:
+      execution_mode:
+        type: string
+        enum: [enforce, warn]
+        description: "Compliance enforcement level"
+      priority_filter:
+        type: array
+        items:
+          type: string
+        description: "Priority filter applied"
+      coverage_enabled:
+        type: boolean
+        description: "Whether coverage was measured"
+
+# Validation rules
+validation_rules:
+  - id: completeness_check
+    description: "All required artifacts must be present"
+    rule: "completeness_rate == 100"
+
+  - id: blocker_free
+    description: "No blocker issues for gate readiness"
+    rule: "IF ready_for_gate == true THEN blocker_issues is empty"
+
+  - id: catalog_consistency
+    description: "Catalog count must match artifacts"
+    rule: "total_artifacts == length(evidence_catalog)"
+
+# Example
+example:
+  evidence_pack_id: "ep-smoke-20260316-001"
+  pack_type: "smoke_test"
+  source_workflow: "template.dev.smoke_l3"
+  created_at: "2026-03-16T10:35:00Z"
+  created_by: "agent.dev.evidence_packager"
+  subject_refs:
+    feat_id: "FEAT-023"
+    test_set_id: "TS-USER-AUTH-001"
+    smoke_run_id: "smoke-20260316-001"
+  evidence_catalog:
+    - artifact_id: "cases-001"
+      artifact_type: "test_cases"
+      path: "tests_dir/exec/smoke-20260316-001/cases.yaml"
+      required: true
+    - artifact_id: "scripts-001"
+      artifact_type: "scripts"
+      path: "tests_dir/exec/smoke-20260316-001/scripts/"
+      required: true
+    - artifact_id: "runner-output-001"
+      artifact_type: "runner_output"
+      path: "tests_dir/exec/smoke-20260316-001/runner-output.json"
+      required: true
+    - artifact_id: "bundle-001"
+      artifact_type: "evidence_bundle"
+      path: "tests_dir/exec/smoke-20260316-001/bundle/"
+      required: true
+    - artifact_id: "compliance-001"
+      artifact_type: "compliance_result"
+      path: "tests_dir/exec/smoke-20260316-001/compliance-result.json"
+      required: true
+    - artifact_id: "results-001"
+      artifact_type: "results"
+      path: "tests_dir/exec/smoke-20260316-001/results.yaml"
+      required: true
+    - artifact_id: "tse-001"
+      artifact_type: "tse"
+      path: "tests_dir/exec/smoke-20260316-001/tse.yaml"
+      required: true
+  verification_summary:
+    total_artifacts: 7
+    required_artifacts: 7
+    present_artifacts: 7
+    completeness_rate: 100
+  quality_checks:
+    - check_id: "qc-001"
+      check_name: "Artifact Existence"
+      status: "pass"
+      message: "All required artifacts present"
+    - check_id: "qc-002"
+      check_name: "Schema Compliance"
+      status: "pass"
+      message: "All artifacts conform to schema"
+    - check_id: "qc-003"
+      check_name: "Evidence Integrity"
+      status: "pass"
+      message: "Evidence bundle has valid checksums"
+  gate_evaluation:
+    gate_id: "gate.dev.smoke_gate"
+    ready_for_gate: true
+    blocker_issues: []
+    major_issues: []
+  metadata:
+    execution_mode: "enforce"
+    priority_filter: ["P0", "P1"]
+    coverage_enabled: true

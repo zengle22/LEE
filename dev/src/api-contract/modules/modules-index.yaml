@@ -1,0 +1,27 @@
+# API Contract Modules Index
+# LEE API 协议模块索引
+
+index_version: 1.0.0
+updated_at: '2026-03-16'
+
+modules:
+  - module_id: gate-dual-axis
+    name: Gate Dual-Axis Model
+    description: Gate 双轴模型（purpose + decision_mode）API 协议
+    version: 1.0.0
+    status: draft
+    created_at: '2026-03-16'
+    source_refs:
+      - TECH-FEAT-SRC-041-001
+      - ADR-017
+      - FEAT-SRC-041-001
+    contract_path: dev/src/api-contract/modules/gate-dual-axis/v1/api-contract.yaml
+    endpoints_count: 4
+    enums:
+      - GatePurpose
+      - GateDecisionMode
+    tags:
+      - gate
+      - approval
+      - dual-axis
+      - SRC-041

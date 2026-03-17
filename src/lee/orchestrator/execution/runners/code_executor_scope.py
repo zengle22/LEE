@@ -8,18 +8,49 @@ from lee.orchestrator.execution.runners.base import StepRunnerBase
 from lee.orchestrator.storage.models import StepResult, TaskExecutionStatus
 
 
-def collect_declared_output_paths(step) -> List[str]:
+def collect_declared_output_paths(step, project_root: Optional[str] = None) -> List[str]:
+    """
+    Collect declared output paths from step outputs.
+
+    Handles three types of outputs:
+    1. Dict with type="file"/"dir" and path: returns the explicit path
+    2. Dict with type="symbol" or no type: symbolic output, allows project root
+    3. String (symbolic name): symbolic output, allows project root
+
+    For symbolic outputs, project root is added to allow writes to standard locations.
+    """
     declared_output_files: List[str] = []
+    has_symbolic_output = False
+
     for output in (getattr(step, "outputs", None) or []):
         if isinstance(output, dict):
             output_type = output.get("type")
             output_path = output.get("path", "")
+            # Symbolic output (type="symbol" or no type with symbol name)
+            if output_type == "symbol" or (output_type is None and "symbol" in output):
+                has_symbolic_output = True
+                continue
         else:
+            # Check if it's a SimpleNamespace or similar object
             output_type = getattr(output, "type", None)
             output_path = getattr(output, "path", "")
+            # Check for symbolic output
+            if output_type == "symbol":
+                has_symbolic_output = True
+                continue
+            # String output is a symbolic name
+            if isinstance(output, str):
+                has_symbolic_output = True
+                continue
+
         normalized_path = str(output_path or "").strip()
         if output_type in {"file", "dir"} and normalized_path:
             declared_output_files.append(normalized_path)
+
+    # If there are symbolic outputs, add project root to allow standard location writes
+    if has_symbolic_output and project_root:
+        declared_output_files.append(project_root)
+
     return declared_output_files
 
 
@@ -53,9 +84,10 @@ def build_code_executor_io_config(
     step_id: str,
     step,
     configured_write_scope: Any,
+    project_root: Optional[str] = None,
 ) -> dict[str, Any]:
     step_workspace = str(Path(workspace) / ".workflow" / "workspace" / workflow_id / step_id)
-    declared_output_files = collect_declared_output_paths(step)
+    declared_output_files = collect_declared_output_paths(step, project_root)
     return {
         "step_workspace": step_workspace,
         "declared_output_files": declared_output_files,

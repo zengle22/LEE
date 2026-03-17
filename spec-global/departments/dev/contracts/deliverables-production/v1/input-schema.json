@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "deliverables-production-input-v1",
+  "title": "Deliverables Production Input Schema",
+  "description": "Input schema for agent.dev.deliverables_producer",
+  "type": "object",
+  "required": ["feat_spec_ref", "missing_deliverables", "output_base"],
+  "properties": {
+    "feat_spec_ref": {
+      "type": "string",
+      "description": "Path to FEAT specification file"
+    },
+    "missing_deliverables": {
+      "type": "array",
+      "description": "List of missing deliverable filenames",
+      "items": {
+        "type": "string"
+      }
+    },
+    "output_base": {
+      "type": "string",
+      "description": "Base directory for output files"
+    },
+    "project_root": {
+      "type": "string",
+      "description": "Project root directory"
+    },
+    "search_dirs": {
+      "type": "array",
+      "description": "Directories to search for context",
+      "items": {
+        "type": "string"
+      },
+      "default": ["src", "spec", "docs", "examples", "output"]
+    }
+  },
+  "additionalProperties": false
+}

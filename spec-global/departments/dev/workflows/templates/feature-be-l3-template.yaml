@@ -44,6 +44,10 @@ instance_schema:
   - coverage_report_ref
   - coverage_gate_result
   - be_handoff_package_ref
+  - deliverables_production_report_ref
+  - deliverables_production_result
+  - deliverables_check_report_ref
+  - deliverables_gate_result
 stages:
 - id: execution
   name: Execution Pipeline
@@ -107,3 +111,53 @@ stages:
     outputs:
     - be_handoff_package_ref
     - handoff_notes
+  - id: deliverables_production
+    name: Deliverables Production
+    kind: agent
+    description: Produce missing deliverables defined in FEAT specification.
+    agent_id: agent.dev.deliverables_producer
+    config:
+      search_dirs:
+      - src
+      - spec
+      - docs
+      - examples
+      - output
+    mandatory: true
+    depends_on:
+    - publish_backend
+    outputs:
+    - deliverables_production_report_ref
+    - deliverables_production_result
+    - produced_count
+    - failed_count
+  - id: deliverables_check
+    name: Deliverables Completeness Check
+    kind: agent
+    description: Validate that all deliverables defined in FEAT specification are produced.
+    agent_id: agent.dev.deliverables_reviewer
+    config:
+      search_dirs:
+      - src
+      - spec
+      - docs
+      - examples
+      - output
+      fail_on_missing: false
+    mandatory: true
+    depends_on:
+    - deliverables_production
+    outputs:
+    - deliverables_check_report_ref
+    - deliverables_gate_result
+  - id: deliverables_gate
+    name: Deliverables Completeness Gate
+    kind: gate
+    description: Human gate to review deliverables completeness before handoff.
+    mandatory: true
+    depends_on:
+    - deliverables_check
+    config:
+      gate:
+        type: human_approval
+        gate_id: gate.dev.deliverables_gate

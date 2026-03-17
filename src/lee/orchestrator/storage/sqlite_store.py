@@ -26,6 +26,10 @@ from lee.orchestrator.storage.models import (
     Template,
     GateApproval,
     GateStatus,
+    GatePurpose,
+    GateDecisionMode,
+    validate_purpose_mode_combination,
+    InvalidPurposeModeCombinationError,
 )
 
 
@@ -276,6 +280,9 @@ class SQLiteStore:
                 structured_feedback TEXT,
                 issues TEXT,
                 invalidated_at TEXT,
+                purpose TEXT,
+                decision_mode TEXT,
+                legacy_gate_type TEXT,
 
                 PRIMARY KEY (workflow_id, gate_id),
                 FOREIGN KEY (workflow_id) REFERENCES workflow_instances(id)
@@ -858,7 +865,12 @@ class SQLiteStore:
         创建门禁审批记录
 
         v1.1: 支持新增字段（version, default_action, decision_action 等）
+        v1.2 (SRC-041): 添加 purpose 和 decision_mode 组合验证
         """
+        # SRC-041: 验证 purpose 和 decision_mode 的组合合法性
+        if not validate_purpose_mode_combination(gate.purpose, gate.decision_mode):
+            raise InvalidPurposeModeCombinationError(gate.purpose, gate.decision_mode)
+
         # 检查 gate_approvals 表是否有新列
         # 如果没有（旧版本），则不插入新字段
         try:
@@ -868,8 +880,9 @@ class SQLiteStore:
                  created_at, decided_at, approval_criteria, reviewers,
                  version, default_reject_action, default_reject_target,
                  default_revise_action, default_revise_target,
-                 decision_action, target_step)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 decision_action, target_step,
+                 purpose, decision_mode, legacy_gate_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 gate.workflow_id,
                 gate.gate_id,
@@ -888,6 +901,9 @@ class SQLiteStore:
                 gate.default_revise_target,
                 gate.decision_action,
                 gate.target_step,
+                gate.purpose.value,
+                gate.decision_mode.value,
+                gate.legacy_gate_type,
             ))
         except aiosqlite.OperationalError as e:
             # 如果新列不存在，回退到旧版本插入
@@ -1125,6 +1141,7 @@ class SQLiteStore:
         将数据库行转换为 GateApproval
 
         v1.1: 支持新字段的解析
+        v1.2 (SRC-041): 支持 purpose 和 decision_mode 字段的解析
         """
         # 基本字段（索引 0-9）
         workflow_id = row[0]
@@ -1151,6 +1168,11 @@ class SQLiteStore:
         issues = None
         invalidated_at = None
 
+        # v1.2 SRC-041 双轴模型字段
+        purpose = GatePurpose.REVIEW
+        decision_mode = GateDecisionMode.HUMAN_REQUIRED
+        legacy_gate_type = None
+
         # 尝试解析新字段
         try:
             if len(row) > 10:
@@ -1173,7 +1195,14 @@ class SQLiteStore:
                 issues = json.loads(row[18])
             if len(row) > 19 and row[19]:
                 invalidated_at = datetime.fromisoformat(row[19])
-        except (IndexError, json.JSONDecodeError, ValueError):
+            # SRC-041 双轴字段（索引 20, 21, 22）
+            if len(row) > 20 and row[20]:
+                purpose = GatePurpose(row[20])
+            if len(row) > 21 and row[21]:
+                decision_mode = GateDecisionMode(row[21])
+            if len(row) > 22 and row[22]:
+                legacy_gate_type = row[22]
+        except (IndexError, json.JSONDecodeError, ValueError, KeyError):
             # 新字段不存在或解析失败，使用默认值
             pass
 
@@ -1198,4 +1227,7 @@ class SQLiteStore:
             structured_feedback=structured_feedback,
             issues=issues,
             invalidated_at=invalidated_at,
+            purpose=purpose,
+            decision_mode=decision_mode,
+            legacy_gate_type=legacy_gate_type,
         )

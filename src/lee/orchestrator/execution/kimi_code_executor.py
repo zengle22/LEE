@@ -36,6 +36,7 @@ class KimiCodeExecutor(ClaudeCodeExecutor):
             or self.DEFAULT_MODEL
         )
         self._extra_env = self._load_kimi_env_settings()
+        super().__init__(**kwargs)
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         validation_error = self._validate_input(input_data)
@@ -100,11 +101,14 @@ class KimiCodeExecutor(ClaudeCodeExecutor):
 
         evidence_dir = self._prepare_evidence_dir(evidence_base, workspace)
 
+        read_only = bool(input_data.get("read_only", False))
+
         system_prompt = self._build_system_prompt(
             goal=goal,
             workspace=workspace,
             allowed_commands=allowed_commands,
             write_scope=write_scope,
+            read_only=read_only,
             forbidden_read_paths=forbidden_read_paths,
             max_iterations=max_iterations,
             max_bash_calls=max_bash_calls,

@@ -1,0 +1,302 @@
+# Gate Dual-Axis Contract
+# SRC-041 Gate 双轴模型改造 - 内部接口契约
+# 注：本项目为纯 CLI + Spec 项目，无 HTTP API
+
+contract_id: CONTRACT-GATE-DUAL-AXIS-20260316-001
+version: 1.0.0
+status: pending_freeze
+created_at: '2026-03-16'
+contract_type: internal_python_interface
+source_refs:
+  - TECH-FEAT-SRC-041-001
+  - ADR-017
+  - FEAT-SRC-041-001
+
+---
+
+## 1. Enum Definitions
+
+### 1.1 GatePurpose
+
+枚举 Gate 的目的，用于区分 Gate 的职责语义。
+
+```python
+class GatePurpose(str, Enum):
+    REVIEW = "review"        # 质量判断，不表达正式责任确认
+    APPROVAL = "approval"    # 正式责任确认，必须与 human_required 组合
+```
+
+**字段说明**:
+- `REVIEW`: 用于质量把关、代码审核、测试验证等非正式确认场景
+- `APPROVAL`: 用于 freeze、release、merge、risk acceptance 等正式责任确认场景
+
+**约束规则**:
+- `APPROVAL` purpose 只能与 `HUMAN_REQUIRED` decision_mode 组合
+- `REVIEW` purpose 可以与任意 decision_mode 组合
+
+### 1.2 GateDecisionMode
+
+枚举 Gate 的决策方式，用于定义 Gate 的触发条件。
+
+```python
+class GateDecisionMode(str, Enum):
+    AUTO = "auto"                    # 自动通过，无需人工干预
+    CONDITIONAL_HUMAN = "conditional_human"  # 条件触发人工审批
+    HUMAN_REQUIRED = "human_required"        # 必须人工审批
+```
+
+**字段说明**:
+- `AUTO`: 满足条件后自动通过，适用于低风险场景
+- `CONDITIONAL_HUMAN`: 根据配置条件（如金额阈值、风险等级）决定是否触发人工审批
+- `HUMAN_REQUIRED`: 必须由人工明确批准，适用于正式责任确认场景
+
+**约束规则**:
+- `APPROVAL + AUTO` 组合非法
+- `APPROVAL + CONDITIONAL_HUMAN` 组合非法
+- `APPROVAL + HUMAN_REQUIRED` 组合合法（强制）
+- `REVIEW + AUTO/CONDITIONAL_HUMAN/HUMAN_REQUIRED` 组合均合法
+
+---
+
+## 2. Data Model Extensions
+
+### 2.1 GateApproval 扩展
+
+在现有 `GateApproval` 数据模型基础上新增双轴字段。
+
+**新增字段** (P0):
+```python
+purpose: GatePurpose                          # 必填：Gate 目的
+decision_mode: GateDecisionMode               # 必填：决策方式
+legacy_gate_type: Optional[str]               # 可选：历史分类映射（废弃中）
+```
+
+**完整模型**:
+```python
+@dataclass
+class GateApproval:
+    workflow_id: str
+    gate_id: str
+    step_id: str
+    status: GateStatus = GateStatus.PENDING
+    approver: Optional[str] = None
+    comments: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.now)
+    decided_at: Optional[datetime] = None
+    approval_criteria: List[Dict[str, Any]] = field(default_factory=list)
+    reviewers: List[Dict[str, str]] = field(default_factory=list)
+    version: int = 1
+
+    # === 双轴模型新增字段 ===
+    purpose: GatePurpose
+    decision_mode: GateDecisionMode
+    legacy_gate_type: Optional[str] = None  # 历史分类映射
+
+    # v1.1 原有字段
+    default_reject_action: Optional[str] = None
+    default_reject_target: Optional[str] = None
+    default_revise_target: Optional[str] = None
+    decision_action: Optional[str] = None
+    target_step: Optional[str] = None
+    structured_feedback: Optional[Dict[str, Any]] = None
+    issues: Optional[List[str]] = None
+    invalidated_at: Optional[datetime] = None
+```
+
+---
+
+## 3. Internal Python Interfaces
+
+本项目为纯 CLI + Spec 项目，无 HTTP API。本章节定义内部 Python 接口契约。
+
+### 3.1 Store 接口 (SQLiteStore)
+
+**实现文件**: `src/lee/orchestrator/storage/store.py`
+
+```python
+class SQLiteStore:
+    # === GateApproval 相关方法 ===
+
+    async def create_gate_approval(self, gate: GateApproval) -> None:
+        """
+        创建 GateApproval 记录
+        前置条件：purpose 和 decision_mode 必须通过组合验证
+        """
+
+    async def get_gate_approval(self, workflow_id: str, gate_id: str) -> Optional[GateApproval]:
+        """
+        获取 GateApproval 记录
+        返回：包含 purpose 和 decision_mode 字段的 GateApproval
+        """
+
+    async def update_gate_approval(self, gate: GateApproval) -> bool:
+        """
+        更新 GateApproval 记录（乐观锁，需要 version 字段）
+        返回：是否更新成功
+        """
+
+    async def get_pending_gates(self, workflow_id: str) -> List[GateApproval]:
+        """
+        获取工作流的所有待审批 Gates
+        返回：GateApproval 列表，status=PENDING
+        """
+```
+
+### 3.2 Runner 接口 (HumanGateRunner)
+
+**实现文件**: `src/lee/orchestrator/execution/runners/gate_runner.py`
+
+```python
+class HumanGateRunner:
+    async def execute(self, workflow_id: str, step, ctx: RunnerContext) -> StepResult:
+        """
+        处理 Human Gate 步骤
+
+        双轴逻辑:
+        1. 从 step.config 提取 purpose 和 decision_mode
+        2. 验证组合合法性 (APPROVAL + HUMAN_REQUIRED 必须)
+        3. 创建 GateApproval 记录 (包含双轴字段)
+        4. 暂停工作流等待人工审批
+        """
+
+    def _get_purpose_from_config(self, step_config: dict) -> GatePurpose:
+        """
+        从步骤配置解析 purpose
+        默认值：REVIEW
+        """
+
+    def _get_decision_mode_from_config(self, step_config: dict) -> GateDecisionMode:
+        """
+        从步骤配置解析 decision_mode
+        默认值：HUMAN_REQUIRED
+        """
+```
+
+### 3.3 CLI 接口 (lee gates 命令)
+
+**实现文件**: `src/lee/cli/commands/gates_cmd.py`
+
+```python
+# === 显示 Gate 信息时增加双轴字段 ===
+@click.option('--show-dual-axis', is_flag=True, help='显示双轴字段')
+def list_gates(show_dual_axis: bool):
+    """
+    列出待审批的 Gates
+
+    输出字段:
+    - gate_id, workflow_id, step_id
+    - status, approver, created_at
+    - purpose, decision_mode (当 show_dual_axis=True)
+    """
+```
+
+---
+
+## 4. Validation Rules
+
+### 4.1 组合验证
+
+```python
+def validate_purpose_mode_combination(purpose: GatePurpose, decision_mode: GateDecisionMode) -> bool:
+    """验证 purpose 和 decision_mode 的组合合法性"""
+    if purpose == GatePurpose.APPROVAL:
+        # approval 只能与 human_required 组合
+        return decision_mode == GateDecisionMode.HUMAN_REQUIRED
+    elif purpose == GatePurpose.REVIEW:
+        # review 可以与任意 decision_mode 组合
+        return decision_mode in [GateDecisionMode.AUTO, GateDecisionMode.CONDITIONAL_HUMAN, GateDecisionMode.HUMAN_REQUIRED]
+    return False
+```
+
+**验证时机**:
+- 创建 GateApproval 时
+- 更新 purpose 或 decision_mode 时
+- SQLiteStore 写入前
+
+**错误信息**:
+```
+Invalid combination: purpose=APPROVAL with decision_mode=AUTO is not allowed.
+APPROVAL purpose must be paired with HUMAN_REQUIRED decision_mode only.
+```
+
+---
+
+### 4.2 字段验证
+
+| 字段 | 验证规则 | 错误信息 |
+|------|---------|---------|
+| purpose | 必须是 REVIEW 或 APPROVAL | Invalid purpose value |
+| decision_mode | 必须是 AUTO/CONDITIONAL_HUMAN/HUMAN_REQUIRED | Invalid decision_mode value |
+| purpose + decision_mode | 必须通过组合验证 | Invalid combination |
+
+---
+
+## 5. Legacy Compatibility
+
+### 5.1 历史分类映射表
+
+| 历史 gate_type | purpose | decision_mode | 说明 |
+|---------------|---------|---------------|------|
+| code_review | REVIEW | HUMAN_REQUIRED | 代码审核 |
+| quality_gate | REVIEW | HUMAN_REQUIRED | 质量门禁 |
+| security_review | REVIEW | HUMAN_REQUIRED | 安全审查 |
+| compliance_check | REVIEW | CONDITIONAL_HUMAN | 合规检查 |
+| auto_test | REVIEW | AUTO | 自动化测试 |
+| freeze | APPROVAL | HUMAN_REQUIRED | 冻结操作 |
+| release | APPROVAL | HUMAN_REQUIRED | 发布操作 |
+| merge | APPROVAL | HUMAN_REQUIRED | 合并操作 |
+| risk_acceptance | APPROVAL | HUMAN_REQUIRED | 风险接受 |
+
+### 5.2 映射函数
+
+```python
+def map_legacy_to_dual_axis(legacy_gate_type: Optional[str]) -> Tuple[GatePurpose, GateDecisionMode]:
+    """将历史分类映射到双轴模型"""
+    MAPPING = {
+        # REVIEW purposes
+        "code_review": (GatePurpose.REVIEW, GateDecisionMode.HUMAN_REQUIRED),
+        "quality_gate": (GatePurpose.REVIEW, GateDecisionMode.HUMAN_REQUIRED),
+        "security_review": (GatePurpose.REVIEW, GateDecisionMode.HUMAN_REQUIRED),
+        "compliance_check": (GatePurpose.REVIEW, GateDecisionMode.CONDITIONAL_HUMAN),
+        "auto_test": (GatePurpose.REVIEW, GateDecisionMode.AUTO),
+        # APPROVAL purposes
+        "freeze": (GatePurpose.APPROVAL, GateDecisionMode.HUMAN_REQUIRED),
+        "release": (GatePurpose.APPROVAL, GateDecisionMode.HUMAN_REQUIRED),
+        "merge": (GatePurpose.APPROVAL, GateDecisionMode.HUMAN_REQUIRED),
+        "risk_acceptance": (GatePurpose.APPROVAL, GateDecisionMode.HUMAN_REQUIRED),
+    }
+
+    if legacy_gate_type and legacy_gate_type in MAPPING:
+        return MAPPING[legacy_gate_type]
+
+    # 默认值：REVIEW + HUMAN_REQUIRED
+    return (GatePurpose.REVIEW, GateDecisionMode.HUMAN_REQUIRED)
+```
+
+---
+
+## 6. Changelog
+
+| 版本 | 日期 | 变更说明 |
+|------|------|---------|
+| 1.0.0 | 2026-03-16 | 初始版本，定义 GatePurpose 和 GateDecisionMode 枚举，扩展 GateApproval 模型 |
+
+---
+
+## 7. Implementation Locations
+
+| 组件 | 文件路径 | 负责内容 |
+|------|---------|---------|
+| 枚举定义 | `src/lee/orchestrator/storage/models.py` | GatePurpose, GateDecisionMode |
+| 数据模型 | `src/lee/orchestrator/storage/models.py` | GateApproval 扩展 |
+| 持久化 | `src/lee/orchestrator/storage/store.py` | SQLiteStore 方法 |
+| Runner | `src/lee/orchestrator/execution/runners/gate_runner.py` | HumanGateRunner 双轴逻辑 |
+| CLI | `src/lee/cli/commands/gates_cmd.py` | gates 命令双轴字段展示 |
+
+---
+
+## 8. Open Questions
+
+1. 是否需要为 `legacy_gate_type` 字段添加索引以优化查询性能？
+2. 是否需要提供批量迁移脚本将现有 GateApproval 记录迁移到双轴模型？
+3. CLI 展示层是否需要同时显示双轴字段和历史分类？

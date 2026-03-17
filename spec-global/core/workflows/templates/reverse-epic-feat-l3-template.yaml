@@ -33,10 +33,6 @@ input_contract:
     - name: repo_root
       type: string
       description: Repository root to analyze
-    - name: objective
-      type: enum
-      values: [reverse_epic_feat]
-      description: Fixed objective for this workflow
   optional_fields:
     - name: include_paths
       type: array
@@ -405,7 +401,6 @@ instance_schema:
   context_fields:
     - request_id
     - repo_root
-    - objective
     - strict_evidence
     - publish_mode
     - include_paths

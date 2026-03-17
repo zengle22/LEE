@@ -14,6 +14,53 @@ from lee.orchestrator.execution.claude_code_executor import ClaudeCodeExecutor
 from lee.orchestrator.execution.output_seed import seed_declared_output_files
 
 
+class TestNestedSessionDetection:
+    """Tests for nested Claude Code session detection (BUG-LEE-EXECUTOR-001)."""
+
+    @pytest.mark.asyncio
+    async def test_invoke_claude_raises_when_in_nested_session(self, monkeypatch):
+        """Test that _invoke_claude raises RuntimeError when CLAUDECODE env var is set."""
+        monkeypatch.setenv("CLAUDECODE", "1")
+        executor = ClaudeCodeExecutor()
+
+        with pytest.raises(RuntimeError) as exc_info:
+            await executor._invoke_claude(
+                prompt="test",
+                system_prompt="test",
+                workspace="/tmp",
+                allowed_commands=["cat"],
+                timeout_seconds=30,
+                max_iterations=1,
+            )
+
+        assert "Cannot launch nested Claude Code session" in str(exc_info.value)
+        assert "already running inside a Claude Code session" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_invoke_claude_allows_execution_when_not_nested(self, monkeypatch, tmp_path):
+        """Test that _invoke_claude works normally when CLAUDECODE env var is not set."""
+        monkeypatch.delenv("CLAUDECODE", raising=False)
+        executor = ClaudeCodeExecutor()
+
+        # Mock subprocess to avoid actually calling claude CLI
+        def mock_run_subprocess(*args, **kwargs):
+            return '{"type":"result","subtype":"success","is_error":false,"num_turns":1,"result":"test"}'
+
+        monkeypatch.setattr(executor, "_run_subprocess", mock_run_subprocess)
+
+        # Should not raise
+        result = await executor._invoke_claude(
+            prompt="test",
+            system_prompt="test",
+            workspace=str(tmp_path),
+            allowed_commands=["cat"],
+            timeout_seconds=30,
+            max_iterations=1,
+        )
+
+        assert result is not None
+
+
 class TestClaudeCodeExecutor:
     def setup_method(self):
         self.executor = ClaudeCodeExecutor()

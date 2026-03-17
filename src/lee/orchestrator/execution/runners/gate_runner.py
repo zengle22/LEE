@@ -18,6 +18,7 @@ import yaml
 
 from lee.orchestrator.storage.models import StepResult
 from lee.orchestrator.execution.runners.base import StepRunnerBase, RunnerContext
+from lee.orchestrator.storage.models import GatePurpose, GateDecisionMode, validate_purpose_mode_combination
 
 
 class HumanGateRunner(StepRunnerBase):
@@ -36,6 +37,12 @@ class HumanGateRunner(StepRunnerBase):
         处理 Human Gate 步骤
 
         Human Gate 不调用 Executor，而是暂停工作流等待人工审批。
+
+        SRC-041 双轴逻辑:
+        1. 从 step.config 提取 purpose 和 decision_mode
+        2. 验证组合合法性 (APPROVAL + HUMAN_REQUIRED 必须)
+        3. 创建 GateApproval 记录 (包含双轴字段)
+        4. 暂停工作流等待人工审批
         """
         from lee.orchestrator.storage.models import WorkflowStatus, GateApproval, GateStatus
 
@@ -69,7 +76,22 @@ class HumanGateRunner(StepRunnerBase):
             # revise 总是执行 retry
             default_revise_target = on_revise.get("target_step")
 
-        # 创建门禁审批记录（包含默认动作）
+        # SRC-041: 提取双轴配置
+        purpose = self._get_purpose_from_config(gate_config)
+        decision_mode = self._get_decision_mode_from_config(gate_config)
+
+        # SRC-041: 验证组合合法性
+        if not validate_purpose_mode_combination(purpose, decision_mode):
+            return StepResult(
+                status="failed",
+                step_id=step.id,
+                workflow_id=workflow_id,
+                message=f"Invalid Gate Dual-Axis combination: purpose={purpose.value}, decision_mode={decision_mode.value}. "
+                        f"APPROVAL purpose must be paired with HUMAN_REQUIRED decision_mode only.",
+                next_steps=[],
+            )
+
+        # 创建门禁审批记录（包含默认动作和双轴字段）
         gate_id_base = step.gate_id or f"gate_{workflow_id}_{step.id}"
         pending_gates = await ctx.store.get_pending_gates(workflow_id)
         existing_pending_gate = next(
@@ -111,6 +133,9 @@ class HumanGateRunner(StepRunnerBase):
             default_reject_action=default_reject_action,
             default_reject_target=default_reject_target,
             default_revise_target=default_revise_target,
+            # SRC-041: 双轴字段
+            purpose=purpose,
+            decision_mode=decision_mode,
         )
         await ctx.store.create_gate_approval(gate_approval)
 
@@ -130,6 +155,44 @@ class HumanGateRunner(StepRunnerBase):
             message=f"Waiting for human approval at gate: {gate_id_value}",
             next_steps=[],
         )
+
+    def _get_purpose_from_config(self, step_config: dict) -> GatePurpose:
+        """
+        从步骤配置解析 purpose
+
+        默认值：REVIEW
+
+        Args:
+            step_config: Gate 配置字典
+
+        Returns:
+            GatePurpose: 解析后的目的枚举值
+        """
+        purpose_str = step_config.get("purpose", "review")
+        try:
+            return GatePurpose(purpose_str)
+        except ValueError:
+            # 无效值时返回默认值
+            return GatePurpose.REVIEW
+
+    def _get_decision_mode_from_config(self, step_config: dict) -> GateDecisionMode:
+        """
+        从步骤配置解析 decision_mode
+
+        默认值：HUMAN_REQUIRED
+
+        Args:
+            step_config: Gate 配置字典
+
+        Returns:
+            GateDecisionMode: 解析后的决策方式枚举值
+        """
+        decision_mode_str = step_config.get("decision_mode", "human_required")
+        try:
+            return GateDecisionMode(decision_mode_str)
+        except ValueError:
+            # 无效值时返回默认值
+            return GateDecisionMode.HUMAN_REQUIRED
 
 
 class ComplianceGateRunner(StepRunnerBase):

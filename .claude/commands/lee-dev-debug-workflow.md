@@ -14,6 +14,8 @@ description: Debug workflow end-to-end: run with inputs, force completion, valid
 | ✅ 只能跑工作流 | 所有调整必须通过 re-run workflow 实现 |
 | 🤖 调用对应 agent | 工作流调整调用 `spec-global/core/agents` 或对应部门 agents |
 | 🔍 完整校验 | 文件目录、命名、内容结构、字段、语义全部检查 |
+| 🛡️ 代码修改必调 safe-code | 涉及代码修改时必须先调用 `/lee-safe-code` skill |
+| 🚪 验收 gate 必须通过 | 修改完成后必须通过 `/gate-review` 验收才能提交 |
 
 ## 使用方法
 
@@ -36,6 +38,10 @@ lee run dev.tech-design-l3 --project-dir <repo> --spec <spec-file>
 3. 校验所有输出
 4. 发现问题 → 调用对应 agent 修复 → 重新运行
 5. 循环直到所有校验通过
+6. **涉及代码修改时**：
+   - 调用 `/lee-safe-code` 进行安全编码约束检查
+   - 调用 `/gate-review` 进行人工验收确认
+   - 验收通过后才可提交 git
 
 ## 校验清单（必须全部通过）
 
@@ -141,3 +147,31 @@ lee run dev.tech-design-l3 --spec debug-spec.yaml --project-dir .
 ```
 
 等待完成后，逐项校验输出，发现问题则调用对应 agent 修复后重新运行。
+
+## 代码修改场景（重要）
+
+当调试的工作流产出物涉及**代码文件**（`.py`、`.ts`、`.js` 等）修改时：
+
+### 1. 调用 Safe Code Skill
+```bash
+/lee-safe-code
+```
+- 检查代码复用情况
+- 验证代码质量
+- 确保测试覆盖率
+- 避免重复代码
+
+### 2. 调用 Gate Review 验收
+```bash
+/gate-review
+```
+- 人工验收修改内容
+- 确认符合契约要求
+- 批准后方可提交 git
+
+### 3. 提交 Git
+验收通过后，执行：
+```bash
+git add <modified_files>
+git commit -m "<conventional_commit_message>"
+```

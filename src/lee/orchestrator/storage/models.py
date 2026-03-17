@@ -272,6 +272,76 @@ class GateStatus(str, Enum):
     INVALIDATED = "invalidated"  # v1.1: 已作废
 
 
+# ========================================================================
+# SRC-041 Gate Dual-Axis Model (v1.2)
+# ========================================================================
+
+class GatePurpose(str, Enum):
+    """
+    Gate 目的枚举（SRC-041 双轴模型）
+
+    用于区分 Gate 的职责语义：
+    - REVIEW: 质量判断，不表达正式责任确认
+    - APPROVAL: 正式责任确认，必须与 human_required 组合
+    """
+    REVIEW = "review"        # 质量判断，不表达正式责任确认
+    APPROVAL = "approval"    # 正式责任确认，必须与 human_required 组合
+
+
+class GateDecisionMode(str, Enum):
+    """
+    Gate 决策方式枚举（SRC-041 双轴模型）
+
+    用于定义 Gate 的触发条件：
+    - AUTO: 自动通过，无需人工干预
+    - CONDITIONAL_HUMAN: 条件触发人工审批
+    - HUMAN_REQUIRED: 必须人工审批
+    """
+    AUTO = "auto"                    # 自动通过，无需人工干预
+    CONDITIONAL_HUMAN = "conditional_human"  # 条件触发人工审批
+    HUMAN_REQUIRED = "human_required"        # 必须人工审批
+
+
+def validate_purpose_mode_combination(purpose: GatePurpose, decision_mode: GateDecisionMode) -> bool:
+    """
+    验证 purpose 和 decision_mode 的组合合法性（ADR-017 约束）
+
+    规则:
+    - APPROVAL purpose 只能与 HUMAN_REQUIRED decision_mode 组合
+    - REVIEW purpose 可以与任意 decision_mode 组合
+
+    Returns:
+        bool: 组合是否合法
+
+    Example:
+        >>> validate_purpose_mode_combination(GatePurpose.APPROVAL, GateDecisionMode.HUMAN_REQUIRED)
+        True
+        >>> validate_purpose_mode_combination(GatePurpose.APPROVAL, GateDecisionMode.AUTO)
+        False
+        >>> validate_purpose_mode_combination(GatePurpose.REVIEW, GateDecisionMode.AUTO)
+        True
+    """
+    if purpose == GatePurpose.APPROVAL:
+        # approval 只能与 human_required 组合
+        return decision_mode == GateDecisionMode.HUMAN_REQUIRED
+    elif purpose == GatePurpose.REVIEW:
+        # review 可以与任意 decision_mode 组合
+        return decision_mode in [GateDecisionMode.AUTO, GateDecisionMode.CONDITIONAL_HUMAN, GateDecisionMode.HUMAN_REQUIRED]
+    return False
+
+
+class InvalidPurposeModeCombinationError(Exception):
+    """非法的 purpose 和 decision_mode 组合异常（SRC-041）"""
+
+    def __init__(self, purpose: GatePurpose, decision_mode: GateDecisionMode):
+        self.purpose = purpose
+        self.decision_mode = decision_mode
+        super().__init__(
+            f"Invalid combination: purpose={purpose.value} with decision_mode={decision_mode.value} is not allowed. "
+            f"APPROVAL purpose must be paired with HUMAN_REQUIRED decision_mode only."
+        )
+
+
 class ConcurrentDecisionError(Exception):
     """并发决策冲突异常（v1.1）"""
     pass
@@ -288,6 +358,11 @@ class GateApproval:
     - 添加决策 action 字段
     - 添加结构化反馈字段
     - 添加作废标记
+
+    v1.2 (SRC-041):
+    - 添加 purpose 字段（GatePurpose 枚举）
+    - 添加 decision_mode 字段（GateDecisionMode 枚举）
+    - 添加 legacy_gate_type 字段（历史分类映射）
     """
     workflow_id: str
     gate_id: str
@@ -324,6 +399,17 @@ class GateApproval:
 
     # 作废标记
     invalidated_at: Optional[datetime] = None
+
+    # === v1.2 SRC-041 双轴模型新增字段 ===
+
+    # Gate 目的（必填）
+    purpose: GatePurpose = GatePurpose.REVIEW
+
+    # 决策方式（必填）
+    decision_mode: GateDecisionMode = GateDecisionMode.HUMAN_REQUIRED
+
+    # 历史分类映射（可选，废弃中）
+    legacy_gate_type: Optional[str] = None
 
 
 @dataclass

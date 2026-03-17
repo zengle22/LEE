@@ -1,0 +1,75 @@
+# Integration Test Plan - FEAT-SRC-056-002
+
+## Test Objective
+验证 Artifact Placement Reviewer Agent 的集成能力，并识别交付物缺失问题。
+
+## Test Scope
+1. CLI 集成测试
+2. Python API 集成测试
+3. 交付物完整性检查
+
+---
+
+## Test Cases
+
+### TC-001: CLI Module Import
+**目的**: 验证 CLI 模块可以正常导入
+
+**步骤**:
+```bash
+python -c "from lee.agents.artifact_placement_reviewer import audit_directory; print('OK')"
+```
+
+**预期**: 成功导入，无错误
+
+---
+
+### TC-002: CLI Help Command
+**目的**: 验证 CLI 命令已注册
+
+**步骤**:
+```bash
+lee audit --help
+```
+
+**预期**: 显示帮助信息
+
+---
+
+### TC-003: Python API Basic Usage
+**目的**: 验证 Python API 可以调用
+
+**步骤**:
+```python
+from lee.agents.artifact_placement_reviewer import ManifestLoader
+print(ManifestLoader)
+```
+
+**预期**: 成功访问类定义
+
+---
+
+### TC-004: Deliverables Check
+**目的**: 检查规范要求的交付物是否完整
+
+**检查清单**:
+- [ ] `artifact_placement_reviewer.py` 存在
+- [ ] `placement_audit_report_schema.yaml` 存在
+- [ ] `example-audit-report.yaml` 存在
+- [ ] `agent-usage-guide.md` 存在
+
+**预期**: 所有文件存在
+
+---
+
+## Success Criteria
+- TC-001: PASS
+- TC-002: PASS
+- TC-003: PASS
+- TC-004: 识别缺失文件
+
+---
+
+## Output
+- `output/integration-test-report.json`
+- `output/deliverables-gap-analysis.json`

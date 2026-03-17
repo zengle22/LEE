@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from lee.orchestrator.api import pm_workflow
+from lee.orchestrator.storage.models import GatePurpose, GateDecisionMode
 
 
 @click.group()
@@ -42,7 +43,8 @@ def _load_gates_from_db(
         base_sql = """
             SELECT gate_id, step_id, status, approver, comments,
                    created_at, decided_at, approval_criteria, reviewers,
-                   default_reject_action, default_reject_target
+                   default_reject_action, default_reject_target,
+                   purpose, decision_mode, legacy_gate_type
             FROM gate_approvals
         """
         params: list[Any] = []
@@ -75,22 +77,37 @@ def _load_gates_from_db(
             reviewers,
             default_reject_action,
             default_reject_target,
+            purpose,
+            decision_mode,
+            legacy_gate_type,
         ) in cursor.fetchall():
-            rows.append(
-                {
-                    "gate_id": gate_id,
-                    "step_id": step_id,
-                    "status": status,
-                    "approver": approver,
-                    "comments": comments,
-                    "created_at": created_at,
-                    "decided_at": decided_at,
-                    "approval_criteria": _safe_json_loads(approval_criteria, []),
-                    "reviewers": _safe_json_loads(reviewers, []),
-                    "default_reject_action": default_reject_action,
-                    "default_reject_target": default_reject_target,
-                }
-            )
+            row_dict = {
+                "gate_id": gate_id,
+                "step_id": step_id,
+                "status": status,
+                "approver": approver,
+                "comments": comments,
+                "created_at": created_at,
+                "decided_at": decided_at,
+                "approval_criteria": _safe_json_loads(approval_criteria, []),
+                "reviewers": _safe_json_loads(reviewers, []),
+                "default_reject_action": default_reject_action,
+                "default_reject_target": default_reject_target,
+            }
+            # SRC-041: 双轴字段
+            if purpose:
+                try:
+                    row_dict["purpose"] = GatePurpose(purpose).value
+                except ValueError:
+                    row_dict["purpose"] = purpose
+            if decision_mode:
+                try:
+                    row_dict["decision_mode"] = GateDecisionMode(decision_mode).value
+                except ValueError:
+                    row_dict["decision_mode"] = decision_mode
+            if legacy_gate_type:
+                row_dict["legacy_gate_type"] = legacy_gate_type
+            rows.append(row_dict)
         return rows
     finally:
         conn.close()
@@ -176,11 +193,13 @@ def _resolve_gate_ref(
 @click.option("--all", "-a", is_flag=True, help="显示所有门禁（包括已处理的）")
 @click.option("--pending", "-p", is_flag=True, help="只显示待处理门禁（默认）")
 @click.option("--project-dir", default=".", help="项目目录")
-def list(workflow_id: str | None, all: bool, pending: bool, project_dir: str) -> None:
+@click.option("--show-dual-axis", is_flag=True, help="显示双轴字段 (purpose, decision_mode)")
+def list(workflow_id: str | None, all: bool, pending: bool, project_dir: str, show_dual_axis: bool) -> None:
     """列出门禁
 
     不指定 WORKFLOW_ID 时，列出所有工作流的门禁。
     使用 --all 显示已处理的历史门禁。
+    使用 --show-dual-axis 显示 SRC-041 双轴模型字段 (purpose, decision_mode)。
     """
     project_root = Path(project_dir).resolve()
     db_path = project_root / ".workflow" / "orchestrator.db"
@@ -298,6 +317,17 @@ def list(workflow_id: str | None, all: bool, pending: bool, project_dir: str) ->
                 target = gate.get("default_reject_target")
                 target_suffix = f" (target={target})" if target else ""
                 click.echo(f"  默认拒绝动作: {gate.get('default_reject_action')}{target_suffix}")
+
+            # SRC-041: 显示双轴字段
+            if show_dual_axis:
+                purpose = gate.get("purpose", "review")
+                decision_mode = gate.get("decision_mode", "human_required")
+                click.echo(f"  双轴模型:")
+                click.echo(f"    purpose: {purpose}")
+                click.echo(f"    decision_mode: {decision_mode}")
+                legacy = gate.get("legacy_gate_type")
+                if legacy:
+                    click.echo(f"    legacy_gate_type: {legacy}")
 
         conn.close()
 

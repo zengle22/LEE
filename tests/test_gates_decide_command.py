@@ -12,6 +12,7 @@ def _prepare_db(tmp_path: Path) -> None:
     db_path = db_dir / "orchestrator.db"
     conn = sqlite3.connect(str(db_path))
     cur = conn.cursor()
+    # SRC-041: 更新 schema 以包含双轴字段
     cur.execute(
         """
         CREATE TABLE gate_approvals (
@@ -26,17 +27,22 @@ def _prepare_db(tmp_path: Path) -> None:
             approval_criteria TEXT,
             reviewers TEXT,
             default_reject_action TEXT,
-            default_reject_target TEXT
+            default_reject_target TEXT,
+            purpose TEXT DEFAULT 'review',
+            decision_mode TEXT DEFAULT 'human_required',
+            legacy_gate_type TEXT
         )
         """
     )
+    # SRC-041: INSERT 语句包含双轴字段
     cur.execute(
         """
         INSERT INTO gate_approvals (
             workflow_id, gate_id, step_id, status, approver, comments,
             created_at, decided_at, approval_criteria, reviewers,
-            default_reject_action, default_reject_target
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            default_reject_action, default_reject_target,
+            purpose, decision_mode, legacy_gate_type
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "wf_task_x",
@@ -51,6 +57,9 @@ def _prepare_db(tmp_path: Path) -> None:
             '[{"id":"zeng","role":"owner"}]',
             "rollback",
             "s1_review",
+            "review",  # purpose
+            "human_required",  # decision_mode
+            None,  # legacy_gate_type
         ),
     )
     conn.commit()

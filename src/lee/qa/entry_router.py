@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 import uuid
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable, Optional, Union
 
 from lee.orchestrator.execution.artifacts.id_parser import parse_parent
 
@@ -21,8 +21,8 @@ from .schemas import (
     SSOTAxisBinding,
 )
 
-Validator = Callable[[str], Awaitable[ChainValidationResult] | ChainValidationResult]
-AuditSink = Callable[[AuditEntry], Awaitable[Optional[str]] | Optional[str]]
+Validator = Callable[[str], Union[Awaitable[ChainValidationResult], ChainValidationResult]]
+AuditSink = Callable[[AuditEntry], Union[Awaitable[Optional[str]], Optional[str]]]
 
 
 class EntryRouter:
