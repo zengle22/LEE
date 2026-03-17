@@ -1,14 +1,14 @@
 ---
 id: FEAT-SRC-058-001
 ssot_type: feat
-title: Smoke Gate Merge 门禁集成
+title: MR Smoke Gate Merge 门禁集成
 status: frozen
-version: v1
+version: v2
 workflow_instance_id: wf_task_fdb19191
 parent_id: EPIC-SRC-058-001
 derived_from_ids:
 - id: EPIC-SRC-058-001
-  version: v1
+  version: v4
   required: true
 source_refs:
 - EPIC-SRC-058-001#scope
@@ -22,7 +22,7 @@ frozen_at: '2026-03-17T10:13:48.257344'
 
 # Goal
 
-将 Smoke Gate 作为 blocker 门禁集成到 merge 流程，实现 100% merge 请求覆盖，自动拦截 blocker 问题
+将 MR Smoke Gate(P0 only) 作为 blocker 门禁集成到 merge 流程，实现 100% merge 请求覆盖，自动拦截 blocker 问题，3-5 分钟内完成
 
 # User Value
 
@@ -40,6 +40,8 @@ Dev 在 merge 前自动执行 Smoke 测试，快速拦截 blocker 问题，避�
 - 实现 100% merge 请求覆盖
 - 自动拦截 blocker 问题
 - 可视化门禁状态
+- 只执行 P0 优先级用例，目标 3-5 分钟完成
+- 超时时间 10 分钟
 
 # Outputs
 
@@ -49,10 +51,11 @@ Dev 在 merge 前自动执行 Smoke 测试，快速拦截 blocker 问题，避�
 
 # Acceptance
 
-- Smoke Gate 作为 blocker 门禁集成到 merge 流程
+- MR Smoke Gate(P0 only) 作为 blocker 门禁集成到 merge 流程
 - 实现 100% merge 请求覆盖
 - 自动拦截 blocker 问题
 - 门禁状态可视化
+- 执行时间≤5 分钟
 
 # Acceptance Checks
 
