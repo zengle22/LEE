@@ -645,6 +645,14 @@ class ClaudeCodeExecutor(BaseExecutor):
         工作目录通过 subprocess cwd 参数控制。
         prompt 通过 stdin 传入以避免 shell 转义问题。
         """
+        # 检测嵌套会话：如果已在 Claude Code 会话中，直接返回错误
+        if os.environ.get("CLAUDECODE"):
+            raise RuntimeError(
+                "Cannot launch nested Claude Code session. "
+                "You are already running inside a Claude Code session. "
+                "Please use the current session directly or choose a different executor."
+            )
+
         base_cmd = [
             self._claude_binary,
             "--print",

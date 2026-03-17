@@ -36,6 +36,7 @@ class KimiCodeExecutor(ClaudeCodeExecutor):
             or self.DEFAULT_MODEL
         )
         self._extra_env = self._load_kimi_env_settings()
+        super().__init__(**kwargs)
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         validation_error = self._validate_input(input_data)
