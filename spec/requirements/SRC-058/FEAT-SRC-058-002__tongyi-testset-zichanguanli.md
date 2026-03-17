@@ -3,8 +3,8 @@ id: FEAT-SRC-058-002
 ssot_type: feat
 title: 统一 Test Set 资产管理
 status: frozen
-version: v2
-workflow_instance_id: wf_task_fix-p0p1-issues
+version: v3
+workflow_instance_id: wf_task_optimize-adv-issues
 parent_id: EPIC-SRC-058-001
 derived_from_ids:
 - id: EPIC-SRC-058-001
@@ -17,7 +17,7 @@ tags: []
 properties:
   contract_key: feat_002
   identity_kind: ssot
-frozen_at: '2026-03-17T12:00:00.000000'
+frozen_at: '2026-03-17T12:30:00.000000'
 ---
 
 # Goal
@@ -86,4 +86,11 @@ Flaky Test 标记功能正常，支持自动识别和手动标记
 
 # Dependencies
 
-- FEAT-SRC-058-005  # Flaky Test 治理 (使用标记字段)
+- FEAT-SRC-058-005  # Flaky Test 治理 (可选依赖，Flaky Test 标记字段可独立使用)
+
+# Implementation Order
+
+实施顺序建议：
+1. FEAT-SRC-058-002 第一阶段：实现 Test Set 数据模型和 priority 字段
+2. FEAT-SRC-058-002 第二阶段：实现 Flaky Test 标记字段 (可独立工作)
+3. FEAT-SRC-058-005：实现完整的 Flaky Test 治理流程 (可选)
