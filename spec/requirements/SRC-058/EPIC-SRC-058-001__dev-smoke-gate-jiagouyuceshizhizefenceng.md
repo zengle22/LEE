@@ -2,13 +2,13 @@
 id: EPIC-SRC-058-001
 ssot_type: epic
 title: Dev Smoke Gate 架构与测试职责分层
-status: active
+status: frozen
 version: v2
-workflow_instance_id: SRC-058
+workflow_instance_id: SRC-058-v2
 parent_id: SRC-058
 derived_from_ids:
 - id: SRC-058
-  version: v1
+  version: v2
   required: true
 source_refs:
 - SRC-058#scope
@@ -16,7 +16,7 @@ owner: null
 tags: []
 properties:
   src_root_id: SRC-058
-frozen_at: '2026-03-17T01:08:16.383006'
+frozen_at: '2026-03-17T11:00:00.000000'
 ---
 
 # Dev Smoke Gate 架构与测试职责分层

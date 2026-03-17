@@ -2,9 +2,10 @@
 id: SRC-058
 ssot_type: src
 title: Dev Smoke Gate 架构与测试职责分层
-status: active
+status: frozen
 version: v2
-workflow_instance_id: gate-materialize
+workflow_instance_id: gate-materialize-v2
+frozen_at: '2026-03-17T11:00:00.000000'
 parent_id: null
 derived_from_ids: []
 source_refs:

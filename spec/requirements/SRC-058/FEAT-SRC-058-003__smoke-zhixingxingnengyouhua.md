@@ -2,13 +2,13 @@
 id: FEAT-SRC-058-003
 ssot_type: feat
 title: Smoke 执行性能优化
-status: active
+status: frozen
 version: v2
-workflow_instance_id: wf_task_fdb19191
+workflow_instance_id: wf_task_fdb19191-refreeze
 parent_id: EPIC-SRC-058-001
 derived_from_ids:
 - id: EPIC-SRC-058-001
-  version: v1
+  version: v2
   required: true
 source_refs:
 - EPIC-SRC-058-001#scope
@@ -17,7 +17,7 @@ tags: []
 properties:
   contract_key: feat_003
   identity_kind: ssot
-frozen_at: '2026-03-17T10:13:48.257344'
+frozen_at: '2026-03-17T11:00:00.000000'
 ---
 
 # Goal
