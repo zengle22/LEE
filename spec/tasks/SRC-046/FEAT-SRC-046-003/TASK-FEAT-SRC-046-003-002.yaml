@@ -1,0 +1,71 @@
+---
+id: TASK-FEAT-SRC-046-003-002
+ssot_type: task
+title: 研发执行入口治理收口规则编写
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-003-002-20260317
+source_refs:
+  - FEAT-SRC-046-003
+owner: dev
+tags:
+  - dev
+  - documentation
+  - governance
+properties:
+  role: dev
+  priority: P1
+  estimated_effort: 4h
+  assignee: tech-lead-001
+---
+
+# TASK-FEAT-SRC-046-003-002: 研发执行入口治理收口规则编写
+
+## 1. 任务描述
+
+建立研发执行入口治理收口规则，统一研发执行入口并消除对分散命令的依赖。
+
+## 2. 验收标准
+
+- [ ] 研发执行入口统一
+- [ ] 分散命令依赖已识别
+- [ ] 收口路径明确可执行
+- [ ] 获得 tech_lead 批准
+
+## 3. 技术实现要点
+
+### 3.1 入口统一规则
+
+```yaml
+entry_governance:
+  primary_entry: "lee dev execute --plan {devplan_id}"
+  deprecated_entries:
+    - "lee run task"
+    - "lee dev task-run"
+  migration_path:
+    phase1: 记录使用
+    phase2: 发出警告
+    phase3: 停止支持
+```
+
+### 3.2 依赖识别
+
+```python
+def scan_scattered_entries() -> List[ScatteredEntry]:
+    """扫描并识别分散入口依赖"""
+    pass
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on:
+  - TASK-FEAT-SRC-046-003-001  # 依赖 QA 入口定义
+blocks:
+  - TASK-FEAT-SRC-046-003-003  # 入口收口依赖治理规则
+```
+
+## 5. 输出产物
+
+- `docs/dev/entry-governance-spec.md` - 研发入口治理规格
+- `docs/dev/scattered-entries-list.md` - 分散入口清单

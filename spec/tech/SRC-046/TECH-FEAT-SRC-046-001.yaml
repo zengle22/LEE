@@ -1,0 +1,153 @@
+---
+id: TECH-FEAT-SRC-046-001
+ssot_type: tech
+title: 交付主链建立与 RELEASE 起点治理技术设计
+status: frozen
+version: v1
+workflow_instance_id: wf-tech-src-046-001-20260317
+source_refs:
+  - FEAT-SRC-046-001
+owner: dev
+tags:
+  - architecture
+  - ssot
+  - delivery-chain
+properties:
+  architecture_pattern: "交付主链"
+  database_changes: false
+  api_changes: true
+  governing_adrs:
+    - ADR-001
+    - ADR-003
+    - ADR-007
+    - ADR-008
+    - ADR-017
+    - ADR-022
+---
+
+# TECH-FEAT-SRC-046-001: 交付主链建立与 RELEASE 起点治理技术设计
+
+## 1. 架构设计
+
+### 1.1 交付主链组件图
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   RELEASE   │────▶│  DEVPLAN    │────▶│   TASK      │
+│  (交付起点)  │     │ (开发计划)   │     │ (执行任务)   │
+└─────────────┘     └─────────────┘     └─────────────┘
+       │
+       │ 派生
+       ▼
+┌─────────────┐     ┌─────────────┐
+│  TESTPLAN   │────▶│   TASK      │
+│ (测试计划)   │     │ (验证任务)   │
+└─────────────┘     └─────────────┘
+```
+
+### 1.2 技术栈
+
+| 层级 | 技术选型 |
+|------|----------|
+| SSOT 存储 | YAML + Git |
+| 验证器 | Python + Pydantic |
+| CLI | Click + Python |
+| CI/CD | GitHub Actions |
+
+## 2. 对象 Schema 设计
+
+### 2.1 RELEASE 对象
+
+```yaml
+required_fields:
+  - id
+  - ssot_type
+  - title
+  - status
+  - version
+  - derived_from_ids  # FEAT 引用列表
+  - properties
+```
+
+### 2.2 DEVPLAN 对象
+
+```yaml
+required_fields:
+  - id
+  - ssot_type
+  - title
+  - status
+  - version
+  - parent_id  # RELEASE 引用
+  - derived_from_ids  # FEAT 引用
+  - properties
+```
+
+### 2.3 TESTPLAN 对象
+
+```yaml
+required_fields:
+  - id
+  - ssot_type
+  - title
+  - status
+  - version
+  - parent_id  # RELEASE 引用
+  - derived_from_ids  # FEAT + TESTSET 引用
+  - properties
+```
+
+## 3. SSOT 类型系统
+
+### 3.1 独立类型 (independent)
+
+- src: 原始需求来源
+- epic: 较大的业务目标集合
+- feat: 最小可独立验收业务单元
+- adr: 架构或业务决策
+- release: 版本范围与发布基线
+
+### 3.2 依赖父类型 (direct_parent)
+
+- ui: UI 原型/交互设计 (parent: FEAT)
+- tech: 技术设计 (parent: FEAT)
+- devplan: 开发计划 (parent: RELEASE)
+- testplan: 测试计划 (parent: RELEASE)
+- task: 实施任务 (parent: DEVPLAN/TESTPLAN)
+
+## 4. P0 校验规则
+
+### 4.1 规则清单
+
+| 规则 ID | 描述 | 检查内容 |
+|---------|------|----------|
+| P0-001 | ID 唯一性 | registry 中不存在重复 ID |
+| P0-002 | 路径唯一性 | active 对象的路径不冲突 |
+| P0-003 | Metadata 完整性 | id/ssot_type/title/status/version 必填 |
+| P0-004 | 类型合法性 | ssot_type 属于正式枚举 |
+| P0-005 | 引用存在性 | derived_from_ids 引用的对象必须存在 |
+
+## 5. 交付链验证
+
+### 5.1 验证流程
+
+```python
+def validate_delivery_chain(release_id: str):
+    # 1. 验证 RELEASE 对象
+    validate_release(release_id)
+
+    # 2. 验证 DEVPLAN 覆盖
+    validate_devplan_coverage(release_id)
+
+    # 3. 验证 TESTPLAN 覆盖
+    validate_testplan_coverage(release_id)
+
+    # 4. 验证 TASK 完整性
+    validate_task_completeness(release_id)
+```
+
+## 6. 输出产物
+
+- `spec-global/core/contracts/ssot-agent-output/v1/schema.json` - SSOT Schema
+- `src/lee/orchestrator/execution/artifacts/validator.py` - 验证器
+- `docs/ssot/delivery-chain.md` - 交付主链文档

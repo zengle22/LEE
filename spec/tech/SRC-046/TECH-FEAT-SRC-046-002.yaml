@@ -1,0 +1,108 @@
+---
+id: TECH-FEAT-SRC-046-002
+ssot_type: tech
+title: 发布关闭标准统一与治理闭环技术设计
+status: frozen
+version: v1
+workflow_instance_id: wf-tech-src-046-002-20260317
+source_refs:
+  - FEAT-SRC-046-002
+owner: dev
+tags:
+  - governance
+  - release
+  - audit
+properties:
+  architecture_pattern: "治理闭环"
+  database_changes: false
+  api_changes: true
+  governing_adrs:
+    - ADR-001
+    - ADR-007
+    - ADR-017
+---
+
+# TECH-FEAT-SRC-046-002: 发布关闭标准统一与治理闭环技术设计
+
+## 1. 架构设计
+
+### 1.1 治理闭环组件图
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│ release-    │────▶│ release-    │────▶│   Audit     │
+│   check     │     │   close     │    │   Trail     │
+└─────────────┘     └─────────────┘     └─────────────┘
+       │                   │                   │
+       ▼                   ▼                   ▼
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Check      │     │   Close     │     │  Evidence   │
+│  Result     │     │  Decision   │     │  Archive    │
+└─────────────┘     └─────────────┘     └─────────────┘
+```
+
+### 1.2 技术栈
+
+| 组件 | 技术选型 |
+|------|----------|
+| 检查执行 | Python + Pydantic |
+| 审计存储 | YAML + Git |
+| 证据归档 | File System + Hash |
+
+## 2. 审计数据结构
+
+### 2.1 审计轨迹
+
+```python
+class ReleaseCloseAudit:
+    release_id: str
+    closed_at: datetime
+    closed_by: str
+    check_result: ReleaseCheckResult
+    exceptions: List[ExceptionRecord]
+    evidence_refs: List[str]
+```
+
+### 2.2 检查项目
+
+```yaml
+release_check_items:
+  - item: feat_coverage
+    description: "所有 FEAT 已覆盖"
+    required: true
+  - item: blocker_bug_cleared
+    description: "Blocker bug 已清零"
+    required: true
+  - item: test_passed
+    description: "测试通过率达标"
+    required: true
+  - item: evidence_complete
+    description: "证据完整"
+    required: true
+```
+
+## 3. 治理路径
+
+### 3.1 标准路径
+
+```
+1. release-check → 2. 审查结果 → 3. 处理问题 → 4. release-close → 5. 审计归档
+```
+
+### 3.2 例外路径
+
+```yaml
+exception_handling:
+  blocker_bug_exists:
+    action: escalate_to_release_gate
+    requires: waiver_approval
+  test_coverage_low:
+    action: wait_or_waiver
+    requires: qa_lead_approval
+```
+
+## 4. 输出产物
+
+- `src/lee/orchestrator/execution/audit/release_close_audit.py` - 审计实现
+- `docs/release/close-governance.md` - 治理路径文档
+- `docs/audit/trail-schema.md` - 审计数据 Schema

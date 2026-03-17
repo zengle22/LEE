@@ -1,0 +1,66 @@
+---
+id: TASK-FEAT-SRC-046-002-001
+ssot_type: task
+title: 发布关闭标准文档编写
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-002-001-20260317
+source_refs:
+  - FEAT-SRC-046-002
+owner: product
+tags:
+  - documentation
+  - release
+  - governance
+properties:
+  role: product
+  priority: P0
+  estimated_effort: 4h
+  assignee: product-owner-001
+---
+
+# TASK-FEAT-SRC-046-002-001: 发布关闭标准文档编写
+
+## 1. 任务描述
+
+编写统一的发布关闭标准文档，明确 release-close 操作的验收条件。
+
+## 2. 验收标准
+
+- [ ] 发布关闭标准清晰可执行
+- [ ] 包含所有必需的审计报告项
+- [ ] 与现有 release-check/release-close 命令对齐
+- [ ] 获得 release_manager 批准
+
+## 3. 技术实现要点
+
+### 3.1 关闭标准清单
+
+1. 所有 FEAT 已完成开发并提测
+2. 测试通过率 >= 95%
+3. Blocker bug 清零或被豁免
+4. 发布报告已生成
+5. 部署证据已归档
+
+### 3.2 审计 trail
+
+```yaml
+audit_trail:
+  - release_check_result: required
+  - test_execution_report: required
+  - go_no_go_decision: required
+  - deployment_evidence: required
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on: []
+blocks:
+  - TASK-FEAT-SRC-046-002-002  # 治理路径执行依赖标准定义
+```
+
+## 5. 输出产物
+
+- `docs/release/release-close-criteria.md` - 发布关闭标准
+- `docs/release/audit-checklist.md` - 审计清单

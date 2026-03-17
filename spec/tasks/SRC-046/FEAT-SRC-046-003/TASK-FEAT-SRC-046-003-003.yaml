@@ -1,0 +1,71 @@
+---
+id: TASK-FEAT-SRC-046-003-003
+ssot_type: task
+title: 入口收口路径实现
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-003-003-20260317
+source_refs:
+  - FEAT-SRC-046-003
+owner: dev
+tags:
+  - dev
+  - implementation
+  - workflow
+properties:
+  role: dev
+  priority: P1
+  estimated_effort: 8h
+  assignee: dev-backend-005
+---
+
+# TASK-FEAT-SRC-046-003-003: 入口收口路径实现
+
+## 1. 任务描述
+
+实现入口收口路径，将 QA 和研发执行入口统一绑定到交付主链。
+
+## 2. 验收标准
+
+- [ ] 统一入口命令可用
+- [ ] 与交付主链绑定关系正确
+- [ ] 分散入口迁移指南完成
+- [ ] 通过端到端测试
+
+## 3. 技术实现要点
+
+### 3.1 统一入口命令
+
+```python
+@cli.command("execute")
+@click.option("--plan", required=True)
+def execute(plan: str):
+    """统一执行入口"""
+    plan_obj = registry.get(plan)
+    if plan_obj.ssot_type == "devplan":
+        execute_devplan(plan_obj)
+    elif plan_obj.ssot_type == "testplan":
+        execute_testplan(plan_obj)
+```
+
+### 3.2 绑定关系验证
+
+```python
+def validate_entry_binding(plan: Plan) -> ValidationResult:
+    """验证入口与交付主链的绑定关系"""
+    pass
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on:
+  - TASK-FEAT-SRC-046-003-002  # 依赖治理规则
+blocks: []
+```
+
+## 5. 输出产物
+
+- `src/lee/cli/commands/execute.py` - 统一入口命令
+- `tests/cli/test_execute.py` - 集成测试
+- `docs/dev/entry-migration-guide.md` - 迁移指南
