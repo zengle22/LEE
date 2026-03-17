@@ -224,6 +224,18 @@ input_params:
     required: false
     description: "Module name (legacy compatibility; prefer deriving from FEAT)"
 
+  qa_specs_dir:
+    type: string
+    required: false
+    default: "qa/specs"
+    description: "QA specs output directory for Test Set artifacts"
+
+  tests_dir:
+    type: string
+    required: false
+    default: "tests"
+    description: "Tests output directory for analysis, strategy, and review artifacts"
+
   feat_freeze:
     type: string
     required: false
