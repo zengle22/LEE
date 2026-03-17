@@ -1,0 +1,12 @@
+frozen_at: '2026-03-17T23:27:55.631518'
+frozen_by: gate.qa.testplan_freeze_gate
+id: testplan-test-001
+owner:
+  qa_lead: qa-lead-001
+  release_manager: rm-001
+release_ref: release-test-001
+ssot_type: TESTPLAN
+status: frozen
+test_set_refs:
+- ts-verification-code
+test_strategy_ref: spec/testplans/test-001/test_strategy.yaml

@@ -1,0 +1,18 @@
+task_execution_order:
+- lane: backend
+  priority: P0
+  tasks:
+  - assignee: dev-backend-001
+    depends_on: []
+    estimated_effort: 4h
+    status: ready
+    task_id: TASK-FEAT-TEST-001-001
+- lane: frontend
+  priority: P0
+  tasks:
+  - assignee: dev-frontend-001
+    depends_on:
+    - TASK-FEAT-TEST-001-001
+    estimated_effort: 4h
+    status: blocked
+    task_id: TASK-FEAT-TEST-001-002

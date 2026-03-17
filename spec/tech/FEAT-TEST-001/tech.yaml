@@ -1,0 +1,154 @@
+---
+id: TECH-FEAT-TEST-001
+ssot_type: TECH
+status: frozen
+version: v1
+workflow_instance_id: wf-tech-test-001-20260317
+source_refs:
+  - FEAT-TEST-001
+owner: dev
+tags:
+  - tech-design
+  - verification-code
+properties:
+  architecture_pattern: "前后端分离"
+  database_changes: true
+  api_changes: true
+---
+
+# TECH-FEAT-TEST-001: 验证码登录技术设计
+
+## 1. 架构设计
+
+### 1.1 组件图
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Frontend  │────▶│  API Gateway │────▶│  Auth Service│
+└─────────────┘     └─────────────┘     └─────────────┘
+                                              │
+                    ┌─────────────────────────┼─────────────────────────┐
+                    ▼                         ▼                         ▼
+           ┌───────────────┐         ┌───────────────┐         ┌───────────────┐
+           │  Redis Cache  │         │ SMS Provider A│         │ SMS Provider B│
+           │  (验证码存储)  │         │  (主服务商)    │         │  (备用服务商)   │
+           └───────────────┘         └───────────────┘         └───────────────┘
+```
+
+### 1.2 技术栈
+
+| 层级 | 技术选型 |
+|------|----------|
+| Frontend | React 18 + TypeScript |
+| API Gateway | Kong |
+| Auth Service | Node.js + Express |
+| Cache | Redis 7.0 |
+| SMS Provider A | 阿里云短信 |
+| SMS Provider B | 腾讯云短信 |
+
+## 2. API 设计
+
+### 2.1 发送验证码 API
+
+```yaml
+POST /api/send-code
+Request:
+  phone: string  # 手机号，格式 +86-138xxxxxxxx
+  scene: string  # 使用场景：login | register | reset_password
+
+Response:
+  code: number   # 200 成功，4xx 客户端错误，5xx 服务端错误
+  message: string
+  data:
+    expires_in: number  # 验证码有效期 (秒)
+```
+
+### 2.2 验证验证码 API
+
+```yaml
+POST /api/verify-code
+Request:
+  phone: string    # 手机号
+  code: string     # 验证码
+  token: string    # 发送时返回的 token
+
+Response:
+  code: number
+  message: string
+  data:
+    access_token: string  # 登录凭证
+    expires_in: number    # 凭证有效期
+```
+
+## 3. 数据库设计
+
+### 3.1 验证码表
+
+```sql
+CREATE TABLE verification_codes (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  phone VARCHAR(20) NOT NULL,
+  code VARCHAR(10) NOT NULL,
+  scene VARCHAR(50) NOT NULL,
+  status TINYINT DEFAULT 1,  -- 1: 未使用，2: 已使用，3: 已过期
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NOT NULL,
+  used_at TIMESTAMP NULL,
+  INDEX idx_phone_status (phone, status),
+  INDEX idx_expires_at (expires_at)
+);
+```
+
+## 4. 容灾设计
+
+### 4.1 主备切换逻辑
+
+```python
+def send_sms(phone: str, code: str) -> bool:
+    # 尝试主服务商
+    if provider_a.send(phone, code):
+        return True
+
+    # 主服务商失败，记录日志
+    logger.warning(f"Provider A failed, switching to Provider B")
+
+    # 切换备用服务商
+    if provider_b.send(phone, code):
+        # 发送告警，通知运维主服务商故障
+        alert_provider_failure("A")
+        return True
+
+    # 全部失败
+    logger.error(f"All providers failed")
+    return False
+```
+
+### 4.2 限流策略
+
+- 单手机号：60 秒内最多发送 1 次
+- 单 IP: 1 小时内最多请求 100 次
+- 全局限流：1000 QPS
+
+## 5. 安全设计
+
+### 5.1 验证码安全
+
+- 验证码长度：6 位数字
+- 有效期：5 分钟
+- 存储：Redis 加密存储
+- 防暴力破解：连续错误 5 次锁定 30 分钟
+
+### 5.2 接口安全
+
+- HTTPS 强制
+- 请求签名验证
+- 防重放攻击 (nonce + timestamp)
+
+## 6. 监控指标
+
+| 指标 | 阈值 | 告警级别 |
+|------|------|----------|
+| API 响应时间 P99 | < 500ms | Warning |
+| 验证码发送成功率 | > 98% | Critical |
+| 主备切换次数/小时 | < 3 次 | Warning |
+| 验证码验证通过率 | > 95% | Warning |

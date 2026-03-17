@@ -1,0 +1,69 @@
+---
+id: TASK-FEAT-SRC-046-004-001
+ssot_type: task
+title: 缺陷回流路径规格编写
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-004-001-20260317
+source_refs:
+  - FEAT-SRC-046-004
+owner: qa
+tags:
+  - qa
+  - documentation
+  - bugfix
+properties:
+  role: qa
+  priority: P1
+  estimated_effort: 4h
+  assignee: qa-lead-002
+---
+
+# TASK-FEAT-SRC-046-004-001: 缺陷回流路径规格编写
+
+## 1. 任务描述
+
+定义缺陷回流路径规格，确保 bugfix 可追溯至对应交付版本并重新进入交付轴闭环。
+
+## 2. 验收标准
+
+- [ ] 缺陷回流路径清晰可执行
+- [ ] bugfix 与交付版本关联规则明确
+- [ ] 与现有 bug 管理流程兼容
+- [ ] 获得 qa_lead 批准
+
+## 3. 技术实现要点
+
+### 3.1 回流路径定义
+
+```yaml
+bugfix_route:
+  discovery: QA 测试发现 bug
+  triage: bug-triage 评估严重性
+  assignment: 分配至对应研发
+  fix: 研发修复并提交
+  verification: QA 验证修复
+  closure: 关闭并记录
+  delivery: 纳入下一版本交付
+```
+
+### 3.2 版本关联
+
+```python
+def associate_bugfix_to_release(bug_id: str) -> ReleaseRef:
+    """关联 bugfix 到对应交付版本"""
+    pass
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on: []
+blocks:
+  - TASK-FEAT-SRC-046-004-002  # 证据归属依赖回流路径
+```
+
+## 5. 输出产物
+
+- `docs/bugfix/route-spec.md` - 缺陷回流路径规格
+- `docs/bugfix/version-association.md` - 版本关联指南

@@ -1,0 +1,72 @@
+---
+id: TASK-FEAT-SRC-046-001-002
+ssot_type: task
+title: SSOT Service release_check 实现
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-001-002-20260317
+source_refs:
+  - FEAT-SRC-046-001
+  - TECH-FEAT-SRC-046-001
+owner: dev
+tags:
+  - backend
+  - service
+  - release
+properties:
+  role: backend
+  priority: P0
+  estimated_effort: 8h
+  assignee: dev-backend-002
+---
+
+# TASK-FEAT-SRC-046-001-002: SSOT Service release_check 实现
+
+## 1. 任务描述
+
+实现 SSOT Service 的 release_check 方法，用于执行 RELEASE 对象的完整性校验。
+
+## 2. 验收标准
+
+- [ ] release_check() 方法可正常调用
+- [ ] 支持 enforce 模式用于发布 gate
+- [ ] 校验结果包含详细的错误信息
+- [ ] 支持 recut 审计
+
+## 3. 技术实现要点
+
+### 3.1 方法签名
+
+```python
+class SSOTService:
+    def release_check(
+        self,
+        release_id: str,
+        enforce: bool = False,
+        output_format: str = "detail"
+    ) -> ReleaseCheckResult:
+        """执行 RELEASE 级聚合校验"""
+        pass
+```
+
+### 3.2 校验内容
+
+- FEAT 覆盖完整性
+- DEVPLAN/TESTPLAN 派生状态
+- Blocker bug 状态
+- 发布报告/测试报告/部署证据
+
+## 4. 依赖关系
+
+```yaml
+depends_on:
+  - TASK-FEAT-SRC-046-001-001  # 依赖 P0 验证器
+blocks:
+  - TASK-FEAT-SRC-046-001-003  # derive_plans 依赖 release_check
+```
+
+## 5. 输出产物
+
+- `src/lee/orchestrator/execution/artifacts/ssot_service.py` - Service 实现
+- `tests/service/test_release_check.py` - 单元测试
+- `docs/service/release-check.md` - API 文档

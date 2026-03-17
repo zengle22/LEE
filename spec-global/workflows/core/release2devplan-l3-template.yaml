@@ -1,0 +1,224 @@
+# RELEASE2DEVPLAN L3 Template
+# 从 RELEASE 派生 DEVPLAN 的 L3 工作流模板
+#
+# 定位：ADR-027 渐进式工作流的核心 L3 之一
+# 上游：FEAT2RELEASE (RELEASE draft) + Delivery Prep (TASK frozen)
+# 下游：Dev Execution (现有工作流)
+#
+# 关键说明：
+# - TASK 对象已在 Delivery Prep 阶段生成并冻结
+# - 本 L3 不派生 TASK，仅组织已有 TASK 的执行顺序
+# - DEVPLAN 冻结后锁定 task_refs，禁止增删
+
+kind: l3_workflow_template
+version: "1.0"
+id: template.core.release2devplan
+name: RELEASE2DEVPLAN L3 Template
+description: |
+  L3 template for deriving DEVPLAN from RELEASE.
+
+  从 RELEASE 派生 DEVPLAN，并组织已有 TASK 的执行顺序：
+  1. DevPlan Init: 初始化 DEVPLAN 对象
+  2. Task Organization: 读取 Delivery Prep 中的 TASK，组织执行顺序
+  3. Task Validate: 验证 TASK 覆盖度
+  4. DevPlan Freeze: 冻结 DEVPLAN
+
+owner: dev-governance
+tags: [l3, devplan, release2devplan, adr-027, core]
+
+# SSOT Integration
+ssot_integration:
+  input_types:
+    - release_draft
+    - task_freeze
+  output_types:
+    - devplan_freeze
+
+# 阶段流程
+phases:
+  - id: devplan_init
+    name: "DEVPLAN Initialization"
+    description: |
+      初始化 DEVPLAN 对象：
+      - 生成 DEVPLAN-{release_id}.yaml (draft)
+      - 绑定 release_ref
+      - 设置 devplan_owner (tech_lead)
+    default_complexity: S
+    depends_on: []
+    outputs:
+      - path: spec/devplans/devplan-{release_id}.yaml
+        type: file
+        format: yaml
+        ssot_type: DEVPLAN
+        freeze: false  # draft 状态
+
+  - id: task_organization
+    name: "TASK Organization"
+    description: |
+      组织已有 TASK 的执行顺序：
+      - 读取 spec/tasks/{FEAT-ID}/TASK-*.yaml (来自 Delivery Prep)
+      - 定义 task_execution_order (按依赖关系排序)
+      - 定义 workstream 分组 (backend/frontend/integration)
+      - 分配责任人 (assignees)
+      - 估算工作量 (estimated_effort)
+    default_complexity: L
+    depends_on: [devplan_init]
+    spawns_l3: false
+    outputs:
+      - path: spec/devplans/{release_id}/task_execution_order.yaml
+        type: file
+        format: yaml
+        description: "TASK execution order and workstream grouping"
+
+  - id: task_validate
+    name: "TASK Validation"
+    description: |
+      验证 TASK 覆盖度：
+      - 所有 FEAT 都有至少一个 TASK
+      - TASK 责任角色明确
+      - TASK 依赖关系清晰
+      - 责任人已确认
+    default_complexity: S
+    depends_on: [task_organization]
+    gate:
+      type: auto_check
+      gate_id: gate.dev.task_validate_gate
+      checks:
+        - all_feats_covered
+        - task_assignees_confirmed
+        - task_dependencies_clear
+      on_pass: proceed_to_freeze
+      on_fail: block_devplan_freeze
+    outputs:
+      - path: spec/devplans/{release_id}/task_validation_result.json
+        type: file
+        format: json
+
+  - id: devplan_freeze
+    name: "DEVPLAN Freeze"
+    description: |
+      冻结 DEVPLAN：
+      - 锁定 task_refs，禁止增删
+      - 标记 DEVPLAN.status = "frozen"
+      - 记录 frozen_at 时间戳
+      - 人类审批确认
+    default_complexity: S
+    depends_on: [task_validate]
+    gate:
+      type: human_approval
+      gate_id: gate.dev.devplan_freeze_gate
+      approvers:
+        - tech_lead
+        - release_manager
+    outputs:
+      - path: spec/devplans/devplan-{release_id}.yaml
+        type: file
+        format: yaml
+        freeze: true  # frozen 状态
+
+# 输入输出 Contract
+l3_input_schema:
+  required_fields:
+    - release_ref: "release-{id}"
+    - release_draft_path: "spec/releases/release-{id}.yaml"
+    - task_bundle_paths: "list of TASK file paths"
+    - feat_bundle_refs: "list of FEAT IDs"
+  optional_fields:
+    - tech_lead: "tech lead assignee"
+    - release_manager: "release manager assignee"
+
+l3_output_schema:
+  required_fields:
+    - devplan_freeze_path: "spec/devplans/devplan-{id}.yaml"
+    - task_execution_order_path: "spec/devplans/{id}/task_execution_order.yaml"
+    - validation_result: "{all_feats_covered: bool, errors: []}"
+  optional_fields:
+    - workstream_grouping: "backend/frontend/integration groups"
+
+# 输出示例
+output_example:
+  devplan_yaml: |
+    # spec/devplans/devplan-{release_id}.yaml
+    id: devplan-{release_id}
+    ssot_type: DEVPLAN
+    status: frozen
+    release_ref: release-{release_id}
+    frozen_at: "2026-03-17T14:00:00Z"
+    frozen_by: gate.dev.devplan_freeze_gate
+    task_refs:
+      - TASK-FEAT-001-001
+      - TASK-FEAT-001-002
+      - TASK-FEAT-002-001
+    owner:
+      tech_lead: dev-lead-001
+      release_manager: rm-001
+
+  task_execution_order_yaml: |
+    # spec/devplans/{release_id}/task_execution_order.yaml
+    task_execution_order:
+      - lane: backend
+        priority: P0
+        tasks:
+          - task_id: TASK-FEAT-001-001
+            depends_on: []
+            assignee: dev-backend-001
+            estimated_effort: 4h
+            status: ready
+          - task_id: TASK-FEAT-002-001
+            depends_on: [TASK-FEAT-001-001]
+            assignee: dev-backend-002
+            estimated_effort: 8h
+            status: blocked
+      - lane: frontend
+        priority: P0
+        tasks:
+          - task_id: TASK-FEAT-001-002
+            depends_on: [TASK-FEAT-001-001]
+            assignee: dev-frontend-001
+            estimated_effort: 4h
+            status: blocked
+      - lane: integration
+        priority: P1
+        tasks:
+          - task_id: TASK-FEAT-001-003
+            depends_on: [TASK-FEAT-001-001, TASK-FEAT-001-002]
+            assignee: dev-senior-001
+            estimated_effort: 2h
+            status: blocked
+
+  validation_result_json: |
+    {
+      "all_feats_covered": true,
+      "total_feats": 3,
+      "total_tasks": 5,
+      "task_assignees_confirmed": true,
+      "task_dependencies_clear": true,
+      "errors": []
+    }
+
+# Gate 定义
+gate_definitions:
+  - gate_id: gate.dev.task_validate_gate
+    type: auto_check
+    description: "自动验证 TASK 覆盖度"
+    checks:
+      - id: all_feats_covered
+        description: "所有 FEAT 都有至少一个 TASK"
+        severity: error
+      - id: task_assignees_confirmed
+        description: "所有 TASK 责任人已确认"
+        severity: error
+      - id: task_dependencies_clear
+        description: "TASK 依赖关系清晰"
+        severity: warning
+
+  - gate_id: gate.dev.devplan_freeze_gate
+    type: human_approval
+    description: "人类审批冻结 DEVPLAN"
+    approvers:
+      - tech_lead
+      - release_manager
+    approval_criteria:
+      - TASK 覆盖度验证通过
+      - 责任人确认接受任务
+      - 依赖关系清晰可执行

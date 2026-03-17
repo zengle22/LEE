@@ -1,0 +1,125 @@
+# DEVPLAN Freeze Gate v1.0
+# DEVPLAN 冻结门禁（人类审批）
+#
+# 定位：ADR-027 渐进式工作流的核心 Gate 之一
+# 人类审批冻结 DEVPLAN
+
+kind: gate
+version: 1.0
+
+# ============================================
+# 宪法引用
+# ============================================
+constitution:
+  ref: ../../../departments/dev/AGENTS.md
+  version: "1.0"
+  mandatory: true
+
+# ============================================
+# ADR 引用
+# ============================================
+governing_adrs:
+  - ADR-027: 渐进式工作流落地设计
+
+id: gate.dev.devplan_freeze_gate
+name: DEVPLAN Freeze Gate
+description: >
+  DEVPLAN 冻结门禁（人类审批）。
+  锁定 DEVPLAN 的 task_refs，禁止增删，标记为 frozen 状态。
+
+owner: dev-governance
+tags: [gate, dev, devplan, freeze, human-approval, adr-027]
+
+# ============================================
+# 门禁类型
+# ============================================
+type: human_approval
+priority: blocker
+
+# ============================================
+# 触发条件
+# ============================================
+trigger:
+  event: "task_validate_passed"
+  source: "gate.dev.task_validate_gate"
+
+# ============================================
+# 输入证据
+# ============================================
+input_evidence:
+  - "spec/devplans/devplan-{release_id}.yaml"
+  - "spec/devplans/{release_id}/task_execution_order.yaml"
+  - "spec/devplans/{release_id}/task_validation_result.json"
+
+# ============================================
+# 审批人
+# ============================================
+approvers:
+  - role: tech_lead
+    description: "技术负责人，确认技术方案和 TASK 分配"
+  - role: release_manager
+    description: "发布经理，确认发布计划和时间表"
+
+# ============================================
+# 审批标准
+# ============================================
+approval_criteria:
+  - id: task_coverage_validated
+    description: "TASK 覆盖度验证通过"
+    check: "gate.dev.task_validate_gate passed"
+    required: true
+
+  - id: assignees_confirmed
+    description: "所有 TASK 责任人已确认接受任务"
+    check: "all task assignees have confirmed acceptance"
+    required: true
+
+  - id: dependencies_clear
+    description: "TASK 依赖关系清晰可执行"
+    check: "task dependencies are clear and executable"
+    required: true
+
+  - id: timeline_realistic
+    description: "时间表现实可行"
+    check: "estimated timeline is realistic"
+    required: false
+
+# ============================================
+# 通过条件
+# ============================================
+pass_criteria:
+  all_required: true
+  min_approvals: 2  # Both tech_lead and release_manager must approve
+  description: "所有审批人必须批准"
+
+# ============================================
+# 失败处理
+# ============================================
+on_fail:
+  action: "block_and_return"
+  message: "DEVPLAN 冻结审批未通过，请修正后重新提交审批"
+  return_to: "template.core.release2devplan"
+
+# ============================================
+# 效果
+# ============================================
+on_pass:
+  action: "freeze_devplan"
+  effects:
+    - "Set DEVPLAN.status = 'frozen'"
+    - "Lock task_refs (no additions or deletions)"
+    - "Record frozen_at timestamp"
+    - "Record frozen_by = 'gate.dev.devplan_freeze_gate'"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "dev-governance"
+  created_at: "2026-03-17"
+  version: "1.0"
+  changelog:
+    - version: "1.0"
+      date: "2026-03-17"
+      changes:
+        - "新建 DEVPLAN 冻结门禁 (ADR-027)"
