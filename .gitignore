@@ -79,6 +79,10 @@ nul
 .env
 .env.local
 
+# Claude Code local settings (keep example files)
+.claude/settings.local.json
+.claude/settings.json
+
 .artifacts
 .workflow
 .VSCodeCounter
