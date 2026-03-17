@@ -767,6 +767,9 @@ class TestYamlTemplates:
             "refactor_backend",
             "coverage_gate",
             "publish_backend",
+            "deliverables_production",
+            "deliverables_check",
+            "deliverables_gate",
         ]
         assert steps[3]["config"] == {
             "coverage_threshold": 80,
