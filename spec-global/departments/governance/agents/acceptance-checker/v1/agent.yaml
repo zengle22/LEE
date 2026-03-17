@@ -127,6 +127,11 @@ prompting:
     - "错误信息要具体，包含文件路径和行号"
     - "区分 error（阻塞）和 warning（建议）"
     - "输出严格的 JSON，符合 output schema"
+    - "CRITICAL: 输出必须是扁平结构，顶层必须有 status、check_type、dimensions 字段"
+    - "CRITICAL: 不要使用 business_output 或 structured_payload 嵌套结构"
+    - "CRITICAL: dimensions 必须是对象，包含 schema_validation、contract_validation、completeness_check、dependency_resolution 四个字段"
+    - "CRITICAL: 输出纯 JSON，不要用 markdown 代码块包裹（不要用 ```json ... ```）"
+    - "CRITICAL: 直接输出 JSON 对象，不要有任何前缀或后缀文本"
 
   output_format: json
 
@@ -168,23 +173,24 @@ checklist:
 # ============================================
 output_template: |
   {
-    "status": "pass|fail|escalate",
+    "status": "pass",
     "check_type": "auto",
     "dimensions": {
-      "schema_validation": "pass|fail",
-      "contract_validation": "pass|fail",
-      "completeness_check": "pass|fail",
-      "dependency_resolution": "pass|fail"
+      "schema_validation": "pass",
+      "contract_validation": "pass",
+      "completeness_check": "pass",
+      "dependency_resolution": "pass"
     },
-    "errors": [
-      "具体错误信息 1",
-      "具体错误信息 2"
-    ],
-    "warnings": [
-      "警告信息 1",
-      "警告信息 2"
-    ]
+    "errors": [],
+    "warnings": []
   }
+
+  # CRITICAL FORMAT REQUIREMENTS:
+  # 1. "status" MUST be one of: "pass", "fail", "escalate" - NOT "passed", "failed", "ok", "success"
+  # 2. "dimensions" values MUST be strings: "pass" or "fail" - NOT objects with nested "status" fields
+  # 3. "errors" and "warnings" MUST be arrays of strings - NOT arrays of objects
+  # 4. Do NOT add extra fields like "check_id", "epic_ref", "subject_refs", "summary", "timestamp", "details"
+  # 5. The output MUST be flat and minimal, matching the schema exactly
 
 # ============================================
 # 禁止行为
