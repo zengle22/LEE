@@ -15,9 +15,12 @@ LEE Orchestrator API 层
 
 import asyncio
 import contextlib
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from lee.orchestrator.storage.sqlite_store import SQLiteStore
 from lee.orchestrator.storage.models import WorkflowLevel, WorkflowStatus
@@ -404,7 +407,9 @@ async def api_approve_gate(
     workflow_id: str,
     gate_id: str,
     approver: str,
-    comments: str = ""
+    comments: str = "",
+    auto_continue: bool = True,
+    max_steps: int = 10,
 ) -> Dict[str, Any]:
     """
     批准门禁
@@ -415,6 +420,8 @@ async def api_approve_gate(
         gate_id: 门禁 ID
         approver: 审批人
         comments: 审批意见
+        auto_continue: 批准后是否自动继续执行（默认：True）
+        max_steps: 自动继续时最大执行步数（默认：10）
 
     Returns:
         审批结果
@@ -427,13 +434,29 @@ async def api_approve_gate(
         comments
     )
 
-    return {
+    response = {
         "status": result.status,
         "step_id": result.step_id,
         "workflow_id": result.workflow_id,
         "message": result.message,
         "timestamp": datetime.now().isoformat(),
     }
+
+    # 自动继续执行
+    if auto_continue:
+        try:
+            run_result = await api_run_until_blocked(
+                project_dir, workflow_id, max_steps
+            )
+            response["auto_continued"] = True
+            response["run_result"] = run_result
+        except Exception as e:
+            # 自动继续失败不影响审批结果
+            logger.warning(f"Auto-continue failed after gate approval: {e}")
+            response["auto_continued"] = True
+            response["run_error"] = str(e)
+
+    return response
 
 
 async def api_reject_gate(

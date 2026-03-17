@@ -99,3 +99,4 @@ tmp_*.py
 vibe-kanban/
 .tmp*
 .claude/scheduled_tasks.lock
+.test-temp-test-runner/
