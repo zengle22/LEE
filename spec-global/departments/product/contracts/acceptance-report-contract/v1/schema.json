@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Acceptance Report Contract v1",
+  "description": "ADR-025 验收报告",
+  "type": "object",
+  "required": ["ssot_id", "ssot_type", "overall_decision", "defect_summary"],
+  "properties": {
+    "ssot_id": { "type": "string" },
+    "ssot_type": { "type": "string" },
+    "ssot_version": { "type": "string" },
+    "overall_decision": {
+      "type": "string",
+      "enum": ["approved", "revised", "rejected", "flagged"]
+    },
+    "defect_summary": {
+      "type": "object",
+      "properties": {
+        "p0_count": { "type": "integer" },
+        "p1_count": { "type": "integer" },
+        "p2_count": { "type": "integer" },
+        "p3_count": { "type": "integer" },
+        "total_count": { "type": "integer" }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "properties": {
+        "functional_closure": { "type": "object" },
+        "user_story_experience": { "type": "object" },
+        "feature_completeness": { "type": "object" },
+        "logic_vulnerability": { "type": "object" },
+        "industry_gap": { "type": "object" },
+        "improvement_opportunities": { "type": "object" }
+      }
+    }
+  }
+}

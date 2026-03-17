@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "departments/product/contracts/feat-acceptance-review-input-contract/v1/schema.json",
+  "title": "FEAT Acceptance Review Input Contract v1",
+  "description": "FEAT 验收人工评审的输入契约，包含 FEAT candidate 和自动检查结果",
+  "type": "object",
+  "required": [
+    "ssot_object",
+    "auto_check_result"
+  ],
+  "properties": {
+    "ssot_object": {
+      "type": "object",
+      "description": "FEAT candidate 对象",
+      "required": [
+        "ssot_type",
+        "title",
+        "goal",
+        "scope",
+        "acceptance_checks"
+      ],
+      "properties": {
+        "ssot_type": {
+          "type": "string",
+          "enum": ["FEAT"]
+        },
+        "title": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "acceptance_checks": {
+          "type": "array",
+          "description": "结构化验收检查项",
+          "items": {
+            "type": "object",
+            "required": ["scenario", "given", "when", "then"],
+            "properties": {
+              "scenario": {
+                "type": "string"
+              },
+              "given": {
+                "type": "string"
+              },
+              "when": {
+                "type": "string"
+              },
+              "then": {
+                "type": "string"
+              },
+              "trace_hints": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "auto_check_result": {
+      "type": "object",
+      "description": "自动检查结果",
+      "required": [
+        "check_type",
+        "overall_status",
+        "dimensions"
+      ],
+      "properties": {
+        "check_type": {
+          "type": "string",
+          "enum": ["auto"]
+        },
+        "overall_status": {
+          "type": "string",
+          "enum": ["pass", "fail", "warning"]
+        },
+        "dimensions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["pass", "fail", "warning"]
+              },
+              "findings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "issues": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
