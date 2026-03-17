@@ -2,8 +2,13 @@
 # 测试计划管理 L2 模板
 #
 # 定位：从 RELEASE 派生 TESTPLAN，并管理 Test Set 执行
-# 上游：RELEASE L1 (scope_freeze 后)
+# 上游：RELEASE L1 (scope_freeze 后) + Delivery Prep (TECH/TASK 已冻结)
 # 下游：Test Plan Execution L2 (执行测试)
+#
+# 关键说明：
+# - TESTPLAN 定义测试策略 (测什么、何时测、谁来测)
+# - Test Set 是 TESTPLAN 冻结后的产物，不是输入
+# - TESTPLAN 消费 FEAT.AC + TECH + TASK 作为测试策略依据
 
 kind: l2_workflow_template
 version: "1.0"
@@ -12,14 +17,15 @@ name: TESTPLAN Management L2 Template
 description: |
   L2 template for TESTPLAN management.
 
-  从 RELEASE 派生 TESTPLAN，并执行测试：
+  从 RELEASE 派生 TESTPLAN，并管理测试执行：
   1. Test Plan Init: 初始化 TESTPLAN 对象
-  2. Test Set Derive: 从 RELEASE.feat_refs 派生 Test Set 需求
-  3. Test Set Validate: 验证 Test Set 覆盖度
-  4. Test Plan Freeze: 冻结 TESTPLAN
-  5. Spawn Test Run L2: 生成 Test Plan Execution L2 实例
-  6. Track Progress: 跟踪测试进度
-  7. Aggregate Results: 汇总测试结果
+  2. Test Strategy Define: 定义测试策略 (基于 FEAT.AC + TECH + TASK)
+  3. Test Set Production: 生产 Test Set 设计资产 (用于验证覆盖度)
+  4. Test Set Validate: 验证 Test Set 覆盖度
+  5. Test Plan Freeze: 冻结 TESTPLAN
+  6. Spawn Test Run L2: 生成 Test Plan Execution L2 实例
+  7. Track Progress: 跟踪测试进度
+  8. Aggregate Results: 汇总测试结果
 
 owner: qa-governance
 tags: [l2, testplan, management, canonical]
@@ -36,7 +42,7 @@ ssot_integration:
 phases:
   - id: test_plan_init
     name: "TESTPLAN Initialization"
-    description: "初始化 TESTPLAN 对象，绑定 RELEASE"
+    description: "初始化 TESTPLAN 对象，绑定 RELEASE，定义测试策略"
     default_complexity: S
     depends_on: []
     outputs:
@@ -46,15 +52,34 @@ phases:
         ssot_type: TESTPLAN
         freeze: false
 
-  - id: test_set_derive
-    name: "Test Set Derivation"
+  - id: test_strategy_define
+    name: "Test Strategy Definition"
     description: |
-      从 RELEASE.feat_refs 派生 Test Set：
-      - 对每个 FEAT，读取 delivery_prep 作为 seed
+      定义测试策略：
+      - 读取 FEAT.acceptance_criteria
+      - 读取 TECH specs 了解实现细节
+      - 读取 TASK 了解实施范围
+      - 定义 smoke/regression/automation 测试范围
+      - 定义 test milestones
+    default_complexity: M
+    depends_on: [test_plan_init]
+    outputs:
+      - path: spec/testplans/testplan-{release_id}/test_strategy.yaml
+        type: file
+        format: yaml
+        description: "Test strategy definition"
+
+  - id: test_set_production
+    name: "Test Set Production"
+    description: |
+      生产 Test Set（基于 TESTPLAN 策略）:
+      - 对每个 FEAT，读取 FEAT.AC + TECH + TASK 作为输入
       - QA 执行 Test Set Production L3
       - 生成 Test Set YAML (qa_specs_dir/test-sets/ts-{module}.yaml)
+      - 注意：Test Set 是 TESTPLAN 冻结后的产物，但为了验证覆盖度，
+        在 testplan_freeze 之前先生产 Test Set 设计资产
     default_complexity: L
-    depends_on: [test_plan_init]
+    depends_on: [test_strategy_define]
     spawns_l3: true
     l3_template_id: template.qa.test_set_production_l3
     outputs:
@@ -71,7 +96,7 @@ phases:
       - Test Set 优先级覆盖合理 (P0/P1/P2)
       - Test Case 与 FEAT Acceptance Criteria 可追溯
     default_complexity: S
-    depends_on: [test_set_derive]
+    depends_on: [test_set_production]
     gate:
       type: auto_check
       gate_id: gate.qa.test_set_validate_gate
@@ -84,7 +109,7 @@ phases:
 
   - id: testplan_freeze
     name: "TESTPLAN Freeze"
-    description: "冻结 TESTPLAN，锁定 Test Set refs"
+    description: "冻结 TESTPLAN，锁定测试策略和 Test Set refs"
     default_complexity: S
     depends_on: [test_set_validate]
     gate:
@@ -101,9 +126,10 @@ phases:
     description: |
       生成 Test Plan Execution L2 实例：
       - 绑定 TESTPLAN 和 RELEASE
+      - 消费已生成的 Test Set
       - 执行 Test Plan L2 (env_provision → test_set_execution → report → exit_eval)
     default_complexity: L
-    depends_on: [testplan_freeze]
+    depends_on: [testplan_freeze, test_set_production]
     spawns_l3: true
     l3_template_id: template.qa.test_plan_l2
     outputs:

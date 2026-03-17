@@ -112,18 +112,40 @@ FEAT → RELEASE → DEVPLAN → TESTPLAN → TASK
 │                    SSOT Delivery Chain                          │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Product 部门:                                                   │
-│  RAW → SRC → EPIC → FEAT → Delivery Prep (UI/TECH/TASK)        │
+│  Product 部门 (Delivery Prep):                                  │
+│  RAW → SRC → EPIC → FEAT → UI/TECH/TASK (冻结)                 │
 │                              │                                  │
 │                              ▼                                  │
-│  Dev Governance:                                                  │
-│                    FEAT Bundle → RELEASE → DEVPLAN → TASK       │
-│                                      │                          │
-│                                      ▼                          │
-│  QA 部门：                                                        │
-│                           RELEASE → TESTPLAN → Test Set        │
+│  Dev Governance (Release Center):                               │
+│                    FEAT Bundle → RELEASE                        │
+│                                 │                               │
+│           ┌─────────────────────┼─────────────────────┐        │
+│           │                     │                     │        │
+│           ▼                     ▼                     ▼        │
+│  ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+│  │ DEVPLAN         │   │ TESTPLAN        │   │ (已有 TASK)     │
+│  │ (消费 TECH/TASK) │   │ (消费 AC/TECH)  │   │ (消费 TECH)     │
+│  │ 组织任务执行     │   │ 定义测试策略     │   │ 执行实施        │
+│  └─────────────────┘   └─────────────────┘   └─────────────────┘
+│           │                     │                                  │
+│           │                     ▼                                  │
+│           │            ┌─────────────────┐                        │
+│           │            │ Test Set 生产     │ ◄── 执行层            │
+│           │            │ (基于 TESTPLAN)  │                        │
+│           │            └─────────────────┘                        │
+│           │                     │                                  │
+│           ▼                     ▼                                  │
+│  ┌─────────────────────────────────────────┐                     │
+│  │      Dev + QA Execution (消费 TECH)      │                     │
+│  └─────────────────────────────────────────┘                     │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
+
+关键说明：
+- TECH/TASK 在 Delivery Prep 阶段已生成并冻结
+- DEVPLAN 不派生 TASK，而是组织/分配已有 TASK
+- TESTPLAN 定义测试策略，Test Set 是执行层产物
+- Test Set 基于 TESTPLAN 指令 + FEAT.AC + TECH 生成
 ```
 
 ### 3.2 SSOT 对象定义
@@ -132,21 +154,31 @@ FEAT → RELEASE → DEVPLAN → TESTPLAN → TASK
 |-----------|------|----------|------|------|----------|
 | **FEAT** | Feature | Product | EPIC | UI/TECH/TASK | Delivery Prep 完成 |
 | **RELEASE** | Release | Dev Governance | FEAT Bundle | DEVPLAN, TESTPLAN | Scope Freeze |
-| **DEVPLAN** | Development Plan | Dev Governance | RELEASE | TASK refs | Plan Derive 完成 |
-| **TESTPLAN** | Test Plan | QA | RELEASE + FEAT | Test Set refs | Plan Derive 完成 |
-| **TASK** | Task | Dev/QA | DEVPLAN/TESTPLAN | 执行结果 | 执行完成 |
+| **DEVPLAN** | Development Plan | Dev Governance | RELEASE + TECH + TASK | 执行任务分配 | Plan Derive 完成 |
+| **TESTPLAN** | Test Plan | QA | RELEASE + FEAT(AC) + TECH + TASK | Test Set 派生指令 | Plan Derive 完成 |
+| **Test Set** | Test Set | QA | TESTPLAN + FEAT(AC) + TECH | 测试用例细节 | Test Set 生产完成 |
+| **TASK** | Task | Dev/QA | DEVPLAN/TESTPLAN + TECH | 执行结果 | 执行完成 |
 
 ### 3.3 SSOT 追溯关系
 
 ```yaml
+# 关键依赖关系说明：
+# - DEVPLAN 依赖 Delivery Prep 中的 TECH 和 TASK
+# - TESTPLAN 依赖 FEAT 的 AC + TECH + TASK (用于测试策略)
+# - Test Set 是 TESTPLAN 冻结后的产物，不是 TESTPLAN 的输入
+
 # RELEASE SSOT 示例
 ssot_type: RELEASE
 id: RELEASE-001
 status: scope_frozen  # planning → scope_frozen → in_execution → released → closed
-feat_refs:  # ← 绑定的 FEAT Bundle
+feat_bundle_refs:  # ← 绑定的 FEAT Bundle
   - FEAT-001
   - FEAT-002
   - FEAT-003
+delivery_prep_refs:  # ← 绑定的 Delivery Prep (含 TECH/TASK)
+  - FEAT-001/delivery-prep-freeze
+  - FEAT-002/delivery-prep-freeze
+  - FEAT-003/delivery-prep-freeze
 devplan_ref: "spec/devplans/devplan-001.yaml"  # ← 派生的 DEVPLAN
 testplan_ref: "spec/testplans/testplan-001.yaml"  # ← 派生的 TESTPLAN
 release_window:
@@ -159,7 +191,10 @@ ssot_type: DEVPLAN
 id: DEVPLAN-001
 status: frozen
 release_ref: "RELEASE-001"
-task_refs:  # ← 派生的 TASK
+tech_refs:  # ← 消费 Delivery Prep 中的 TECH
+  - FEAT-001/tech-spec
+  - FEAT-002/tech-spec
+task_refs:  # ← 消费 Delivery Prep 中的 TASK，不是派生
   - TASK-FEAT-001-001
   - TASK-FEAT-001-002
   - TASK-FEAT-002-001
@@ -176,10 +211,19 @@ ssot_type: TESTPLAN
 id: TESTPLAN-001
 status: frozen
 release_ref: "RELEASE-001"
-test_set_refs:  # ← 派生的 Test Set
-  - ts-user-auth
-  - ts-checkout
-  - ts-subscription
+feat_ac_refs:  # ← 消费 FEAT 的验收标准
+  - FEAT-001.acceptance_criteria
+  - FEAT-002.acceptance_criteria
+tech_refs:  # ← 消费 TECH 了解实现细节
+  - FEAT-001/tech-spec
+  - FEAT-002/tech-spec
+test_strategy:  # ← 测试策略定义
+  smoke_scope: "核心链路 + 高风险变更"
+  regression_scope: "全量功能"
+  automation_ratio_target: 0.8
+test_set_instruction_refs:  # ← 派生 Test Set 的指令 (不是 Test Set 本身)
+  - instruction: "为每个 FEAT 生成 Smoke Test Set"
+  - instruction: "为关键链路生成 Regression Test Set"
 milestones:
   - name: "Smoke Test Complete"
     target_date: "2026-03-25"
@@ -367,23 +411,36 @@ gates:
 │ Plan Derivation                                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
+│  Pre-condition:                                                 │
+│    - RELEASE.status = "scope_frozen"                            │
+│    - 所有 FEAT 的 Delivery Prep 已完成 (TECH/TASK 冻结)            │
+│                                                                 │
 │  Step 1: derive_devplan (并行)                                  │
 │    Agent: agent.dev.plan_deriver                                │
-│    Input: RELEASE (scope_frozen)                                │
+│    Input:                                                       │
+│      - RELEASE (scope_frozen)                                   │
+│      - TECH specs (来自 Delivery Prep)                          │
+│      - TASK specs (来自 Delivery Prep)                          │
 │    Output: spec/devplans/devplan-{release_id}.yaml             │
 │    Action:                                                      │
 │      - 读取 RELEASE.feat_refs                                   │
-│      - 对每个 FEAT 生成 DEVPLAN 条目                              │
-│      - 定义 milestones, assignees                               │
+│      - 消费 TECH 了解技术实现细节                                 │
+│      - 组织/分配已有 TASK (不是派生新 TASK)                       │
+│      - 定义 milestones, assignees, workstreams                  │
 │                                                                 │
 │  Step 2: derive_testplan (并行)                                 │
 │    Agent: agent.qa.plan_deriver                                 │
-│    Input: RELEASE (scope_frozen)                                │
+│    Input:                                                       │
+│      - RELEASE (scope_frozen)                                   │
+│      - FEAT.acceptance_criteria                                 │
+│      - TECH specs (了解实现细节)                                │
+│      - TASK specs (了解实施范围)                                │
 │    Output: spec/testplans/testplan-{release_id}.yaml           │
 │    Action:                                                      │
-│      - 读取 RELEASE.feat_refs                                   │
-│      - 对每个 FEAT 生成 TESTPLAN 条目                             │
+│      - 定义 test_strategy (smoke/regression/automation 比例)     │
+│      - 定义 test_scope (基于 FEAT.AC 和 TECH)                     │
 │      - 定义 test milestones, test types                         │
+│      - 生成 Test Set 生产指令 (不是 Test Set 本身)                │
 │                                                                 │
 │  Step 3: plan_validate                                          │
 │    Agent: agent.dev.plan_validator                              │

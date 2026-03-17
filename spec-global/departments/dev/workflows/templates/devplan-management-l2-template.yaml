@@ -2,8 +2,13 @@
 # 开发计划管理 L2 模板
 #
 # 定位：从 RELEASE 派生 DEVPLAN，并管理 TASK 执行
-# 上游：RELEASE L1 (scope_freeze 后)
+# 上游：RELEASE L1 (scope_freeze 后) + Delivery Prep (TECH/TASK 已冻结)
 # 下游：Feature Delivery L2 (每个 TASK  spawns 一个 L2)
+#
+# 关键说明：
+# - TASK 在 Product Delivery Prep 阶段已生成并冻结
+# - DEVPLAN 不派生 TASK，而是组织/分配已有 TASK
+# - DEVPLAN 消费 TECH 了解技术实现细节
 
 kind: l2_workflow_template
 version: "1.0"
@@ -12,11 +17,11 @@ name: DEVPLAN Management L2 Template
 description: |
   L2 template for DEVPLAN management.
 
-  从 RELEASE 派生 DEVPLAN，并将每个 TASK 派生为 Feature Delivery L2 实例：
+  从 RELEASE 派生 DEVPLAN，并管理已有 TASK 的执行：
   1. Dev Plan Init: 初始化 DEVPLAN 对象
-  2. Task Derive: 从 RELEASE.feat_refs 派生 TASK
+  2. Task Organization: 读取 Delivery Prep 中的 TASK，组织执行顺序
   3. Task Validate: 验证 TASK 覆盖度 (所有 FEAT 都有 TASK)
-  4. Task Freeze: 冻结 DEVPLAN
+  4. Devplan Freeze: 冻结 DEVPLAN
   5. Spawn Dev L2: 对每个 TASK 生成 Feature Delivery L2 实例
   6. Track Progress: 跟踪所有 L2 进度
   7. Aggregate Results: 汇总所有 L2 结果
@@ -46,21 +51,21 @@ phases:
         freeze: false
 
   - id: task_derive
-    name: "TASK Derivation"
+    name: "TASK Organization"
     description: |
-      从 RELEASE.feat_refs 派生 TASK：
-      - 对每个 FEAT，读取 delivery_prep.task_plan
-      - 生成 TASK 对象 (spec/tasks/{FEAT-ID}/TASK-*.yaml)
-      - 定义 TASK.workstream, TASK.responsible_role
+      组织已有 TASK 的执行顺序：
+      - 读取 Delivery Prep 中的 TASK (spec/tasks/{FEAT-ID}/TASK-*.yaml)
+      - 定义 TASK 执行顺序 (基于依赖关系)
+      - 定义 TASK.workstream 分组
+      - 注意：TASK 对象已在 Delivery Prep 生成，此处仅组织执行
     default_complexity: L
     depends_on: [dev_plan_init]
-    spawns_l3: true
-    l3_template_id: template.dev.task_derive_l3
+    spawns_l3: false
     outputs:
-      - path: spec/tasks/{release_id}/
-        type: directory
+      - path: spec/devplans/{release_id}/task_execution_order.yaml
+        type: file
         format: yaml
-        description: "Generated TASK SSOT files"
+        description: "TASK execution order and workstream grouping"
 
   - id: task_validate
     name: "TASK Validation"
