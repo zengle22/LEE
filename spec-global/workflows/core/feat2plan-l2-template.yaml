@@ -1,0 +1,352 @@
+# FEAT2PLAN L2 Workflow Template
+# 从 FEAT Bundle 到 DEVPLAN/TESTPLAN 的 L2 编排工作流
+#
+# 定位：ADR-027 渐进式工作流的 L2 编排层
+# 上游：Delivery Prep (FEAT Bundle frozen + TASK/TECH/UI frozen)
+# 下游：Dev Execution + QA Execution (现有工作流)
+#
+# 关键说明：
+# - L2 编排调用 3 个 L3 模板
+# - FEAT2RELEASE 先执行，生成 RELEASE draft
+# - RELEASE2DEVPLAN 和 RELEASE2TESTPLAN 可并行执行
+# - 输出 DEVPLAN 和 TESTPLAN (均为 frozen)
+
+kind: l2_workflow_template
+version: "1.0"
+id: workflow.core.feat2plan
+name: FEAT2PLAN L2 Orchestration Template
+description: |
+  L2 workflow for orchestrating FEAT to PLAN derivation.
+
+  从 FEAT Bundle 派生 DEVPLAN 和 TESTPLAN：
+  1. Generate RELEASE: 调用 FEAT2RELEASE 生成 RELEASE draft
+  2. Derive DEVPLAN: 调用 RELEASE2DEVPLAN 生成 DEVPLAN frozen
+  3. Derive TESTPLAN: 调用 RELEASE2TESTPLAN 生成 TESTPLAN frozen
+  4. Output Contract: 验证输出并驱动下游执行
+
+owner: dev-governance
+tags: [l2, orchestration, feat2plan, adr-027, core]
+
+# SSOT Integration
+ssot_integration:
+  input_types:
+    - feat_freeze
+  output_types:
+    - devplan_freeze
+    - testplan_freeze
+
+# 阶段流程
+phases:
+  - id: generate_release
+    name: "Generate RELEASE"
+    description: |
+      调用 FEAT2RELEASE L3 生成 RELEASE draft：
+      - 输入：FEAT Bundle (frozen)
+      - 输出：RELEASE (draft)
+      - 验证：所有 FEAT frozen
+    default_complexity: S
+    depends_on: []
+    spawns_l3: true
+    l3_template_id: template.core.feat2release
+    gate:
+      type: auto_check
+      gate_id: gate.core.release_generate_gate
+      checks:
+        - release_generated
+        - feat_bundle_valid
+    outputs:
+      - path: spec/releases/release-{release_id}.yaml
+        type: file
+        format: yaml
+        ssot_type: RELEASE
+        freeze: false
+      - path: .workflow/{release_id}/release_output.yaml
+        type: file
+        format: yaml
+
+  - id: derive_devplan
+    name: "Derive DEVPLAN"
+    description: |
+      调用 RELEASE2DEVPLAN L3 生成 DEVPLAN frozen：
+      - 输入：RELEASE draft + TASK Bundle
+      - 输出：DEVPLAN (frozen)
+      - 验证：TASK 覆盖度
+    default_complexity: L
+    depends_on: [generate_release]
+    spawns_l3: true
+    l3_template_id: template.core.release2devplan
+    gate:
+      type: human_approval
+      gate_id: gate.dev.devplan_freeze_gate
+      approvers:
+        - tech_lead
+        - release_manager
+    outputs:
+      - path: spec/devplans/devplan-{release_id}.yaml
+        type: file
+        format: yaml
+        ssot_type: DEVPLAN
+        freeze: true
+      - path: spec/devplans/{release_id}/task_execution_order.yaml
+        type: file
+        format: yaml
+
+  - id: derive_testplan
+    name: "Derive TESTPLAN"
+    description: |
+      调用 RELEASE2TESTPLAN L3 生成 TESTPLAN frozen：
+      - 输入：RELEASE draft + FEAT.AC + TECH
+      - 输出：TESTPLAN (frozen)
+      - 验证：Test Set 覆盖度
+    default_complexity: L
+    depends_on: [generate_release]
+    spawns_l3: true
+    l3_template_id: template.core.release2testplan
+    parallel_with: [derive_devplan]  # 可并行执行
+    gate:
+      type: human_approval
+      gate_id: gate.qa.testplan_freeze_gate
+      approvers:
+        - qa_lead
+        - release_manager
+    outputs:
+      - path: spec/testplans/testplan-{release_id}.yaml
+        type: file
+        format: yaml
+        ssot_type: TESTPLAN
+        freeze: true
+      - path: spec/testplans/{release_id}/test_strategy.yaml
+        type: file
+        format: yaml
+
+  - id: output_contract
+    name: "Output Contract"
+    description: |
+      验证输出并准备驱动下游：
+      - 验证 DEVPLAN 和 TESTPLAN 都已冻结
+      - 验证追溯性完整
+      - 准备驱动下游 Dev/QA 工作流
+    default_complexity: S
+    depends_on: [derive_devplan, derive_testplan]
+    spawns_l3: false
+    gate:
+      type: auto_check
+      gate_id: gate.core.output_contract_gate
+      checks:
+        - devplan_frozen
+        - testplan_frozen
+        - traceability_complete
+    outputs:
+      - path: .workflow/{release_id}/output_contract.json
+        type: file
+        format: json
+        description: "Output contract validation result"
+
+  - id: spawn_downstream
+    name: "Spawn Downstream Workflows"
+    description: |
+      驱动下游执行工作流：
+      - DEVPLAN → template.dev.feature_delivery_l2
+      - TESTPLAN → template.qa.test_plan_l2
+      - 注意：此阶段可选项，取决于是否自动触发下游
+    default_complexity: L
+    depends_on: [output_contract]
+    spawns_l3: false  # Spawns L2, not L3
+    optional: true
+    outputs:
+      - path: .workflow/{release_id}/downstream_instances.yaml
+        type: file
+        format: yaml
+        description: "Downstream workflow instance references"
+
+# 执行策略
+execution_strategies:
+  S:
+    description: "Direct execution inside L2"
+    spawns_l3: false
+  L:
+    description: "Spawn L3 instances"
+    spawns_l3: true
+
+# 并行执行配置
+parallel_execution:
+  derive_devplan_and_testplan:
+    description: "RELEASE2DEVPLAN and RELEASE2TESTPLAN can run in parallel"
+    parallel_phases:
+      - derive_devplan
+      - derive_testplan
+    sync_point: output_contract
+    benefits:
+      - "Reduce total execution time"
+      - "Dev and QA planning can proceed independently"
+
+# 输入输出 Contract
+l3_input_schema:
+  required_fields:
+    - feat_bundle_refs: "list of FEAT IDs"
+    - feat_bundle_path: "path to FEAT Bundle directory"
+    - release_id: "release identifier"
+    - task_bundle_paths: "list of TASK file paths (from Delivery Prep)"
+    - feat_acceptance_criteria: "list of FEAT AC paths"
+    - tech_specs_paths: "list of TECH spec paths"
+  optional_fields:
+    - release_type: "major | minor | patch | hotfix"
+    - release_window_start: "release window start date"
+    - release_window_end: "release window end date"
+    - tech_lead: "tech lead assignee"
+    - qa_lead: "qa lead assignee"
+    - release_manager: "release manager assignee"
+
+l3_output_schema:
+  required_fields:
+    - release_ref: "release-{id}"
+    - devplan_freeze_path: "spec/devplans/devplan-{id}.yaml"
+    - testplan_freeze_path: "spec/testplans/testplan-{id}.yaml"
+    - task_execution_order_path: "spec/devplans/{id}/task_execution_order.yaml"
+    - test_strategy_path: "spec/testplans/{id}/test_strategy.yaml"
+    - validation_results: "{release: object, devplan: object, testplan: object}"
+  optional_fields:
+    - downstream_instances: "references to spawned Dev/QA workflows"
+
+# 输出示例
+output_example:
+  output_contract_json: |
+    {
+      "release_id": "release-001",
+      "devplan_status": "frozen",
+      "testplan_status": "frozen",
+      "devplan_path": "spec/devplans/devplan-001.yaml",
+      "testplan_path": "spec/testplans/testplan-001.yaml",
+      "traceability": {
+        "devplan_traceability": true,
+        "testplan_traceability": true,
+        "all_feats_covered": true
+      },
+      "validation_passed": true,
+      "ready_for_downstream": true
+    }
+
+  downstream_instances_yaml: |
+    # .workflow/{release_id}/downstream_instances.yaml
+    downstream_instances:
+      dev_execution:
+        template_id: template.dev.feature_delivery_l2
+        instances:
+          - task_ref: TASK-FEAT-001-001
+            instance_id: wf-dev-TASK-001-001
+            status: pending
+          - task_ref: TASK-FEAT-001-002
+            instance_id: wf-dev-TASK-001-002
+            status: pending
+      qa_execution:
+        template_id: template.qa.test_plan_l2
+        instance_id: wf-qa-testplan-001
+        testplan_ref: testplan-001
+        status: pending
+
+# Gate 定义
+gate_definitions:
+  - gate_id: gate.core.release_generate_gate
+    type: auto_check
+    description: "自动验证 RELEASE 生成"
+    checks:
+      - id: release_generated
+        description: "RELEASE 对象已生成"
+        severity: error
+      - id: feat_bundle_valid
+        description: "FEAT Bundle 有效"
+        severity: error
+
+  - gate_id: gate.dev.devplan_freeze_gate
+    type: human_approval
+    description: "人类审批冻结 DEVPLAN"
+    approvers:
+      - tech_lead
+      - release_manager
+    approval_criteria:
+      - TASK 覆盖度验证通过
+      - 责任人确认接受任务
+      - 依赖关系清晰可执行
+
+  - gate_id: gate.qa.testplan_freeze_gate
+    type: human_approval
+    description: "人类审批冻结 TESTPLAN"
+    approvers:
+      - qa_lead
+      - release_manager
+    approval_criteria:
+      - Test Set 覆盖度验证通过
+      - 追溯性完整
+      - 风险区域已识别并有缓解措施
+
+  - gate_id: gate.core.output_contract_gate
+    type: auto_check
+    description: "自动验证输出 Contract"
+    checks:
+      - id: devplan_frozen
+        description: "DEVPLAN 已冻结"
+        severity: error
+      - id: testplan_frozen
+        description: "TESTPLAN 已冻结"
+        severity: error
+      - id: traceability_complete
+        description: "追溯性完整"
+        severity: error
+
+# 与现有工作流的集成
+downstream_integration:
+  dev_execution:
+    template_id: template.dev.feature_delivery_l2
+    input_mapping:
+      formal_ssot_id: "FEAT ID from task_ref"
+      task_refs: "from DEVPLAN.task_refs"
+      source_refs: "from FEAT.source_refs"
+      governing_adrs: ["ADR-026", "ADR-027"]
+    trigger: "after_devplan_freeze"
+    execution_mode: "per_task"  # One L2 instance per TASK
+
+  qa_execution:
+    template_id: template.qa.test_plan_l2
+    input_mapping:
+      testplan_ref: "testplan-{id}"
+      test_set_refs: "from TESTPLAN.test_set_refs"
+      test_environment: "qa/staging"
+    trigger: "after_testplan_freeze"
+    execution_mode: "single"  # One L2 instance for entire TESTPLAN
+
+# Constitution
+constitution:
+  id: feat2plan_constitution_v1
+  name: "FEAT2PLAN L2 Constitution"
+  version: "1.0"
+  principles:
+    - id: release_before_plans
+      rule: "RELEASE must be generated before DEVPLAN and TESTPLAN derivation"
+    - id: parallel_plan_derivation
+      rule: "DEVPLAN and TESTPLAN derivation can proceed in parallel"
+    - id: both_plans_required
+      rule: "Both DEVPLAN and TESTPLAN must be frozen for output contract"
+    - id: traceability_mandatory
+      rule: "Traceability from plans back to FEAT is mandatory"
+
+# Instance Schema
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+    - context
+    - phases
+  context_fields:
+    - feat_bundle_refs
+    - release_id
+    - release_type
+    - release_window
+  phase_fields:
+    - id
+    - complexity
+    - status
+    - l3_instance_ids
+    - depends_on
+    - parallel_with
