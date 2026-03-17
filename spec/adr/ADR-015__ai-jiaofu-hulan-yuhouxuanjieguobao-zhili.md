@@ -2,30 +2,32 @@
 id: ADR-015
 ssot_type: adr
 title: AI 交付护栏与候选结果包闭环治理
-status: draft
+status: frozen
 version: v1
+workflow_instance_id: wf_task_ce03dd82
 parent_id: null
 derived_from_ids:
-  - id: ADR-001
-    version: v1
-  - id: ADR-005
-    version: v1
-  - id: ADR-011
-    version: v1
-  - id: ADR-013
-    version: v1
+- id: ADR-001
+  version: v1
+- id: ADR-005
+  version: v1
+- id: ADR-011
+  version: v1
+- id: ADR-013
+  version: v1
 source_refs: []
 owner: governance
 tags:
-  - governance
-  - ai-delivery
-  - gates
-  - evidence
-  - workflow
-  - review
+- governance
+- ai-delivery
+- gates
+- evidence
+- workflow
+- review
 properties:
   adr_kind: governance_design
   decision_scope: ai_delivery_guardrails_and_candidate_package
+frozen_at: '2026-03-17T17:17:55.516123'
 ---
 
 # AI 交付护栏与候选结果包闭环治理

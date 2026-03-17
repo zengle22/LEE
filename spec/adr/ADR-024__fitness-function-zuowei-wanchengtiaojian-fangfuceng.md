@@ -2,27 +2,35 @@
 id: ADR-024
 ssot_type: adr
 title: Fitness Function 作为完成条件防腐层
-status: draft
+status: frozen
 version: v1
 parent_id: null
 derived_from_ids:
-  - id: ADR-011
-    version: v1
-  - id: ADR-015
-    version: v1
-  - id: ADR-017
-    version: v1
-  - id: ADR-020
-    version: v1
-  - id: ADR-021
-    version: v1
+- id: ADR-011
+  version: v1
+- id: ADR-015
+  version: v1
+- id: ADR-017
+  version: v1
+- id: ADR-020
+  version: v1
+- id: ADR-021
+  version: v1
 source_refs: []
 owner: governance
-tags: [governance, ai-delivery, fitness, completion, gate, evidence, verifier]
+tags:
+- governance
+- ai-delivery
+- fitness
+- completion
+- gate
+- evidence
+- verifier
 workflow_instance_id: wf-adr-024-20260317
 properties:
   adr_kind: governance_design
   decision_scope: fitness_function_as_completion_anti_corruption_layer
+frozen_at: '2026-03-17T17:45:23.039787'
 ---
 
 # Fitness Function 作为完成条件防腐层
