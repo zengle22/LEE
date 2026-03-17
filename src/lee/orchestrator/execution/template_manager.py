@@ -1178,7 +1178,7 @@ class TemplateManager:
             skill_id=skill_id,
             gate_id=gate_id,
             depends_on=depends_on,
-            input=step_data.get("inputs", step_data.get("input", {})),
+            input=self._build_step_input(step_data),
             outputs=outputs,
             config=self._build_step_config(
                 step_data,
@@ -1188,6 +1188,38 @@ class TemplateManager:
             ),
             on_failure=step_data.get("on_failure"),
         )
+
+    def _build_step_input(self, step_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        构建步骤输入数据
+
+        包含：
+        - inputs/input 字段的内容
+        - command 字段（对于 shell executor 步骤）
+        - 其他输入相关字段
+        """
+        # 基础 input 从 inputs 或 input 字段获取
+        input_data = step_data.get("inputs", step_data.get("input", {})).copy()
+
+        # 对于 shell executor，添加 command 字段
+        # 这是 BUG-LEE-EXECUTOR-003 的修复
+        if "command" in step_data:
+            input_data["command"] = step_data["command"]
+
+        # 添加其他可能的输入字段
+        if "params" in step_data:
+            input_data.setdefault("params", {}).update(step_data["params"])
+
+        if "context_files" in step_data:
+            input_data["context_files"] = step_data["context_files"]
+
+        if "working_dir" in step_data:
+            input_data["working_dir"] = step_data["working_dir"]
+
+        if "timeout" in step_data:
+            input_data["timeout"] = step_data["timeout"]
+
+        return input_data
 
     def _build_step_config(
         self,

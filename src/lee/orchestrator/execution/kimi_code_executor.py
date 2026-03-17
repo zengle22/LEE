@@ -103,6 +103,10 @@ class KimiCodeExecutor(ClaudeCodeExecutor):
 
         read_only = bool(input_data.get("read_only", False))
 
+        # BUG-LEE-EXECUTOR-001 修复：确保所有必需参数都被传递
+        # 添加 structured_output_only 参数以匹配父类签名
+        structured_output_only = bool(input_data.get("structured_output_only", False))
+
         system_prompt = self._build_system_prompt(
             goal=goal,
             workspace=workspace,
@@ -114,6 +118,7 @@ class KimiCodeExecutor(ClaudeCodeExecutor):
             max_bash_calls=max_bash_calls,
             stop_conditions=stop_conditions,
             system_prompt_extra=system_prompt_extra,
+            structured_output_only=structured_output_only,
         )
         user_prompt = self._build_user_prompt(
             goal=goal,
