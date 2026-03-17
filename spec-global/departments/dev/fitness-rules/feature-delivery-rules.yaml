@@ -1,0 +1,288 @@
+# Dev Feature Delivery Fitness Rules v1.0
+# Dev 部门特性交付完成前 Fitness 检查规则
+#
+# 这些规则在 Evidence Pack 完成前执行，确保特性交付满足完成条件。
+
+kind: fitness_rules
+version: "1.0"
+id: fitness_rules.dev.feature_delivery
+name: Feature Delivery Fitness Rules
+description: |
+  Feature Delivery 完成前的 Fitness 检查规则。
+
+  规则来源：
+  - feature-delivery-l2 workflow 的 evidence_pack 要求
+  - Dev 部门质量标准
+  - 完成条件定义
+
+owner: dev-governance
+tags: [fitness-rules, dev, feature-delivery, hard-gate, adr-024]
+
+# ============================================
+# Governing ADRs
+# ============================================
+governing_adrs:
+  - ADR-024: Fitness Function 完成条件防腐层核心能力构建
+  - ADR-023: Dev Smoke Gate 架构与测试职责分层
+
+# ============================================
+# 规则定义
+# ============================================
+rules:
+  # ------------------------------------------
+  # Hard Gate 规则（必须通过）
+  # ------------------------------------------
+  - id: backend_contract_frozen
+    name: "后端协议冻结"
+    description: "后端 API 协议必须已冻结"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        evidence_pack.backend_contract.frozen == true AND
+        evidence_pack.backend_contract.api_spec_path IS NOT EMPTY
+
+    failure_message: "后端协议未冻结"
+    suggestion: "完成 API 协议设计并冻结"
+
+  - id: tech_design_frozen
+    name: "技术设计冻结"
+    description: "技术设计文档必须已冻结"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        evidence_pack.tech_design.frozen == true AND
+        evidence_pack.tech_design.design_path IS NOT EMPTY
+
+    failure_message: "技术设计未冻结"
+    suggestion: "完成技术设计文档并冻结"
+
+  - id: unit_tests_implemented
+    name: "单元测试实现"
+    description: "后端单元测试必须已实现"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        evidence_pack.backend_dev.unit_tests.implemented == true AND
+        evidence_pack.backend_dev.unit_tests.count >= 1
+
+    failure_message: "单元测试未实现"
+    suggestion: "按 TDD 流程编写单元测试"
+
+  - id: integration_tests_passed
+    name: "集成测试通过"
+    description: "前后端集成测试必须通过"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: metric_check
+      rule: |
+        evidence_pack.integration.test_result.passed == true
+
+    failure_message: "集成测试未通过"
+    suggestion: "修复集成测试失败"
+
+  - id: feat_traceability
+    name: "FEAT 追溯性"
+    description: "交付物必须追溯到 FEAT"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: reference_check
+      rule: |
+        evidence_pack.feat_ref IS NOT EMPTY AND
+        evidence_pack.feat_ref STARTS_WITH 'FEAT-'
+
+    failure_message: "交付物未追溯到 FEAT"
+    suggestion: "确保交付物正确引用父 FEAT"
+
+  - id: acceptance_criteria_verified
+    name: "验收标准验证"
+    description: "FEAT 的验收标准必须被验证"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        evidence_pack.acceptance_verification IS NOT EMPTY AND
+        ALL(ac IN evidence_pack.acceptance_verification WHERE ac.verified == true)
+
+    failure_message: "有验收标准未被验证"
+    suggestion: "验证所有验收标准"
+
+  - id: ui_designed
+    name: "UI 设计完成"
+    description: "UI 设计稿必须已完成"
+    type: hard_gate
+    severity: blocker
+
+    condition: "evidence_pack.ui_required == true"
+
+    check:
+      type: completeness_check
+      rule: |
+        evidence_pack.ui_design.completed == true AND
+        evidence_pack.ui_design.design_path IS NOT EMPTY
+
+    failure_message: "UI 设计未完成"
+    suggestion: "完成 UI 设计稿"
+
+  - id: frontend_implemented
+    name: "前端实现完成"
+    description: "前端组件必须已实现"
+    type: hard_gate
+    severity: blocker
+
+    condition: "evidence_pack.frontend_required == true"
+
+    check:
+      type: completeness_check
+      rule: |
+        evidence_pack.frontend_dev.completed == true
+
+    failure_message: "前端实现未完成"
+    suggestion: "完成前端组件实现"
+
+  # ------------------------------------------
+  # Quality Signal 规则（建议性）
+  # ------------------------------------------
+  - id: unit_test_coverage
+    name: "单元测试覆盖率"
+    description: "单元测试行覆盖率应不低于 80%"
+    type: quality_signal
+    severity: major
+
+    check:
+      type: metric_check
+      rule: |
+        evidence_pack.backend_dev.unit_tests.coverage.line_coverage >= 80
+
+    threshold:
+      min_line_coverage: 80
+
+    failure_message: "单元测试覆盖率低于 80%（实际：{actual}%）"
+    suggestion: "补充单元测试提高覆盖率"
+
+  - id: code_review_completed
+    name: "代码审查完成"
+    description: "代码审查应已完成"
+    type: quality_signal
+    severity: major
+
+    check:
+      type: flag_check
+      rule: |
+        evidence_pack.code_review.completed == true
+
+    failure_message: "代码审查未完成"
+    suggestion: "完成代码审查"
+
+  - id: documentation_complete
+    name: "文档完整性"
+    description: "相关文档应完整"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: completeness_check
+      rule: |
+        evidence_pack.documentation.api_docs IS NOT EMPTY AND
+        evidence_pack.documentation.user_guide IS NOT EMPTY
+
+    failure_message: "文档不完整"
+    suggestion: "补充 API 文档和用户指南"
+
+  - id: performance_baseline
+    name: "性能基线"
+    description: "性能应满足基线要求"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: metric_check
+      rule: |
+        evidence_pack.performance.baseline_met == true
+
+    failure_message: "性能未达基线"
+    suggestion: "优化性能至基线以上"
+
+  - id: security_scan_passed
+    name: "安全扫描通过"
+    description: "安全扫描应通过"
+    type: quality_signal
+    severity: major
+
+    check:
+      type: flag_check
+      rule: |
+        evidence_pack.security.scan_passed == true
+
+    failure_message: "安全扫描未通过"
+    suggestion: "修复安全漏洞"
+
+# ============================================
+# 执行配置
+# ============================================
+execution_config:
+  execution_mode: enforce  # hard_gate 失败会阻断
+  parallel_evaluation: true
+  fail_fast: false
+
+  result_mapping:
+    all_hard_gate_passed: "PASSED"
+    any_hard_gate_failed: "BLOCKED"
+    hard_gate_passed_signal_failed: "WARNING"
+
+# ============================================
+# Gate 消费配置
+# ============================================
+gate_consumption:
+  gate_id: gate.dev.evidence_pack_gate
+  auto_pass_on: "PASSED"
+  auto_block_on: "BLOCKED"
+  require_review_on: "WARNING"
+
+  failure_blocking: true
+  signal_failure_warning: true
+
+# ============================================
+# 与 workflow 的集成
+# ============================================
+workflow_integration:
+  workflow_id: feature-delivery-l2
+  trigger_point: "before_evidence_pack"
+  trigger_event: "evidence_pack_complete"
+
+  input_evidence:
+    - source: "evidence_pack"
+      type: "evidence_pack"
+      required: true
+
+  output_consumption:
+    - consumer: "gate.dev.evidence_pack_gate"
+      field: "fitness_result"
+      required: true
+    - consumer: "gate.dev.smoke_gate"
+      field: "fitness_result"
+      required: false
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "dev-governance"
+  created_at: "2026-03-17"
+  version: "1.0"
+  related_workflow: "feature-delivery-l2"
+  related_gate: "gate.dev.evidence_pack_gate"
