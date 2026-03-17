@@ -328,6 +328,14 @@ DEFAULT_DIRECTORY_SCHEMA = {
             "copy_templates_from": "templates/spec",
         },
 
+        # QA Specifications (Test Set artifacts)
+        "qa_specs_dir": {
+            "path": "qa/specs",
+            "description": "QA specification SSOT (Test Set and other frozen assets)",
+            "subdirs": ["test-sets"],
+            "structure": "flat",
+        },
+
         # Contracts (frozen analysis outputs)
         "contracts_dir": {
             "path": "contracts",

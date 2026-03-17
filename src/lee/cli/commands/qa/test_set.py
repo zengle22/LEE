@@ -36,14 +36,14 @@ def _load_dirs_config(project_dir: Path) -> Dict[str, Any]:
             "directories": {
                 "specs_dir": {"path": "spec"},
                 "spec_dir": {"path": "spec"},  # 别名支持
-                "qa_specs_dir": {"path": "spec/qa"},
+                "qa_specs_dir": {"path": "qa/specs"},
                 "src_dir": {"path": "src"},
                 "docs_dir": {"path": "docs"},
                 "tests_dir": {"path": "tests"},
                 "artifacts_dir": {"path": ".artifacts"},
             }
         }
-    
+
     with open(config_file, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f) or {}
 
@@ -53,7 +53,7 @@ def _build_dir_context(project_dir: Path) -> Dict[str, str]:
     dirs_config = _load_dirs_config(project_dir)
     directories = dirs_config.get("directories", {})
     context = {}
-    
+
     # 直接映射目录配置到模板变量
     if "specs_dir" in directories:
         context["specs_dir"] = directories["specs_dir"].get("path", "spec")
@@ -61,11 +61,11 @@ def _build_dir_context(project_dir: Path) -> Dict[str, str]:
         context["specs_dir"] = directories["spec_dir"].get("path", "spec")
     else:
         context["specs_dir"] = "spec"
-    
+
     if "qa_specs_dir" in directories:
-        context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", "spec/qa")
+        context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", "qa/specs")
     else:
-        context["qa_specs_dir"] = "spec/qa"
+        context["qa_specs_dir"] = "qa/specs"
     
     # 其他目录直接映射
     for dir_name in ["src_dir", "docs_dir", "tests_dir", "artifacts_dir"]:

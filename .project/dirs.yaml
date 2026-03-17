@@ -49,6 +49,13 @@ directories:
     structure: flat
     naming: default
     copy_templates_from: templates/spec
+  qa_specs_dir:
+    path: qa/specs
+    description: QA 规格 SSOT（Test Set 等冻结资产）
+    subdirs:
+    - test-sets
+    structure: flat
+    naming: default
   docs_dir:
     path: docs
     description: 解释性文档（说明、指南、报告）

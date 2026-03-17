@@ -337,9 +337,9 @@ class WorkflowRunner:
                 context["specs_dir"] = "spec"
             
             if "qa_specs_dir" in directories:
-                context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", "spec/qa")
+                context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", "qa/specs")
             else:
-                context["qa_specs_dir"] = "spec/qa"
+                context["qa_specs_dir"] = "qa/specs"
             
             # 其他目录直接映射
             for dir_name in ["src_dir", "docs_dir", "knowledge_dir", "tests_dir", "artifacts_dir",
@@ -368,7 +368,7 @@ class WorkflowRunner:
             # 使用默认值
             context = {
                 "specs_dir": "spec",
-                "qa_specs_dir": "spec/qa",
+                "qa_specs_dir": "qa/specs",
                 "src_dir": "src",
                 "docs_dir": "docs",
                 "knowledge_dir": "knowledge",
