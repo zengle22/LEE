@@ -1,0 +1,69 @@
+{
+  "smoke_run_id": "smoke-20260317-143000",
+  "test_set_id": "TS-SMOKE-GATE-001",
+  "module": "lee-smoke-gate",
+  "executed_at": "2026-03-17T14:30:00.000000",
+  "completed_at": "2026-03-17T14:30:02.000000",
+  "duration_seconds": 1.48,
+
+  "result": {
+    "status": "PASS",
+    "gate_decision": "ALLOW_MERGE",
+    "confidence": "high"
+  },
+
+  "statistics": {
+    "total_tests": 38,
+    "passed": 38,
+    "failed": 0,
+    "skipped": 0,
+    "pass_rate": 100.0,
+    "test_files": 5
+  },
+
+  "coverage": {
+    "interfaces_covered": 10,
+    "interfaces_total": 10,
+    "coverage_rate": "100%",
+    "acceptance_criteria": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  },
+
+  "files_tested": [
+    "src/lee/smoke/models.py",
+    "src/lee/smoke/executor.py",
+    "src/lee/smoke/gate/manager.py",
+    "src/lee/smoke/integration/merge_gate.py",
+    "src/lee/smoke/hooks/pre_merge.py",
+    "src/lee/smoke/storage/store.py"
+  ],
+
+  "breakdown_by_file": {
+    "test_models.py": {"total": 16, "passed": 16},
+    "test_storage.py": {"total": 8, "passed": 8},
+    "test_manager.py": {"total": 5, "passed": 5},
+    "test_integration.py": {"total": 5, "passed": 5},
+    "test_integration_flow.py": {"total": 3, "passed": 3}
+  },
+
+  "blocker_issues": [],
+  "warnings": [
+    {
+      "type": "naming_convention",
+      "message": "TestExecutionRecord class name may conflict with pytest collection",
+      "file": "src/lee/smoke/models.py",
+      "severity": "low"
+    }
+  ],
+
+  "environment": {
+    "python_version": "3.13.3",
+    "pytest_version": "9.0.2",
+    "platform": "win32"
+  },
+
+  "artifacts_path": "tests_dir/exec/smoke-20260317-143000/"
+}
