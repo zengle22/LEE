@@ -22,6 +22,7 @@ roles:
     - agent.governance.acceptance_checker
     - agent.review.acceptance_reviewer
     - agent.governance.defect_fixer
+    - agent.qa.output_validator
   skills: []
   gates:
     - gate.product.epic_acceptance_approval
@@ -335,9 +336,10 @@ stages:
           - source: epic_updated_defect_list
             required: true
         outputs:
-          - path: output/design-frozen/{project}-epic-freeze.yaml
+          - path: spec/requirements/epics/{epic_id}.yaml
             required: true
             freeze: true
+            contract: departments/product/contracts/epic-contract/v1/schema.json
             ssot:
               identity_kind: ssot
               ssot_type: EPIC
@@ -362,6 +364,28 @@ stages:
           gate:
             type: human_approval
             gate_id: gate.product.epic_freeze
+
+      - id: output_validation
+        name: 输出完整性校验
+        kind: agent
+        agent_id: agent.governance.output_validator
+        mandatory: true
+        depends_on: [epic_freeze]
+        description: >
+          对落盘的 EPIC 文件进行全面校验，确保 SSOT 字段完整有效。
+          校验失败则拒绝放行，触发重跑（最多 3 次），3 次失败则整体流程失败。
+        inputs:
+          - source: epic_freeze
+            required: true
+        outputs:
+          - symbol: output_validation_result
+            contract: departments/product/contracts/gate-result-contract/v1/schema.json
+            freeze: false
+        config:
+          validation:
+            kind: ssot
+            ssot_type: EPIC
+            max_retries: 3
     step_order:
       - problem_alignment
       - epic_design
@@ -373,6 +397,7 @@ stages:
       - epic_acceptance_approval_gate
       - epic_identity_formalize
       - epic_freeze
+      - output_validation
 
 stage_order:
   - src_to_epic_flow
@@ -438,6 +463,7 @@ state_machine:
     - EPIC_ACCEPTANCE_APPROVAL: "EPIC 验收 - 审批"
     - EPIC_IDENTITY_FORMALIZE: "EPIC 身份定版"
     - EPIC_FREEZE: "EPIC 冻结"
+    - OUTPUT_VALIDATION: "输出完整性校验"
     - COMPLETED: "完成"
     - FAILED: "失败"
   transitions:
@@ -490,7 +516,12 @@ state_machine:
       - to: FAILED
         trigger: epic_identity_formalize_failed
     EPIC_FREEZE:
-      - to: COMPLETED
+      - to: OUTPUT_VALIDATION
         trigger: epic_freeze_completed
       - to: FAILED
         trigger: epic_freeze_failed
+    OUTPUT_VALIDATION:
+      - to: COMPLETED
+        trigger: output_validation_completed
+      - to: FAILED
+        trigger: output_validation_failed
