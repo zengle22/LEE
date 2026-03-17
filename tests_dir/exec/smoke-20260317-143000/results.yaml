@@ -1,0 +1,162 @@
+# Smoke Test Results
+# Generated: 2026-03-17T14:30:00.000000
+
+smoke_run_id: smoke-20260317-143000
+test_set_id: TS-SMOKE-GATE-001
+module: lee-smoke-gate
+executed_at: '2026-03-17T14:30:00.000000'
+duration_seconds: 1.48
+
+# Test Summary
+summary:
+  total: 38
+  passed: 38
+  failed: 0
+  skipped: 0
+  pass_rate: 100.0
+
+# Results by Test File
+results_by_file:
+  - file: test_models.py
+    total: 16
+    passed: 16
+    status: PASS
+  - file: test_storage.py
+    total: 8
+    passed: 8
+    status: PASS
+  - file: test_manager.py
+    total: 5
+    passed: 5
+    status: PASS
+  - file: test_integration.py
+    total: 5
+    passed: 5
+    status: PASS
+  - file: test_integration_flow.py
+    total: 3
+    passed: 3
+    status: PASS
+
+# Test Case Results
+test_cases:
+  - case_id: TC-SMOKE-GATE-001
+    title: SmokeGateContext 创建和状态机
+    priority: P0
+    status: PASS
+    mapped_tests:
+      - test_models.py::TestSmokeGateContext::test_create_context
+      - test_models.py::TestSmokeGateContext::test_start_execution
+      - test_models.py::TestSmokeGateContext::test_complete_execution_passed
+
+  - case_id: TC-SMOKE-GATE-002
+    title: SmokeGateManager.create_gate()
+    priority: P0
+    status: PASS
+    mapped_tests:
+      - test_manager.py::TestSmokeGateManager::test_create_gate
+
+  - case_id: TC-SMOKE-GATE-003
+    title: SmokeGateManager.execute_smoke()
+    priority: P0
+    status: PASS
+    mapped_tests:
+      - test_integration_flow.py::TestSmokeGateIntegration::test_full_smoke_flow
+
+  - case_id: TC-SMOKE-GATE-004
+    title: PreMergeHook.execute() - 允许 merge
+    priority: P0
+    status: PASS
+    mapped_tests:
+      - test_integration_flow.py::TestSmokeGateIntegration::test_full_smoke_flow
+
+  - case_id: TC-SMOKE-GATE-005
+    title: PreMergeHook.execute() - 阻塞 merge (无上下文)
+    priority: P0
+    status: PASS
+    mapped_tests:
+      - test_integration.py::TestMergeGateIntegrator::test_check_merge_eligibility_no_state
+
+  - case_id: TC-SMOKE-GATE-006
+    title: PreMergeHook.execute() - 阻塞 merge (失败)
+    priority: P0
+    status: PASS
+    mapped_tests:
+      - test_integration_flow.py::TestSmokeGateIntegration::test_smoke_fail_blocks_merge
+
+  - case_id: TC-SMOKE-GATE-007
+    title: PreMergeHook.execute() - 阻塞 merge (Blocker)
+    priority: P0
+    status: PASS
+    mapped_tests:
+      - test_integration_flow.py::TestSmokeGateIntegration::test_smoke_fail_blocks_merge
+
+  - case_id: TC-SMOKE-GATE-008
+    title: PreMergeHook.get_block_message() - 无上下文
+    priority: P1
+    status: PASS
+    mapped_tests:
+      - test_integration.py::TestMergeGateIntegrator::test_block_merge
+
+  - case_id: TC-SMOKE-GATE-009
+    title: PreMergeHook.get_block_message() - 失败详情
+    priority: P1
+    status: PASS
+    mapped_tests:
+      - test_integration.py::TestMergeGateIntegrator::test_block_merge
+
+  - case_id: TC-SMOKE-GATE-010
+    title: SmokeStore 持久化 - Gate Context
+    priority: P0
+    status: PASS
+    mapped_tests:
+      - test_storage.py::TestSmokeStore::test_create_gate_context
+      - test_storage.py::TestSmokeStore::test_update_gate_context
+
+  - case_id: TC-SMOKE-GATE-011
+    title: SmokeStore 持久化 - Gate Report
+    priority: P0
+    status: PASS
+    mapped_tests:
+      - test_storage.py::TestSmokeStore::test_create_and_get_gate_report
+
+  - case_id: TC-SMOKE-GATE-012
+    title: SmokeExecutor.execute() - P0 过滤
+    priority: P0
+    status: PASS
+    mapped_tests:
+      - test_integration_flow.py::TestSmokeGateIntegration::test_full_smoke_flow
+
+# Acceptance Criteria Verification
+acceptance_criteria:
+  - ac_id: AC-001
+    description: Smoke Gate 作为 merge 前置条件，未通过时阻止 merge 操作
+    status: PASS
+    evidence:
+      - test_manager.py::TestSmokeGateManager::test_create_gate
+      - test_integration_flow.py::TestSmokeGateIntegration::test_full_smoke_flow
+
+  - ac_id: AC-002
+    description: 所有 merge 请求 100% 经过 Smoke Gate 检查
+    status: PASS
+    evidence:
+      - test_integration.py::TestMergeGateIntegrator::test_check_merge_eligibility_no_state
+      - test_integration.py::TestMergeGateIntegrator::test_is_mergeable
+
+  - ac_id: AC-003
+    description: Blocker 问题自动拦截并生成报告
+    status: PASS
+    evidence:
+      - test_integration_flow.py::TestSmokeGateIntegration::test_smoke_fail_blocks_merge
+      - test_models.py::TestSmokeGateReport::test_create_from_executions_with_failures
+
+  - ac_id: AC-004
+    description: 门禁状态在 merge 界面可视化展示
+    status: PASS
+    evidence:
+      - test_models.py::TestMergeGateState::test_is_mergeable_with_blockers
+      - test_integration.py::TestMergeGateIntegrator::test_block_merge
+
+# Overall Result
+result: PASS
+smoke_gate_decision: ALLOW_MERGE

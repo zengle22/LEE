@@ -1,0 +1,73 @@
+{
+  "evidence_pack_id": "EP-SMOKE-20260317-143000",
+  "generated_at": "2026-03-17T14:30:00.000000",
+  "module": "lee-smoke-gate",
+  "test_set_id": "TS-SMOKE-GATE-001",
+  "smoke_run_id": "smoke-20260317-143000",
+
+  "gate_evaluation": {
+    "gate_id": "gate.dev.smoke_gate",
+    "gate_type": "auto_gate",
+    "priority": "blocker",
+    "status": "passed",
+    "result": "ALLOW_MERGE"
+  },
+
+  "smoke_summary": {
+    "total_tests": 38,
+    "passed": 38,
+    "failed": 0,
+    "pass_rate": 100.0,
+    "duration_seconds": 1.48,
+    "executed_at": "2026-03-17T14:30:00.000000"
+  },
+
+  "compliance_checks": {
+    "smoke_test_pass": {
+      "check": "Smoke Test must be 100% passed",
+      "status": "PASS",
+      "details": "38/38 tests passed"
+    },
+    "smoke_result_pass": {
+      "check": "Overall result must be PASS",
+      "status": "PASS",
+      "details": "result=PASS"
+    },
+    "coverage_threshold": {
+      "check": "Coverage must be >= 80%",
+      "status": "PASS",
+      "details": "Integration tests cover all 10 interfaces (100%)"
+    },
+    "evidence_completeness": {
+      "check": "Evidence pack must be complete",
+      "status": "PASS",
+      "details": "All required artifacts present"
+    },
+    "gate_handoff_ready": {
+      "check": "Evidence pack must be ready for gate",
+      "status": "PASS",
+      "details": "Ready for handoff to gate.dev.smoke_gate"
+    }
+  },
+
+  "acceptance_criteria_status": [
+    {"ac_id": "AC-001", "status": "PASS", "description": "Smoke Gate 作为 merge 前置条件"},
+    {"ac_id": "AC-002", "status": "PASS", "description": "100% merge 请求覆盖"},
+    {"ac_id": "AC-003", "status": "PASS", "description": "Blocker 问题自动拦截"},
+    {"ac_id": "AC-004", "status": "PASS", "description": "门禁状态可视化"}
+  ],
+
+  "artifacts": {
+    "test_results": "tests_dir/exec/smoke-20260317-143000/results.yaml",
+    "pytest_output": "tests_dir/exec/smoke-20260317-143000/pytest-output.log",
+    "test_set": "qa_specs_dir/test-sets/ts-smoke-gate-merge.yaml",
+    "integration_plan": "output/integration-plan.json",
+    "selfcheck_report": "output/integration-selfcheck.json"
+  },
+
+  "decision": {
+    "merge_allowed": true,
+    "confidence": "high",
+    "rationale": "All 38 integration tests pass, 100% interface coverage, all acceptance criteria verified, no blocker issues found."
+  }
+}

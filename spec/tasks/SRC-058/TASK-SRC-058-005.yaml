@@ -1,0 +1,96 @@
+# TASK-SRC-058-005: Smoke Gate 可观测性与验证测试套件
+# Parent: FEAT-SRC-058-005
+# Workstream: observability-validation
+# Responsible Role: qa-validation-engineer
+
+task_id: TASK-SRC-058-005
+title: Smoke Gate 可观测性与验证测试套件
+objective: 实现完整的可观测性体系和测试验证套件，确保 Dev Smoke Gate 质量
+
+description: |
+  建立 Dev Smoke Gate 的可观测性和验证能力：
+  1. 执行日志：结构化日志 (info/warn/error)，支持级别过滤和下载
+  2. 进度监控：实时上报已执行/总数、当前通过率、预计剩余时间
+  3. 证据包：自动打包截图、日志、网络请求记录，目录结构规范
+  4. 测试套件：P0/P1 用例覆盖核心流程 (环境检测、执行、重试、Gate 判定)
+  5. Flaky 验证：模拟 Flaky 场景验证检测准确率
+  6. 超时处理：30 分钟阈值警告，支持继续等待或终止
+
+  测试范围：单元测试 (phases)、集成测试 (5 Phase 流程)、端到端测试 (完整 Merge 流程)
+
+source_feat: FEAT-SRC-058-005
+workstream: observability-validation
+task_kind: test_governance
+responsible_role: qa-validation-engineer
+
+acceptance_criteria_mapping:
+  - feat: FEAT-SRC-058-005
+    ac: AC-OBS-001
+    description: 结构化日志支持 info/warn/error 级别过滤
+  - feat: FEAT-SRC-058-005
+    ac: AC-OBS-002
+    description: 实时进度监控准确显示已执行/总数和通过率
+  - feat: FEAT-SRC-058-005
+    ac: AC-OBS-003
+    description: 证据包目录结构符合规范，包含截图/日志/网络记录
+  - feat: FEAT-SRC-058-005
+    ac: AC-OBS-004
+    description: P0/P1 测试用例覆盖核心流程，单元测试通过率 >= 90%
+  - feat: FEAT-SRC-058-005
+    ac: AC-OBS-005
+    description: Flaky 检测准确率验证通过 (模拟 5 次执行 pass_rate < 80%)
+
+prerequisites:
+  - TASK-SRC-058-001
+  - TASK-SRC-058-002
+  - TASK-SRC-058-003
+  - TASK-SRC-058-004
+
+dependencies:
+  - TASK-SRC-058-001
+  - TASK-SRC-058-002
+  - TASK-SRC-058-003
+  - TASK-SRC-058-004
+
+definition_of_done:
+  - TASK-SRC-058-005.yaml 已创建并冻结
+  - 测试套件实现完成，P0/P1 用例执行通过
+  - 可观测性组件验证通过 (日志/进度/证据包)
+  - 端到端测试验证完整 Merge 流程
+  - Flaky 检测准确率验证通过
+
+priority: P0
+milestone: M4-Validate
+estimated_effort: 2 days
+lifecycle_status: draft
+
+observability:
+  execution_unit: task
+  log_scope: task-execution
+  audit_fields:
+    - run_id
+    - changed_files
+    - evidence_refs
+    - test_results
+    - coverage_report
+
+evidence_requirements:
+  required_refs:
+    - TASK-SRC-058-001
+    - TASK-SRC-058-002
+    - TASK-SRC-058-003
+    - TASK-SRC-058-004
+    - TECH-SRC-058-001
+  review_required: true
+
+rollback_strategy:
+  mode: revert
+  restore_targets:
+    - tests/dev_smoke/
+    - src/lee/observability/
+
+ssot:
+  identity_kind: ssot
+  ssot_type: task
+  parent: FEAT-SRC-058-005
+  derived_from: FEAT-SRC-058-005#observability

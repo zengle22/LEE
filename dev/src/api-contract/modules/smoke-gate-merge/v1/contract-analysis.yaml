@@ -1,0 +1,163 @@
+# Contract Analysis
+# FEAT-SRC-058-001 Smoke Gate Merge 门禁集成 - 需求分析
+
+analysis_id: ANALYSIS-SMOKE-GATE-MERGE-20260317-001
+created_at: '2026-03-17'
+source_feat: FEAT-SRC-058-001
+contract_version: 1.0.0
+
+---
+
+## 1. Requirement Extraction
+
+### 1.1 API Endpoints Needed
+
+本项目为纯 CLI + Spec 项目，无 HTTP API。提取内部 Python 接口如下：
+
+| 接口 | 方法 | 描述 | 输入 | 输出 |
+|------|------|------|------|------|
+| SmokeGateManager.create_gate | async | 创建 Gate 实例 | merge_request_id, config | SmokeGateContext |
+| SmokeGateManager.start_execution | async | 启动执行 | context | updated context |
+| SmokeGateManager.get_gate_status | async | 获取状态 | merge_request_id | SmokeGateStatus |
+| SmokeGateManager.get_gate_report | async | 获取报告 | smoke_run_id | SmokeGateReport |
+| SmokeExecutor.execute | async | 执行测试 | context, test_cases | SmokeGateReport |
+| SmokeExecutor.execute_with_retry | async | 带重试执行 | test_case, max_retries | TestExecutionRecord |
+| MergeGateIntegrator.check_merge_eligibility | async | 检查 merge 条件 | merge_request_id | MergeGateState |
+| MergeGateIntegrator.block_merge | async | 阻塞 merge | merge_request_id, reason | None |
+| MergeGateIntegrator.allow_merge | async | 允许 merge | merge_request_id | None |
+| PreMergeHook.execute | sync | pre-merge 检查 | merge_request_id | bool |
+
+### 1.2 DTOs Required
+
+**核心数据模型**:
+- `SmokeGateContext`: Gate 执行上下文
+- `TestExecutionRecord`: 单个测试执行记录
+- `SmokeGateReport`: Gate 执行报告
+- `MergeGateState`: Merge Gate 状态机
+
+**枚举类型**:
+- `SmokeGateStatus`: Gate 状态枚举
+- `GateResult`: 判定结果枚举
+- `FailureSeverity`: 失败严重程度枚举
+- `SmokeGateEvent`: 事件类型枚举
+
+### 1.3 Dependencies
+
+**内部依赖**:
+- Test Set 模块：加载测试用例
+- Environment 模块：环境检查
+- Orchestrator: 工作流集成
+
+**外部依赖**:
+- pytest: 测试框架
+- Playwright: E2E 测试
+- pytest-xdist: 并发执行
+- pytest-html: 报告生成
+
+---
+
+## 2. Contract Design Decisions
+
+### 2.1 状态机设计
+
+采用严格的状态转换规则：
+```
+NOT_STARTED → RUNNING → {PASSED | FAILED | INVALID}
+```
+
+**设计理由**:
+- 防止跳过执行直接通过
+- 防止已通过后重新执行
+- 确保状态可追踪
+
+### 2.2 重试机制
+
+- 单次失败自动重试，最多 3 次
+- 3 次全败才判定为 blocker
+- Flaky 测试不阻塞 merge
+
+**设计理由**:
+- 减少偶发失败对开发流程的干扰
+- 区分真实问题和偶发问题
+- 提升 Gate 可信度
+
+### 2.3 严重程度分级
+
+| 优先级 | 严重程度 | 是否阻塞 |
+|--------|---------|---------|
+| P0 | Blocker | 是 |
+| P1 | Blocker | 是 |
+| P2 | Critical | 否（QA 回归用） |
+| Flaky | Flaky | 否（生成技术债务） |
+
+---
+
+## 3. Field Mapping
+
+### 3.1 FEAT Spec → Contract
+
+| FEAT 需求 | Contract 实现 |
+|----------|--------------|
+| Smoke Gate 作为 blocker 门禁 | `MergeGateIntegrator.block_merge()` |
+| 100% merge 请求覆盖 | `PreMergeHook.execute()` |
+| 自动拦截 blocker 问题 | `determine_severity()` + `is_merge_allowed()` |
+| 门禁状态可视化 | `MergeGateIntegrator.update_gate_status_display()` |
+
+### 3.2 Acceptance Criteria → Validation
+
+| AC | Validation Rule |
+|----|----------------|
+| AC-001: Smoke Gate 作为 merge 前置条件 | `is_merge_allowed()` 检查 gate_status == PASSED |
+| AC-002: 所有 MR 100% 经过检查 | `PreMergeHook.execute()` 在 merge 前强制调用 |
+| AC-003: Blocker 问题自动拦截 | `determine_severity()` 判定 P0/P1 为 blocker |
+| AC-004: 门禁状态可视化 | `update_gate_status_display()` 更新 MR 页面状态 |
+
+---
+
+## 4. Version Strategy
+
+### 4.1 版本规划
+
+- **当前版本**: v1.0.0 (初始版本)
+- **未来扩展**:
+  - v1.1.0: 支持手动重试
+  - v2.0.0: 支持部分 merge（破坏性变更）
+
+### 4.2 兼容性保证
+
+- v1.x.x 保持向后兼容
+- 新增字段使用 Optional 类型
+- 枚举新增成员不影响现有代码
+
+---
+
+## 5. Implementation Priority
+
+### P0 (必须实现)
+1. `SmokeGateStatus`, `GateResult`, `FailureSeverity` 枚举
+2. `SmokeGateContext`, `SmokeGateReport` 数据模型
+3. `SmokeExecutor.execute()` 核心执行逻辑
+4. `PreMergeHook.execute()` merge 拦截逻辑
+5. `is_merge_allowed()` 判定逻辑
+
+### P1 (重要)
+1. `SmokeGateManager` 生命周期管理
+2. `MergeGateIntegrator` Git 平台集成
+3. `SmokeStore` 持久化层
+4. 重试机制实现
+
+### P2 (可选)
+1. 事件系统 (`SmokeGateEvent`)
+2. HTML 报告生成
+3. 状态可视化显示
+
+---
+
+## 6. Risks and Mitigations
+
+| 风险 | 影响 | 缓解措施 |
+|------|------|---------|
+| 执行时间超过 30 分钟 | 阻塞开发流程 | 并发执行 + 超时控制 |
+| 误报导致 merge 阻塞 | 开发效率下降 | 重试机制 + Flaky 检测 |
+| Git 平台 API 限制 | 集成失败 | 本地 Git Hook 作为备选 |
+| 并发 merge 请求资源竞争 | 执行队列阻塞 | 执行队列管理 + 资源隔离 |

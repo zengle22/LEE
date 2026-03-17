@@ -1,0 +1,85 @@
+# TASK-SRC-058-002: Dev Smoke 执行引擎 Runtime 实现
+# Parent: FEAT-SRC-058-002
+# Workstream: dev-smoke-runtime
+# Responsible Role: backend-runtime-engineer
+
+task_id: TASK-SRC-058-002
+title: Dev Smoke 执行引擎 Runtime 实现
+objective: 实现 5 Phase Dev Smoke 执行引擎，包括环境检测、用例生成、并行执行、结果判定和证据打包
+
+description: |
+  基于架构规范实现 Dev Smoke L3 执行器的核心 runtime：
+  1. Phase 1 - Env Check: OS 检测、路径分隔符、环境变量校验、Docker 配置 (可选)
+  2. Phase 2 - Case Gen: 从 FEAT 导入 AC、生成 Test Set 模板、优先级映射 (P0/P1/P2)
+  3. Phase 3 - Execution: pytest + pytest-xdist 并行执行 (默认 4 worker)、实时进度上报
+  4. Phase 4 - Result Judgment: 通过率计算、Flaky 检测 (5 次执行 pass_rate < 80%)、Gate 判定
+  5. Phase 5 - Evidence Pack: 日志打包、截图收集、证据目录结构生成
+
+  技术栈：pytest >= 7.0, pytest-xdist >= 3.0, playwright >= 1.40, psutil >= 5.9
+
+source_feat: FEAT-SRC-058-002
+workstream: dev-smoke-runtime
+task_kind: implementation
+responsible_role: backend-runtime-engineer
+
+acceptance_criteria_mapping:
+  - feat: FEAT-SRC-058-002
+    ac: AC-RUN-001
+    description: 环境检测能识别 OS 类型、路径分隔符、环境变量差异
+  - feat: FEAT-SRC-058-002
+    ac: AC-RUN-002
+    description: 支持从 FEAT YAML 自动导入 AC 并生成 Test Set 模板
+  - feat: FEAT-SRC-058-002
+    ac: AC-RUN-003
+    description: 并行执行支持 4 worker，实时上报进度 (已执行/总数、通过率)
+  - feat: FEAT-SRC-058-002
+    ac: AC-RUN-004
+    description: 自动 Flaky 检测：5 次执行 pass_rate < 80% 标记为 flaky
+  - feat: FEAT-SRC-058-002
+    ac: AC-RUN-005
+    description: 证据包包含日志、截图、执行摘要，目录结构符合规范
+
+prerequisites:
+  - TASK-SRC-058-001
+
+dependencies:
+  - TASK-SRC-058-001
+
+definition_of_done:
+  - TASK-SRC-058-002.yaml 已创建并冻结
+  - 执行引擎 runtime 代码实现完成
+  - 5 Phase 流程单元测试通过
+  - 本地 Smoke 执行时间 <= 30 分钟
+
+priority: P0
+milestone: M2-Runtime-Implement
+estimated_effort: 3 days
+lifecycle_status: draft
+
+observability:
+  execution_unit: task
+  log_scope: task-execution
+  audit_fields:
+    - run_id
+    - changed_files
+    - evidence_refs
+    - test_results
+    - execution_time
+
+evidence_requirements:
+  required_refs:
+    - TASK-SRC-058-001
+    - TECH-SRC-058-001
+  review_required: true
+
+rollback_strategy:
+  mode: revert
+  restore_targets:
+    - src/lee/dev_smoke/executor.py
+    - src/lee/dev_smoke/phases/
+
+ssot:
+  identity_kind: ssot
+  ssot_type: task
+  parent: FEAT-SRC-058-002
+  derived_from: FEAT-SRC-058-002#execution

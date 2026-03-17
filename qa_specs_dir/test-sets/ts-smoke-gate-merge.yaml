@@ -1,0 +1,243 @@
+# Test Set: MR Smoke Gate Merge Integration
+# 测试 Smoke Gate 模块的核心功能和集成
+
+suite_id: TS-SMOKE-GATE-001
+type: smoke
+module: lee-smoke-gate
+description: MR Smoke Gate 核心功能测试集
+owner: dev-team
+version: "1.0"
+
+# 测试策略
+strategy:
+  focus:
+    - SmokeGateManager 生命周期管理
+    - SmokeExecutor 测试执行
+    - MergeGateIntegrator Git 平台集成
+    - PreMergeHook merge 拦截
+    - SmokeStore 数据持久化
+  test_types:
+    - unit
+    - integration
+  priority: P0
+
+# 测试重点
+test_focus:
+  positive:
+    - SmokeGate 创建和执行成功
+    - 测试通过后允许 merge
+    - 状态机正确转换
+    - 数据持久化正常
+  negative:
+    - Blocker 问题阻塞 merge
+    - 状态机非法转换抛出异常
+    - 缺失 Gate 上下文阻塞 merge
+
+# 可追溯性
+traceability:
+  feature_ids:
+    - FEAT-SRC-058-001
+  acceptance_criteria_refs:
+    - AC-001: Smoke Gate 作为 merge 前置条件
+    - AC-002: 100% merge 请求覆盖
+    - AC-003: Blocker 问题自动拦截
+    - AC-004: 门禁状态可视化
+
+# 执行配置
+execution:
+  mode: sequential
+  fail_fast: true
+  timeout_seconds: 300
+
+# 验证规则
+validation_rules:
+  - rule: "smoke_must_be_p0_p1"
+    check: "IF type == 'smoke' THEN ALL test_cases HAVE priority IN [P0, P1]"
+
+# 测试用例
+test_cases:
+  - case_id: TC-SMOKE-GATE-001
+    title: SmokeGateContext 创建和状态机
+    priority: P0
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-001
+    scenario: 验证 Gate 上下文创建和状态机转换
+    steps:
+      - step_number: 1
+        action: 创建 SmokeGateContext 实例
+        expected_result: 实例创建成功，status=NOT_STARTED
+      - step_number: 2
+        action: 调用 start_execution()
+        expected_result: status 转换为 RUNNING
+      - step_number: 3
+        action: 调用 complete_execution(GateResult.ALLOW_MERGE)
+        expected_result: status 转换为 PASSED
+    expected_result: 状态机正确转换，无异常抛出
+
+  - case_id: TC-SMOKE-GATE-002
+    title: SmokeGateManager.create_gate()
+    priority: P0
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-001
+    scenario: 验证创建 Gate 实例
+    steps:
+      - step_number: 1
+        action: 调用 create_gate(merge_request_id, config)
+        expected_result: 返回 SmokeGateContext
+      - step_number: 2
+        action: 验证 context 字段
+        expected_result: merge_request_id, status=NOT_STARTED 正确
+    expected_result: Gate 实例创建成功并持久化
+
+  - case_id: TC-SMOKE-GATE-003
+    title: SmokeGateManager.execute_smoke()
+    priority: P0
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-001
+    scenario: 验证执行 Smoke 测试并生成报告
+    steps:
+      - step_number: 1
+        action: 准备测试用例列表
+        expected_result: 测试用例准备完成
+      - step_number: 2
+        action: 调用 execute_smoke(context, test_cases)
+        expected_result: 返回 SmokeGateReport
+      - step_number: 3
+        action: 验证报告内容
+        expected_result: total_count, pass_count, result 正确
+    expected_result: 测试执行完成，报告生成成功
+
+  - case_id: TC-SMOKE-GATE-004
+    title: PreMergeHook.execute() - 允许 merge
+    priority: P0
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-002
+    scenario: 验证 Gate 通过时允许 merge
+    steps:
+      - step_number: 1
+        action: 创建已通过的 Gate 上下文
+        expected_result: status=PASSED, result=ALLOW_MERGE
+      - step_number: 2
+        action: 调用 PreMergeHook.execute(mr_id)
+        expected_result: 返回 True
+    expected_result: merge 被允许
+
+  - case_id: TC-SMOKE-GATE-005
+    title: PreMergeHook.execute() - 阻塞 merge (无上下文)
+    priority: P0
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-002
+    scenario: 验证无 Gate 上下文时阻塞 merge
+    steps:
+      - step_number: 1
+        action: 不创建 Gate 上下文
+        expected_result: 无数据
+      - step_number: 2
+        action: 调用 PreMergeHook.execute(mr_id)
+        expected_result: 返回 False
+    expected_result: merge 被阻塞
+
+  - case_id: TC-SMOKE-GATE-006
+    title: PreMergeHook.execute() - 阻塞 merge (失败)
+    priority: P0
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-003
+    scenario: 验证 Gate 失败时阻塞 merge
+    steps:
+      - step_number: 1
+        action: 创建失败的 Gate 上下文
+        expected_result: status=FAILED
+      - step_number: 2
+        action: 调用 PreMergeHook.execute(mr_id)
+        expected_result: 返回 False
+    expected_result: merge 被阻塞
+
+  - case_id: TC-SMOKE-GATE-007
+    title: PreMergeHook.execute() - 阻塞 merge (Blocker)
+    priority: P0
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-003
+    scenario: 验证 blocker_count>0 时阻塞 merge
+    steps:
+      - step_number: 1
+        action: 创建包含 blocker 的报告
+        expected_result: blocker_count > 0
+      - step_number: 2
+        action: 调用 PreMergeHook.execute(mr_id)
+        expected_result: 返回 False
+    expected_result: merge 被阻塞
+
+  - case_id: TC-SMOKE-GATE-008
+    title: PreMergeHook.get_block_message() - 无上下文
+    priority: P1
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-004
+    scenario: 验证阻塞消息生成 (无上下文)
+    steps:
+      - step_number: 1
+        action: 调用 get_block_message(mr_id)
+        expected_result: 返回 "Smoke Gate has not been executed" 消息
+    expected_result: 阻塞消息清晰
+
+  - case_id: TC-SMOKE-GATE-009
+    title: PreMergeHook.get_block_message() - 失败详情
+    priority: P1
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-004
+    scenario: 验证阻塞消息生成 (含失败详情)
+    steps:
+      - step_number: 1
+        action: 创建失败的 Gate 和报告
+        expected_result: failure_details 存在
+      - step_number: 2
+        action: 调用 get_block_message(mr_id)
+        expected_result: 返回包含 blocker 详情的消息
+    expected_result: 阻塞消息包含具体失败原因
+
+  - case_id: TC-SMOKE-GATE-010
+    title: SmokeStore 持久化 - Gate Context
+    priority: P0
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-001
+    scenario: 验证 Gate 上下文持久化
+    steps:
+      - step_number: 1
+        action: 调用 create_gate_context(context)
+        expected_result: 数据写入 SQLite
+      - step_number: 2
+        action: 调用 get_gate_context(mr_id)
+        expected_result: 返回相同的 context
+    expected_result: 持久化正常
+
+  - case_id: TC-SMOKE-GATE-011
+    title: SmokeStore 持久化 - Gate Report
+    priority: P0
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-001
+    scenario: 验证 Gate 报告持久化
+    steps:
+      - step_number: 1
+        action: 调用 create_gate_report(report)
+        expected_result: 数据写入 SQLite
+      - step_number: 2
+        action: 调用 get_gate_report(smoke_run_id)
+        expected_result: 返回相同的 report
+    expected_result: 持久化正常
+
+  - case_id: TC-SMOKE-GATE-012
+    title: SmokeExecutor.execute() - P0 过滤
+    priority: P0
+    feature_id: FEAT-SRC-058-001
+    acceptance_criteria_id: AC-001
+    scenario: 验证只执行 P0 优先级用例
+    steps:
+      - step_number: 1
+        action: 准备混合优先级测试用例
+        expected_result: P0, P1, P2 混合
+      - step_number: 2
+        action: 设置 priority_filter=["P0"]
+        expected_result: 过滤器配置完成
+      - step_number: 3
+        action: 调用 execute(context, test_cases)
+        expected_result: 只执行 P0 用例
+    expected_result: P0 过滤正确

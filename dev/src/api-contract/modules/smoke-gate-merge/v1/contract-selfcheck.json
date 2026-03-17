@@ -1,0 +1,123 @@
+{
+  "contract_id": "CONTRACT-SMOKE-GATE-MERGE-20260317-001",
+  "version": "1.0.0",
+  "self_check_date": "2026-03-17T12:00:00Z",
+  "reviewer": "agent.dev.code_self_reviewer",
+  "status": "passed",
+
+  "checklist": {
+    "endpoints_complete": {
+      "passed": true,
+      "description": "所有内部 Python 接口都有完整定义",
+      "details": {
+        "total_interfaces": 10,
+        "with_request_definition": 10,
+        "with_response_definition": 10,
+        "with_description": 10
+      }
+    },
+    "dto_completeness": {
+      "passed": true,
+      "description": "所有 DTO 字段完整且类型明确",
+      "details": {
+        "total_dtos": 4,
+        "with_complete_fields": 4,
+        "with_types": 4,
+        "no_ambiguous_types": true
+      }
+    },
+    "enum_definitions": {
+      "passed": true,
+      "description": "所有枚举类型定义清晰",
+      "details": {
+        "total_enums": 4,
+        "enums": ["SmokeGateStatus", "GateResult", "FailureSeverity", "SmokeGateEvent"]
+      }
+    },
+    "naming_convention": {
+      "passed": true,
+      "description": "字段命名符合 snake_case 规范",
+      "details": {
+        "fields_checked": 45,
+        "violations": 0
+      }
+    },
+    "version_format": {
+      "passed": true,
+      "description": "版本号符合 SemVer 格式",
+      "details": {
+        "version": "1.0.0",
+        "format_valid": true
+      }
+    },
+    "changelog_present": {
+      "passed": true,
+      "description": "Changelog 包含当前版本条目",
+      "details": {
+        "entries": [
+          {"version": "1.0.0", "date": "2026-03-17", "description": "初始版本"}
+        ]
+      }
+    },
+    "required_fields_marked": {
+      "passed": true,
+      "description": "必填字段已标注",
+      "details": {
+        "required_fields": 28,
+        "optional_fields": 17,
+        "all_marked": true
+      }
+    },
+    "validation_rules": {
+      "passed": true,
+      "description": "验证规则完整定义",
+      "details": {
+        "state_transition_rules": true,
+        "merge_allowance_rules": true,
+        "severity_determination_rules": true,
+        "retry_rules": true
+      }
+    },
+    "implementation_locations": {
+      "passed": true,
+      "description": "实现位置明确标注",
+      "details": {
+        "components_documented": 7,
+        "file_paths_specified": true
+      }
+    },
+    "dependencies_documented": {
+      "passed": true,
+      "description": "依赖关系完整记录",
+      "details": {
+        "internal_dependencies": 3,
+        "external_dependencies": 4
+      }
+    }
+  },
+
+  "quality_score": {
+    "overall": 100,
+    "completeness": 100,
+    "clarity": 95,
+    "consistency": 100,
+    "maintainability": 95
+  },
+
+  "issues_found": [],
+
+  "recommendations": [
+    "建议在实现阶段添加详细的 docstring 说明每个接口的使用场景",
+    "建议为事件系统添加 schema 验证",
+    "建议考虑添加性能指标（如执行时间阈值）"
+  ],
+
+  "freeze_readiness": {
+    "ready": true,
+    "blocking_issues": 0,
+    "minor_issues": 0,
+    "recommendations_count": 3
+  },
+
+  "self_check_summary": "Contract 自检通过，所有检查项均满足要求。协议完整、字段清晰、类型明确，可以进入冻结门禁。"
+}
