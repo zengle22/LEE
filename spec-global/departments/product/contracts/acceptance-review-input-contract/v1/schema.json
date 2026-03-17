@@ -1,0 +1,147 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lee-spec/product/contracts/acceptance-review-input-contract/v1/schema.json",
+  "title": "Acceptance Review Input Contract",
+  "description": "Input contract for ADR-025 acceptance reviewer agent",
+  "version": "1.0",
+  "type": "object",
+  "required": [
+    "ssot_object",
+    "auto_check_result"
+  ],
+  "properties": {
+    "ssot_object": {
+      "type": "object",
+      "description": "The SSOT object to be reviewed (SRC or EPIC)",
+      "required": [
+        "ssot_type",
+        "id",
+        "status"
+      ],
+      "properties": {
+        "ssot_type": {
+          "type": "string",
+          "enum": ["SRC", "EPIC", "FEAT"],
+          "description": "Type of the SSOT object"
+        },
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the SSOT object"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "in_review", "frozen", "active", "deprecated"],
+          "description": "Current status of the SSOT object"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the SSOT object"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the SSOT object"
+        },
+        "content": {
+          "type": "object",
+          "description": "Full content of the SSOT object"
+        }
+      }
+    },
+    "auto_check_result": {
+      "$ref": "#/definitions/auto_check_result"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "References to source documents"
+    }
+  },
+  "definitions": {
+    "auto_check_result": {
+      "type": "object",
+      "description": "Result from the automatic acceptance check",
+      "required": [
+        "status",
+        "dimensions"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail", "warning"],
+          "description": "Overall status of auto check"
+        },
+        "dimensions": {
+          "type": "object",
+          "properties": {
+            "schema_validation": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["pass", "fail"]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "contract_validation": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["pass", "fail"]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "completeness_check": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["pass", "fail"]
+                },
+                "missing_fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "dependency_resolution": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["pass", "fail"]
+                },
+                "unresolved_deps": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": {
+          "type": "string",
+          "description": "Summary of auto check results"
+        }
+      }
+    }
+  }
+}
