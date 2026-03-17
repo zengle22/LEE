@@ -27,6 +27,7 @@ from lee.orchestrator.storage.models import (
     StepResult,
     TaskExecution,
 )
+from lee.orchestrator.execution.condition_engine import ConditionEngine
 
 
 # ========================================================================
@@ -919,6 +920,58 @@ class WorkflowStateMachine(IStateMachine):
 
         await self.store.update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
 
+    def _build_condition_context(
+        self,
+        instance: Any,
+        completed_steps: List[str],
+        all_steps: List[Step]
+    ) -> Dict[str, Any]:
+        """
+        构建 condition 评估上下文
+
+        BUG-LEE-QA-005: 为 condition 评估提供变量上下文
+
+        Args:
+            instance: Workflow 实例
+            completed_steps: 已完成的步骤列表
+            all_steps: 所有步骤列表
+
+        Returns:
+            condition 评估上下文字典
+        """
+        context: Dict[str, Any] = {}
+
+        # 从 instance.data 获取测试相关计数
+        instance_data = instance.data if instance else {}
+
+        # fail_count: 从 instance.data 获取，或计算失败的步骤数
+        fail_count = instance_data.get("fail_count", 0)
+        context["fail_count"] = fail_count
+
+        # pass_count: 从 instance.data 获取
+        pass_count = instance_data.get("pass_count", 0)
+        context["pass_count"] = pass_count
+
+        # total_count: 测试用例总数
+        total_count = instance_data.get("total_count", pass_count + fail_count)
+        context["total_count"] = total_count
+
+        # has_failures: 是否有失败
+        context["has_failures"] = fail_count > 0
+
+        # completed_count: 已完成步骤数
+        context["completed_count"] = len(completed_steps)
+
+        # step_count: 总步骤数
+        context["step_count"] = len(all_steps)
+
+        # 添加 instance.data 中的所有其他变量（用于扩展）
+        for key, value in instance_data.items():
+            if key not in context:
+                context[key] = value
+
+        return context
+
     async def get_ready_steps(
         self,
         workflow_id: str,
@@ -971,8 +1024,26 @@ class WorkflowStateMachine(IStateMachine):
                 for dep in step.depends_on
             )
 
-            if dependencies_met:
-                ready_steps.append(step)
+            if not dependencies_met:
+                continue
+
+            # BUG-LEE-QA-005: 评估 condition（如果定义了）
+            condition = step.config.get("condition") if step.config else None
+            if condition:
+                # 构建 condition 评估上下文
+                context = self._build_condition_context(instance, completed_steps, all_steps)
+                try:
+                    engine = ConditionEngine()
+                    condition_met = engine.evaluate(condition, context)
+                    if not condition_met:
+                        # Condition 不满足，跳过此步骤（标记为 skipped）
+                        continue
+                except Exception as e:
+                    # Condition 评估失败，记录警告并跳过
+                    print(f"[WARN] Condition evaluation failed for step {step.id}: {e}")
+                    continue
+
+            ready_steps.append(step)
 
         return ready_steps
 

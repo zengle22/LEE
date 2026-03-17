@@ -1296,6 +1296,10 @@ class TemplateManager:
         if "success_criteria" in step_data:
             config["success_criteria"] = step_data["success_criteria"]
 
+        # Condition for conditional step execution
+        if "condition" in step_data:
+            config["condition"] = step_data["condition"]
+
         return config
 
     def _infer_format(self, path: str) -> str:
