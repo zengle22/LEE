@@ -269,6 +269,8 @@ stages:
           - symbol: epic_acceptance_approval
             contract: departments/product/contracts/gate-result-contract/v1/schema.json
             freeze: false
+        config:
+          strict_output_validation: true
         gate_rules:
           reviewers:
             - role: product_owner
