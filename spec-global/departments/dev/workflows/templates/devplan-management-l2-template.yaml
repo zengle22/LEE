@@ -1,0 +1,174 @@
+# DEVPLAN Management L2 Template (Draft Design)
+# 开发计划管理 L2 模板
+#
+# 定位：从 RELEASE 派生 DEVPLAN，并管理 TASK 执行
+# 上游：RELEASE L1 (scope_freeze 后)
+# 下游：Feature Delivery L2 (每个 TASK  spawns 一个 L2)
+
+kind: l2_workflow_template
+version: "1.0"
+id: workflow.dev.devplan_management_l2
+name: DEVPLAN Management L2 Template
+description: |
+  L2 template for DEVPLAN management.
+
+  从 RELEASE 派生 DEVPLAN，并将每个 TASK 派生为 Feature Delivery L2 实例：
+  1. Dev Plan Init: 初始化 DEVPLAN 对象
+  2. Task Derive: 从 RELEASE.feat_refs 派生 TASK
+  3. Task Validate: 验证 TASK 覆盖度 (所有 FEAT 都有 TASK)
+  4. Task Freeze: 冻结 DEVPLAN
+  5. Spawn Dev L2: 对每个 TASK 生成 Feature Delivery L2 实例
+  6. Track Progress: 跟踪所有 L2 进度
+  7. Aggregate Results: 汇总所有 L2 结果
+
+owner: dev-governance
+tags: [l2, devplan, management, canonical]
+
+# SSOT Integration
+ssot_integration:
+  input_types:
+    - release_freeze
+  output_types:
+    - devplan_freeze
+    - dev_l2_results
+
+phases:
+  - id: dev_plan_init
+    name: "DEVPLAN Initialization"
+    description: "初始化 DEVPLAN 对象，绑定 RELEASE"
+    default_complexity: S
+    depends_on: []
+    outputs:
+      - path: spec/devplans/devplan-{release_id}.yaml
+        type: file
+        format: yaml
+        ssot_type: DEVPLAN
+        freeze: false
+
+  - id: task_derive
+    name: "TASK Derivation"
+    description: |
+      从 RELEASE.feat_refs 派生 TASK：
+      - 对每个 FEAT，读取 delivery_prep.task_plan
+      - 生成 TASK 对象 (spec/tasks/{FEAT-ID}/TASK-*.yaml)
+      - 定义 TASK.workstream, TASK.responsible_role
+    default_complexity: L
+    depends_on: [dev_plan_init]
+    spawns_l3: true
+    l3_template_id: template.dev.task_derive_l3
+    outputs:
+      - path: spec/tasks/{release_id}/
+        type: directory
+        format: yaml
+        description: "Generated TASK SSOT files"
+
+  - id: task_validate
+    name: "TASK Validation"
+    description: |
+      验证 TASK 覆盖度：
+      - 所有 FEAT 都有至少一个 TASK
+      - TASK 责任角色明确
+      - TASK 依赖关系清晰
+    default_complexity: S
+    depends_on: [task_derive]
+    gate:
+      type: auto_check
+      gate_id: gate.dev.task_validate_gate
+      on_pass: proceed_to_freeze
+      on_fail: block_devplan_freeze
+    outputs:
+      - path: spec/devplans/{release_id}/task_validation_result.json
+        type: file
+        format: json
+
+  - id: devplan_freeze
+    name: "DEVPLAN Freeze"
+    description: "冻结 DEVPLAN，锁定 TASK refs"
+    default_complexity: S
+    depends_on: [task_validate]
+    gate:
+      type: human_approval
+      gate_id: gate.dev.devplan_freeze_gate
+    outputs:
+      - path: spec/devplans/devplan-{release_id}.yaml
+        type: file
+        format: yaml
+        freeze: true
+
+  - id: spawn_dev_l2
+    name: "Spawn Dev L2 Instances"
+    description: |
+      对每个 TASK 生成 Feature Delivery L2 实例：
+      - 绑定 TASK 和 FEAT
+      - 执行 tech_design → contract → be/fe → integration → evidence → smoke_gate
+    default_complexity: L
+    depends_on: [devplan_freeze]
+    spawns_l3: true  # Actually spawns L2 instances
+    l3_template_id: template.dev.feature_delivery_l2
+    outputs:
+      - path: .workflow/devplan-{release_id}/l2-instances/
+        type: directory
+        format: yaml
+
+  - id: track_progress
+    name: "Track Progress"
+    description: "跟踪所有 Dev L2 实例进度"
+    default_complexity: S
+    depends_on: [spawn_dev_l2]
+    outputs:
+      - path: spec/devplans/{release_id}/progress_report.md
+        type: file
+        format: markdown
+
+  - id: aggregate_results
+    name: "Aggregate Results"
+    description: |
+      汇总所有 Dev L2 结果：
+      - 统计完成率
+      - 统计 Smoke Gate 通过率
+      - 生成 dev_aggregate_report.md
+    default_complexity: S
+    depends_on: [track_progress]
+    outputs:
+      - path: spec/devplans/{release_id}/dev_aggregate_report.md
+        type: file
+        format: markdown
+
+execution_strategies:
+  S:
+    description: "Direct execution inside L2"
+    spawns_l3: false
+  L:
+    description: "Spawn L3/L2 instances"
+    spawns_l3: true
+
+# Data contracts
+l3_input_schema:
+  required_fields:
+    - release_ref
+    - devplan_id
+    - task_ref
+    - feat_ref
+
+l3_output_schema:
+  required_fields:
+    - phase_id
+    - status
+    - artifacts
+  optional_fields:
+    - smoke_gate_result
+    - evidence_pack_ref
+
+instance_schema:
+  required_fields:
+    - id
+    - template_id
+    - name
+    - status
+  context_fields:
+    - release_ref
+    - feat_bundle_refs
+  output_fields:
+    - devplan_freeze
+    - dev_l2_results
+    - aggregate_report

@@ -1,0 +1,547 @@
+# Release Delivery L1 Template (Draft Design)
+# 版本交付主链 - L1 级编排
+#
+# 定位：交付轴的总入口，从 FEAT Bundle 到 RELEASE 关闭的全流程
+# 负责部门：Dev Governance (Release Manager)
+# 下游部门：Dev (执行 DEVPLAN), QA (执行 TESTPLAN)
+
+kind: l1_workflow_template
+version: "1.0"
+id: workflow.dev.release_delivery_l1
+name: Release Delivery L1 Template
+description: |
+  L1 template for Release Delivery main chain.
+
+  交付轴主流程，定义从 FEAT Bundle 到 RELEASE 关闭的完整生命周期：
+  1. Scope Init: 初始化 RELEASE 对象，绑定 FEAT Bundle
+  2. Scope Validate: 验证 FEAT Bundle 完整性与依赖关系
+  3. Scope Freeze: 冻结 RELEASE Scope，禁止再添加/移除 FEAT
+  4. Plan Derive: 从 RELEASE 派生 DEVPLAN 和 TESTPLAN
+  5. Plan Validate: 验证 DEVPLAN/TESTPLAN 覆盖度
+  6. Task Execute (Dev): Dev 执行 DEVPLAN → TASK
+  7. Task Execute (QA): QA 执行 TESTPLAN → TASK
+  8. Coverage Check: 验证交付覆盖度
+  9. Go/No-Go Decision: 发布决策门禁
+  10. Release Close: 关闭 RELEASE，归档证据
+
+owner: dev-governance
+tags: [l1, release, delivery, canonical]
+
+# SSOT Integration
+ssot_integration:
+  input_types:
+    - feat_freeze_bundle
+  output_types:
+    - release_freeze
+    - devplan_freeze
+    - testplan_freeze
+    - release_close_report
+
+stages:
+  - id: scope_management
+    name: Scope Management
+    kind: stage
+    description: RELEASE Scope 定义与冻结
+    steps:
+      - id: scope_init
+        name: Scope Initialization
+        kind: agent
+        agent_id: agent.dev.release_manager
+        description: |
+          初始化 RELEASE 对象：
+          - 生成 RELEASE-{id}.yaml
+          - 绑定 FEAT Bundle (feat_refs: [FEAT-001, FEAT-002, ...])
+          - 定义 release_window (时间窗口)
+          - 定义 release_type (major/minor/patch)
+        outputs:
+          - path: spec/releases/release-{release_id}.yaml
+            type: file
+            format: yaml
+            ssot_type: RELEASE
+            freeze: false
+        config:
+          implementation_facing: false
+
+      - id: scope_validate
+        name: Scope Validation
+        kind: agent
+        agent_id: agent.dev.scope_validator
+        description: |
+          验证 FEAT Bundle 完整性：
+          - 所有 FEAT 必须是 frozen 状态
+          - 验证 FEAT 依赖关系无环
+          - 验证 FEAT outputs 完备性
+          - 生成 dependency_graph.md
+        depends_on: [scope_init]
+        outputs:
+          - path: spec/releases/{release_id}/dependency_graph.md
+            type: file
+            format: markdown
+          - path: scope_validation_result
+            type: symbol
+            format: json
+            description: "{valid: bool, errors: [], warnings: []}"
+        gate:
+          type: auto_check
+          gate_id: gate.dev.scope_validate_gate
+          on_pass: proceed_to_freeze
+          on_fail: block_scope_freeze
+        config:
+          implementation_facing: false
+
+      - id: scope_freeze
+        name: Scope Freeze
+        kind: gate
+        description: |
+          冻结 RELEASE Scope：
+          - 锁定 feat_refs，禁止增删
+          - 标记 RELEASE.status = "scope_frozen"
+          - 记录 freeze_timestamp
+        depends_on: [scope_validate]
+        inputs:
+          - scope_validation_result
+        outputs:
+          - path: spec/releases/release-{release_id}.yaml
+            type: file
+            format: yaml
+            freeze: true
+        gate_rules:
+          reviewers:
+            - role: release_manager
+            - role: product_owner
+            - role: tech_lead
+          approval_criteria:
+            - label: "FEAT Bundle 完整"
+              criteria: "所有计划内的 FEAT 都已加入且 frozen"
+              required: true
+            - label: "依赖关系清晰"
+              criteria: "dependency_graph 无环，关键路径明确"
+              required: true
+            - label: "风险可控"
+              criteria: "已知风险已记录并有缓解方案"
+              required: true
+        config:
+          gate:
+            type: human_approval
+            gate_id: gate.dev.scope_freeze_gate
+
+  - id: plan_derivation
+    name: Plan Derivation
+    kind: stage
+    description: 从 RELEASE 派生 DEVPLAN 和 TESTPLAN
+    steps:
+      - id: derive_devplan
+        name: Derive DEVPLAN
+        kind: agent
+        agent_id: agent.dev.plan_deriver
+        description: |
+          从 RELEASE 派生 DEVPLAN：
+          - 读取 RELEASE.feat_refs
+          - 对每个 FEAT，生成 DEVPLAN 条目
+          - 定义开发里程碑 (milestones)
+          - 定义开发责任人 (assignees)
+          - 生成 spec/devplans/devplan-{release_id}.yaml
+        depends_on: [scope_freeze]
+        outputs:
+          - path: spec/devplans/devplan-{release_id}.yaml
+            type: file
+            format: yaml
+            ssot_type: DEVPLAN
+            freeze: false
+        config:
+          implementation_facing: false
+
+      - id: derive_testplan
+        name: Derive TESTPLAN
+        kind: agent
+        agent_id: agent.qa.plan_deriver
+        description: |
+          从 RELEASE 派生 TESTPLAN：
+          - 读取 RELEASE.feat_refs
+          - 对每个 FEAT，生成 TESTPLAN 条目
+          - 定义测试里程碑
+          - 定义测试类型 (smoke/regression/performance)
+          - 生成 spec/testplans/testplan-{release_id}.yaml
+        depends_on: [scope_freeze]
+        parallel_with: [derive_devplan]
+        outputs:
+          - path: spec/testplans/testplan-{release_id}.yaml
+            type: file
+            format: yaml
+            ssot_type: TESTPLAN
+            freeze: false
+        config:
+          implementation_facing: false
+
+      - id: plan_validate
+        name: Plan Validation
+        kind: agent
+        agent_id: agent.dev.plan_validator
+        description: |
+          验证 DEVPLAN/TESTPLAN 覆盖度：
+          - 所有 FEAT 都有 DEVPLAN 条目
+          - 所有 FEAT 都有 TESTPLAN 条目
+          - 里程碑时间合理
+          - 责任人已确认
+        depends_on: [derive_devplan, derive_testplan]
+        outputs:
+          - path: spec/releases/{release_id}/plan_validation_result.json
+            type: file
+            format: json
+            description: "{devplan_coverage: 100, testplan_coverage: 100, milestones_validated: bool}"
+        gate:
+          type: auto_check
+          gate_id: gate.dev.plan_validate_gate
+          on_pass: proceed_to_task_execution
+          on_fail: block_task_execution
+        config:
+          implementation_facing: false
+
+  - id: dev_execution
+    name: Dev Execution
+    kind: stage
+    description: Dev 执行 DEVPLAN
+    steps:
+      - id: spawn_dev_l2
+        name: Spawn Dev L2 Instances
+        kind: skill
+        skill_id: skill.orchestrator.spawn_l2
+        description: |
+          对 DEVPLAN 中每个 TASK：
+          - 生成 Feature Delivery L2 instance
+          - 绑定 FEAT 和 TASK
+          - 执行 Dev 交付流程 (tech_design → contract → be/fe → integration → evidence → smoke_gate)
+        depends_on: [plan_validate]
+        outputs:
+          - path: .workflow/release-{release_id}/dev-instances/
+            type: directory
+            format: yaml
+            description: "Dev L2 workflow instances"
+        config:
+          implementation_facing: true
+
+      - id: track_dev_progress
+        name: Track Dev Progress
+        kind: agent
+        agent_id: agent.dev.progress_tracker
+        description: |
+          跟踪 Dev 执行进度：
+          - 统计 L2 实例完成率
+          - 识别阻塞风险
+          - 生成 progress_report.md
+        depends_on: [spawn_dev_l2]
+        outputs:
+          - path: spec/releases/{release_id}/dev_progress_report.md
+            type: file
+            format: markdown
+        config:
+          implementation_facing: false
+
+  - id: qa_execution
+    name: QA Execution
+    kind: stage
+    description: QA 执行 TESTPLAN
+    steps:
+      - id: spawn_qa_l2
+        name: Spawn QA L2 Instances
+        kind: skill
+        skill_id: skill.orchestrator.spawn_l2
+        description: |
+          对 TESTPLAN 执行：
+          - 生成 Test Plan L2 instance
+          - 绑定 RELEASE 和 TESTPLAN
+          - 执行测试流程 (env_provision → test_set_execution → report → exit_eval)
+        depends_on: [track_dev_progress]
+        pre_condition: "dev_progress.dev_l2_complete_rate >= 100"
+        outputs:
+          - path: .workflow/release-{release_id}/qa-instances/
+            type: directory
+            format: yaml
+            description: "QA L2 workflow instances"
+        config:
+          implementation_facing: true
+
+      - id: track_qa_progress
+        name: Track QA Progress
+        kind: agent
+        agent_id: agent.qa.progress_tracker
+        description: |
+          跟踪 QA 执行进度：
+          - 统计 Test Set 完成率
+          - 统计 pass/fail 率
+          - 生成 qa_progress_report.md
+        depends_on: [spawn_qa_l2]
+        outputs:
+          - path: spec/releases/{release_id}/qa_progress_report.md
+            type: file
+            format: markdown
+        config:
+          implementation_facing: false
+
+  - id: release_closure
+    name: Release Closure
+    kind: stage
+    description: 发布决策与关闭
+    steps:
+      - id: coverage_check
+        name: Coverage Check
+        kind: agent
+        agent_id: agent.dev.coverage_checker
+        description: |
+          验证交付覆盖度：
+          - Dev L2 完成率 = 100%
+          - QA Test Set 完成率 = 100%
+          - QA Pass Rate >= 100% (或条件通过)
+          - 所有 Smoke Gate 通过
+        depends_on: [track_qa_progress]
+        outputs:
+          - path: spec/releases/{release_id}/coverage_check_result.json
+            type: file
+            format: json
+            description: "{dev_complete: bool, qa_complete: bool, pass_rate: number, smoke_gates_passed: bool}"
+        config:
+          implementation_facing: false
+
+      - id: go_nogo_decision
+        name: Go/No-Go Decision
+        kind: gate
+        description: |
+          发布决策门禁：
+          - 基于 coverage_check 结果
+          - 人类决策：Go / Conditional Go / No-Go
+          - Go: 允许发布
+          - Conditional Go: 带已知问题发布
+          - No-Go: 打回修复
+        depends_on: [coverage_check]
+        inputs:
+          - coverage_check_result
+          - dev_progress_report
+          - qa_progress_report
+        outputs:
+          - path: spec/releases/{release_id}/go_nogo_decision.yaml
+            type: file
+            format: yaml
+            freeze: true
+        gate_rules:
+          reviewers:
+            - role: release_manager
+            - role: product_owner
+            - role: tech_lead
+          approval_criteria:
+            - label: "Dev 交付完成"
+              criteria: "所有 Dev L2 实例完成且 Smoke Gate 通过"
+              required: true
+            - label: "QA 测试完成"
+              criteria: "所有 Test Set 执行完成且 Pass Rate >= 100%"
+              required: true
+            - label: "已知风险可接受"
+              criteria: "已知问题已记录且风险评估可接受"
+              required: true
+        config:
+          gate:
+            type: human_approval
+            gate_id: gate.dev.go_nogo_gate
+
+      - id: release_close
+        name: Release Close
+        kind: agent
+        agent_id: agent.dev.release_closer
+        description: |
+          关闭 RELEASE：
+          - 标记 RELEASE.status = "closed"
+          - 生成 release_close_report.md
+          - 归档所有证据到 release_archive/
+          - 触发下游部署流程 (如适用)
+        depends_on: [go_nogo_decision]
+        pre_condition: "go_nogo_decision != 'No-Go'"
+        outputs:
+          - path: spec/releases/{release_id}/release_close_report.md
+            type: file
+            format: markdown
+          - path: spec/releases/release-{release_id}.yaml
+            type: file
+            format: yaml
+            freeze: true
+            update: "status: closed"
+        config:
+          implementation_facing: false
+
+step_order:
+  - scope_init
+  - scope_validate
+  - scope_freeze
+  - derive_devplan
+  - derive_testplan
+  - plan_validate
+  - spawn_dev_l2
+  - track_dev_progress
+  - spawn_qa_l2
+  - track_qa_progress
+  - coverage_check
+  - go_nogo_decision
+  - release_close
+
+# Input parameters
+input_params:
+  feat_bundle_refs:
+    type: array
+    items: string
+    required: true
+    description: "FEAT IDs to include in this RELEASE"
+
+  release_type:
+    type: string
+    enum: [major, minor, patch, hotfix]
+    required: true
+    description: "Release type for versioning"
+
+  release_window:
+    type: object
+    required: true
+    properties:
+      start_date:
+        type: string
+        format: date
+      end_date:
+        type: string
+        format: date
+    description: "Release time window"
+
+# Output contract
+output_contract:
+  release_freeze:
+    path: "spec/releases/release-{release_id}.yaml"
+    ssot_type: RELEASE
+    freeze: true
+
+  devplan_freeze:
+    path: "spec/devplans/devplan-{release_id}.yaml"
+    ssot_type: DEVPLAN
+    freeze: true
+
+  testplan_freeze:
+    path: "spec/testplans/testplan-{release_id}.yaml"
+    ssot_type: TESTPLAN
+    freeze: true
+
+  release_close_report:
+    path: "spec/releases/{release_id}/release_close_report.md"
+    type: file
+    format: markdown
+
+# State machine
+state_machine:
+  states:
+    - INIT: "初始化"
+    - SCOPE_INIT: "Scope 初始化"
+    - SCOPE_VALIDATE: "Scope 验证"
+    - SCOPE_FROZEN: "Scope 冻结"
+    - PLAN_DERIVE: "计划派生"
+    - PLAN_VALIDATED: "计划验证"
+    - DEV_EXECUTION: "Dev 执行中"
+    - QA_EXECUTION: "QA 执行中"
+    - COVERAGE_CHECK: "覆盖度检查"
+    - GO_NOGO_DECISION: "发布决策"
+    - RELEASED: "已发布 (Go)"
+    - CONDITIONAL_RELEASED: "条件发布 (Conditional Go)"
+    - CLOSED: "已关闭"
+    - NOGO: "不予发布 (No-Go)"
+    - FAILED: "失败"
+
+  transitions:
+    INIT:
+      - to: SCOPE_INIT
+        trigger: workflow_started
+    SCOPE_INIT:
+      - to: SCOPE_VALIDATE
+        trigger: scope_initialized
+    SCOPE_VALIDATE:
+      - to: SCOPE_FROZEN
+        trigger: scope_validated
+      - to: FAILED
+        trigger: scope_validation_failed
+    SCOPE_FROZEN:
+      - to: PLAN_DERIVE
+        trigger: scope_frozen
+    PLAN_DERIVE:
+      - to: PLAN_VALIDATED
+        trigger: plans_derived_and_validated
+      - to: FAILED
+        trigger: plan_validation_failed
+    PLAN_VALIDATED:
+      - to: DEV_EXECUTION
+        trigger: dev_execution_started
+    DEV_EXECUTION:
+      - to: QA_EXECUTION
+        trigger: dev_execution_completed
+    QA_EXECUTION:
+      - to: COVERAGE_CHECK
+        trigger: qa_execution_completed
+    COVERAGE_CHECK:
+      - to: GO_NOGO_DECISION
+        trigger: coverage_check_completed
+    GO_NOGO_DECISION:
+      - to: RELEASED
+        trigger: go_decision
+      - to: CONDITIONAL_RELEASED
+        trigger: conditional_go_decision
+      - to: NOGO
+        trigger: nogo_decision
+    RELEASED:
+      - to: CLOSED
+        trigger: release_closed
+    CONDITIONAL_RELEASED:
+      - to: CLOSED
+        trigger: release_closed
+    NOGO:
+      - to: FAILED
+        trigger: release_aborted
+
+# Constraints
+constraints:
+  feat_bundle_required: |
+    RELEASE 必须绑定至少一个 frozen FEAT。
+    空 RELEASE 不允许创建。
+
+  scope_freeze_before_plan: |
+    必须先冻结 Scope 才能派生 DEVPLAN/TESTPLAN。
+    禁止在 scope_freeze 之前执行 plan_derivation。
+
+  dev_before_qa: |
+    Dev 执行必须在 QA 执行之前完成。
+    QA 不允许在 Dev L2 未完成前开始。
+
+  go_nogo_required: |
+    所有 RELEASE 必须经过 Go/No-Go 决策门禁。
+    禁止跳过决策直接关闭 RELEASE。
+
+# Observability
+observability:
+  metrics:
+    - name: release_cycle_duration
+      type: histogram
+      description: "RELEASE 从 init 到 close 的总时长"
+      labels:
+        - release_id
+        - release_type
+      buckets: [3600, 14400, 43200, 86400, 172800, 604800]
+
+    - name: dev_l2_instances_total
+      type: counter
+      description: "Dev L2 实例总数"
+      labels:
+        - release_id
+        - status
+
+    - name: qa_test_sets_total
+      type: counter
+      description: "QA Test Set 总数"
+      labels:
+        - release_id
+        - status
+
+    - name: feature_completion_rate
+      type: gauge
+      description: "FEAT 完成率"
+      labels:
+        - release_id
