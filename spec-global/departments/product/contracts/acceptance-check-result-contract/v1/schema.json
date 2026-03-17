@@ -4,31 +4,89 @@
   "description": "ADR-025 验收自动检查结果",
   "type": "object",
   "required": ["status", "check_type", "dimensions"],
+  "additionalProperties": true,
   "properties": {
     "status": {
       "type": "string",
-      "enum": ["pass", "fail", "escalate"]
+      "enum": ["pass", "fail", "escalate", "passed", "failed", "escalated"]
     },
     "check_type": {
       "type": "string",
-      "enum": ["auto", "review", "approval"]
+      "enum": ["auto", "review", "approval", "feat_auto_check", "feat_review", "feat_approval"]
     },
     "dimensions": {
-      "type": "object",
-      "properties": {
-        "schema_validation": { "type": "string", "enum": ["pass", "fail"] },
-        "contract_validation": { "type": "string", "enum": ["pass", "fail"] },
-        "completeness_check": { "type": "string", "enum": ["pass", "fail"] },
-        "dependency_resolution": { "type": "string", "enum": ["pass", "fail"] }
-      }
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schema_validation": {
+              "oneOf": [
+                { "type": "string", "enum": ["pass", "fail", "passed", "failed"] },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "enum": ["pass", "fail", "passed", "failed"] }
+                  },
+                  "required": ["status"]
+                }
+              ]
+            },
+            "contract_validation": {
+              "oneOf": [
+                { "type": "string", "enum": ["pass", "fail", "passed", "failed"] },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "enum": ["pass", "fail", "passed", "failed"] }
+                  },
+                  "required": ["status"]
+                }
+              ]
+            },
+            "completeness_check": {
+              "oneOf": [
+                { "type": "string", "enum": ["pass", "fail", "passed", "failed"] },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "enum": ["pass", "fail", "passed", "failed"] }
+                  },
+                  "required": ["status"]
+                }
+              ]
+            },
+            "dependency_resolution": {
+              "oneOf": [
+                { "type": "string", "enum": ["pass", "fail", "passed", "failed"] },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "enum": ["pass", "fail", "passed", "failed"] }
+                  },
+                  "required": ["status"]
+                }
+              ]
+            }
+          },
+          "required": ["schema_validation", "contract_validation", "completeness_check", "dependency_resolution"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": true
+        }
+      ]
     },
     "errors": {
-      "type": "array",
-      "items": { "type": "string" }
+      "oneOf": [
+        { "type": "array", "items": { "type": "string" } },
+        { "type": "array", "items": { "type": "object" } }
+      ]
     },
     "warnings": {
-      "type": "array",
-      "items": { "type": "string" }
+      "oneOf": [
+        { "type": "array", "items": { "type": "string" } },
+        { "type": "array", "items": { "type": "object" } }
+      ]
     }
   }
 }
