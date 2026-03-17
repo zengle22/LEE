@@ -271,6 +271,9 @@ stages:
             freeze: false
         config:
           strict_output_validation: true
+          gate:
+            type: human_approval
+            gate_id: gate.product.epic_acceptance_approval
         gate_rules:
           reviewers:
             - role: product_owner
@@ -284,10 +287,6 @@ stages:
             - label: "行业差距分析"
               criteria: "至少 3 个对标对象，差距程度量化"
               required: true
-          config:
-            gate:
-              type: human_approval
-              gate_id: gate.product.epic_acceptance_approval
 
       # ========== ADR-025 验收卡点结束 ==========
       - id: epic_identity_formalize
