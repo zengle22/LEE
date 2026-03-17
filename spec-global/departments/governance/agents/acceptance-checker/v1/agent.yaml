@@ -185,12 +185,14 @@ output_template: |
     "warnings": []
   }
 
-  # CRITICAL FORMAT REQUIREMENTS:
+  # CRITICAL FORMAT REQUIREMENTS - MUST FOLLOW EXACTLY:
   # 1. "status" MUST be one of: "pass", "fail", "escalate" - NOT "passed", "failed", "ok", "success"
   # 2. "dimensions" values MUST be strings: "pass" or "fail" - NOT objects with nested "status" fields
   # 3. "errors" and "warnings" MUST be arrays of strings - NOT arrays of objects
-  # 4. Do NOT add extra fields like "check_id", "epic_ref", "subject_refs", "summary", "timestamp", "details"
-  # 5. The output MUST be flat and minimal, matching the schema exactly
+  # 4. ONLY allowed fields: status, check_type, dimensions, errors,warnings - NO other fields allowed
+  # 5. Do NOT add: "check_id", "epic_ref", "subject_refs", "summary", "timestamp", "details", "findings", "risks", "recommendations"
+  # 6. The output MUST be flat and minimal, matching the schema exactly
+  # 7. additionalProperties are NOT allowed - any extra fields will cause schema validation failure
 
 # ============================================
 # 禁止行为
