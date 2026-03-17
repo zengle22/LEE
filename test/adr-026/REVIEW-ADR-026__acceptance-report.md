@@ -1,6 +1,6 @@
 ---
-id: REVIEW-ADR-023
-title: ADR-023 验收报告 (Delivery Axis Design Acceptance Report)
+id: REVIEW-ADR-026
+title: ADR-026 验收报告 (Delivery Axis Design Acceptance Report)
 version: v1
 created_at: 2026-03-17
 owner: dev-governance
@@ -10,12 +10,12 @@ tags:
   - acceptance-report
 ---
 
-# ADR-023 验收报告
+# ADR-026 验收报告
 
 ## 验收概述
 
 **验收日期**: 2026-03-17
-**验收版本**: ADR-023 v1
+**验收版本**: ADR-026 v1
 **验收范围**: 功能逻辑闭环性、用户故事体验、功能完整性、行业实践对齐
 
 ---
@@ -217,7 +217,7 @@ tags:
 
 ### 最终结论: ✅ **通过**
 
-**ADR-023 交付轴设计已通过验收，理由如下**:
+**ADR-026 交付轴设计已通过验收，理由如下**:
 
 1. **P0 问题清零**: 所有阻塞性问题已修复，设计无致命缺陷
 2. **P1 问题基本修复**: 96% 修复率，剩余问题影响可控
@@ -256,6 +256,6 @@ tags:
 
 ## 附录：测试工件
 
-- 测试计划：`test/adr-023/TEST-ADR-023__delivery-axis-review.md`
+- 测试计划：`test/adr-026/TEST-ADR-026__delivery-axis-review.md`
 - 问题跟踪：见本文档第六章
-- 修复验证：见 ADR-023 对应章节
+- 修复验证：见 ADR-026 对应章节

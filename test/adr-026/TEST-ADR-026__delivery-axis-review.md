@@ -1,6 +1,6 @@
 ---
-id: TEST-ADR-023
-title: ADR-023 交付轴设计测试与验收报告
+id: TEST-ADR-026
+title: ADR-026 交付轴设计测试与验收报告
 version: v1
 created_at: 2026-03-17
 owner: dev-governance
@@ -10,7 +10,7 @@ tags:
   - quality-assurance
 ---
 
-# ADR-023 测试与验收报告
+# ADR-026 测试与验收报告
 
 ## 测试范围
 

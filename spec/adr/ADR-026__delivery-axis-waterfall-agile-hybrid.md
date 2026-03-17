@@ -1,9 +1,9 @@
 ---
-id: ADR-023
+id: ADR-026
 title: 交付轴设计 - 瀑布 - 敏捷混合模式 (Delivery Axis Design)
 status: accepted
 version: v1
-workflow_instance_id: wf-adr-023-20260317
+workflow_instance_id: wf-adr-026-20260317
 source_refs: []
 owner: dev-governance
 tags:
@@ -19,7 +19,7 @@ properties:
     - SRC-048-waterfall-agile-hybrid
 ---
 
-# ADR-023: 交付轴设计 - 瀑布 - 敏捷混合模式
+# ADR-026: 交付轴设计 - 瀑布 - 敏捷混合模式
 
 ## 一、决策背景
 
@@ -231,43 +231,43 @@ phase2: "Test Set 执行 (TESTPLAN Freeze 后)"
 
 ```yaml
 TASK 执行结果回流到 DEVPLAN:
-  触发条件: TASK 完成 (通过 L3 DoD)
+  触发条件：TASK 完成 (通过 L3 DoD)
   回流内容:
     - TASK.status: "completed"
     - TASK.evidence_pack_ref: 证据包位置
     - TASK.actual_effort: 实际工时
     - TASK.blockers: 遇到的阻塞 (如有)
-  更新频率: 实时 (TASK 完成时立即更新)
-  责任方: TASK 执行者
+  更新频率：实时 (TASK 完成时立即更新)
+  责任方：TASK 执行者
 
 Test Set 执行结果回流到 TESTPLAN:
-  触发条件: Test Set 执行完成
+  触发条件：Test Set 执行完成
   回流内容:
     - Test Set.status: "passed/failed/blocked"
     - Test Set.pass_rate: 通过率
     - Test Set.bugs: 发现的 Bug 列表
     - Test Set.execution_time: 执行时间
-  更新频率: 实时 (Test Set 完成时立即更新)
-  责任方: QA 执行者
+  更新频率：实时 (Test Set 完成时立即更新)
+  责任方：QA 执行者
 
 DEVPLAN/TESTPLAN 状态汇总到 RELEASE:
-  触发条件: DEVPLAN/TESTPLAN 更新
+  触发条件：DEVPLAN/TESTPLAN 更新
   汇总内容:
     - dev_completion_rate: Dev 完成率 (已完成任务/总任务)
     - qa_pass_rate: QA 通过率 (通过测试/总测试)
     - bug_summary: Bug 统计 (按优先级)
     - blocker_count: 当前阻塞数
-  更新频率: 每次 L2 更新时自动汇总
-  责任方: Workflow 系统自动计算
+  更新频率：每次 L2 更新时自动汇总
+  责任方：Workflow 系统自动计算
 
 RELEASE 状态用于决策:
-  触发条件: 达到计划完成时间或所有 FEAT 完成
+  触发条件：达到计划完成时间或所有 FEAT 完成
   决策输入:
     - 所有 FEAT 的 L2 DoD 状态
     - Bug 摘要 (P0/P1 数量)
     - 风险清单
-  决策输出: Go/No-Go/Conditional Go
-  责任方: release_manager 组织决策
+  决策输出：Go/No-Go/Conditional Go
+  责任方：release_manager 组织决策
 ```
 
 ### L1/L2/L3 层级衔接规则
@@ -473,7 +473,7 @@ Bug 分级标准:
     - 轻微 UI 问题
     - 文档错误
     - 建议性改进
-    - 响应： backlog 中优先级最低
+    - 响应：backlog 中优先级最低
 ```
 
 ### 7.4 Evidence Pack 清单
@@ -567,7 +567,7 @@ Pre-conditions (必须同时满足):
 
 ```yaml
 Bug 发现来源:
-  - Dev 自测: 开发过程中发现问题
+  - Dev 自测：开发过程中发现问题
   - QA 测试：测试执行中发现问题
   - 自动化：CI/CD 流水线失败
   - 生产监控：线上问题告警
@@ -1098,7 +1098,7 @@ Staging → Production:
 
    异常处理:
      - 如进度滞后 (< 50% 在迭代中段): 调整计划或削减范围
-     - 如阻塞 > 4 小时: 升级处理
+     - 如阻塞 > 4 小时：升级处理
 
 5. Go/No-Go 决策 (迭代最后 1 天)
    准备材料:
@@ -1140,7 +1140,7 @@ Staging → Production:
 
 ```yaml
 1. 接收 TASK (迭代第 2-3 天)
-   触发条件: DEVPLAN Freeze 完成
+   触发条件：DEVPLAN Freeze 完成
 
    TASK 通知内容:
      - TASK 描述和验收标准
@@ -1216,7 +1216,7 @@ Staging → Production:
 
 ```yaml
 1. 接收 TESTPLAN (迭代第 2-3 天)
-   触发条件: TESTPLAN Freeze 完成
+   触发条件：TESTPLAN Freeze 完成
 
    TESTPLAN 内容:
      - 测试策略 (smoke/regression/automation)
@@ -1370,7 +1370,7 @@ gates:
   - gate.dev.go_nogo_gate:
       type: human_approval
       options: [Go, Conditional Go, No-Go]
-      输入：
+      输入:
         - dev_complete_rate
         - qa_pass_rate
         - bug_summary
@@ -1382,9 +1382,9 @@ gates:
 
 ---
 
-## 九、实施建议
+## 十四、实施建议
 
-### 9.1 实施阶段
+### 14.1 实施阶段
 
 ```yaml
 Phase 1: 认知对齐 (第 1 周)
@@ -1403,7 +1403,7 @@ Phase 3: 持续改进 (第 6 周起)
   - 沉淀最佳实践
 ```
 
-### 9.2 度量指标 (DORA)
+### 14.2 度量指标 (DORA)
 
 ```yaml
 delivery_metrics:
@@ -1424,9 +1424,9 @@ reliability_metrics:  # DORA
 
 ---
 
-## 十、验收标准
+## 十五、验收标准
 
-### 10.1 团队认知验收
+### 15.1 团队认知验收
 
 ```yaml
 团队认知验收:
@@ -1435,7 +1435,7 @@ reliability_metrics:  # DORA
   - 理解变更是允许的，但需要 SSOT 留痕
 ```
 
-### 10.2 流程验收
+### 15.2 流程验收
 
 ```yaml
 流程验收:
@@ -1444,7 +1444,7 @@ reliability_metrics:  # DORA
   - 三层 DoD 被严格执行
 ```
 
-### 10.3 价值验收
+### 15.3 价值验收
 
 ```yaml
 价值验收:
@@ -1455,7 +1455,7 @@ reliability_metrics:  # DORA
 
 ---
 
-## 十一、风险与缓解
+## 十六、风险与缓解
 
 | 风险 | 影响 | 缓解措施 |
 |------|------|----------|
@@ -1466,22 +1466,22 @@ reliability_metrics:  # DORA
 
 ---
 
-## 十二、后续行动
+## 十七、后续行动
 
-### 12.1 立即行动 (本周)
+### 17.1 立即行动 (本周)
 
 1. **修正图示矛盾** - 确保图示与正文描述一致
 2. **明确 QA 前置条件** - 降低完成率阈值，添加 Smoke Gate 要求
 3. **澄清 Test Set 生命周期** - 区分设计资产生产和执行
 4. **补充 Bug 管理流程** - 定义 Bug 生命周期和 SLA
 
-### 12.2 短期行动 (本月)
+### 17.2 短期行动 (本月)
 
 1. **添加变更管理流程** - 正式化变更控制
 2. **添加风险管理流程** - 风险识别、评估、应对
 3. **添加度量指标体系** - DORA 指标集成
 
-### 12.3 中期行动 (本季度)
+### 17.3 中期行动 (本季度)
 
 1. **添加环境管理** - Dev/QA/Staging 环境配置
 2. **添加回滚预案** - 发布安全保证
@@ -1490,7 +1490,7 @@ reliability_metrics:  # DORA
 
 ---
 
-## 十三、与 SRC-046 原始设计的关系
+## 十八、与 SRC-046 原始设计的关系
 
 ```
 原始 SRC-046 (jiaofuzhou-workflow-huazhiliyufabubihuanjianshe.md):
@@ -1498,7 +1498,7 @@ reliability_metrics:  # DORA
   - 状态：frozen
   - 不能删除，保留作为实际交付源头
 
-本 ADR-023:
+本 ADR-026:
   - 整合了 SRC-046 设计文档、SRC-047 审查报告、SRC-048 混合模式设计
   - 提供了完整的架构决策记录
   - 状态：accepted
@@ -1507,7 +1507,7 @@ reliability_metrics:  # DORA
 
 ---
 
-## 十四、结论
+## 十九、结论
 
 交付轴设计采用"瀑布 - 敏捷混合模式"，核心洞察是：
 
