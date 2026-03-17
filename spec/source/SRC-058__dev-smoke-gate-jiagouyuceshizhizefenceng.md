@@ -23,7 +23,7 @@ properties:
     - FEAT
     - RELEASE
     acceptance_impact:
-    - Dev Smoke 作为 blocker 门禁成功集成到 merge 流程；Dev 和 QA 共享同一套 Test Set 资产；本地 Smoke 执行时间≤5
+    - Dev Smoke 作为 blocker 门禁成功集成到 merge 流程；Dev 和 QA 共享同一套 Test Set 资产；本地 Smoke 执行时间≤30
       分钟。
     non_goals:
     - QA Test Run 不直接阻塞 merge（作为独立发布前质量确认）
@@ -62,7 +62,7 @@ properties:
 
 ## 验收与交付影响
 
-- Dev Smoke 作为 blocker 门禁成功集成到 merge 流程；Dev 和 QA 共享同一套 Test Set 资产；本地 Smoke 执行时间≤5 分钟。
+- Dev Smoke 作为 blocker 门禁成功集成到 merge 流程；Dev 和 QA 共享同一套 Test Set 资产；本地 Smoke 执行时间≤30 分钟。
 
 ## 非目标
 

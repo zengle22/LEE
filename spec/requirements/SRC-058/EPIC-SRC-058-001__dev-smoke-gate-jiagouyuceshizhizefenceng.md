@@ -29,7 +29,7 @@ frozen_at: '2026-03-17T01:08:16.383006'
 
 - Dev Smoke 作为 blocker 门禁集成到 merge 流程
 - Dev 和 QA 共享同一套 Test Set 资产
-- 本地 Smoke 执行时间≤5 分钟
+- 本地 Smoke 执行时间≤30 分钟
 - 通过 priority 字段区分 P0/P1 核心用例与 P2 边缘场景用例
 - 本地环境检测与一致性校验工具集成
 
@@ -41,7 +41,7 @@ frozen_at: '2026-03-17T01:08:16.383006'
 
 ## 成功标准
 
-- Dev Smoke 执行时间≤5 分钟
+- Dev Smoke 执行时间≤30 分钟
 - Smoke Gate 作为 merge 前置条件 100% 覆盖
 - Dev 与 QA 共享同一 Test Set 资产，无重复维护
 - 测试职责边界清晰，减少跨部门 Handoff
