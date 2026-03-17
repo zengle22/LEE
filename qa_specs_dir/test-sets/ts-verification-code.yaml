@@ -1,0 +1,28 @@
+feat_ref: FEAT-TEST-001
+id: ts-verification-code
+module: verification-code
+ssot_type: TESTSET
+status: frozen
+test_cases:
+- description: 验证码发送 API 正常调用
+  expected: API 返回成功，用户收到验证码
+  id: tc-001
+  priority: P0
+  steps:
+  - step: 调用 POST /api/send-code
+  - step: 验证返回状态码 200
+  - step: 验证用户收到短信
+  trace_to:
+  - FEAT-TEST-001.AC-001
+  type: smoke
+- description: 主方案失败时自动切换备用方案
+  expected: 备用方案启动，用户仍能收到验证码
+  id: tc-002
+  priority: P1
+  steps:
+  - step: 模拟主服务商失败
+  - step: 验证备用方案启动
+  - step: 验证用户仍能收到验证码
+  trace_to:
+  - FEAT-TEST-001.AC-002
+  type: regression

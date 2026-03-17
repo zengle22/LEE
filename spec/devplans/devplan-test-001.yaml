@@ -1,0 +1,12 @@
+frozen_at: '2026-03-17T23:27:55.629385'
+frozen_by: gate.dev.devplan_freeze_gate
+id: devplan-test-001
+owner:
+  release_manager: rm-001
+  tech_lead: dev-lead-001
+release_ref: release-test-001
+ssot_type: DEVPLAN
+status: frozen
+task_refs:
+- TASK-FEAT-TEST-001-001
+- TASK-FEAT-TEST-001-002
