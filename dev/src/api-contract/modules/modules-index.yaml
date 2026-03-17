@@ -2,7 +2,7 @@
 # LEE API 协议模块索引
 
 index_version: 1.0.0
-updated_at: '2026-03-16'
+updated_at: '2026-03-17'
 
 modules:
   - module_id: gate-dual-axis
@@ -25,3 +25,25 @@ modules:
       - approval
       - dual-axis
       - SRC-041
+
+  - module_id: smoke-gate-merge
+    name: Smoke Gate Merge Integration
+    description: Dev Smoke Gate Merge 门禁集成 API 协议
+    version: 1.0.0
+    status: pending_freeze
+    created_at: '2026-03-17'
+    source_refs:
+      - FEAT-SRC-058-001
+      - ADR-023
+    contract_path: dev/src/api-contract/modules/smoke-gate-merge/v1/api-contract.yaml
+    endpoints_count: 10
+    enums:
+      - SmokeGateStatus
+      - GateResult
+      - FailureSeverity
+      - SmokeGateEvent
+    tags:
+      - smoke
+      - gate
+      - merge
+      - SRC-058
