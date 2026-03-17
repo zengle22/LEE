@@ -7,15 +7,15 @@ frozen_at: 2026-03-17T10:13:48+00:00
 gate_id: gate_wf_task_fdb19191_feat_freeze
 gate_approved: true
 feats:
-  - feat_id: FEAT-SRC-058-001-MERGE-GATE
+  - feat_id: FEAT-SRC-058-001
     title: Smoke Gate Merge 门禁集成
     status: frozen
-  - feat_id: FEAT-SRC-058-001-TESTSET-UNIFIED
+  - feat_id: FEAT-SRC-058-002
     title: 统一 Test Set 资产管理
     status: frozen
-  - feat_id: FEAT-SRC-058-001-PERF-OPT
+  - feat_id: FEAT-SRC-058-003
     title: Smoke 执行性能优化
     status: frozen
-  - feat_id: FEAT-SRC-058-001-ENV-CHECK
+  - feat_id: FEAT-SRC-058-004
     title: 本地环境检测与一致性校验
     status: frozen
