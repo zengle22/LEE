@@ -2880,13 +2880,28 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         if not result.success:
             raise RuntimeError(f"Failed to generate L3 instance: {result.errors}")
 
+        # Build L3 params with required fields for template rendering
+        # BUG-FIX: Ensure test_run_id is available for L3 template variable rendering
+        l3_params = dict(parent_params)
+        if "test_run_id" not in l3_params:
+            # Use parent's run_id as test_run_id (format: RUN-YYYYMMDD-NNNNNN-XXXX)
+            # Convert to TR- format if needed
+            parent_run_id = parent.data.get("run_id", "")
+            if parent_run_id.startswith("RUN-"):
+                l3_params["test_run_id"] = parent_run_id.replace("RUN-", "TR-", 1)
+            else:
+                # Generate test_run_id from current date
+                from datetime import datetime
+                now = datetime.now()
+                l3_params["test_run_id"] = f"TR-{now.strftime('%Y%m%d')}-{now.strftime('%H%M%S')}"
+
         l3_instance = await self.spawn_workflow(
             parent_id=parent_l2_id,
             level=WorkflowLevel.TASK,
             template_id=l3_template_id,
             data={
                 "kind": "l3_workflow_instance",
-                "params": dict(parent_params),
+                "params": l3_params,
                 "artifacts": dict(parent_artifacts),
                 "point_id": point.id,
                 "point_title": point.title,
