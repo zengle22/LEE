@@ -1,0 +1,63 @@
+---
+rule_id: FCR-004
+dimension: evidence_completeness
+rule_class: hard_gate
+severity: blocker
+description: "Evidence pack completeness - 证据包完整性检查"
+
+execution_method:
+  type: evidence_pack_audit
+  config:
+    evidence_dir: ".workflow/evidence/"
+    required_evidence_types:
+      - test_results
+      - coverage_report
+      - git_diff
+      - build_artifacts
+    required_manifest_fields:
+      - evidence_id
+      - timestamp
+      - workflow_ref
+      - step_ref
+      - artifact_paths
+
+evidence_binding:
+  type: evidence_pack_manifest
+  config:
+    manifest_path: ".workflow/evidence/evidence_manifest.json"
+    artifact_index_path: ".workflow/evidence/artifact_index.json"
+
+success_criteria:
+  - "evidence_manifest.json 存在且格式正确"
+  - "所有必需证据类型已收集"
+  - "证据与 workflow/step 可追溯绑定"
+  - "artifact 路径有效且文件存在"
+  - "证据时间戳在 workflow 执行时间范围内"
+
+failure_message: |
+  证据包不完整。
+
+  缺失项:
+  {{ missing_evidence }}
+
+  无效引用:
+  {{ invalid_refs }}
+
+  请补充缺失证据或修复引用。
+
+rollback_target: rule_execution
+---
+
+# FCR-004 执行说明
+#
+# 1. 扫描 evidence 目录
+# 2. 加载 evidence_manifest.json
+# 3. 验证必需证据类型存在
+# 4. 验证 artifact 路径有效性
+# 5. 验证时间戳追溯关系
+# 6. 任一检查失败则整体失败
+#
+# 适用嵌入点:
+# - Product L2 (FEAT 冻结后): 验证需求链证据完整性
+# - Dev L2 (Smoke 前置): 验证开发执行证据
+# - QA L2 (Test Report 前): 验证测试证据完整性

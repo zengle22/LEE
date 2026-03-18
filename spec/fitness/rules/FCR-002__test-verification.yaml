@@ -1,0 +1,62 @@
+---
+rule_id: FCR-002
+dimension: testability
+rule_class: hard_gate
+severity: blocker
+description: "Unit test coverage check - 单元测试覆盖率达标"
+
+execution_method:
+  type: coverage_check
+  config:
+    coverage_tool: "pytest-cov"
+    coverage_command: "pytest --cov={{ source_dir }} --cov-report=json --cov-report=term-missing {{ test_dir }}"
+    threshold_lines: 80
+    threshold_branches: 70
+    threshold_functions: 90
+    source_dir: "src"
+    test_dir: "tests"
+
+evidence_binding:
+  type: coverage_report
+  config:
+    coverage_json_path: ".workflow/fitness/coverage_report.json"
+    coverage_html_path: ".workflow/fitness/htmlcov/"
+    threshold_config:
+      lines: 80
+      branches: 70
+      functions: 90
+
+success_criteria:
+  - "行覆盖率 ≥ 80%"
+  - "分支覆盖率 ≥ 70%"
+  - "函数覆盖率 ≥ 90%"
+  - "核心模块 (src/lee/orchestrator) 覆盖率 ≥ 90%"
+  - "无未经豁免的零覆盖文件"
+
+failure_message: |
+  测试覆盖率未达标。
+
+  实际覆盖率:
+  - 行覆盖率：{{ lines_covered }}% (目标：{{ lines_threshold }}%)
+  - 分支覆盖率：{{ branches_covered }}% (目标：{{ branches_threshold }}%)
+  - 函数覆盖率：{{ functions_covered }}% (目标：{{ functions_threshold }}%)
+
+  零覆盖文件列表:
+  {{ zero_coverage_files }}
+
+  请补充测试或申请覆盖率豁免 (需审批)。
+
+rollback_target: integration
+---
+
+# FCR-002 执行说明
+#
+# 1. 执行 pytest --cov 收集覆盖率数据
+# 2. 解析 coverage.json 报告
+# 3. 比对阈值要求
+# 4. 输出覆盖率报告和零覆盖文件列表
+# 5. 任一阈值未达标则失败
+#
+# 适用嵌入点:
+# - Dev L2 (Smoke 前置): 验证代码测试覆盖率
+# - QA L2 (Test Report 前): 验证测试执行完整性

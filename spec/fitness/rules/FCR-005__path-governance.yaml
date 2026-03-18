@@ -1,0 +1,67 @@
+---
+rule_id: FCR-005
+dimension: path_governance
+rule_class: hard_gate
+severity: blocker
+description: "Canonical/Forbidden path check - 代码放置在规范目录且未写入禁止路径"
+
+execution_method:
+  type: canonical_path_verify
+  config:
+    canonical_rules:
+      - pattern: "src/lee/**/*.py"
+        description: "Python 代码必须在 src/lee/ 目录下"
+      - pattern: "spec/**/*.yaml"
+        description: "SSOT 对象必须在 spec/ 目录下"
+      - pattern: "tests/**/*.py"
+        description: "测试代码必须在 tests/ 目录下"
+    forbidden_paths:
+      - ".env"
+      - "*.log"
+      - "__pycache__/"
+      - ".pytest_cache/"
+      - "node_modules/"
+    allowed_exceptions:
+      - ".workflow/"
+      - ".git/"
+      - "build/"
+
+evidence_binding:
+  type: path_policy_check_results
+  config:
+    path_policy_output: ".workflow/fitness/path_check_report.json"
+    git_status_output: ".workflow/fitness/git_status.txt"
+
+success_criteria:
+  - "所有新增/修改的 Python 文件在 src/lee/ 目录下"
+  - "所有 SSOT 对象文件在 spec/ 目录下"
+  - "所有测试文件在 tests/ 目录下"
+  - "无写入禁止路径的文件"
+  - "无硬编码绝对路径 (C:/Users 等)"
+
+failure_message: |
+  路径规范性检查失败。
+
+  违规文件:
+  {{ violation_files }}
+
+  禁止路径写入:
+  {{ forbidden_writes }}
+
+  请移动文件到规范目录或申请路径豁免。
+
+rollback_target: rule_execution
+---
+
+# FCR-005 执行说明
+#
+# 1. 扫描 git status 获取变更文件
+# 2. 验证每个文件符合 canonical 规则
+# 3. 检查是否写入 forbidden 路径
+# 4. 检测硬编码绝对路径
+# 5. 任一违规则失败
+#
+# 适用嵌入点:
+# - Dev L2 (Smoke 前置): 验证代码放置规范性
+# - Product L2 (FEAT 冻结后): 验证 SSOT 对象放置规范性
+# - QA L2 (Test Report 前): 验证测试代码放置规范性
