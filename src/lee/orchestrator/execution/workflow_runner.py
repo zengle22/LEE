@@ -154,13 +154,43 @@ class WorkflowRunner:
     async def _run_with_plan(self) -> WorkflowRunResult:
         """使用 Plan 模式执行"""
         # 1. 加载和渲染模板
-        template = await self._load_template()
+        rendered_template = await self._load_template()
 
-        if self._should_bypass_plan(template):
-            workflow_id = await self._create_workflow(self.config.template_path)
+        if self._should_bypass_plan(rendered_template):
+            # 将渲染后的模板保存为临时文件
+            import tempfile
+            import yaml
+            import logging
+            logger = logging.getLogger(__name__)
+
+            # 调试：检查渲染后的模板内容
+            logger.info(f"Bypass Plan: rendered template outputs = {rendered_template.get('outputs', [])}")
+
+            # DEBUG: Check rendered outputs for unrendered variables
+            for output in rendered_template.get('outputs', []):
+                if isinstance(output, dict):
+                    path = output.get('path', '')
+                    logger.info(f"Bypass Plan: output path = {path}")
+                    if '{{ qa_specs_dir }}' in str(path):
+                        logger.warning("WARNING: qa_specs_dir NOT rendered in output path!")
+                    if '{{ tests_dir }}' in str(path):
+                        logger.warning("WARNING: tests_dir NOT rendered in output path!")
+                    if '{{ module }}' in str(path):
+                        logger.warning("WARNING: module NOT rendered in output path!")
+
+            rendered_yaml = yaml.dump(rendered_template, allow_unicode=True, default_flow_style=False)
+
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False, encoding='utf-8') as f:
+                f.write(rendered_yaml)
+                rendered_path = Path(f.name)
+
+            logger.info(f"Bypass Plan: rendered template saved to {rendered_path}")
+            logger.info(f"Bypass Plan: instance_path in result will be {rendered_path}")
+
+            workflow_id = await self._create_workflow(rendered_path)
             return WorkflowRunResult(
                 workflow_id=workflow_id,
-                instance_path=self.config.template_path,
+                instance_path=rendered_path,
                 plan_summary="Bypassed PlanAgent for phase-based workflow template.",
                 success=True,
             )
@@ -296,15 +326,12 @@ class WorkflowRunner:
             **dir_context,  # 注入目录变量
         }
         logger.info(f"Render context keys: {list(render_context.keys())}")
-        
+        logger.info(f"Render context qa_specs_dir: {render_context.get('qa_specs_dir', 'MISSING')}")
+        logger.info(f"Render context tests_dir: {render_context.get('tests_dir', 'MISSING')}")
+        logger.info(f"Render context module: {render_context.get('module', 'MISSING')}")
+
         rendered = engine.render_string(template_content, render_context)
-        
-        # 检查渲染后的路径变量
-        if "{{ tests_dir }}" in rendered:
-            logger.warning("WARNING: {{ tests_dir }} was NOT rendered!")
-        if "{{ qa_specs_dir }}" in rendered:
-            logger.warning("WARNING: {{ qa_specs_dir }} was NOT rendered!")
-        
+
         # 解析为 Dict
         return yaml.safe_load(rendered)
 
@@ -395,8 +422,22 @@ class WorkflowRunner:
             self.config.params,
             self.config.project_root,
         )
+
+        # Build directory context and merge into params for template variable resolution
+        dir_context = self._build_dir_context()
+        merged_params = {**dir_context, **self.config.params}
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"WorkflowRunner._create_workflow: dir_context keys = {list(dir_context.keys())}")
+        logger.info(f"WorkflowRunner._create_workflow: config.params keys = {list(self.config.params.keys()) if self.config.params else 'None'}")
+        logger.info(f"WorkflowRunner._create_workflow: merged_params keys = {list(merged_params.keys())}")
+        logger.info(f"WorkflowRunner._create_workflow: qa_specs_dir = {merged_params.get('qa_specs_dir')}")
+        logger.info(f"WorkflowRunner._create_workflow: tests_dir = {merged_params.get('tests_dir')}")
+        logger.info(f"WorkflowRunner._create_workflow: module = {merged_params.get('module')}")
+
         workflow_data = {
-            "params": self.config.params,
+            "params": merged_params,
             "workflow_key": self.config.workflow_key,
             "instance_path": str(instance_path),
             "concurrency_scope": scope_info.concurrency_scope,

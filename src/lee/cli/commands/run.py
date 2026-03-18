@@ -846,6 +846,10 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
     if branch:
         params["branch"] = branch
 
+    # Merge directory context into params for template variable resolution
+    dirs_context = _load_directory_context(project_root)
+    params = {**dirs_context, **params}
+
     params = adapt_params_for_workflow(workflow_key, params, project_root=Path(project_dir).resolve())
 
     # 为未显式传入的参数填充模板默认值，避免渲染为空字符串。

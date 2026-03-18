@@ -1424,6 +1424,17 @@ class LLMRunner(StepRunnerBase):
         """
         # 获取工作流上下文
         instance = await ctx.store.get_workflow(workflow_id)
+
+        # DEBUG: Log instance.data structure
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"LLMRunner.execute: instance.data keys = {list(instance.data.keys()) if instance.data else 'None'}")
+        logger.info(f"LLMRunner.execute: instance.data.get('params') keys = {list(instance.data.get('params', {}).keys()) if instance.data.get('params') else 'None'}")
+        if instance.data and instance.data.get('params'):
+            logger.info(f"LLMRunner.execute: params.qa_specs_dir = {instance.data.get('params', {}).get('qa_specs_dir', 'MISSING')}")
+            logger.info(f"LLMRunner.execute: params.tests_dir = {instance.data.get('params', {}).get('tests_dir', 'MISSING')}")
+            logger.info(f"LLMRunner.execute: params.module = {instance.data.get('params', {}).get('module', 'MISSING')}")
+
         workflow_context = {
             "workflow_id": workflow_id,
             "template_id": instance.template_id,
@@ -6393,6 +6404,17 @@ class ClaudeCodeRunner(StepRunnerBase):
         """
         # 获取工作流上下文
         instance = await ctx.store.get_workflow(workflow_id)
+
+        # DEBUG: Log instance.data structure
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"LLMRunner.execute_claude: instance.data keys = {list(instance.data.keys()) if instance.data else 'None'}")
+        logger.info(f"LLMRunner.execute_claude: instance.data.get('params') keys = {list(instance.data.get('params', {}).keys()) if instance.data.get('params') else 'None'}")
+        if instance.data and instance.data.get('params'):
+            logger.info(f"LLMRunner.execute_claude: params.qa_specs_dir = {instance.data.get('params', {}).get('qa_specs_dir', 'MISSING')}")
+            logger.info(f"LLMRunner.execute_claude: params.tests_dir = {instance.data.get('params', {}).get('tests_dir', 'MISSING')}")
+            logger.info(f"LLMRunner.execute_claude: params.module = {instance.data.get('params', {}).get('module', 'MISSING')}")
+
         workflow_context = {
             "workflow_id": workflow_id,
             "project_name": instance.data.get("project_name", ""),
