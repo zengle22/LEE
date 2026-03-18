@@ -63,9 +63,9 @@ stages:
     steps:
       - id: case_generation
         name: "Case Generation"
-        kind: agent
+        kind: skill
         description: "Dynamically generate test cases from Test Set strategy"
-        agent_id: agent.qa.case_generator
+        skill_id: skill.qa.case_generator
         mandatory: true
         depends_on: []
         outputs:
@@ -78,9 +78,9 @@ stages:
 
       - id: script_translation
         name: "Script Translation"
-        kind: agent
+        kind: skill
         description: "Translate cases to executable scripts"
-        agent_id: agent.qa.script_translator
+        skill_id: skill.qa.script_translator
         mandatory: true
         depends_on: [case_generation]
         outputs:
@@ -174,11 +174,11 @@ stages:
 
       - id: result_judgment
         name: "Result Judgment"
-        kind: agent
+        kind: skill
         description: |
           Judge pass/fail based on evidence.
           Role: JUDGE - can only read evidence and judge, cannot modify or re-execute.
-        agent_id: agent.qa.result_judge
+        skill_id: skill.qa.result_judge
         mandatory: true
         depends_on: [behavior_compliance]
         gate:
@@ -210,9 +210,9 @@ stages:
 
       - id: tse_assembly
         name: "TSE Assembly"
-        kind: agent
+        kind: skill
         description: "Assemble Test Set Execution file"
-        agent_id: agent.qa.tse_assembler
+        skill_id: skill.qa.tse_assembler
         mandatory: true
         depends_on: [result_judgment]
         outputs:
@@ -224,11 +224,11 @@ stages:
 
       - id: bug_drafting
         name: "Bug Drafting"
-        kind: agent
+        kind: skill
         description: |
           Draft bugs for failed cases.
           Multiple bugs may be drafted from one Test Set.
-        agent_id: agent.qa.bug_drafter
+        skill_id: skill.qa.bug_drafter
         mandatory: true
         depends_on: [tse_assembly]
         condition: "fail_count > 0"

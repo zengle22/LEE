@@ -767,6 +767,7 @@ class TemplateManager:
                     "description": phase.get("description", ""),
                     "default_complexity": default_complexity,
                     "phase": phase_id,
+                    "l3_template_id": phase.get("l3_template_id"),
                 },
             ))
 
