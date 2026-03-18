@@ -178,7 +178,7 @@ def _load_directory_context(project_dir: Path) -> Dict[str, Any]:
     dirs_yaml_path = project_dir / ".project" / "dirs.yaml"
     defaults: Dict[str, Any] = {
         "specs_dir": "spec",
-        "qa_specs_dir": "specs/qa",
+        "qa_specs_dir": "spec/qa",
         "src_dir": "src",
         "docs_dir": "docs",
         "knowledge_dir": "knowledge",

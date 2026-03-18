@@ -36,7 +36,7 @@ def _load_dirs_config(project_dir: Path) -> Dict[str, Any]:
             "directories": {
                 "specs_dir": {"path": "spec"},
                 "spec_dir": {"path": "spec"},  # 别名支持
-                "qa_specs_dir": {"path": "specs/qa"},
+                "qa_specs_dir": {"path": "spec/qa"},
                 "src_dir": {"path": "src"},
                 "docs_dir": {"path": "docs"},
                 "tests_dir": {"path": "tests"},
@@ -63,9 +63,9 @@ def _build_dir_context(project_dir: Path) -> Dict[str, str]:
         context["specs_dir"] = "spec"
 
     if "qa_specs_dir" in directories:
-        context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", "specs/qa")
+        context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", "spec/qa")
     else:
-        context["qa_specs_dir"] = "specs/qa"
+        context["qa_specs_dir"] = "spec/qa"
     
     # 其他目录直接映射
     for dir_name in ["src_dir", "docs_dir", "tests_dir", "artifacts_dir"]:
