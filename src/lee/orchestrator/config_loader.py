@@ -82,7 +82,7 @@ class OnFailureConfig:
 @dataclass
 class ExecutorConfig:
     """执行器配置"""
-    default_type: str = "claude_code"
+    default_type: str = "llm"
     coding_executor: str = "claude_code"       # 编码步骤首选执行器
     coding_fallback: str = "kimi"              # 编码步骤降级执行器
     coding_second_fallback: str = "codex"      # 编码步骤次级降级执行器

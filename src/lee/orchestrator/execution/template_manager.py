@@ -767,6 +767,7 @@ class TemplateManager:
                     "description": phase.get("description", ""),
                     "default_complexity": default_complexity,
                     "phase": phase_id,
+                    "l3_template_id": phase.get("l3_template_id"),
                 },
             ))
 
@@ -851,6 +852,17 @@ class TemplateManager:
                         if parsed is not None
                     ]
 
+                    # Build step config including condition (BUG-LEE-QA-005 fix)
+                    step_config = {
+                        **(step_data.get("config") or {}),
+                        "name": step_data.get("name", ""),
+                        "description": step_data.get("description", ""),
+                        "mandatory": step_data.get("mandatory", True),
+                        "stage_id": stage_id,
+                    }
+                    if "condition" in step_data:
+                        step_config["condition"] = step_data["condition"]
+
                     steps.append(Step(
                         id=step_id,
                         kind=kind,
@@ -863,13 +875,7 @@ class TemplateManager:
                             "description": step_data.get("description", ""),
                         },
                         outputs=outputs,
-                        config={
-                            **(step_data.get("config") or {}),
-                            "name": step_data.get("name", ""),
-                            "description": step_data.get("description", ""),
-                            "mandatory": step_data.get("mandatory", True),
-                            "stage_id": stage_id,
-                        },
+                        config=step_config,
                     ))
                     steps[-1].inputs = step_data.get("inputs", [])
 
@@ -891,6 +897,16 @@ class TemplateManager:
                     if parsed is not None
                 ]
 
+                # Build step config including condition (BUG-LEE-QA-005 fix)
+                step_config = {
+                    **(step_data.get("config") or {}),
+                    "name": step_data.get("name", ""),
+                    "description": step_data.get("description", ""),
+                    "mandatory": step_data.get("mandatory", True),
+                }
+                if "condition" in step_data:
+                    step_config["condition"] = step_data["condition"]
+
                 steps.append(Step(
                     id=step_id,
                     kind=kind,
@@ -903,12 +919,7 @@ class TemplateManager:
                         "description": step_data.get("description", ""),
                     },
                     outputs=outputs,
-                    config={
-                        **(step_data.get("config") or {}),
-                        "name": step_data.get("name", ""),
-                        "description": step_data.get("description", ""),
-                        "mandatory": step_data.get("mandatory", True),
-                    },
+                    config=step_config,
                 ))
                 steps[-1].inputs = step_data.get("inputs", [])
 
@@ -1295,6 +1306,10 @@ class TemplateManager:
             config["on_failure"] = step_data["on_failure"]
         if "success_criteria" in step_data:
             config["success_criteria"] = step_data["success_criteria"]
+
+        # Condition for conditional step execution
+        if "condition" in step_data:
+            config["condition"] = step_data["condition"]
 
         return config
 
