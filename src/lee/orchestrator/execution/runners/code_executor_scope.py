@@ -1,87 +1,26 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from lee.orchestrator.execution.runners.base import StepRunnerBase
 from lee.orchestrator.storage.models import StepResult, TaskExecutionStatus
 
 
-def _render_template_path(path: str, params: Dict[str, Any]) -> str:
+def collect_declared_output_paths(step, project_root: Optional[str] = None) -> List[str]:
     """
-    Render Jinja2-style template variables in a path string.
+    Collect declared output paths from step outputs.
 
-    Supports:
-    - {{ params.xxx }} -> params['xxx']
-    - {{ params.xxx | default('yyy') }} -> params['xxx'] or 'yyy'
-    - {{ xxx }} -> params['xxx'] (direct variable syntax)
-    - {{ xxx | default('yyy') }} -> params['xxx'] or 'yyy'
-    """
-    if not isinstance(path, str):
-        return str(path) if path else ""
+    Handles three types of outputs:
+    1. Dict with type="file"/"dir" and path: returns the explicit path
+    2. Dict with type="symbol" or no type: symbolic output, allows project root
+    3. String (symbolic name): symbolic output, allows project root
 
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.debug(f"_render_template_path: input path = {path}")
-    logger.debug(f"_render_template_path: params keys = {list(params.keys()) if params else 'None'}")
-
-    # Pattern 1: {{ params.xxx }} or {{ params.xxx | default('yyy') }}
-    params_pattern = r'\{\{\s*params\.(\w+)(?:\s*\|\s*default\(\s*[\'"]([^\'"]*)[\'"]\s*\))?\s*\}\}'
-
-    def replace_param(match):
-        param_name = match.group(1)
-        default_value = match.group(2)
-        value = params.get(param_name, default_value)
-        logger.debug(f"_render_template_path: params.{param_name} = {value}")
-        return str(value) if value is not None else (default_value or '')
-
-    rendered = re.sub(params_pattern, replace_param, path)
-
-    # Pattern 2: {{ xxx }} or {{ xxx | default('yyy') }} (direct variable syntax)
-    # This matches variables like {{ qa_specs_dir }}, {{ tests_dir }}, {{ module }}
-    direct_pattern = r'\{\{\s*(\w+)(?:\s*\|\s*default\(\s*[\'"]([^\'"]*)[\'"]\s*\))?\s*\}\}'
-
-    def replace_direct(match):
-        var_name = match.group(1)
-        default_value = match.group(2)
-        # Skip 'params' prefix pattern (already handled)
-        if var_name == 'params':
-            return match.group(0)
-        value = params.get(var_name, default_value)
-        logger.debug(f"_render_template_path: direct {var_name} = {value}")
-        return str(value) if value is not None else (default_value or '')
-
-    rendered = re.sub(direct_pattern, replace_direct, rendered)
-
-    logger.debug(f"_render_template_path: output path = {rendered}")
-    return rendered
-
-
-def collect_declared_output_paths(step, params: Optional[Dict[str, Any]] = None, project_root: Optional[str] = None) -> List[str]:
-    """
-    Collect declared output file paths from step outputs.
-
-    Args:
-        step: Step object with outputs attribute
-        params: Optional params dict for rendering template variables
-        project_root: Optional project root for symbolic outputs
-
-    Returns:
-        List of normalized output paths (with template variables rendered if params provided)
+    For symbolic outputs, project root is added to allow writes to standard locations.
     """
     declared_output_files: List[str] = []
     has_symbolic_output = False
-
-    # DEBUG: Log params at collection time
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"collect_declared_output_paths: params keys = {list(params.keys()) if params else 'None'}")
-    if params:
-        logger.info(f"collect_declared_output_paths: qa_specs_dir = {params.get('qa_specs_dir', 'MISSING')}")
-        logger.info(f"collect_declared_output_paths: tests_dir = {params.get('tests_dir', 'MISSING')}")
-        logger.info(f"collect_declared_output_paths: module = {params.get('module', 'MISSING')}")
 
     for output in (getattr(step, "outputs", None) or []):
         if isinstance(output, dict):
@@ -95,10 +34,14 @@ def collect_declared_output_paths(step, params: Optional[Dict[str, Any]] = None,
             # Check if it's a SimpleNamespace or similar object
             output_type = getattr(output, "type", None)
             output_path = getattr(output, "path", "")
-
-        # Render template variables if params provided
-        if params and isinstance(output_path, str):
-            output_path = _render_template_path(output_path, params)
+            # Check for symbolic output
+            if output_type == "symbol":
+                has_symbolic_output = True
+                continue
+            # String output is a symbolic name
+            if isinstance(output, str):
+                has_symbolic_output = True
+                continue
 
         normalized_path = str(output_path or "").strip()
         if output_type in {"file", "dir"} and normalized_path:

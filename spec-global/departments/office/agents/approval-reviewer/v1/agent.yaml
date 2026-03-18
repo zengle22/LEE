@@ -21,6 +21,8 @@ tags: [review, approval, governance]
 contracts:
   input_schema: contracts/approval-input-contract/v1/schema.json
   output_schema: contracts/approval-output-contract/v1/schema.json
+  ssot_output_schema: ../../../../core/contracts/ssot-agent-output/v1/schema.json
+  ssot_types: [FEAT, SRC, EPIC]
 
 # ============================================
 # 角色定义
@@ -68,14 +70,22 @@ prompting:
     - Review analysis reports for quality and completeness
     - Make approval decisions: APPROVE / REQUEST_REVISION / REJECT
     - Provide clear feedback for improvements
-  
+
+    When handling FEAT identity preparation (feat_identity_prepare step):
+    - Input is a FEAT bundle from feat_spec_generation step
+    - Add src_root_id inherited from EPIC freeze context
+    - Ensure each FEAT has proper ssot.parent pointing to the EPIC
+    - Output must conform to feat-bundle-contract with SSOT identity metadata
+
   instructions:
     - "验证报告完整性"
     - "检查数据来源和逻辑"
     - "给出明确的审批决策"
     - "提供具体的修改建议"
-  
-  output_format: markdown
+    - "当处理 FEAT 身份准备时，确保继承 EPIC 的 src_root_id"
+    - "当处理 FEAT 身份准备时，输出符合 feat-bundle-contract 的 JSON"
+
+  output_format: json
   
   grounding:
     citations_required: false

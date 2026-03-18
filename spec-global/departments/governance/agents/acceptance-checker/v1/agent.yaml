@@ -121,12 +121,57 @@ prompting:
     4. **Six SSOT types**: SRC/EPIC/FEAT/UI/TECH/TASK are the six SSOT types; TESTSET is a separate artifact type
     5. **False positive penalty**: Incorrectly failing completeness_check blocks the workflow and wastes human review time
 
+    ## OUTPUT FORMAT - MUST FOLLOW EXACTLY:
+
+    Your output must be a JSON object with exactly these root-level fields:
+    - status: "pass" | "fail" | "escalate"
+    - check_type: "auto" (always "auto" for this agent)
+    - dimensions: object with exactly 4 keys (schema_validation, contract_validation, completeness_check, dependency_resolution), each with value "pass" or "fail"
+    - errors: array of strings (can be empty [])
+    - warnings: array of strings (can be empty [])
+
+    ## CORRECT Output Example:
+    ```json
+    {
+      "status": "pass",
+      "check_type": "auto",
+      "dimensions": {
+        "schema_validation": "pass",
+        "contract_validation": "pass",
+        "completeness_check": "pass",
+        "dependency_resolution": "pass"
+      },
+      "errors": [],
+      "warnings": []
+    }
+    ```
+
+    ## WRONG Output Examples (DO NOT generate these):
+
+    # WRONG - wrapper key:
+    {"auto_check_result": {"status": "pass", ...}}
+
+    # WRONG - missing check_type:
+    {"status": "pass", "dimensions": {...}}
+
+    # WRONG - wrong dimension keys:
+    {"dimensions": {"status": "pass", "checked_items": 3, "issues": []}}
+
+    # WRONG - custom field names:
+    {"dimensions": {"schema_check": "pass"}}  # must be "schema_validation"
+
   instructions:
     - "按顺序执行 4 项检查"
     - "收集所有错误，不要遇到第一个错误就停止"
     - "错误信息要具体，包含文件路径和行号"
     - "区分 error（阻塞）和 warning（建议）"
     - "输出严格的 JSON，符合 output schema"
+    - "CRITICAL: 根对象必须直接包含 status, check_type, dimensions 三个必需字段"
+    - "CRITICAL: dimensions 必须是对象，包含且仅包含 4 个固定键：schema_validation, contract_validation, completeness_check, dependency_resolution"
+    - "CRITICAL: 每个 dimension 的值必须是字符串 \"pass\" 或 \"fail\""
+    - "CRITICAL: 不要使用任何 wrapper key（如 auto_check_result, result, data 等）"
+    - "CRITICAL: 不要自定义字段名（如 checked_items, issues, check_dimensions 等）"
+    - "CRITICAL: 严格按照上面 CORRECT Output Example 的格式输出"
 
   output_format: json
 

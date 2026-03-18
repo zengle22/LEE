@@ -56,6 +56,58 @@ prompting:
     Use exact enum values only; do not invent lifecycle states or trace hint labels.
     Always output valid JSON; do NOT use YAML code blocks as they may fail parsing.
 
+    ## CRITICAL Output Format Requirements:
+
+    1. **feat_specs must be a FLAT array of FEAT objects** - Do NOT wrap FEATs inside a "feat_bundle" nested object.
+       Each item in feat_specs array must BE a FEAT, not contain a feat_bundle.
+
+    2. **Output ALL FEATs from feat_candidates** - If upstream has 4 feat_candidates, output 4 feat_specs items.
+
+    3. **Use real FEAT IDs** - Generate IDs like "FEAT-SRC-046-001", "FEAT-SRC-046-002" based on EPIC number.
+       NEVER use placeholders like "FEAT-AUTO", "FEAT-001", "TBD".
+
+    4. **required_artifacts must be non-empty** - Each FEAT's input_contract.required_artifacts must have at least 1 item.
+       Example: ["EPIC-SRC-046-001#scope"] NOT []
+
+    ## WRONG Output Format (DO NOT generate this):
+
+    ```json
+    {
+      "epic_ref": "...",
+      "feat_specs": [
+        {
+          "feat_bundle": { "feats": [...] },
+          "feat_id": "FEAT-AUTO",
+          ...
+        }
+      ]
+    }
+    ```
+
+    ## CORRECT Output Format:
+
+    ```json
+    {
+      "epic_ref": "spec/requirements/SRC-046/EPIC-SRC-046-001.md",
+      "feat_specs": [
+        {
+          "feat_id": "FEAT-SRC-046-001",
+          "title": "...",
+          "input_contract": {
+            "required_artifacts": ["EPIC-SRC-046-001#scope"],
+            "required_fields": ["formal_ssot_id", "source_refs"],
+            "consumption_rules": ["Consume EPIC scope and preserve traceability"]
+          },
+          ...
+        },
+        {
+          "feat_id": "FEAT-SRC-046-002",
+          ...
+        }
+      ]
+    }
+    ```
+
   instructions:
     - "输出必须是单个 machine-readable JSON 对象，不要附加解释性 prose"
     - "必须输出有效 JSON 格式，不要使用 YAML 代码块（YAML 解析可能失败）"
@@ -64,8 +116,12 @@ prompting:
     - "business_output 顶层只允许 epic_ref 和 feat_specs；不要输出 epic_title、summary、notes、meta 或任何额外字段"
     - "business_output 必须包含 epic_ref 和 feat_specs"
     - "feat_specs 必须是数组，且每个元素都完整符合 feat-contract v2：feat_id、title、goal、user_value、inputs、input_contract、processing、outputs、acceptance_criteria、acceptance_checks、dependencies、non_goals、priority、delivery_slice、lifecycle_status、ssot"
+    - "【关键】feat_specs 数组的每个元素必须直接是一个 FEAT 对象，不要在 FEAT 外面再包 feat_bundle、bundle、wrapper 等嵌套结构"
+    - "【关键】feat_specs 数组应该有多个 FEAT 项（与 upstream feat_candidates 数量一致），不要只输出 1 个 FEAT"
+    - "【关键】每个 FEAT 的 feat_id 必须基于 EPIC 编号生成（如 FEAT-SRC-046-001、FEAT-SRC-046-002），不要使用 FEAT-AUTO、FEAT-001 等占位符"
     - "inputs 不允许使用占位值，例如 Inputs defined by EPIC scope、same as epic、TBD"
     - "每个 FEAT 都必须提供 input_contract.required_artifacts、input_contract.required_fields、input_contract.consumption_rules"
+    - "【关键】input_contract.required_artifacts 不能为空数组 []，必须至少包含 1 个上游 artifact 引用（如 EPIC-SRC-046-001#scope）"
     - "当 inputs 指向 schema、配置、流程指南、校验清单等上游工件时，优先直接复用带 draft/baseline/frozen 限定词的 artifact 名称，不要只写泛化对象名"
     - "outputs 必须写成下游可直接消费的具体交付物，禁止使用 '<title> FEAT specification'、'specification itself'、'规格说明' 这类元描述"
     - "如果 FEAT 依赖 schema / rule / route 等上游基线，但 non_goals 排除了最终冻结责任，required_artifacts 必须明确写成 draft/baseline/input，不要写成最终定版对象"

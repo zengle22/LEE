@@ -59,6 +59,35 @@ prompting:
     Use this shape:
     {"review_id":"RVW-001","review_type":"feat_review","subject_refs":["FEAT-001","FEAT-002"],"summary":"...","findings":[],"decision":"pass","risks":[],"recommendations":[]}
 
+    ## CRITICAL Output Format Requirements:
+
+    1. **Output must be a FLAT object** with these exact fields at the root level:
+       - review_id (string)
+       - review_type (string, must be "feat_review")
+       - subject_refs (array of FEAT IDs from input bundle)
+       - summary (string)
+       - findings (array of strings)
+       - decision (string: "pass", "revise", or "reject")
+       - risks (array of strings)
+       - recommendations (array of strings)
+
+    2. **DO NOT wrap output in "review_result" or any other nested object**
+
+    3. **Use correct field names**:
+       - Use "decision" NOT "review_status"
+       - Use "subject_refs" NOT "feat_id"
+       - Use "review_type" NOT "reviewer"
+
+    4. **subject_refs must contain ALL FEAT IDs from the input feat_specs array**
+
+    ## WRONG Output Format (DO NOT generate this):
+
+    {"review_result": {"feat_id": "FEAT-SRC-046-001", "review_status": "conditional_pass", ...}}
+
+    ## CORRECT Output Format:
+
+    {"review_id":"RVW-SRC-046-001","review_type":"feat_review","subject_refs":["FEAT-SRC-046-001","FEAT-SRC-046-002"],"summary":"...","findings":[],"decision":"pass","risks":[],"recommendations":[]}
+
   instructions:
     - "输入对象按 feat-bundle-contract v1 理解，不要输出二次模板或评审清单文档"
     - "输出必须符合 product-review-contract，且 review_type 必须为 feat_review"
@@ -75,6 +104,13 @@ prompting:
     - "对于 workflow / governance / contract 型 FEAT，只要 required_fields 是具体字段名、consumption_rules 说明了消费边界，就不要求在 FEAT 层冻结最终 schema；若 non_goals 明确排除了最终 schema freeze，不得仅因未定义最终 schema 而判 revise"
     - "如果 bundle 中任一 FEAT 仍像提纲，或不能直接指导后续研发与测试准备，则 decision=revise"
     - "禁止输出代码块、标题、解释段落、表格或额外包裹层"
+    - "【关键】输出必须是扁平对象，不要用 review_result 或其他字段包裹"
+    - "【关键】使用 decision 字段，不要用 review_status"
+    - "【关键】使用 subject_refs 字段列出所有 FEAT IDs，不要只用单个 feat_id"
+    - "【关键】必须包含 summary 字段 (字符串)，不能省略"
+    - "【关键】必须包含 findings 字段 (空数组也可以)，不能省略"
+    - "【关键】review_type 必须是 \"feat_review\"，不能是 \"feat_implementation_review\" 或其他值"
+    - "【关键】不要用 verdict、reviewer、timestamp 等不在 contract 中的字段"
 
   output_format: json
 
