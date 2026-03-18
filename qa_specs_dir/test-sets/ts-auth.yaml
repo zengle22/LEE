@@ -1,0 +1,231 @@
+---
+# Test Set Design Asset
+# Module: auth (用户验证码登录功能)
+# Source FEAT: FEAT-TEST-001
+# Version: v1.0
+# Status: draft
+# Generated: 2026-03-18
+
+metadata:
+  id: ts-auth
+  name: "用户验证码登录功能测试集"
+  module: auth
+  source_feat: FEAT-TEST-001
+  version: "1.0.0"
+  status: draft
+  priority: P0
+  complexity: M
+  owner: qa
+  created_at: "2026-03-18"
+  reviewed_by: []
+
+module_boundary:
+  name: "认证模块 (Auth Module)"
+  description: "用户身份验证与验证码管理模块"
+  scope:
+    - "验证码发送服务"
+    - "验证码验证服务"
+    - "短信服务商切换机制"
+  
+  inputs:
+    - id: input-001
+      endpoint: "POST /api/send-code"
+      format: "application/json"
+      schema:
+        phone:
+          type: string
+          required: true
+          pattern: "^1[3-9]\\d{9}$"
+          description: "用户手机号"
+      
+    - id: input-002
+      endpoint: "POST /api/verify-code"
+      format: "application/json"
+      schema:
+        phone:
+          type: string
+          required: true
+          pattern: "^1[3-9]\\d{9}$"
+        code:
+          type: string
+          required: true
+          pattern: "^\\d{6}$"
+          description: "6位数字验证码"
+  
+  outputs:
+    - id: output-001
+      type: "api_response"
+      format: "application/json"
+      schema:
+        success:
+          type: boolean
+          required: true
+        message:
+          type: string
+          required: false
+        
+    - id: output-002
+      type: "sms_gateway_request"
+      protocol: "HTTP/HTTPS"
+      target: ["primary_provider", "backup_provider"]
+      
+    - id: output-003
+      type: "system_log"
+      format: "text"
+      content: "failover_event_log"
+  
+  dependencies:
+    internal:
+      - name: "验证码存储"
+        type: "cache/redis"
+        description: "验证码有效期管理(60秒)"
+    external:
+      - name: "主短信服务商"
+        type: "sms_gateway"
+        criticality: required
+      - name: "备用短信服务商"
+        type: "sms_gateway"
+        criticality: required
+  
+  boundaries:
+    include:
+      - "验证码生成逻辑"
+      - "短信发送调度"
+      - "服务商故障检测与切换"
+      - "验证码验证逻辑"
+    exclude:
+      - "用户注册流程"
+      - "密码登录逻辑"
+      - "用户资料管理"
+
+testable_features:
+  functional:
+    - id: TF-001
+      name: "验证码发送功能"
+      acceptance_criteria: AC-001
+      description: "验证用户输入有效手机号后，系统能正确发送验证码短信"
+      priority: P0
+      test_type: functional
+      validation_points:
+        - "API返回状态码200"
+        - "用户收到短信验证码"
+        - "验证码有效期为60秒"
+      test_data:
+        - type: valid_phone
+          value: "13800138000"
+          description: "有效手机号"
+        - type: invalid_phone
+          value: "138001"
+          description: "无效手机号格式"
+      
+    - id: TF-002
+      name: "短信服务商故障转移"
+      acceptance_criteria: AC-002
+      description: "验证主短信服务商不可用时，系统自动切换至备用服务商"
+      priority: P0
+      test_type: fault_tolerance
+      validation_points:
+        - "主服务商故障检测"
+        - "自动切换至备用服务商"
+        - "用户仍能收到验证码"
+        - "切换事件被正确记录"
+      test_data:
+        - type: failure_simulation
+          scenario: "primary_provider_timeout"
+          description: "模拟主服务商超时"
+        - type: failure_simulation
+          scenario: "primary_provider_500"
+          description: "模拟主服务商500错误"
+      
+    - id: TF-003
+      name: "验证码验证功能"
+      acceptance_criteria: AC-003
+      description: "验证用户输入手机号和验证码后，系统正确验证其有效性"
+      priority: P0
+      test_type: functional
+      validation_points:
+        - "正确验证码返回成功"
+        - "错误验证码返回失败"
+        - "验证码使用后立即失效"
+      test_data:
+        - type: valid_code
+          value: "123456"
+          description: "有效验证码"
+        - type: invalid_code
+          value: "000000"
+          description: "错误验证码"
+        - type: expired_code
+          age: 61
+          description: "过期验证码"
+          
+  non_functional:
+    - id: TF-004
+      name: "响应时间性能"
+      description: "验证API在正常负载下的响应时间满足SLA要求"
+      priority: P1
+      test_type: performance
+      sla: "< 200ms"
+      metrics:
+        - name: "p50_latency"
+          threshold: "< 100ms"
+        - name: "p95_latency"
+          threshold: "< 150ms"
+        - name: "p99_latency"
+          threshold: "< 200ms"
+          
+    - id: TF-005
+      name: "发送成功率"
+      description: "验证验证码发送成功率满足可靠性要求"
+      priority: P1
+      test_type: reliability
+      sla: ">= 99%"
+      metrics:
+        - name: "success_rate"
+          threshold: ">= 99%"
+        - name: "failure_rate"
+          threshold: "<= 1%"
+          
+    - id: TF-006
+      name: "并发处理能力"
+      description: "验证系统在高并发场景下的稳定性"
+      priority: P1
+      test_type: load
+      sla: ">= 1000 QPS"
+      metrics:
+        - name: "throughput"
+          threshold: ">= 1000 QPS"
+        - name: "error_rate"
+          threshold: "<= 0.1%"
+        - name: "avg_latency"
+          threshold: "< 200ms"
+
+test_categories:
+  functional:
+    - id: TF-001
+    - id: TF-002
+    - id: TF-003
+  performance:
+    - id: TF-004
+    - id: TF-006
+  reliability:
+    - id: TF-005
+
+risks:
+  - id: R001
+    description: "外部短信服务商不稳定"
+    impact: high
+    mitigation: "使用Mock服务进行主要测试"
+    
+  - id: R002
+    description: "验证码时效性测试时间敏感"
+    impact: medium
+    mitigation: "配置可调有效期用于测试环境"
+
+assumptions:
+  - "测试环境短信服务商配置可用"
+  - "验证码存储机制在测试环境正常运行"
+  - "手机号格式符合中国大陆规范"
+
+notes: |
+  本Test Set基于FEAT-TEST-001验收标准设计，包含3个核心功能测试特性和3个非功能测试特性。
+  测试执行时应优先完成功能测试(TF-001~003)，再执行性能与可靠性测试(TF-004~006)。

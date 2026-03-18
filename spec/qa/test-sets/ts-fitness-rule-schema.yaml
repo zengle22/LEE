@@ -1,0 +1,363 @@
+# Test Set: Fitness Rule Schema 验证
+# Module: fitness-rule-schema
+# FEAT: FEAT-SRC-059-001
+# Status: draft (pending QA review)
+# Generated: 2026-03-18
+
+---
+test_set:
+  id: TESTSET-FEAT-SRC-059-001
+  title: Fitness Rule Schema 验证测试集
+  module: fitness-rule-schema
+  target_feat: FEAT-SRC-059-001
+  status: draft
+  version: v1
+  
+  metadata:
+    created_at: "2026-03-18T12:28:45+08:00"
+    created_by: requirement_analysis_agent
+    priority: P0
+    test_level: unit
+    automation: required
+
+# ============================================================================
+# 模块边界定义 (Module Boundary)
+# ============================================================================
+module_boundary:
+  name: Fitness Rule Schema 定义与验证模块
+  description: |
+    本模块负责定义 fitness_rule.yaml 的 JSON Schema 及验证工具，
+    为治理团队和 AI 执行器提供统一的 fitness 规则描述语言。
+  
+  scope_includes:
+    - Schema 定义 (fitness_rule.schema.json)
+    - Schema 验证工具 (validate_fitness_rule.py)
+    - 示例规则文件 (YAML/JSON)
+    - 结构化错误输出
+  
+  scope_excludes:
+    - 规则执行逻辑实现
+    - 与现有 gate 规则文件迁移
+    - fitness_result 生成
+  
+  interfaces:
+    input:
+      format: [yaml, json]
+      schema: spec/contracts/fitness-rule/v1/schema.json
+    output:
+      success: { exit_code: 0, output: null }
+      failure: { exit_code: non-zero, output: structured_error }
+
+# ============================================================================
+# 可测试特性 (Testable Features)
+# ============================================================================
+testable_features:
+  
+  # -------------------------------------------------------------------------
+  # 1. Schema 结构验证
+  # -------------------------------------------------------------------------
+  - id: TF-SCHEMA-001
+    name: 必需字段验证
+    description: 验证 rule_id, rule_type, scan_command, pass_criteria, description 为必需字段
+    priority: P0
+    category: schema_validation
+    acceptance_criteria_ref: AC-001, AC-002
+    
+  - id: TF-SCHEMA-002
+    name: rule_id 格式验证
+    description: 验证 rule_id 必须符合 pattern ^FIT-[A-Z0-9_-]+$
+    priority: P0
+    category: schema_validation
+    acceptance_criteria_ref: AC-002
+    test_cases:
+      - valid: [FIT-TEST-001, FIT-CONTRACT-CHECK, FIT-EVIDENCE-COMPLETE]
+      - invalid: [test-001, fit-test, FIT-test-001, 123]
+    
+  - id: TF-SCHEMA-003
+    name: rule_type 枚举验证
+    description: 验证 rule_type 仅允许 hard_gate 或 quality_signal
+    priority: P0
+    category: schema_validation
+    acceptance_criteria_ref: AC-002
+    test_cases:
+      - valid: [hard_gate, quality_signal]
+      - invalid: [gate, signal, warning, error]
+    
+  - id: TF-SCHEMA-004
+    name: dimension 枚举验证
+    description: 验证 dimension 为 5 个固定维度之一
+    priority: P1
+    category: schema_validation
+    test_cases:
+      - valid: [contract_consistency, testability, integration_closure, evidence_completeness, path_governance]
+      - invalid: [other, unknown, custom]
+    
+  - id: TF-SCHEMA-005
+    name: severity 枚举验证
+    description: 验证 severity 为 4 个严重级别之一
+    priority: P1
+    category: schema_validation
+    test_cases:
+      - valid: [blocker, major, minor, nit]
+      - invalid: [critical, high, low]
+
+  # -------------------------------------------------------------------------
+  # 2. 格式支持
+  # -------------------------------------------------------------------------
+  - id: TF-FORMAT-001
+    name: YAML 格式支持
+    description: 验证工具可正确解析 YAML 格式的 fitness rule 文件
+    priority: P0
+    category: format_support
+    acceptance_criteria_ref: AC-001, AC-003
+    
+  - id: TF-FORMAT-002
+    name: JSON 格式支持
+    description: 验证工具可正确解析 JSON 格式的 fitness rule 文件
+    priority: P0
+    category: format_support
+    acceptance_criteria_ref: AC-001, AC-003
+    
+  - id: TF-FORMAT-003
+    name: 非法格式拒绝
+    description: 非法格式应返回验证失败和结构化错误
+    priority: P0
+    category: format_support
+    acceptance_criteria_ref: AC-002
+    test_cases:
+      - invalid: [xml, toml, ini, plain_text]
+
+  # -------------------------------------------------------------------------
+  # 3. 错误报告
+  # -------------------------------------------------------------------------
+  - id: TF-ERROR-001
+    name: 行号信息
+    description: 验证失败时错误报告包含 YAML/JSON 行号
+    priority: P0
+    category: error_reporting
+    acceptance_criteria_ref: AC-002
+    
+  - id: TF-ERROR-002
+    name: 字段路径
+    description: 验证失败时错误报告包含字段路径 (JSON Pointer)
+    priority: P0
+    category: error_reporting
+    acceptance_criteria_ref: AC-002
+    
+  - id: TF-ERROR-003
+    name: 结构化输出
+    description: 错误信息必须为结构化 JSON 格式
+    priority: P0
+    category: error_reporting
+    acceptance_criteria_ref: AC-002
+    expected_schema:
+      type: object
+      required: [valid, errors]
+      properties:
+        valid: { type: boolean }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              line: { type: integer }
+              path: { type: string }
+              message: { type: string }
+
+  # -------------------------------------------------------------------------
+  # 4. Pass Criteria 条件验证
+  # -------------------------------------------------------------------------
+  - id: TF-PASS-001
+    name: exit_code 条件验证
+    description: 当 kind=exit_code 时，必须包含 exit_code 字段
+    priority: P1
+    category: field_constraints
+    acceptance_criteria_ref: AC-002
+    condition: { kind: exit_code, required: [exit_code] }
+    
+  - id: TF-PASS-002
+    name: regex_match 条件验证
+    description: 当 kind=regex_match 时，必须包含 pattern 字段
+    priority: P1
+    category: field_constraints
+    acceptance_criteria_ref: AC-002
+    condition: { kind: regex_match, required: [pattern] }
+    
+  - id: TF-PASS-003
+    name: json_path 条件验证
+    description: 当 kind=json_path 时，必须包含 json_path 和 expected_value 字段
+    priority: P1
+    category: field_constraints
+    acceptance_criteria_ref: AC-002
+    condition: { kind: json_path, required: [json_path, expected_value] }
+    
+  - id: TF-PASS-004
+    name: file_exists 条件验证
+    description: 当 kind=file_exists 时，必须包含 file_path 字段
+    priority: P1
+    category: field_constraints
+    acceptance_criteria_ref: AC-002
+    condition: { kind: file_exists, required: [file_path] }
+
+  # -------------------------------------------------------------------------
+  # 5. Scan Command 验证
+  # -------------------------------------------------------------------------
+  - id: TF-SCAN-001
+    name: command 字段必需
+    description: scan_command 对象必须包含 command 字段
+    priority: P0
+    category: field_constraints
+    acceptance_criteria_ref: AC-002
+    
+  - id: TF-SCAN-002
+    name: timeout 默认值
+    description: timeout_seconds 字段默认值为 300 秒
+    priority: P1
+    category: field_constraints
+    default_value: 300
+
+  # -------------------------------------------------------------------------
+  # 6. Evidence Binding 验证
+  # -------------------------------------------------------------------------
+  - id: TF-EVIDENCE-001
+    name: artifact_kind 枚举
+    description: artifact_kind 必须为 3 种证据类型之一
+    priority: P2
+    category: field_constraints
+    test_cases:
+      - valid: [runner_output, command_log, test_artifact]
+      - invalid: [log, output, file]
+
+# ============================================================================
+# 测试数据需求
+# ============================================================================
+test_data_requirements:
+  
+  positive_test_files:
+    - name: valid_rule_minimal.yaml
+      description: 最小合法配置（仅必需字段）
+      fields: [rule_id, rule_type, scan_command, pass_criteria, description]
+      
+    - name: valid_rule_full.yaml
+      description: 完整字段配置
+      fields: [rule_id, rule_type, scan_command, pass_criteria, description, dimension, severity, evidence_binding, metadata]
+      
+    - name: valid_rule_hard_gate.yaml
+      description: hard_gate 类型规则
+      rule_type: hard_gate
+      
+    - name: valid_rule_quality_signal.yaml
+      description: quality_signal 类型规则
+      rule_type: quality_signal
+      
+    - name: valid_rule_all_pass_kinds.yaml
+      description: 覆盖所有 pass_criteria kind 类型
+      kinds: [exit_code, regex_match, json_path, file_exists]
+  
+  negative_test_files:
+    - name: invalid_missing_required.yaml
+      description: 缺少必需字段
+      missing: [rule_id]
+      
+    - name: invalid_rule_id_format.yaml
+      description: rule_id 格式错误
+      invalid_value: test-001
+      
+    - name: invalid_rule_type.yaml
+      description: 非法 rule_type 值
+      invalid_value: gate
+      
+    - name: invalid_pass_criteria_exit_code.yaml
+      description: exit_code kind 缺少 exit_code 字段
+      condition: { kind: exit_code }
+      missing: [exit_code]
+      
+    - name: invalid_pass_criteria_regex.yaml
+      description: regex_match kind 缺少 pattern 字段
+      condition: { kind: regex_match }
+      missing: [pattern]
+      
+    - name: invalid_pass_criteria_json_path.yaml
+      description: json_path kind 缺少必需字段
+      condition: { kind: json_path }
+      missing: [expected_value]
+      
+    - name: invalid_pass_criteria_file.yaml
+      description: file_exists kind 缺少 file_path 字段
+      condition: { kind: file_exists }
+      missing: [file_path]
+      
+    - name: invalid_scan_command.yaml
+      description: scan_command 缺少 command 字段
+      missing: [command]
+
+# ============================================================================
+# 测试覆盖矩阵
+# ============================================================================
+coverage_matrix:
+  schema_fields:
+    - field: rule_id
+      covered_by: [TF-SCHEMA-001, TF-SCHEMA-002]
+      test_count: 4
+      
+    - field: rule_type
+      covered_by: [TF-SCHEMA-001, TF-SCHEMA-003]
+      test_count: 4
+      
+    - field: scan_command
+      covered_by: [TF-SCHEMA-001, TF-SCAN-001, TF-SCAN-002]
+      test_count: 5
+      
+    - field: pass_criteria
+      covered_by: [TF-SCHEMA-001, TF-PASS-001, TF-PASS-002, TF-PASS-003, TF-PASS-004]
+      test_count: 8
+      
+    - field: description
+      covered_by: [TF-SCHEMA-001]
+      test_count: 2
+      
+    - field: dimension
+      covered_by: [TF-SCHEMA-004]
+      test_count: 6
+      
+    - field: severity
+      covered_by: [TF-SCHEMA-005]
+      test_count: 5
+      
+    - field: evidence_binding
+      covered_by: [TF-EVIDENCE-001]
+      test_count: 4
+      
+    - field: metadata
+      covered_by: []
+      test_count: 0
+      note: 可选字段，无强约束
+
+  acceptance_criteria:
+    - ac_id: AC-001
+      covered_by: [TF-FORMAT-001, TF-FORMAT-002, TF-SCHEMA-001, TF-SCHEMA-002, TF-SCHEMA-003]
+      coverage: full
+      
+    - ac_id: AC-002
+      covered_by: [TF-ERROR-001, TF-ERROR-002, TF-ERROR-003, TF-SCHEMA-001, TF-SCHEMA-002, TF-SCHEMA-003, TF-PASS-001, TF-PASS-002, TF-PASS-003, TF-PASS-004]
+      coverage: full
+      
+    - ac_id: AC-003
+      covered_by: [TF-FORMAT-001, TF-FORMAT-002]
+      coverage: full
+
+# ============================================================================
+# 下一步行动
+# ============================================================================
+next_steps:
+  - action: QA 审核 Test Set 设计
+    owner: QA Owner
+    
+  - action: 生成具体测试用例
+    owner: Test Designer
+    
+  - action: 准备测试数据文件
+    owner: Test Data Manager
+    
+  - action: 实现自动化测试脚本
+    owner: Automation Engineer

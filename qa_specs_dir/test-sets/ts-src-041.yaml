@@ -1,0 +1,329 @@
+---
+# Test Set Design Asset for SRC-041
+# Frozen FEAT Bundle: EPIC-SRC-041-016
+# Generated from requirement analysis step
+
+metadata:
+  ts_id: TS-SRC-041-001
+  module: SRC-041
+  title: Gate 治理语义归一化与人工审批上下文统一治理 Test Set
+  version: "1.0"
+  frozen_at: "2026-03-18T12:15:00+08:00"
+  epic_ref: EPIC-SRC-041-016
+  feat_refs:
+    - FEAT-SRC-041-001
+    - FEAT-SRC-041-002
+    - FEAT-SRC-041-003
+    - FEAT-SRC-041-004
+    - FEAT-SRC-041-005
+
+module_boundary:
+  name: Gate 治理语义归一化与人工审批上下文统一治理模块
+  description: |
+    本模块负责将 gate 的职责语义与参与方式归一化为 purpose 与 decision_mode 双轴模型，
+    将 human_gate_context 固定为人工决策场景的强制前置物，
+    并统一待审批 gate 的最小可判断摘要与决策结果输出格式。
+  
+  scope:
+    in_scope:
+      - Gate 双轴语义（purpose / decision_mode）的定义与约束
+      - human_gate_context 最小信息边界与强制化规则
+      - 正式边界动作（freeze/release/merge/risk acceptance）的 approval + human_required 约束
+      - 待审批 gate 最小可判断摘要（purpose、decision_mode、subject、why_now）的统一
+      - 人工 gate 统一决策结果（gate_result）的定义，包含 subject_refs、evidence_refs、next_action
+      - 旧分类（Auto/Review/Approval Gate、auto_check 等）到双轴模型的收敛映射
+      - Gate 定义合规校验规则
+      - 人工决策前置上下文校验与阻断机制
+    
+    out_of_scope:
+      - 技术架构设计与具体实现方案定版
+      - 数据库最终列名、存储结构或一次性历史数据迁移方案
+      - 前端 UI 样式、交互视觉设计或终端展现美化
+      - 研发排期、资源拆分或跨团队执行计划
+      - CLI 命令交互样式细节
+      - 审批界面设计
+      - 审计报表设计
+      - 数据库落表细节
+      - 历史结果回填策略
+  
+  interfaces:
+    inputs:
+      - gate_definition
+      - legacy_classification
+      - human_decision_request
+      - escalation_trigger
+      - gate_list_query
+      - gate_show_request
+      - gate_decide_request
+    
+    outputs:
+      - normalized_gate_def
+      - human_gate_context
+      - gate_summary
+      - gate_result
+      - validation_result
+      - gate_list_response
+      - gate_detail_response
+
+testable_features:
+  - id: TF-001
+    name: Gate 双轴语义定义验证
+    description: 验证 purpose 与 decision_mode 双轴模型的正确定义，字段支持值符合治理约束
+    priority: P0
+    feat_ref: FEAT-SRC-041-001
+    acceptance_criteria:
+      - purpose 字段支持 approval、review、check 等可审计职责边界值
+      - decision_mode 字段支持 auto、human_required 等决策参与模式值
+      - 字段定义符合治理约束文档且可解析
+      - 双轴组合能够表达所有历史 gate 分类语义
+    test_focus:
+      - purpose_field_validation
+      - decision_mode_field_validation
+      - allowed_values_verification
+      - dual_axis_completeness
+      - schema_compliance
+    
+  - id: TF-002
+    name: 新增 Gate 双轴语义冻结
+    description: 验证新增或收敛后的 gate 定义必须显式声明 purpose 与 decision_mode，无需依赖旧分类字段
+    priority: P0
+    feat_ref: FEAT-SRC-041-001
+    acceptance_criteria:
+      - 新 gate 定义可直接读取 purpose 与 decision_mode 字段
+      - 定义中无需依赖旧分类字段即可解释职责与参与方式
+      - 缺少双轴字段的定义被判定为不合规
+    test_focus:
+      - new_gate_definition_validation
+      - explicit_field_declaration
+      - legacy_field_independence
+      - compliance_check_trigger
+    
+  - id: TF-003
+    name: 历史分类兼容映射限制
+    description: 验证旧分类值只能映射到双轴模型，不能继续发布为正式治理语义
+    priority: P0
+    feat_ref: FEAT-SRC-041-001
+    acceptance_criteria:
+      - Auto Gate、Review Gate、Approval Gate、auto_check、human_review、human_approval、human_gate 映射结果只包含 purpose 与 decision_mode
+      - 系统拒绝将旧分类值作为正式治理语义发布
+      - 映射规则覆盖所有已知旧分类值
+    test_focus:
+      - legacy_classification_mapping
+      - mapping_completeness
+      - formal_semantic_blocking
+      - backward_compatibility
+    
+  - id: TF-004
+    name: human_gate_context 最小信息边界
+    description: 验证人工决策前置上下文包含完整的五类判断信息，支持两类决策入口
+    priority: P0
+    feat_ref: FEAT-SRC-041-002
+    acceptance_criteria:
+      - human_gate_context 包含 subject、why_now、evidence、risk、next_action 五类信息
+      - 原生人工决策与自动升级场景使用统一前置物要求
+      - 上下文对象可被 CLI、runtime 与审计共享消费
+    test_focus:
+      - context_field_completeness
+      - five_required_fields_presence
+      - unified_entrance_requirement
+      - cross_component_sharing
+    
+  - id: TF-005
+    name: 人工 Gate 审批前上下文强制校验
+    description: 验证 decision_mode=human_required 的 gate 必须具备 human_gate_context，否则阻断流转
+    priority: P0
+    feat_ref: FEAT-SRC-041-002
+    acceptance_criteria:
+      - decision_mode=human_required 的 gate 在进入可审批状态前必须具备 human_gate_context
+      - 缺少 human_gate_context 时阻断人工决策流转
+      - 阻断时返回明确的错误信息指示缺少上下文
+    test_focus:
+      - pre_approval_validation
+      - context_mandatory_check
+      - workflow_blocking_mechanism
+      - error_message_clarity
+    
+  - id: TF-006
+    name: 自动升级到人工决策的上下文补齐
+    description: 验证自动检查升级到人工决策时补齐 human_gate_context，包含升级原因
+    priority: P0
+    feat_ref: FEAT-SRC-041-002
+    acceptance_criteria:
+      - 自动检查升级到人工决策时 human_gate_context 包含 escalation_reason
+      - 上下文可连接到 subject_refs 与 evidence_refs
+      - 升级原因与当前审批理由可在上下文中表达
+    test_focus:
+      - escalation_context_completion
+      - escalation_reason_field
+      - reference_connectivity
+      - upgrade_scenario_handling
+    
+  - id: TF-007
+    name: 正式边界动作分类约束
+    description: 验证 freeze、release、merge、risk acceptance 只能表达为 purpose=approval 且 decision_mode=human_required
+    priority: P0
+    feat_ref: FEAT-SRC-041-003
+    acceptance_criteria:
+      - freeze、release、merge、risk acceptance 校验要求 purpose=approval
+      - 正式边界动作 decision_mode 固定为 human_required
+      - 违规分类被判定为不合规并给出明确错误
+    test_focus:
+      - formal_action_identification
+      - approval_constraint_validation
+      - human_required_constraint_validation
+      - compliance_violation_detection
+    
+  - id: TF-008
+    name: review 语义无法表达正式放行验证
+    description: 验证 review 语义不得再表达正式放行动作，系统明确拒绝并要求修改
+    priority: P0
+    feat_ref: FEAT-SRC-041-003
+    acceptance_criteria:
+      - 用 review 语义定义正式边界动作时被系统拒绝
+      - 拒绝时明确要求改为 approval + human_required
+      - review 语义仅可用于非正式放行场景
+    test_focus:
+      - review_semantic_rejection
+      - error_message_appropriateness
+      - required_alternative_guidance
+      - semantic_boundary_enforcement
+    
+  - id: TF-009
+    name: 待审批 Gate 最小可判断摘要
+    description: 验证 list 阶段展示 purpose、decision_mode、subject 与 why_now，无需追问即可判断
+    priority: P0
+    feat_ref: FEAT-SRC-041-004
+    acceptance_criteria:
+      - 待审批 gate 在 list 阶段可见 purpose、decision_mode、subject 与 why_now 四字段
+      - 审批者无需额外追问即可识别 gate 职责、参与方式、决策对象与触发原因
+      - 摘要信息可直接消费用于快速决策
+    test_focus:
+      - list_stage_summary_display
+      - four_required_fields_visibility
+      - decision_support_completeness
+      - no_follow_up_required
+    
+  - id: TF-010
+    name: list/show/decide 链路语义一致性
+    description: 验证 list、show、decide 三个链路复用同一判断语义与字段来源，字段同名同义
+    priority: P0
+    feat_ref: FEAT-SRC-041-004
+    acceptance_criteria:
+      - show 与 decide 链路延续 list 阶段的字段语义
+      - 同一 gate 的职责、参与方式、对象与原因字段保持同名同义
+      - 不出现平行语义或重新命名的同类治理信息
+    test_focus:
+      - cross_stage_semantic_consistency
+      - field_name_unification
+      - no_parallel_semantics
+      - shared_field_source
+    
+  - id: TF-011
+    name: Gate 决策结果统一输出
+    description: 验证所有人工 gate 决策结果统一输出为 gate_result，采用统一结构
+    priority: P0
+    feat_ref: FEAT-SRC-041-005
+    acceptance_criteria:
+      - 所有人工 gate 的决策结果输出为统一 gate_result 对象
+      - 批准、拒绝、补充信息、风险接受等结论采用统一结构
+      - 非特定 gate 私有结构或分叉载体
+    test_focus:
+      - unified_output_structure
+      - result_object_consistency
+      - decision_type_uniformity
+      - no_private_structures
+    
+  - id: TF-012
+    name: Gate 结果最小治理字段验证
+    description: 验证 gate_result 包含 subject_refs、evidence_refs 与 next_action，支持下游追溯
+    priority: P0
+    feat_ref: FEAT-SRC-041-005
+    acceptance_criteria:
+      - gate_result 稳定包含 subject_refs、evidence_refs 与 next_action
+      - 下游系统可直接读取三个字段
+      - 可追溯到对应审批对象和证据
+    test_focus:
+      - three_required_fields_presence
+      - downstream_consumability
+      - traceability_to_objects
+      - traceability_to_evidence
+
+test_categories:
+  functional:
+    - purpose_decision_mode_semantic_validation
+    - gate_definition_compliance_check
+    - human_gate_context_validation
+    - pre_approval_blocking_mechanism
+    - formal_action_constraint_validation
+    - summary_generation_and_display
+    - gate_result_output_validation
+    - legacy_classification_mapping
+  
+  integration:
+    - list_show_decide_stage_consistency
+    - runtime_cli_audit_consumption
+    - workflow_integration
+    - escalation_scenario_handling
+  
+  contract:
+    - schema_compliance
+    - api_contract_validation
+    - field_boundary_validation
+    - semantic_consistency
+  
+  compliance:
+    - governance_rule_enforcement
+    - approval_human_required_constraint
+    - review_semantic_restriction
+    - formal_boundary_action_validation
+
+data_requirements:
+  test_data:
+    strategy: isolated_test_definitions
+    cleanup: automatic
+    fixtures:
+      - valid_gate_definitions_with_dual_axis
+      - invalid_gate_definitions_missing_fields
+      - legacy_classification_samples
+      - human_gate_context_complete
+      - human_gate_context_incomplete
+      - formal_boundary_action_definitions
+      - informal_review_definitions
+      - gate_result_samples
+  
+  test_environments:
+    - local_development
+    - ci_simulation
+
+dependencies:
+  - FEAT-SRC-041-001 → FEAT-SRC-041-002 (双轴语义是上下文强制化的基础)
+  - FEAT-SRC-041-001 → FEAT-SRC-041-003 (双轴语义是正式动作约束的基础)
+  - FEAT-SRC-041-001 → FEAT-SRC-041-004 (双轴语义是最小摘要的基础)
+  - FEAT-SRC-041-001 → FEAT-SRC-041-005 (双轴语义是统一结果的基础)
+  - FEAT-SRC-041-002 → FEAT-SRC-041-003 (上下文强制化是正式动作约束的基础)
+  - FEAT-SRC-041-002 → FEAT-SRC-041-004 (上下文强制化是最小摘要的基础)
+  - FEAT-SRC-041-002 → FEAT-SRC-041-005 (上下文强制化是统一结果的基础)
+
+notes: |
+  本 Test Set 验证 EPIC-SRC-041-016 中的所有 5 个 FEAT：
+  1. FEAT-SRC-041-001: Gate purpose 与 decision_mode 目标语义冻结
+  2. FEAT-SRC-041-002: human_gate_context 人工决策前置上下文强制化
+  3. FEAT-SRC-041-003: 正式边界动作的 approval plus human_required 约束
+  4. FEAT-SRC-041-004: 待审批 gate 的最小可判断摘要统一
+  5. FEAT-SRC-041-005: 人工 gate 决策结果的统一 gate_result 输出
+  
+  关键测试场景：
+  - Gate 双轴语义定义与验证
+  - 历史分类到双轴模型的映射
+  - human_gate_context 完整性与强制校验
+  - 正式边界动作的 approval + human_required 约束
+  - 待审批 gate 最小可判断摘要展示
+  - list/show/decide 链路语义一致性
+  - Gate 决策结果统一输出与字段验证
+  
+  测试执行顺序建议：
+  Phase 1: TF-001, TF-002, TF-003 (双轴语义基础)
+  Phase 2: TF-004, TF-005, TF-006 (上下文强制化)
+  Phase 3: TF-007, TF-008 (正式动作约束)
+  Phase 4: TF-009, TF-010 (最小摘要统一)
+  Phase 5: TF-011, TF-012 (统一结果输出)

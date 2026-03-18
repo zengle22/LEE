@@ -1,0 +1,237 @@
+---
+# Test Set Design Asset for SRC-058
+# Frozen FEAT Bundle: FEAT-FREEZE-SRC-058-001
+# Generated from requirement analysis step
+
+metadata:
+  ts_id: TS-SRC-058-001
+  module: SRC-058
+  title: Dev Smoke Gate Architecture Test Set
+  version: "1.0"
+  frozen_at: "2026-03-18T11:54:00+08:00"
+  epic_ref: EPIC-SRC-058-001
+  feat_refs:
+    - FEAT-SRC-058-001
+    - FEAT-SRC-058-002
+    - FEAT-SRC-058-003
+    - FEAT-SRC-058-004
+    - FEAT-SRC-058-005
+
+module_boundary:
+  name: Dev Smoke Gate Architecture
+  description: |
+    Dev Smoke Gate 架构与测试职责分层模块，包含：
+    - MR Smoke Gate Merge 门禁集成
+    - 统一 Test Set 资产管理
+    - Smoke 执行性能优化
+    - 本地环境检测与一致性校验
+    - 误报处理与 Flaky Test 治理
+  
+  scope:
+    in_scope:
+      - Merge 流程中的 Smoke Gate 集成
+      - Test Set 数据模型与 priority 分级
+      - P0/P1 用例的 Dev Smoke 执行
+      - 本地 Smoke 性能测量与优化
+      - 跨平台环境检测 (Windows/macOS/Linux)
+      - Flaky Test 自动识别与重试机制
+    
+    out_of_scope:
+      - QA Test Run 直接阻塞 merge
+      - P2 用例作为 Dev Smoke 默认执行
+      - CI 环境性能优化
+      - 完整回归测试性能约束
+      - 环境自动修复
+      - 远程环境检测
+      - CI 环境 Flaky Test 治理
+  
+  interfaces:
+    inputs:
+      - smoke_test_result
+      - merge_request_context
+      - gate_config
+      - feat_prd
+      - test_requirement
+      - priority_schema
+      - test_execution_metrics
+      - environment_config
+      - test_execution_history
+    
+    outputs:
+      - merge_gate_status
+      - blocker_issue_report
+      - gate_visualization
+      - unified_test_set_schema
+      - execution_time_metrics
+      - environment_check_result
+      - flaky_test_list
+      - test_stability_report
+
+priority_definition:
+  P0:
+    name: Critical
+    description: 阻塞性测试，必须100%通过
+    owner: Dev
+    execution: Smoke Gate 必执行
+    examples:
+      - MR Smoke Gate 基础功能
+      - 核心合并阻塞逻辑
+  
+  P1:
+    name: High
+    description: 重要功能测试，影响主要流程
+    owner: Dev
+    execution: Smoke Gate 必执行
+    examples:
+      - 环境检测核心功能
+      - Test Set 优先级解析
+  
+  P2:
+    name: Medium
+    description: 回归测试用例，QA场景使用
+    owner: QA
+    execution: QA回归可选
+    examples:
+      - Flaky Test 完整治理流程
+      - 高级性能优化配置
+
+testable_features:
+  - id: TF-001
+    name: MR Smoke Gate Merge Integration
+    description: MR Smoke Gate 作为 blocker 门禁集成到 merge 流程
+    priority: P0
+    feat_ref: FEAT-SRC-058-001
+    acceptance_criteria:
+      - Smoke Gate 作为 merge 前置条件，未通过时阻止 merge 操作
+      - 所有 merge 请求 100% 经过 Smoke Gate 检查
+      - Blocker 问题自动拦截并生成报告
+      - 门禁状态在 merge 界面可视化展示
+    test_focus:
+      - merge_gate_integration
+      - blocker_detection
+      - status_visualization
+      - execution_time_constraint
+    
+  - id: TF-002
+    name: Unified Test Set Asset Management
+    description: 单一 Test Set 数据模型，Dev 和 QA 共享测试资产
+    priority: P0
+    feat_ref: FEAT-SRC-058-002
+    acceptance_criteria:
+      - Test Set 数据模型支持 priority 字段定义
+      - P0/P1 用例自动包含在 Dev Smoke 执行计划中
+      - P2 用例标记为 QA 回归可选
+      - Dev 和 QA 共享同一 Test Set 资产，无重复维护
+      - 测试数据管理策略已实现
+      - Flaky Test 标记功能正常
+    test_focus:
+      - schema_validation
+      - priority_classification
+      - asset_sharing
+      - test_data_management
+      - flaky_marking
+    
+  - id: TF-003
+    name: Smoke Execution Performance Optimization
+    description: 本地 Smoke 执行性能优化，确保≤30分钟完成
+    priority: P1
+    feat_ref: FEAT-SRC-058-003
+    acceptance_criteria:
+      - Smoke 执行时间自动测量并记录
+      - 执行时间超过 30 分钟时触发告警
+      - 性能报告生成并可视化
+      - 并行执行功能正常，支持默认 4 路并行
+      - 动态超时策略生效
+    test_focus:
+      - execution_time_measurement
+      - performance_alerting
+      - parallel_execution
+      - dynamic_timeout
+      - playwright_optimization
+    
+  - id: TF-004
+    name: Local Environment Detection
+    description: 本地环境配置检测与一致性校验
+    priority: P1
+    feat_ref: FEAT-SRC-058-004
+    acceptance_criteria:
+      - 本地环境配置自动检测并报告
+      - 本地/CI 环境一致性校验通过
+      - 环境检测失败时阻止 Smoke 执行
+      - 跨平台检测功能正常
+    test_focus:
+      - environment_detection
+      - consistency_validation
+      - execution_blocking
+      - cross_platform_support
+    
+  - id: TF-005
+    name: Flaky Test Governance
+    description: 误报处理与 Flaky Test 自动识别治理
+    priority: P1
+    feat_ref: FEAT-SRC-058-005
+    acceptance_criteria:
+      - 单次测试失败后自动重试，最多 3 次
+      - 自动识别并标记 Flaky Test（通过率<80% 持续 5 次执行）
+      - 测试失败自动分类为 Blocker/Critical/Flaky
+      - Flaky Test 自动生成技术债务工单
+      - Flaky Test 修复后可清除标记
+    test_focus:
+      - auto_retry_mechanism
+      - flaky_detection
+      - failure_classification
+      - debt_tracking
+      - flaky_recovery
+
+test_categories:
+  functional:
+    - merge_gate_blocking_logic
+    - priority_classification_rules
+    - environment_detection_rules
+    - retry_mechanism
+    - flaky_detection_algorithm
+  
+  integration:
+    - merge_request_integration
+    - test_set_schema_integration
+    - playwright_parallel_execution
+    - cross_platform_compatibility
+  
+  performance:
+    - execution_time_measurement
+    - parallel_execution_efficiency
+    - timeout_handling
+  
+  regression:
+    - smoke_test_reliability
+    - environment_consistency
+    - flaky_test_stability
+
+data_requirements:
+  test_data:
+    strategy: isolated_test_database
+    cleanup: automatic
+    fixtures:
+      - sample_merge_requests
+      - mock_test_results
+      - environment_configs
+  
+  test_environments:
+    - local_windows
+    - local_macos
+    - local_linux
+    - ci_simulation
+
+dependencies:
+  - FEAT-SRC-058-002 → FEAT-SRC-058-003 (Test Set 定义用于性能基线)
+  - FEAT-SRC-058-002 → FEAT-SRC-058-004 (Test Set 定义检测目标)
+  - FEAT-SRC-058-002 → FEAT-SRC-058-005 (存储 Flaky 标记)
+  - FEAT-SRC-058-003 → FEAT-SRC-058-005 (重试影响执行时间)
+
+notes: |
+  本 Test Set 验证 FEAT-FREEZE-SRC-058-001 中的所有特性：
+  1. FEAT-SRC-058-001: MR Smoke Gate Merge 门禁集成
+  2. FEAT-SRC-058-002: 统一 Test Set 资产管理
+  3. FEAT-SRC-058-003: Smoke 执行性能优化
+  4. FEAT-SRC-058-004: 本地环境检测与一致性校验
+  5. FEAT-SRC-058-005: 误报处理与 Flaky Test 治理
