@@ -1,0 +1,82 @@
+---
+id: TASK-FEAT-SRC-046-001-003
+ssot_type: task
+title: SSOT Service derive_plans 实现
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-001-003-20260317
+source_refs:
+  - FEAT-SRC-046-001
+  - TECH-FEAT-SRC-046-001
+owner: dev
+tags:
+  - backend
+  - service
+  - planning
+properties:
+  role: backend
+  priority: P0
+  estimated_effort: 8h
+  assignee: dev-backend-003
+---
+
+# TASK-FEAT-SRC-046-001-003: SSOT Service derive_plans 实现
+
+## 1. 任务描述
+
+实现 SSOT Service 的 derive_plans 方法，用于从 RELEASE 对象派生 DEVPLAN 和 TESTPLAN 骨架。
+
+## 2. 验收标准
+
+- [ ] derive_plans() 方法可正常调用
+- [ ] 支持 dry-run 模式用于预览
+- [ ] 生成的 DEVPLAN/TESTPLAN 包含正确的引用关系
+- [ ] 支持增量更新
+
+## 3. 技术实现要点
+
+### 3.1 方法签名
+
+```python
+class SSOTService:
+    def derive_plans(
+        self,
+        release_id: str,
+        dry_run: bool = False
+    ) -> DerivePlansResult:
+        """从 RELEASE 派生 DEVPLAN/TESTPLAN 骨架"""
+        pass
+```
+
+### 3.2 派生逻辑
+
+```python
+def derive_plans(self, release_id: str) -> DerivePlansResult:
+    # 1. 获取 RELEASE 对象
+    release = self.registry.get(release_id)
+
+    # 2. 遍历 FEAT@version
+    for feat_ref in release.derived_from_ids:
+        # 3. 创建 DEVPLAN slice
+        devplan_slices.append(create_slice(feat_ref))
+
+        # 4. 创建 TESTPLAN slice
+        testplan_slices.append(create_test_slice(feat_ref))
+
+    # 5. 生成对象并返回
+    return DerivePlansResult(devplan, testplan)
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on:
+  - TASK-FEAT-SRC-046-001-002  # 依赖 release_check
+blocks: []
+```
+
+## 5. 输出产物
+
+- `src/lee/orchestrator/execution/artifacts/ssot_service.py` - Service 实现 (扩展)
+- `tests/service/test_derive_plans.py` - 单元测试
+- `docs/service/derive-plans.md` - API 文档

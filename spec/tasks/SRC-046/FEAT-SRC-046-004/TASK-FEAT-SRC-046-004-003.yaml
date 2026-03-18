@@ -1,0 +1,80 @@
+---
+id: TASK-FEAT-SRC-046-004-003
+ssot_type: task
+title: bugfix 交付轴闭环规则实现
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-004-003-20260317
+source_refs:
+  - FEAT-SRC-046-004
+owner: dev
+tags:
+  - dev
+  - implementation
+  - bugfix
+  - workflow
+properties:
+  role: dev
+  priority: P1
+  estimated_effort: 8h
+  assignee: dev-backend-006
+---
+
+# TASK-FEAT-SRC-046-004-003: bugfix 交付轴闭环规则实现
+
+## 1. 任务描述
+
+实现 bugfix 交付轴闭环规则，确保 bugfix 可重新进入交付轴并形成治理闭环。
+
+## 2. 验收标准
+
+- [ ] bugfix 可关联至交付版本
+- [ ] 交付轴闭环可验证
+- [ ] 与 release-check 集成
+- [ ] 通过端到端测试
+
+## 3. 技术实现要点
+
+### 3.1 闭环规则
+
+```python
+class BugfixDeliveryAxis:
+    def associate_to_release(
+        self,
+        bug_id: str,
+        release_id: str
+    ) -> AssociationResult:
+        """关联 bugfix 到交付版本"""
+        pass
+
+    def validate_closure(
+        self,
+        release_id: str
+    ) -> ClosureValidationResult:
+        """验证交付轴闭环"""
+        pass
+```
+
+### 3.2 release-check 集成
+
+```yaml
+release_check_integration:
+  - check: blocker_bugs_cleared_or_waived
+    rule: "所有 blocker bug 必须已关闭或豁免"
+  - check: bugfix_delivery_complete
+    rule: "已关联 bugfix 必须已完成交付"
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on:
+  - TASK-FEAT-SRC-046-004-002  # 依赖证据区分
+blocks: []
+```
+
+## 5. 输出产物
+
+- `src/lee/orchestrator/execution/bugfix/delivery_axis.py` - 交付轴实现
+- `tests/bugfix/test_delivery_axis.py` - 集成测试
+- `docs/bugfix/closure-rules.md` - 闭环规则文档

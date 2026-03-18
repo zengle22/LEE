@@ -1,0 +1,69 @@
+---
+id: TASK-FEAT-SRC-046-003-001
+ssot_type: task
+title: QA 入口绑定关系规格编写
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-003-001-20260317
+source_refs:
+  - FEAT-SRC-046-003
+owner: qa
+tags:
+  - qa
+  - documentation
+  - entry-point
+properties:
+  role: qa
+  priority: P1
+  estimated_effort: 4h
+  assignee: qa-lead-001
+---
+
+# TASK-FEAT-SRC-046-003-001: QA 入口绑定关系规格编写
+
+## 1. 任务描述
+
+定义 QA 执行入口与交付主链的绑定关系规格，确保 QA 执行可追溯到交付主链。
+
+## 2. 验收标准
+
+- [ ] QA 入口与交付主链绑定关系清晰
+- [ ] 支持从 QA 入口追溯到 RELEASE/DEVPLAN/TESTPLAN
+- [ ] 与现有 QA 工作流兼容
+- [ ] 获得 qa_lead 批准
+
+## 3. 技术实现要点
+
+### 3.1 绑定关系定义
+
+```yaml
+qa_entry_binding:
+  test_plan_id: TESTPLAN-REL-x.y.z
+  delivery_chain_ref: RELEASE-REL-x.y.z
+  execution_command: "lee qa test-run --plan {test_plan_id}"
+  traceability:
+    - release_id
+    - devplan_id
+    - feat_refs
+```
+
+### 3.2 追溯接口
+
+```python
+def trace_qa_entry_to_delivery(entry_id: str) -> DeliveryChainRef:
+    """从 QA 入口追溯到交付主链"""
+    pass
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on: []
+blocks:
+  - TASK-FEAT-SRC-046-003-002  # 研发入口治理依赖 QA 入口定义
+```
+
+## 5. 输出产物
+
+- `docs/qa/entry-binding-spec.md` - QA 入口绑定规格
+- `docs/qa/traceability-guide.md` - 追溯指南

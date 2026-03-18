@@ -1,0 +1,78 @@
+---
+id: TASK-FEAT-TEST-001-001
+ssot_type: TASK
+status: frozen
+version: v1
+workflow_instance_id: wf-task-test-001-001-20260317
+source_refs:
+  - FEAT-TEST-001
+  - TECH-FEAT-TEST-001
+owner: dev
+tags:
+  - backend
+  - api
+properties:
+  role: backend
+  priority: P0
+  estimated_effort: 4h
+  assignee: dev-backend-001
+---
+
+# TASK-FEAT-TEST-001-001: 验证码发送 API 实现
+
+## 1. 任务描述
+
+实现验证码发送 API，支持主备短信服务商切换。
+
+## 2. 验收标准
+
+- [ ] API 端点 `POST /api/send-code` 可正常调用
+- [ ] 验证码生成符合规范（6 位数字）
+- [ ] Redis 存储验证码正确
+- [ ] 主服务商失败时自动切换备用服务商
+- [ ] 限流策略生效
+- [ ] 单元测试覆盖率 >= 80%
+
+## 3. 技术实现要点
+
+### 3.1 验证码生成
+
+```python
+import random
+def generate_code(length=6) -> str:
+    return ''.join(str(random.randint(0, 9)) for _ in range(length))
+```
+
+### 3.2 Redis 存储
+
+```python
+# Key 格式：verify:code:{phone}:{scene}
+# Value: 验证码
+# TTL: 300 秒（5 分钟）
+redis.setex(f"verify:code:{phone}:{scene}", 300, code)
+```
+
+### 3.3 服务商切换
+
+```python
+providers = [ProviderA(), ProviderB()]
+for provider in providers:
+    if provider.send(phone, code):
+        return True
+    logger.warning(f"Provider {provider.name} failed")
+return False
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on: []  # 无前置 TASK 依赖
+blocks:
+  - TASK-FEAT-TEST-001-002  # 前端开发依赖此 API
+```
+
+## 5. 输出产物
+
+- `src/auth/api/send_code.py` - API 实现
+- `tests/auth/test_send_code.py` - 单元测试
+- `docs/api/send-code.md` - API 文档

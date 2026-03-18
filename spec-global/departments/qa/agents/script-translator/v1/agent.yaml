@@ -43,6 +43,7 @@ policy:
       - "脚本语法正确"
       - "覆盖所有生成用例"
       - "包含断言"
+      - "正确的测试状态判定（PASS/FAIL/SKIP）"
     should_have:
       - "错误处理"
       - "证据收集（截图/日志）"
@@ -116,6 +117,29 @@ prompting:
     - test() 测试函数
     - 断言 (expect)
     - 证据收集 (截图/trace)
+
+    **测试状态判定规则（重要）：**
+
+    必须严格遵守以下测试状态定义：
+    - **PASS**: 实际结果与预期结果完全一致
+    - **FAIL**: 实际结果与预期结果不符（这是bug，必须标记为FAIL）
+    - **SKIP**: 仅用于环境/依赖问题导致无法执行测试（如：服务器未启动、网络不通、前置条件不满足）
+
+    正确的断言逻辑示例（Python）：
+    ```python
+    if response.status_code == expected_status:
+        status = "PASS"
+    elif response.status_code == 404:
+        status = "SKIP"  # 只有环境问题才SKIP
+        reason = "API endpoint not found"
+    else:
+        status = "FAIL"  # 预期不符必须标记为FAIL！
+        reason = f"Expected {expected_status}, got {response.status_code}"
+    ```
+
+    **常见错误（必须避免）：**
+    - 当实际结果与预期不符时标记为SKIP（这是严重错误！）
+    - 混淆FAIL和SKIP的使用场景
 
     **注意：**
     - 脚本文件保存到指定目录

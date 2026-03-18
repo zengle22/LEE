@@ -1,0 +1,14 @@
+created_at: '2026-03-17T23:27:55.628378'
+created_by: workflow.core.feat2plan
+derived_from:
+- FEAT-TEST-001
+feat_refs:
+- FEAT-TEST-001
+id: release-test-001
+release_type: minor
+release_window:
+  end_date: '2026-03-31'
+  start_date: '2026-03-17'
+ssot_type: RELEASE
+status: draft
+version: 1.0.0

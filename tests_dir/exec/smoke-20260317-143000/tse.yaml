@@ -1,0 +1,76 @@
+# Test Set Execution Record
+
+tse_id: TSE-SMOKE-GATE-001-20260317-143000
+test_set_id: TS-SMOKE-GATE-001
+smoke_run_id: smoke-20260317-143000
+executed_at: '2026-03-17T14:30:00.000000'
+completed_at: '2026-03-17T14:30:02.000000'
+
+# Execution Context
+context:
+  module: lee-smoke-gate
+  feature_id: FEAT-SRC-058-001
+  owner: dev-team
+  execution_mode: sequential
+  fail_fast: true
+
+# Result
+result:
+  status: PASS
+  total_cases: 12
+  passed_cases: 12
+  failed_cases: 0
+  pass_rate: 100.0
+
+# Mapped Test Results
+mapped_results:
+  - case_id: TC-SMOKE-GATE-001
+    status: PASS
+    actual_tests: 3
+  - case_id: TC-SMOKE-GATE-002
+    status: PASS
+    actual_tests: 1
+  - case_id: TC-SMOKE-GATE-003
+    status: PASS
+    actual_tests: 1
+  - case_id: TC-SMOKE-GATE-004
+    status: PASS
+    actual_tests: 1
+  - case_id: TC-SMOKE-GATE-005
+    status: PASS
+    actual_tests: 1
+  - case_id: TC-SMOKE-GATE-006
+    status: PASS
+    actual_tests: 1
+  - case_id: TC-SMOKE-GATE-007
+    status: PASS
+    actual_tests: 1
+  - case_id: TC-SMOKE-GATE-008
+    status: PASS
+    actual_tests: 1
+  - case_id: TC-SMOKE-GATE-009
+    status: PASS
+    actual_tests: 1
+  - case_id: TC-SMOKE-GATE-010
+    status: PASS
+    actual_tests: 2
+  - case_id: TC-SMOKE-GATE-011
+    status: PASS
+    actual_tests: 1
+  - case_id: TC-SMOKE-GATE-012
+    status: PASS
+    actual_tests: 1
+
+# Gate Handoff
+gate_handoff:
+  gate_id: gate.dev.smoke_gate
+  handoff_status: completed
+  gate_evaluation: passed
+  merge_allowed: true
+
+# Artifacts
+artifacts:
+  evidence_pack: tests_dir/exec/smoke-20260317-143000/bundle/evidence_pack.json
+  summary: tests_dir/exec/smoke-20260317-143000/bundle/smoke_summary.json
+  results: tests_dir/exec/smoke-20260317-143000/results.yaml
+  readme: tests_dir/exec/smoke-20260317-143000/bundle/README.md

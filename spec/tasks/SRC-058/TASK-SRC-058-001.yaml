@@ -1,0 +1,77 @@
+# TASK-SRC-058-001: Dev Smoke Gate 架构规范与契约定义
+# Parent: FEAT-SRC-058-001
+# Workstream: workflow-governance
+# Responsible Role: workflow-architect
+
+task_id: TASK-SRC-058-001
+title: Dev Smoke Gate 架构规范与契约定义
+objective: 定义 Dev Smoke Gate 的整体架构、Gate 类型、状态机和契约边界
+
+description: |
+  基于 ADR-023 和 TECH-SRC-058-001，完成以下规范定义：
+  1. 四层架构边界 (Merge Gate Layer、Smoke Gate Layer、Dev Smoke Execution Layer、Test Asset Layer)
+  2. Gate 状态机 (pending/running/passed/failed/flaky)
+  3. Auto Gate 判定契约 (pass_rate/coverage/execution_time 阈值)
+  4. 5 Phase 执行流程契约 (Env Check → Case Gen → Execution → Result Judgment → Evidence Pack)
+  5. Test Set 资产结构 (单一 Test Set + Flaky Registry + Priority 字段)
+
+source_feat: FEAT-SRC-058-001
+workstream: workflow-governance
+task_kind: specification
+responsible_role: workflow-architect
+
+acceptance_criteria_mapping:
+  - feat: FEAT-SRC-058-001
+    ac: AC-ARCH-001
+    description: 四层架构边界文档完成，明确各层职责和接口
+  - feat: FEAT-SRC-058-001
+    ac: AC-ARCH-002
+    description: Gate 状态机定义完整，覆盖 5 种状态及转换条件
+  - feat: FEAT-SRC-058-001
+    ac: AC-ARCH-003
+    description: Auto Gate 判定阈值明确 (P0+P1 pass_rate >= 100%)
+
+prerequisites:
+  - TECH-SRC-058-001.yaml
+
+dependencies: []
+
+definition_of_done:
+  - TASK-SRC-058-001.yaml 已创建并冻结
+  - 架构规范文档通过 workflow-architect 评审
+  - 与 ADR-023/ADR-005/ADR-007/ADR-008/ADR-011 一致
+
+priority: P0
+milestone: M1-Spec-Freeze
+estimated_effort: 1 day
+lifecycle_status: draft
+
+observability:
+  execution_unit: task
+  log_scope: task-execution
+  audit_fields:
+    - run_id
+    - changed_files
+    - evidence_refs
+    - reviewer_approval
+
+evidence_requirements:
+  required_refs:
+    - TECH-SRC-058-001
+    - ADR-023
+    - ADR-005
+    - ADR-007
+    - ADR-008
+    - ADR-011
+  review_required: true
+
+rollback_strategy:
+  mode: revert
+  restore_targets:
+    - .workflow/workspace/wf_task_22f46d08/task_planning/TASK-SRC-058-001.yaml
+
+ssot:
+  identity_kind: ssot
+  ssot_type: task
+  parent: FEAT-SRC-058-001
+  derived_from: FEAT-SRC-058-001#architecture

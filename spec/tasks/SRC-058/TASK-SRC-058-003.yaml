@@ -1,0 +1,81 @@
+# TASK-SRC-058-003: Test Set 资产管理与 Flaky Registry 实现
+# Parent: FEAT-SRC-058-003
+# Workstream: test-asset-governance
+# Responsible Role: test-asset-engineer
+
+task_id: TASK-SRC-058-003
+title: Test Set 资产管理与 Flaky Registry 实现
+objective: 实现单一 Test Set YAML 资产结构和 Flaky Registry 治理能力
+
+description: |
+  实现 Dev 和 QA 共享的 Test Set 资产管理系统：
+  1. Test Set YAML 结构：包含 FEAT 关联、AC 映射、Priority 字段 (P0/P1/P2)
+  2. Flaky Registry: 记录 Flaky Test ID、失败模式、通过率趋势、技术债务状态
+  3. 优先级筛选：Dev Smoke 默认执行 P0+P1，QA 回归执行全量
+  4. Flaky 标记接口：支持手动/自动标记，关联技术债务工单
+  5. Test Set 版本管理：支持从 FEAT 版本派生 Test Set 版本
+
+  数据结构：test_set.yaml (用例列表 + 优先级), flaky_registry.yaml (Flaky 记录 + 债务追踪)
+
+source_feat: FEAT-SRC-058-003
+workstream: test-asset-governance
+task_kind: implementation
+responsible_role: test-asset-engineer
+
+acceptance_criteria_mapping:
+  - feat: FEAT-SRC-058-003
+    ac: AC-ASSET-001
+    description: Test Set YAML 包含完整的 FEAT 关联和 AC 映射
+  - feat: FEAT-SRC-058-003
+    ac: AC-ASSET-002
+    description: Priority 字段正确映射 P0/P1 核心用例与 P2 边缘用例
+  - feat: FEAT-SRC-058-003
+    ac: AC-ASSET-003
+    description: Flaky Registry 记录 5 次执行 pass_rate 和失败模式
+  - feat: FEAT-SRC-058-003
+    ac: AC-ASSET-004
+    description: 支持手动 Flaky 标记并生成技术债务工单链接
+
+prerequisites:
+  - TASK-SRC-058-001
+
+dependencies:
+  - TASK-SRC-058-001
+
+definition_of_done:
+  - TASK-SRC-058-003.yaml 已创建并冻结
+  - Test Set YAML schema 定义完成
+  - Flaky Registry 数据结构实现完成
+  - Dev/QA 共享资产验证通过
+
+priority: P0
+milestone: M2-Runtime-Implement
+estimated_effort: 2 days
+lifecycle_status: draft
+
+observability:
+  execution_unit: task
+  log_scope: task-execution
+  audit_fields:
+    - run_id
+    - changed_files
+    - evidence_refs
+    - asset_schema
+
+evidence_requirements:
+  required_refs:
+    - TASK-SRC-058-001
+    - TECH-SRC-058-001
+  review_required: true
+
+rollback_strategy:
+  mode: revert
+  restore_targets:
+    - src/lee/test_assets/test_set.py
+    - src/lee/test_assets/flaky_registry.py
+
+ssot:
+  identity_kind: ssot
+  ssot_type: task
+  parent: FEAT-SRC-058-003
+  derived_from: FEAT-SRC-058-003#test_assets

@@ -1030,6 +1030,7 @@ class LLMRunner(StepRunnerBase):
                 step_id=step.id,
                 step=step,
                 configured_write_scope=code_config.get("write_scope", []),
+                params=instance.data.get("params", {}),
                 project_root=ctx.project_root,
             ))
             if code_config.get("allowed_commands"):
@@ -6338,6 +6339,7 @@ class ClaudeCodeRunner(StepRunnerBase):
         workflow_id: str,
         step_id: str,
         context_files: List[str],
+        params: Optional[Dict[str, Any]] = None,
         project_root: Optional[str] = None,
     ) -> Dict[str, Any]:
         input_data = {
@@ -6364,6 +6366,7 @@ class ClaudeCodeRunner(StepRunnerBase):
             step_id=step_id,
             step=step,
             configured_write_scope=claude_config.get("write_scope", []),
+            params=params,
             project_root=project_root,
         ))
         return input_data
@@ -6441,6 +6444,7 @@ class ClaudeCodeRunner(StepRunnerBase):
                 workflow_id=workflow_id,
                 step_id=step.id,
                 context_files=context_files,
+                params=instance.data.get("params", {}),
                 project_root=ctx.project_root,
             )
 

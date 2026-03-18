@@ -1,0 +1,21 @@
+release_ref: release-test-001
+test_strategy:
+  approach: risk-based
+  priority_distribution:
+    P0: 30%
+    P1: 50%
+    P2: 20%
+  risk_areas:
+  - area: 验证码服务集成
+    mitigation: 增加备用方案测试
+    severity: high
+  test_levels:
+  - coverage_target: 100%
+    description: 核心功能冒烟测试
+    level: smoke
+  - coverage_target: 80%
+    description: 回归测试
+    level: regression
+  - coverage_target: 60%
+    description: 自动化测试
+    level: automation

@@ -1,0 +1,69 @@
+---
+id: TASK-FEAT-SRC-046-002-003
+ssot_type: task
+title: 发布关闭审计闭环验证实现
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-002-003-20260317
+source_refs:
+  - FEAT-SRC-046-002
+owner: dev
+tags:
+  - backend
+  - audit
+  - validation
+properties:
+  role: backend
+  priority: P0
+  estimated_effort: 4h
+  assignee: dev-backend-004
+---
+
+# TASK-FEAT-SRC-046-002-003: 发布关闭审计闭环验证实现
+
+## 1. 任务描述
+
+实现发布关闭审计闭环验证逻辑，确保每次关闭操作都有完整的审计轨迹。
+
+## 2. 验收标准
+
+- [ ] 审计轨迹可查询
+- [ ] 验证逻辑可自动执行
+- [ ] 支持历史数据追溯
+- [ ] 与治理路径集成
+
+## 3. 技术实现要点
+
+### 3.1 审计数据结构
+
+```python
+class ReleaseCloseAudit:
+    release_id: str
+    closed_at: datetime
+    closed_by: str
+    check_result: ReleaseCheckResult
+    exceptions: List[ExceptionRecord]
+    evidence_refs: List[str]
+```
+
+### 3.2 验证接口
+
+```python
+def validate_audit_trail(release_id: str) -> AuditValidationResult:
+    """验证发布关闭审计轨迹完整性"""
+    pass
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on:
+  - TASK-FEAT-SRC-046-002-002  # 依赖执行指南
+blocks: []
+```
+
+## 5. 输出产物
+
+- `src/lee/orchestrator/execution/audit/release_close_audit.py` - 审计实现
+- `tests/audit/test_release_close_audit.py` - 单元测试
+- `docs/audit/trail-validation.md` - 审计验证文档

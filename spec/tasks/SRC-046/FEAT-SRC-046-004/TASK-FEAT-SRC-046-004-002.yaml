@@ -1,0 +1,66 @@
+---
+id: TASK-FEAT-SRC-046-004-002
+ssot_type: task
+title: bugfix 证据归属与执行承诺区分指南编写
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-004-002-20260317
+source_refs:
+  - FEAT-SRC-046-004
+owner: dev
+tags:
+  - dev
+  - documentation
+  - bugfix
+properties:
+  role: dev
+  priority: P1
+  estimated_effort: 4h
+  assignee: tech-lead-002
+---
+
+# TASK-FEAT-SRC-046-004-002: bugfix 证据归属与执行承诺区分指南编写
+
+## 1. 任务描述
+
+编写 bugfix 证据归属与执行承诺区分指南，明确两类文档的位置和用途。
+
+## 2. 验收标准
+
+- [ ] 证据归属位置明确
+- [ ] 执行承诺位置明确
+- [ ] 两者区分清晰
+- [ ] 获得 tech_lead 批准
+
+## 3. 技术实现要点
+
+### 3.1 证据归属
+
+```yaml
+evidence_location:
+  bug_report: tests/bugs/{bug_id}.md
+  test_result: tests/results/{bug_id}-fix-verification.md
+  screenshots: docs/evidence/{bug_id}/
+```
+
+### 3.2 执行承诺
+
+```yaml
+commitment_location:
+  fix_plan: spec/bugfixes/{bug_id}-fix-plan.md
+  delivery_commitment: spec/releases/{release_id}/bugfix-commitments.md
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on:
+  - TASK-FEAT-SRC-046-004-001  # 依赖回流路径
+blocks:
+  - TASK-FEAT-SRC-046-004-003  # 交付轴闭环依赖证据区分
+```
+
+## 5. 输出产物
+
+- `docs/bugfix/evidence-commitment-guide.md` - 证据与承诺区分指南
+- `docs/bugfix/location-reference.md` - 位置参考文档

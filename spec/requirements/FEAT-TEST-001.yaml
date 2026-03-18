@@ -1,0 +1,81 @@
+---
+id: FEAT-TEST-001
+ssot_type: FEAT
+status: frozen
+version: v1
+workflow_instance_id: wf-feat-test-001-20260317
+source_refs:
+  - EPIC-TEST-001
+  - SRC-TEST-001
+owner: product
+tags:
+  - test
+  - feat2plan-validation
+properties:
+  priority: P0
+  complexity: M
+  department: product
+---
+
+# FEAT-TEST-001: 用户验证码登录功能
+
+## 1. 特性描述
+
+支持用户通过手机号 + 验证码方式登录系统，包含主备两套短信服务商方案。
+
+## 2. 验收标准
+
+### AC-001: 验证码发送 API 正常调用
+
+**Given**: 用户输入有效手机号
+
+**When**: 调用 `POST /api/send-code`
+
+**Then**:
+- API 返回状态码 200
+- 用户收到短信验证码
+- 验证码 60 秒内有效
+
+### AC-002: 主方案失败时自动切换备用方案
+
+**Given**: 主短信服务商不可用
+
+**When**: 调用验证码发送 API
+
+**Then**:
+- 自动切换到备用服务商
+- 用户仍能收到验证码
+- 记录切换日志
+
+### AC-003: 验证码验证 API 正常调用
+
+**Given**: 用户输入手机号和验证码
+
+**When**: 调用 `POST /api/verify-code`
+
+**Then**:
+- 正确验证码返回成功
+- 错误验证码返回失败
+- 验证码使用后立即失效
+
+## 3. 依赖关系
+
+```yaml
+depends_on: []  # 无前置 FEAT 依赖
+blocks:
+  - FEAT-TEST-002  # 假设有后续特性依赖此特性
+```
+
+## 4. 非功能性需求
+
+- 响应时间 < 200ms
+- 验证码发送成功率 >= 99%
+- 支持并发 >= 1000 QPS
+
+## 5. 交付验收
+
+- [ ] AC-001 测试通过
+- [ ] AC-002 测试通过
+- [ ] AC-003 测试通过
+- [ ] 性能测试通过
+- [ ] 代码审查通过

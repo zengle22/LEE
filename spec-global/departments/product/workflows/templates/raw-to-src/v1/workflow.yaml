@@ -20,8 +20,12 @@ roles:
     - agent.analysis.product_goal
     - agent.review.requirement_reviewer
     - agent.governance.approval_reviewer
+    - agent.governance.acceptance_checker
+    - agent.review.acceptance_reviewer
+    - agent.governance.defect_fixer
   skills: []
   gates:
+    - gate.product.src_acceptance_approval
     - gate.product.src_freeze
 
 overview:
@@ -134,19 +138,185 @@ stages:
         config:
           claude_code:
             read_only: true
+
+      # ========== ADR-025 验收卡点开始 ==========
+      - id: src_acceptance_auto_check
+        name: SRC 验收 - 自动检查
+        kind: agent
+        agent_id: agent.governance.acceptance_checker
+        mandatory: true
+        depends_on: [source_review]
+        description: >
+          根据 ADR-025 执行 SRC 自动验收检查。
+          包括 Schema 验证、Contract 验证、完整性检查、依赖解析。
+          输出 auto_check_result，作为 Review Gate 的输入。
+        inputs:
+          - source: normalized_src
+            required: true
+          - source: source_review_report
+            required: true
+        outputs:
+          - symbol: src_auto_check_result
+            contract: departments/product/contracts/acceptance-check-result-contract/v1/schema.json
+            freeze: false
+        config:
+          acceptance:
+            version: "1.0"
+            check_type: auto
+            dimensions:
+              - schema_validation
+              - contract_validation
+              - completeness_check
+              - dependency_resolution
+
+      - id: src_acceptance_review
+        name: SRC 验收 - 人工评审
+        kind: agent
+        agent_id: agent.review.acceptance_reviewer
+        mandatory: true
+        depends_on: [src_acceptance_auto_check]
+        description: >
+          根据 ADR-025 执行 SRC 人工验收评审。
+          包括六大维度：功能逻辑闭环、用户故事体验、功能完整性、逻辑漏洞、行业差距、改进空间。
+          输出 acceptance_report 和 defect_list。
+        inputs:
+          - source: normalized_src
+            required: true
+          - source: src_auto_check_result
+            required: true
+        outputs:
+          - symbol: src_acceptance_report
+            contract: departments/product/contracts/acceptance-report-contract/v1/schema.json
+            freeze: false
+          - symbol: src_defect_list
+            contract: departments/product/contracts/defect-list-contract/v1/schema.json
+            freeze: false
+        config:
+          acceptance:
+            version: "1.0"
+            check_type: review
+            dimensions:
+              - functional_closure
+              - user_story_experience
+              - feature_completeness
+              - logic_vulnerability
+              - industry_gap
+              - improvement_opportunities
+            gate_type: review
+            meeting_format: sync_60min  # SRC 采用同步会议 (60 分钟)
+            reviewers:
+              - role: product_owner
+              - role: tech_lead
+
+      # ========== ADR-025 Fix Loop 开始 ==========
+      - id: src_defect_fix_loop
+        name: SRC 验收 - 缺陷修复 Loop
+        kind: agent
+        agent_id: agent.governance.defect_fixer
+        mandatory: true
+        depends_on: [src_acceptance_review]
+        description: >
+          根据 ADR-025 执行缺陷修复循环。
+          检查 P0/P1 缺陷，如果存在则修复或标记为延期。
+          输出 defect_fix_report 和 updated_defect_list。
+
+          Fix Loop 规则：
+          - P0 缺陷：必须修复，不允许绕过
+          - P1 缺陷：原则必须修复，特殊情况需 PO+Tech Lead 决策可延期
+          - P2/P3 缺陷：记录为技术债务，纳入 backlog，不影响 Approval Gate
+
+          循环退出条件：
+          - P0 缺陷数量 = 0
+          - P1 缺陷数量 = 0 或所有 P1 缺陷都有延期审批
+        inputs:
+          - source: src_acceptance_report
+            required: true
+          - source: src_defect_list
+            required: true
+          - source: normalized_src
+            required: true
+        outputs:
+          - symbol: src_defect_fix_report
+            contract: departments/product/contracts/defect-fix-report-contract/v1/schema.json
+            freeze: false
+          - symbol: src_updated_defect_list
+            contract: departments/product/contracts/defect-list-contract/v1/schema.json
+            freeze: false
+        config:
+          acceptance:
+            version: "1.0"
+            fix_policy:
+              p0_policy: must_fix  # P0 必须修复
+              p1_policy: fix_or_defer_with_approval  # P1 必须修复或经审批延期
+              p2_policy: defer_to_backlog  # P2 纳入 backlog
+              p3_policy: defer_to_backlog  # P3 纳入 backlog
+            exit_conditions:
+              - p0_count_equals_zero
+              - p1_count_equals_zero_or_all_deferred_with_approval
+            max_iterations: 3  # 最多修复 3 轮
+        # ========== ADR-025 Fix Loop 结束 ==========
+
+      - id: src_acceptance_approval_gate
+        name: SRC 验收 - 审批 Gate
+        kind: gate
+        mandatory: true
+        depends_on: [src_defect_fix_loop]
+        description: >
+          根据 ADR-025 执行 SRC 验收审批。
+          验证 P0/P1 缺陷已修复，批准验收报告。
+          只有通过审批后，才能进入 SRC 冻结步骤。
+        inputs:
+          - source: normalized_src
+            required: true
+          - source: src_acceptance_report
+            required: true
+          - source: src_defect_list
+            required: true
+        outputs:
+          - symbol: src_acceptance_approval
+            contract: departments/product/contracts/gate-result-contract/v1/schema.json
+            freeze: false
+        config:
+          gate:
+            type: human_approval
+            gate_id: gate.product.src_acceptance_approval
+        gate_rules:
+          reviewers:
+            - role: product_owner
+          approval_criteria:
+            - label: "P0/P1 缺陷清零"
+              criteria: "所有 P0/P1 缺陷已修复或延期有理据"
+              required: true
+            - label: "验收报告完整"
+              criteria: "六大维度评审完成，报告结构完整"
+              required: true
+            - label: "行业差距分析"
+              criteria: "至少 3 个对标对象，差距程度量化"
+              required: true
+        # ========== ADR-025 验收卡点结束 ==========
+
       - id: source_freeze
         name: SRC 冻结
         kind: gate
         mandatory: true
-        depends_on: [source_review]
+        depends_on: [src_acceptance_approval_gate, src_defect_fix_loop]
         description: >
           由产品负责人冻结正式 SRC。
+          冻结前必须通过 ADR-025 验收卡点（src_acceptance_approval_gate）。
           冻结后，下游流程只能引用该 SRC 版本，不允许直接回到原始输入。
           该步骤同时产出 `src_root_id`，作为后续 EPIC / FEAT / TECH / TASK 的根作用域。
         inputs:
           - source: normalized_src
             required: true
           - source: source_review_report
+            required: true
+          - source: src_acceptance_approval
+            required: true
+          - source: src_acceptance_report
+            required: true
+          - source: src_defect_fix_report
+            required: true
+          - source: src_updated_defect_list
             required: true
         outputs:
           - path: output/design-frozen/{project}-src-freeze.yaml
@@ -172,6 +342,9 @@ stages:
               required: false
             - label: "可独立复用"
               criteria: "SRC 已具备独立 replay、单测和复用条件"
+              required: true
+            - label: "验收通过"
+              criteria: "ADR-025 验收卡点通过 (src_acceptance_approval = approve)"
               required: true
         config:
           gate:
@@ -219,6 +392,10 @@ stages:
       - raw_input_intake
       - source_normalization
       - source_review
+      - src_acceptance_auto_check
+      - src_acceptance_review
+      - src_defect_fix_loop
+      - src_acceptance_approval_gate
       - source_freeze
       - output_validation
 
@@ -235,7 +412,7 @@ constraints:
     不得在 source_normalization 或 source_freeze 阶段自动扇出多个 SRC 文件。
 
   no_auto_split_before_src_freeze: |
-    若原始输入包含多个独立问题域，流程必须返回“需要先拆分原始输入”或等价阻塞信号。
+    若原始输入包含多个独立问题域，流程必须返回”需要先拆分原始输入”或等价阻塞信号。
     多主题拆分不属于 canonical raw_to_src 冻结路径。
 
   semantic_fidelity_required: |
@@ -255,6 +432,29 @@ constraints:
     输入文件必须是原始需求，不能是已在 SSOT 链上的对象。
     如果输入文件具有 ssot_type 字段且 status 为 frozen/active/deprecated，
     必须立即拒绝执行，返回明确的错误信息指引用户使用正确的下游流程。
+
+  # ========== ADR-025 验收卡点约束 ==========
+  adr025_acceptance_required: |
+    根据 ADR-025，SRC 冻结前必须通过验收卡点：
+    - src_acceptance_auto_check: 自动检查（Schema/Contract/Completeness/Dependency）
+    - src_acceptance_review: 人工评审（六大维度）
+    - src_acceptance_approval_gate: 审批 Gate（P0/P1 清零）
+    任何一步失败都不得进入 source_freeze 步骤。
+
+  adr025_p0_p1_defect_policy: |
+    P0/P1 缺陷处理政策：
+    - P0 缺陷：必须修复，不允许绕过
+    - P1 缺陷：原则必须修复，特殊情况需 PO + Tech Lead 共同决策可延期
+    - P2/P3 缺陷：记录为技术债务，纳入 backlog
+    source_freeze 前必须确认所有 P0/P1 缺陷已修复或有明确的延期理据。
+
+  adr025_acceptance_report_required: |
+    验收报告是 source_freeze 的必要输入：
+    - src_acceptance_report: 包含六大维度评审结果和缺陷列表
+    - 验收报告必须存储在 .artifacts/active/product/src/{src_id}/acceptance-report-v{version}.yaml
+    - 验收报告必须被 gate record 引用
+
+  # ========== 结束 ADR-025 验收卡点约束 ==========
 
   output_validation_required: |
     落盘的 SRC 文件必须通过全面的输出校验，包括：

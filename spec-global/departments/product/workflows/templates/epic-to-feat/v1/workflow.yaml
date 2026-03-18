@@ -19,8 +19,13 @@ roles:
     - agent.product.prd_writer
     - agent.product.feat_reviewer
     - agent.governance.approval_reviewer
+    - agent.governance.acceptance_checker
+    - agent.review.acceptance_reviewer
+    - agent.governance.defect_fixer
+    - agent.qa.output_validator
   skills: []
   gates:
+    - gate.product.feat_acceptance_approval
     - gate.product.feat_freeze
 
 overview:
@@ -133,12 +138,172 @@ stages:
           - symbol: feat_review_report
             contract: departments/product/contracts/product-review-contract/v1/schema.json
             freeze: false
+
+      # ========== ADR-025 验收卡点开始 ==========
+      - id: feat_acceptance_auto_check
+        name: FEAT 验收 - 自动检查
+        kind: agent
+        agent_id: agent.governance.acceptance_checker
+        mandatory: true
+        depends_on: [feat_review]
+        description: >
+          根据 ADR-025 执行 FEAT 自动验收检查。
+          包括 Schema 验证、Contract 验证、完整性检查、依赖解析。
+          输出 auto_check_result，作为 Review Gate 的输入。
+        inputs:
+          - source: feat_scoped_specs
+            required: true
+          - source: feat_review_report
+            required: true
+        outputs:
+          - symbol: feat_auto_check_result
+            contract: departments/product/contracts/acceptance-check-result-contract/v1/schema.json
+            freeze: false
+        config:
+          strict_output_validation: true
+          acceptance:
+            version: "1.0"
+            check_type: auto
+            dimensions:
+              - schema_validation
+              - contract_validation
+              - completeness_check
+              - dependency_resolution
+
+      - id: feat_acceptance_review
+        name: FEAT 验收 - 人工评审
+        kind: agent
+        agent_id: agent.review.acceptance_reviewer
+        mandatory: true
+        depends_on: [feat_acceptance_auto_check]
+        description: >
+          根据 ADR-025 执行 FEAT 人工验收评审。
+          包括六大维度：功能逻辑闭环、用户故事体验、功能完整性、逻辑漏洞、行业差距、改进空间。
+          输出 acceptance_report 和 defect_list。
+        inputs:
+          - source: feat_scoped_specs
+            required: true
+          - source: feat_auto_check_result
+            required: true
+        outputs:
+          - symbol: feat_acceptance_report
+            contract: departments/product/contracts/acceptance-report-contract/v1/schema.json
+            freeze: false
+          - symbol: feat_defect_list
+            contract: departments/product/contracts/defect-list-contract/v1/schema.json
+            freeze: false
+        config:
+          strict_output_validation: true
+          acceptance:
+            version: "1.0"
+            check_type: review
+            dimensions:
+              - functional_closure
+              - user_story_experience
+              - feature_completeness
+              - logic_vulnerability
+              - industry_gap
+              - improvement_opportunities
+            gate_type: review
+            meeting_format: sync_60min
+            reviewers:
+              - role: product_owner
+              - role: tech_lead
+
+      # ========== ADR-025 Fix Loop 开始 ==========
+      - id: feat_defect_fix_loop
+        name: FEAT 验收 - 缺陷修复 Loop
+        kind: agent
+        agent_id: agent.governance.defect_fixer
+        mandatory: true
+        depends_on: [feat_acceptance_review]
+        description: >
+          根据 ADR-025 执行缺陷修复循环。
+          检查 P0/P1 缺陷，如果存在则修复或标记为延期。
+          输出 defect_fix_report 和 updated_defect_list。
+
+          Fix Loop 规则：
+          - P0 缺陷：必须修复，不允许绕过
+          - P1 缺陷：原则必须修复，特殊情况需 PO+Tech Lead 决策可延期
+          - P2/P3 缺陷：记录为技术债务，纳入 backlog，不影响 Approval Gate
+
+          循环退出条件：
+          - P0 缺陷数量 = 0
+          - P1 缺陷数量 = 0 或所有 P1 缺陷都有延期审批
+        inputs:
+          - source: feat_acceptance_report
+            required: true
+          - source: feat_defect_list
+            required: true
+          - source: feat_scoped_specs
+            required: true
+        outputs:
+          - symbol: feat_defect_fix_report
+            contract: departments/product/contracts/defect-fix-report-contract/v1/schema.json
+            freeze: false
+          - symbol: feat_updated_defect_list
+            contract: departments/product/contracts/defect-list-contract/v1/schema.json
+            freeze: false
+        config:
+          strict_output_validation: true
+          acceptance:
+            version: "1.0"
+            fix_policy:
+              p0_policy: must_fix
+              p1_policy: fix_or_defer_with_approval
+              p2_policy: defer_to_backlog
+              p3_policy: defer_to_backlog
+            exit_conditions:
+              - p0_count_equals_zero
+              - p1_count_equals_zero_or_all_deferred_with_approval
+            max_iterations: 3
+
+      - id: feat_acceptance_approval_gate
+        name: FEAT 验收 - 审批 Gate
+        kind: gate
+        mandatory: true
+        depends_on: [feat_defect_fix_loop]
+        description: >
+          根据 ADR-025 执行 FEAT 验收审批。
+          验证 P0/P1 缺陷已修复，批准验收报告。
+          只有通过审批后，才能进入 FEAT 身份定版步骤。
+        inputs:
+          - source: feat_scoped_specs
+            required: true
+          - source: feat_acceptance_report
+            required: true
+          - source: feat_defect_list
+            required: true
+        outputs:
+          - symbol: feat_acceptance_approval
+            contract: departments/product/contracts/gate-result-contract/v1/schema.json
+            freeze: false
+        config:
+          strict_output_validation: true
+          gate:
+            type: human_approval
+            gate_id: gate.product.feat_acceptance_approval
+        gate_rules:
+          reviewers:
+            - role: product_owner
+          approval_criteria:
+            - label: "P0/P1 缺陷清零"
+              criteria: "所有 P0/P1 缺陷已修复或延期有理据"
+              required: true
+            - label: "验收报告完整"
+              criteria: "六大维度评审完成，报告结构完整"
+              required: true
+            - label: "结构化验收检查"
+              criteria: "acceptance_checks 包含 scenario/given/when/then/trace_hints"
+              required: true
+
+      # ========== ADR-025 验收卡点结束 ==========
       - id: feat_identity_formalize
         name: FEAT 身份定版
         kind: agent
         agent_id: agent.governance.approval_reviewer
         mandatory: true
-        depends_on: [feat_review]
+        depends_on: [feat_acceptance_approval_gate, feat_defect_fix_loop]
         description: >
           在 FEAT freeze 前，将 provisional FEAT 批量定版为 SRC scoped 正式身份，
           并完成同批次内的引用和目录路由重写。
@@ -146,6 +311,10 @@ stages:
           - source: feat_scoped_specs
             required: true
           - source: feat_review_report
+            required: true
+          - source: feat_acceptance_approval
+            required: true
+          - source: feat_defect_fix_report
             required: true
         outputs:
           - symbol: feat_formalized_specs
@@ -159,18 +328,28 @@ stages:
         name: FEAT 冻结
         kind: gate
         mandatory: true
-        depends_on: [feat_identity_formalize]
+        depends_on: [feat_identity_formalize, feat_acceptance_approval_gate]
         description: >
           由产品负责人冻结 FEAT 集合，形成后续 UI / TECH / TASK 的唯一输入基线。
+          冻结前必须通过 ADR-025 验收卡点（feat_acceptance_approval_gate）。
         inputs:
           - source: feat_formalized_specs
             required: true
           - source: feat_review_report
             required: true
+          - source: feat_acceptance_report
+            required: true
+          - source: feat_acceptance_approval
+            required: true
+          - source: feat_defect_fix_report
+            required: true
+          - source: feat_updated_defect_list
+            required: true
         outputs:
-          - path: output/design-frozen/{project}-feat-freeze.yaml
+          - path: spec/requirements/feats/{feat_id}.yaml
             required: true
             freeze: true
+            contract: departments/product/contracts/feat-bundle-contract/v1/schema.json
             ssot:
               identity_kind: ssot
               ssot_type: FEAT
@@ -200,17 +379,47 @@ stages:
             - label: "可供下游设计"
               criteria: "信息足以驱动 UI / TECH / TASK 设计"
               required: true
+            - label: "验收通过"
+              criteria: "ADR-025 验收卡点通过 (feat_acceptance_approval = approve)"
+              required: true
         config:
           gate:
             type: human_approval
             gate_id: gate.product.feat_freeze
+
+      - id: output_validation
+        name: 输出完整性校验
+        kind: agent
+        agent_id: agent.qa.output_validator
+        mandatory: true
+        depends_on: [feat_freeze]
+        description: >
+          对落盘的 FEAT 文件进行全面校验，确保 SSOT 字段完整有效。
+          校验失败则拒绝放行，触发重跑（最多 3 次），3 次失败则整体流程失败。
+        inputs:
+          - source: feat_freeze
+            required: true
+        outputs:
+          - symbol: output_validation_result
+            contract: departments/product/contracts/gate-result-contract/v1/schema.json
+            freeze: false
+        config:
+          validation:
+            kind: ssot
+            ssot_type: FEAT
+            max_retries: 3
     step_order:
       - feat_boundary_design
       - feat_spec_generation
       - feat_identity_prepare
       - feat_review
+      - feat_acceptance_auto_check
+      - feat_acceptance_review
+      - feat_defect_fix_loop
+      - feat_acceptance_approval_gate
       - feat_identity_formalize
       - feat_freeze
+      - output_validation
 
 stage_order:
   - epic_to_feat_flow
@@ -223,6 +432,27 @@ constraints:
   src_scoped_feat_rule: |
     FEAT 必须继承 EPIC freeze 对应的 src_root_id。
     freeze 前必须完成 FEAT 的 SRC 作用域 identity formalize。
+
+  # ========== ADR-025 验收卡点约束 ==========
+  adr025_acceptance_required: |
+    根据 ADR-025，FEAT 冻结前必须通过验收卡点：
+    - feat_acceptance_auto_check: 自动检查（Schema/Contract/Completeness/Dependency）
+    - feat_acceptance_review: 人工评审（六大维度）
+    - feat_acceptance_approval_gate: 审批 Gate（P0/P1 清零）
+    任何一步失败都不得进入 feat_freeze 步骤。
+
+  adr025_p0_p1_defect_policy: |
+    P0/P1 缺陷处理政策：
+    - P0 缺陷：必须修复，不允许绕过
+    - P1 缺陷：原则必须修复，特殊情况需 PO + Tech Lead 共同决策可延期
+    - P2/P3 缺陷：记录为技术债务，纳入 backlog
+    feat_freeze 前必须确认所有 P0/P1 缺陷已修复或有明确的延期理据。
+
+  adr025_acceptance_report_required: |
+    验收报告是 feat_freeze 的必要输入：
+    - feat_acceptance_report: 包含六大维度评审结果和缺陷列表
+    - 验收报告必须存储在 .artifacts/active/product/feat/{feat_id}/acceptance-report-v{version}.yaml
+    - 验收报告必须被 gate record 引用
 
 instance_schema:
   required_fields:
@@ -247,8 +477,13 @@ state_machine:
     - FEAT_SPEC_GENERATION: "FEAT 规格生成"
     - FEAT_IDENTITY_PREPARE: "FEAT 身份准备"
     - FEAT_REVIEW: "FEAT 评审"
+    - FEAT_ACCEPTANCE_AUTO_CHECK: "FEAT 验收 - 自动检查"
+    - FEAT_ACCEPTANCE_REVIEW: "FEAT 验收 - 人工评审"
+    - FEAT_DEFECT_FIX_LOOP: "FEAT 验收 - 缺陷修复循环"
+    - FEAT_ACCEPTANCE_APPROVAL: "FEAT 验收 - 审批"
     - FEAT_IDENTITY_FORMALIZE: "FEAT 身份定版"
     - FEAT_FREEZE: "FEAT 冻结"
+    - OUTPUT_VALIDATION: "输出完整性校验"
     - COMPLETED: "完成"
     - FAILED: "失败"
   transitions:
@@ -271,17 +506,42 @@ state_machine:
       - to: FAILED
         trigger: feat_identity_prepare_failed
     FEAT_REVIEW:
-      - to: FEAT_IDENTITY_FORMALIZE
+      - to: FEAT_ACCEPTANCE_AUTO_CHECK
         trigger: feat_review_completed
       - to: FAILED
         trigger: feat_review_failed
+    FEAT_ACCEPTANCE_AUTO_CHECK:
+      - to: FEAT_ACCEPTANCE_REVIEW
+        trigger: feat_acceptance_auto_check_completed
+      - to: FAILED
+        trigger: feat_acceptance_auto_check_failed
+    FEAT_ACCEPTANCE_REVIEW:
+      - to: FEAT_DEFECT_FIX_LOOP
+        trigger: feat_acceptance_review_completed
+      - to: FAILED
+        trigger: feat_acceptance_review_failed
+    FEAT_DEFECT_FIX_LOOP:
+      - to: FEAT_ACCEPTANCE_APPROVAL
+        trigger: feat_defect_fix_loop_completed
+      - to: FAILED
+        trigger: feat_defect_fix_loop_failed
+    FEAT_ACCEPTANCE_APPROVAL:
+      - to: FEAT_IDENTITY_FORMALIZE
+        trigger: feat_acceptance_approval_completed
+      - to: FAILED
+        trigger: feat_acceptance_approval_failed
     FEAT_IDENTITY_FORMALIZE:
       - to: FEAT_FREEZE
         trigger: feat_identity_formalize_completed
       - to: FAILED
         trigger: feat_identity_formalize_failed
     FEAT_FREEZE:
-      - to: COMPLETED
+      - to: OUTPUT_VALIDATION
         trigger: feat_freeze_completed
       - to: FAILED
         trigger: feat_freeze_failed
+    OUTPUT_VALIDATION:
+      - to: COMPLETED
+        trigger: output_validation_completed
+      - to: FAILED
+        trigger: output_validation_failed

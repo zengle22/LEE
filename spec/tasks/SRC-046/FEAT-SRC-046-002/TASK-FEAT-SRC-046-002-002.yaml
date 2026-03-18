@@ -1,0 +1,69 @@
+---
+id: TASK-FEAT-SRC-046-002-002
+ssot_type: task
+title: 统一治理路径执行指南编写
+status: frozen
+version: v1
+workflow_instance_id: wf-task-src-046-002-002-20260317
+source_refs:
+  - FEAT-SRC-046-002
+owner: product
+tags:
+  - documentation
+  - governance
+  - workflow
+properties:
+  role: product
+  priority: P0
+  estimated_effort: 4h
+  assignee: product-owner-002
+---
+
+# TASK-FEAT-SRC-046-002-002: 统一治理路径执行指南编写
+
+## 1. 任务描述
+
+编写发布关闭统一治理路径执行指南，指导 release_manager 执行标准关闭流程。
+
+## 2. 验收标准
+
+- [ ] 执行步骤清晰可操作
+- [ ] 包含异常处理路径
+- [ ] 与 release-check/release-close 命令对应
+- [ ] 获得 release_manager 批准
+
+## 3. 技术实现要点
+
+### 3.1 执行流程
+
+```
+1. 执行 release-check --enforce
+2. 审查检查结果
+3. 处理 blocker 问题 (如有)
+4. 执行 release-close
+5. 生成审计报告
+```
+
+### 3.2 异常处理
+
+```yaml
+exceptions:
+  - condition: blocker_bug_exists
+    action: 升级至 release_gate 或使用 --force (需记录原因)
+  - condition: test_coverage_below_threshold
+    action: 等待测试完成或申请豁免
+```
+
+## 4. 依赖关系
+
+```yaml
+depends_on:
+  - TASK-FEAT-SRC-046-002-001  # 依赖关闭标准定义
+blocks:
+  - TASK-FEAT-SRC-046-002-003  # 审计闭环验证依赖执行指南
+```
+
+## 5. 输出产物
+
+- `docs/release/governance-route-guide.md` - 执行指南
+- `docs/release/exception-handling.md` - 异常处理指南

@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Gate Result Contract v1",
+  "description": "ADR-025 Gate 决策结果",
+  "type": "object",
+  "required": ["gate_id", "gate_type", "decision"],
+  "properties": {
+    "gate_id": { "type": "string" },
+    "gate_type": { "type": "string", "enum": ["auto", "review", "approval"] },
+    "decision": { "type": "string" },
+    "decision_by": { "type": "string" },
+    "decision_at": { "type": "string", "format": "date-time" },
+    "comments": { "type": "string" },
+    "subject_refs": {
+      "type": "object",
+      "properties": {
+        "ssot_id": { "type": "string" },
+        "ssot_type": { "type": "string" }
+      }
+    }
+  }
+}

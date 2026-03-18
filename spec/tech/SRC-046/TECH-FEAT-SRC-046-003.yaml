@@ -1,0 +1,123 @@
+---
+id: TECH-FEAT-SRC-046-003
+ssot_type: tech
+title: QA 与研发执行入口绑定收口技术设计
+status: frozen
+version: v1
+workflow_instance_id: wf-tech-src-046-003-20260317
+source_refs:
+  - FEAT-SRC-046-003
+owner: dev
+tags:
+  - entry-point
+  - qa
+  - dev
+  - governance
+properties:
+  architecture_pattern: "统一入口"
+  database_changes: false
+  api_changes: true
+  governing_adrs:
+    - ADR-001
+    - ADR-003
+    - ADR-017
+---
+
+# TECH-FEAT-SRC-046-003: QA 与研发执行入口绑定收口技术设计
+
+## 1. 架构设计
+
+### 1.1 入口绑定组件图
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  QA Entry   │────▶│  Delivery   │◀────│  Dev Entry  │
+│  (测试执行)  │     │    Chain    │     │  (研发执行)  │
+└─────────────┘     │  (交付主链)  │     └─────────────┘
+                    └─────────────┘
+                           │
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+       ┌──────────┐ ┌──────────┐ ┌──────────┐
+       │ RELEASE  │ │ DEVPLAN  │ │ TESTPLAN │
+       └──────────┘ └──────────┘ └──────────┘
+```
+
+### 1.2 技术栈
+
+| 组件 | 技术选型 |
+|------|----------|
+| CLI 入口 | Click + Python |
+| 绑定验证 | Python + Pydantic |
+| 追溯查询 | SQLite + SQLAlchemy |
+
+## 2. 入口绑定设计
+
+### 2.1 QA 入口绑定
+
+```yaml
+qa_entry_binding:
+  command: "lee qa test-run --plan {testplan_id}"
+  binding:
+    testplan_id: TESTPLAN-REL-x.y.z
+    release_id: RELEASE-REL-x.y.z
+    feat_refs:
+      - FEAT-SRC-046-001
+      - FEAT-SRC-046-002
+  traceability:
+    - release_id
+    - devplan_id
+    - feat_refs
+```
+
+### 2.2 研发入口绑定
+
+```yaml
+dev_entry_binding:
+  command: "lee dev execute --plan {devplan_id}"
+  binding:
+    devplan_id: DEVPLAN-REL-x.y.z
+    release_id: RELEASE-REL-x.y.z
+    task_refs:
+      - TASK-*
+  traceability:
+    - release_id
+    - feat_refs
+```
+
+## 3. 分散入口识别
+
+### 3.1 扫描规则
+
+```python
+def scan_scattered_entries() -> List[ScatteredEntry]:
+    """扫描分散入口依赖"""
+    patterns = [
+        r"lee\s+run\s+task",
+        r"lee\s+dev\s+task-run",
+        r"lee\s+qa\s+run",
+    ]
+    # 扫描代码库中的使用情况
+    pass
+```
+
+### 3.2 迁移策略
+
+```yaml
+migration_strategy:
+  phase1_record:
+    action: "记录使用情况"
+    duration: "2 周"
+  phase2_warn:
+    action: "发出迁移警告"
+    duration: "2 周"
+  phase3_deprecate:
+    action: "停止支持旧入口"
+    duration: "永久"
+```
+
+## 4. 输出产物
+
+- `src/lee/cli/commands/execute.py` - 统一入口命令
+- `src/lee/orchestrator/execution/entry/binding.py` - 绑定验证
+- `docs/entry/binding-spec.md` - 入口绑定规格

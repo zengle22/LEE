@@ -1,0 +1,158 @@
+---
+id: TECH-FEAT-SRC-046-004
+ssot_type: tech
+title: 缺陷回流路径与 bugfix 交付轴闭环技术设计
+status: frozen
+version: v1
+workflow_instance_id: wf-tech-src-046-004-20260317
+source_refs:
+  - FEAT-SRC-046-004
+owner: dev
+tags:
+  - bugfix
+  - delivery-chain
+  - qa
+properties:
+  architecture_pattern: "缺陷回流"
+  database_changes: false
+  api_changes: true
+  governing_adrs:
+    - ADR-001
+    - ADR-007
+    - ADR-017
+---
+
+# TECH-FEAT-SRC-046-004: 缺陷回流路径与 bugfix 交付轴闭环技术设计
+
+## 1. 架构设计
+
+### 1.1 缺陷回流组件图
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Bug       │────▶│   Fix       │────▶│  Verify     │
+│  Discovery  │     │  Execution  │     │  & Close    │
+└─────────────┘     └─────────────┘     └─────────────┘
+                           │
+                           ▼
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Delivery   │◀────│   Release   │◀────│   Bugfix    │
+│    Axis     │     │  Assignment │     │  Evidence   │
+└─────────────┘     └─────────────┘     └─────────────┘
+```
+
+### 1.2 技术栈
+
+| 组件 | 技术选型 |
+|------|----------|
+| Bug 跟踪 | YAML + Git |
+| 版本关联 | Python + SQLite |
+| 交付验证 | Python + Pydantic |
+
+## 2. 缺陷回流路径
+
+### 2.1 回流状态机
+
+```yaml
+bug_lifecycle:
+  states:
+    - open
+    - triaged
+    - in_fix
+    - fixed
+    - verified
+    - closed
+    - waived
+  transitions:
+    - from: open
+      to: triaged
+      actor: triage_lead
+    - from: triaged
+      to: in_fix
+      actor: dev_assignee
+    - from: in_fix
+      to: fixed
+      actor: dev_assignee
+    - from: fixed
+      to: verified
+      actor: qa_verifier
+    - from: verified
+      to: closed
+      actor: qa_lead
+```
+
+### 2.2 版本关联
+
+```python
+def associate_bugfix_to_release(
+    bug_id: str,
+    release_id: str
+) -> AssociationResult:
+    """关联 bugfix 到交付版本"""
+    # 1. 验证 bug 存在
+    # 2. 验证 release 存在
+    # 3. 创建关联记录
+    # 4. 更新交付轴状态
+    pass
+```
+
+## 3. 交付轴闭环
+
+### 3.1 闭环验证
+
+```yaml
+closure_validation:
+  checks:
+    - name: bugfix_evidence_complete
+      rule: "bugfix 证据完整"
+      required: true
+    - name: delivery_version_assigned
+      rule: "已分配至交付版本"
+      required: true
+    - name: fix_verified
+      rule: "修复已验证"
+      required: true
+    - name: blocker_cleared
+      rule: "blocker 已清零"
+      required: true
+```
+
+### 3.2 release-check 集成
+
+```python
+class ReleaseCheckBugfix:
+    def validate_bugfix_closure(
+        self,
+        release_id: str
+    ) -> BugfixValidationResult:
+        """验证 release 关联的 bugfix 闭环"""
+        # 1. 获取关联的 bugfix
+        # 2. 验证每个 bugfix 状态
+        # 3. 返回验证结果
+        pass
+```
+
+## 4. 证据归属与执行承诺
+
+### 4.1 证据归属
+
+```yaml
+evidence_location:
+  bug_report: "tests/bugs/{bug_id}.md"
+  test_result: "tests/results/{bug_id}-fix-verification.md"
+  screenshots: "docs/evidence/{bug_id}/"
+```
+
+### 4.2 执行承诺
+
+```yaml
+commitment_location:
+  fix_plan: "spec/bugfixes/{bug_id}-fix-plan.md"
+  delivery_commitment: "spec/releases/{release_id}/bugfix-commitments.md"
+```
+
+## 5. 输出产物
+
+- `src/lee/orchestrator/execution/bugfix/delivery_axis.py` - 交付轴实现
+- `src/lee/orchestrator/execution/bugfix/route.py` - 回流路径
+- `docs/bugfix/closure-rules.md` - 闭环规则文档

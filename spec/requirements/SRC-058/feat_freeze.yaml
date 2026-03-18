@@ -1,0 +1,11 @@
+---
+freeze_id: FEAT-FREEZE-SRC-058-001
+epic_ref: EPIC-SRC-058-001
+frozen_at: 2026-03-17T10:13:48+00:00
+workflow_instance_id: wf_task_fdb19191
+gate_approved: true
+feats:
+  - FEAT-SRC-058-001-MERGE-GATE
+  - FEAT-SRC-058-001-TESTSET-UNIFIED
+  - FEAT-SRC-058-001-PERF-OPT
+  - FEAT-SRC-058-001-ENV-CHECK

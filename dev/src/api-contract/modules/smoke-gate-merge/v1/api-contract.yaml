@@ -1,0 +1,545 @@
+# Smoke Gate Merge Contract
+# SRC-058 Dev Smoke Gate - Merge 门禁集成 API 协议
+# 注：本项目为纯 CLI + Spec 项目，无 HTTP API
+
+contract_id: CONTRACT-SMOKE-GATE-MERGE-20260317-001
+version: 1.0.0
+status: pending_freeze
+created_at: '2026-03-17'
+contract_type: internal_python_interface
+source_refs:
+  - FEAT-SRC-058-001
+  - ADR-023
+
+---
+
+## 1. Enum Definitions
+
+### 1.1 SmokeGateStatus
+
+枚举 Smoke Gate 的状态，用于表示门禁的当前状态。
+
+```python
+class SmokeGateStatus(str, Enum):
+    NOT_STARTED = "not_started"      # 尚未开始执行
+    RUNNING = "running"              # 正在执行中
+    PASSED = "passed"                # 已通过
+    FAILED = "failed"                # 失败（有 blocker）
+    INVALID = "invalid"              # 无效执行（环境错误等）
+```
+
+**字段说明**:
+- `NOT_STARTED`: Smoke 测试尚未触发，merge 请求刚创建
+- `RUNNING`: Smoke 测试正在执行中
+- `PASSED`: 所有 P0/P1 用例通过，允许 merge
+- `FAILED`: 有 P0/P1 用例失败，阻塞 merge
+- `INVALID`: 执行环境异常或配置错误，需要人工介入
+
+### 1.2 GateResult
+
+枚举 Gate 的最终判定结果。
+
+```python
+class GateResult(str, Enum):
+    ALLOW_MERGE = "allow_merge"      # 允许合并
+    BLOCK_MERGE = "block_merge"      # 阻塞合并
+    PENDING = "pending"              # 等待中（执行中或环境准备中）
+    ERROR = "error"                  # 错误状态
+```
+
+### 1.3 FailureSeverity
+
+枚举测试失败的严重程度，用于区分阻塞级别。
+
+```python
+class FailureSeverity(str, Enum):
+    BLOCKER = "blocker"              # 阻塞性问题，必须修复
+    CRITICAL = "critical"            # 严重问题，但可能不阻塞
+    FLAKY = "flaky"                  # 不稳定测试，不阻塞但需追踪
+```
+
+---
+
+## 2. Data Models
+
+### 2.1 SmokeGateContext
+
+Smoke Gate 执行的上下文信息。
+
+```python
+@dataclass
+class SmokeGateContext:
+    # === 基础标识 ===
+    merge_request_id: str                     # Merge 请求 ID
+    branch_name: str                          # 分支名称
+    target_branch: str                        # 目标分支（如 main）
+    commit_sha: str                           # 当前 commit SHA
+
+    # === 测试配置 ===
+    test_set_ref: str                         # Test Set 引用
+    priority_filter: List[str]                # 优先级过滤 [P0, P1]
+    retry_count: int = 3                      # 重试次数
+    timeout_minutes: int = 30                 # 超时时间
+
+    # === 执行状态 ===
+    status: SmokeGateStatus                   # Gate 状态
+    result: Optional[GateResult] = None       # 判定结果
+
+    # === 时间戳 ===
+    created_at: datetime = field(default_factory=datetime.now)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+```
+
+### 2.2 TestExecutionRecord
+
+单个测试用例的执行记录。
+
+```python
+@dataclass
+class TestExecutionRecord:
+    test_id: str                              # 测试用例 ID
+    test_name: str                            # 测试用例名称
+    priority: str                             # 优先级 P0/P1/P2
+    status: str                               # 执行状态 pass/fail/skip
+    severity: Optional[FailureSeverity] = None  # 失败严重程度
+    duration_ms: int                          # 执行耗时（毫秒）
+    error_message: Optional[str] = None       # 错误信息
+    retry_attempts: int = 0                   # 重试次数
+    evidence_path: Optional[str] = None       # 证据文件路径（截图/日志）
+```
+
+### 2.3 SmokeGateReport
+
+Smoke Gate 执行报告，包含完整的执行结果和判定。
+
+```python
+@dataclass
+class SmokeGateReport:
+    # === 执行标识 ===
+    smoke_run_id: str                         # Smoke 执行 ID
+    merge_request_id: str                     # 关联的 MR ID
+    commit_sha: str                           # 关联的 commit
+    test_set_ref: str                         # Test Set 引用
+
+    # === 执行摘要 ===
+    total_cases: int                          # 总用例数
+    passed: int                               # 通过数
+    failed: int                               # 失败数
+    skipped: int                              # 跳过数
+    pass_rate: float                          # 通过率
+
+    # === 判定结果 ===
+    result: GateResult                        # 判定结果
+    status: SmokeGateStatus                   # 执行状态
+
+    # === 失败详情 ===
+    failure_details: List[TestExecutionRecord]  # 失败用例详情
+    blocker_count: int                        # Blocker 数量
+    critical_count: int                       # Critical 数量
+    flaky_count: int                          # Flaky 数量
+
+    # === 时间信息 ===
+    started_at: datetime                      # 开始时间
+    completed_at: datetime                    # 完成时间
+    duration_seconds: int                     # 执行耗时
+
+    # === 证据引用 ===
+    log_path: str                             # 日志文件路径
+    evidence_dir: str                         # 证据目录
+    report_html_path: Optional[str] = None    # HTML 报告路径
+
+    # === 元数据 ===
+    version: int = 1
+```
+
+### 2.4 MergeGateState
+
+Merge Gate 的状态机，用于追踪整个 merge 流程的 Gate 状态。
+
+```python
+@dataclass
+class MergeGateState:
+    merge_request_id: str                     # Merge 请求 ID
+    branch_name: str                          # 分支名称
+    target_branch: str                        # 目标分支
+    current_commit_sha: str                   # 当前 commit
+
+    # === Gate 状态 ===
+    gate_status: SmokeGateStatus              # Smoke Gate 状态
+    gate_result: Optional[GateResult] = None  # Gate 判定结果
+
+    # === 执行历史 ===
+    last_run_id: Optional[str] = None         # 最近一次执行 ID
+    last_run_at: Optional[datetime] = None    # 最近执行时间
+    run_count: int = 0                        # 执行次数
+
+    # === Blocker 信息 ===
+    blocker_issues: List[str] = field(default_factory=list)  # Blocker 问题列表
+    is_mergeable: bool = True                 # 是否可合并
+
+    # === 元数据 ===
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+    version: int = 1
+```
+
+---
+
+## 3. Internal Python Interfaces
+
+本项目为纯 CLI + Spec 项目，无 HTTP API。本章节定义内部 Python 接口契约。
+
+### 3.1 Smoke Gate Manager 接口
+
+**实现文件**: `src/lee/smoke/gate/manager.py`
+
+```python
+class SmokeGateManager:
+    """
+    Smoke Gate 管理器，负责 Gate 生命周期管理
+    """
+
+    async def create_gate(self, merge_request_id: str, config: SmokeGateConfig) -> SmokeGateContext:
+        """
+        创建 Smoke Gate 实例
+
+        前置条件:
+        - merge_request_id 有效
+        - config 包含必需的 test_set_ref
+
+        后置条件:
+        - SmokeGateContext 创建并持久化
+        - status = NOT_STARTED
+        """
+
+    async def start_execution(self, context: SmokeGateContext) -> SmokeGateContext:
+        """
+        启动 Smoke 测试执行
+
+        前置条件:
+        - context.status == NOT_STARTED
+
+        后置条件:
+        - context.status = RUNNING
+        - context.started_at 已设置
+        """
+
+    async def get_gate_status(self, merge_request_id: str) -> SmokeGateStatus:
+        """
+        获取指定 MR 的 Gate 状态
+
+        返回：
+        - 当前 SmokeGateStatus
+        """
+
+    async def get_gate_report(self, smoke_run_id: str) -> Optional[SmokeGateReport]:
+        """
+        获取指定执行的报告
+
+        返回:
+        - SmokeGateReport 如果存在
+        - None 如果不存在
+        """
+```
+
+### 3.2 Smoke Executor 接口
+
+**实现文件**: `src/lee/smoke/executor.py`
+
+```python
+class SmokeExecutor:
+    """
+    Smoke 测试执行器，负责实际执行测试
+    """
+
+    async def execute(self, context: SmokeGateContext, test_cases: List[TestCase]) -> SmokeGateReport:
+        """
+        执行 Smoke 测试
+
+        参数:
+        - context: Gate 上下文
+        - test_cases: 测试用例列表
+
+        执行流程:
+        1. 环境检查
+        2. 执行测试（支持并发）
+        3. 处理重试
+        4. 生成报告
+
+        返回:
+        - SmokeGateReport 包含完整执行结果
+        """
+
+    async def execute_with_retry(self, test_case: TestCase, max_retries: int = 3) -> TestExecutionRecord:
+        """
+        执行单个测试用例，支持重试
+
+        重试逻辑:
+        - 失败后自动重试，最多 3 次
+        - 3 次全部失败才判定为失败
+        - Flaky 检测：连续 5 次执行通过率<80%
+
+        返回:
+        - TestExecutionRecord 包含执行详情
+        """
+```
+
+### 3.3 Merge Gate Integrator 接口
+
+**实现文件**: `src/lee/smoke/integration/merge_gate.py`
+
+```python
+class MergeGateIntegrator:
+    """
+    Merge Gate 集成器，负责与 Git 平台集成
+    """
+
+    async def check_merge_eligibility(self, merge_request_id: str) -> MergeGateState:
+        """
+        检查 MR 是否满足 merge 条件
+
+        检查项:
+        - Smoke Gate 是否已执行
+        - Smoke Gate 是否通过
+        - 是否存在 blocker 问题
+
+        返回:
+        - MergeGateState 包含可合并性判定
+        """
+
+    async def block_merge(self, merge_request_id: str, reason: str) -> None:
+        """
+        阻塞 merge 请求
+
+        副作用:
+        - 在 Git 平台设置 merge 阻塞状态
+        - 添加评论说明原因
+        """
+
+    async def allow_merge(self, merge_request_id: str) -> None:
+        """
+        允许 merge 请求
+
+        副作用:
+        - 在 Git 平台清除 merge 阻塞状态
+        - 更新 Gate 状态可视化
+        """
+
+    async def update_gate_status_display(self, merge_request_id: str, status: SmokeGateStatus) -> None:
+        """
+        更新 Gate 状态可视化显示
+
+        显示位置:
+        - MR 页面的状态徽章
+        - CI/CD 状态检查列表
+        """
+```
+
+### 3.4 Git Hook Interface
+
+**实现文件**: `src/lee/smoke/hooks/pre_merge.py`
+
+```python
+class PreMergeHook:
+    """
+    Pre-merge Git Hook，在执行 merge 前拦截检查
+    """
+
+    def execute(self, merge_request_id: str) -> bool:
+        """
+        执行 pre-merge 检查
+
+        流程:
+        1. 查询 Smoke Gate 状态
+        2. 如果 status != PASSED，返回 False 阻塞 merge
+        3. 如果 status == PASSED，返回 True 允许 merge
+
+        返回:
+        - True: 允许 merge
+        - False: 阻塞 merge
+        """
+
+    def get_block_message(self, merge_request_id: str) -> str:
+        """
+        获取 merge 阻塞原因消息
+
+        返回:
+        - 包含 blocker 详情的消息
+        """
+```
+
+### 3.5 Store 接口
+
+**实现文件**: `src/lee/smoke/storage/store.py`
+
+```python
+class SmokeStore:
+    """
+    Smoke Gate 数据持久化存储
+    """
+
+    async def create_gate_context(self, context: SmokeGateContext) -> None:
+        """创建 Gate 上下文记录"""
+
+    async def get_gate_context(self, merge_request_id: str) -> Optional[SmokeGateContext]:
+        """获取 Gate 上下文记录"""
+
+    async def update_gate_context(self, context: SmokeGateContext) -> bool:
+        """更新 Gate 上下文记录"""
+
+    async def create_gate_report(self, report: SmokeGateReport) -> None:
+        """创建 Gate 执行报告"""
+
+    async def get_gate_report(self, smoke_run_id: str) -> Optional[SmokeGateReport]:
+        """获取 Gate 执行报告"""
+
+    async def get_latest_report(self, merge_request_id: str) -> Optional[SmokeGateReport]:
+        """获取 MR 的最新执行报告"""
+
+    async def create_merge_gate_state(self, state: MergeGateState) -> None:
+        """创建 Merge Gate 状态记录"""
+
+    async def update_merge_gate_state(self, state: MergeGateState) -> bool:
+        """更新 Merge Gate 状态记录"""
+
+    async def get_merge_gate_state(self, merge_request_id: str) -> Optional[MergeGateState]:
+        """获取 Merge Gate 状态记录"""
+```
+
+---
+
+## 4. Validation Rules
+
+### 4.1 Gate 状态转换规则
+
+```
+NOT_STARTED → RUNNING → {PASSED | FAILED | INVALID}
+```
+
+**非法转换**:
+- NOT_STARTED → PASSED (跳过执行)
+- RUNNING → RUNNING (重复执行需先创建新 context)
+- PASSED → RUNNING (已通过不允许重新执行)
+- FAILED → PASSED (失败不允许直接改通过)
+
+### 4.2 Merge 允许条件
+
+```python
+def is_merge_allowed(state: MergeGateState) -> bool:
+    """判定是否允许 merge"""
+    if state.gate_status != SmokeGateStatus.PASSED:
+        return False
+    if state.gate_result != GateResult.ALLOW_MERGE:
+        return False
+    if len(state.blocker_issues) > 0:
+        return False
+    return True
+```
+
+### 4.3 Blocker 判定规则
+
+```python
+def determine_severity(failure: TestExecutionRecord) -> FailureSeverity:
+    """根据失败类型判定严重程度"""
+    if failure.priority == "P0":
+        return FailureSeverity.BLOCKER
+    elif failure.priority == "P1":
+        return FailureSeverity.BLOCKER
+    elif failure.is_flaky:
+        return FailureSeverity.FLAKY
+    else:
+        return FailureSeverity.CRITICAL
+```
+
+### 4.4 重试规则
+
+| 条件 | 重试次数 | 最终判定 |
+|------|---------|---------|
+| 首次失败 | 自动重试 (最多 3 次) | 3 次全败才判失败 |
+| 3 次重试全败 | 不再重试 | 判定为 blocker |
+| Flaky 测试 | 不阻塞 merge | 生成技术债务工单 |
+
+---
+
+## 5. Event Definitions
+
+### 5.1 SmokeGateEvents
+
+Smoke Gate 生命周期事件。
+
+```python
+class SmokeGateEvent(str, Enum):
+    GATE_CREATED = "gate.created"           # Gate 创建
+    EXECUTION_STARTED = "execution.started" # 执行开始
+    EXECUTION_COMPLETED = "execution.completed"  # 执行完成
+    GATE_PASSED = "gate.passed"             # Gate 通过
+    GATE_FAILED = "gate.failed"             # Gate 失败
+    MERGE_BLOCKED = "merge.blocked"         # Merge 被阻塞
+    MERGE_ALLOWED = "merge.allowed"         # Merge 被允许
+```
+
+### 5.2 Event Payload
+
+```python
+@dataclass
+class SmokeGateEventPayload:
+    event_type: SmokeGateEvent
+    timestamp: datetime
+    merge_request_id: str
+    smoke_run_id: Optional[str]
+    status: Optional[SmokeGateStatus]
+    result: Optional[GateResult]
+    blocker_details: Optional[List[str]]
+```
+
+---
+
+## 6. Changelog
+
+| 版本 | 日期 | 变更说明 |
+|------|------|---------|
+| 1.0.0 | 2026-03-17 | 初始版本，定义 Smoke Gate Merge 门禁集成的内部接口契约 |
+
+---
+
+## 7. Implementation Locations
+
+| 组件 | 文件路径 | 负责内容 |
+|------|---------|---------|
+| 枚举定义 | `src/lee/smoke/models.py` | SmokeGateStatus, GateResult, FailureSeverity |
+| 数据模型 | `src/lee/smoke/models.py` | SmokeGateContext, SmokeGateReport, MergeGateState |
+| Gate 管理器 | `src/lee/smoke/gate/manager.py` | SmokeGateManager 实现 |
+| 执行器 | `src/lee/smoke/executor.py` | SmokeExecutor 实现 |
+| Merge 集成 | `src/lee/smoke/integration/merge_gate.py` | MergeGateIntegrator 实现 |
+| Git Hook | `src/lee/smoke/hooks/pre_merge.py` | PreMergeHook 实现 |
+| 持久化 | `src/lee/smoke/storage/store.py` | SmokeStore 实现 |
+
+---
+
+## 8. Dependencies
+
+### 8.1 内部依赖
+
+| 依赖模块 | 用途 |
+|---------|------|
+| `src/lee/smoke/test_set/` | Test Set 加载与过滤 |
+| `src/lee/smoke/environment/` | 环境检查与校验 |
+| `src/lee/orchestrator/` | 工作流集成 |
+
+### 8.2 外部依赖
+
+| 依赖 | 用途 | 版本约束 |
+|------|------|---------|
+| pytest | 测试执行框架 | >= 7.0 |
+| Playwright | E2E 测试驱动 | >= 1.40 |
+| pytest-xdist | 并发测试执行 | >= 3.0 |
+| pytest-html | HTML 报告生成 | >= 4.0 |
+
+---
+
+## 9. Open Questions
+
+1. 是否需要支持手动触发重试（在修复问题后重新执行 Smoke）？
+2. 是否需要支持部分 merge（仅 merge 与失败测试无关的文件）？
+3. 如何处理并发 merge 请求的 Smoke 执行资源竞争？
