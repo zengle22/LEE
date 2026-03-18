@@ -330,7 +330,7 @@ DEFAULT_DIRECTORY_SCHEMA = {
 
         # QA Specifications (Test Set artifacts)
         "qa_specs_dir": {
-            "path": "qa/specs",
+            "path": "specs/qa",
             "description": "QA specification SSOT (Test Set and other frozen assets)",
             "subdirs": ["test-sets"],
             "structure": "flat",

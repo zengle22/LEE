@@ -50,7 +50,7 @@ directories:
     naming: default
     copy_templates_from: templates/spec
   qa_specs_dir:
-    path: qa/specs
+    path: specs/qa
     description: QA 规格 SSOT（Test Set 等冻结资产）
     subdirs:
     - test-sets

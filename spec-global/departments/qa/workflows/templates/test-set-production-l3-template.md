@@ -234,7 +234,7 @@
 ```
 
 **说明**:
-- `qa_specs_dir` = `qa/specs`（QA 冻结资产目录）
+- `qa_specs_dir` = `specs/qa`（QA 冻结资产目录）
 - Test Set 主文件与详细报告分离存放
 - 新主链中，Test Set 应显式 trace 到单一 FEAT，并覆盖其 Acceptance Criteria
 - 如流程受 ADR 约束，还应在 `traceability` 中保留 `governing_adrs` 或 `decision_refs`
