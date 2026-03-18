@@ -147,12 +147,21 @@ def validate_code_executor_write_scope(
             normalized = str(raw_path or "").strip()
             if not normalized:
                 continue
-            candidate = Path(StepRunnerBase._normalize_project_relative_path(normalized))
-            resolved = (
-                (base_dir / candidate).resolve()
-                if not candidate.is_absolute()
-                else candidate.resolve()
-            )
+            # FIX: Check if original path is absolute before normalization
+            # _normalize_project_relative_path strips leading / which breaks absolute path detection
+            original_path = Path(normalized)
+            if original_path.is_absolute():
+                try:
+                    # If already under base_dir, use it directly
+                    original_path.relative_to(base_dir)
+                    resolved = original_path.resolve()
+                except ValueError:
+                    # Absolute but not under base_dir, use as-is
+                    resolved = original_path.resolve()
+            else:
+                # Relative path: normalize and join with base_dir
+                candidate = Path(StepRunnerBase._normalize_project_relative_path(normalized))
+                resolved = (base_dir / candidate).resolve()
             if resolved not in allowed_paths:
                 allowed_paths.append(resolved)
 
@@ -164,12 +173,21 @@ def validate_code_executor_write_scope(
         normalized = str(raw_path or "").strip()
         if not normalized:
             continue
-        candidate = Path(StepRunnerBase._normalize_project_relative_path(normalized))
-        resolved = (
-            (base_dir / candidate).resolve()
-            if not candidate.is_absolute()
-            else candidate.resolve()
-        )
+        # FIX: Check if original path is absolute before normalization
+        # _normalize_project_relative_path strips leading / which breaks absolute path detection
+        original_path = Path(normalized)
+        if original_path.is_absolute():
+            try:
+                # If already under base_dir, use it directly
+                original_path.relative_to(base_dir)
+                resolved = original_path.resolve()
+            except ValueError:
+                # Absolute but not under base_dir, use as-is
+                resolved = original_path.resolve()
+        else:
+            # Relative path: normalize and join with base_dir
+            candidate = Path(StepRunnerBase._normalize_project_relative_path(normalized))
+            resolved = (base_dir / candidate).resolve()
         if any(path_within_scope(resolved, allowed) for allowed in allowed_paths):
             continue
         blocked.append(str(resolved))
