@@ -2,25 +2,55 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from lee.orchestrator.execution.runners.base import StepRunnerBase
 from lee.orchestrator.storage.models import StepResult, TaskExecutionStatus
 
 
-def collect_declared_output_paths(step, project_root: Optional[str] = None) -> List[str]:
+class _SafeFormatDict(dict):
+    """Preserve unresolved placeholders when formatting declared output paths."""
+
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def _render_declared_output_path(
+    raw_path: Any,
+    *,
+    params: Optional[Dict[str, Any]],
+    project_root: Optional[str],
+) -> str:
+    normalized = str(raw_path or "").strip()
+    if not normalized:
+        return ""
+
+    format_values: Dict[str, str] = {}
+    if isinstance(params, dict):
+        for key, value in params.items():
+            if isinstance(value, (str, int, float, bool)):
+                format_values[key] = str(value)
+
+    if "project" not in format_values and project_root:
+        format_values["project"] = Path(project_root).resolve().name
+
+    return normalized.format_map(_SafeFormatDict(format_values)).strip()
+
+
+def collect_declared_output_paths(
+    step,
+    params: Optional[Dict[str, Any]] = None,
+    project_root: Optional[str] = None,
+) -> List[str]:
     """
     Collect declared output paths from step outputs.
 
-    Handles three types of outputs:
-    1. Dict with type="file"/"dir" and path: returns the explicit path
-    2. Dict with type="symbol" or no type: symbolic output, allows project root
-    3. String (symbolic name): symbolic output, allows project root
+    Handles explicit file/dir outputs only.
 
-    For symbolic outputs, project root is added to allow writes to standard locations.
+    Symbolic outputs are handled separately in write scope construction so they
+    do not get seeded into executor prompts as fake target files.
     """
     declared_output_files: List[str] = []
-    has_symbolic_output = False
 
     for output in (getattr(step, "outputs", None) or []):
         if isinstance(output, dict):
@@ -28,7 +58,6 @@ def collect_declared_output_paths(step, project_root: Optional[str] = None) -> L
             output_path = output.get("path", "")
             # Symbolic output (type="symbol" or no type with symbol name)
             if output_type == "symbol" or (output_type is None and "symbol" in output):
-                has_symbolic_output = True
                 continue
         else:
             # Check if it's a SimpleNamespace or similar object
@@ -36,22 +65,37 @@ def collect_declared_output_paths(step, project_root: Optional[str] = None) -> L
             output_path = getattr(output, "path", "")
             # Check for symbolic output
             if output_type == "symbol":
-                has_symbolic_output = True
                 continue
             # String output is a symbolic name
             if isinstance(output, str):
-                has_symbolic_output = True
                 continue
 
-        normalized_path = str(output_path or "").strip()
+        normalized_path = _render_declared_output_path(
+            output_path,
+            params=params,
+            project_root=project_root,
+        )
         if output_type in {"file", "dir"} and normalized_path:
             declared_output_files.append(normalized_path)
 
-    # If there are symbolic outputs, add project root to allow standard location writes
-    if has_symbolic_output and project_root:
-        declared_output_files.append(project_root)
-
     return declared_output_files
+
+
+def step_has_symbolic_outputs(step) -> bool:
+    for output in (getattr(step, "outputs", None) or []):
+        if isinstance(output, dict):
+            output_type = output.get("type")
+            if output_type == "symbol" or (output_type is None and "symbol" in output):
+                return True
+            continue
+
+        output_type = getattr(output, "type", None)
+        if output_type == "symbol":
+            return True
+        if isinstance(output, str):
+            return True
+
+    return False
 
 
 def build_code_executor_write_scope(
@@ -61,6 +105,8 @@ def build_code_executor_write_scope(
     step_id: str,
     configured_write_scope: Any,
     declared_output_files: Optional[List[str]] = None,
+    allow_project_root_write: bool = False,
+    project_root: Optional[str] = None,
 ) -> List[str]:
     merged: List[str] = [
         str(Path(workspace) / ".workflow" / "workspace" / workflow_id / step_id)
@@ -69,6 +115,10 @@ def build_code_executor_write_scope(
         normalized = str(raw_path or "").strip()
         if normalized and normalized not in merged:
             merged.append(normalized)
+    if allow_project_root_write and project_root:
+        normalized_project_root = str(project_root).strip()
+        if normalized_project_root and normalized_project_root not in merged:
+            merged.append(normalized_project_root)
     if isinstance(configured_write_scope, list):
         for raw_path in configured_write_scope:
             normalized = str(raw_path or "").strip()
@@ -89,6 +139,7 @@ def build_code_executor_io_config(
 ) -> dict[str, Any]:
     step_workspace = str(Path(workspace) / ".workflow" / "workspace" / workflow_id / step_id)
     declared_output_files = collect_declared_output_paths(step, params, project_root)
+    allow_project_root_write = step_has_symbolic_outputs(step)
     return {
         "step_workspace": step_workspace,
         "declared_output_files": declared_output_files,
@@ -98,6 +149,8 @@ def build_code_executor_io_config(
             step_id=step_id,
             configured_write_scope=configured_write_scope,
             declared_output_files=declared_output_files,
+            allow_project_root_write=allow_project_root_write,
+            project_root=project_root,
         ),
     }
 

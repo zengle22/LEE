@@ -11,7 +11,7 @@ def test_spec_governance_template_is_valid_yaml() -> None:
 
     assert data["kind"] == "l3_workflow_template"
     assert data["id"] == "template.core.spec_governance"
-    assert data["supported_spec_kinds"] == ["agent", "workflow", "contract"]
+    assert data["supported_spec_kinds"] == ["agent", "workflow", "contract", "adr"]
     assert [stage["id"] for stage in data["stages"]] == [
         "spec_maintenance",
         "spec_review",
@@ -28,6 +28,7 @@ def test_spec_governance_template_routes_supported_maintainers() -> None:
     assert route_map["agent"] == "agent.governance.spec_maintainer"
     assert route_map["workflow"] == "agent.governance.workflow_spec_maintainer"
     assert route_map["contract"] == "agent.governance.contracts_spec_maintainer"
+    assert route_map["adr"] == "agent.governance.spec_maintainer"
 
     review_step = data["stages"][1]["steps"][0]
     assert review_step["agent_id"] == "agent.review.spec_review"

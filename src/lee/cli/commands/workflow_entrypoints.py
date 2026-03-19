@@ -15,6 +15,7 @@ EXECUTOR_CHOICES = ["llm", "qwen", "kimi", "shell", "claude_code", "codex", "lan
 
 WORKFLOW_ALIASES = {
     "adr": "governance.adr-create",
+    "adr-update": "governance.adr-update",
     "src": "product.raw-to-src",
     "epic": "product.src-to-epic",
     "feat": "product.epic-to-feat",
@@ -263,6 +264,83 @@ def adr_new(dry_run: bool) -> None:
         task_id=None,
         new_task=None,
         skip_plan=False,
+        dry_run=dry_run,
+    )
+
+
+@adr.command("update")
+@click.option("--dry-run", is_flag=True, help="只显示将要触发的 workflow alias，不实际执行。")
+@click.option("--skip-plan", is_flag=True, help="跳过 Plan，直接执行 workflow。")
+@click.option("--new-task", help="创建新 Task 作为 SSOT Root。")
+@click.option("--task-id", help="关联现有 Task 作为 SSOT Root。")
+@click.option(
+    "--executor",
+    type=click.Choice(EXECUTOR_CHOICES),
+    help="覆盖 workflow 中的执行器类型。",
+)
+@click.option("--max-steps", default=10, show_default=True, help="最大执行步数。")
+@click.option("--project-dir", default=".", show_default=True, help="项目目录。")
+@click.option(
+    "--spec",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+    help="现有 ADR 文件路径 (作为 update 的 target_path)。",
+)
+@click.option(
+    "--change-request",
+    "-c",
+    required=True,
+    help="描述需要进行的更改。",
+)
+@click.option(
+    "--ssot-root-id",
+    help="关联的正式 SSOT Root ID (如 SRC-059)。",
+)
+@click.option(
+    "--acceptance-brief-id",
+    help="临时治理锚点 ID。",
+)
+def adr_update(
+    dry_run: bool,
+    skip_plan: bool,
+    new_task: Optional[str],
+    task_id: Optional[str],
+    executor: Optional[str],
+    max_steps: int,
+    project_dir: str,
+    spec: Path,
+    change_request: str,
+    ssot_root_id: Optional[str],
+    acceptance_brief_id: Optional[str],
+) -> None:
+    """通过治理流程更新现有 ADR。
+
+    示例:
+
+        lee adr update --spec spec/adr/ADR-024__fitness-function-zuowei-wanchengtiaojian-fangfuceng.md --change-request "更新决策以支持新的评估维度"
+    """
+    params = {
+        "spec_kind": "adr",
+        "action": "update",
+        "change_request": change_request,
+        "target_path": str(spec.resolve()),
+    }
+    if ssot_root_id:
+        params["ssot_root_id"] = ssot_root_id
+    if acceptance_brief_id:
+        params["acceptance_brief_id"] = acceptance_brief_id
+
+    _dispatch_workflow_command(
+        "adr update",
+        WORKFLOW_ALIASES["adr-update"],
+        spec=None,
+        params=params,
+        project_dir=project_dir,
+        max_steps=max_steps,
+        executor=executor,
+        task_id=task_id,
+        new_task=new_task,
+        skip_plan=skip_plan,
         dry_run=dry_run,
     )
 
