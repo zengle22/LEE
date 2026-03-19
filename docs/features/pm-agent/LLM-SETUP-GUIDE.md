@@ -9,9 +9,38 @@
 
 配置文件位于：`config/llm_config.yaml`
 
+项目级执行器策略配置建议位于：`.lee/config.yaml`
+
 ---
 
 ## 🔧 配置方法
+
+### 先决定执行器策略
+
+在 LEE 中，`llm` 是按量 API 执行器；`claude_code`、`kimi`、`codex`、`qwen_chat` 更适合作为套餐型 CLI 执行器使用。
+
+如果你的目标是控制长期成本，建议先在项目根目录配置 `.lee/config.yaml`，明确采用“套餐优先，API 保底”策略：
+
+```yaml
+executor:
+  default_type: claude_code
+  coding_executor: claude_code
+  coding_fallbacks:
+    - kimi
+    - codex
+  timeout_seconds: 600
+```
+
+推荐含义：
+
+- 普通步骤默认优先走套餐型 CLI 执行器
+- 代码类步骤优先走 `claude_code`
+- 失败后按 `kimi -> codex` 降级
+- `llm` 保持为补充能力或兜底后端，而不是默认高频路径
+
+如果你明确要让某个 workflow 使用 API 执行器，再通过 CLI 或配置显式指定 `llm`。
+
+---
 
 ### 方法 1: 使用环境变量（推荐）
 
@@ -175,6 +204,22 @@ except Exception as e:
 
 ## 🎯 推荐配置
 
+### 执行器层推荐
+
+```yaml
+executor:
+  default_type: claude_code
+  coding_executor: claude_code
+  coding_fallbacks:
+    - kimi
+    - codex
+```
+
+说明：
+
+- 这是推荐的项目默认策略
+- 核心目标是优先消耗套餐资源，而不是默认走 API 计费
+
 ### 开发/测试环境
 
 ```bash
@@ -259,12 +304,13 @@ export LLM_API_KEY=your-new-api-key
 
 1. **使用环境变量**：不要在配置文件中硬编码 API keys
 2. **使用 .env 文件**：方便管理不同环境的配置
-3. **选择合适的 Provider**：
+3. **优先使用套餐执行器**：默认先用 `claude_code` / `kimi` / `codex` / `qwen_chat`，减少 API 费用
+4. **选择合适的 Provider**：
    - 开发：Ollama
    - 测试：DeepSeek
    - 生产：DeepSeek 或 Claude
-4. **监控用量**：定期检查 API 使用量，避免超支
-5. **设置超时**：合理的超时时间（60-120秒）
+5. **监控用量**：定期检查 API 使用量，避免超支
+6. **设置超时**：合理的超时时间（60-120秒）
 
 ---
 

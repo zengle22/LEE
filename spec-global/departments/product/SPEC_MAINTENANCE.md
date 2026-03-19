@@ -45,6 +45,8 @@
   - `src-to-epic`
   - `epic-to-feat`
   - `feat-to-delivery-prep`
+  - `feat-to-release`
+  - `feat-to-plan`
 - Agents:
   - `agent.analysis.product_goal`
   - `agent.product.requirement_alignment`
@@ -55,8 +57,13 @@
 - Contracts:
   - `raw-source-input-contract`
   - `source-freeze-contract`
+  - `release-contract`
   - `problem-definition`
   - `epic-contract`
   - `feat-breakdown-contract`
   - `feat-contract`
   - `product-review-contract`
+- Gates:
+  - `release_generate_gate`
+  - `release_validate_gate`
+  - `output_contract_gate`

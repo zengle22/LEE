@@ -2,6 +2,7 @@
 # 版本交付主链 - L1 级编排
 #
 # 定位：交付轴的总入口，从 FEAT Bundle 到 RELEASE 关闭的全流程
+# 说明：上游计划派生 canonical path 已拆分为 workflow.product.feat_to_plan_pipeline / workflow.dev.task.release_to_devplan / workflow.qa.task.release_to_testplan
 # 负责部门：Dev Governance (Release Manager)
 # 下游部门：Dev (执行 DEVPLAN), QA (执行 TESTPLAN)
 

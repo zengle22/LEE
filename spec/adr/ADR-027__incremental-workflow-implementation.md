@@ -46,7 +46,7 @@ L1 的 Scope Management 和 Go/No-Go 决策是治理需求，而非交付核心�
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    L2: Feature-to-Plan Orchestration                    │
-│  workflow.core.feat2plan                                                │
+│  workflow.product.feat_to_plan_pipeline                                 │
 │  输入：FEAT Bundle (frozen)                                             │
 │  输出：DEVPLAN (frozen) + TESTPLAN (frozen)                             │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -79,7 +79,7 @@ L1 的 Scope Management 和 Go/No-Go 决策是治理需求，而非交付核心�
 
 | 属性 | 值 |
 |------|-----|
-| **模板 ID** | `template.core.feat2release` |
+| **模板 ID** | `workflow.product.task.feat_to_release` |
 | **输入** | FEAT Bundle (frozen) |
 | **输出** | RELEASE (draft) |
 | **职责** | 生成 RELEASE 对象，绑定 FEAT refs |
@@ -123,7 +123,7 @@ derived_from:
 
 | 属性 | 值 |
 |------|-----|
-| **模板 ID** | `template.core.release2devplan` |
+| **模板 ID** | `workflow.dev.task.release_to_devplan` |
 | **输入** | RELEASE (draft) + TASK Bundle (来自 Delivery Prep) |
 | **输出** | DEVPLAN (frozen) |
 | **职责** | 从 RELEASE 派生 DEVPLAN，组织 TASK 执行顺序 |
@@ -214,7 +214,7 @@ task_execution_order:
 
 | 属性 | 值 |
 |------|-----|
-| **模板 ID** | `template.core.release2testplan` |
+| **模板 ID** | `workflow.qa.task.release_to_testplan` |
 | **输入** | RELEASE (draft) + FEAT.AC + TECH + TASK |
 | **输出** | TESTPLAN (frozen) + Test Set 设计资产 |
 | **职责** | 从 RELEASE 派生 TESTPLAN，生产 Test Set 设计资产 |
@@ -319,8 +319,8 @@ test_cases:
 
 | 属性 | 值 |
 |------|-----|
-| **模板 ID** | `workflow.core.feat2plan` |
-| **模板文件** | `spec-global/workflows/core/feat2plan-l2-template.yaml` |
+| **模板 ID** | `workflow.product.feat_to_plan_pipeline` |
+| **模板文件** | `spec-global/departments/product/workflows/templates/feat-to-plan/v1/workflow.yaml` |
 | **输入** | FEAT Bundle (frozen) |
 | **输出** | DEVPLAN (frozen) + TESTPLAN (frozen) |
 | **负责角色** | Tech Lead + QA Lead |
@@ -334,7 +334,7 @@ stages:
       - id: run_feat2release
         kind: skill
         skill_id: skill.orchestrator.run_l3
-        l3_template: template.core.feat2release
+        l3_template: workflow.product.task.feat_to_release
         outputs:
           - release_draft
 
@@ -344,7 +344,7 @@ stages:
       - id: run_release2devplan
         kind: skill
         skill_id: skill.orchestrator.run_l3
-        l3_template: template.core.release2devplan
+        l3_template: workflow.dev.task.release_to_devplan
         depends_on: [run_feat2release]
         inputs:
           - release_draft
@@ -355,7 +355,7 @@ stages:
       - id: run_release2testplan
         kind: skill
         skill_id: skill.orchestrator.run_l3
-        l3_template: template.core.release2testplan
+        l3_template: workflow.qa.task.release_to_testplan
         depends_on: [run_feat2release]
         parallel_with: [run_release2devplan]
         inputs:
@@ -457,9 +457,9 @@ Phase 3 (ADR-026 完整):
 
 | 任务 | 描述 | 优先级 |
 |------|------|--------|
-| **T1** | 实现 `template.core.feat2release` | P0 |
-| **T2** | 实现 `template.core.release2devplan` | P0 |
-| **T3** | 实现 `template.core.release2testplan` | P0 |
+| **T1** | 实现 `workflow.product.task.feat_to_release` | P0 |
+| **T2** | 实现 `workflow.dev.task.release_to_devplan` | P0 |
+| **T3** | 实现 `workflow.qa.task.release_to_testplan` | P0 |
 | **T4** | 实现 Gate: `task_validate_gate`, `devplan_freeze_gate` | P0 |
 | **T5** | 实现 Gate: `test_set_validate_gate`, `testplan_freeze_gate` | P0 |
 
@@ -467,7 +467,7 @@ Phase 3 (ADR-026 完整):
 
 | 任务 | 描述 | 优先级 |
 |------|------|--------|
-| **T6** | 实现 `workflow.core.feat2plan` 编排逻辑 | P0 |
+| **T6** | 实现 `workflow.product.feat_to_plan_pipeline` 编排逻辑 | P0 |
 | **T7** | 实现 L3 调用和并行执行 | P0 |
 | **T8** | 实现输出验证 | P1 |
 
@@ -583,7 +583,7 @@ Phase 2: Test Set Execution (下游 QA 工作流)
     - scope_freeze: 人类审批，锁定 scope
 
 修改:
-  template.core.feat2release → 改为从 scope_frozen 的 RELEASE 开始
+  workflow.product.task.feat_to_release → 改为从 scope_frozen 的 RELEASE 开始
 ```
 
 ### 8.2 L1 Release Closure（Phase 3）

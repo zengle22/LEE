@@ -1,0 +1,281 @@
+---
+# Test Set Design Asset for SRC-056
+# Frozen FEAT Bundle: FEAT-FREEZE-SRC-056-001
+# Generated from requirement analysis step
+
+metadata:
+  ts_id: TS-SRC-056-001
+  module: SRC-056
+  title: Run-Scoped Artifact Placement Governance Test Set
+  version: "1.0"
+  frozen_at: "2026-03-18T12:06:00+08:00"
+  epic_ref: EPIC-SRC-056-001
+  feat_refs:
+    - FEAT-SRC-056-001
+    - FEAT-SRC-056-002
+
+module_boundary:
+  name: Run-Scoped Artifact Placement Governance and Directory Audit
+  description: |
+    Run-Scoped 产物放置治理与目录审计模块，包含：
+    - Placement Manifest Contract 设计与定义
+    - Artifact Placement Reviewer Agent 实现
+    - 目录审计与合规检测能力
+    - Requirement Chain Validation 集成
+  
+  scope:
+    in_scope:
+      - Run-scoped placement manifest schema 定义与验证
+      - Placement manifest 生成时机与消费方式规范
+      - Artifact placement reviewer agent 核心功能
+      - 目录审计与文件放置合规检测
+      - 违规文件识别与报告生成
+      - CLI 与 Python API 接口
+      - Requirement chain validation 集成
+    
+    out_of_scope:
+      - 自动修复错误文件位置
+      - 自动搬运已有错误文件到正确目录
+      - 修复历史存量目录问题
+      - Runtime 物理文件写入逻辑
+      - 业务对象主链语义修改
+  
+  interfaces:
+    inputs:
+      - placement_manifest_file
+      - target_directory_path
+      - workflow_run_context
+      - directory_governance_policy
+      - artifact_type_catalog
+    
+    outputs:
+      - audit_report
+      - compliance_status
+      - violation_file_list
+      - compliant_file_list
+      - audit_result_schema
+
+testable_features:
+  - id: TF-001
+    name: Placement Manifest Schema Definition
+    description: Placement manifest schema 包含完整字段定义，支持 run-scoped 产物管理
+    priority: P0
+    feat_ref: FEAT-SRC-056-001
+    acceptance_criteria:
+      - Schema 包含 manifest_id、run_scope、expected_artifacts、placement_rules 四个核心字段
+      - Schema 定义符合 YAML 格式规范且可解析
+      - Schema 支持多种 artifact 类型定义
+    test_focus:
+      - schema_structure_validation
+      - field_completeness
+      - yaml_syntax_validation
+      - artifact_type_support
+    
+  - id: TF-002
+    name: Placement Manifest Contract Documentation
+    description: Contract 文档明确定义 manifest 生成时机和消费方式
+    priority: P0
+    feat_ref: FEAT-SRC-056-001
+    acceptance_criteria:
+      - 文档明确说明 manifest 在 workflow 初始化阶段生成
+      - 文档明确说明 manifest 由 auditer agent 和 validator 消费
+      - 文档包含完整的消费指南
+    test_focus:
+      - contract_completeness
+      - generation_timing_spec
+      - consumption_pattern_spec
+      - documentation_accuracy
+    
+  - id: TF-003
+    name: Manifest Example Completeness
+    description: 提供完整的示例 manifest 文件，覆盖多种 artifact 类型
+    priority: P0
+    feat_ref: FEAT-SRC-056-001
+    acceptance_criteria:
+      - 示例文件符合 schema 定义
+      - 示例包含至少 3 种 artifact 类型的放置规则
+      - 示例文件可被成功解析
+    test_focus:
+      - example_validity
+      - schema_compliance
+      - artifact_coverage
+      - parseability
+    
+  - id: TF-004
+    name: Agent Manifest Loading
+    description: Agent 模块能够读取 placement manifest 并解析 expected artifacts
+    priority: P0
+    feat_ref: FEAT-SRC-056-002
+    acceptance_criteria:
+      - Agent 成功加载符合 schema 的 manifest 文件
+      - Agent 正确解析 expected artifacts 列表
+      - Agent 处理 manifest 异常时给出明确错误信息
+    test_focus:
+      - manifest_loading
+      - artifact_parsing
+      - error_handling
+      - schema_validation
+    
+  - id: TF-005
+    name: Directory Audit Core Logic
+    description: Agent 能够扫描指定目录并比对实际文件位置与 manifest 规则
+    priority: P0
+    feat_ref: FEAT-SRC-056-002
+    acceptance_criteria:
+      - Agent 正确扫描目标目录结构
+      - Agent 准确识别违规文件（不在 manifest 规则中的文件）
+      - Agent 准确识别合规文件（符合 manifest 规则的文件）
+      - Agent 正确处理嵌套目录结构
+    test_focus:
+      - directory_scanning
+      - violation_detection
+      - compliance_detection
+      - nested_directory_support
+    
+  - id: TF-006
+    name: Audit Report Generation
+    description: Agent 输出审计结果报告，包含违规文件列表和合规文件列表
+    priority: P0
+    feat_ref: FEAT-SRC-056-002
+    acceptance_criteria:
+      - 报告包含完整的违规文件列表及其路径
+      - 报告包含完整的合规文件列表及其路径
+      - 报告格式符合定义的 schema
+      - 报告可被下游流程消费
+    test_focus:
+      - report_structure
+      - violation_listing
+      - compliance_listing
+      - schema_compliance
+    
+  - id: TF-007
+    name: CLI Interface Support
+    description: Agent 支持 CLI 调用方式
+    priority: P0
+    feat_ref: FEAT-SRC-056-002
+    acceptance_criteria:
+      - CLI 命令格式：lee audit --manifest <path> --target <path>
+      - CLI 正确输出审计结果
+      - CLI 生成 report 文件到指定位置
+      - CLI 提供清晰的帮助信息
+    test_focus:
+      - cli_syntax
+      - output_format
+      - report_generation
+      - help_documentation
+    
+  - id: TF-008
+    name: Python API Support
+    description: Agent 支持 Python API 调用方式
+    priority: P0
+    feat_ref: FEAT-SRC-056-002
+    acceptance_criteria:
+      - Agent 可通过 import artifact_placement_reviewer 导入
+      - Python API 提供 load_manifest 方法
+      - Python API 提供 audit 方法
+      - API 返回结构化审计结果
+    test_focus:
+      - api_import
+      - load_manifest_api
+      - audit_api
+      - return_structure
+    
+  - id: TF-009
+    name: Requirement Chain Validation Integration
+    description: Agent 可被 requirement-chain-validation workflow 集成调用
+    priority: P0
+    feat_ref: FEAT-SRC-056-002
+    acceptance_criteria:
+      - Workflow 可在 audit 步骤调用 agent API
+      - Agent 返回结果供后续 gate 决策使用
+      - 目录审计不通过时阻断 workflow 继续推进
+      - Integration 符合 workflow 调用规范
+    test_focus:
+      - workflow_integration
+      - gate_decision_support
+      - blocking_mechanism
+      - api_contract_compliance
+    
+  - id: TF-010
+    name: Formal File Directory Validation
+    description: 检测正式 SSOT 文件是否误写到 step_workspace 等运行时目录
+    priority: P1
+    feat_ref: EPIC-SRC-056-001
+    acceptance_criteria:
+      - 准确识别位于错误目录的正式 SSOT 文件
+      - 检测率达到 100%
+      - 报告包含文件预期位置与实际位置
+    test_focus:
+      - formal_file_detection
+      - location_validation
+      - detection_accuracy
+      - report_detail
+    
+  - id: TF-011
+    name: Intermediate Artifact Directory Validation
+    description: 检测中间产物是否误写到 spec/ 或其他正式目录
+    priority: P1
+    feat_ref: EPIC-SRC-056-001
+    acceptance_criteria:
+      - 准确识别位于错误目录的中间产物
+      - 检测率达到 100%
+      - 区分正式文件与中间产物
+    test_focus:
+      - intermediate_file_detection
+      - directory_type_recognition
+      - detection_accuracy
+      - false_positive_control
+
+test_categories:
+  functional:
+    - manifest_schema_validation
+    - manifest_loading_and_parsing
+    - directory_audit_logic
+    - violation_detection
+    - report_generation
+    - cli_interface
+    - python_api
+    - workflow_integration
+  
+  integration:
+    - requirement_chain_validation_integration
+    - gate_blocking_mechanism
+    - workflow_step_integration
+  
+  contract:
+    - schema_compliance
+    - api_contract_validation
+    - input_output_validation
+  
+  compliance:
+    - formal_file_placement_rules
+    - intermediate_file_placement_rules
+    - directory_governance_policy
+
+data_requirements:
+  test_data:
+    strategy: isolated_test_manifests
+    cleanup: automatic
+    fixtures:
+      - valid_placement_manifests
+      - invalid_placement_manifests
+      - sample_directory_structures
+      - expected_audit_reports
+  
+  test_environments:
+    - local_development
+    - ci_simulation
+
+dependencies:
+  - FEAT-SRC-056-001 → FEAT-SRC-056-002 (manifest contract 是 agent 的基础)
+
+notes: |
+  本 Test Set 验证 FEAT-FREEZE-SRC-056-001 中的所有特性：
+  1. FEAT-SRC-056-001: Run-Scoped Placement Manifest Contract Design
+  2. FEAT-SRC-056-002: Artifact Placement Reviewer Agent Implementation
+  
+  关键测试场景：
+  - 正常目录结构的审计通过
+  - 违规文件放置的检测与报告
+  - CLI 和 API 的双模式调用
+  - Workflow 集成与 Gate 阻断

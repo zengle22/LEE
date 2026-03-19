@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from lee.orchestrator.core.event_bus import EventType
 from lee.orchestrator.execution.orchestrator import Orchestrator
@@ -252,5 +252,31 @@ async def test_run_until_blocked_waits_for_running_task_execution(tmp_path, monk
         assert summary.status == "failed"
         assert call_count == 2
         sleep_mock.assert_awaited_once()
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_create_workflow_persists_project_root_into_instance_data(tmp_path):
+    store = SQLiteStore(":memory:")
+    await store.connect()
+    try:
+        template_manager = MagicMock()
+        template_manager.get_template.return_value = SimpleNamespace(owner="product", departments=[])
+        orchestrator = Orchestrator(
+            store=store,
+            template_manager=template_manager,
+            project_root=str(tmp_path),
+        )
+
+        instance = await orchestrator.create_workflow(
+            WorkflowLevel.TASK,
+            "workflow.product.task.feat_to_release",
+            data={"params": {}},
+        )
+
+        persisted = await store.get_workflow(instance.id)
+        assert persisted is not None
+        assert persisted.data["project_root"] == str(tmp_path.resolve())
     finally:
         await store.close()

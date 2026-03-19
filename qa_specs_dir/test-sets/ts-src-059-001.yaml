@@ -1,0 +1,306 @@
+---
+# Test Set: Fitness Rule Schema 定义
+# Test Set 设计资产 - 验证单一 FEAT (FEAT-SRC-059-001)
+
+feat_ref: FEAT-SRC-059-001
+id: ts-src-059-001
+module: src-059-001
+ssot_type: TESTSET
+status: frozen
+version: "1.0"
+
+# 模块信息
+module_info:
+  name: src-059-001
+  description: Fitness Rule Schema 定义 - 定义 fitness_rule.yaml 的 JSON schema 及验证工具
+  interfaces:
+    - Schema Validation API (validate_fitness_rule.py)
+    - JSON Schema Definition (fitness_rule.schema.json)
+    - YAML/JSON Format Support
+    - Structured Error Output
+
+# 测试策略
+strategy:
+  focus:
+    - Schema 结构正确性验证
+    - 验证工具对合法文件的通过能力
+    - 验证工具对非法文件的检测能力
+    - YAML 和 JSON 双格式支持
+    - 结构化错误输出格式
+  test_types:
+    - unit
+    - contract
+  priority: P0
+
+# 可追溯性
+traceability:
+  feature_ids:
+    - FEAT-SRC-059-001
+  acceptance_criteria_refs:
+    - AC-001: Schema 验证工具验证合法的 fitness rule 文件
+    - AC-002: Schema 验证工具检测非法 fitness rule 文件
+    - AC-003: Schema 支持 YAML 和 JSON 双格式
+
+# 执行配置
+execution:
+  mode: sequential
+  fail_fast: true
+  timeout_seconds: 60
+
+# 验证规则
+validation_rules:
+  - rule: "schema_validation_coverage"
+    check: "ALL fitness_rule files MUST pass schema validation OR fail with structured error"
+  - rule: "trace_to_feat"
+    check: "ALL test_cases HAVE trace_to EQUALS 'FEAT-SRC-059-001'"
+  - rule: "format_support"
+    check: "Schema validation MUST support BOTH YAML and JSON formats"
+  - rule: "error_structure"
+    check: "Validation errors MUST contain field path AND line number"
+
+# 测试用例
+test_cases:
+  # ========== AC-001: Schema 验证工具验证合法的 fitness rule 文件 ==========
+  - case_id: TC-059-001-001
+    title: Schema 验证工具验证合法的 YAML fitness rule 文件
+    description: 验证符合 schema 的 YAML 格式 fitness_rule.yaml 文件能通过验证
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-001.AC-001
+    steps:
+      - step_number: 1
+        action: 创建符合 schema 的 fitness_rule.yaml 文件（包含 rule_id, rule_type, scan_command, pass_criteria, description）
+        expected_result: 文件创建成功，内容符合 JSON Schema Draft 2020-12
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证通过，不输出错误信息
+      - step_number: 3
+        action: 检查返回的退出码
+        expected_result: 返回零退出码 (exit_code=0)
+    expected_result: YAML 格式的合法 fitness rule 文件验证通过
+
+  - case_id: TC-059-001-002
+    title: Schema 验证工具验证合法的 JSON fitness rule 文件
+    description: 验证符合 schema 的 JSON 格式 fitness_rule.json 文件能通过验证
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-001.AC-001
+    steps:
+      - step_number: 1
+        action: 创建符合 schema 的 fitness_rule.json 文件（包含所有必需字段）
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证通过，不输出错误信息
+      - step_number: 3
+        action: 检查返回的退出码
+        expected_result: 返回零退出码 (exit_code=0)
+    expected_result: JSON 格式的合法 fitness rule 文件验证通过
+
+  - case_id: TC-059-001-003
+    title: 验证 fitness_rule.schema.json 结构完整性
+    description: 验证 schema 文件包含所有必需字段定义
+    priority: P0
+    type: contract
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-001.AC-001
+    steps:
+      - step_number: 1
+        action: 加载 fitness_rule.schema.json 文件
+        expected_result: 文件加载成功，为有效的 JSON Schema
+      - step_number: 2
+        action: 检查必需字段定义（rule_id, rule_type, scan_command, pass_criteria, description）
+        expected_result: 所有必需字段均已定义
+      - step_number: 3
+        action: 检查 rule_type 枚举值定义
+        expected_result: rule_type 枚举包含 hard_gate 和 quality_signal
+      - step_number: 4
+        action: 验证 schema 符合 JSON Schema Draft 2020-12 规范
+        expected_result: 验证通过
+    expected_result: Schema 文件结构完整且符合规范
+
+  # ========== AC-002: Schema 验证工具检测非法 fitness rule 文件 ==========
+  - case_id: TC-059-001-004
+    title: Schema 验证工具检测缺少必需字段的 fitness rule 文件
+    description: 验证缺少 rule_id 的文件会被检测并输出结构化错误
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-SRC-059-001.AC-002
+    steps:
+      - step_number: 1
+        action: 创建缺少 rule_id 字段的 fitness_rule.yaml 文件
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证失败，输出结构化错误信息
+      - step_number: 3
+        action: 检查错误信息包含字段路径
+        expected_result: 错误信息包含字段路径 "$.rule_id"
+      - step_number: 4
+        action: 检查返回的退出码
+        expected_result: 返回非零退出码 (exit_code!=0)
+    expected_result: 缺少必需字段被正确检测并输出结构化错误
+
+  - case_id: TC-059-001-005
+    title: Schema 验证工具检测非法 rule_type 值的 fitness rule 文件
+    description: 验证 rule_type 不是 hard_gate 或 quality_signal 的文件会被检测
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-SRC-059-001.AC-002
+    steps:
+      - step_number: 1
+        action: 创建 rule_type="invalid_type" 的 fitness_rule.yaml 文件
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证失败，输出结构化错误信息
+      - step_number: 3
+        action: 检查错误信息内容
+        expected_result: 错误信息指出 rule_type 必须是 hard_gate 或 quality_signal
+      - step_number: 4
+        action: 检查返回的退出码
+        expected_result: 返回非零退出码
+    expected_result: 非法枚举值被正确检测
+
+  - case_id: TC-059-001-006
+    title: Schema 验证工具输出包含行号的结构化错误信息
+    description: 验证验证失败时输出的错误信息包含行号信息
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-SRC-059-001.AC-002
+    steps:
+      - step_number: 1
+        action: 创建包含语法错误的 YAML 文件（如缩进错误）
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证失败
+      - step_number: 3
+        action: 检查错误输出包含行号
+        expected_result: 错误信息包含具体的行号（如 "line 5"）
+      - step_number: 4
+        action: 检查错误输出包含字段路径
+        expected_result: 错误信息包含字段路径（如 "$.rule_type"）
+    expected_result: 结构化错误信息包含行号和字段路径
+
+  # ========== AC-003: Schema 支持 YAML 和 JSON 双格式 ==========
+  - case_id: TC-059-001-007
+    title: Schema 验证工具同时支持 YAML 和 JSON 格式
+    description: 验证验证工具能自动识别并处理两种格式
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-SRC-059-001.AC-003
+    steps:
+      - step_number: 1
+        action: 创建相同内容的 fitness_rule.yaml 和 fitness_rule.json 文件
+        expected_result: 两个文件创建成功，内容语义等价
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证 YAML 文件
+        expected_result: 验证通过
+      - step_number: 3
+        action: 执行 validate_fitness_rule.py 验证 JSON 文件
+        expected_result: 验证通过
+      - step_number: 4
+        action: 比较两次验证的输出结果
+        expected_result: 输出结果一致（都通过）
+    expected_result: 两种格式均能被正确验证
+
+  - case_id: TC-059-001-008
+    title: YAML 格式特定语法支持
+    description: 验证 YAML 格式的特殊语法（锚点和引用）能被正确解析
+    priority: P1
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-SRC-059-001.AC-003
+    steps:
+      - step_number: 1
+        action: 创建使用 YAML 锚点和引用的 fitness_rule.yaml 文件
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证通过，YAML 被正确解析
+    expected_result: YAML 特殊语法被正确支持
+
+  - case_id: TC-059-001-009
+    title: JSON 格式严格模式验证
+    description: 验证 JSON 格式文件在严格模式下验证
+    priority: P1
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-SRC-059-001.AC-003
+    steps:
+      - step_number: 1
+        action: 创建包含额外字段的 JSON fitness rule 文件
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件（使用严格模式）
+        expected_result: 根据 schema 定义，额外字段可能被拒绝或警告
+    expected_result: JSON 严格模式验证行为符合 schema 定义
+
+  # ========== 边界测试 ==========
+  - case_id: TC-059-001-010
+    title: 空文件验证处理
+    description: 验证空文件或最小文件的验证行为
+    priority: P1
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-SRC-059-001.AC-002
+    steps:
+      - step_number: 1
+        action: 创建空的 fitness_rule.yaml 文件
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证失败，输出缺少必需字段的错误
+      - step_number: 3
+        action: 检查返回的退出码
+        expected_result: 返回非零退出码
+    expected_result: 空文件被正确检测为非法
+
+  - case_id: TC-059-001-011
+    title: 复杂嵌套结构的 YAML 验证
+    description: 验证包含复杂嵌套结构的 YAML 文件
+    priority: P1
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-001.AC-001
+    steps:
+      - step_number: 1
+        action: 创建包含嵌套对象和数组的复杂 fitness_rule.yaml
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证通过
+    expected_result: 复杂嵌套 YAML 结构被正确验证
+
+---
+*Test Set 生成时间: 2026-03-18T12:19:00+08:00*
+*验证 FEAT: FEAT-SRC-059-001*

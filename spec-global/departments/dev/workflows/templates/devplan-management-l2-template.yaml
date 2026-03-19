@@ -2,6 +2,7 @@
 # 开发计划管理 L2 模板
 #
 # 定位：从 RELEASE 派生 DEVPLAN，并管理 TASK 执行
+# 状态：管理型 draft；DEVPLAN 派生 canonical entry 已收敛到 workflow.dev.task.release_to_devplan
 # 上游：RELEASE L1 (scope_freeze 后) + Delivery Prep (TECH/TASK 已冻结)
 # 下游：Feature Delivery L2 (每个 TASK  spawns 一个 L2)
 #

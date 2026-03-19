@@ -120,6 +120,86 @@ def test_l3_template_parses_symbol_outputs(tmp_path: Path) -> None:
     assert output_spec.ssot == {"identity_kind": "ssot", "ssot_type": "FEAT"}
 
 
+def test_l3_template_supports_phase_based_bridge_format(tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    template_root = project_root / "spec-global"
+    template_root.mkdir(parents=True)
+    (project_root / ".lee").mkdir()
+    (project_root / ".lee" / "config.yaml").write_text(
+        "executor:\n"
+        "  default_type: claude_code\n",
+        encoding="utf-8",
+    )
+
+    template_path = template_root / "workflow.yaml"
+    template_path.write_text(
+        "kind: l3_workflow_template\n"
+        "id: workflow.product.task.feat_to_release\n"
+        "name: Product FEAT to RELEASE\n"
+        "description: test\n"
+        "phases:\n"
+        "  - id: release_init\n"
+        "    name: Release Init\n"
+        "    depends_on: []\n"
+        "  - id: release_validate\n"
+        "    name: Release Validate\n"
+        "    depends_on: [release_init]\n"
+        "    gate:\n"
+        "      type: auto_check\n"
+        "      gate_id: gate.product.release_validate_gate\n",
+        encoding="utf-8",
+    )
+
+    manager = TemplateManager(template_dir=str(template_root), project_root=str(project_root))
+    template = manager.get_template(str(template_path))
+
+    assert template is not None
+    assert [step.id for step in template.steps] == ["release_init", "release_validate"]
+    assert template.steps[0].kind == "phase"
+    assert template.steps[1].kind == "gate"
+    assert template.steps[1].gate_id == "gate.product.release_validate_gate"
+
+
+def test_l3_template_supports_stage_based_bridge_format(tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    template_root = project_root / "spec-global"
+    template_root.mkdir(parents=True)
+    (project_root / ".lee").mkdir()
+    (project_root / ".lee" / "config.yaml").write_text(
+        "executor:\n"
+        "  default_type: claude_code\n",
+        encoding="utf-8",
+    )
+
+    template_path = template_root / "workflow.yaml"
+    template_path.write_text(
+        "kind: l3_workflow_template\n"
+        "id: workflow.dev.task.release_to_devplan\n"
+        "name: Release to DEVPLAN\n"
+        "description: test\n"
+        "stages:\n"
+        "  - id: devplan_init\n"
+        "    name: DEVPLAN Init\n"
+        "    depends_on: []\n"
+        "  - id: task_validate\n"
+        "    name: Task Validate\n"
+        "    depends_on: [devplan_init]\n"
+        "    gate:\n"
+        "      type: auto_check\n"
+        "      gate_id: gate.dev.task_validate_gate\n",
+        encoding="utf-8",
+    )
+
+    manager = TemplateManager(template_dir=str(template_root), project_root=str(project_root))
+    template = manager.get_template(str(template_path))
+
+    assert template is not None
+    assert [step.id for step in template.steps] == ["devplan_init", "task_validate"]
+    assert template.steps[0].kind == "phase"
+    assert template.steps[1].kind == "gate"
+    assert template.steps[1].gate_id == "gate.dev.task_validate_gate"
+
+
 def test_flat_template_preserves_agent_and_executor_aliases(tmp_path: Path) -> None:
     template_root = tmp_path / "templates"
     template_root.mkdir(parents=True)

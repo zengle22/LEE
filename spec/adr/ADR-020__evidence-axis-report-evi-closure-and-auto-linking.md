@@ -2,29 +2,30 @@
 id: ADR-020
 ssot_type: adr
 title: 证据轴 REPORT/EVI 收口与自动回挂规则
-status: draft
+status: frozen
 version: v1
 workflow_instance_id: evidence-axis-report-evi-20260315
 parent_id: null
 derived_from_ids:
-  - id: ADR-001
-    version: v1
-  - id: ADR-007
-    version: v1
-  - id: ADR-008
-    version: v1
+- id: ADR-001
+  version: v1
+- id: ADR-007
+  version: v1
+- id: ADR-008
+  version: v1
 source_refs: []
 owner: governance
 tags:
-  - governance
-  - ssot
-  - evidence-axis
-  - report
-  - evi
-  - traceability
+- governance
+- ssot
+- evidence-axis
+- report
+- evi
+- traceability
 properties:
   adr_kind: governance_design
   decision_scope: evidence_axis_report_evi_closure_and_auto_linking
+frozen_at: '2026-03-17T17:17:55.532953'
 ---
 
 # 证据轴 REPORT/EVI 收口与自动回挂规则

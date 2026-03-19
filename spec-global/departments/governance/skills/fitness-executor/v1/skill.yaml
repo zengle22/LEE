@@ -1,0 +1,402 @@
+# Fitness Executor Skill v1.0
+# 通用 Fitness 执行技能（治理层能力）
+#
+# 该技能是跨部门的通用 Fitness 执行能力，不绑定特定部门。
+# 各部门可在各自的工作流中引用此技能，并配置部门特定的 Fitness Rules。
+
+kind: skill
+version: "1.0"
+id: skill.governance.fitness_executor
+name: Fitness Executor Skill
+description: |
+  通用 Fitness Function 执行技能。
+
+  核心职责：
+  - 读取 fitness_rule 定义（路径由输入指定）
+  - 执行规则检查（hard_gate 和 quality_signal 两类）
+  - 产出结构化的 fitness_result
+  - 供下游 gate 消费进行阻断决策
+
+  设计原则：
+  - 部门无关：不预置任何部门特定规则
+  - 规则驱动：行为完全由输入的 fitness_rule 定义决定
+  - 结构化输出：fitness_result 符合通用 schema
+  - 可组合性：可被多个部门的工作流引用
+
+owner: governance-architect
+tags: [skill, governance, fitness, executor, cross-department, adr-024]
+
+# ============================================
+# Governing ADRs
+# ============================================
+governing_adrs:
+  - ADR-024: Fitness Function 完成条件防腐层核心能力构建
+
+# ============================================
+# 输入合约
+# ============================================
+input_contract:
+  type: object
+  required:
+    - fitness_rule_path
+    - target_context
+  properties:
+    fitness_rule_path:
+      type: string
+      description: "Fitness Rule YAML 文件路径（部门特定）"
+      examples:
+        - "spec-global/departments/product/fitness-rules/src-freeze-rules.yaml"
+        - "spec-global/departments/qa/fitness-rules/test-set-rules.yaml"
+        - "spec-global/departments/dev/fitness-rules/feature-delivery-rules.yaml"
+
+    target_context:
+      type: object
+      description: "被检查的目标对象上下文"
+      required:
+        - object_type
+        - object_path
+      properties:
+        object_type:
+          type: string
+          enum: [src, epic, feat, test_set, test_run, evidence_pack, smoke_result]
+          description: "目标对象类型"
+        object_path:
+          type: string
+          description: "目标对象 YAML 文件路径"
+        parent_refs:
+          type: object
+          description: "父级对象引用（用于追溯检查）"
+          properties:
+            src_root_id:
+              type: string
+            epic_id:
+              type: string
+            feat_id:
+              type: string
+
+    execution_mode:
+      type: string
+      enum: [enforce, warn]
+      default: enforce
+      description: |
+        - enforce: hard_gate 失败时返回 blocked 状态
+        - warn: 所有规则失败仅记录 warning，不阻断
+
+# ============================================
+# 输出合约
+# ============================================
+output_contract:
+  type: object
+  required:
+    - fitness_run_id
+    - executed_at
+    - executed_by
+    - rule_results
+    - result
+    - gate_handoff_ready
+  properties:
+    fitness_run_id:
+      type: string
+      description: "本次 Fitness 执行唯一标识"
+      format: "fitness-{YYYYMMDD}-{counter}"
+
+    executed_at:
+      type: string
+      format: date-time
+      description: "执行时间戳"
+
+    executed_by:
+      type: string
+      description: "执行者（Agent 或 User）"
+
+    fitness_rule_ref:
+      type: string
+      description: "使用的 Fitness Rule 文件路径"
+
+    target_ref:
+      type: object
+      description: "被检查的目标对象引用"
+      properties:
+        object_type:
+          type: string
+        object_path:
+          type: string
+        object_id:
+          type: string
+
+    rule_results:
+      type: array
+      description: "每条规则的执行结果"
+      items:
+        type: object
+        required:
+          - rule_id
+          - rule_type
+          - status
+        properties:
+          rule_id:
+            type: string
+          rule_name:
+            type: string
+          rule_type:
+            type: string
+            enum: [hard_gate, quality_signal]
+          status:
+            type: string
+            enum: [passed, failed, skipped, error]
+          failure_reason:
+            type: string
+            description: "失败原因（仅当 status=failed）"
+          evidence_refs:
+            type: array
+            items:
+              type: string
+            description: "支撑证据路径"
+
+    execution_summary:
+      type: object
+      description: "执行统计摘要"
+      properties:
+        total_rules:
+          type: integer
+        passed_rules:
+          type: integer
+        failed_rules:
+          type: integer
+        skipped_rules:
+          type: integer
+        hard_gate_total:
+          type: integer
+        hard_gate_passed:
+          type: integer
+        hard_gate_failed:
+          type: integer
+        quality_signal_total:
+          type: integer
+        quality_signal_passed:
+          type: integer
+        quality_signal_failed:
+          type: integer
+        pass_rate:
+          type: number
+          description: " overall pass rate (0-100)"
+
+    result:
+      type: string
+      enum: [PASSED, BLOCKED, WARNING, INVALID_RUN]
+      description: |
+        - PASSED: 所有 hard_gate 和 quality_signal 通过
+        - BLOCKED: 至少一个 hard_gate 失败（执行模式=enforce）
+        - WARNING: 所有 hard_gate 通过，但有 quality_signal 失败
+        - INVALID_RUN: 执行过程出错
+
+    failure_details:
+      type: array
+      description: "失败规则详情（仅当有失败时）"
+      items:
+        type: object
+        properties:
+          rule_id:
+            type: string
+          rule_type:
+            type: string
+          failure_reason:
+            type: string
+          suggestion:
+            type: string
+            description: "修复建议"
+
+    quality_signals:
+      type: array
+      description: "Quality Signal 指标记录（无论成败都记录）"
+      items:
+        type: object
+        properties:
+          signal_id:
+            type: string
+          metric_name:
+            type: string
+          metric_value:
+            type: number
+          threshold:
+            type: number
+          status:
+            type: string
+            enum: [passed, failed]
+
+    gate_handoff_ready:
+      type: boolean
+      description: "是否准备好供 Gate 消费"
+
+    gate_evaluation:
+      type: object
+      description: "Gate 评估就绪信息"
+      properties:
+        ready_for_gate:
+          type: boolean
+        recommended_action:
+          type: string
+          enum: [proceed, block, review]
+        blocking_rule_ids:
+          type: array
+          items:
+            type: string
+
+# ============================================
+# 执行语义
+# ============================================
+execution_semantics:
+  rule_evaluation_order: |
+    1. 首先执行所有 hard_gate 规则
+    2. 若任一 hard_gate 失败且 execution_mode=enforce，立即返回 BLOCKED
+    3. 若所有 hard_gate 通过，继续执行 quality_signal 规则
+    4. quality_signal 失败不阻断，仅记录到 quality_signals
+
+  result_determination: |
+    - 若任一 hard_gate 失败且 execution_mode=enforce → BLOCKED
+    - 若所有 hard_gate 通过且所有 quality_signal 通过 → PASSED
+    - 若所有 hard_gate 通过但有 quality_signal 失败 → WARNING
+    - 若执行过程出错 → INVALID_RUN
+
+  gate_consumption: |
+    Gate 消费 fitness_result 的规则：
+    - result=BLOCKED → Gate 自动拒绝，不允许 merge/proceed
+    - result=PASSED → Gate 自动通过（若 Gate 配置为 auto_pass_on_fitness）
+    - result=WARNING → Gate 可配置为自动通过或需要人工审查
+
+# ============================================
+# 错误处理
+# ============================================
+error_handling:
+  errors:
+    - id: rule_file_not_found
+      message: "Fitness Rule 文件不存在：{path}"
+      action: "返回 INVALID_RUN，记录错误详情"
+
+    - id: rule_schema_invalid
+      message: "Fitness Rule schema 校验失败：{errors}"
+      action: "返回 INVALID_RUN，记录错误详情"
+
+    - id: target_object_not_found
+      message: "目标对象不存在：{path}"
+      action: "返回 INVALID_RUN，记录错误详情"
+
+    - id: rule_evaluation_error
+      message: "规则执行出错：{rule_id}: {error}"
+      action: "标记该规则 status=error，继续执行其他规则"
+
+  retry_policy:
+    max_retries: 0  # Fitness 执行不重试，失败即记录
+    retry_on: []
+
+# ============================================
+# 可观测性
+# ============================================
+observability:
+  metrics:
+    - name: fitness_execution_duration
+      type: histogram
+      description: "Fitness 执行耗时"
+      labels:
+        - object_type
+        - department
+        - result
+      buckets: [1, 5, 10, 30, 60, 300]
+
+    - name: fitness_rules_evaluated_total
+      type: counter
+      description: "已评估的规则总数"
+      labels:
+        - rule_type
+        - status
+        - department
+
+    - name: fitness_blocker_total
+      type: counter
+      description: "Fitness Blocker 事件总数"
+      labels:
+        - department
+        - object_type
+        - rule_id
+
+# ============================================
+# 使用示例
+# ============================================
+examples:
+  - name: "Product SRC Freeze 前 Fitness 检查"
+    input:
+      fitness_rule_path: "spec-global/departments/product/fitness-rules/src-freeze-rules.yaml"
+      target_context:
+        object_type: src
+        object_path: "spec/requirements/SRC-024/SRC-024__xxx.md"
+        parent_refs: {}
+      execution_mode: enforce
+    output:
+      fitness_run_id: "fitness-20260317-001"
+      result: PASSED
+      gate_handoff_ready: true
+
+  - name: "QA Test Set 完成前 Fitness 检查"
+    input:
+      fitness_rule_path: "spec-global/departments/qa/fitness-rules/test-set-completion-rules.yaml"
+      target_context:
+        object_type: test_set
+        object_path: "spec/qa/test-sets/ts-user-auth.yaml"
+        parent_refs:
+          feat_id: "FEAT-SRC-024-001"
+      execution_mode: enforce
+    output:
+      fitness_run_id: "fitness-20260317-002"
+      result: BLOCKED
+      failure_details:
+        - rule_id: "ac_traceability_complete"
+          failure_reason: "Test Set 未覆盖 FEAT 的所有 Acceptance Criteria"
+
+  - name: "Dev Evidence Pack 完成前 Fitness 检查"
+    input:
+      fitness_rule_path: "spec-global/departments/dev/fitness-rules/feature-delivery-rules.yaml"
+      target_context:
+        object_type: evidence_pack
+        object_path: ".workflow/evidence-pack-xxx/evidence_pack.json"
+        parent_refs:
+          feat_id: "FEAT-SRC-024-001"
+      execution_mode: enforce
+    output:
+      fitness_run_id: "fitness-20260317-003"
+      result: WARNING
+      quality_signals:
+        - signal_id: "unit_test_coverage"
+          status: failed
+          metric_value: 75
+          threshold: 80
+
+# ============================================
+# 实现说明
+# ============================================
+implementation_notes:
+  cli_entrypoint: "lee fitness run --rule-path <path> --target <path> [--mode enforce|warn]"
+  python_module: "lee.fitness.executor"
+  schema_validation: "lee.fitness.schema"
+
+  architecture: |
+    Fitness Executor 架构分层：
+    1. CLI 层：lee fitness run 命令解析
+    2. 规则加载层：解析 fitness_rule YAML，校验 schema
+    3. 规则执行层：逐条评估规则，收集结果
+    4. 结果输出层：生成结构化 fitness_result JSON
+    5. Gate 集成层：提供 fitness_result 给下游 Gate 消费
+
+  extension_points:
+    - 自定义规则类型：扩展 rule_type 枚举
+    - 自定义评估函数：注册规则评估回调
+    - 自定义输出格式：扩展 fitness_result schema
+
+# ============================================
+# 与现有 FEAT 的对应关系
+# ============================================
+feat_traceability:
+  - FEAT-SRC-024-001: Fitness Rule Schema 定义
+  - FEAT-SRC-024-002: Fitness Executor 核心实现
+  - FEAT-SRC-024-003: Hard Gate 与 Quality Signal 分层
+  - FEAT-SRC-024-004: Fitness Result 结构化输出
+  - FEAT-SRC-024-005: CLI 与 CI 集成

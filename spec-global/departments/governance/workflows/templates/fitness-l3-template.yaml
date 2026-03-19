@@ -1,0 +1,289 @@
+# Fitness Function L3 Workflow Template
+# 完成条件防腐层 - L3 工作流
+#
+# 嵌入点:
+# 1. Product L2: FEAT 冻结后，Delivery Prep 前 → 需求链完整性验证
+# 2. Dev L2: Smoke Test 前 → 代码完成条件验证
+# 3. QA L2: Test Report 前 → 证据完整性验证
+
+kind: l3_workflow_template
+version: "1.0"
+id: template.governance.fitness
+name: Fitness Function L3 Template
+description: |
+  Fitness Function 作为完成条件防腐层 - L3 工作流模板
+
+  核心流程:
+  - Phase 1: Load Fitness Rules - 根据嵌入点和验证对象加载适用规则
+  - Phase 2: Execute Rules - 执行 fitness rule 并收集结果
+  - Phase 3: Aggregate Result - 聚合 fitness_result 对象
+  - Phase 4: Gate Integration - 将 fitness_result 推送到 Gate
+
+  5 个 P0 Dimension:
+  - contract_consistency: 合同一致性验证
+  - testability: 测试验证完成度
+  - integration_closure: 集成契约闭合
+  - evidence_completeness: 证据完整性
+  - path_governance: 路径规范性
+
+owner: governance
+tags: [governance, fitness, completion, gate, l3]
+
+# ============================================
+# Stage definitions
+# ============================================
+stages:
+  - id: rule_load
+    name: "Load Fitness Rules"
+    kind: stage
+    description: "从 spec/fitness/ 加载适用规则"
+    default_complexity: S
+    depends_on: []
+    steps:
+      - id: load_rules
+        name: "Load Rules"
+        kind: agent
+        agent_id: agent.governance.fitness_loader
+        mandatory: true
+        depends_on: []
+        config:
+          embedding_point: "{{ params.embedding_point }}"
+          subject_refs: "{{ params.subject_refs }}"
+          rule_directory: "spec/fitness/rules/"
+
+  - id: rule_execution
+    name: "Execute Fitness Rules"
+    kind: stage
+    description: "执行 fitness rule 并收集结果"
+    default_complexity: L
+    depends_on: [rule_load]
+    spawns_l3: false
+    steps:
+      - id: execute_rules
+        name: "Execute Rules"
+        kind: agent
+        agent_id: agent.governance.fitness_runner
+        mandatory: true
+        depends_on: [load_rules]
+        config:
+          rules: "{{ steps.load_rules.output.rules }}"
+          subject_refs: "{{ params.subject_refs }}"
+          workspace: "{{ params.workspace }}"
+
+  - id: result_aggregate
+    name: "Aggregate Fitness Result"
+    kind: stage
+    description: "聚合 fitness_result 对象"
+    default_complexity: S
+    depends_on: [rule_execution]
+    steps:
+      - id: aggregate
+        name: "Aggregate Results"
+        kind: agent
+        agent_id: agent.governance.result_aggregator
+        mandatory: true
+        depends_on: [execute_rules]
+        config:
+          dimension_results: "{{ steps.execute_rules.output.dimension_results }}"
+          hard_gate_results: "{{ steps.execute_rules.output.hard_gate_results }}"
+          warnings: "{{ steps.execute_rules.output.warnings }}"
+          command_runs: "{{ steps.execute_rules.output.command_runs }}"
+          evidence_refs: "{{ steps.execute_rules.output.evidence_refs }}"
+          subject_refs: "{{ params.subject_refs }}"
+
+  - id: gate_integration
+    name: "Gate Integration"
+    kind: stage
+    description: "将 fitness_result 推送到 Gate"
+    default_complexity: S
+    depends_on: [result_aggregate]
+    steps:
+      - id: push_to_gate
+        name: "Push to Gate"
+        kind: agent
+        agent_id: agent.governance.gate_integrator
+        mandatory: true
+        depends_on: [aggregate]
+        config:
+          fitness_result: "{{ steps.aggregate.output.fitness_result }}"
+          gate_id: "{{ params.gate_id }}"
+
+# ============================================
+# 输出定义 (符合 ADR-024 fitness_result 结构)
+# ============================================
+outputs:
+  - path: "{{ params.fitness_output_dir | default('.workflow/fitness') }}/fitness_result_{{ params.subject_refs | join('_') }}.json"
+    type: file
+    format: json
+    description: "Fitness Result 结构化输出 (机器可读)"
+    required: true
+    schema:
+      type: object
+      required:
+        - subject_refs
+        - dimension_results
+        - hard_gate_results
+        - final_status
+      properties:
+        subject_refs:
+          type: array
+          items: string
+        dimension_results:
+          type: object
+          properties:
+            contract_consistency: { type: object }
+            testability: { type: object }
+            integration_closure: { type: object }
+            evidence_completeness: { type: object }
+            path_governance: { type: object }
+        hard_gate_results:
+          type: object
+          additionalProperties: boolean
+        warnings:
+          type: array
+          items: string
+        command_runs:
+          type: array
+          items: object
+        evidence_refs:
+          type: array
+          items: string
+        summary:
+          type: string
+        final_status:
+          type: string
+          enum: [pass, fail, partial]
+
+  - path: "{{ params.fitness_output_dir | default('.workflow/fitness') }}/fitness_report_{{ params.subject_refs | join('_') }}.md"
+    type: file
+    format: markdown
+    description: "Fitness Report 人读视图"
+    required: false
+
+# ============================================
+# 5 个 P0 Dimension 验证规则
+# ============================================
+fitness_dimensions:
+  - dimension: contract_consistency
+    description: "合同一致性验证 - 实现与冻结合同一致"
+    rules:
+      - rule_id: FCR-001
+        description: "Contract parity check - API 实现与冻结合同一致"
+        severity: blocker
+        execution_method: contract_diff
+        evidence_binding: git_diff_against_frozen_contract
+
+  - dimension: testability
+    description: "测试验证完成度 - Unit/Integration/Smoke 必要验证"
+    rules:
+      - rule_id: FCR-002
+        description: "Unit test coverage check - 单元测试覆盖率达标"
+        severity: blocker
+        execution_method: coverage_check
+        evidence_binding: coverage_report
+
+      - rule_id: FCR-003
+        description: "Integration test execution - 集成测试已执行"
+        severity: critical
+        execution_method: test_execution_check
+        evidence_binding: test_results
+
+  - dimension: integration_closure
+    description: "集成契约闭合 - 跨模块集成契约验证"
+    rules:
+      - rule_id: FCR-004
+        description: "API contract verification - API 契约验证通过"
+        severity: critical
+        execution_method: integration_contract_verify
+        evidence_binding: api_contract_test_results
+
+  - dimension: evidence_completeness
+    description: "证据完整性 - 证据包完整性检查"
+    rules:
+      - rule_id: FCR-005
+        description: "Evidence pack completeness - 证据包完整"
+        severity: blocker
+        execution_method: evidence_pack_audit
+        evidence_binding: evidence_pack_manifest
+
+  - dimension: path_governance
+    description: "路径规范性 - Canonical/Forbidden 路径检查"
+    rules:
+      - rule_id: FCR-006
+        description: "Canonical path check - 代码放置在规范目录"
+        severity: blocker
+        execution_method: canonical_path_verify
+        evidence_binding: path_policy_check_results
+
+      - rule_id: FCR-007
+        description: "Forbidden path check - 未写入禁止路径"
+        severity: blocker
+        execution_method: forbidden_path_verify
+        evidence_binding: io_guard_check_results
+
+# ============================================
+# 嵌入点配置
+# ============================================
+embedding_points:
+  product_l2:
+    description: "Product L2 嵌入点 - FEAT 冻结后，Delivery Prep 前"
+    workflow_template: product.feat-to-delivery-prep
+    insert_before: delivery_prep_freeze
+    subject_refs: ["{{ feat_id }}"]
+    gate_id: "feat_delivery_gate"
+    applicable_dimensions:
+      - contract_consistency
+      - evidence_completeness
+      - path_governance
+
+  dev_l2:
+    description: "Dev L2 嵌入点 - Smoke Test 前"
+    workflow_template: dev.feature
+    insert_before: smoke_test
+    subject_refs: ["{{ task_id }}"]
+    gate_id: "smoke_gate"
+    applicable_dimensions:
+      - contract_consistency
+      - testability
+      - integration_closure
+      - path_governance
+
+  qa_l2:
+    description: "QA L2 嵌入点 - Test Report 前"
+    workflow_template: qa.test-plan
+    insert_before: test_report
+    subject_refs: ["{{ test_plan_id }}"]
+    gate_id: "test_report_gate"
+    applicable_dimensions:
+      - evidence_completeness
+      - testability
+
+# ============================================
+# 阻断规则
+# ============================================
+blocking_rules:
+  - rule: "any_hard_gate_fail_blocks"
+    description: "任一 hard_gate 失败即阻断下游步骤"
+    condition: "any(hard_gate_results.values() == false)"
+    action: "block_and_fail_phase"
+
+  - rule: "blocker_severity_blocks"
+    description: "blocker severity 规则失败即阻断"
+    condition: "any(rule.severity == 'blocker' and rule.result == 'fail')"
+    action: "block_and_fail_phase"
+
+# ============================================
+# 回滚规则
+# ============================================
+rollback_rules:
+  - rule: "contract_rollback"
+    description: "合同一致性失败返回 contract_design"
+    trigger: "dimension_results.contract_consistency.status == 'fail'"
+    rollback_to: "contract_design"
+    max_rollback: 1
+
+  - rule: "integration_rollback"
+    description: "集成契约失败返回 integration"
+    trigger: "dimension_results.integration_closure.status == 'fail'"
+    rollback_to: "integration"
+    max_rollback: 2

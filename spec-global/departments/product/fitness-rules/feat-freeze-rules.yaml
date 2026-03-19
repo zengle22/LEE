@@ -1,0 +1,296 @@
+# Product FEAT Freeze Fitness Rules v1.0
+# 产品部门 FEAT 冻结前 Fitness 检查规则
+#
+# 这些规则在 FEAT Freeze 前执行，确保 FEAT 满足完成条件。
+# 所有规则都是 hard_gate，失败会阻断 freeze。
+
+kind: fitness_rules
+version: "1.0"
+id: fitness_rules.product.feat_freeze
+name: FEAT Freeze Fitness Rules
+description: |
+  FEAT Freeze 前的 Fitness 检查规则。
+
+  规则来源：
+  - epic-to-feat workflow 的 feat_freeze gate 要求
+  - FEAT schema 定义的必需字段
+  - 产品部门质量标准
+
+owner: product-governance
+tags: [fitness-rules, product, feat-freeze, hard-gate, adr-024]
+
+# ============================================
+# Governing ADRs
+# ============================================
+governing_adrs:
+  - ADR-024: Fitness Function 完成条件防腐层核心能力构建
+
+# ============================================
+# 规则定义
+# ============================================
+rules:
+  # ------------------------------------------
+  # Hard Gate 规则（必须通过）
+  # ------------------------------------------
+  - id: ssot_header_complete
+    name: "SSOT Header 完整性"
+    description: "FEAT 必须包含完整的 SSOT Header 字段"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        feat.id IS NOT EMPTY AND
+        feat.ssot_type == 'FEAT' AND
+        feat.status IN ['draft', 'frozen', 'active', 'deprecated'] AND
+        feat.version IS NOT EMPTY AND
+        feat.title IS NOT EMPTY AND
+        feat.workflow_instance_id IS NOT EMPTY AND
+        feat.parent_id IS NOT EMPTY
+
+    failure_message: "SSOT Header 字段不完整，缺少必需字段：{missing_fields}"
+    suggestion: "确保 FEAT 包含 id, ssot_type, status, version, title, workflow_instance_id, parent_id"
+
+  - id: parent_epic_reference
+    name: "父 EPIC 引用"
+    description: "FEAT 必须正确引用父 EPIC"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: reference_check
+      rule: |
+        feat.parent_id STARTS_WITH 'EPIC-' AND
+        feat.derived_from_ids CONTAINS feat.parent_id
+
+    failure_message: "父 EPIC 引用不正确或缺失"
+    suggestion: "确保 parent_id 指向正确的 EPIC 且 derived_from_ids 包含该 EPIC"
+
+  - id: src_scope_inheritance
+    name: "SRC 作用域继承"
+    description: "FEAT 必须继承 SRC 作用域（通过 EPIC）"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: reference_check
+      rule: |
+        feat.properties.src_root_id IS NOT EMPTY AND
+        feat.properties.src_root_id STARTS_WITH 'SRC-'
+
+    failure_message: "SRC 作用域未继承"
+    suggestion: "确保 properties.src_root_id 指向正确的 SRC"
+
+  - id: independent验收_boundary
+    name: "独立验收边界"
+    description: "FEAT 必须有独立可验证的验收边界"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        feat.验收标准 IS NOT EMPTY OR
+        feat.acceptance_criteria IS NOT EMPTY
+
+    failure_message: "独立验收边界未定义"
+    suggestion: "明确描述 FEAT 的验收标准和完成条件"
+
+  - id: structured_acceptance_checks
+    name: "结构化验收检查"
+    description: "FEAT 必须提供结构化的 acceptance_checks"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        feat.acceptance_checks IS NOT EMPTY AND
+        LENGTH(feat.acceptance_checks) >= 1 AND
+        ALL(check IN feat.acceptance_checks WHERE
+          check.scenario IS NOT EMPTY AND
+          check.given IS NOT EMPTY AND
+          check.when IS NOT EMPTY AND
+          check.then IS NOT EMPTY)
+
+    failure_message: "结构化验收检查缺失或不完整"
+    suggestion: "为每条验收检查提供 scenario/given/when/then 字段"
+
+  - id: input_contract_defined
+    name: "输入合约定义"
+    description: "FEAT 必须定义输入合约（不能是占位值）"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        feat.输入 IS NOT EMPTY AND
+        feat.输入 NOT CONTAINS 'TBD' AND
+        feat.输入 NOT CONTAINS 'TODO'
+
+    failure_message: "输入合约未定义或包含占位值"
+    suggestion: "明确描述 FEAT 的输入来源和输入合约"
+
+  - id: output_contract_defined
+    name: "输出合约定义"
+    description: "FEAT 必须定义输出合约"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        feat.输出 IS NOT EMPTY AND
+        feat.输出 NOT CONTAINS 'TBD' AND
+        feat.输出 NOT CONTAINS 'TODO'
+
+    failure_message: "输出合约未定义或包含占位值"
+    suggestion: "明确描述 FEAT 的产出物和输出合约"
+
+  - id: capability_not_task
+    name: "能力而非任务描述"
+    description: "FEAT 应描述系统能力，而不是实现任务"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: semantic_check
+      rule: |
+        feat.目标 NOT CONTAINS '页面' AND
+        feat.目标 NOT CONTAINS '按钮' AND
+        feat.目标 NOT CONTAINS '开发' AND
+        feat.目标 NOT CONTAINS '实现'
+
+    failure_message: "FEAT 描述像任务而非能力"
+    suggestion: "将任务描述改为能力描述，例如 '用户能够...' 而非 '开发 XX 页面'"
+
+  - id: derivation_readiness
+    name: "可派生 TASK/TESTSET"
+    description: "FEAT 必须能够派生 TASK 和 TESTSET"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        feat.用户故事 IS NOT EMPTY OR
+        LENGTH(feat.acceptance_checks) >= 1
+
+    failure_message: "FEAT 信息不足以派生 TASK 和 TESTSET"
+    suggestion: "补充用户故事或验收检查，确保下游可派生"
+
+  # ------------------------------------------
+  # Quality Signal 规则（建议性）
+  # ------------------------------------------
+  - id: user_story_coverage
+    name: "用户故事覆盖"
+    description: "FEAT 应包含完整的用户故事"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: metric_check
+      rule: |
+        feat.用户故事 IS NOT EMPTY AND
+        LENGTH(feat.用户故事) >= 1
+
+    failure_message: "FEAT 未包含用户故事"
+    suggestion: "添加用户故事以更好地描述用户视角"
+
+  - id: non_goals_defined
+    name: "非目标定义"
+    description: "FEAT 应说明非目标"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: completeness_check
+      rule: |
+        feat.非目标 IS NOT EMPTY AND
+        LENGTH(feat.非目标) >= 1
+
+    failure_message: "FEAT 未定义非目标"
+    suggestion: "明确说明什么不在本 FEAT 范围内"
+
+  - id: priority_defined
+    name: "优先级定义"
+    description: "FEAT 应定义优先级"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: completeness_check
+      rule: |
+        feat.properties.priority IN ['P0', 'P1', 'P2', 'P3']
+
+    failure_message: "FEAT 优先级未定义"
+    suggestion: "为 FEAT 设置优先级（P0/P1/P2/P3）"
+
+  - id: delivery_slice_defined
+    name: "交付切片定义"
+    description: "FEAT 应定义交付切片"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: completeness_check
+      rule: |
+        feat.properties.delivery_slice IN ['mvp', 'standard', 'enhanced']
+
+    failure_message: "FEAT 交付切片未定义"
+    suggestion: "为 FEAT 设置交付切片（mvp/standard/enhanced）"
+
+# ============================================
+# 执行配置
+# ============================================
+execution_config:
+  execution_mode: enforce  # hard_gate 失败会阻断
+  parallel_evaluation: true  # 规则可并行评估
+  fail_fast: false  # 不立即失败，收集所有失败规则
+
+  result_mapping:
+    all_hard_gate_passed: "PASSED"
+    any_hard_gate_failed: "BLOCKED"
+    hard_gate_passed_signal_failed: "WARNING"
+
+# ============================================
+# Gate 消费配置
+# ============================================
+gate_consumption:
+  gate_id: gate.product.feat_freeze
+  auto_pass_on: "PASSED"
+  auto_block_on: "BLOCKED"
+  require_review_on: "WARNING"
+
+  failure_blocking: true
+  signal_failure_warning: true
+
+# ============================================
+# 与 workflow 的集成
+# ============================================
+workflow_integration:
+  workflow_id: workflow.product.task.epic_to_feat
+  trigger_point: "before_feat_freeze"
+  trigger_event: "feat_freeze_requested"
+
+  input_evidence:
+    - source: "feat_formalized_specs"
+      type: "feat"
+      required: true
+
+  output_consumption:
+    - consumer: "gate.product.feat_freeze"
+      field: "fitness_result"
+      required: true
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "product-governance"
+  created_at: "2026-03-17"
+  version: "1.0"
+  related_workflow: "epic_to_feat"
+  related_gate: "gate.product.feat_freeze"

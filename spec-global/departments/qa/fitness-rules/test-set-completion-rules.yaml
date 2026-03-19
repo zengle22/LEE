@@ -1,0 +1,278 @@
+# QA Test Set Completion Fitness Rules v1.0
+# QA 部门 Test Set 完成前 Fitness 检查规则
+#
+# 这些规则在 Test Set 完成前执行，确保 Test Set 满足完成条件。
+# 所有规则都是 hard_gate，失败会阻断 Test Set 批准。
+
+kind: fitness_rules
+version: "1.0"
+id: fitness_rules.qa.test_set_completion
+name: Test Set Completion Fitness Rules
+description: |
+  Test Set 完成前的 Fitness 检查规则。
+
+  规则来源：
+  - test-set-production-l3 workflow 的 output_validation 要求
+  - test-set schema 定义的必需字段
+  - QA 部门质量标准
+
+owner: qa-governance
+tags: [fitness-rules, qa, test-set-completion, hard-gate, adr-024]
+
+# ============================================
+# Governing ADRs
+# ============================================
+governing_adrs:
+  - ADR-024: Fitness Function 完成条件防腐层核心能力构建
+
+# ============================================
+# 规则定义
+# ============================================
+rules:
+  # ------------------------------------------
+  # Hard Gate 规则（必须通过）
+  # ------------------------------------------
+  - id: test_set_schema_compliance
+    name: "Test Set Schema 合规性"
+    description: "Test Set 必须符合 test-set schema v1"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: schema_validation
+      rule: |
+        test_set.test_set_id IS NOT EMPTY AND
+        test_set.module IS NOT EMPTY AND
+        test_set.strategy IS NOT EMPTY AND
+        test_set.test_focus IS NOT EMPTY
+
+    failure_message: "Test Set 不符合 schema v1 要求"
+    suggestion: "确保 Test Set 包含 test_set_id, module, strategy, test_focus 等必需字段"
+
+  - id: single_feat_traceability
+    name: "单一 FEAT 追溯"
+    description: "Test Set 必须 trace 到单一 FEAT"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: reference_check
+      rule: |
+        test_set.traceability.feature_ids IS NOT EMPTY AND
+        LENGTH(test_set.traceability.feature_ids) == 1 AND
+        test_set.traceability.feature_ids[0] STARTS_WITH 'FEAT-'
+
+    failure_message: "Test Set 未 trace 到单一 FEAT 或 trace 到多个 FEAT"
+    suggestion: "确保 Test Set 恰好关联一个 FEAT ID"
+
+  - id: ac_coverage
+    name: "Acceptance Criteria 覆盖"
+    description: "Test Set 必须声明覆盖的 Acceptance Criteria"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        test_set.traceability.acceptance_criteria_refs IS NOT EMPTY AND
+        LENGTH(test_set.traceability.acceptance_criteria_refs) >= 1
+
+    failure_message: "Test Set 未声明覆盖的 Acceptance Criteria"
+    suggestion: "列出 Test Set 覆盖的 FEAT Acceptance Criteria（如 AC1, AC2）"
+
+  - id: test_focus_complete
+    name: "测试重点完整性"
+    description: "Test Set 必须包含至少一个测试重点"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        test_set.test_focus.positive IS NOT EMPTY OR
+        test_set.test_focus.negative IS NOT EMPTY OR
+        test_set.test_focus.boundary IS NOT EMPTY OR
+        test_set.test_focus.exception IS NOT EMPTY
+
+    failure_message: "Test Set 未包含任何测试重点（正向/负向/边界/异常）"
+    suggestion: "至少补充一种测试重点（positive/negative/boundary/exception）"
+
+  - id: p0_positive_required
+    name: "P0 级别正向测试"
+    description: "P0 级别 Test Set 必须包含正向测试"
+    type: hard_gate
+    severity: blocker
+
+    condition: "test_set.strategy.priority == 'P0'"
+
+    check:
+      type: completeness_check
+      rule: |
+        test_set.test_focus.positive IS NOT EMPTY AND
+        LENGTH(test_set.test_focus.positive) >= 1
+
+    failure_message: "P0 级别 Test Set 必须包含正向测试点"
+    suggestion: "为 P0 级别 Test Set 补充正向测试场景"
+
+  - id: adr_trace_consistency
+    name: "ADR 追溯一致性"
+    description: "若声明 governing_adrs，必须保留 decision_refs 或 decision_constraints"
+    type: hard_gate
+    severity: blocker
+
+    condition: "test_set.traceability.governing_adrs IS NOT EMPTY"
+
+    check:
+      type: completeness_check
+      rule: |
+        test_set.traceability.decision_refs IS NOT EMPTY OR
+        test_set.traceability.decision_constraints IS NOT EMPTY
+
+    failure_message: "Test Set 受 ADR 约束但未保留 decision_refs 或 decision_constraints"
+    suggestion: "补充 decision_refs 或 decision_constraints 作为审计 trace"
+
+  - id: execution_config_complete
+    name: "执行配置完整性"
+    description: "Test Set 必须包含执行配置"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        test_set.execution IS NOT EMPTY AND
+        test_set.execution.estimated_duration IS NOT EMPTY AND
+        test_set.execution.requires_env IS NOT EMPTY
+
+    failure_message: "Test Set 执行配置不完整"
+    suggestion: "补充 estimated_duration 和 requires_env 等执行配置"
+
+  - id: automation_ready_flag
+    name: "自动化就绪标记"
+    description: "Test Set 应标记是否可自动化"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: flag_check
+      rule: |
+        test_set.execution.automation_ready IS NOT EMPTY AND
+        test_set.execution.automation_ready IN [true, false]
+
+    failure_message: "自动化就绪标记缺失"
+    suggestion: "明确标记 automation_ready 为 true 或 false"
+
+  # ------------------------------------------
+  # Quality Signal 规则（建议性）
+  # ------------------------------------------
+  - id: risk_areas_defined
+    name: "风险区域定义"
+    description: "Test Set 应定义风险区域"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: completeness_check
+      rule: |
+        test_set.strategy.risk_areas IS NOT EMPTY AND
+        LENGTH(test_set.strategy.risk_areas) >= 1
+
+    failure_message: "Test Set 未定义风险区域"
+    suggestion: "识别并列出需要重点测试的风险区域"
+
+  - id: test_types_complete
+    name: "测试类型完整性"
+    description: "Test Set 应声明需要的测试类型"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: completeness_check
+      rule: |
+        test_set.strategy.test_types IS NOT EMPTY AND
+        LENGTH(test_set.strategy.test_types) >= 1
+
+    failure_message: "Test Set 未声明测试类型"
+    suggestion: "声明需要的测试类型（api/e2e/unit/integration/performance/security）"
+
+  - id: dependency_declaration
+    name: "依赖关系声明"
+    description: "Test Set 应声明与其他 Test Set 的依赖关系"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: completeness_check
+      rule: |
+        test_set.execution.depends_on IS NOT EMPTY
+
+    failure_message: "Test Set 未声明依赖关系"
+    suggestion: "声明依赖的其他 Test Set ID（若无依赖可留空）"
+
+  - id: review_report_exists
+    name: "审评报告存在"
+    description: "应有 Test Set 审评报告"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: file_existence
+      rule: |
+        FILE_EXISTS("{{ tests_dir }}/qa/review/ts-{{ module }}/review-report.md")
+
+    failure_message: "Test Set 审评报告不存在"
+    suggestion: "生成审评报告记录 QA Lead 和 PM 的评审意见"
+
+# ============================================
+# 执行配置
+# ============================================
+execution_config:
+  execution_mode: enforce  # hard_gate 失败会阻断
+  parallel_evaluation: true  # 规则可并行评估
+  fail_fast: false  # 不立即失败，收集所有失败规则
+
+  result_mapping:
+    all_hard_gate_passed: "PASSED"
+    any_hard_gate_failed: "BLOCKED"
+    hard_gate_passed_signal_failed: "WARNING"
+
+# ============================================
+# Gate 消费配置
+# ============================================
+gate_consumption:
+  gate_id: gate.qa.test_set_approval
+  auto_pass_on: "PASSED"
+  auto_block_on: "BLOCKED"
+  require_review_on: "WARNING"
+
+  failure_blocking: true
+  signal_failure_warning: true
+
+# ============================================
+# 与 workflow 的集成
+# ============================================
+workflow_integration:
+  workflow_id: template.qa.test_set_production
+  trigger_point: "before_test_set_approval"
+  trigger_event: "test_set_complete"
+
+  input_evidence:
+    - source: "test_set"
+      type: "test_set"
+      required: true
+      path: "{{ qa_specs_dir }}/test-sets/ts-{{ module }}.yaml"
+
+  output_consumption:
+    - consumer: "gate.qa.test_set_approval"
+      field: "fitness_result"
+      required: true
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "qa-governance"
+  created_at: "2026-03-17"
+  version: "1.0"
+  related_workflow: "test_set_production"
+  related_gate: "gate.qa.test_set_approval"

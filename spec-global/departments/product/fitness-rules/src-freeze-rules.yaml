@@ -1,0 +1,268 @@
+# Product SRC Freeze Fitness Rules v1.0
+# 产品部门 SRC 冻结前 Fitness 检查规则
+#
+# 这些规则在 SRC Freeze 前执行，确保 SRC 满足完成条件。
+# 所有规则都是 hard_gate，失败会阻断 freeze。
+
+kind: fitness_rules
+version: "1.0"
+id: fitness_rules.product.src_freeze
+name: SRC Freeze Fitness Rules
+description: |
+  SRC Freeze 前的 Fitness 检查规则。
+
+  规则来源：
+  - raw-to-src workflow 的 output_validation 要求
+  - SRC schema 定义的必需字段
+  - 产品部门质量标准
+
+owner: product-governance
+tags: [fitness-rules, product, src-freeze, hard-gate, adr-024]
+
+# ============================================
+# Governing ADRs
+# ============================================
+governing_adrs:
+  - ADR-024: Fitness Function 完成条件防腐层核心能力构建
+
+# ============================================
+# 规则定义
+# ============================================
+rules:
+  # ------------------------------------------
+  # Hard Gate 规则（必须通过）
+  # ------------------------------------------
+  - id: ssot_header_complete
+    name: "SSOT Header 完整性"
+    description: "SRC 必须包含完整的 SSOT Header 字段"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        src.id IS NOT EMPTY AND
+        src.ssot_type == 'SRC' AND
+        src.status IN ['draft', 'frozen', 'active', 'deprecated'] AND
+        src.version IS NOT EMPTY AND
+        src.title IS NOT EMPTY AND
+        src.workflow_instance_id IS NOT EMPTY
+
+    failure_message: "SSOT Header 字段不完整，缺少必需字段：{missing_fields}"
+    suggestion: "确保 SRC 包含 id, ssot_type, status, version, title, workflow_instance_id"
+
+  - id: problem_statement_complete
+    name: "问题陈述完整性"
+    description: "SRC 必须包含完整的问题陈述"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        src.problem_statement IS NOT EMPTY AND
+        LENGTH(src.problem_statement) >= 20
+
+    failure_message: "问题陈述不完整或缺失"
+    suggestion: "详细描述问题背景、影响范围和业务痛点"
+
+  - id: target_user_defined
+    name: "目标用户定义"
+    description: "SRC 必须明确目标用户"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        src.target_users IS NOT EMPTY AND
+        LENGTH(src.target_users) >= 1
+
+    failure_message: "目标用户未定义"
+    suggestion: "明确描述目标用户群体和用户画像"
+
+  - id: business_driver_defined
+    name: "业务动因定义"
+    description: "SRC 必须说明业务动因"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        src.business_driver IS NOT EMPTY AND
+        LENGTH(src.business_driver) >= 10
+
+    failure_message: "业务动因未定义或过于简单"
+    suggestion: "说明业务价值、商业机会或战略意义"
+
+  - id: key_constraints_defined
+    name: "关键约束定义"
+    description: "SRC 必须说明关键约束"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        src.key_constraints IS NOT EMPTY AND
+        LENGTH(src.key_constraints) >= 1
+
+    failure_message: "关键约束未定义"
+    suggestion: "列出时间、技术、合规等关键约束条件"
+
+  - id: source_traceability
+    name: "来源可追溯性"
+    description: "SRC 必须有明确的来源引用"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        src.source_refs IS NOT EMPTY AND
+        LENGTH(src.source_refs) >= 1
+
+    failure_message: "来源引用缺失"
+    suggestion: "引用原始需求文档、ADR、商业机会或其他来源"
+
+  - id: src_root_id_assigned
+    name: "SRC Root ID 已分配"
+    description: "SRC 必须分配 src_root_id 作用域"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        src.src_root_id IS NOT EMPTY
+
+    failure_message: "src_root_id 未分配"
+    suggestion: "确保 SRC 有唯一的 src_root_id 用于下游追溯"
+
+  - id: non_goals_defined
+    name: "非目标定义"
+    description: "SRC 必须说明非目标（什么不在范围内）"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: completeness_check
+      rule: |
+        src.non_goals IS NOT EMPTY AND
+        LENGTH(src.non_goals) >= 1
+
+    failure_message: "非目标未定义"
+    suggestion: "明确说明什么不在本 SRC 范围内，避免范围蔓延"
+
+  # ------------------------------------------
+  # ADR Bridge 特定规则（若适用）
+  # ------------------------------------------
+  - id: adr_bridge_semantic
+    name: "ADR Bridge 语义完整性"
+    description: "若 SRC 是从 ADR 桥接的，必须包含 bridge 语义"
+    type: hard_gate
+    severity: blocker
+
+    condition: "src.source_kind == 'governance_bridge_src' OR src.governated_by_adrs IS NOT EMPTY"
+
+    check:
+      type: completeness_check
+      rule: |
+        src.governated_by_adrs IS NOT EMPTY AND
+        LENGTH(src.governated_by_adrs) >= 1 AND
+        src.change_scope IS NOT EMPTY AND
+        src.expected_downstream_objects IS NOT EMPTY AND
+        src.acceptance_impact IS NOT EMPTY
+
+    failure_message: "ADR Bridge 语义不完整"
+    suggestion: "补充 governed_by_adrs, change_scope, expected_downstream_objects, acceptance_impact, non_goals"
+
+  # ------------------------------------------
+  # Quality Signal 规则（建议性）
+  # ------------------------------------------
+  - id: src_readability
+    name: "SRC 可读性"
+    description: "SRC 文档应结构清晰、易于理解"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: metric_check
+      rule: |
+        src.has_table_of_contents == true OR
+        LENGTH(src.sections) >= 3
+
+    threshold:
+      min_sections: 3
+
+    failure_message: "SRC 结构可能过于简单"
+    suggestion: "考虑添加目录、分节和示例提高可读性"
+
+  - id: src_independent_replay
+    name: "SRC 独立可复用性"
+    description: "SRC 应具备独立 replay 和复用的条件"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: flag_check
+      rule: |
+        src.standalone_context IS NOT EMPTY OR
+        src.prerequisites IS NOT EMPTY
+
+    failure_message: "SRC 可能依赖未声明的上下文"
+    suggestion: "补充独立 replay 所需的上下文和前置条件"
+
+# ============================================
+# 执行配置
+# ============================================
+execution_config:
+  execution_mode: enforce  # hard_gate 失败会阻断
+  parallel_evaluation: true  # 规则可并行评估
+  fail_fast: false  # 不立即失败，收集所有失败规则
+
+  result_mapping:
+    all_hard_gate_passed: "PASSED"
+    any_hard_gate_failed: "BLOCKED"
+    hard_gate_passed_signal_failed: "WARNING"
+
+# ============================================
+# Gate 消费配置
+# ============================================
+gate_consumption:
+  gate_id: gate.product.src_freeze
+  auto_pass_on: "PASSED"
+  auto_block_on: "BLOCKED"
+  require_review_on: "WARNING"
+
+  failure_blocking: true
+  signal_failure_warning: true
+
+# ============================================
+# 与 workflow 的集成
+# ============================================
+workflow_integration:
+  workflow_id: workflow.product.task.raw_to_src
+  trigger_point: "before_source_freeze"
+  trigger_event: "src_freeze_requested"
+
+  input_evidence:
+    - source: "normalized_src"
+      type: "src"
+      required: true
+
+  output_consumption:
+    - consumer: "gate.product.src_freeze"
+      field: "fitness_result"
+      required: true
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "product-governance"
+  created_at: "2026-03-17"
+  version: "1.0"
+  related_workflow: "raw_to_src"
+  related_gate: "gate.product.src_freeze"

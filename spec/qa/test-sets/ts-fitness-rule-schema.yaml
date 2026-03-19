@@ -1,0 +1,114 @@
+test_set_id: TS-FITNESS-RULE-SCHEMA
+module: fitness-rule-schema
+description: Fitness Rule Schema 模块测试集，验证 ADR-024 定义的 fitness rule schema 结构、fitness result 输出格式、rule class 分类及 dimension 定义的正确性和完整性
+owner: qa-team
+version: "1.1"
+status: active
+created_at: "2026-03-18T12:50:47+08:00"
+updated_at: "2026-03-18T13:30:00+08:00"
+
+strategy:
+  focus:
+    - Schema 结构层验证 - Fitness Rule 8 个核心字段完整性
+    - Schema 结构层验证 - Fitness Result 8 个必需字段完整性
+    - 语义层验证 - Rule Class 定义正确性
+    - 语义层验证 - Dimension 定义完整性
+    - 语义层验证 - Severity 分级正确性
+    - 集成契约验证 - Result 与 Gate 集成契约
+    - L3 工作流集成验证 - Fitness L3 嵌入 Dev/Product/QA L2
+  risk_areas:
+    - Schema 与现有 Gate 规则冲突，导致集成困难
+    - Dimension 定义与实际检查能力不匹配，契约成为空壳
+    - Execution Method 类型扩展性不足
+    - Result 结构复杂度过高导致消费困难
+  test_types:
+    - integration
+    - api
+    - unit
+  priority: P0
+
+test_focus:
+  positive:
+    - 验证 Fitness Rule 8 个核心字段全部存在且数据类型正确
+    - 验证 Fitness Result 8 个必需字段全部存在且 final_status 枚举值正确
+    - 验证 hard_gate 和 quality_signal 两类 Rule Class 定义正确
+    - 验证 5 个 P0 Dimension 全部定义且维度与 rule 映射关系正确
+    - 验证示例 manifest 文件符合 schema 定义且包含至少 3 种 artifact 类型
+    - 验证 Fitness L3 工作流可正确嵌入 Dev/Product/QA L2
+  negative:
+    - 缺失必需字段的 schema 应被拒绝并返回具体错误
+    - 错误数据类型的字段应被检测并标记
+    - 无效 rule_class 值应被拒绝
+    - 无效 dimension 值应被拒绝
+    - 无效 severity 值应被拒绝
+  boundary:
+    - 字段值为空/null/空字符串的处理
+    - 最大长度/数组边界值验证
+    - 嵌套对象的最小结构验证
+  exception:
+    - 网络超时情况下的 schema 验证行为
+    - 服务不可用时的错误处理
+    - 未知 type 值的容错处理
+
+execution:
+  depends_on: []
+  estimated_duration: "30min"
+  requires_env:
+    - api
+    - database
+  requires_data:
+    - 测试用 Fitness Rule YAML 文件 (FCR-001 ~ FCR-005)
+    - 测试用 Fitness Result JSON 数据
+    - Fitness L3 工作流模板
+  automation_ready: true
+
+traceability:
+  requirement_ids:
+    - ADR-024
+    - SRC-046
+    - EPIC-SRC-046-001
+  feature_ids:
+    - FEAT-SRC-046-001
+    - FEAT-SRC-046-005
+  acceptance_criteria_refs:
+    - AC-001
+    - AC-002
+    - AC-003
+    - AC-004
+    - AC-005
+    - AC-006
+    - AC-007
+    - AC-008
+  tech_design_ref: TECH-FEAT-SRC-046-005
+  governing_adrs:
+    - ADR-024
+  decision_refs:
+    - ADR-024
+  decision_constraints:
+    - Fitness Rule Schema 必须包含 8 个核心字段
+    - Fitness Result 必须包含 8 个必需字段
+    - Rule Class 分为 hard_gate 和 quality_signal 两类
+    - 第一阶段至少支持 5 个 P0 Dimension
+    - Severity 分为 blocker/critical/warning/info 四级
+    - final_status 枚举值为 pass/fail/partial
+  architecture_constraints:
+    - TESTSET derives from FEAT, not EPIC
+    - Fitness Rule 必须以仓库正式对象或正式规则文件存在
+    - 正式真源应为 schema-friendly 的 YAML/JSON
+    - Fitness L3 工作流模板：template.governance.fitness
+  process_constraints:
+    - Delivery prep seed required for risk and integration coverage
+    - Fitness 结果必须进入 evidence pack
+    - Fitness L3 嵌入 Dev L2/Prod L2/QA L2 工作流
+  l3_workflow_traceability:
+    workflow_template: template.governance.fitness
+    embedding_points:
+      - dev_l2: "Smoke Test 前"
+      - product_l2: "FEAT 冻结后，Delivery Prep 前"
+      - qa_l2: "Test Report 前"
+    rule_files:
+      - spec/fitness/rules/FCR-001__contract-parity.yaml
+      - spec/fitness/rules/FCR-002__test-verification.yaml
+      - spec/fitness/rules/FCR-003__integration-closure.yaml
+      - spec/fitness/rules/FCR-004__evidence-completeness.yaml
+      - spec/fitness/rules/FCR-005__path-governance.yaml

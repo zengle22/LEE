@@ -1,0 +1,172 @@
+# Product FEAT to RELEASE L3 Template
+# 从 FEAT Bundle 生成 RELEASE 对象的产品侧 L3 工作流模板
+#
+# 定位：ADR-027 渐进式工作流的核心 L3 之一
+# 上游：Delivery Prep (FEAT Bundle frozen + TASK/TECH/UI frozen)
+# 下游：RELEASE2DEVPLAN, RELEASE2TESTPLAN
+#
+# 关键说明：
+# - RELEASE 在此模板中为 draft 状态，不是 frozen
+# - RELEASE 作为中间载体，用于组织 FEAT Bundle
+# - 真正的冻结发生在 DEVPLAN/TESTPLAN Freeze 时
+
+kind: l3_workflow_template
+version: "1.0"
+id: workflow.product.task.feat_to_release
+name: Product FEAT to RELEASE
+description: |
+  L3 template for generating RELEASE from FEAT Bundle.
+
+  从已冻结的 FEAT Bundle 生成 RELEASE 对象（draft 状态）：
+  1. Release Init: 初始化 RELEASE 对象
+  2. Release Validate: 验证 FEAT Bundle 完整性
+  3. Release Output: 输出 RELEASE 到下游 L3
+
+owner: product-ai
+tags: [product, workflow, l3, release, adr-027, delivery-axis]
+
+# SSOT Integration
+ssot_integration:
+  input_types:
+    - feat_freeze
+  output_types:
+    - release_draft
+
+# 阶段流程
+stages:
+  - id: release_init
+    name: "RELEASE Initialization"
+    kind: stage
+    description: |
+      初始化 RELEASE 对象：
+      - 生成 RELEASE-{id}.yaml (draft)
+      - 绑定 feat_refs: [FEAT-001, FEAT-002, ...]
+      - 设置 release_type, release_window
+      - 设置 release_version (语义化版本)
+    default_complexity: S
+    depends_on: []
+    outputs:
+      - path: spec/releases/release-{release_id}.yaml
+        type: file
+        format: yaml
+        ssot_type: RELEASE
+        freeze: false  # draft 状态
+
+  - id: release_validate
+    name: "RELEASE Validation"
+    kind: stage
+    description: |
+      验证 RELEASE 完整性：
+      - 验证 FEAT Bundle 非空
+      - 验证所有 FEAT 为 frozen 状态
+      - 验证 FEAT 依赖关系
+      - 生成 dependency_graph.md
+      - 生成 release_scope.md
+    default_complexity: S
+    depends_on: [release_init]
+    gate:
+      type: auto_check
+      gate_id: gate.product.release_validate_gate
+      checks:
+        - feat_bundle_not_empty
+        - all_feats_frozen
+        - dependency_graph_valid
+    outputs:
+      - path: spec/releases/{release_id}/dependency_graph.md
+        type: file
+        format: markdown
+      - path: spec/releases/{release_id}/release_scope.md
+        type: file
+        format: markdown
+      - path: spec/releases/{release_id}/validation_result.json
+        type: file
+        format: json
+
+  - id: release_output
+    name: "RELEASE Output"
+    kind: stage
+    description: |
+      输出 RELEASE 到下游 L3：
+      - 输出 RELEASE (draft) 到 RELEASE2DEVPLAN
+      - 输出 RELEASE (draft) 到 RELEASE2TESTPLAN
+      - 输出 FEAT Bundle refs
+    default_complexity: S
+    depends_on: [release_validate]
+    outputs:
+      - path: .workflow/{release_id}/release_output.yaml
+        type: file
+        format: yaml
+        description: "RELEASE output contract for downstream L3s"
+
+# 输入输出 Contract
+l3_input_schema:
+  required_fields:
+    - feat_bundle_refs: "list of FEAT IDs"
+    - feat_bundle_path: "path to FEAT Bundle directory"
+    - release_id: "release identifier"
+  optional_fields:
+    - release_type: "major | minor | patch | hotfix"
+    - release_window_start: "release window start date"
+    - release_window_end: "release window end date"
+    - release_version: "semantic version"
+
+l3_output_schema:
+  required_fields:
+    - release_ref: "release-{id}"
+    - release_draft_path: "spec/releases/release-{id}.yaml"
+    - feat_refs: "list of FEAT IDs"
+    - validation_result: "{all_feats_frozen: bool, errors: []}"
+  optional_fields:
+    - dependency_graph_path: "spec/releases/{id}/dependency_graph.md"
+    - release_scope_path: "spec/releases/{id}/release_scope.md"
+
+# 输出示例
+output_example:
+  release_yaml: |
+    # spec/releases/release-{id}.yaml
+    id: release-{id}
+    ssot_type: RELEASE
+    status: draft
+    version: "1.0.0"
+    release_type: minor
+    feat_refs:
+      - FEAT-001
+      - FEAT-002
+      - FEAT-003
+    release_window:
+      start_date: "2026-03-17"
+      end_date: "2026-03-31"
+    derived_from:
+      - FEAT-001
+      - FEAT-002
+      - FEAT-003
+    created_at: "2026-03-17T10:00:00Z"
+    created_by: "workflow.product.feat_to_plan_pipeline"
+
+  release_output_yaml: |
+    # .workflow/{release_id}/release_output.yaml
+    release_ref: release-{id}
+    release_draft_path: spec/releases/release-{id}.yaml
+    feat_refs:
+      - FEAT-001
+      - FEAT-002
+      - FEAT-003
+    validation_result:
+      all_feats_frozen: true
+      errors: []
+
+# Gate 定义
+gate_definitions:
+  - gate_id: gate.product.release_validate_gate
+    type: auto_check
+    description: "自动验证 RELEASE 完整性"
+    checks:
+      - id: feat_bundle_not_empty
+        description: "FEAT Bundle 不能为空"
+        severity: error
+      - id: all_feats_frozen
+        description: "所有 FEAT 必须是 frozen 状态"
+        severity: error
+      - id: dependency_graph_valid
+        description: "FEAT 依赖关系图有效"
+        severity: warning

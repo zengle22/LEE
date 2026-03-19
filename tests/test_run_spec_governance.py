@@ -64,6 +64,59 @@ def test_workflow_registry_contains_product_templates() -> None:
     assert workflows["product.feat-to-delivery-prep"]["required_params"] == ["feat_freeze"]
     assert "delivery_prep_bundle" in workflows["product.requirement-chain-validation"]["optional_params"]
 
+
+def test_workflow_registry_contains_delivery_axis_templates() -> None:
+    registry = _load_registry()
+    workflows = registry["workflows"]
+
+    assert "product.feat-to-release" in workflows
+    assert "product.feat-to-plan" in workflows
+    assert "dev.release-to-devplan" in workflows
+    assert "qa.release-to-testplan" in workflows
+
+    assert workflows["product.feat-to-release"]["path"] == (
+        "spec-global/departments/product/workflows/templates/feat-to-release/v1/workflow.yaml"
+    )
+    assert workflows["product.feat-to-release"]["required_params"] == [
+        "feat_bundle_refs",
+        "feat_bundle_path",
+        "release_id",
+    ]
+    assert workflows["product.feat-to-release"]["load_spec_as_params"] is True
+
+    assert workflows["product.feat-to-plan"]["path"] == (
+        "spec-global/departments/product/workflows/templates/feat-to-plan/v1/workflow.yaml"
+    )
+    assert workflows["product.feat-to-plan"]["kind"] == "l2_workflow_template"
+    assert workflows["product.feat-to-plan"]["required_params"] == [
+        "feat_bundle_refs",
+        "feat_bundle_path",
+        "release_id",
+        "task_bundle_paths",
+        "feat_acceptance_criteria",
+        "tech_specs_paths",
+    ]
+
+    assert workflows["dev.release-to-devplan"]["path"] == (
+        "spec-global/departments/dev/workflows/templates/release-to-devplan/v1/workflow.yaml"
+    )
+    assert workflows["dev.release-to-devplan"]["required_params"] == [
+        "release_ref",
+        "release_draft_path",
+        "task_bundle_paths",
+        "feat_bundle_refs",
+    ]
+
+    assert workflows["qa.release-to-testplan"]["path"] == (
+        "spec-global/departments/qa/workflows/templates/release-to-testplan/v1/workflow.yaml"
+    )
+    assert workflows["qa.release-to-testplan"]["required_params"] == [
+        "release_ref",
+        "release_draft_path",
+        "feat_acceptance_criteria",
+        "tech_specs_paths",
+    ]
+
 def test_product_main_pipeline_template_uses_validation_stage_before_completion() -> None:
     template_path = (
         Path(__file__).resolve().parents[1]
@@ -216,6 +269,36 @@ def test_workflow_registry_updates_qa_test_plan_execution_inputs() -> None:
     assert "release_ref" in entry["optional_params"]
     assert "task_ref" in entry["optional_params"]
     assert "base_url" in entry["optional_params"]
+
+
+def test_spec_global_metadata_registers_delivery_axis_gates() -> None:
+    metadata = yaml.safe_load(
+        (
+            Path(__file__).resolve().parents[1]
+            / "spec-global"
+            / "_metadata.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    gate_registry = {entry["id"]: entry for entry in metadata["gate_registry"]}
+
+    assert gate_registry["gate.product.release_generate_gate"]["path"] == (
+        "departments/product/gates/release-generate-gate/v1/gate.yaml"
+    )
+    assert gate_registry["gate.product.release_validate_gate"]["workflow"] == (
+        "workflow.product.task.feat_to_release"
+    )
+    assert gate_registry["gate.product.output_contract_gate"]["step"] == "output_contract"
+    assert gate_registry["gate.dev.task_validate_gate"]["workflow"] == (
+        "workflow.dev.task.release_to_devplan"
+    )
+    assert gate_registry["gate.dev.devplan_freeze_gate"]["min_approvals"] == 2
+    assert gate_registry["gate.qa.test_set_validate_gate"]["path"] == (
+        "departments/qa/gates/test-set-validate-gate/v1/gate.yaml"
+    )
+    assert gate_registry["gate.qa.testplan_freeze_gate"]["required_roles"] == [
+        "qa_lead",
+        "release_manager",
+    ]
 
 
 def test_qa_test_plan_template_declares_canonical_delivery_context() -> None:

@@ -77,6 +77,18 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 ---
 
+#### 2.1. Release to DEVPLAN（RELEASE 到 DEVPLAN）
+
+**ID**: `workflow.dev.task.release_to_devplan`
+**路径**: `departments/dev/workflows/templates/release-to-devplan/v1/workflow.yaml`
+**版本**: 1.0
+
+**用途**: Dev 部门交付轴派生子流程，从 RELEASE draft 组织 TASK 执行顺序并冻结 DEVPLAN。
+
+**备注**: DEVPLAN 派生 canonical path。checked-in 文件为 template，运行时 instance 动态生成。
+
+---
+
 #### 2. Bugfix Delivery L2（缺陷修复主流程）
 
 **ID**: `template.dev.bugfix_delivery_l2`
@@ -120,6 +132,18 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 **用途**: QA 部门的主测试流程（legacy alias）
 
 **状态**: Deprecated compatibility alias
+
+---
+
+#### 3.1. Release to TESTPLAN（RELEASE 到 TESTPLAN）
+
+**ID**: `workflow.qa.task.release_to_testplan`
+**路径**: `departments/qa/workflows/templates/release-to-testplan/v1/workflow.yaml`
+**版本**: 1.0
+
+**用途**: QA 部门交付轴派生子流程，从 RELEASE draft 生成测试策略、Test Set 设计资产并冻结 TESTPLAN。
+
+**备注**: TESTPLAN 派生 canonical path。checked-in 文件为 template，运行时 instance 动态生成。
 
 ---
 
@@ -170,7 +194,27 @@ LEE Framework 包含多个层级的工作流，覆盖从产品决策到部署验
 
 **用途**: 基于冻结后的 FEAT 生成 UI / TECH / TASK 准备包
 
-#### 9. Requirement Chain Validation（需求链一致性验证）
+---
+
+#### 9. FEAT to RELEASE（FEAT 到 RELEASE）
+
+**ID**: `workflow.product.task.feat_to_release`
+**路径**: `departments/product/workflows/templates/feat-to-release/v1/workflow.yaml`
+
+**用途**: 基于冻结后的 FEAT Bundle 生成 release scope draft，作为 DEVPLAN / TESTPLAN 派生输入
+
+---
+
+#### 10. FEAT to PLAN（FEAT 到计划桥接）
+
+**ID**: `workflow.product.feat_to_plan_pipeline`
+**路径**: `departments/product/workflows/templates/feat-to-plan/v1/workflow.yaml`
+
+**用途**: 产品侧交付桥接流程，串联 FEAT -> RELEASE -> DEVPLAN / TESTPLAN
+
+---
+
+#### 11. Requirement Chain Validation（需求链一致性验证）
 
 **ID**: `workflow.product.task.requirement_chain_validation`
 **路径**: `departments/product/workflows/templates/requirement-chain-validation/v1/workflow.yaml`

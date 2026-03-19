@@ -39,6 +39,16 @@
   - 从冻结后的 `EPIC` 生成多个 `FEAT` 的 L3 模板，并进行人类冻结
 - `feat-to-delivery-prep`
   - 从冻结后的 `FEAT` 生成 `UI`、`TECH(API included)`、`TASK(frontend/backend/integration)` 准备包的 L3 模板
+- `feat-to-release`
+  - 从冻结后的 `FEAT` bundle 生成 release scope draft 的 L3 模板
+- `feat-to-plan`
+  - 产品侧交付桥接 L2，串联 `FEAT -> RELEASE -> DEVPLAN / TESTPLAN`
+
+交付轴边界：
+
+- `product` 负责 `RELEASE` 的上游范围组织语义
+- `dev` 负责 `DEVPLAN` 对象与冻结审批
+- `qa` 负责 `TESTPLAN` 对象与冻结审批
 
 模板物理路径统一放在：
 

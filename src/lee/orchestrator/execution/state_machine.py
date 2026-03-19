@@ -12,6 +12,7 @@ LEE Orchestrator v3.0 - 工作流状态机
 """
 
 import json
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -28,6 +29,8 @@ from lee.orchestrator.storage.models import (
     TaskExecution,
 )
 from lee.orchestrator.execution.condition_engine import ConditionEngine
+
+OUTPUT_PLACEHOLDER_PATTERN = re.compile(r"\{([A-Za-z0-9_]+)\}")
 
 
 # ========================================================================
@@ -457,6 +460,24 @@ class WorkflowStateMachine(IStateMachine):
         return any(key in output for key in ("stdout", "stderr", "return_code", "commands_run"))
 
     def _infer_project_root(self, instance) -> Path:
+        instance_data = instance.data if isinstance(instance.data, dict) else {}
+        params = instance_data.get("params", {}) if isinstance(instance_data.get("params"), dict) else {}
+        for candidate in (
+            instance_data.get("project_root"),
+            instance_data.get("project_dir"),
+            params.get("project_root"),
+            params.get("project_dir"),
+        ):
+            if isinstance(candidate, str) and candidate.strip():
+                return Path(candidate).resolve()
+
+        db_path = getattr(self.store, "db_path", None)
+        if isinstance(db_path, str) and db_path and db_path != ":memory:":
+            db_parts = Path(db_path).resolve().parts
+            if ".workflow" in db_parts:
+                idx = db_parts.index(".workflow")
+                return Path(*db_parts[:idx]).resolve()
+
         template_id = getattr(instance, "template_id", "") or ""
         template_path = Path(template_id)
         if template_path.is_absolute():
@@ -464,19 +485,29 @@ class WorkflowStateMachine(IStateMachine):
             if ".workflow" in parents:
                 idx = parents.index(".workflow")
                 return Path(*parents[:idx]).resolve()
-            return template_path.parent.resolve()
         return Path.cwd().resolve()
 
     def _render_output_path(self, raw_path: str, instance) -> str:
         rendered = str(raw_path)
-        params = instance.data.get("params", {}) if isinstance(instance.data, dict) else {}
+        instance_data = instance.data if isinstance(instance.data, dict) else {}
+        params = instance_data.get("params", {}) if isinstance(instance_data.get("params"), dict) else {}
         project_value = (
             params.get("project")
-            or instance.data.get("project_name")
+            or instance_data.get("project_name")
             or self._infer_project_root(instance).name
         )
-        rendered = rendered.replace("{project}", str(project_value))
-        return rendered
+        replacements: Dict[str, str] = {"project": str(project_value)}
+        for source in (instance_data, params):
+            if not isinstance(source, dict):
+                continue
+            for key, value in source.items():
+                if isinstance(value, (str, int, float, bool)):
+                    replacements.setdefault(key, str(value))
+
+        return OUTPUT_PLACEHOLDER_PATTERN.sub(
+            lambda match: replacements.get(match.group(1), match.group(0)),
+            rendered,
+        )
 
     def _build_declared_output_payload(
         self,

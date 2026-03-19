@@ -1,0 +1,279 @@
+# Fitness Gate Template v1.0
+# 通用 Fitness 门禁模板（治理层能力）
+#
+# 该门禁是跨部门的通用 Fitness Gate 定义模板。
+# 各部门可基于此模板实例化部门特定的 Fitness Gate。
+#
+# 使用方式：
+# 1. 在部门 gate 目录中创建具体实例（如 gate.product.fitness_gate）
+# 2. 配置 fitness_rule_path 指向部门特定的规则文件
+# 3. 配置 trigger 事件和 input_evidence 路径
+
+kind: gate_template
+version: "1.0"
+id: gate_template.governance.fitness_gate
+name: Fitness Gate Template
+description: |
+  通用 Fitness Gate 模板。
+
+  核心职责：
+  - 引用 skill.governance.fitness_executor 执行 Fitness 检查
+  - 根据 fitness_result 进行阻断决策
+  - 支持 hard_gate 和 quality_signal 两类规则
+
+  实例化要求：
+  - 各部门必须配置 fitness_rule_path
+  - 必须指定 target_object_type
+  - 必须定义 trigger 事件
+
+owner: governance-architect
+tags: [gate-template, governance, fitness, cross-department, adr-024]
+
+# ============================================
+# Governing ADRs
+# ============================================
+governing_adrs:
+  - ADR-024: Fitness Function 完成条件防腐层核心能力构建
+  - ADR-005: Gate 三分类治理模型
+
+# ============================================
+# 必需的配置参数（实例化时必填）
+# ============================================
+required_config:
+  department:
+    type: string
+    description: "部门标识（product/qa/dev）"
+    enum: [product, qa, dev]
+
+  fitness_rule_path:
+    type: string
+    description: "Fitness Rule YAML 文件路径"
+    pattern: "^spec-global/departments/.*/fitness-rules/.*\\.yaml$"
+
+  target_object_type:
+    type: string
+    description: "被检查的目标对象类型"
+    enum: [src, epic, feat, test_set, test_run, evidence_pack, smoke_result]
+
+  trigger_event:
+    type: string
+    description: "触发此 Gate 的事件"
+    examples:
+      - "src_freeze_requested"
+      - "epic_freeze_requested"
+      - "feat_freeze_requested"
+      - "test_set_complete"
+      - "test_run_exit_requested"
+      - "evidence_pack_complete"
+
+# ============================================
+# 门禁类型和优先级
+# ============================================
+type: automated
+priority_configurable: true
+default_priority: blocker
+
+priority_guidance: |
+  - blocker: 用于关键质量门禁（如 FEAT Freeze 前、Smoke 前）
+  - major: 用于重要但不阻断的检查（如文档完整性）
+  - minor: 用于建议性检查
+
+# ============================================
+# 触发条件（模板参数）
+# ============================================
+trigger_template:
+  event: "${trigger_event}"
+  source: "agent.governance.fitness_executor"
+
+# ============================================
+# 输入证据（模板参数）
+# ============================================
+input_evidence_template:
+  - "${target_object_path}"  # 目标对象 YAML
+  - "${context_evidence_path}"  # 可选：上下文证据（如 parent refs）
+
+# ============================================
+# 检查项（动态生成）
+# ============================================
+# 注意：实际检查项由 fitness_rule_path 定义的规则动态生成
+# 这里定义的是 Gate 层面的检查配置
+
+checks_from_rules: true
+rules_source: "${fitness_rule_path}"
+
+# Gate 层面的固定检查（可选）
+checks_template:
+  - id: fitness_execution_success
+    name: "Fitness 执行成功"
+    description: "Fitness Executor 必须成功执行"
+    type: flag_check
+    rule: "fitness_result.result != 'INVALID_RUN'"
+    severity: blocker
+    required: true
+
+  - id: fitness_not_blocked
+    name: "Fitness 未阻断"
+    description: "Fitness 结果不能为 BLOCKED"
+    type: metric_check
+    rule: "fitness_result.result != 'BLOCKED'"
+    severity: blocker
+    required: true
+    condition: "execution_mode == 'enforce'"
+
+  - id: gate_handoff_ready
+    name: "门禁移交就绪"
+    description: "Fitness 结果必须标记为就绪"
+    type: flag_check
+    rule: "fitness_result.gate_handoff_ready == true"
+    severity: blocker
+    required: true
+
+# ============================================
+# 通过条件
+# ============================================
+pass_criteria:
+  all_required: true
+  max_blocker: 0
+  max_major: 0
+  description: "所有检查必须通过（具体规则在 fitness_rule 中定义）"
+
+  configurable_rules:
+    allow_quality_signal_failure:
+      type: boolean
+      default: true
+      description: "是否允许 quality_signal 失败（仅 hard_gate 必须通过）"
+
+    auto_pass_on_warning:
+      type: boolean
+      default: true
+      description: "result=WARNING 时是否自动通过"
+
+# ============================================
+# 失败处理
+# ============================================
+on_fail_template:
+  action: "block_merge"
+  priority: "${priority}"
+  message_template: |
+    Fitness Gate 未通过，不允许 ${next_action}。
+
+    失败规则：
+    ${failure_details_formatted}
+
+    请修复后重新触发 ${trigger_event}。
+
+    执行模式：${execution_mode}
+    使用的 Fitness Rule：${fitness_rule_path}
+
+  escalation:
+    - role: tech_lead
+      description: "通知技术负责人"
+      condition: "hard_gate_failure"
+
+  retry_allowed: true
+  retry_config:
+    max_retries: 3
+    retry_trigger: "re_run_fitness_executor"
+
+# ============================================
+# 部门实例化指南
+# ============================================
+department_instantiation_guide:
+  product_department:
+    directory: "spec-global/departments/product/gates/fitness-gate/v1/gate.yaml"
+
+    instances:
+      - name: "SRC Fitness Gate"
+        id: "gate.product.src_fitness_gate"
+        config:
+          fitness_rule_path: "spec-global/departments/product/fitness-rules/src-freeze-rules.yaml"
+          target_object_type: src
+          trigger_event: "src_freeze_requested"
+          priority: blocker
+        gates:
+          - gate.product.src_freeze
+
+      - name: "EPIC Fitness Gate"
+        id: "gate.product.epic_fitness_gate"
+        config:
+          fitness_rule_path: "spec-global/departments/product/fitness-rules/epic-freeze-rules.yaml"
+          target_object_type: epic
+          trigger_event: "epic_freeze_requested"
+          priority: blocker
+        gates:
+          - gate.product.epic_freeze
+
+      - name: "FEAT Fitness Gate"
+        id: "gate.product.feat_fitness_gate"
+        config:
+          fitness_rule_path: "spec-global/departments/product/fitness-rules/feat-freeze-rules.yaml"
+          target_object_type: feat
+          trigger_event: "feat_freeze_requested"
+          priority: blocker
+        gates:
+          - gate.product.feat_freeze
+
+  qa_department:
+    directory: "spec-global/departments/qa/gates/fitness-gate/v1/gate.yaml"
+
+    instances:
+      - name: "Test Set Fitness Gate"
+        id: "gate.qa.test_set_fitness_gate"
+        config:
+          fitness_rule_path: "spec-global/departments/qa/fitness-rules/test-set-completion-rules.yaml"
+          target_object_type: test_set
+          trigger_event: "test_set_complete"
+          priority: blocker
+        gates:
+          - gate.qa.test_set_approval
+
+      - name: "Test Run Exit Fitness Gate"
+        id: "gate.qa.test_run_fitness_gate"
+        config:
+          fitness_rule_path: "spec-global/departments/qa/fitness-rules/test-run-exit-rules.yaml"
+          target_object_type: test_run
+          trigger_event: "test_run_exit_requested"
+          priority: major
+        gates:
+          - gate.qa.test_run_exit
+
+  dev_department:
+    directory: "spec-global/departments/dev/gates/fitness-gate/v1/gate.yaml"
+
+    instances:
+      - name: "Evidence Pack Fitness Gate"
+        id: "gate.dev.evidence_pack_fitness_gate"
+        config:
+          fitness_rule_path: "spec-global/departments/dev/fitness-rules/feature-delivery-rules.yaml"
+          target_object_type: evidence_pack
+          trigger_event: "evidence_pack_complete"
+          priority: blocker
+        gates:
+          - gate.dev.evidence_pack_gate
+
+      - name: "Smoke Fitness Gate"
+        id: "gate.dev.smoke_fitness_gate"
+        config:
+          fitness_rule_path: "spec-global/departments/dev/fitness-rules/smoke-entry-rules.yaml"
+          target_object_type: smoke_result
+          trigger_event: "smoke_test_complete"
+          priority: blocker
+        gates:
+          - gate.dev.smoke_gate
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "governance-architect"
+  created_at: "2026-03-17"
+  version: "1.0"
+  related_feats:
+    - FEAT-SRC-024-001
+    - FEAT-SRC-024-002
+    - FEAT-SRC-024-003
+    - FEAT-SRC-024-004
+    - FEAT-SRC-024-005
+  related_adrs:
+    - ADR-024
+    - ADR-005

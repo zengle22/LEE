@@ -1,5 +1,5 @@
 created_at: '2026-03-17T23:27:55.628378'
-created_by: workflow.core.feat2plan
+created_by: workflow.product.feat_to_plan_pipeline
 derived_from:
 - FEAT-TEST-001
 feat_refs:

@@ -2,27 +2,27 @@
 id: ADR-024
 ssot_type: adr
 title: Fitness Function 作为完成条件防腐层
-status: draft
-version: v1
+status: frozen
+version: v2
 parent_id: null
 derived_from_ids:
   - id: ADR-011
-    version: v1
-  - id: ADR-015
     version: v1
   - id: ADR-017
     version: v1
   - id: ADR-020
     version: v1
-  - id: ADR-021
-    version: v1
-source_refs: []
+source_refs:
+  - SRC-046
+  - EPIC-SRC-046-001
 owner: governance
-tags: [governance, ai-delivery, fitness, completion, gate, evidence, verifier]
+tags: [governance, ai-delivery, fitness, completion, gate, evidence, verifier, l3-workflow]
 workflow_instance_id: wf-adr-024-20260317
 properties:
   adr_kind: governance_design
   decision_scope: fitness_function_as_completion_anti_corruption_layer
+  implementation_status: phase_a_in_progress
+  l3_workflow_template: template.governance.fitness
 ---
 
 # Fitness Function 作为完成条件防腐层
@@ -207,7 +207,62 @@ fitness 统一输出 `fitness_result`，至少包括：
 
 ## 8. Integration Decision
 
-### 8.1 With Gate
+### 8.1 Integration Pattern: L3 Workflow Embedding
+
+由于当前 RELEASE L1 工作流尚未实现，Fitness 采用**独立 L3 工作流 + 多嵌入点**模式：
+
+```
+Fitness L3 Template (template.governance.fitness)
+    ├─ 嵌入 Product L2 (FEAT 冻结后，Delivery Prep 前)
+    ├─ 嵌入 Dev L2 (Smoke Test 前)
+    └─ 嵌入 QA L2 (Test Report 前)
+```
+
+**嵌入点设计原则**：
+- **统一 L3 模板**：所有嵌入点使用同一个 Fitness L3 模板，通过 params 区分验证对象
+- **按需加载规则**：根据嵌入点和验证对象动态加载适用的 fitness rule
+- **结果标准化**：无论哪个嵌入点，fitness_result 结构统一
+
+### 8.2 Embedding: Product L2
+
+**嵌入位置**：`feat-to-delivery-prep` 之后，`delivery packages freeze` 之前
+
+**验证对象**：FEAT bundle
+
+**适用规则**：
+- `contract_consistency` - FEAT 与 EPIC/SRC 一致性
+- `evidence_completeness` - 需求链证据完整性
+- `path_governance` - SSOT 对象放置规范性
+
+**阻断行为**：fitness_result=fail → 阻塞 delivery-prep，返回 epic-to-feat 重修
+
+### 8.3 Embedding: Dev L2
+
+**嵌入位置**：`integration` 之后，`smoke_test` 之前
+
+**验证对象**：TASK / code change
+
+**适用规则**：
+- `contract_consistency` - 实现与冻结合同一致性
+- `testability` - Unit/Integration/Smoke 验证完成
+- `integration_closure` - 跨模块集成契约验证
+- `path_governance` - Canonical/Forbidden 路径检查
+
+**阻断行为**：fitness_result=fail → 阻塞 smoke_test，返回 integration 重修
+
+### 8.4 Embedding: QA L2
+
+**嵌入位置**：`test_set_execution` 之后，`test_report` 之前
+
+**验证对象**：Test Plan / Test Set execution results
+
+**适用规则**：
+- `evidence_completeness` - 测试结果证据完整性
+- `testability` - 测试覆盖率达标
+
+**阻断行为**：fitness_result=fail → 阻塞 test_report，返回 test_set_execution 补测
+
+### 8.5 With Gate
 
 Fitness 不替代 gate，而是成为 gate 的上游输入。
 
@@ -320,37 +375,49 @@ Supervisor 仍保留最终独立关闭边界。
 
 ## 11. Rollout
 
-### 11.1 Phase A: P0 Minimum Closure
+### 11.1 Phase A: P0 Minimum Closure (Current - In Progress)
 
-- 建立最小 fitness rule schema
-- 实现 fitness runner
-- 输出 `fitness_result`
-- 接入现有 gate
-- 将结果回写 evidence pack
+**交付物**：
+- [x] Fitness L3 工作流模板 (`template.governance.fitness`)
+- [x] 最小 Fitness Rule Schema (5 个 P0 Dimension)
+- [x] Fitness Runner 执行器
+- [x] 嵌入 Dev L2 (Smoke 前置验证)
+- [ ] 嵌入 Product L2 (FEAT 冻结验证)
+- [ ] 嵌入 QA L2 (证据完整性验证)
+
+**验收标准**：
+- Fitness L3 可被 Dev L2 正确调用
+- fitness_result 输出结构完整
+- hard_gate 失败可阻塞 smoke_test
+- ADR-024 状态提升为 frozen
 
 ### 11.2 Phase B: P1 Structured Expansion
 
-- 扩展 dimensions
-- 增加 score / warn
-- 接入 tester engine
-- 补 CLI / CI 模板
-- 补回归样板与测试
+**交付物**：
+- [ ] CLI 集成 (`lee fitness-run`)
+- [ ] 扩展 dimensions (score/warn 规则)
+- [ ] 接入 tester engine
+- [ ] 补回归样板与测试
+- [ ] Fitness Rule 库扩展
 
 ### 11.3 Phase C: Governance Tightening
 
-- 逐步让更多 workflow 默认依赖 fitness_result
-- 把零散 completion 条件迁移到统一 fitness 规则对象
-- 对高风险主链启用 fail fast
+**交付物**：
+- [ ] 更多 workflow 默认依赖 fitness_result
+- [ ] 零散 completion 条件迁移到统一 fitness 规则
+- [ ] 高风险主链启用 fail fast
 
 ## 12. Acceptance Signal
 
 当本 ADR 对应能力落地后，至少应满足以下信号：
 
-1. agent 无法仅凭“局部测试通过”就宣布可完成
-2. hard gate 条件存在统一仓库内真源
-3. gate 能直接消费统一 `fitness_result`
-4. evidence pack 能回挂 fitness 执行结果
-5. supervisor 审查时不再需要手工拼接主要完成条件
+1. **L3 工作流可执行**：`template.governance.fitness` 可被 Product/Dev/QA L2 正确调用
+2. **嵌入点生效**：Dev L2 Smoke 前置验证已启用且可阻断
+3. **统一结果对象**：fitness_result 结构统一，可被 gate/supervisor 消费
+4. **完成误判防护**：agent 无法仅凭”局部测试通过”就宣布可完成
+5. **hard gate 真源**：hard gate 条件存在统一仓库内真源 (`spec/fitness/rules/`)
+6. **证据可追溯**：evidence pack 能回挂 fitness 执行结果和 command_runs
+7. **supervisor 减负**：supervisor 审查时不再需要手工拼接主要完成条件
 
 ## 13. Final Rule
 

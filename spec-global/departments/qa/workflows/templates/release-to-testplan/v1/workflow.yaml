@@ -1,0 +1,303 @@
+# Release to TESTPLAN L3 Template
+# 从 RELEASE 派生 TESTPLAN 的 QA 部门 L3 工作流模板
+#
+# 定位：ADR-027 渐进式工作流的核心 L3 之一
+# 上游：FEAT2RELEASE (RELEASE draft) + FEAT.AC + TECH + TASK
+# 下游：QA Execution (现有工作流)
+#
+# 关键说明：
+# - Test Set 设计资产在 TESTPLAN Freeze 前生产
+# - Test Set 追溯性绑定 FEAT Acceptance Criteria
+# - TESTPLAN 冻结后锁定 test_set_refs，禁止增删
+
+kind: l3_workflow_template
+version: "1.0"
+id: workflow.qa.task.release_to_testplan
+name: Release to TESTPLAN
+description: |
+  L3 template for deriving TESTPLAN from RELEASE.
+
+  从 RELEASE 派生 TESTPLAN，并生产 Test Set 设计资产：
+  1. TestPlan Init: 初始化 TESTPLAN 对象
+  2. Test Strategy Define: 定义测试策略
+  3. Test Set Production: 生产 Test Set 设计资产
+  4. Test Set Validate: 验证 Test Set 覆盖度
+  5. TestPlan Freeze: 冻结 TESTPLAN
+
+owner: qa-governance
+tags: [qa, workflow, l3, testplan, adr-027, delivery-axis]
+
+# SSOT Integration
+ssot_integration:
+  input_types:
+    - release_draft
+    - feat_acceptance_criteria
+    - tech_specs
+  output_types:
+    - testplan_freeze
+    - testset_design
+
+# 阶段流程
+stages:
+  - id: testplan_init
+    name: "TESTPLAN Initialization"
+    kind: stage
+    description: |
+      初始化 TESTPLAN 对象：
+      - 生成 TESTPLAN-{release_id}.yaml (draft)
+      - 绑定 release_ref
+      - 设置 testplan_owner (qa_lead)
+    default_complexity: S
+    depends_on: []
+    outputs:
+      - path: spec/testplans/testplan-{release_id}.yaml
+        type: file
+        format: yaml
+        ssot_type: TESTPLAN
+        freeze: false  # draft 状态
+
+  - id: test_strategy_define
+    name: "Test Strategy Definition"
+    kind: stage
+    description: |
+      定义测试策略：
+      - 读取 FEAT.acceptance_criteria
+      - 读取 TECH specs (了解技术实现)
+      - 定义测试策略 (smoke/regression/automation)
+      - 识别风险区域
+      - 定义优先级分布
+    default_complexity: M
+    depends_on: [testplan_init]
+    outputs:
+      - path: spec/testplans/{release_id}/test_strategy.yaml
+        type: file
+        format: yaml
+        description: "Test strategy and risk analysis"
+
+  - id: test_set_production
+    name: "Test Set Production"
+    kind: stage
+    description: |
+      生产 Test Set 设计资产：
+      - 对每个 FEAT/module 生成 Test Set 设计资产
+      - 定义测试用例 (steps, expected, priority)
+      - 建立追溯性 (trace_to FEAT AC)
+      - 定义测试类型 (smoke/regression/automation)
+      - 输出 qa_specs_dir/test-sets/ts-{module}.yaml
+    default_complexity: L
+    depends_on: [test_strategy_define]
+    spawns_l3: false
+    outputs:
+      - path: qa_specs_dir/test-sets/ts-{module}.yaml
+        type: file
+        format: yaml
+        ssot_type: TESTSET
+        description: "Test Set design assets"
+
+  - id: test_set_validate
+    name: "Test Set Validation"
+    kind: stage
+    description: |
+      验证 Test Set 覆盖度：
+      - 所有 FEAT 都有 Test Set 覆盖
+      - 追溯性完整 (每个 TC 都 trace_to FEAT AC)
+      - 优先级分布合理 (P0/P1/P2 比例)
+      - 测试类型覆盖完整 (smoke/regression)
+    default_complexity: S
+    depends_on: [test_set_production]
+    gate:
+      type: auto_check
+      gate_id: gate.qa.test_set_validate_gate
+      checks:
+        - all_feats_covered
+        - traceability_complete
+        - priority_distribution_reasonable
+        - test_types_complete
+      on_pass: proceed_to_freeze
+      on_fail: block_testplan_freeze
+    outputs:
+      - path: spec/testplans/{release_id}/test_set_validation_result.json
+        type: file
+        format: json
+
+  - id: testplan_freeze
+    name: "TESTPLAN Freeze"
+    kind: stage
+    description: |
+      冻结 TESTPLAN：
+      - 锁定 test_set_refs，禁止增删
+      - 标记 TESTPLAN.status = "frozen"
+      - 记录 frozen_at 时间戳
+      - 人类审批确认
+    default_complexity: S
+    depends_on: [test_set_validate]
+    gate:
+      type: human_approval
+      gate_id: gate.qa.testplan_freeze_gate
+      approvers:
+        - qa_lead
+        - release_manager
+    outputs:
+      - path: spec/testplans/testplan-{release_id}.yaml
+        type: file
+        format: yaml
+        freeze: true  # frozen 状态
+
+# 输入输出 Contract
+l3_input_schema:
+  required_fields:
+    - release_ref: "release-{id}"
+    - release_draft_path: "spec/releases/release-{id}.yaml"
+    - feat_acceptance_criteria: "list of FEAT AC paths"
+    - tech_specs_paths: "list of TECH spec paths"
+  optional_fields:
+    - qa_lead: "qa lead assignee"
+    - release_manager: "release manager assignee"
+    - test_environment: "target test environment"
+
+l3_output_schema:
+  required_fields:
+    - testplan_freeze_path: "spec/testplans/testplan-{id}.yaml"
+    - test_strategy_path: "spec/testplans/{id}/test_strategy.yaml"
+    - test_set_assets: "list of Test Set file paths"
+    - validation_result: "{all_feats_covered: bool, traceability_complete: bool}"
+  optional_fields:
+    - risk_analysis: "identified risk areas"
+    - priority_distribution: "P0/P1/P2 distribution"
+
+# 输出示例
+output_example:
+  testplan_yaml: |
+    # spec/testplans/testplan-{release_id}.yaml
+    id: testplan-{release_id}
+    ssot_type: TESTPLAN
+    status: frozen
+    release_ref: release-{release_id}
+    frozen_at: "2026-03-17T16:00:00Z"
+    frozen_by: gate.qa.testplan_freeze_gate
+    test_strategy_ref: "spec/testplans/{id}/test_strategy.yaml"
+    test_set_refs:
+      - ts-module-001
+      - ts-module-002
+    owner:
+      qa_lead: qa-lead-001
+      release_manager: rm-001
+
+  test_strategy_yaml: |
+    # spec/testplans/{release_id}/test_strategy.yaml
+    release_ref: release-{release_id}
+    test_strategy:
+      approach: "risk-based"
+      test_levels:
+        - level: smoke
+          coverage_target: 100%
+          description: "核心功能冒烟测试"
+        - level: regression
+          coverage_target: 80%
+          description: "回归测试"
+        - level: automation
+          coverage_target: 60%
+          description: "自动化测试"
+      risk_areas:
+        - area: "验证码服务集成"
+          severity: high
+          mitigation: "增加备用方案测试"
+        - area: "短信服务商 API"
+          severity: medium
+          mitigation: "mock 测试 + 沙箱测试"
+      priority_distribution:
+        P0: 30%
+        P1: 50%
+        P2: 20%
+
+  testset_yaml: |
+    # qa_specs_dir/test-sets/ts-module-001.yaml
+    id: ts-module-001
+    ssot_type: TESTSET
+    status: frozen
+    feat_ref: FEAT-001
+    module: "verification-code"
+    test_cases:
+      - id: tc-001
+        type: smoke
+        priority: P0
+        description: "验证码发送 API 正常调用"
+        steps:
+          - step: "调用 POST /api/send-code"
+          - step: "验证返回状态码 200"
+          - step: "验证用户收到短信"
+        expected: "API 返回成功，用户收到验证码"
+        trace_to:
+          - FEAT-001.AC-001
+      - id: tc-002
+        type: regression
+        priority: P1
+        description: "主方案失败时自动切换备用方案"
+        steps:
+          - step: "模拟主服务商失败"
+          - step: "验证备用方案启动"
+          - step: "验证用户仍能收到验证码"
+        expected: "备用方案启动，用户仍能收到验证码"
+        trace_to:
+          - FEAT-001.AC-002
+      - id: tc-003
+        type: smoke
+        priority: P0
+        description: "验证码验证 API 正常调用"
+        steps:
+          - step: "调用 POST /api/verify-code"
+          - step: "验证正确验证码通过"
+          - step: "验证错误验证码拒绝"
+        expected: "验证码验证逻辑正确"
+        trace_to:
+          - FEAT-001.AC-003
+
+  validation_result_json: |
+    {
+      "all_feats_covered": true,
+      "total_feats": 3,
+      "total_test_sets": 5,
+      "total_test_cases": 25,
+      "traceability_complete": true,
+      "priority_distribution": {
+        "P0": 8,
+        "P1": 12,
+        "P2": 5
+      },
+      "test_types": {
+        "smoke": 10,
+        "regression": 10,
+        "automation": 5
+      },
+      "errors": []
+    }
+
+# Gate 定义
+gate_definitions:
+  - gate_id: gate.qa.test_set_validate_gate
+    type: auto_check
+    description: "自动验证 Test Set 覆盖度"
+    checks:
+      - id: all_feats_covered
+        description: "所有 FEAT 都有 Test Set 覆盖"
+        severity: error
+      - id: traceability_complete
+        description: "追溯性完整 (每个 TC 都 trace_to FEAT AC)"
+        severity: error
+      - id: priority_distribution_reasonable
+        description: "优先级分布合理 (P0 占比 20-40%)"
+        severity: warning
+      - id: test_types_complete
+        description: "测试类型覆盖完整 (smoke/regression)"
+        severity: error
+
+  - gate_id: gate.qa.testplan_freeze_gate
+    type: human_approval
+    description: "人类审批冻结 TESTPLAN"
+    approvers:
+      - qa_lead
+      - release_manager
+    approval_criteria:
+      - Test Set 覆盖度验证通过
+      - 追溯性完整
+      - 风险区域已识别并有缓解措施

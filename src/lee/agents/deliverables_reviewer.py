@@ -80,23 +80,53 @@ class DeliverablesChecker:
         return {}
 
     def extract_required_outputs(self, feat_spec: Dict[str, Any]) -> List[str]:
-        """Extract required outputs from FEAT spec
+        """Extract required outputs from FEAT spec.
 
         Looks for outputs in two locations:
         1. Root level 'outputs' key (standard location)
         2. 'properties.outputs' key (alternative location for FEAT specs)
+
+        Returns:
+            List of output strings. Empty list if no outputs found.
+
+        Note:
+            This method silently returns empty list for malformed specs.
+            Callers should validate the FEAT spec structure before calling.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         # Try root level first
         outputs = feat_spec.get('outputs', [])
         if isinstance(outputs, list) and outputs:
             return [str(o) for o in outputs if o]
 
+        # Log warning if outputs is not a list
+        if outputs is not None and not isinstance(outputs, list):
+            logger.warning(
+                f"FEAT spec 'outputs' is not a list (type: {type(outputs).__name__}), "
+                f"treating as empty"
+            )
+
         # Fall back to properties.outputs for FEAT specs
         properties = feat_spec.get('properties', {})
-        if isinstance(properties, dict):
-            outputs = properties.get('outputs', [])
-            if isinstance(outputs, list):
-                return [str(o) for o in outputs if o]
+        if not isinstance(properties, dict):
+            logger.warning(
+                f"FEAT spec 'properties' is not a dict (type: {type(properties).__name__}), "
+                f"treating as empty"
+            )
+            return []
+
+        outputs = properties.get('outputs', [])
+        if isinstance(outputs, list):
+            return [str(o) for o in outputs if o]
+
+        # Log warning if outputs is not a list
+        if outputs is not None and not isinstance(outputs, list):
+            logger.warning(
+                f"FEAT spec 'properties.outputs' is not a list (type: {type(outputs).__name__}), "
+                f"treating as empty"
+            )
 
         return []
 

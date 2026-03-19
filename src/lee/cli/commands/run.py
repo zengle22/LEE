@@ -41,7 +41,6 @@ try:
     import fcntl
 except ImportError:  # pragma: no cover
     fcntl = None
-
 TERMINAL_WORKFLOW_STATUSES = {"completed", "failed", "superseded"}
 
 
@@ -128,7 +127,6 @@ def _render_workflow_template(template_path: Path, params: Dict[str, Any], proje
     out_path.write_text(rendered, encoding="utf-8")
     return out_path
 
-
 def _derive_workflow_creation_metadata(rendered_path: Path) -> Tuple[WorkflowLevel, Dict[str, Any]]:
     try:
         doc = yaml.safe_load(rendered_path.read_text(encoding="utf-8")) or {}
@@ -150,16 +148,19 @@ def _derive_workflow_creation_metadata(rendered_path: Path) -> Tuple[WorkflowLev
         for phase in doc.get("phases", []) if isinstance(doc.get("phases"), list) else []:
             if not isinstance(phase, dict):
                 continue
+            gate = phase.get("gate") if isinstance(phase.get("gate"), dict) else {}
             phases.append(
                 {
-                    "id": phase.get("id", ""),
-                    "name": phase.get("name", ""),
+                    "id": phase.get("id", ""), "name": phase.get("name", ""),
                     "description": phase.get("description", ""),
                     "complexity": phase.get("default_complexity", "M"),
                     "status": "pending",
                     "depends_on": phase.get("depends_on", []),
-                    "workflow": phase.get("workflow"),
-                    "level": phase.get("level"),
+                    "workflow": phase.get("workflow"), "level": phase.get("level"),
+                    "spawns_l3": phase.get("spawns_l3", False),
+                    "l3_template_id": phase.get("l3_template_id"),
+                    "gate_id": gate.get("gate_id"),
+                    "gate_type": gate.get("type"),
                     "output_map": phase.get("output_map", {}),
                     "l3_instance_ids": [],
                 }
@@ -172,7 +173,6 @@ def _derive_workflow_creation_metadata(rendered_path: Path) -> Tuple[WorkflowLev
         }
 
     return WorkflowLevel.TASK, {}
-
 
 def _load_directory_context(project_dir: Path) -> Dict[str, Any]:
     dirs_yaml_path = project_dir / ".project" / "dirs.yaml"
@@ -826,6 +826,7 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
         plan_only: bool, skip_plan: bool, plan_mode: str, instance: str | None,
         task_id: str | None, new_task: str | None) -> None:
     """运行指定工作流"""
+    project_root = Path(project_dir).resolve()
     registry = _load_registry()
     workflows = registry.get("workflows", {})
     if workflow_key not in workflows:
@@ -846,7 +847,11 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
     if branch:
         params["branch"] = branch
 
-    params = adapt_params_for_workflow(workflow_key, params, project_root=Path(project_dir).resolve())
+    # Merge directory context into params for template variable resolution
+    dirs_context = _load_directory_context(project_root)
+    params = {**dirs_context, **params}
+
+    params = adapt_params_for_workflow(workflow_key, params, project_root=project_root)
 
     # 为未显式传入的参数填充模板默认值，避免渲染为空字符串。
     default_params = _load_template_param_defaults(template_path)
@@ -866,7 +871,6 @@ def run(workflow_key: str, spec: str | None, env: str | None, version: str | Non
             f"{', '.join(effective_missing)}"
         )
 
-    project_root = Path(project_dir).resolve()
     scope_info = derive_concurrency_scope(effective_workflow_key, params, project_root)
     config = load_config(str(project_root))
     executor_resolution = ConfigResolver(project_root=project_root, config=config).resolve(

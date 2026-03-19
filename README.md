@@ -180,6 +180,7 @@ lee --help
 
 - [Orchestrator 模块](src/lee/orchestrator/README.md)
 - [Execution 执行层](src/lee/orchestrator/execution/)
+- [执行器总览](docs/guides/technical/executors-overview.md)
 - [Spec 组织结构](docs/Spec-Organization.md)
 
 ### 变更日志

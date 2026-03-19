@@ -1,0 +1,121 @@
+# TASK Validate Gate v1.0
+# TASK 覆盖度验证门禁（自动检查）
+#
+# 定位：ADR-027 渐进式工作流的核心 Gate 之一
+# 验证 DEVPLAN 的 TASK 覆盖度
+
+kind: gate
+version: 1.0
+
+# ============================================
+# 宪法引用
+# ============================================
+constitution:
+  ref: ../../../AGENTS.md
+  version: "1.0"
+  mandatory: true
+
+# ============================================
+# ADR 引用
+# ============================================
+governing_adrs:
+  - ADR-027: 渐进式工作流落地设计
+
+id: gate.dev.task_validate_gate
+name: TASK Validate Gate
+description: >
+  TASK 覆盖度验证门禁（自动检查）。
+  验证 DEVPLAN 的 TASK 覆盖度，确保所有 FEAT 都有 TASK 对应。
+
+owner: dev-governance
+tags: [gate, dev, task, validate, devplan, adr-027]
+
+# ============================================
+# 门禁类型
+# ============================================
+type: automated
+priority: blocker
+
+# ============================================
+# 触发条件
+# ============================================
+trigger:
+  event: "task_organization_complete"
+  source: "workflow.dev.task.release_to_devplan"
+
+# ============================================
+# 输入证据
+# ============================================
+input_evidence:
+  - "spec/devplans/devplan-{release_id}.yaml"
+  - "spec/devplans/{release_id}/task_execution_order.yaml"
+
+# ============================================
+# 检查项
+# ============================================
+checks:
+  - id: all_feats_covered
+    name: "所有 FEAT 都有 TASK 覆盖"
+    description: "每个 FEAT 必须至少有一个 TASK 对应"
+    type: coverage_check
+    rule: "for each feat_ref, exists at least one task with matching feat_ref"
+    severity: blocker
+    required: true
+    input_field: "task_execution_order"
+
+  - id: task_assignees_confirmed
+    name: "TASK 责任人已确认"
+    description: "所有 TASK 必须已分配责任人"
+    type: field_check
+    rule: "all tasks have non-empty assignee field"
+    severity: blocker
+    required: true
+    input_field: "task_execution_order.tasks.assignee"
+
+  - id: task_dependencies_clear
+    name: "TASK 依赖关系清晰"
+    description: "所有 TASK 的依赖关系必须清晰定义"
+    type: validation_check
+    rule: "all tasks have valid depends_on lists (no circular deps)"
+    severity: major
+    required: true
+    input_field: "task_execution_order.tasks.depends_on"
+
+  - id: effort_estimated
+    name: "工作量已估算"
+    description: "所有 TASK 必须已估算工作量"
+    type: field_check
+    rule: "all tasks have estimated_effort field"
+    severity: minor
+    required: false
+    input_field: "task_execution_order.tasks.estimated_effort"
+
+# ============================================
+# 通过条件
+# ============================================
+pass_criteria:
+  all_required: true
+  max_blocker: 0
+  max_major: 0
+  description: "所有 blocker 和 major 检查必须通过"
+
+# ============================================
+# 失败处理
+# ============================================
+on_fail:
+  action: "block_and_return"
+  message: "TASK 覆盖度验证未通过，请补充缺失的 TASK 或确认责任人"
+  return_to: "workflow.dev.task.release_to_devplan"
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "dev-governance"
+  created_at: "2026-03-17"
+  version: "1.0"
+  changelog:
+    - version: "1.0"
+      date: "2026-03-17"
+      changes:
+        - "新建 TASK 覆盖度验证门禁 (ADR-027)"

@@ -40,6 +40,7 @@ ALLOWED_FILES: FrozenSet[str] = frozenset({
 EXCLUDED_DIRS: FrozenSet[str] = frozenset({
     "evidence",             # 历史运行产物
     "spec-global",           # 规范定义目录（声明期望的目录结构）
+    "spec/fitness",         # Fitness 规则定义目录（模板配置）
     "tech-debt",             # 技术债务记录
     ".workflow",             # 工作流运行态（输出目录）
     ".artifacts",           # 产出物目录
@@ -79,6 +80,16 @@ ALLOWED_CONTEXTS: List[re.Pattern] = [
     re.compile(r'["\'](\.artifacts|\.workflow)/[^"\'\s]+["\']:\s*["\']'),  # dict key with description
     # JSON/字典中的路径描述（如 docstring 说明输出路径）
     re.compile(r'"outputs":\s*\[[^]]*(\.workflow|\.artifacts)[^]]*\]'),  # "outputs": [".workflow/..."]
+    # YAML 模板变量（如 workflow template 输出路径）- 如 ".workflow/fitness/contract_diff_{{ contract_id }}.txt"
+    re.compile(r'["\'].*\.workflow/.*\{\{.*\}\}.*["\']'),  # YAML with .workflow/ and {{ }}
+    re.compile(r'["\'].*\.artifacts/.*\{\{.*\}\}.*["\']'),  # YAML with .artifacts/ and {{ }}
+    # YAML 模板参数（如 {{ params.xxx }} 或 {{ xxx }}）
+    re.compile(r'["\'].*\.workflow/.*\{\{\s*\w+\s*\}\}.*["\']'),  # {{ param }} style
+    re.compile(r'["\'].*\.workflow/.*\{\{\s*params\..*["\']'),  # {{ params.xxx }} style
+    # YAML 配置字段（workflow template 中的输出路径配置）- 如 xxx_path: ".workflow/fitness/..."
+    re.compile(r'^\s+[\w_]+_path:\s*["\']\.workflow/'),  # xxx_path: ".workflow/...
+    re.compile(r'^\s+[\w_]+_output:\s*["\']\.workflow/'),  # xxx_output: ".workflow/...
+    re.compile(r'^\s+[\w_]+_dir:\s*["\']\.workflow/'),  # xxx_dir: ".workflow/...
 ]
 
 # 豁免的配置列表模式（列表中的路径字符串不算硬编码）
