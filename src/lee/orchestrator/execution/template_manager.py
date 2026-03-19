@@ -421,23 +421,12 @@ class TemplateManager:
         return None
 
     def _find_template_file(self, template_id: str) -> Optional[Path]:
-        """
-        在模板目录中查找模板文件
-
-        支持的查找策略：
-        1. 按 ID 中的路径部分查找（workflow.prd.xxx → departments/prd/workflows/xxx）
-        2. 递归搜索所有 workflow.yaml 文件
-        """
-        # 策略 1：解析 ID 结构
-        # 格式：workflow.{department}.{workflow_name}
+        """在模板目录中按 canonical ID 查找模板文件。"""
         parts = template_id.split(".")
         if len(parts) >= 3 and parts[0] == "workflow":
             dept = parts[1]
             workflow_name = "_".join(parts[2:])
-            # 转换下划线为连字符
             workflow_name_hyphen = workflow_name.replace("_", "-")
-
-            # 尝试多个可能的路径
             possible_paths = [
                 self.template_dir / "departments" / dept / "workflows" / workflow_name_hyphen / "v1" / "workflow.yaml",
                 self.template_dir / "departments" / dept / "workflows" / workflow_name / "v1" / "workflow.yaml",
@@ -448,13 +437,15 @@ class TemplateManager:
                 if path.exists():
                     return path
 
-        # 策略 2：递归搜索
         for workflow_file in self.template_dir.rglob("workflow.yaml"):
             try:
                 with open(workflow_file, 'r', encoding='utf-8') as f:
                     content = f.read()
-                    # 简单检查 ID 是否在文件中
-                    if f"id: {template_id}" in content:
+                    match = re.search(
+                        r'(?m)^\s*id\s*:\s*["\']?([a-zA-Z0-9_.-]+)["\']?\s*$',
+                        content,
+                    )
+                    if match and match.group(1).strip() == template_id:
                         return workflow_file
             except Exception as e:
                 import logging
@@ -642,52 +633,26 @@ class TemplateManager:
         template_id: str,
         file_path: Optional[Path] = None
     ) -> WorkflowTemplate:
-        """
-        解析模板文档
-
-        支持四种格式：
-        1. spec-global 格式：kind: workflow，完整的工作流定义
-        2. L2 模板格式：kind: l2_workflow_template
-        3. L3 模板格式：kind: l3_workflow_template
-        4. 旧格式：level 字段指定层级
-
-        Args:
-            doc: YAML 文档字典
-            template_id: 模板 ID
-            file_path: 模板文件路径（可选）
-
-        Returns:
-            WorkflowTemplate 对象
-        """
-        # 检测文档格式
+        """解析 workflow / L2 / L3 模板文档。"""
         kind = doc.get("kind", "")
 
-        # v3.6: L2/L3 模板支持
         if kind == "l2_workflow_template":
             return self._parse_l2_template(doc, template_id, file_path)
         elif kind == "l3_workflow_template":
             return self._parse_l3_template(doc, template_id, file_path)
 
-        # spec-global 格式检测
-        # 检查 stages 是否在顶层或在 overview 下
         has_stages = "stages" in doc or "stages" in doc.get("overview", {})
         if kind == "workflow" and has_stages:
-            # 使用 spec-global 解析器
             return self._parse_spec_global_format(doc, template_id, file_path)
 
-        # 其他格式处理（保持原有逻辑）
         if kind == "workflow":
-            # 新格式：从 overview 推断 level
-            # 有 stages 的通常是 department 级别流程
             overview = doc.get("overview", {})
             stages = overview.get("stages", [])
-
             if stages:
                 level = WorkflowLevel.DEPARTMENT
             else:
                 level = WorkflowLevel.TASK
         else:
-            # 旧格式：直接读取 level
             level_str = doc.get("level", "task")
             try:
                 level = WorkflowLevel(level_str)
@@ -697,7 +662,6 @@ class TemplateManager:
         steps_data = doc.get("steps", [])
         steps = [self._parse_step(s) for s in steps_data]
 
-        # 从 completion 字段提取完成条件
         completion = doc.get("completion", {})
         completion_criteria = completion if completion else doc.get("completion_criteria", {})
 
@@ -719,33 +683,15 @@ class TemplateManager:
         template_id: str,
         file_path: Optional[Path] = None
     ) -> WorkflowTemplate:
-        """
-        解析 L2 工作流模板
-
-        L2 模板特点：
-        - kind: l2_workflow_template
-        - phases 定义（而非 steps）
-        - 每个阶段有 default_complexity
-
-        Args:
-            doc: YAML 文档字典
-            template_id: 模板 ID
-            file_path: 模板文件路径（可选）
-
-        Returns:
-            WorkflowTemplate 对象
-        """
+        """解析 L2 工作流模板。"""
         from lee.orchestrator.storage.models import Complexity
 
         phases = doc.get("phases", [])
         steps = []
 
-        # 将 phases 转换为 steps（保持与现有 WorkflowTemplate 兼容）
         for phase in phases:
             phase_id = phase.get("id", "")
             default_complexity = phase.get("default_complexity", "M")
-
-            # 验证 complexity 值
             try:
                 Complexity(default_complexity)
             except ValueError:
@@ -753,7 +699,7 @@ class TemplateManager:
 
             steps.append(Step(
                 id=phase_id,
-                kind="phase",  # L2 特有 kind
+                kind="phase",
                 executor_type=None,
                 depends_on=[],
                 input={
@@ -794,25 +740,7 @@ class TemplateManager:
         template_id: str,
         file_path: Optional[Path] = None
     ) -> WorkflowTemplate:
-        """
-        解析 L3 工作流模板
-
-        L3 模板特点：
-        - kind: l3_workflow_template
-        - 6 个标准步骤
-        - 单点任务执行
-        - 支持两种格式：
-          1. 嵌套格式: stages -> steps (v1.2 新格式)
-          2. 扁平格式: steps 直接在顶层
-
-        Args:
-            doc: YAML 文档字典
-            template_id: 模板 ID
-            file_path: 模板文件路径（可选）
-
-        Returns:
-            WorkflowTemplate 对象
-        """
+        """解析 L3 工作流模板，支持 phase/stage/flat 三种格式。"""
         steps = []
 
         def resolve_executor_type(kind: str) -> Optional[str]:
@@ -828,22 +756,43 @@ class TemplateManager:
                 return None
             return "shell"
 
-        # 格式1: 嵌套格式: stages -> steps (v1.2 新格式)
-        if "stages" in doc:
+        def append_bridge_step(entry: Dict[str, Any]) -> None:
+            gate = entry.get("gate") or {}
+            gate_type = str(gate.get("type") or "").lower()
+            kind = "human_gate" if gate_type in ("human_approval", "human_review", "human_decision") else ("gate" if gate else "phase")
+            outputs = [
+                parsed
+                for parsed in (self._parse_output_spec(output_item) for output_item in entry.get("outputs", []))
+                if parsed is not None
+            ]
+            steps.append(Step(
+                id=entry.get("id", ""),
+                kind=kind,
+                executor_type=None,
+                gate_id=gate.get("gate_id"),
+                depends_on=entry.get("depends_on", []),
+                input={"phase_id": entry.get("id", ""), "name": entry.get("name", ""), "description": entry.get("description", "")},
+                outputs=outputs,
+                config={"name": entry.get("name", ""), "description": entry.get("description", ""), "gate": gate},
+            ))
+
+        if "phases" in doc:
+            for phase in doc.get("phases", []):
+                append_bridge_step(phase)
+
+        elif "stages" in doc:
             for stage in doc.get("stages", []):
+                if "steps" not in stage:
+                    append_bridge_step(stage)
+                    continue
                 stage_id = stage.get("id", "")
-                # 解析 stage 级别的 depends_on
                 stage_deps = stage.get("depends_on", [])
 
                 for step_data in stage.get("steps", []):
                     step_id = step_data.get("id", "")
                     kind = step_data.get("kind", "agent")
-
-                    # 合并 stage 和 step 的 depends_on
                     step_deps = step_data.get("depends_on", [])
                     combined_deps = list(set(stage_deps + step_deps))
-
-                    # 解析 agent_id（支持 agent_id 或 run 字段）
                     agent_id = step_data.get("agent_id") or step_data.get("run", "")
 
                     outputs = [
@@ -852,7 +801,6 @@ class TemplateManager:
                         if parsed is not None
                     ]
 
-                    # Build step config including condition (BUG-LEE-QA-005 fix)
                     step_config = {
                         **(step_data.get("config") or {}),
                         "name": step_data.get("name", ""),
@@ -879,7 +827,6 @@ class TemplateManager:
                     ))
                     steps[-1].inputs = step_data.get("inputs", [])
 
-        # 格式2: 扁平 steps (旧格式)
         elif "steps" in doc:
             for step_data in doc.get("steps", []):
                 step_id = step_data.get("id", "")
@@ -1212,12 +1159,8 @@ class TemplateManager:
         # 基础 input 从 inputs 或 input 字段获取
         input_data = step_data.get("inputs", step_data.get("input", {})).copy()
 
-        # 对于 shell executor，添加 command 字段
-        # 这是 BUG-LEE-EXECUTOR-003 的修复
         if "command" in step_data:
             input_data["command"] = step_data["command"]
-
-        # 添加其他可能的输入字段
         if "params" in step_data:
             input_data.setdefault("params", {}).update(step_data["params"])
 
@@ -1239,18 +1182,8 @@ class TemplateManager:
         subworkflow_ref: Optional[str] = None,
         subworkflow_level: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        构建步骤配置
-
-        包含：
-        - 步骤名称和描述
-        - 阶段信息
-        - 门禁配置
-        - 其他元数据
-        """
+        """构建步骤配置。"""
         config = step_data.get("config", {}).copy()
-
-        # 添加步骤名称和描述
         if "name" in step_data:
             config["name"] = step_data["name"]
         if "description" in step_data:

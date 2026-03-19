@@ -510,6 +510,11 @@ def test_run_bootstraps_l2_template_as_department_workflow(monkeypatch, tmp_path
                 "    level: task",
                 "    depends_on: []",
                 "    default_complexity: M",
+                "    spawns_l3: true",
+                "    l3_template_id: workflow.dev.task.release_to_devplan",
+                "    gate:",
+                "      type: auto_check",
+                "      gate_id: gate.product.release_generate_gate",
                 "    output_map:",
                 "      source_freeze: $child_data.step_outputs.source_freeze",
             ]
@@ -570,6 +575,10 @@ def test_run_bootstraps_l2_template_as_department_workflow(monkeypatch, tmp_path
             "depends_on": [],
             "workflow": "workflow.product.task.src_to_epic",
             "level": "task",
+            "spawns_l3": True,
+            "l3_template_id": "workflow.dev.task.release_to_devplan",
+            "gate_id": "gate.product.release_generate_gate",
+            "gate_type": "auto_check",
             "output_map": {
                 "source_freeze": "$child_data.step_outputs.source_freeze",
             },

@@ -457,6 +457,24 @@ class WorkflowStateMachine(IStateMachine):
         return any(key in output for key in ("stdout", "stderr", "return_code", "commands_run"))
 
     def _infer_project_root(self, instance) -> Path:
+        instance_data = instance.data if isinstance(instance.data, dict) else {}
+        params = instance_data.get("params", {}) if isinstance(instance_data.get("params"), dict) else {}
+        for candidate in (
+            instance_data.get("project_root"),
+            instance_data.get("project_dir"),
+            params.get("project_root"),
+            params.get("project_dir"),
+        ):
+            if isinstance(candidate, str) and candidate.strip():
+                return Path(candidate).resolve()
+
+        db_path = getattr(self.store, "db_path", None)
+        if isinstance(db_path, str) and db_path and db_path != ":memory:":
+            db_parts = Path(db_path).resolve().parts
+            if ".workflow" in db_parts:
+                idx = db_parts.index(".workflow")
+                return Path(*db_parts[:idx]).resolve()
+
         template_id = getattr(instance, "template_id", "") or ""
         template_path = Path(template_id)
         if template_path.is_absolute():
@@ -464,7 +482,6 @@ class WorkflowStateMachine(IStateMachine):
             if ".workflow" in parents:
                 idx = parents.index(".workflow")
                 return Path(*parents[:idx]).resolve()
-            return template_path.parent.resolve()
         return Path.cwd().resolve()
 
     def _render_output_path(self, raw_path: str, instance) -> str:

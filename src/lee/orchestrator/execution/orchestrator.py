@@ -216,26 +216,11 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         parent_id: Optional[str] = None,
         data: Optional[Dict[str, Any]] = None,
     ) -> WorkflowInstance:
-        """
-        创建工作流实例
-
-        Args:
-            level: 工作流层级（project/department/task）
-            template_id: 模板 ID
-            parent_id: 父工作流 ID（L1 为 null）
-            data: 工作流数据
-
-        Returns:
-            创建的 WorkflowInstance
-        """
-        # 生成唯一 ID
+        """创建工作流实例。"""
         workflow_id = f"wf_{level.value}_{uuid.uuid4().hex[:8]}"
-
         template_ref = template_id
-
-        # 验证模板存在
         template = self.template_manager.get_template(template_ref)
-        if not template and template_id.startswith("template."):
+        if not template and template_id.startswith(("template.", "workflow.")):
             try:
                 resolved_template_path = self._resolve_l3_template_path(template_id)
             except FileNotFoundError:
@@ -246,7 +231,6 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         if not template:
             raise ValueError(f"Template not found: {template_id}")
 
-        # v3.1: 契约发现 - 验证工作流所需输入契约
         try:
             self.contract_discovery.discover_all()
             is_complete, missing = self.contract_discovery.validate_workflow_inputs(template_id)
@@ -259,8 +243,9 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             import logging
             logging.getLogger(__name__).warning(f"Contract discovery error: {e}")
 
-        # 创建 WorkflowInstance
         data = data or {}
+        if self.project_root:
+            data.setdefault("project_root", str(Path(self.project_root).resolve()))
         data.setdefault("run_id", self._generate_run_id())
         parent = await self.store.get_workflow(parent_id) if parent_id else None
         if parent and isinstance(parent.data, dict):
@@ -778,6 +763,26 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                     return await self._run_orchestrator_cli_step(workflow_id, step_to_execute)
                 elif step_to_execute.kind == "compliance_gate":
                     return await self._run_compliance_gate_step(workflow_id, step_to_execute)
+                elif step_to_execute.kind == "phase":
+                    result = await self.state_machine.complete_step(
+                        workflow_id,
+                        step_to_execute.id,
+                        {"phase_id": step_to_execute.id, "status": "completed"},
+                        step_outputs=step_to_execute.outputs if hasattr(step_to_execute, "outputs") else None,
+                    )
+                    get_event_bus().publish(Event(
+                        type=EventType.STEP_COMPLETED,
+                        payload={
+                            "run_id": run_id,
+                            "step_id": step_to_execute.id,
+                            "result": asdict(result) if hasattr(result, "to_dict") else result.__dict__,
+                        },
+                        source_workflow=workflow_id,
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        event_id=uuid.uuid4().hex,
+                    ))
+                    await self._check_workflow_completion(workflow_id)
+                    return result
                 elif step_to_execute.kind == "claude_code":
                     return await self._run_claude_code_step(workflow_id, step_to_execute)
                 elif step_to_execute.kind == "patch_apply":
@@ -1657,7 +1662,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 message=f"Parent workflow not found: {workflow_id}",
             )
 
-        subworkflow_ref = phase_info.get("workflow")
+        subworkflow_ref = phase_info.get("workflow") or phase_info.get("l3_template_id")
         if not isinstance(subworkflow_ref, str) or not subworkflow_ref.strip():
             return StepResult(
                 status="failed",
@@ -1960,20 +1965,14 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         phase_id: str,
         complexity: Complexity
     ) -> StepResult:
-        """Route L2 phase execution based on complexity.
-
-        Args:
-            workflow_id: L2 workflow ID
-            phase_id: Phase identifier
-            complexity: Complexity level (S/M/L)
-
-        Returns:
-            StepResult from phase execution
-        """
+        """Route L2 phase execution by complexity and explicit workflow refs."""
         instance = await self.store.get_workflow(workflow_id)
         phase_info = self._get_phase_info(instance, phase_id) if instance else {}
-        if phase_info.get("workflow"):
+        subworkflow_ref = phase_info.get("workflow") or phase_info.get("l3_template_id")
+        if isinstance(subworkflow_ref, str) and subworkflow_ref.startswith("workflow."):
             return await self._run_l2_phase_subworkflow(workflow_id, phase_id, phase_info)
+        if phase_info.get("spawns_l3") is False and not subworkflow_ref:
+            return await self._execute_complexity_s(workflow_id, phase_id)
 
         if complexity == Complexity.S:
             return await self._execute_complexity_s(workflow_id, phase_id)
@@ -2012,12 +2011,21 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         direct_output = self._build_direct_phase_output(instance.data or {}, phase_id)
         gate_id = self._resolve_direct_phase_gate_id(phase_id, phase_info)
         if gate_id:
-            return await self._trigger_l2_phase_gate(
-                workflow_id=workflow_id,
-                phase_id=phase_id,
-                gate_id=gate_id,
-                output=direct_output,
-            )
+            gate_type = str(phase_info.get("gate_type") or "").strip().lower()
+            if gate_type == "auto_check":
+                gate_result = await self._run_auto_check_gate_step(
+                    workflow_id,
+                    Step(id=phase_id, kind="gate", gate_id=gate_id, config={"gate": {"type": gate_type, "gate_id": gate_id}}),
+                )
+                if gate_result.status != "success":
+                    return gate_result
+            else:
+                return await self._trigger_l2_phase_gate(
+                    workflow_id=workflow_id,
+                    phase_id=phase_id,
+                    gate_id=gate_id,
+                    output=direct_output,
+                )
 
         await self._merge_l2_phase_outputs(workflow_id, phase_id, direct_output)
         await self._update_l2_phase(
@@ -2765,6 +2773,26 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         dev_template_roots = []
         qa_template_roots = []
         framework_root = Path(__file__).resolve().parents[4]
+        if l3_template_id.startswith("workflow."):
+            spec_roots = []
+            if self.project_root:
+                project_root_path = Path(self.project_root)
+                spec_roots.extend([project_root_path / "lee" / "spec-global", project_root_path / "spec-global"])
+            else:
+                spec_roots.extend([Path("lee/spec-global"), Path("spec-global")])
+            spec_roots.append(framework_root / "spec-global")
+            for spec_root in spec_roots:
+                if not spec_root.exists():
+                    continue
+                for candidate in spec_root.rglob("workflow.yaml"):
+                    try:
+                        for line in candidate.read_text(encoding="utf-8").splitlines():
+                            stripped = line.strip()
+                            if stripped.startswith("id:") and stripped[3:].strip().strip("'\"") == l3_template_id:
+                                return candidate
+                    except Exception:
+                        continue
+            raise FileNotFoundError(f"Workflow template not found: {l3_template_id}")
         if self.project_root:
             project_root_path = Path(self.project_root)
             dev_template_roots.extend([
@@ -2830,28 +2858,13 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         repo_id: str,
         l3_template_id: Optional[str] = None,
     ) -> str:
-        """Generate and spawn L3 instance for a single point.
-
-        v3: Uses L3 v3 template with 6-step TDD flow.
-
-        Args:
-            point: Point to implement
-            parent_l2_id: Parent L2 workflow ID
-            parent_phase_id: Parent phase ID
-            repo_id: Repository ID for this point
-
-        Returns:
-            Created L3 workflow ID
-        """
+        """Generate and spawn an L3 instance for one point."""
         from lee.orchestrator.core.workflow_generator import WorkflowGenerator, L3InstanceConfig
 
-        # Get parent context
         parent = await self.store.get_workflow(parent_l2_id)
         context = parent.data.get("context", {})
         parent_params = dict(parent.data.get("params", {}) or {})
         parent_artifacts = dict(parent.data.get("artifacts", {}) or {})
-
-        # Generate L3 instance
         config = L3InstanceConfig(
             point=point,
             parent_l2_id=parent_l2_id,
@@ -2868,9 +2881,6 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         l3_template_id = config.template_id
         l3_template_path = self._resolve_l3_template_path(l3_template_id)
         generator = WorkflowGenerator(template_path=str(l3_template_path))
-
-        # Instance files go to runtime directory (.workflow/instances/l3/), NOT in framework directory
-        # 使用 path_policy 中的工具目录常量
         from lee.orchestrator.core.path_policy import TOOL_DIRECTORIES
         workflow_dir = next(d for d in TOOL_DIRECTORIES if d == ".workflow")
         runtime_dir = Path(self.project_root) / workflow_dir if self.project_root else Path(workflow_dir)
@@ -2880,17 +2890,12 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         if not result.success:
             raise RuntimeError(f"Failed to generate L3 instance: {result.errors}")
 
-        # Build L3 params with required fields for template rendering
-        # BUG-FIX: Ensure test_run_id is available for L3 template variable rendering
         l3_params = dict(parent_params)
         if "test_run_id" not in l3_params:
-            # Use parent's run_id as test_run_id (format: RUN-YYYYMMDD-NNNNNN-XXXX)
-            # Convert to TR- format if needed
             parent_run_id = parent.data.get("run_id", "")
             if parent_run_id.startswith("RUN-"):
                 l3_params["test_run_id"] = parent_run_id.replace("RUN-", "TR-", 1)
             else:
-                # Generate test_run_id from current date
                 from datetime import datetime
                 now = datetime.now()
                 l3_params["test_run_id"] = f"TR-{now.strftime('%Y%m%d')}-{now.strftime('%H%M%S')}"
@@ -2912,32 +2917,21 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
                 "parent_l2_id": parent_l2_id,
                 "repo_id": repo_id,
                 "l3_template_id": l3_template_id,
-                "step_index": 0,  # Current step in L3 flow
+                "step_index": 0,
             }
         )
-
-        # Publish L3 spawned event
         self._publish_l3_spawned(parent_l2_id, parent_phase_id, l3_instance.id, point.id)
-
         return l3_instance.id
 
     async def _wait_for_l3_completion(self, l3_ids: List[str]) -> None:
-        """Wait for all L3 instances to complete.
-
-        Args:
-            l3_ids: List of L3 workflow IDs to wait for
-
-        Raises:
-            TimeoutError: If L3s don't complete within timeout
-        """
-        max_wait_seconds = 3600  # 1 hour
-        check_interval = 10  # 10 seconds
+        """Wait for all L3 instances to complete or fail."""
+        max_wait_seconds = 3600
+        check_interval = 10
 
         import asyncio
         start_time = asyncio.get_event_loop().time()
 
         while True:
-            # Check status of all L3s
             all_done = True
             for l3_id in l3_ids:
                 l3 = await self.store.get_workflow(l3_id)
@@ -2948,7 +2942,6 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             if all_done:
                 break
 
-            # Timeout check
             if asyncio.get_event_loop().time() - start_time > max_wait_seconds:
                 raise TimeoutError(f"L3 completion timeout after {max_wait_seconds}s")
 

@@ -588,6 +588,44 @@ class TestBugFixes:
         assert payload["frozen_inputs"]["feat_review"]["decision"] == "pass"
 
     @pytest.mark.asyncio
+    async def test_complete_step_materializes_outputs_under_store_project_root_for_absolute_templates(self, tmp_path):
+        canonical_root = tmp_path.parent / f"{tmp_path.name}-canonical"
+        template_path = canonical_root / "spec-global" / "departments" / "product" / "workflows" / "templates" / "feat-to-release" / "v1" / "workflow.yaml"
+        template_path.parent.mkdir(parents=True, exist_ok=True)
+        template_path.write_text("id: workflow.product.task.feat_to_release\n", encoding="utf-8")
+
+        self.mock_store.db_path = str(tmp_path / ".workflow" / "orchestrator.db")
+
+        mock_instance = MagicMock()
+        mock_instance.template_id = str(template_path)
+        mock_instance.status = WorkflowStatus.RUNNING
+        mock_instance.data = {
+            "completed_steps": [],
+            "step_outputs": {},
+            "params": {"project": "demo"},
+        }
+        self.mock_store.get_workflow.return_value = mock_instance
+
+        step_info = MagicMock()
+        step_info.outputs = [OutputSpec(type="file", path="spec/releases/{project}-release.yaml", format="yaml")]
+        step_info.input = []
+
+        template = MagicMock()
+        template.get_step_info.return_value = step_info
+        template_manager = MagicMock()
+        template_manager.get_template.return_value = template
+
+        state_machine = WorkflowStateMachine(self.mock_store, template_manager=template_manager)
+        await state_machine.complete_step(
+            "workflow-789",
+            "release_output",
+            {"business_output": {"release_id": "REL-001"}},
+        )
+
+        assert (tmp_path / "spec" / "releases" / "demo-release.yaml").exists()
+        assert not (template_path.parent / "spec" / "releases" / "demo-release.yaml").exists()
+
+    @pytest.mark.asyncio
     async def test_complete_step_registers_symbol_output_aliases(self, tmp_path):
         rendered_dir = tmp_path / ".workflow" / "rendered"
         rendered_dir.mkdir(parents=True, exist_ok=True)

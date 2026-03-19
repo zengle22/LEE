@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
 
 from lee.orchestrator.storage.models import Complexity, Point, WorkflowLevel, WorkflowStatus
-from lee.orchestrator.storage.models import WorkflowInstance, Step
+from lee.orchestrator.storage.models import WorkflowInstance, Step, StepResult
 from lee.orchestrator.storage.sqlite_store import SQLiteStore
 from lee.orchestrator.execution.orchestrator import Orchestrator
 from lee.orchestrator.core.workflow_generator import (
@@ -278,6 +278,189 @@ class TestL2SubworkflowHandoff:
                 "E:/ai/LEE/output/design-frozen/LEE-src-freeze.yaml",
             ]
         }
+
+
+class TestL2WorkflowRouting:
+    """Test workflow-based L2 phase routing."""
+
+    @pytest.mark.asyncio
+    async def test_execute_l2_phase_uses_workflow_l3_template_as_subworkflow(self, tmp_path):
+        instance = WorkflowInstance(
+            id="wf-parent",
+            level=WorkflowLevel.DEPARTMENT,
+            template_id="workflow.product.feat_to_plan_pipeline",
+            status=WorkflowStatus.RUNNING,
+            data={
+                "kind": "l2_workflow_instance",
+                "phases": [
+                    {
+                        "id": "derive_devplan",
+                        "name": "Derive DEVPLAN",
+                        "status": "pending",
+                        "complexity": "L",
+                        "depends_on": [],
+                        "l3_template_id": "workflow.dev.task.release_to_devplan",
+                    }
+                ],
+            },
+        )
+
+        store = Mock()
+        store.get_workflow = AsyncMock(return_value=instance)
+        orch = Orchestrator(store=store, project_root=str(tmp_path))
+        orch._run_l2_phase_subworkflow = AsyncMock(
+            return_value=StepResult(
+                status="success",
+                step_id="derive_devplan",
+                workflow_id="wf-parent",
+                message="ok",
+            )
+        )
+        orch._execute_complexity_l = AsyncMock()
+
+        result = await orch._execute_l2_phase_with_complexity(
+            "wf-parent",
+            "derive_devplan",
+            Complexity.L,
+        )
+
+        assert result.status == "success"
+        orch._run_l2_phase_subworkflow.assert_awaited_once()
+        orch._execute_complexity_l.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_execute_l2_phase_without_l3_spawn_runs_directly(self, tmp_path):
+        instance = WorkflowInstance(
+            id="wf-parent",
+            level=WorkflowLevel.DEPARTMENT,
+            template_id="workflow.product.feat_to_plan_pipeline",
+            status=WorkflowStatus.RUNNING,
+            data={
+                "kind": "l2_workflow_instance",
+                "phases": [
+                    {
+                        "id": "spawn_downstream",
+                        "name": "Spawn Downstream",
+                        "status": "pending",
+                        "complexity": "L",
+                        "depends_on": [],
+                        "spawns_l3": False,
+                    }
+                ],
+            },
+        )
+
+        store = Mock()
+        store.get_workflow = AsyncMock(return_value=instance)
+        orch = Orchestrator(store=store, project_root=str(tmp_path))
+        orch._execute_complexity_s = AsyncMock(
+            return_value=StepResult(
+                status="success",
+                step_id="spawn_downstream",
+                workflow_id="wf-parent",
+                message="ok",
+            )
+        )
+        orch._execute_complexity_l = AsyncMock()
+
+        result = await orch._execute_l2_phase_with_complexity(
+            "wf-parent",
+            "spawn_downstream",
+            Complexity.L,
+        )
+
+        assert result.status == "success"
+        orch._execute_complexity_s.assert_awaited_once()
+        orch._execute_complexity_l.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_execute_complexity_s_auto_gate_runs_runner(self, tmp_path):
+        instance = WorkflowInstance(
+            id="wf-parent",
+            level=WorkflowLevel.DEPARTMENT,
+            template_id="workflow.product.feat_to_plan_pipeline",
+            status=WorkflowStatus.RUNNING,
+            data={
+                "kind": "l2_workflow_instance",
+                "params": {"release_id": "release-001"},
+                "phases": [
+                    {
+                        "id": "output_contract",
+                        "name": "Output Contract",
+                        "status": "pending",
+                        "complexity": "S",
+                        "depends_on": [],
+                        "spawns_l3": False,
+                        "gate_id": "gate.product.output_contract_gate",
+                        "gate_type": "auto_check",
+                    }
+                ],
+            },
+        )
+
+        store = Mock()
+        store.get_workflow = AsyncMock(return_value=instance)
+        orch = Orchestrator(store=store, project_root=str(tmp_path))
+        orch._run_auto_check_gate_step = AsyncMock(
+            return_value=StepResult(status="success", step_id="output_contract", workflow_id="wf-parent", message="ok")
+        )
+        orch._merge_l2_phase_outputs = AsyncMock()
+        orch._update_l2_phase = AsyncMock()
+
+        result = await orch._execute_complexity_s("wf-parent", "output_contract")
+
+        assert result.status == "success"
+        orch._run_auto_check_gate_step.assert_awaited_once()
+        orch._merge_l2_phase_outputs.assert_awaited_once()
+        orch._update_l2_phase.assert_awaited_once()
+
+    def test_resolve_l3_template_path_supports_workflow_ids(self, tmp_path):
+        decoy_file = tmp_path / "spec-global" / "departments" / "product" / "workflows" / "templates" / "feat-to-plan" / "v1" / "workflow.yaml"
+        decoy_file.parent.mkdir(parents=True, exist_ok=True)
+        decoy_file.write_text(
+            "kind: l2_workflow_template\nid: workflow.product.feat_to_plan_pipeline\nphases:\n  - id: derive_devplan\n    l3_template_id: workflow.product.task.feat_to_release\n",
+            encoding="utf-8",
+        )
+        workflow_file = tmp_path / "spec-global" / "departments" / "product" / "workflows" / "templates" / "feat-to-release" / "v1" / "workflow.yaml"
+        workflow_file.parent.mkdir(parents=True, exist_ok=True)
+        workflow_file.write_text(
+            "kind: l3_workflow_template\nid: workflow.product.task.feat_to_release\nphases: []\n",
+            encoding="utf-8",
+        )
+
+        orch = Orchestrator(store=Mock(), project_root=str(tmp_path))
+
+        resolved = orch._resolve_l3_template_path("workflow.product.task.feat_to_release")
+
+        assert resolved == workflow_file
+
+    @pytest.mark.asyncio
+    async def test_phase_step_completion_uses_state_machine(self, tmp_path):
+        instance = WorkflowInstance(
+            id="wf-task",
+            level=WorkflowLevel.TASK,
+            template_id="workflow.product.task.feat_to_release",
+            status=WorkflowStatus.RUNNING,
+            current_step=None,
+            data={},
+        )
+        step = Step(id="release_init", kind="phase", config={})
+
+        store = Mock()
+        store.get_workflow = AsyncMock(return_value=instance)
+        orch = Orchestrator(store=store, project_root=str(tmp_path))
+        orch.get_ready_steps = AsyncMock(return_value=[step])
+        orch._continue_run_step = Orchestrator._continue_run_step.__get__(orch, Orchestrator)
+        orch.state_machine.start_step = AsyncMock()
+        orch.state_machine.complete_step = AsyncMock(
+            return_value=StepResult(status="success", step_id="release_init", workflow_id="wf-task", message="ok")
+        )
+        orch._check_workflow_completion = AsyncMock()
+
+        result = await orch.run_step("wf-task")
+
+        assert result.status == "success"
+        orch.state_machine.complete_step.assert_awaited_once()
 
 
 class TestP2SplitCaching:
