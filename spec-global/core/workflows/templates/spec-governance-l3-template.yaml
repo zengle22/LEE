@@ -6,6 +6,7 @@
 # - agent spec
 # - workflow spec
 # - contract spec
+# - adr spec
 
 kind: l3_workflow_template
 version: "1.0"
@@ -21,7 +22,7 @@ description: |
   - Stage 4: Final Output - emit final summary and review outcome
 
   v2 scope:
-  - supported spec kinds: agent, workflow, contract
+  - supported spec kinds: agent, workflow, contract, adr
   - maintainer output is written back to the target spec path when provided
   - exact unified diff is generated for the target spec
   - review failure enters a human gate branch instead of immediately failing
@@ -36,11 +37,13 @@ supported_spec_kinds:
   - agent
   - workflow
   - contract
+  - adr
 
 maintainer_route_map:
   agent: agent.governance.spec_maintainer
   workflow: agent.governance.workflow_spec_maintainer
   contract: agent.governance.contracts_spec_maintainer
+  adr: agent.governance.spec_maintainer
 
 input_contract:
   description: Spec governance request input
@@ -50,7 +53,7 @@ input_contract:
       description: Unique request identifier for this spec change
     - name: spec_kind
       type: enum
-      values: [agent, workflow, contract]
+      values: [agent, workflow, contract, adr]
       description: Which kind of spec should be maintained
     - name: action
       type: enum
@@ -119,7 +122,7 @@ stages:
         name: "Spec Maintenance"
         kind: agent
         description: "Route to the appropriate spec maintainer based on spec_kind"
-        agent_id: "{{ 'agent.governance.spec_maintainer' if params.spec_kind == 'agent' else ('agent.governance.workflow_spec_maintainer' if params.spec_kind == 'workflow' else 'agent.governance.contracts_spec_maintainer') }}"
+        agent_id: "{{ 'agent.governance.spec_maintainer' if params.spec_kind == 'agent' else ('agent.governance.workflow_spec_maintainer' if params.spec_kind == 'workflow' else ('agent.governance.contracts_spec_maintainer' if params.spec_kind == 'contract' else 'agent.governance.spec_maintainer')) }}"
         mandatory: true
         depends_on: []
         config:

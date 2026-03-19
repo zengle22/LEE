@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 
+from lee.orchestrator.config import is_coding_executor_type
 from lee.orchestrator.storage.models import (
     TaskExecution,
     TaskExecutionStatus,
@@ -101,10 +102,22 @@ class StepRunnerMixin:
         workflow_id: str,
         step,
     ) -> StepResult:
-        """运行 Agent 步骤 → 委托给 LLMRunner"""
+        """运行 Agent 步骤，必要时转交 ClaudeCodeRunner 处理 coding executor。"""
         ctx = self._build_runner_context()
         registry = self._get_runner_registry()
-        runner = registry.get_runner(step.kind if hasattr(step, "kind") and step.kind in ("agent", "llm") else "agent")
+        instance = await ctx.store.get_workflow(workflow_id)
+        instance_data = instance.data if instance and isinstance(instance.data, dict) else {}
+        executor_override = instance_data.get("executor_override")
+        step_executor_type = getattr(step, "executor_type", None)
+
+        if is_coding_executor_type(executor_override):
+            runner_key = "claude_code"
+        elif is_coding_executor_type(step_executor_type):
+            runner_key = "claude_code"
+        else:
+            runner_key = step.kind if hasattr(step, "kind") and step.kind in ("agent", "llm") else "agent"
+
+        runner = registry.get_runner(runner_key)
         return await runner.execute(workflow_id, step, ctx)
 
     async def _run_orchestrator_cli_step(

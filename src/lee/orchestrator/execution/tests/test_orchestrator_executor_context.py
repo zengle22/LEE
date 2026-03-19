@@ -168,3 +168,117 @@ async def test_agent_step_routes_to_llm_runner_for_non_coding_override(tmp_path:
     assert result.status == "success"
     orchestrator._run_agent_step.assert_awaited_once()
     orchestrator._run_claude_code_step.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_agent_step_uses_claude_runner_for_coding_executor_override(tmp_path: Path, monkeypatch) -> None:
+    lee_dir = tmp_path / ".lee"
+    lee_dir.mkdir()
+    (lee_dir / "repos.yaml").write_text("version: '1.0'\nrepos: {}\n", encoding="utf-8")
+
+    instance = WorkflowInstance(
+        id="wf_task_claude_override_001",
+        level=WorkflowLevel.TASK,
+        template_id="workflow.product.task.raw_to_src",
+        status=WorkflowStatus.RUNNING,
+        data={
+            "executor_override": "claude_code",
+            "executor_selection_source": "cli_override",
+            "run_id": "RUN-claude-override-001",
+        },
+    )
+
+    step = SimpleNamespace(
+        id="input_validation",
+        kind="agent",
+        executor_type="llm",
+        agent_id="agent.governance.input_validator",
+        config={},
+        outputs=[],
+    )
+
+    store = SimpleNamespace()
+    store.get_workflow = AsyncMock(return_value=instance)
+
+    orchestrator = Orchestrator(store=store, project_root=str(tmp_path))
+    llm_runner = SimpleNamespace(execute=AsyncMock(return_value=StepResult(
+        status="failed",
+        step_id=step.id,
+        workflow_id=instance.id,
+        message="should not use llm runner",
+    )))
+    claude_runner = SimpleNamespace(execute=AsyncMock(return_value=StepResult(
+        status="success",
+        step_id=step.id,
+        workflow_id=instance.id,
+        message="ok",
+    )))
+    registry = SimpleNamespace(
+        get_runner=lambda key: {
+            "agent": llm_runner,
+            "claude_code": claude_runner,
+        }[key]
+    )
+    monkeypatch.setattr(orchestrator, "_get_runner_registry", lambda: registry)
+
+    result = await orchestrator._run_agent_step(instance.id, step)
+
+    assert result.status == "success"
+    claude_runner.execute.assert_awaited_once()
+    llm_runner.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_agent_step_uses_claude_runner_for_coding_step_executor(tmp_path: Path, monkeypatch) -> None:
+    lee_dir = tmp_path / ".lee"
+    lee_dir.mkdir()
+    (lee_dir / "repos.yaml").write_text("version: '1.0'\nrepos: {}\n", encoding="utf-8")
+
+    instance = WorkflowInstance(
+        id="wf_task_claude_step_001",
+        level=WorkflowLevel.TASK,
+        template_id="workflow.product.task.raw_to_src",
+        status=WorkflowStatus.RUNNING,
+        data={
+            "run_id": "RUN-claude-step-001",
+        },
+    )
+
+    step = SimpleNamespace(
+        id="input_validation",
+        kind="agent",
+        executor_type="claude_code",
+        agent_id="agent.governance.input_validator",
+        config={},
+        outputs=[],
+    )
+
+    store = SimpleNamespace()
+    store.get_workflow = AsyncMock(return_value=instance)
+
+    orchestrator = Orchestrator(store=store, project_root=str(tmp_path))
+    llm_runner = SimpleNamespace(execute=AsyncMock(return_value=StepResult(
+        status="failed",
+        step_id=step.id,
+        workflow_id=instance.id,
+        message="should not use llm runner",
+    )))
+    claude_runner = SimpleNamespace(execute=AsyncMock(return_value=StepResult(
+        status="success",
+        step_id=step.id,
+        workflow_id=instance.id,
+        message="ok",
+    )))
+    registry = SimpleNamespace(
+        get_runner=lambda key: {
+            "agent": llm_runner,
+            "claude_code": claude_runner,
+        }[key]
+    )
+    monkeypatch.setattr(orchestrator, "_get_runner_registry", lambda: registry)
+
+    result = await orchestrator._run_agent_step(instance.id, step)
+
+    assert result.status == "success"
+    claude_runner.execute.assert_awaited_once()
+    llm_runner.execute.assert_not_awaited()

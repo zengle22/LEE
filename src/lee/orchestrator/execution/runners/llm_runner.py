@@ -4626,7 +4626,144 @@ class LLMRunner(StepRunnerBase):
             else:
                 updated_structured = {**structured_payload, **fixed}
 
+        deterministic = LLMRunner._derive_acceptance_checker_result_from_inputs(instance_data)
+        if deterministic and LLMRunner._should_prefer_deterministic_acceptance_result(
+            current_result=fixed,
+            deterministic_result=deterministic,
+        ):
+            return deterministic, updated_structured
+
         return fixed, updated_structured
+
+    @staticmethod
+    def _derive_acceptance_checker_result_from_inputs(
+        instance_data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(instance_data, dict):
+            return None
+
+        step_outputs = instance_data.get("step_outputs")
+        if not isinstance(step_outputs, dict):
+            return None
+
+        normalized_src = None
+        for key in ("normalized_src", "source_normalization"):
+            candidate = step_outputs.get(key)
+            if isinstance(candidate, dict):
+                normalized_src = candidate
+                break
+        if not isinstance(normalized_src, dict):
+            return None
+
+        top_business = normalized_src.get("business_output")
+        structured = normalized_src.get("structured_payload")
+        structured = structured if isinstance(structured, dict) else {}
+        nested_business = structured.get("business_output")
+        business = nested_business if isinstance(nested_business, dict) else top_business
+        if not isinstance(top_business, dict) or not isinstance(business, dict):
+            return None
+
+        ssot_contract = structured.get("ssot_output_contract")
+        ssot_contract = ssot_contract if isinstance(ssot_contract, dict) else {}
+        outputs = ssot_contract.get("outputs") if isinstance(ssot_contract.get("outputs"), list) else []
+        src_outputs = [
+            item
+            for item in outputs
+            if isinstance(item, dict)
+            and str(item.get("key") or "").strip().lower() == "src"
+            and str(item.get("ssot_type") or "").strip().lower() == "src"
+        ]
+        src_output = src_outputs[0] if len(src_outputs) == 1 else {}
+
+        def _is_placeholder(value: Any) -> bool:
+            if not isinstance(value, str):
+                return False
+            return bool(re.search(r"\b(?:todo|tbd|n/?a|placeholder)\b", value, re.IGNORECASE))
+
+        schema_pass = bool(top_business) and bool(structured) and bool(ssot_contract)
+        contract_pass = len(src_outputs) == 1
+        title = str(src_output.get("title") or "").strip()
+        content = str(src_output.get("content") or "").strip()
+        completeness_pass = contract_pass and bool(title) and bool(content) and not _is_placeholder(content)
+        source_refs = LLMRunner._filter_materializable_refs(src_output.get("source_refs"))
+        bridge_context = src_output.get("bridge_context") if isinstance(src_output.get("bridge_context"), dict) else {}
+        governed_by_adrs = LLMRunner._filter_materializable_refs(bridge_context.get("governed_by_adrs"))
+        dependency_pass = bool(source_refs or governed_by_adrs)
+
+        result = {
+            "status": "pass" if all((schema_pass, contract_pass, completeness_pass, dependency_pass)) else "fail",
+            "check_type": "auto",
+            "dimensions": {
+                "schema_validation": "pass" if schema_pass else "fail",
+                "contract_validation": "pass" if contract_pass else "fail",
+                "completeness_check": "pass" if completeness_pass else "fail",
+                "dependency_resolution": "pass" if dependency_pass else "fail",
+            },
+            "errors": [],
+            "warnings": [],
+        }
+
+        if not schema_pass:
+            result["errors"].append("normalized_src 缺少 business_output/structured_payload/ssot_output_contract。")
+        if not contract_pass:
+            result["errors"].append("normalized_src 未声明唯一 src ssot_output_contract 输出。")
+        if not completeness_pass:
+            result["errors"].append("normalized_src 的 src 输出缺少有效 title/content 或仍包含占位文本。")
+        if not dependency_pass:
+            result["errors"].append("normalized_src 的 src 输出缺少可解析的 source_refs 或 governed_by_adrs。")
+
+        contract_status = business.get("contract_info", {}).get("status")
+        if isinstance(contract_status, str) and contract_status.strip().upper() == "DRAFT":
+            result["warnings"].append("Contract status is 'DRAFT' - not yet confirmed")
+
+        confirmation = business.get("key_designs", {}).get("risks_and_boundaries", {}).get("confirmation")
+        if isinstance(confirmation, dict) and str(confirmation.get("status") or "").strip().lower() == "pending":
+            unanswered = [
+                item
+                for item in confirmation.get("questions", [])
+                if isinstance(item, dict) and item.get("answered") is False
+            ]
+            if unanswered:
+                result["warnings"].append(
+                    f"Confirmation status is 'pending' with {len(unanswered)} unanswered questions"
+                )
+
+        return result
+
+    @staticmethod
+    def _should_prefer_deterministic_acceptance_result(
+        *,
+        current_result: Dict[str, Any],
+        deterministic_result: Dict[str, Any],
+    ) -> bool:
+        if not isinstance(current_result, dict) or not isinstance(deterministic_result, dict):
+            return False
+        if deterministic_result.get("status") != "pass":
+            return False
+        if current_result.get("status") == "pass":
+            return False
+
+        errors = current_result.get("errors")
+        normalized_errors = (
+            " ".join(str(item).strip().lower() for item in errors if str(item).strip())
+            if isinstance(errors, list)
+            else ""
+        )
+        if not normalized_errors:
+            return True
+
+        false_negative_markers = (
+            "missing 'business_output'",
+            "missing 'structured_payload'",
+            "missing 'ssot_output_contract'",
+            "no src file found",
+            "no src output generated",
+            "缺少 `business_output`",
+            "缺少 structured_payload",
+            "缺少 ssot_output_contract",
+            "工作区缺少生成的 src 文件",
+        )
+        return any(marker in normalized_errors for marker in false_negative_markers)
 
     @staticmethod
     def _prevalidate_fix_acceptance_reviewer_payload(

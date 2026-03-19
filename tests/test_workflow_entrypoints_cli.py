@@ -216,6 +216,83 @@ def test_adr_new_reports_missing_registered_workflow(monkeypatch) -> None:
     assert "governance.adr-create" in result.output
 
 
+def test_adr_update_dispatches_to_governance_adr_update(monkeypatch, tmp_path: Path) -> None:
+    """Test that lee adr update dispatches to governance.adr-update workflow with correct params."""
+    _register_commands()
+    runner = CliRunner()
+    adr_file = tmp_path / "ADR-024__test.md"
+    adr_file.write_text("# ADR Test\n", encoding="utf-8")
+    captured = {}
+
+    monkeypatch.setattr(
+        entry_module,
+        "load_workflow_registry",
+        lambda: {"workflows": {"governance.adr-update": {}}},
+    )
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        # Store the spec content before it's deleted
+        if kwargs.get("spec"):
+            captured["spec_doc"] = yaml.safe_load(Path(kwargs["spec"]).read_text(encoding="utf-8"))
+
+    monkeypatch.setattr(entry_module.run, "callback", fake_run)
+
+    result = runner.invoke(
+        cli,
+        [
+            "adr",
+            "update",
+            "--spec",
+            str(adr_file),
+            "--change-request",
+            "测试更新",
+            "--project-dir",
+            str(tmp_path),
+            "--skip-plan",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["workflow_key"] == "governance.adr-update"
+    assert captured["skip_plan"] is True
+    # Verify params were passed correctly via the spec doc
+    assert captured["spec_doc"]["spec_kind"] == "adr"
+    assert captured["spec_doc"]["action"] == "update"
+    assert captured["spec_doc"]["change_request"] == "测试更新"
+    assert str(adr_file.resolve()) in captured["spec_doc"]["target_path"]
+
+
+def test_adr_update_dry_run_shows_workflow_alias(monkeypatch, tmp_path: Path) -> None:
+    """Test that dry-run shows the correct workflow alias."""
+    _register_commands()
+    runner = CliRunner()
+    adr_file = tmp_path / "ADR-024__test.md"
+    adr_file.write_text("# ADR Test\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        entry_module,
+        "load_workflow_registry",
+        lambda: {"workflows": {"governance.adr-update": {}}},
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "adr",
+            "update",
+            "--spec",
+            str(adr_file),
+            "--change-request",
+            "测试更新",
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "lee adr update -> lee run governance.adr-update" in result.output
+
+
 def test_cli_help_groups_workflow_and_system_commands() -> None:
     _register_commands()
     runner = CliRunner()

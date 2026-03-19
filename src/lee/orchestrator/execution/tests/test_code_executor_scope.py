@@ -58,8 +58,8 @@ def test_build_code_executor_io_config_defaults_to_step_workspace(temp_project_r
     )
 
     assert config["step_workspace"].endswith(".workflow\\workspace\\wf-001\\spec_maintenance")
-    # With symbolic output, project root should be included
-    assert config["declared_output_files"] == [str(temp_project_root)]
+    # Symbolic output should not be seeded as a fake target file
+    assert config["declared_output_files"] == []
     assert config["write_scope"] == [config["step_workspace"], str(temp_project_root)]
 
 
@@ -87,8 +87,8 @@ def test_llm_runner_build_executor_input_uses_scoped_write_paths(temp_project_ro
     )
 
     assert input_data["step_workspace"].endswith(".workflow\\workspace\\wf-001\\spec_maintenance")
-    # With symbolic output, project root should be included in declared output files
-    assert input_data["declared_output_files"] == [str(temp_project_root)]
+    # Symbolic output should only broaden write scope, not declared output files
+    assert input_data["declared_output_files"] == []
     assert input_data["write_scope"] == [input_data["step_workspace"], str(temp_project_root)]
     assert input_data["token_context"] == "encoded-token"
 
@@ -174,8 +174,8 @@ def test_symbolic_output_allows_project_root_writes(temp_project_root):
         project_root=str(temp_project_root),
     )
 
-    # Project root should be in declared output files
-    assert str(temp_project_root) in config["declared_output_files"]
+    # Project root should not be seeded into declared output files
+    assert config["declared_output_files"] == []
     # Project root should be in write scope
     assert str(temp_project_root) in config["write_scope"]
 
@@ -207,8 +207,8 @@ def test_string_output_allows_project_root_writes(temp_project_root):
         project_root=str(temp_project_root),
     )
 
-    # Project root should be in declared output files
-    assert str(temp_project_root) in config["declared_output_files"]
+    # String symbolic outputs should not appear in declared output files
+    assert config["declared_output_files"] == []
 
 
 def test_mixed_outputs_handle_both_types(temp_project_root):
@@ -228,6 +228,26 @@ def test_mixed_outputs_handle_both_types(temp_project_root):
         project_root=str(temp_project_root),
     )
 
-    # Should have project root (from symbolic) and explicit file path
-    assert str(temp_project_root) in config["declared_output_files"]
-    assert "reports/coverage.json" in config["declared_output_files"]
+    # Declared output files only keep explicit paths
+    assert config["declared_output_files"] == ["reports/coverage.json"]
+    assert str(temp_project_root) in config["write_scope"]
+
+
+def test_build_code_executor_io_config_renders_declared_output_placeholders(temp_project_root):
+    step = SimpleNamespace(
+        outputs=[
+            SimpleNamespace(type="file", path="output/design-frozen/{project}-{release_id}.yaml")
+        ]
+    )
+
+    config = build_code_executor_io_config(
+        workspace=str(temp_project_root),
+        workflow_id="wf-001",
+        step_id="source_freeze",
+        step=step,
+        configured_write_scope=[],
+        params={"project": "LEE", "release_id": "src-freeze"},
+        project_root=str(temp_project_root),
+    )
+
+    assert config["declared_output_files"] == ["output/design-frozen/LEE-src-freeze.yaml"]
