@@ -1,28 +1,321 @@
+---
+# Test Set: 用户验证码登录功能
+# Test Set 设计资产 - 验证单一 FEAT (FEAT-TEST-001)
+
 feat_ref: FEAT-TEST-001
 id: ts-verification-code
 module: verification-code
 ssot_type: TESTSET
 status: frozen
-test_cases:
-- description: 验证码发送 API 正常调用
-  expected: API 返回成功，用户收到验证码
-  id: tc-001
+version: "1.0"
+
+# 模块信息
+module_info:
+  name: verification-code
+  description: 用户验证码登录模块
+  interfaces:
+    - POST /api/send-code
+    - POST /api/verify-code
+
+# 测试策略
+strategy:
+  focus:
+    - 验证码发送流程
+    - 验证码验证流程
+    - 主备服务商故障切换
+    - 验证码生命周期管理
+  test_types:
+    - unit
+    - integration
+    - contract
   priority: P0
-  steps:
-  - step: 调用 POST /api/send-code
-  - step: 验证返回状态码 200
-  - step: 验证用户收到短信
-  trace_to:
-  - FEAT-TEST-001.AC-001
-  type: smoke
-- description: 主方案失败时自动切换备用方案
-  expected: 备用方案启动，用户仍能收到验证码
-  id: tc-002
-  priority: P1
-  steps:
-  - step: 模拟主服务商失败
-  - step: 验证备用方案启动
-  - step: 验证用户仍能收到验证码
-  trace_to:
-  - FEAT-TEST-001.AC-002
-  type: regression
+
+# 可追溯性
+traceability:
+  feature_ids:
+    - FEAT-TEST-001
+  acceptance_criteria_refs:
+    - AC-001: 验证码发送 API 正常调用
+    - AC-002: 主方案失败时自动切换备用方案
+    - AC-003: 验证码验证 API 正常调用
+
+# 执行配置
+execution:
+  mode: sequential
+  fail_fast: true
+  timeout_seconds: 300
+
+# 验证规则
+validation_rules:
+  - rule: "smoke_must_be_p0"
+    check: "IF type == 'smoke' THEN priority == 'P0'"
+  - rule: "trace_to_feat"
+    check: "ALL test_cases HAVE trace_to STARTING_WITH 'FEAT-TEST-001'"
+
+# 测试用例
+test_cases:
+  # ========== AC-001: 验证码发送 API 正常调用 ==========
+  - case_id: TC-VC-001
+    title: 验证码发送 API - 正常流程
+    description: 验证使用有效手机号调用发送 API 的正常流程
+    priority: P0
+    type: smoke
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-TEST-001.AC-001
+    steps:
+      - step_number: 1
+        action: 准备有效的中国大陆手机号（11位）
+        expected_result: 手机号格式正确
+      - step_number: 2
+        action: 调用 POST /api/send-code，传入手机号
+        expected_result: API 返回 HTTP 200 状态码
+      - step_number: 3
+        action: 检查响应体
+        expected_result: 返回包含 success=true 和 message_id 的 JSON
+      - step_number: 4
+        action: 验证短信送达（使用测试号码接收或 mock 验证）
+        expected_result: 用户收到包含 6 位数字验证码的短信
+    expected_result: 验证码发送成功，用户收到有效验证码
+
+  - case_id: TC-VC-002
+    title: 验证码发送 API - 验证码有效期验证
+    description: 验证生成的验证码在 60 秒内有效
+    priority: P0
+    type: integration
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-TEST-001.AC-001
+    steps:
+      - step_number: 1
+        action: 调用 POST /api/send-code 发送验证码
+        expected_result: 发送成功，记录发送时间 T0
+      - step_number: 2
+        action: 等待 30 秒后调用 POST /api/verify-code 验证
+        expected_result: 验证成功（在有效期内）
+      - step_number: 3
+        action: 重新发送验证码，等待 61 秒后验证
+        expected_result: 验证失败，返回"验证码已过期"
+    expected_result: 验证码 60 秒内有效，超时后失效
+
+  - case_id: TC-VC-003
+    title: 验证码发送 API - 无效手机号处理
+    description: 验证系统对无效手机号的处理
+    priority: P0
+    type: smoke
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-TEST-001.AC-001
+    steps:
+      - step_number: 1
+        action: 使用无效手机号（如 12345678901）调用发送 API
+        expected_result: API 返回 HTTP 400 状态码
+      - step_number: 2
+        action: 使用非11位手机号调用发送 API
+        expected_result: API 返回 HTTP 400 状态码
+      - step_number: 3
+        action: 使用空手机号调用发送 API
+        expected_result: API 返回 HTTP 400 状态码
+    expected_result: 系统拒绝无效手机号请求，返回明确错误信息
+
+  # ========== AC-002: 主方案失败时自动切换备用方案 ==========
+  - case_id: TC-VC-004
+    title: 服务商故障切换 - 主服务商不可用
+    description: 验证主短信服务商故障时自动切换到备用服务商
+    priority: P0
+    type: smoke
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-TEST-001.AC-002
+    steps:
+      - step_number: 1
+        action: 配置主服务商为不可用状态（模拟故障）
+        expected_result: 主服务商标记为 DOWN
+      - step_number: 2
+        action: 调用 POST /api/send-code 发送验证码
+        expected_result: 系统自动检测到主服务商故障
+      - step_number: 3
+        action: 验证备用服务商被调用
+        expected_result: 请求被路由到备用服务商
+      - step_number: 4
+        action: 验证用户收到验证码
+        expected_result: 短信通过备用服务商成功送达
+    expected_result: 主服务商故障时无缝切换到备用，用户无感知
+
+  - case_id: TC-VC-005
+    title: 服务商故障切换 - 切换日志记录
+    description: 验证服务商切换事件被正确记录
+    priority: P1
+    type: integration
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-TEST-001.AC-002
+    steps:
+      - step_number: 1
+        action: 触发主服务商故障场景
+        expected_result: 系统检测到故障
+      - step_number: 2
+        action: 发送验证码触发切换
+        expected_result: 成功切换到备用服务商
+      - step_number: 3
+        action: 查询系统日志
+        expected_result: 日志中包含 "FAILOVER" 标记和切换详情
+      - step_number: 4
+        action: 验证日志内容完整性
+        expected_result: 日志包含时间戳、主服务商标识、备用服务商标识
+    expected_result: 切换事件被完整记录，可用于审计和告警
+
+  - case_id: TC-VC-006
+    title: 服务商故障切换 - 主服务商恢复后切换回主
+    description: 验证主服务商恢复后流量切回主服务商
+    priority: P1
+    type: integration
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-TEST-001.AC-002
+    steps:
+      - step_number: 1
+        action: 在主服务商故障状态下发送验证码
+        expected_result: 使用备用服务商成功发送
+      - step_number: 2
+        action: 恢复主服务商为可用状态
+        expected_result: 健康检查通过
+      - step_number: 3
+        action: 再次发送验证码
+        expected_result: 请求被路由回主服务商
+    expected_result: 主服务恢复后自动切回，实现负载均衡
+
+  # ========== AC-003: 验证码验证 API 正常调用 ==========
+  - case_id: TC-VC-007
+    title: 验证码验证 API - 正确验证码验证成功
+    description: 验证使用正确的验证码调用验证 API 成功
+    priority: P0
+    type: smoke
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-TEST-001.AC-003
+    steps:
+      - step_number: 1
+        action: 调用 POST /api/send-code 获取验证码
+        expected_result: 验证码发送成功，记录验证码值
+      - step_number: 2
+        action: 调用 POST /api/verify-code，传入正确手机号和验证码
+        expected_result: API 返回 HTTP 200 状态码
+      - step_number: 3
+        action: 检查响应体
+        expected_result: 返回 success=true 和 auth_token
+    expected_result: 正确验证码验证通过，返回认证令牌
+
+  - case_id: TC-VC-008
+    title: 验证码验证 API - 错误验证码验证失败
+    description: 验证使用错误的验证码调用验证 API 失败
+    priority: P0
+    type: smoke
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-TEST-001.AC-003
+    steps:
+      - step_number: 1
+        action: 调用 POST /api/send-code 获取验证码
+        expected_result: 验证码发送成功
+      - step_number: 2
+        action: 调用 POST /api/verify-code，传入错误验证码
+        expected_result: API 返回 HTTP 401 状态码
+      - step_number: 3
+        action: 检查响应体
+        expected_result: 返回 success=false 和错误信息"验证码错误"
+    expected_result: 错误验证码被拒绝，不返回认证令牌
+
+  - case_id: TC-VC-009
+    title: 验证码验证 API - 验证码使用后立即失效
+    description: 验证验证码验证成功后不能再次使用
+    priority: P0
+    type: smoke
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-TEST-001.AC-003
+    steps:
+      - step_number: 1
+        action: 调用 POST /api/send-code 获取验证码
+        expected_result: 验证码发送成功，记录验证码值
+      - step_number: 2
+        action: 第一次调用 POST /api/verify-code 验证
+        expected_result: 验证成功，返回 HTTP 200
+      - step_number: 3
+        action: 使用同一验证码第二次调用验证 API
+        expected_result: 返回 HTTP 401，错误信息"验证码已失效"
+    expected_result: 验证码一次性使用，防止重放攻击
+
+  - case_id: TC-VC-010
+    title: 验证码验证 API - 过期验证码验证失败
+    description: 验证过期验证码无法通过验证
+    priority: P0
+    type: integration
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-TEST-001.AC-003
+    steps:
+      - step_number: 1
+        action: 调用 POST /api/send-code 获取验证码
+        expected_result: 验证码发送成功，记录发送时间
+      - step_number: 2
+        action: 等待 61 秒
+        expected_result: 超过 60 秒有效期
+      - step_number: 3
+        action: 调用 POST /api/verify-code 验证过期验证码
+        expected_result: 返回 HTTP 401，错误信息"验证码已过期"
+    expected_result: 过期验证码被拒绝，保障安全性
+
+  # ========== 非功能性测试 ==========
+  - case_id: TC-VC-011
+    title: 性能测试 - API 响应时间 < 200ms
+    description: 验证验证码发送和验证 API 响应时间满足要求
+    priority: P0
+    type: performance
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-TEST-001.AC-001
+      - FEAT-TEST-001.AC-003
+    steps:
+      - step_number: 1
+        action: 准备 100 个并发请求
+        expected_result: 测试数据准备完成
+      - step_number: 2
+        action: 并发调用 POST /api/send-code
+        expected_result: 记录每个请求的响应时间
+      - step_number: 3
+        action: 统计 95% 分位响应时间
+        expected_result: P95 响应时间 < 200ms
+    expected_result: API 响应时间满足非功能性需求
+
+  - case_id: TC-VC-012
+    title: 安全测试 - 频率限制验证
+    description: 验证系统对频繁请求的限制
+    priority: P1
+    type: security
+    feature_id: FEAT-TEST-001
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-TEST-001.AC-001
+    steps:
+      - step_number: 1
+        action: 使用同一手机号连续调用 send-code 5 次
+        expected_result: 前几次请求成功
+      - step_number: 2
+        action: 第 6 次调用 send-code
+        expected_result: 返回 HTTP 429 Too Many Requests
+      - step_number: 3
+        action: 等待限制窗口后重试
+        expected_result: 请求恢复正常
+    expected_result: 系统实现频率限制，防止滥用

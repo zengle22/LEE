@@ -43,7 +43,7 @@ def _load_dirs_config(project_dir: Path) -> Dict[str, Any]:
                 "artifacts_dir": {"path": ".artifacts"},
             }
         }
-    
+
     with open(config_file, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f) or {}
 
@@ -53,7 +53,7 @@ def _build_dir_context(project_dir: Path) -> Dict[str, str]:
     dirs_config = _load_dirs_config(project_dir)
     directories = dirs_config.get("directories", {})
     context = {}
-    
+
     # 直接映射目录配置到模板变量
     if "specs_dir" in directories:
         context["specs_dir"] = directories["specs_dir"].get("path", "spec")
@@ -61,7 +61,7 @@ def _build_dir_context(project_dir: Path) -> Dict[str, str]:
         context["specs_dir"] = directories["spec_dir"].get("path", "spec")
     else:
         context["specs_dir"] = "spec"
-    
+
     if "qa_specs_dir" in directories:
         context["qa_specs_dir"] = directories["qa_specs_dir"].get("path", "spec/qa")
     else:

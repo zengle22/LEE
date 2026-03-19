@@ -2,29 +2,30 @@
 id: ADR-017
 ssot_type: adr
 title: Gate 职责与决策模式分层及人机审批交互收敛
-status: draft
+status: frozen
 version: v1
 workflow_instance_id: gate-governance-design-20260315
 parent_id: null
 derived_from_ids:
-  - id: ADR-005
-    version: v1
-  - id: ADR-006
-    version: v1
-  - id: ADR-015
-    version: v1
+- id: ADR-005
+  version: v1
+- id: ADR-006
+  version: v1
+- id: ADR-015
+  version: v1
 source_refs: []
 owner: governance
 tags:
-  - gate
-  - review
-  - approval
-  - cli
-  - workflow
-  - human-in-the-loop
+- gate
+- review
+- approval
+- cli
+- workflow
+- human-in-the-loop
 properties:
   adr_kind: governance_design
   decision_scope: gate_purpose_mode_and_human_gate_cli
+frozen_at: '2026-03-17T17:17:55.525189'
 ---
 
 # Gate 职责与决策模式分层及人机审批交互收敛

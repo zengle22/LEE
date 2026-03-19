@@ -1,0 +1,197 @@
+---
+# Test Set Design Asset for TEST-001
+# Frozen FEAT: FEAT-TEST-001
+# Generated from requirement analysis step
+
+metadata:
+  ts_id: TS-TEST-001-001
+  module: TEST-001
+  title: 用户验证码登录功能 Test Set
+  version: "1.0"
+  frozen_at: "2026-03-18T11:36:00+08:00"
+  epic_ref: EPIC-TEST-001
+  feat_refs:
+    - FEAT-TEST-001
+
+module_boundary:
+  name: 用户验证码登录功能
+  description: |
+    用户验证码登录功能模块，支持用户通过手机号 + 验证码方式登录系统：
+    - 验证码发送 API 调用
+    - 主备短信服务商自动切换
+    - 验证码验证 API 调用
+    - 验证码生命周期管理
+  
+  scope:
+    in_scope:
+      - 验证码发送 API (POST /api/send-code)
+      - 验证码验证 API (POST /api/verify-code)
+      - 主备短信服务商切换机制
+      - 验证码有效期管理 (60秒)
+      - 短信发送成功率监控
+      - 并发请求处理 (>=1000 QPS)
+      - 响应时间优化 (<200ms)
+    
+    out_of_scope:
+      - 用户注册功能
+      - 密码登录功能
+      - 第三方登录集成
+      - 短信内容模板管理
+      - 服务商账单管理
+      - 用户行为分析
+  
+  interfaces:
+    inputs:
+      - mobile_number
+      - verification_code
+      - provider_config
+      - sms_template
+    
+    outputs:
+      - send_code_response
+      - verify_code_response
+      - provider_switch_log
+      - sms_delivery_status
+
+priority_definition:
+  P0:
+    name: Critical
+    description: 阻塞性测试，必须100%通过
+    owner: Dev
+    execution: 必执行
+    examples:
+      - 验证码发送 API 基础功能
+      - 验证码验证 API 基础功能
+      - 主备切换核心逻辑
+  
+  P1:
+    name: High
+    description: 重要功能测试，影响主要流程
+    owner: Dev
+    execution: 必执行
+    examples:
+      - 验证码有效期验证
+      - 并发请求处理
+      - 响应时间达标
+  
+  P2:
+    name: Medium
+    description: 回归测试用例
+    owner: QA
+    execution: 回归可选
+    examples:
+      - 异常手机号格式处理
+      - 日志记录完整性
+
+testable_features:
+  - id: TF-001
+    name: 验证码发送 API
+    description: 用户输入有效手机号后调用发送验证码 API，返回成功并发送短信
+    priority: P0
+    feat_ref: FEAT-TEST-001
+    acceptance_criteria:
+      - API 返回状态码 200
+      - 用户收到短信验证码
+      - 验证码 60 秒内有效
+      - 同一手机号 60 秒内重复请求应被限制
+    test_focus:
+      - api_response_validation
+      - sms_delivery_verification
+      - code_expiration_mechanism
+      - rate_limiting
+    
+  - id: TF-002
+    name: 主备短信服务商切换
+    description: 主短信服务商不可用时自动切换到备用服务商
+    priority: P0
+    feat_ref: FEAT-TEST-001
+    acceptance_criteria:
+      - 主服务商故障时自动检测
+      - 自动切换到备用服务商
+      - 用户仍能收到验证码
+      - 记录切换日志
+      - 主服务恢复后可切换回主服务
+    test_focus:
+      - failover_detection
+      - provider_switching
+      - service_recovery
+      - logging_verification
+    
+  - id: TF-003
+    name: 验证码验证 API
+    description: 用户输入手机号和验证码后进行验证
+    priority: P0
+    feat_ref: FEAT-TEST-001
+    acceptance_criteria:
+      - 正确验证码返回验证成功
+      - 错误验证码返回验证失败
+      - 验证码使用后立即失效
+      - 过期验证码返回失败
+    test_focus:
+      - correct_code_verification
+      - incorrect_code_handling
+      - code_invalidation
+      - expiration_handling
+    
+  - id: TF-004
+    name: 性能与并发要求
+    description: 系统性能满足非功能性需求规格
+    priority: P1
+    feat_ref: FEAT-TEST-001
+    acceptance_criteria:
+      - 响应时间 < 200ms
+      - 验证码发送成功率 >= 99%
+      - 支持并发 >= 1000 QPS
+      - 系统在高并发下稳定运行
+    test_focus:
+      - response_time_measurement
+      - success_rate_monitoring
+      - concurrent_load_testing
+      - stability_under_load
+
+test_categories:
+  functional:
+    - send_code_api_logic
+    - verify_code_api_logic
+    - provider_failover_logic
+    - code_lifecycle_management
+    - rate_limiting_rules
+  
+  integration:
+    - sms_provider_integration
+    - api_endpoint_integration
+    - logging_system_integration
+  
+  performance:
+    - response_time_validation
+    - throughput_testing
+    - concurrent_request_handling
+  
+  reliability:
+    - provider_failover_reliability
+    - success_rate_monitoring
+    - error_handling
+
+data_requirements:
+  test_data:
+    strategy: isolated_test_environment
+    cleanup: automatic
+    fixtures:
+      - valid_mobile_numbers
+      - invalid_mobile_numbers
+      - mock_sms_providers
+      - test_verification_codes
+  
+  test_environments:
+    - local_development
+    - ci_test_environment
+    - staging_with_mock_providers
+
+dependencies: []
+
+notes: |
+  本 Test Set 验证 FEAT-TEST-001 中的所有特性：
+  1. AC-001: 验证码发送 API 正常调用
+  2. AC-002: 主方案失败时自动切换备用方案
+  3. AC-003: 验证码验证 API 正常调用
+  4. NFR: 响应时间 < 200ms, 成功率 >= 99%, 并发 >= 1000 QPS

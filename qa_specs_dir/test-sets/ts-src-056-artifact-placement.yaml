@@ -1,0 +1,592 @@
+---
+# Test Set Design Asset for SRC-056 Artifact Placement Governance
+# Frozen: true
+# Version: v1.0.0
+# Module: src-056-artifact-placement
+
+metadata:
+  testset_id: TS-SRC-056-001
+  module: src-056-artifact-placement
+  title: Artifact Placement Governance Test Set
+  description: |
+    Test Set for SRC-056 Artifact Placement Governance module.
+    Covers FEAT-SRC-056-001 (Manifest Contract) and FEAT-SRC-056-002 (Agent Implementation).
+  status: frozen
+  version: "1.0.0"
+  created_at: "2026-03-18T10:49:00+08:00"
+  frozen_at: "2026-03-18T10:49:00+08:00"
+  owner: qa
+  
+  # SSOT 溯源
+  ssot_refs:
+    epic:
+      - id: EPIC-SRC-056-001
+        title: Run-Scoped Artifact Placement Governance and Directory Audit
+        path: spec/requirements/SRC-056/EPIC-SRC-056-001__run-scoped-artifact-placement-governance-and-direc.md
+    feat:
+      - id: FEAT-SRC-056-001
+        title: Run-Scoped Placement Manifest Contract Design
+        path: spec/requirements/SRC-056/FEAT-SRC-056-001__run-scoped-placement-manifest-contract-design.md
+      - id: FEAT-SRC-056-002
+        title: Artifact Placement Reviewer Agent Implementation
+        path: spec/requirements/SRC-056/FEAT-SRC-056-002__artifact-placement-reviewer-agent-implementation.md
+    adrs:
+      - ADR-021
+  
+  # 测试范围
+  scope:
+    in_scope:
+      - Manifest schema structure validation
+      - Manifest parsing functionality
+      - Directory scanning functionality
+      - File placement rule matching
+      - Audit report generation
+      - CLI interface
+      - Python API
+      - Workflow integration
+      - Gate blocking mechanism
+    out_of_scope:
+      - Runtime manifest generation
+      - Physical file write operations
+      - Automatic file relocation
+      - Business object semantic changes
+
+# 模块边界定义
+module_boundary:
+  module_id: src-056-artifact-placement
+  module_name: Run-Scoped Artifact Placement Governance
+  description: |
+    建立覆盖正式 SSOT 文件与非正式 workflow 产物的统一目录治理方案，
+    通过 run-scoped placement manifest、公共目录审计 agent 和 gate 阻断机制，
+    确保每次 workflow 运行产生的所有文件都落到正确目录。
+  
+  components:
+    - id: MANIFEST-CONTRACT
+      name: Placement Manifest Contract
+      description: Manifest schema 定义、生成时机规范、消费方式规范
+      feat_ref: FEAT-SRC-056-001
+      
+    - id: AUDIT-AGENT
+      name: Artifact Placement Reviewer Agent
+      description: 独立的 directory audit agent 模块
+      feat_ref: FEAT-SRC-056-002
+  
+  interfaces:
+    inputs:
+      - name: placement-manifest.yaml
+        type: manifest
+        description: Placement manifest 文件
+        schema: placement-manifest-schema.yaml
+        
+      - name: CLI args
+        type: command-line
+        description: 命令行参数 (--manifest, --target)
+        
+      - name: Python API
+        type: library
+        description: Python 库接口
+        
+    outputs:
+      - name: audit-report.yaml
+        type: report
+        description: 审计结果报告
+        schema: placement_audit_report_schema.yaml
+        
+      - name: CLI stdout
+        type: console
+        description: 控制台输出
+        
+      - name: API return value
+        type: object
+        description: Python 对象返回值
+
+# 可测试特性列表
+testable_features:
+  # TF-001: Manifest Schema 结构完整性
+  - id: TF-001
+    name: Manifest Schema Structure Integrity
+    description: 验证 placement manifest schema 包含所有必需字段
+    priority: P0
+    test_level: unit
+    feat_ref: FEAT-SRC-056-001
+    ac_ref: AC-001
+    
+    acceptance_criteria:
+      - Schema 包含 manifest_id 字段
+      - Schema 包含 run_scope 字段
+      - Schema 包含 expected_artifacts 字段
+      - Schema 包含 placement_rules 字段
+    
+    test_cases:
+      - tc_id: TC-001-001
+        title: Schema 字段完整性验证
+        preconditions:
+          - placement-manifest-schema.yaml 文件存在
+        steps:
+          - 加载 schema 文件
+          - 验证必需字段存在
+        expected_result: 所有必需字段（manifest_id, run_scope, expected_artifacts, placement_rules）存在
+        
+      - tc_id: TC-001-002
+        title: Schema YAML 语法有效性
+        preconditions:
+          - schema 文件存在
+        steps:
+          - 解析 YAML 文件
+        expected_result: YAML 解析成功，无语法错误
+
+  # TF-002: Manifest 生成时机规范
+  - id: TF-002
+    name: Manifest Generation Timing Specification
+    description: 验证 contract 文档明确定义 manifest 生成时机
+    priority: P0
+    test_level: review
+    feat_ref: FEAT-SRC-056-001
+    ac_ref: AC-002
+    
+    acceptance_criteria:
+      - 文档明确说明生成时机
+      - 生成时机符合 workflow 生命周期
+    
+    test_cases:
+      - tc_id: TC-002-001
+        title: Contract 文档生成时机定义审查
+        preconditions:
+          - placement-manifest-contract.md 文档存在
+        steps:
+          - 审查 contract 文档
+          - 确认生成时机定义
+        expected_result: 文档明确说明 manifest 在 workflow 初始化阶段生成
+
+  # TF-003: Manifest 消费方式规范
+  - id: TF-003
+    name: Manifest Consumption Specification
+    description: 验证 contract 文档明确定义 manifest 消费方式
+    priority: P0
+    test_level: review
+    feat_ref: FEAT-SRC-056-001
+    ac_ref: AC-002
+    
+    acceptance_criteria:
+      - 文档明确说明 auditer agent 读取方式
+      - 文档明确说明 validator 引用方式
+    
+    test_cases:
+      - tc_id: TC-003-001
+        title: Contract 文档消费方式定义审查
+        preconditions:
+          - placement-manifest-contract.md 文档存在
+        steps:
+          - 审查 contract 文档消费章节
+          - 确认 auditer 和 validator 消费方式
+        expected_result: 文档明确说明 auditer agent 读取和 validator 引用方式
+
+  # TF-004: Manifest 示例有效性
+  - id: TF-004
+    name: Manifest Example Validity
+    description: 验证示例 manifest 文件符合 schema 且包含至少 3 种 artifact 类型
+    priority: P0
+    test_level: unit
+    feat_ref: FEAT-SRC-056-001
+    ac_ref: AC-003
+    
+    acceptance_criteria:
+      - 示例符合 schema 定义
+      - 包含 ≥3 种 artifact 类型
+      - 放置规则定义完整
+    
+    test_cases:
+      - tc_id: TC-004-001
+        title: 示例 manifest Schema 合规性验证
+        preconditions:
+          - example-placement-manifest-run-001.yaml 存在
+          - schema 文件存在
+        steps:
+          - 加载示例文件
+          - 使用 schema 验证
+        expected_result: 示例文件通过 schema 验证
+        
+      - tc_id: TC-004-002
+        title: 示例 artifact 类型数量验证
+        preconditions:
+          - 示例 manifest 文件存在
+        steps:
+          - 解析 expected_artifacts
+          - 统计 artifact 类型数量
+        expected_result: 包含至少 3 种不同的 artifact 类型
+
+  # TF-005: Manifest 解析功能
+  - id: TF-005
+    name: Manifest Parsing Functionality
+    description: 验证 agent 能够读取 placement manifest 并解析 expected artifacts
+    priority: P0
+    test_level: unit
+    feat_ref: FEAT-SRC-056-002
+    ac_ref: AC-001
+    
+    acceptance_criteria:
+      - 成功加载有效 manifest 文件
+      - 正确解析 expected artifacts 列表
+      - 错误 manifest 返回适当错误
+    
+    test_cases:
+      - tc_id: TC-005-001
+        title: 有效 manifest 加载和解析
+        preconditions:
+          - 提供符合 schema 的 placement manifest 文件
+        steps:
+          - 调用 agent 的 load_manifest 方法
+          - 传入有效 manifest 路径
+        expected_result: agent 成功解析 manifest 并返回 expected artifacts 列表
+        
+      - tc_id: TC-005-002
+        title: 无效 manifest 错误处理
+        preconditions:
+          - 提供无效的 manifest 文件（损坏 YAML、缺失字段）
+        steps:
+          - 调用 load_manifest 方法
+          - 传入无效 manifest 路径
+        expected_result: agent 返回适当的错误信息
+        
+      - tc_id: TC-005-003
+        title: 空 manifest 文件处理
+        preconditions:
+          - 提供空 manifest 文件
+        steps:
+          - 调用 load_manifest 方法
+        expected_result: agent 返回错误，提示空文件
+
+  # TF-006: 目录扫描功能
+  - id: TF-006
+    name: Directory Scanning Functionality
+    description: 验证 agent 能够扫描指定目录
+    priority: P0
+    test_level: unit
+    feat_ref: FEAT-SRC-056-002
+    ac_ref: AC-002
+    
+    acceptance_criteria:
+      - 递归扫描目标目录
+      - 识别所有文件类型
+      - 正确处理符号链接
+      - 处理权限错误
+    
+    test_cases:
+      - tc_id: TC-006-001
+        title: 基本目录扫描
+        preconditions:
+          - 目标目录存在且包含文件
+        steps:
+          - 调用 scan_directory 方法
+          - 传入目标目录路径
+        expected_result: 返回目录中所有文件的完整列表
+        
+      - tc_id: TC-006-002
+        title: 递归子目录扫描
+        preconditions:
+          - 目标目录包含嵌套子目录
+        steps:
+          - 调用扫描方法
+        expected_result: 递归扫描所有子目录并汇总文件
+        
+      - tc_id: TC-006-003
+        title: 空目录处理
+        preconditions:
+          - 目标目录为空
+        steps:
+          - 调用扫描方法
+        expected_result: 返回空列表，无错误
+
+  # TF-007: 文件位置比对逻辑
+  - id: TF-007
+    name: File Placement Rule Matching
+    description: 验证 agent 能够比对实际文件位置与 manifest 规则
+    priority: P0
+    test_level: unit
+    feat_ref: FEAT-SRC-056-002
+    ac_ref: AC-002
+    
+    acceptance_criteria:
+      - 正确识别合规文件
+      - 正确识别违规文件
+      - 支持多种匹配规则
+      - 正确处理文件名/路径大小写
+    
+    test_cases:
+      - tc_id: TC-007-001
+        title: 合规文件识别
+        preconditions:
+          - manifest 已加载
+          - 目标目录包含合规文件
+        steps:
+          - 调用 audit 方法
+          - 比对文件位置
+        expected_result: 合规文件被正确识别并列入 compliant_files
+        
+      - tc_id: TC-007-002
+        title: 违规文件识别
+        preconditions:
+          - manifest 已加载
+          - 目标目录包含违规文件
+        steps:
+          - 调用 audit 方法
+        expected_result: 违规文件被正确识别并列入 violation_files
+        
+      - tc_id: TC-007-003
+        title: 多种规则类型匹配
+        preconditions:
+          - manifest 包含多种规则类型（精确、模式、前缀）
+        steps:
+          - 执行 audit
+        expected_result: 所有规则类型正确匹配
+
+  # TF-008: 审计报告生成
+  - id: TF-008
+    name: Audit Report Generation
+    description: 验证 agent 输出审计结果报告
+    priority: P0
+    test_level: unit
+    feat_ref: FEAT-SRC-056-002
+    ac_ref: AC-002
+    
+    acceptance_criteria:
+      - 报告包含违规文件列表
+      - 报告包含合规文件列表
+      - 报告格式符合 schema
+      - 报告包含统计摘要
+    
+    test_cases:
+      - tc_id: TC-008-001
+        title: 审计报告结构验证
+        preconditions:
+          - audit 已完成
+        steps:
+          - 生成审计报告
+        expected_result: 报告包含 compliant_files, violation_files, summary 等必需字段
+        
+      - tc_id: TC-008-002
+        title: 报告 Schema 合规性
+        preconditions:
+          - 审计报告已生成
+          - report schema 文件存在
+        steps:
+          - 使用 schema 验证报告
+        expected_result: 报告符合 placement_audit_report_schema.yaml 定义
+
+  # TF-009: CLI 接口功能
+  - id: TF-009
+    name: CLI Interface Functionality
+    description: 验证 agent 支持 CLI 调用
+    priority: P0
+    test_level: integration
+    feat_ref: FEAT-SRC-056-002
+    ac_ref: AC-003
+    
+    acceptance_criteria:
+      - 支持 lee audit --manifest <path> --target <path>
+      - 支持帮助信息输出
+      - 支持错误处理和退出码
+      - 支持报告文件输出
+    
+    test_cases:
+      - tc_id: TC-009-001
+        title: CLI 基本调用
+        preconditions:
+          - agent 模块已安装
+          - manifest 文件存在
+          - 目标目录存在
+        steps:
+          - 执行 lee audit --manifest <path> --target <path>
+        expected_result: CLI 输出审计结果并生成 report 文件
+        
+      - tc_id: TC-009-002
+        title: CLI 帮助信息
+        preconditions:
+          - agent 已安装
+        steps:
+          - 执行 lee audit --help
+        expected_result: 显示帮助信息，包含所有可用参数
+        
+      - tc_id: TC-009-003
+        title: CLI 退出码验证
+        preconditions:
+          - 准备合规和违规两种场景
+        steps:
+          - 执行 CLI 调用
+          - 检查退出码
+        expected_result: 合规返回 0，违规返回非 0 退出码
+
+  # TF-010: Python API 功能
+  - id: TF-010
+    name: Python API Functionality
+    description: 验证 agent 支持 Python API 调用
+    priority: P0
+    test_level: integration
+    feat_ref: FEAT-SRC-056-002
+    ac_ref: AC-003
+    
+    acceptance_criteria:
+      - 支持 import artifact_placement_reviewer
+      - 提供 load_manifest() 方法
+      - 提供 audit() 方法
+      - 返回结构化结果对象
+    
+    test_cases:
+      - tc_id: TC-010-001
+        title: API 导入和基本调用
+        preconditions:
+          - agent 模块已安装
+        steps:
+          - import artifact_placement_reviewer
+          - 创建 agent 实例
+          - 调用 load_manifest 和 audit
+        expected_result: 所有 API 调用成功，返回预期结果
+        
+      - tc_id: TC-010-002
+        title: API 返回值结构验证
+        preconditions:
+          - API 调用已完成
+        steps:
+          - 检查返回值结构
+        expected_result: 返回值包含预期的 compliant_files, violation_files, summary 字段
+
+  # TF-011: Workflow 集成功能
+  - id: TF-011
+    name: Workflow Integration
+    description: 验证 agent 可被 requirement-chain-validation workflow 集成调用
+    priority: P0
+    test_level: integration
+    feat_ref: FEAT-SRC-056-002
+    ac_ref: AC-004
+    
+    acceptance_criteria:
+      - 支持 workflow 调用 API
+      - 返回结果可供 gate 决策
+      - 支持异步/同步调用模式
+    
+    test_cases:
+      - tc_id: TC-011-001
+        title: Workflow API 集成
+        preconditions:
+          - requirement-chain-validation workflow 执行到 audit 步骤
+        steps:
+          - workflow 调用 agent API
+        expected_result: agent 返回审计结果供后续 gate 决策
+        
+      - tc_id: TC-011-002
+        title: 集成结果格式验证
+        preconditions:
+          - API 调用已完成
+        steps:
+          - 验证返回结果格式
+        expected_result: 结果格式可被 workflow 解析和处理
+
+  # TF-012: Gate 阻断机制
+  - id: TF-012
+    name: Gate Blocking Mechanism
+    description: 验证 requirement-chain-validation 流程中目录审计步骤作为 blocker
+    priority: P0
+    test_level: e2e
+    feat_ref: EPIC-SRC-056-001
+    ac_ref: null
+    
+    acceptance_criteria:
+      - 审计不通过时阻断 workflow
+      - 审计通过时允许 workflow 继续
+      - 阻断时提供明确的错误信息
+    
+    test_cases:
+      - tc_id: TC-012-001
+        title: Gate 阻断不合规运行
+        preconditions:
+          - workflow 执行到 audit 步骤
+          - 存在违规文件
+        steps:
+          - 执行 audit 步骤
+          - 检查 gate 决策
+        expected_result: gate 阻断 workflow，提供违规文件列表
+        
+      - tc_id: TC-012-002
+        title: Gate 放行合规运行
+        preconditions:
+          - workflow 执行到 audit 步骤
+          - 所有文件合规
+        steps:
+          - 执行 audit 步骤
+          - 检查 gate 决策
+        expected_result: gate 允许 workflow 继续执行
+
+# 测试数据需求
+test_data:
+  - id: TD-001
+    name: Valid Manifest Sample
+    description: 符合 schema 的 manifest 文件
+    format: yaml
+    
+  - id: TD-002
+    name: Invalid Manifest Sample
+    description: 不符合 schema 的 manifest 文件（用于错误处理测试）
+    format: yaml
+    
+  - id: TD-003
+    name: Test Directory Structure
+    description: 包含合规和违规文件的测试目录结构
+    format: directory
+    
+  - id: TD-004
+    name: Expected Audit Report
+    description: 预期的审计报告输出
+    format: yaml
+
+# 环境需求
+test_environments:
+  - name: unit-test
+    description: 单元测试环境
+    requirements:
+      - Python 3.10+
+      - pytest
+      - 文件系统读写权限
+      
+  - name: integration-test
+    description: 集成测试环境
+    requirements:
+      - 完整 LEE 环境
+      - workflow 框架
+      
+  - name: e2e-test
+    description: 端到端测试环境
+    requirements:
+      - 完整 LEE 运行时
+      - requirement-chain-validation workflow
+
+# 执行策略
+execution_strategy:
+  order: sequential
+  dependencies:
+    - source: TF-001, TF-002, TF-003, TF-004
+      target: TF-005
+      type: must_complete_before
+      
+    - source: TF-005
+      target: TF-006, TF-007, TF-008
+      type: must_complete_before
+      
+    - source: TF-006, TF-007, TF-008
+      target: TF-009, TF-010
+      type: must_complete_before
+      
+    - source: TF-009, TF-010
+      target: TF-011
+      type: must_complete_before
+      
+    - source: TF-011
+      target: TF-012
+      type: must_complete_before
+
+# 验收标准汇总
+acceptance_summary:
+  total_features: 12
+  p0_features: 12
+  p1_features: 0
+  total_test_cases: 24
+  coverage_target: "100% of acceptance criteria"

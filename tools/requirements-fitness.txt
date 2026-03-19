@@ -1,0 +1,14 @@
+# Fitness Rule Schema 验证工具依赖
+# 用于验证 fitness_rule.yaml/fitness_rule.json 文件是否符合 schema 定义
+
+# JSON Schema 验证库（核心依赖）
+jsonschema>=4.17.0
+
+# YAML 解析库（推荐 ruamel.yaml 以保留行号信息）
+ruamel.yaml>=0.17.0
+
+# 后备 YAML 解析库（当 ruamel.yaml 不可用时）
+pyyaml>=6.0
+
+# 类型提示支持（Python 3.9 以下版本需要）
+typing-extensions>=4.0; python_version < "3.10"

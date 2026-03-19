@@ -1,0 +1,238 @@
+# QA Test Run Exit Fitness Rules v1.0
+# QA 部门 Test Run 退出前 Fitness 检查规则
+#
+# 这些规则在 Test Run 退出前执行，作为质量信号（不阻断，仅记录）。
+
+kind: fitness_rules
+version: "1.0"
+id: fitness_rules.qa.test_run_exit
+name: Test Run Exit Fitness Rules
+description: |
+  Test Run 退出前的 Fitness 检查规则。
+
+  规则来源：
+  - test-plan-l2 workflow 的 exit_evaluation 要求
+  - QA 部门质量标准
+  - 发布准入门槛
+
+owner: qa-governance
+tags: [fitness-rules, qa, test-run-exit, quality-signal, adr-024]
+
+# ============================================
+# Governing ADRs
+# ============================================
+governing_adrs:
+  - ADR-024: Fitness Function 完成条件防腐层核心能力构建
+
+# ============================================
+# 规则定义
+# ============================================
+rules:
+  # ------------------------------------------
+  # Hard Gate 规则（必须通过）
+  # ------------------------------------------
+  - id: l3_output_validation_passed
+    name: "L3 输出验证通过"
+    description: "所有 L3 输出必须通过 schema 验证"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: flag_check
+      rule: |
+        test_run.l3_output_validation.status == 'passed' OR
+        test_run.l3_output_validation.invalid_runs ALLOWED
+
+    failure_message: "L3 输出验证失败"
+    suggestion: "检查 L3 输出是否符合 schema 要求"
+
+  - id: critical_test_sets_passed
+    name: "关键 Test Set 通过"
+    description: "所有 P0 级别 Test Set 必须通过"
+    type: hard_gate
+    severity: blocker
+
+    check:
+      type: metric_check
+      rule: |
+        ALL(ts IN test_run.test_set_results WHERE ts.priority == 'P0' AND ts.status == 'completed' AND ts.pass_rate == 100)
+
+    failure_message: "有关键 Test Set 未通过"
+    suggestion: "修复 P0 Test Set 中的失败用例"
+
+  # ------------------------------------------
+  # Quality Signal 规则（建议性）
+  # ------------------------------------------
+  - id: overall_pass_rate_threshold
+    name: "整体通过率门槛"
+    description: "整体测试通过率应不低于 90%"
+    type: quality_signal
+    severity: major
+
+    check:
+      type: metric_check
+      rule: |
+        test_run.execution_summary.overall_pass_rate >= 90
+
+    threshold:
+      min_pass_rate: 90
+
+    failure_message: "整体测试通过率低于 90%（实际：{actual}%）"
+    suggestion: "分析失败用例，评估是否影响发布"
+
+  - id: bug_fix_rate
+    name: "Bug 修复率"
+    description: "阻塞性 Bug 修复率应达到 100%"
+    type: quality_signal
+    severity: major
+
+    check:
+      type: metric_check
+      rule: |
+        test_run.bug_summary.blocking_bugs_fixed_rate >= 100
+
+    threshold:
+      min_fix_rate: 100
+
+    failure_message: "阻塞性 Bug 未完全修复"
+    suggestion: "优先修复所有阻塞性 Bug"
+
+  - id: critical_bugs_count
+    name: "严重 Bug 数量"
+    description: "不应有未解决的严重 Bug"
+    type: quality_signal
+    severity: major
+
+    check:
+      type: metric_check
+      rule: |
+        test_run.bug_summary.unresolved_critical_bugs == 0
+
+    threshold:
+      max_critical_bugs: 0
+
+    failure_message: "存在 {count} 个未解决的严重 Bug"
+    suggestion: "解决或降级所有严重 Bug"
+
+  - id: code_coverage_threshold
+    name: "代码覆盖率门槛"
+    description: "代码覆盖率应不低于 80%"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: metric_check
+      rule: |
+        test_run.coverage_summary.line_coverage >= 80
+
+    threshold:
+      min_coverage: 80
+
+    failure_message: "代码覆盖率低于 80%（实际：{actual}%）"
+    suggestion: "补充测试用例提高覆盖率"
+
+  - id: invalid_run_ratio
+    name: "Invalid Run 比例"
+    description: "Invalid Run 比例应低于 5%"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: metric_check
+      rule: |
+        test_run.execution_summary.invalid_run_ratio <= 5
+
+    threshold:
+      max_invalid_ratio: 5
+
+    failure_message: "Invalid Run 比例过高（实际：{actual}%）"
+    suggestion: "分析 Invalid Run 原因并修复"
+
+  - id: automated_test_rate
+    name: "自动化测试比例"
+    description: "自动化测试比例应不低于 70%"
+    type: quality_signal
+    severity: minor
+
+    check:
+      type: metric_check
+      rule: |
+        test_run.execution_summary.automation_rate >= 70
+
+    threshold:
+      min_automation_rate: 70
+
+    failure_message: "自动化测试比例低于 70%（实际：{actual}%）"
+    suggestion: "提高自动化测试覆盖率"
+
+  - id: regression_coverage
+    name: "回归测试覆盖"
+    description: "核心功能回归测试应 100% 覆盖"
+    type: quality_signal
+    severity: major
+
+    check:
+      type: metric_check
+      rule: |
+        test_run.execution_summary.regression_coverage >= 100
+
+    threshold:
+      min_regression_coverage: 100
+
+    failure_message: "回归测试覆盖不完整（实际：{actual}%）"
+    suggestion: "确保核心功能回归测试全覆盖"
+
+# ============================================
+# 执行配置
+# ============================================
+execution_config:
+  execution_mode: warn  # quality_signal 不阻断
+  parallel_evaluation: true
+  fail_fast: false
+
+  result_mapping:
+    all_passed: "PASSED"
+    any_signal_failed: "WARNING"
+
+# ============================================
+# Gate 消费配置
+# ============================================
+gate_consumption:
+  gate_id: gate.qa.test_run_exit
+  auto_pass_on: "PASSED"
+  auto_pass_on_warning: true  # WARNING 也自动通过
+  require_review_on: "WARNING"
+
+  failure_blocking: false  # quality_signal 失败不阻断
+  signal_failure_warning: true
+
+# ============================================
+# 与 workflow 的集成
+# ============================================
+workflow_integration:
+  workflow_id: template.qa.test_plan_l2
+  trigger_point: "before_exit_evaluation"
+  trigger_event: "test_run_exit_requested"
+
+  input_evidence:
+    - source: "test_run_summary"
+      type: "test_run"
+      required: true
+
+  output_consumption:
+    - consumer: "gate.qa.test_run_exit"
+      field: "fitness_result"
+      required: true
+    - consumer: "exit_evaluation"
+      field: "quality_signals"
+      required: false
+
+# ============================================
+# 元数据
+# ============================================
+metadata:
+  created_by: "qa-governance"
+  created_at: "2026-03-17"
+  version: "1.0"
+  related_workflow: "test_plan_execution"
+  related_gate: "gate.qa.test_run_exit"

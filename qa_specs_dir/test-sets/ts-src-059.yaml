@@ -1,0 +1,606 @@
+---
+# Test Set: Fitness Function 完成条件防腐层
+# Test Set 设计资产 - 验证 FEAT Bundle (FEAT-SRC-059-001 ~ FEAT-SRC-059-005)
+
+feat_ref: EPIC-SRC-059-001
+id: ts-src-059
+module: src-059
+ssot_type: TESTSET
+status: frozen
+version: "1.0"
+
+# 模块信息
+module_info:
+  name: src-059
+  description: Fitness Function 作为完成条件防腐层
+  interfaces:
+    - Fitness Rule Schema API
+    - Fitness Executor API (scan_rules, execute_commands, aggregate_results)
+    - Hard Gate & Quality Signal Layering API
+    - Fitness Result Formatter API
+    - CLI Commands (lee fitness run, lee fitness validate)
+
+# 测试策略
+strategy:
+  focus:
+    - Schema 验证工具正确性
+    - 规则扫描、命令执行、结果聚合流程
+    - Hard Gate 阻断与 Quality Signal 分层逻辑
+    - Fitness Result 结构化输出格式
+    - CLI 命令与 CI 集成
+  test_types:
+    - unit
+    - integration
+    - contract
+    - security
+  priority: P0
+
+# 可追溯性
+traceability:
+  feature_ids:
+    - FEAT-SRC-059-001
+    - FEAT-SRC-059-002
+    - FEAT-SRC-059-003
+    - FEAT-SRC-059-004
+    - FEAT-SRC-059-005
+  acceptance_criteria_refs:
+    - AC-001: Schema 验证工具验证合法的 fitness rule 文件
+    - AC-002: Schema 验证工具检测非法 fitness rule 文件
+    - AC-003: Schema 支持 YAML 和 JSON 双格式
+    - AC-004: 扫描指定目录下的 fitness rule 文件
+    - AC-005: 执行规则命令并捕获输出
+    - AC-006: 聚合多个规则的执行结果
+    - AC-007: hard_gate 失败触发整体阻断
+    - AC-008: quality_signal 失败仅扣分不阻断
+    - AC-009: fitness_gate 模板可被下游复用
+    - AC-010: 生成符合 schema 的 fitness_result.json
+    - AC-011: fitness_result 可被现有 gate 语义消费
+    - AC-012: evidence_links 支持回挂到 evidence pack
+    - AC-013: 执行 lee fitness run 命令
+    - AC-014: 执行 lee fitness validate 命令
+    - AC-015: 执行失败返回非零退出码
+    - AC-016: CI 模板可在 GitHub Actions 中使用
+
+# 执行配置
+execution:
+  mode: sequential
+  fail_fast: true
+  timeout_seconds: 300  # 5分钟
+
+# 验证规则
+validation_rules:
+  - rule: "schema_validation_coverage"
+    check: "ALL fitness_rule files MUST pass schema validation OR fail with structured error"
+  - rule: "trace_to_feat"
+    check: "ALL test_cases HAVE trace_to STARTING_WITH 'FEAT-SRC-059'"
+  - rule: "hard_gate_blocking"
+    check: "IF hard_gate_failed=true THEN overall_pass=false"
+  - rule: "exit_code_semantic"
+    check: "IF test_passed=true THEN exit_code=0 ELSE exit_code!=0"
+
+# 测试用例
+test_cases:
+  # ========== FEAT-SRC-059-001: Fitness Rule Schema ==========
+  - case_id: TC-059-001
+    title: Schema 验证工具验证合法的 YAML fitness rule 文件
+    description: 验证符合 schema 的 YAML 格式 fitness_rule.yaml 文件能通过验证
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-001.AC-001
+    steps:
+      - step_number: 1
+        action: 创建符合 schema 的 fitness_rule.yaml 文件（包含 rule_id, rule_type, scan_command, pass_criteria）
+        expected_result: 文件创建成功，内容符合 JSON Schema Draft 2020-12
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证通过，不输出错误信息
+      - step_number: 3
+        action: 检查返回的退出码
+        expected_result: 返回零退出码 (exit_code=0)
+    expected_result: YAML 格式的合法 fitness rule 文件验证通过
+
+  - case_id: TC-059-002
+    title: Schema 验证工具验证合法的 JSON fitness rule 文件
+    description: 验证符合 schema 的 JSON 格式 fitness_rule.json 文件能通过验证
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-SRC-059-001.AC-003
+    steps:
+      - step_number: 1
+        action: 创建符合 schema 的 fitness_rule.json 文件
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证通过
+      - step_number: 3
+        action: 检查返回的退出码
+        expected_result: 返回零退出码
+    expected_result: JSON 格式的合法 fitness rule 文件验证通过
+
+  - case_id: TC-059-003
+    title: Schema 验证工具检测非法 fitness rule 文件
+    description: 验证不符合 schema 的文件会被检测并输出结构化错误
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-001
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-SRC-059-001.AC-002
+    steps:
+      - step_number: 1
+        action: 创建缺少必需字段的 fitness_rule.yaml 文件（缺少 rule_type）
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 执行 validate_fitness_rule.py 验证该文件
+        expected_result: 验证失败，输出结构化错误信息
+      - step_number: 3
+        action: 检查错误信息内容
+        expected_result: 错误信息包含字段路径 (如 "$.rule_type") 和行号
+      - step_number: 4
+        action: 检查返回的退出码
+        expected_result: 返回非零退出码 (exit_code!=0)
+    expected_result: 非法 fitness rule 文件被正确检测并输出结构化错误
+
+  # ========== FEAT-SRC-059-002: Fitness Executor ==========
+  - case_id: TC-059-004
+    title: 扫描指定目录下的 fitness rule 文件
+    description: 验证 scan_rules() 接口能正确扫描目录并返回所有 fitness_rule.yaml 文件
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-002
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-002.AC-001
+    steps:
+      - step_number: 1
+        action: 创建包含多个 fitness_rule.yaml 文件的规则目录结构（3 个文件分散在不同子目录）
+        expected_result: 目录结构创建完成，共 3 个 fitness_rule.yaml 文件
+      - step_number: 2
+        action: 调用 scan_rules(rules_dir) 接口
+        expected_result: 接口调用成功，返回文件路径列表
+      - step_number: 3
+        action: 验证返回的文件数量
+        expected_result: 返回 3 个文件路径
+      - step_number: 4
+        action: 验证返回的文件路径格式
+        expected_result: 所有路径为绝对路径，指向正确的 fitness_rule.yaml 文件
+    expected_result: scan_rules() 正确返回所有 fitness rule 文件的绝对路径列表
+
+  - case_id: TC-059-005
+    title: 执行规则命令并捕获输出
+    description: 验证 execute_commands() 接口能执行命令并捕获完整输出信息
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-002
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-SRC-059-002.AC-002
+    steps:
+      - step_number: 1
+        action: 创建包含有效 scan_command 的 fitness rule（如 "echo 'test'"）
+        expected_result: Rule 创建成功
+      - step_number: 2
+        action: 调用 execute_commands([rule]) 接口
+        expected_result: 接口调用成功，返回结构化结果
+      - step_number: 3
+        action: 检查返回结果包含 stdout
+        expected_result: stdout 字段包含 "test"
+      - step_number: 4
+        action: 检查返回结果包含 exit_code
+        expected_result: exit_code 为 0
+      - step_number: 5
+        action: 检查返回结果包含 duration
+        expected_result: duration 大于 0（毫秒）
+    expected_result: execute_commands() 返回包含 stdout/stderr/exit_code/duration 的结构化结果
+
+  - case_id: TC-059-006
+    title: 聚合多个规则的执行结果
+    description: 验证 aggregate_results() 接口能正确聚合多个规则的执行结果
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-002
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-SRC-059-002.AC-003
+    steps:
+      - step_number: 1
+        action: 准备 3 个规则的执行结果（2 个成功，1 个失败）
+        expected_result: 模拟执行结果准备完成
+      - step_number: 2
+        action: 调用 aggregate_results([results]) 接口
+        expected_result: 接口调用成功，返回聚合结果
+      - step_number: 3
+        action: 检查 per-rule 详情
+        expected_result: 包含每个规则的 rule_id、exit_code、stdout、stderr、duration
+      - step_number: 4
+        action: 检查 summary 统计
+        expected_result: summary 包含 total_count=3, passed_count=2, failed_count=1
+    expected_result: aggregate_results() 返回包含 per-rule 详情和 summary 统计的结构化输出
+
+  - case_id: TC-059-007
+    title: 命令执行失败处理
+    description: 验证命令执行失败时正确捕获错误信息
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-002
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-SRC-059-002.AC-002
+    steps:
+      - step_number: 1
+        action: 创建包含失败命令的 fitness rule（如 "exit 1"）
+        expected_result: Rule 创建成功
+      - step_number: 2
+        action: 调用 execute_commands([rule]) 接口
+        expected_result: 接口调用成功，返回执行结果
+      - step_number: 3
+        action: 检查 exit_code
+        expected_result: exit_code 为 1
+      - step_number: 4
+        action: 检查 stderr 捕获
+        expected_result: stderr 被正确捕获（如有输出）
+    expected_result: 命令执行失败时正确捕获 exit_code 和 stderr
+
+  # ========== FEAT-SRC-059-003: Hard Gate & Quality Signal Layering ==========
+  - case_id: TC-059-008
+    title: hard_gate 失败触发整体阻断
+    description: 验证当 hard_gate 规则执行失败时，overall_pass=false 且 hard_gate_failed=true
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-003
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-003.AC-001
+    steps:
+      - step_number: 1
+        action: 创建 rule_type=hard_gate 的规则并模拟执行失败（exit_code=1）
+        expected_result: 规则执行结果准备完成，exit_code=1
+      - step_number: 2
+        action: 执行分层聚合逻辑
+        expected_result: 聚合完成，返回结果
+      - step_number: 3
+        action: 检查 overall_pass 字段
+        expected_result: overall_pass=false
+      - step_number: 4
+        action: 检查 hard_gate_failed 字段
+        expected_result: hard_gate_failed=true
+    expected_result: hard_gate 失败时 overall_pass=false 且 hard_gate_failed=true
+
+  - case_id: TC-059-009
+    title: quality_signal 失败仅扣分不阻断
+    description: 验证 quality_signal 规则失败时仅记录 dimension 扣分，不影响 overall_pass
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-003
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-SRC-059-003.AC-002
+    steps:
+      - step_number: 1
+        action: 创建 rule_type=quality_signal 的规则并模拟执行失败（exit_code=1）
+        expected_result: 规则执行结果准备完成，exit_code=1
+      - step_number: 2
+        action: 执行分层聚合逻辑
+        expected_result: 聚合完成，返回结果
+      - step_number: 3
+        action: 检查 overall_pass 字段
+        expected_result: overall_pass=true（或保持之前的值，不受 quality_signal 影响）
+      - step_number: 4
+        action: 检查 dimension_scores 字段
+        expected_result: dimension_scores 记录了该 quality_signal 的扣分信息
+    expected_result: quality_signal 失败时 overall_pass 不受影响但 dimension_scores 记录扣分
+
+  - case_id: TC-059-010
+    title: 混合规则分层处理
+    description: 验证同时存在 hard_gate 和 quality_signal 时的分层处理逻辑
+    priority: P0
+    type: integration
+    feature_id: FEAT-SRC-059-003
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-003.AC-001
+    steps:
+      - step_number: 1
+        action: 创建混合规则：1 个 hard_gate（失败），2 个 quality_signal（1 成功 1 失败）
+        expected_result: 规则执行结果准备完成
+      - step_number: 2
+        action: 执行分层聚合逻辑
+        expected_result: 聚合完成，返回结果
+      - step_number: 3
+        action: 检查 overall_pass 和 hard_gate_failed
+        expected_result: overall_pass=false, hard_gate_failed=true
+      - step_number: 4
+        action: 检查 dimension_scores
+        expected_result: 包含 quality_signal 的扣分信息
+    expected_result: 混合规则场景下分层逻辑正确处理
+
+  - case_id: TC-059-011
+    title: fitness_gate 模板可被下游复用
+    description: 验证 gate_template.governance.fitness_gate 模板可被正确导入和使用
+    priority: P0
+    type: integration
+    feature_id: FEAT-SRC-059-003
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-SRC-059-003.AC-003
+    steps:
+      - step_number: 1
+        action: 导入 gate_template.governance.fitness_gate 模板
+        expected_result: 模板导入成功，无错误
+      - step_number: 2
+        action: 调用模板提供的标准 gate 接口
+        expected_result: 接口调用成功，返回预期结果
+      - step_number: 3
+        action: 验证模板接口参数
+        expected_result: 接口接受 fitness_result 作为输入参数
+    expected_result: fitness_gate 模板可被正确导入并提供标准的 gate 接口
+
+  # ========== FEAT-SRC-059-004: Fitness Result Formatter ==========
+  - case_id: TC-059-012
+    title: 生成符合 schema 的 fitness_result.json
+    description: 验证 fitness_result_formatter 生成符合 schema 的 JSON 输出文件
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-004
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-004.AC-001
+    steps:
+      - step_number: 1
+        action: 准备完整的规则执行结果（包含 hard_gate 和 quality_signal 结果）
+        expected_result: 执行结果数据准备完成
+      - step_number: 2
+        action: 调用 fitness_result_formatter 生成输出
+        expected_result: 生成 fitness_result.json 文件
+      - step_number: 3
+        action: 使用 fitness_result.schema.json 验证生成的文件
+        expected_result: 验证通过，符合 schema 定义
+    expected_result: 生成符合 fitness_result.schema.json 的 JSON 文件
+
+  - case_id: TC-059-013
+    title: fitness_result 可被现有 gate 语义消费
+    description: 验证现有 gate 语义能正确解析 fitness_result 的关键字段
+    priority: P0
+    type: contract
+    feature_id: FEAT-SRC-059-004
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-SRC-059-004.AC-002
+    steps:
+      - step_number: 1
+        action: 创建包含 overall_pass, hard_gate_results 的 fitness_result.json
+        expected_result: 文件创建成功
+      - step_number: 2
+        action: 使用现有 gate 语义解析该文件
+        expected_result: 解析成功，能正确读取 overall_pass 和 hard_gate_results
+      - step_number: 3
+        action: 验证字段类型和值
+        expected_result: overall_pass 为布尔值，hard_gate_results 为数组
+    expected_result: 现有 gate 语义可正确解析 fitness_result 的关键字段
+
+  - case_id: TC-059-014
+    title: evidence_links 支持回挂到 evidence pack
+    description: 验证 fitness_result 中的 evidence_links 包含指向 evidence pack 的有效链接
+    priority: P0
+    type: integration
+    feature_id: FEAT-SRC-059-004
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-SRC-059-004.AC-003
+    steps:
+      - step_number: 1
+        action: 准备有效的 evidence pack 路径
+        expected_result: 路径准备完成，目录存在
+      - step_number: 2
+        action: 调用 fitness_result_formatter 生成输出，指定 evidence_pack 参数
+        expected_result: 生成 fitness_result.json
+      - step_number: 3
+        action: 检查 evidence_links 字段
+        expected_result: evidence_links 包含指向 evidence pack 的有效链接
+      - step_number: 4
+        action: 验证链接可访问
+        expected_result: 链接指向的路径存在且可访问
+    expected_result: evidence_links 包含指向 evidence pack 的有效链接
+
+  - case_id: TC-059-015
+    title: fitness_result 包含完整的元数据字段
+    description: 验证 fitness_result 包含 executed_at, rules_version 等元数据
+    priority: P0
+    type: unit
+    feature_id: FEAT-SRC-059-004
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-004.AC-001
+    steps:
+      - step_number: 1
+        action: 调用 fitness_result_formatter 生成输出
+        expected_result: 生成 fitness_result.json
+      - step_number: 2
+        action: 检查 executed_at 字段
+        expected_result: 包含有效的 ISO 8601 格式时间戳
+      - step_number: 3
+        action: 检查 rules_version 字段
+        expected_result: 包含规则版本信息
+      - step_number: 4
+        action: 检查 dimension_results 字段
+        expected_result: 包含规则覆盖率和执行追踪信息
+    expected_result: fitness_result 包含完整的元数据字段
+
+  # ========== FEAT-SRC-059-005: CLI & CI Integration ==========
+  - case_id: TC-059-016
+    title: 执行 lee fitness run 命令
+    description: 验证 lee fitness run 命令能正确执行并生成 fitness_result.json
+    priority: P1
+    type: integration
+    feature_id: FEAT-SRC-059-005
+    acceptance_criteria_id: AC-001
+    trace_to:
+      - FEAT-SRC-059-005.AC-001
+    steps:
+      - step_number: 1
+        action: 创建包含 fitness_rule.yaml 的规则目录
+        expected_result: 目录准备完成，包含有效规则文件
+      - step_number: 2
+        action: 执行 lee fitness run --rules-dir <dir> --output-file result.json
+        expected_result: 命令执行完成
+      - step_number: 3
+        action: 检查输出文件
+        expected_result: result.json 文件存在且内容有效
+      - step_number: 4
+        action: 检查退出码
+        expected_result: 返回零退出码
+    expected_result: lee fitness run 命令生成 fitness_result.json 并返回零退出码
+
+  - case_id: TC-059-017
+    title: 执行 lee fitness validate 命令
+    description: 验证 lee fitness validate 命令能正确验证 schema
+    priority: P1
+    type: integration
+    feature_id: FEAT-SRC-059-005
+    acceptance_criteria_id: AC-002
+    trace_to:
+      - FEAT-SRC-059-005.AC-002
+    steps:
+      - step_number: 1
+        action: 准备 fitness_rule.yaml 文件
+        expected_result: 文件准备完成
+      - step_number: 2
+        action: 执行 lee fitness validate <file>
+        expected_result: 命令执行完成，输出验证结果
+      - step_number: 3
+        action: 验证合法文件
+        expected_result: 验证通过，返回零退出码
+      - step_number: 4
+        action: 验证非法文件
+        expected_result: 验证失败，返回非零退出码
+    expected_result: lee fitness validate 命令正确验证 schema
+
+  - case_id: TC-059-018
+    title: 执行失败返回非零退出码
+    description: 验证命令执行失败时返回非零退出码
+    priority: P1
+    type: integration
+    feature_id: FEAT-SRC-059-005
+    acceptance_criteria_id: AC-003
+    trace_to:
+      - FEAT-SRC-059-005.AC-003
+    steps:
+      - step_number: 1
+        action: 创建包含无效规则或失败命令的规则目录
+        expected_result: 目录准备完成
+      - step_number: 2
+        action: 执行 lee fitness run 命令
+        expected_result: 命令执行完成
+      - step_number: 3
+        action: 检查退出码
+        expected_result: 返回非零退出码（如 1）
+      - step_number: 4
+        action: 对无效文件执行 lee fitness validate
+        expected_result: 返回非零退出码
+    expected_result: 执行失败时返回非零退出码
+
+  - case_id: TC-059-019
+    title: CI 模板可在 GitHub Actions 中使用
+    description: 验证 ci-templates/fitness-github-action.yml 可在 GitHub Actions 中正常工作
+    priority: P1
+    type: integration
+    feature_id: FEAT-SRC-059-005
+    acceptance_criteria_id: AC-004
+    trace_to:
+      - FEAT-SRC-059-005.AC-004
+    steps:
+      - step_number: 1
+        action: 在 GitHub Actions workflow 中引用 ci-templates/fitness-github-action.yml 模板
+        expected_result: workflow 配置成功
+      - step_number: 2
+        action: 触发 workflow 执行
+        expected_result: workflow 正常运行，fitness 检查步骤执行
+      - step_number: 3
+        action: 检查执行结果
+        expected_result: fitness 检查完成，输出 fitness_result
+      - step_number: 4
+        action: 验证结果上报
+        expected_result: 检查结果可在 GitHub Actions 日志中查看
+    expected_result: CI 模板可在 GitHub Actions 中正常使用
+
+  # ========== 端到端场景测试 ==========
+  - case_id: TC-059-E2E-001
+    title: E2E - 完整 Fitness 检查通过流程
+    description: 验证从规则扫描到结果生成的完整成功流程
+    priority: P0
+    type: integration
+    feature_id: EPIC-SRC-059-001
+    acceptance_criteria_id: E2E-001
+    trace_to:
+      - FEAT-SRC-059-001
+      - FEAT-SRC-059-002
+      - FEAT-SRC-059-004
+    steps:
+      - step_number: 1
+        action: 创建包含多个规则（hard_gate 和 quality_signal）的规则目录
+        expected_result: 目录创建完成，所有规则合法
+      - step_number: 2
+        action: 执行 lee fitness run 命令
+        expected_result: 命令执行完成
+      - step_number: 3
+        action: 验证 fitness_result.json 生成
+        expected_result: 文件生成成功，包含 overall_pass=true
+      - step_number: 4
+        action: 验证 hard_gate 和 dimension_results
+        expected_result: hard_gate 通过，dimension 分数正确
+    expected_result: 完整 Fitness 检查流程成功执行
+
+  - case_id: TC-059-E2E-002
+    title: E2E - Hard Gate 阻断流程
+    description: 验证 hard_gate 失败时的阻断和报告流程
+    priority: P0
+    type: integration
+    feature_id: EPIC-SRC-059-001
+    acceptance_criteria_id: E2E-002
+    trace_to:
+      - FEAT-SRC-059-003
+      - FEAT-SRC-059-004
+    steps:
+      - step_number: 1
+        action: 创建包含失败 hard_gate 规则的规则目录
+        expected_result: 目录创建完成
+      - step_number: 2
+        action: 执行 lee fitness run 命令
+        expected_result: 命令执行完成，返回非零退出码
+      - step_number: 3
+        action: 检查 fitness_result.json
+        expected_result: overall_pass=false, hard_gate_failed=true
+      - step_number: 4
+        action: 检查 hard_gate_results 详情
+        expected_result: 包含失败规则的详细信息
+    expected_result: Hard Gate 失败正确触发阻断并生成报告
+
+  - case_id: TC-059-E2E-003
+    title: E2E - 安全边界验证
+    description: 验证命令执行的安全边界（禁止执行危险命令）
+    priority: P0
+    type: security
+    feature_id: EPIC-SRC-059-001
+    acceptance_criteria_id: E2E-003
+    trace_to:
+      - FEAT-SRC-059-002
+    steps:
+      - step_number: 1
+        action: 尝试创建包含危险命令的 fitness rule（如 "rm -rf /"）
+        expected_result: 规则被阻止或执行被限制
+      - step_number: 2
+        action: 验证安全机制
+        expected_result: 危险命令被拒绝执行或沙箱隔离
+      - step_number: 3
+        action: 检查错误报告
+        expected_result: 安全违规被记录并报告
+    expected_result: 危险命令被安全机制阻止
+
+---
+*Test Set 生成时间: 2026-03-18T10:59:00+08:00*

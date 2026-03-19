@@ -1,0 +1,128 @@
+# Test Set for Fitness Rule Schema Module
+# FEAT-SRC-059-001: Fitness Rule Schema 定义
+
+# ========== 基础标识 ==========
+test_set_id: "TS-FITNESS-RULE-SCHEMA"
+module: "fitness-rule-schema"
+description: |
+  测试 Fitness Rule Schema 定义与验证工具的正确性。
+  覆盖 schema 结构验证、YAML/JSON 双格式支持、
+  结构化错误信息输出等核心功能。
+owner: "qa-team"
+
+# ========== 测试策略 ==========
+strategy:
+  focus:
+    - "Schema 结构定义正确性"
+    - "YAML/JSON 双格式验证支持"
+    - "验证通过行为（零退出码）"
+    - "验证失败行为（结构化错误信息）"
+    - "行号和字段路径准确性"
+  
+  risk_areas:
+    - "双格式兼容性: YAML 和 JSON 解析差异"
+    - "错误信息准确性: 行号和字段路径必须精确"
+    - "Schema 演进: 向后兼容性风险"
+    - "pass_criteria 条件 schema 复杂性"
+  
+  test_types:
+    - unit
+    - integration
+  
+  priority: P0
+
+# ========== 测试重点 ==========
+test_focus:
+  positive:
+    - "合法的 fitness rule YAML 文件通过验证"
+    - "合法的 fitness rule JSON 文件通过验证"
+    - "包含所有必需字段的 rule 定义验证通过"
+    - "包含可选字段的 rule 定义验证通过"
+    - "不同 pass_criteria kind 类型的 rule 验证通过"
+    
+  negative:
+    - "缺失 rule_id 字段的验证失败"
+    - "缺失 rule_type 字段的验证失败"
+    - "缺失 scan_command 字段的验证失败"
+    - "缺失 pass_criteria 字段的验证失败"
+    - "缺失 description 字段的验证失败"
+    - "非法 rule_id 格式的验证失败"
+    - "非法 rule_type 枚举值的验证失败"
+    
+  boundary:
+    - "rule_id 格式边界: FIT- 前缀验证"
+    - "rule_id 格式边界: 合法字符集 [A-Z0-9_-]"
+    - "rule_type 枚举边界: hard_gate 和 quality_signal"
+    - "timeout_seconds 最小值: 1"
+    - "severity 默认值: blocker"
+    - "空 args 数组处理"
+    
+  exception:
+    - "YAML 语法错误处理"
+    - "JSON 语法错误处理"
+    - "文件不存在错误处理"
+    - "Schema 文件加载失败处理"
+    - "循环引用检测（如果适用）"
+
+# ========== 执行配置 ==========
+execution:
+  depends_on: []
+  
+  estimated_duration: "45min"
+  
+  requires_env:
+    - python
+    - jsonschema library
+  
+  requires_data:
+    - "有效的 fitness rule YAML 示例文件"
+    - "有效的 fitness rule JSON 示例文件"
+    - "各种无效 rule 文件（用于负向测试）"
+    - "fitness_rule.schema.json"
+  
+  automation_ready: true
+
+# ========== 追溯性 ==========
+traceability:
+  requirement_ids:
+    - "EPIC-SRC-059-001"
+    - "FEAT-SRC-059-001"
+  
+  feature_ids:
+    - "FEAT-SRC-059-001"
+  
+  acceptance_criteria_refs:
+    - "AC-001"
+    - "AC-002"
+    - "AC-003"
+  
+  tech_design_ref: "TECH-FEAT-SRC-059-001"
+  
+  governing_adrs:
+    - "ADR-024"
+    - "ADR-015"
+    - "ADR-017"
+    - "ADR-020"
+  
+  decision_refs:
+    - "ADR-024"
+    - "ADR-015"
+  
+  decision_constraints:
+    - "Fitness Rule 必须支持 YAML 和 JSON 两种输入格式"
+    - "验证失败时必须输出结构化错误信息，包含行号和字段路径"
+    - "rule_type 必须为 hard_gate 或 quality_signal 枚举值"
+  
+  architecture_constraints:
+    - "FEAT parentage: FEAT-SRC-059-001"
+    - "归属治理域 (governance domain)"
+  
+  process_constraints:
+    - "必须覆盖 FEAT-SRC-059-001 的所有验收标准"
+    - "Test Set 必须可被自动化执行"
+
+# ========== 元数据 ==========
+created_at: "2026-03-18T00:37:00+08:00"
+updated_at: "2026-03-18T00:37:00+08:00"
+version: "1.0"
+status: active

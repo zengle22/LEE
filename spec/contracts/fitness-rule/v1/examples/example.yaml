@@ -1,0 +1,33 @@
+# Fitness Rule 示例 - YAML 格式
+# 符合 ADR-024 定义的 Fitness Function 规范
+
+rule_id: FIT-CONTRACT-PARITY
+rule_type: hard_gate
+dimension: contract_consistency
+
+scan_command:
+  command: python
+  args:
+    - scripts/check_contract_parity.py
+    - --spec
+    - spec/requirements/SRC-XXX
+  timeout_seconds: 120
+
+pass_criteria:
+  kind: exit_code
+  exit_code: 0
+
+description: |
+  检查 spec 与 implementation 是否保持 parity
+  这是 ADR-024 定义的 P0 最小阻断切片之一
+
+severity: blocker
+
+evidence_binding:
+  output_file: evidence/fitness/FIT-CONTRACT-PARITY/output.json
+  artifact_kind: command_log
+
+metadata:
+  owner: governance
+  version: "1.0"
+  created_at: "2026-03-17T00:00:00Z"

@@ -1,0 +1,51 @@
+---
+rule_id: FCR-001
+dimension: contract_consistency
+rule_class: hard_gate
+severity: blocker
+description: "Contract parity check - API 实现与冻结合同一致"
+
+execution_method:
+  type: contract_diff
+  config:
+    frozen_contract_path: "spec/contracts/{{ contract_id }}.yaml"
+    implementation_path: "{{ params.workspace }}/src/"
+    diff_tool: "yaml-diff"
+    ignore_comments: true
+    strict_mode: true
+
+evidence_binding:
+  type: git_diff_against_frozen_contract
+  config:
+    base_ref: "frozen_contract_{{ contract_id }}"
+    head_ref: "HEAD"
+    diff_output_path: ".workflow/fitness/contract_diff_{{ contract_id }}.txt"
+
+success_criteria:
+  - "所有 API 端点路径与冻结合同一致"
+  - "请求字段名称、类型、约束与合同匹配"
+  - "响应字段名称、类型、约束与合同匹配"
+  - "错误码定义与合同匹配"
+  - "无未经合同审批的字段增减"
+
+failure_message: |
+  实现与冻结合同存在差异。
+
+  差异详情：{{ diff_summary }}
+
+  请修复实现或更新合同 (需重新冻结)。
+
+rollback_target: contract_design
+---
+
+# FCR-001 执行说明
+#
+# 1. 加载冻结合同 (spec/contracts/{{ contract_id }}.yaml)
+# 2. 扫描实现代码 (src/目录下的路由/API 定义)
+# 3. 执行 YAML diff 比较
+# 4. 输出差异报告
+# 5. 如有差异则失败，无差异则通过
+#
+# 适用嵌入点:
+# - Dev L2 (Smoke 前置): 验证代码实现与合同一致
+# - Product L2 (FEAT 冻结后): 验证 FEAT bundle 合同完整性

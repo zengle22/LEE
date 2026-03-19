@@ -318,10 +318,29 @@ class PlacementAuditor:
         )
 
     def _file_matches_artifact(self, file_entry: FileEntry, artifact: ExpectedArtifact) -> bool:
-        """Check if a file matches an artifact's placement criteria"""
-        # Simple matching: check if file path contains expected directory
-        return artifact.expected_dir.replace('\\', '/') in file_entry.relative_path or \
-               file_entry.relative_path.startswith(artifact.expected_dir.replace('\\', '/'))
+        """Check if a file matches an artifact's placement criteria.
+
+        Uses strict path matching to ensure files are placed in the correct directory.
+        """
+        from pathlib import Path
+
+        expected_dir = Path(artifact.expected_dir).as_posix()
+        file_path = Path(file_entry.relative_path).as_posix()
+
+        try:
+            # Use relative_to for strict prefix matching
+            # This ensures the file is actually under the expected directory
+            Path(file_path).relative_to(expected_dir)
+            return True
+        except ValueError:
+            # relative_to raises ValueError if expected_dir is not a prefix of file_path
+            pass
+
+        # Fallback: check if file_path starts with expected_dir as a path prefix
+        # Normalize both paths to ensure consistent comparison
+        if not expected_dir.endswith('/'):
+            expected_dir += '/'
+        return file_path.startswith(expected_dir) or file_path.startswith(expected_dir.rstrip('/') + '/')
 
     def _check_placement_compliance(self, file_entry: FileEntry, artifact: ExpectedArtifact) -> Optional[AuditFinding]:
         """Check if file is placed correctly according to artifact rules"""

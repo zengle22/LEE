@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lee-spec.example.com/contracts/fitness-rule/v1/schema.json",
+  "title": "Fitness Rule Schema",
+  "description": "JSON Schema for Fitness Rule definition (ADR-024)",
+  "type": "object",
+  "required": [
+    "rule_id",
+    "rule_type",
+    "scan_command",
+    "pass_criteria",
+    "description"
+  ],
+  "properties": {
+    "rule_id": {
+      "type": "string",
+      "pattern": "^FIT-[A-Z0-9_-]+$",
+      "description": "唯一规则 ID，遵循 LEE ID 命名规范",
+      "examples": ["FIT-CONTRACT-CHECK", "FIT-EVIDENCE-COMPLETE"]
+    },
+    "rule_type": {
+      "type": "string",
+      "enum": ["hard_gate", "quality_signal"],
+      "description": "规则类型：hard_gate 失败阻断，quality_signal 仅警告"
+    },
+    "scan_command": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "执行扫描的命令或脚本路径"
+        },
+        "args": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "可选的命令行参数"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "可选的工作目录"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 300,
+          "description": "超时时间（秒）"
+        }
+      }
+    },
+    "pass_criteria": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["exit_code", "regex_match", "json_path", "file_exists"]
+        },
+        "exit_code": {
+          "type": "integer",
+          "default": 0,
+          "description": "期望的退出码（当 kind=exit_code 时）"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "正则表达式（当 kind=regex_match 时）"
+        },
+        "json_path": {
+          "type": "string",
+          "description": "JSONPath 表达式（当 kind=json_path 时）"
+        },
+        "expected_value": {
+          "description": "期望值（用于 json_path 或 regex_match 比对）"
+        },
+        "file_path": {
+          "type": "string",
+          "description": "文件路径（当 kind=file_exists 时）"
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "exit_code"}}},
+          "then": {"required": ["exit_code"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "regex_match"}}},
+          "then": {"required": ["pattern"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "json_path"}}},
+          "then": {"required": ["json_path", "expected_value"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "file_exists"}}},
+          "then": {"required": ["file_path"]}
+        }
+      ]
+    },
+    "description": {
+      "type": "string",
+      "description": "规则描述（人读）"
+    },
+    "dimension": {
+      "type": "string",
+      "enum": [
+        "contract_consistency",
+        "testability",
+        "integration_closure",
+        "evidence_completeness",
+        "path_governance"
+      ],
+      "description": "规则归属的 Fitness 维度（ADR-024 Section 7.2）"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["blocker", "major", "minor", "nit"],
+      "default": "blocker",
+      "description": "失败严重性（用于 quality_signal 分类）"
+    },
+    "evidence_binding": {
+      "type": "object",
+      "properties": {
+        "output_file": {
+          "type": "string",
+          "description": "扫描输出文件路径（用于 Evidence Pack 引用）"
+        },
+        "artifact_kind": {
+          "type": "string",
+          "enum": ["runner_output", "command_log", "test_artifact"],
+          "description": "证据类型（ADR-020）"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "created_at": {"type": "string", "format": "date-time"},
+        "updated_at": {"type": "string", "format": "date-time"},
+        "owner": {"type": "string"},
+        "version": {"type": "string"}
+      }
+    }
+  }
+}
