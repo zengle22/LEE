@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-spec.example.com/contracts/product-release-contract/v1/schema.json",
+  "title": "Product Release Contract",
+  "description": "Product 侧 RELEASE 契约。用于表达从冻结 FEAT bundle 组织出的 release scope draft，不覆盖 dev 侧执行态和 release close 语义。",
+  "type": "object",
+  "required": [
+    "id",
+    "ssot_type",
+    "status",
+    "feat_refs",
+    "release_type",
+    "release_window"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "ssot_type": {
+      "type": "string",
+      "enum": ["RELEASE", "release"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "scope_frozen", "frozen", "closed", "superseded"]
+    },
+    "title": {
+      "type": "string"
+    },
+    "version": {
+      "type": ["string", "number"]
+    },
+    "release_type": {
+      "type": "string",
+      "enum": ["major", "minor", "patch", "hotfix"]
+    },
+    "release_window": {
+      "type": "object",
+      "required": ["start_date", "end_date"],
+      "additionalProperties": true,
+      "properties": {
+        "start_date": {
+          "type": "string"
+        },
+        "end_date": {
+          "type": "string"
+        }
+      }
+    },
+    "feat_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "derived_from": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "derived_from_ids": {
+      "type": "array",
+      "items": {
+        "type": ["string", "object"]
+      }
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "workflow_instance_id": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "properties": {
+      "type": "object"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

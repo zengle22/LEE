@@ -157,6 +157,13 @@ workflow_registry:
     version: "1.0"
     v3_1_compatible: true
 
+  - id: workflow.dev.task.release_to_devplan
+    path: departments/dev/workflows/templates/release-to-devplan/v1/workflow.yaml
+    level: task
+    description: "Dev 部门 - L3 子流程：RELEASE 到 DEVPLAN"
+    version: "1.0"
+    v3_1_compatible: true
+
   # ============================================
   # QA 部门工作流 (L2 - Department 级)
   # ============================================
@@ -205,6 +212,13 @@ workflow_registry:
     notes: |
       Legacy alias retained for compatibility.
       Canonical checked-in template is departments/qa/workflows/templates/test-set-execute-l3-template.yaml.
+
+  - id: workflow.qa.task.release_to_testplan
+    path: departments/qa/workflows/templates/release-to-testplan/v1/workflow.yaml
+    level: task
+    description: "QA 部门 - L3 子流程：RELEASE 到 TESTPLAN"
+    version: "1.0"
+    v3_1_compatible: true
 
   # ============================================
   # UI 部门工作流 (L2 - Department 级)
@@ -274,6 +288,20 @@ workflow_registry:
     path: departments/product/workflows/templates/feat-to-delivery-prep/v1/workflow.yaml
     level: task
     description: "Product 部门 - L3 子流程：FEAT 到研发准备"
+    version: "1.0"
+    v3_1_compatible: true
+
+  - id: workflow.product.feat_to_plan_pipeline
+    path: departments/product/workflows/templates/feat-to-plan/v1/workflow.yaml
+    level: department
+    description: "Product 部门 - 交付轴桥接流程：FEAT 到 RELEASE / DEVPLAN / TESTPLAN"
+    version: "1.0"
+    v3_1_compatible: true
+
+  - id: workflow.product.task.feat_to_release
+    path: departments/product/workflows/templates/feat-to-release/v1/workflow.yaml
+    level: task
+    description: "Product 部门 - L3 子流程：FEAT 到 RELEASE"
     version: "1.0"
     v3_1_compatible: true
 
@@ -955,6 +983,11 @@ contract_registry:
     v3_1_validator: SchemaValidator
     description: "需求源冻结 Contract - 正式 SRC 对象或冻结视图"
 
+  - id: contract.product.release
+    path: departments/product/contracts/release-contract/v1/schema.json
+    v3_1_validator: SchemaValidator
+    description: "产品 RELEASE Contract - 基于冻结 FEAT bundle 组织出的 release scope draft"
+
   - id: contract.product.problem_definition
     path: departments/product/contracts/problem-definition/v1/schema.json
     v3_1_validator: SchemaValidator
@@ -1068,6 +1101,27 @@ gate_registry:
     required_roles: [product_owner, tech_lead, design_lead]
     min_approvals: 2
 
+  - id: gate.product.release_generate_gate
+    workflow: workflow.product.feat_to_plan_pipeline
+    step: generate_release
+    type: auto_check
+    blocking: true
+    path: departments/product/gates/release-generate-gate/v1/gate.yaml
+
+  - id: gate.product.release_validate_gate
+    workflow: workflow.product.task.feat_to_release
+    step: release_validate
+    type: auto_check
+    blocking: true
+    path: departments/product/gates/release-validate-gate/v1/gate.yaml
+
+  - id: gate.product.output_contract_gate
+    workflow: workflow.product.feat_to_plan_pipeline
+    step: output_contract
+    type: auto_check
+    blocking: true
+    path: departments/product/gates/output-contract-gate/v1/gate.yaml
+
   # ============================================
   # Dev 部门 Gates
   # ============================================
@@ -1126,6 +1180,41 @@ gate_registry:
       action: escalate
     required_roles: [tech_lead]
     min_approvals: 1
+
+  - id: gate.dev.task_validate_gate
+    workflow: workflow.dev.task.release_to_devplan
+    step: task_validate
+    type: auto_check
+    blocking: true
+    path: departments/dev/gates/task-validate-gate/v1/gate.yaml
+
+  - id: gate.dev.devplan_freeze_gate
+    workflow: workflow.dev.task.release_to_devplan
+    step: devplan_freeze
+    type: approval
+    blocking: true
+    path: departments/dev/gates/devplan-freeze-gate/v1/gate.yaml
+    required_roles: [tech_lead, release_manager]
+    min_approvals: 2
+
+  # ============================================
+  # QA 部门 Gates
+  # ============================================
+  - id: gate.qa.test_set_validate_gate
+    workflow: workflow.qa.task.release_to_testplan
+    step: test_set_validate
+    type: auto_check
+    blocking: true
+    path: departments/qa/gates/test-set-validate-gate/v1/gate.yaml
+
+  - id: gate.qa.testplan_freeze_gate
+    workflow: workflow.qa.task.release_to_testplan
+    step: testplan_freeze
+    type: approval
+    blocking: true
+    path: departments/qa/gates/testplan-freeze-gate/v1/gate.yaml
+    required_roles: [qa_lead, release_manager]
+    min_approvals: 2
 
   # ============================================
   # Phase OpenSpec Flow Gates

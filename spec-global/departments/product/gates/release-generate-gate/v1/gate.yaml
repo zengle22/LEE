@@ -11,7 +11,7 @@ version: 1.0
 # 宪法引用
 # ============================================
 constitution:
-  ref: ../../AGENTS.md
+  ref: ../../../README.md
   version: "1.0"
   mandatory: true
 
@@ -21,14 +21,14 @@ constitution:
 governing_adrs:
   - ADR-027: 渐进式工作流落地设计
 
-id: gate.core.release_generate_gate
+id: gate.product.release_generate_gate
 name: RELEASE Generate Gate
 description: >
   RELEASE 生成验证门禁（自动检查）。
   验证 FEAT2RELEASE L3 成功生成 RELEASE 对象。
 
-owner: dev-governance
-tags: [gate, core, release, generate, adr-027]
+owner: product-ai
+tags: [gate, product, release, generate, adr-027]
 
 # ============================================
 # 门禁类型
@@ -41,7 +41,7 @@ priority: blocker
 # ============================================
 trigger:
   event: "feat2release_complete"
-  source: "template.core.feat2release"
+  source: "workflow.product.task.feat_to_release"
 
 # ============================================
 # 输入证据
@@ -96,13 +96,13 @@ pass_criteria:
 on_fail:
   action: "block_and_return"
   message: "RELEASE 生成验证未通过，请检查 FEAT2RELEASE 执行结果"
-  return_to: "template.core.feat2release"
+  return_to: "workflow.product.task.feat_to_release"
 
 # ============================================
 # 元数据
 # ============================================
 metadata:
-  created_by: "dev-governance"
+  created_by: "product-ai"
   created_at: "2026-03-17"
   version: "1.0"
   changelog:

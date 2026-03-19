@@ -1,8 +1,8 @@
-# RELEASE Validate Gate v1.0
-# RELEASE 验证门禁（自动检查）
+# TASK Validate Gate v1.0
+# TASK 覆盖度验证门禁（自动检查）
 #
 # 定位：ADR-027 渐进式工作流的核心 Gate 之一
-# 验证 RELEASE 对象生成的完整性
+# 验证 DEVPLAN 的 TASK 覆盖度
 
 kind: gate
 version: 1.0
@@ -11,7 +11,7 @@ version: 1.0
 # 宪法引用
 # ============================================
 constitution:
-  ref: ../../AGENTS.md
+  ref: ../../../AGENTS.md
   version: "1.0"
   mandatory: true
 
@@ -21,14 +21,14 @@ constitution:
 governing_adrs:
   - ADR-027: 渐进式工作流落地设计
 
-id: gate.core.release_validate_gate
-name: RELEASE Validate Gate
+id: gate.dev.task_validate_gate
+name: TASK Validate Gate
 description: >
-  RELEASE 验证门禁（自动检查）。
-  验证 FEAT2RELEASE L3 生成的 RELEASE 对象完整性。
+  TASK 覆盖度验证门禁（自动检查）。
+  验证 DEVPLAN 的 TASK 覆盖度，确保所有 FEAT 都有 TASK 对应。
 
 owner: dev-governance
-tags: [gate, core, release, validate, adr-027]
+tags: [gate, dev, task, validate, devplan, adr-027]
 
 # ============================================
 # 门禁类型
@@ -40,55 +40,55 @@ priority: blocker
 # 触发条件
 # ============================================
 trigger:
-  event: "release_init_complete"
-  source: "template.core.feat2release"
+  event: "task_organization_complete"
+  source: "workflow.dev.task.release_to_devplan"
 
 # ============================================
 # 输入证据
 # ============================================
 input_evidence:
-  - "spec/releases/release-{release_id}.yaml"
-  - ".workflow/{release_id}/release_output.yaml"
+  - "spec/devplans/devplan-{release_id}.yaml"
+  - "spec/devplans/{release_id}/task_execution_order.yaml"
 
 # ============================================
 # 检查项
 # ============================================
 checks:
-  - id: feat_bundle_not_empty
-    name: "FEAT Bundle 非空"
-    description: "FEAT Bundle 不能为空，必须至少包含一个 FEAT"
-    type: metric_check
-    rule: "release.feat_refs.length > 0"
+  - id: all_feats_covered
+    name: "所有 FEAT 都有 TASK 覆盖"
+    description: "每个 FEAT 必须至少有一个 TASK 对应"
+    type: coverage_check
+    rule: "for each feat_ref, exists at least one task with matching feat_ref"
     severity: blocker
     required: true
-    input_field: "release.feat_refs"
+    input_field: "task_execution_order"
 
-  - id: all_feats_frozen
-    name: "所有 FEAT 已冻结"
-    description: "所有 FEAT 必须是 frozen 状态"
+  - id: task_assignees_confirmed
+    name: "TASK 责任人已确认"
+    description: "所有 TASK 必须已分配责任人"
     type: field_check
-    rule: "all feat_refs reference frozen FEAT objects"
+    rule: "all tasks have non-empty assignee field"
     severity: blocker
     required: true
-    input_field: "release.feat_refs"
+    input_field: "task_execution_order.tasks.assignee"
 
-  - id: dependency_graph_valid
-    name: "依赖关系图有效"
-    description: "FEAT 依赖关系图有效，无循环依赖"
+  - id: task_dependencies_clear
+    name: "TASK 依赖关系清晰"
+    description: "所有 TASK 的依赖关系必须清晰定义"
     type: validation_check
-    rule: "dependency_graph has no cycles"
+    rule: "all tasks have valid depends_on lists (no circular deps)"
     severity: major
     required: true
-    input_field: "dependency_graph"
+    input_field: "task_execution_order.tasks.depends_on"
 
-  - id: release_metadata_complete
-    name: "RELEASE 元数据完整"
-    description: "RELEASE 元数据（type, window, version）完整"
+  - id: effort_estimated
+    name: "工作量已估算"
+    description: "所有 TASK 必须已估算工作量"
     type: field_check
-    rule: "release.release_type AND release.release_window AND release.version defined"
-    severity: major
-    required: true
-    input_field: "release"
+    rule: "all tasks have estimated_effort field"
+    severity: minor
+    required: false
+    input_field: "task_execution_order.tasks.estimated_effort"
 
 # ============================================
 # 通过条件
@@ -104,8 +104,8 @@ pass_criteria:
 # ============================================
 on_fail:
   action: "block_and_return"
-  message: "RELEASE 验证未通过，请检查 FEAT Bundle 和依赖关系"
-  return_to: "template.core.feat2release"
+  message: "TASK 覆盖度验证未通过，请补充缺失的 TASK 或确认责任人"
+  return_to: "workflow.dev.task.release_to_devplan"
 
 # ============================================
 # 元数据
@@ -118,4 +118,4 @@ metadata:
     - version: "1.0"
       date: "2026-03-17"
       changes:
-        - "新建 RELEASE 验证门禁 (ADR-027)"
+        - "新建 TASK 覆盖度验证门禁 (ADR-027)"

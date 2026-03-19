@@ -1,5 +1,5 @@
-# FEAT2PLAN L2 Workflow Template
-# 从 FEAT Bundle 到 DEVPLAN/TESTPLAN 的 L2 编排工作流
+# Product FEAT to PLAN L2 Workflow Template
+# 从 FEAT Bundle 到 RELEASE / DEVPLAN / TESTPLAN 的产品侧交付桥接模板
 #
 # 定位：ADR-027 渐进式工作流的 L2 编排层
 # 上游：Delivery Prep (FEAT Bundle frozen + TASK/TECH/UI frozen)
@@ -13,8 +13,8 @@
 
 kind: l2_workflow_template
 version: "1.0"
-id: workflow.core.feat2plan
-name: FEAT2PLAN L2 Orchestration Template
+id: workflow.product.feat_to_plan_pipeline
+name: Product FEAT to PLAN Pipeline
 description: |
   L2 workflow for orchestrating FEAT to PLAN derivation.
 
@@ -24,8 +24,8 @@ description: |
   3. Derive TESTPLAN: 调用 RELEASE2TESTPLAN 生成 TESTPLAN frozen
   4. Output Contract: 验证输出并驱动下游执行
 
-owner: dev-governance
-tags: [l2, orchestration, feat2plan, adr-027, core]
+owner: product-ai
+tags: [product, workflow, l2, feat-to-plan, adr-027, delivery-axis]
 
 # SSOT Integration
 ssot_integration:
@@ -47,10 +47,10 @@ phases:
     default_complexity: S
     depends_on: []
     spawns_l3: true
-    l3_template_id: template.core.feat2release
+    l3_template_id: workflow.product.task.feat_to_release
     gate:
       type: auto_check
-      gate_id: gate.core.release_generate_gate
+      gate_id: gate.product.release_generate_gate
       checks:
         - release_generated
         - feat_bundle_valid
@@ -74,7 +74,7 @@ phases:
     default_complexity: L
     depends_on: [generate_release]
     spawns_l3: true
-    l3_template_id: template.core.release2devplan
+    l3_template_id: workflow.dev.task.release_to_devplan
     gate:
       type: human_approval
       gate_id: gate.dev.devplan_freeze_gate
@@ -101,7 +101,7 @@ phases:
     default_complexity: L
     depends_on: [generate_release]
     spawns_l3: true
-    l3_template_id: template.core.release2testplan
+    l3_template_id: workflow.qa.task.release_to_testplan
     parallel_with: [derive_devplan]  # 可并行执行
     gate:
       type: human_approval
@@ -131,7 +131,7 @@ phases:
     spawns_l3: false
     gate:
       type: auto_check
-      gate_id: gate.core.output_contract_gate
+      gate_id: gate.product.output_contract_gate
       checks:
         - devplan_frozen
         - testplan_frozen
@@ -246,7 +246,7 @@ output_example:
 
 # Gate 定义
 gate_definitions:
-  - gate_id: gate.core.release_generate_gate
+  - gate_id: gate.product.release_generate_gate
     type: auto_check
     description: "自动验证 RELEASE 生成"
     checks:
@@ -279,7 +279,7 @@ gate_definitions:
       - 追溯性完整
       - 风险区域已识别并有缓解措施
 
-  - gate_id: gate.core.output_contract_gate
+  - gate_id: gate.product.output_contract_gate
     type: auto_check
     description: "自动验证输出 Contract"
     checks:
@@ -316,8 +316,8 @@ downstream_integration:
 
 # Constitution
 constitution:
-  id: feat2plan_constitution_v1
-  name: "FEAT2PLAN L2 Constitution"
+  id: feat_to_plan_constitution_v1
+  name: "Product FEAT to PLAN Constitution"
   version: "1.0"
   principles:
     - id: release_before_plans

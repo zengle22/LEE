@@ -11,7 +11,7 @@ version: 1.0
 # 宪法引用
 # ============================================
 constitution:
-  ref: ../../../departments/qa/AGENTS.md
+  ref: ../../../README.md
   version: "1.0"
   mandatory: true
 
@@ -98,7 +98,7 @@ pass_criteria:
 on_fail:
   action: "block_and_return"
   message: "TESTPLAN 冻结审批未通过，请修正后重新提交审批"
-  return_to: "template.core.release2testplan"
+  return_to: "workflow.qa.task.release_to_testplan"
 
 # ============================================
 # 效果

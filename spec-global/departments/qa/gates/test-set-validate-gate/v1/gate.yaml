@@ -11,7 +11,7 @@ version: 1.0
 # 宪法引用
 # ============================================
 constitution:
-  ref: ../../../departments/qa/AGENTS.md
+  ref: ../../../README.md
   version: "1.0"
   mandatory: true
 
@@ -41,7 +41,7 @@ priority: blocker
 # ============================================
 trigger:
   event: "test_set_production_complete"
-  source: "template.core.release2testplan"
+  source: "workflow.qa.task.release_to_testplan"
 
 # ============================================
 # 输入证据
@@ -115,7 +115,7 @@ pass_criteria:
 on_fail:
   action: "block_and_return"
   message: "Test Set 覆盖度验证未通过，请补充缺失的测试用例或追溯性"
-  return_to: "template.core.release2testplan"
+  return_to: "workflow.qa.task.release_to_testplan"
 
 # ============================================
 # 元数据

@@ -330,6 +330,70 @@ workflows:
       - feat_freeze_bundle
       - delivery_prep_bundle
 
+  product.feat-to-release:
+    path: spec-global/departments/product/workflows/templates/feat-to-release/v1/workflow.yaml
+    kind: l3_workflow_template
+    description: "Product L3 - FEAT bundle to RELEASE draft"
+    load_spec_as_params: true
+    required_params:
+      - feat_bundle_refs
+      - feat_bundle_path
+      - release_id
+    optional_params:
+      - release_type
+      - release_window_start
+      - release_window_end
+      - release_version
+
+  product.feat-to-plan:
+    path: spec-global/departments/product/workflows/templates/feat-to-plan/v1/workflow.yaml
+    kind: l2_workflow_template
+    description: "Product L2 - FEAT bundle to RELEASE / DEVPLAN / TESTPLAN bridge"
+    load_spec_as_params: true
+    required_params:
+      - feat_bundle_refs
+      - feat_bundle_path
+      - release_id
+      - task_bundle_paths
+      - feat_acceptance_criteria
+      - tech_specs_paths
+    optional_params:
+      - release_type
+      - release_window_start
+      - release_window_end
+      - tech_lead
+      - qa_lead
+      - release_manager
+
+  dev.release-to-devplan:
+    path: spec-global/departments/dev/workflows/templates/release-to-devplan/v1/workflow.yaml
+    kind: l3_workflow_template
+    description: "Dev L3 - RELEASE draft to DEVPLAN freeze"
+    load_spec_as_params: true
+    required_params:
+      - release_ref
+      - release_draft_path
+      - task_bundle_paths
+      - feat_bundle_refs
+    optional_params:
+      - tech_lead
+      - release_manager
+
+  qa.release-to-testplan:
+    path: spec-global/departments/qa/workflows/templates/release-to-testplan/v1/workflow.yaml
+    kind: l3_workflow_template
+    description: "QA L3 - RELEASE draft to TESTPLAN freeze"
+    load_spec_as_params: true
+    required_params:
+      - release_ref
+      - release_draft_path
+      - feat_acceptance_criteria
+      - tech_specs_paths
+    optional_params:
+      - qa_lead
+      - release_manager
+      - test_environment
+
   # ========== Office 工作流 ==========
   office.workspace-cleanup:
     path: spec-global/departments/office/workflows/workspace-cleanup/v1/workflow.yaml

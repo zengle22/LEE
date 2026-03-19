@@ -11,7 +11,7 @@ version: 1.0
 # 宪法引用
 # ============================================
 constitution:
-  ref: ../../AGENTS.md
+  ref: ../../../README.md
   version: "1.0"
   mandatory: true
 
@@ -21,14 +21,14 @@ constitution:
 governing_adrs:
   - ADR-027: 渐进式工作流落地设计
 
-id: gate.core.output_contract_gate
+id: gate.product.output_contract_gate
 name: OUTPUT Contract Gate
 description: >
   输出 Contract 验证门禁（自动检查）。
   验证 FEAT2PLAN L2 输出 Contract 完整性，确保 DEVPLAN 和 TESTPLAN 都已冻结。
 
-owner: dev-governance
-tags: [gate, core, output, contract, adr-027]
+owner: product-ai
+tags: [gate, product, output, contract, adr-027]
 
 # ============================================
 # 门禁类型
@@ -41,7 +41,7 @@ priority: blocker
 # ============================================
 trigger:
   event: "derive_plans_complete"
-  source: "workflow.core.feat2plan"
+  source: "workflow.product.feat_to_plan_pipeline"
 
 # ============================================
 # 输入证据
@@ -115,7 +115,7 @@ pass_criteria:
 on_fail:
   action: "block_and_return"
   message: "输出 Contract 验证未通过，请检查 DEVPLAN 和 TESTPLAN 状态"
-  return_to: "workflow.core.feat2plan"
+  return_to: "workflow.product.feat_to_plan_pipeline"
 
 # ============================================
 # 通过效果
@@ -123,7 +123,7 @@ on_fail:
 on_pass:
   action: "release_outputs"
   effects:
-    - "Mark FEAT2PLAN workflow as complete"
+    - "Mark FEAT to PLAN workflow as complete"
     - "Enable downstream workflow spawning"
     - "Generate output_contract.json"
 
@@ -131,7 +131,7 @@ on_pass:
 # 元数据
 # ============================================
 metadata:
-  created_by: "dev-governance"
+  created_by: "product-ai"
   created_at: "2026-03-17"
   version: "1.0"
   changelog:

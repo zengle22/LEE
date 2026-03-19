@@ -2,6 +2,7 @@
 # 测试计划管理 L2 模板
 #
 # 定位：从 RELEASE 派生 TESTPLAN，并管理 Test Set 执行
+# 状态：管理型 draft；TESTPLAN 派生 canonical entry 已收敛到 workflow.qa.task.release_to_testplan
 # 上游：RELEASE L1 (scope_freeze 后) + Delivery Prep (TECH/TASK 已冻结)
 # 下游：Test Plan Execution L2 (执行测试)
 #
