@@ -12,6 +12,7 @@ LEE Orchestrator v3.0 - 工作流状态机
 """
 
 import json
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -28,6 +29,8 @@ from lee.orchestrator.storage.models import (
     TaskExecution,
 )
 from lee.orchestrator.execution.condition_engine import ConditionEngine
+
+OUTPUT_PLACEHOLDER_PATTERN = re.compile(r"\{([A-Za-z0-9_]+)\}")
 
 
 # ========================================================================
@@ -486,14 +489,25 @@ class WorkflowStateMachine(IStateMachine):
 
     def _render_output_path(self, raw_path: str, instance) -> str:
         rendered = str(raw_path)
-        params = instance.data.get("params", {}) if isinstance(instance.data, dict) else {}
+        instance_data = instance.data if isinstance(instance.data, dict) else {}
+        params = instance_data.get("params", {}) if isinstance(instance_data.get("params"), dict) else {}
         project_value = (
             params.get("project")
-            or instance.data.get("project_name")
+            or instance_data.get("project_name")
             or self._infer_project_root(instance).name
         )
-        rendered = rendered.replace("{project}", str(project_value))
-        return rendered
+        replacements: Dict[str, str] = {"project": str(project_value)}
+        for source in (instance_data, params):
+            if not isinstance(source, dict):
+                continue
+            for key, value in source.items():
+                if isinstance(value, (str, int, float, bool)):
+                    replacements.setdefault(key, str(value))
+
+        return OUTPUT_PLACEHOLDER_PATTERN.sub(
+            lambda match: replacements.get(match.group(1), match.group(0)),
+            rendered,
+        )
 
     def _build_declared_output_payload(
         self,

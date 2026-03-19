@@ -626,6 +626,47 @@ class TestBugFixes:
         assert not (template_path.parent / "spec" / "releases" / "demo-release.yaml").exists()
 
     @pytest.mark.asyncio
+    async def test_complete_step_renders_general_output_path_placeholders_from_params(self, tmp_path):
+        rendered_dir = tmp_path / ".workflow" / "rendered"
+        rendered_dir.mkdir(parents=True, exist_ok=True)
+        template_path = rendered_dir / "workflow-test.yaml"
+        template_path.write_text("id: dummy\n", encoding="utf-8")
+
+        mock_instance = MagicMock()
+        mock_instance.template_id = str(template_path)
+        mock_instance.status = WorkflowStatus.RUNNING
+        mock_instance.data = {
+            "completed_steps": [],
+            "step_outputs": {},
+            "params": {
+                "project": "demo",
+                "release_id": "REL-001",
+            },
+        }
+        self.mock_store.get_workflow.return_value = mock_instance
+
+        step_info = MagicMock()
+        step_info.outputs = [
+            OutputSpec(type="file", path="spec/releases/{release_id}/{project}-release.yaml", format="yaml")
+        ]
+        step_info.input = []
+
+        template = MagicMock()
+        template.get_step_info.return_value = step_info
+        template_manager = MagicMock()
+        template_manager.get_template.return_value = template
+
+        state_machine = WorkflowStateMachine(self.mock_store, template_manager=template_manager)
+        await state_machine.complete_step(
+            "workflow-790",
+            "release_output",
+            {"business_output": {"release_id": "REL-001"}},
+        )
+
+        assert (tmp_path / "spec" / "releases" / "REL-001" / "demo-release.yaml").exists()
+        assert not (tmp_path / "spec" / "releases" / "{release_id}" / "demo-release.yaml").exists()
+
+    @pytest.mark.asyncio
     async def test_complete_step_registers_symbol_output_aliases(self, tmp_path):
         rendered_dir = tmp_path / ".workflow" / "rendered"
         rendered_dir.mkdir(parents=True, exist_ok=True)
