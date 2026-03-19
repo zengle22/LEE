@@ -5743,6 +5743,33 @@ class LLMRunner(StepRunnerBase):
         business_output: Any,
         structured_payload: Any,
     ) -> Optional[Dict[str, Any]]:
+        """Attempt schema repair with attempt counter to prevent infinite loops.
+
+        Tracks repair attempts per step and fails fast after max attempts.
+        """
+        # Initialize or increment schema repair attempt counter on step object
+        if not hasattr(step, '_schema_repair_attempts'):
+            step._schema_repair_attempts = 0
+        step._schema_repair_attempts += 1
+
+        # Fail fast after max attempts to prevent infinite loops
+        MAX_SCHEMA_REPAIR_ATTEMPTS = 3
+        if step._schema_repair_attempts > MAX_SCHEMA_REPAIR_ATTEMPTS:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(
+                f"Schema repair failed after {MAX_SCHEMA_REPAIR_ATTEMPTS} attempts for step {step.id}. "
+                f"Error: {validation_error}"
+            )
+            return None
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"Attempting schema repair #{step._schema_repair_attempts}/{MAX_SCHEMA_REPAIR_ATTEMPTS} "
+            f"for step {step.id}"
+        )
+
         repair_input = self._build_schema_repair_input(
             executor_type=executor_type,
             input_data=input_data,

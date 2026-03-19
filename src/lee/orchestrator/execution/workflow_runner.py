@@ -157,26 +157,15 @@ class WorkflowRunner:
         rendered_template = await self._load_template()
 
         if self._should_bypass_plan(rendered_template):
+            # Validate rendered template before proceeding
+            import yaml
+            rendered_yaml = yaml.dump(rendered_template, allow_unicode=True, default_flow_style=False)
+            self._validate_rendered_template(rendered_yaml)
+
             # 将渲染后的模板保存为临时文件
             import tempfile
-            import yaml
             import logging
             logger = logging.getLogger(__name__)
-
-            # 调试：检查渲染后的模板内容
-            logger.info(f"Bypass Plan: rendered template outputs = {rendered_template.get('outputs', [])}")
-
-            # DEBUG: Check rendered outputs for unrendered variables
-            for output in rendered_template.get('outputs', []):
-                if isinstance(output, dict):
-                    path = output.get('path', '')
-                    logger.info(f"Bypass Plan: output path = {path}")
-                    if '{{ qa_specs_dir }}' in str(path):
-                        logger.warning("WARNING: qa_specs_dir NOT rendered in output path!")
-                    if '{{ tests_dir }}' in str(path):
-                        logger.warning("WARNING: tests_dir NOT rendered in output path!")
-                    if '{{ module }}' in str(path):
-                        logger.warning("WARNING: module NOT rendered in output path!")
 
             rendered_yaml = yaml.dump(rendered_template, allow_unicode=True, default_flow_style=False)
 
@@ -332,6 +321,9 @@ class WorkflowRunner:
 
         rendered = engine.render_string(template_content, render_context)
 
+        # Validate: fail hard on unrendered template variables
+        self._validate_rendered_template(rendered)
+
         # 解析为 Dict
         return yaml.safe_load(rendered)
 
@@ -408,8 +400,36 @@ class WorkflowRunner:
                 "legacy_dir": "legacy",
             }
             logger.warning(f"dirs.yaml not found, using defaults: {context}")
-        
+
         return context
+
+    def _validate_rendered_template(self, rendered: str) -> None:
+        """Validate rendered template for unrendered variables.
+
+        Fails hard if any template variables remain unrendered.
+
+        Args:
+            rendered: The rendered template string
+
+        Raises:
+            ValueError: If unrendered template variables are found
+        """
+        import re
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Pattern to match unrendered template variables: {{ variable_name }}
+        unrendered_pattern = r'\{\{\s*(\w+)\s*\}\}'
+        matches = re.findall(unrendered_pattern, rendered)
+
+        if matches:
+            unique_vars = sorted(set(matches))
+            error_msg = f"Template rendering failed: unrendered variables found: {unique_vars}"
+            logger.error(error_msg)
+            logger.error(f"Rendered template preview (first 500 chars): {rendered[:500]}")
+            raise ValueError(error_msg)
+
+        logger.info("Template validation passed: no unrendered variables")
 
     async def _create_workflow(self, instance_path: Path) -> str:
         """创建工作流实例"""
