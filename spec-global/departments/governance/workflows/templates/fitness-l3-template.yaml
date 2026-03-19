@@ -30,17 +30,22 @@ owner: governance
 tags: [governance, fitness, completion, gate, l3]
 
 # ============================================
-# Phase definitions
+# Stage definitions
 # ============================================
-phases:
+stages:
   - id: rule_load
     name: "Load Fitness Rules"
+    kind: stage
     description: "从 spec/fitness/ 加载适用规则"
     default_complexity: S
     depends_on: []
     steps:
       - id: load_rules
-        agent: agent.governance.fitness_loader
+        name: "Load Rules"
+        kind: agent
+        agent_id: agent.governance.fitness_loader
+        mandatory: true
+        depends_on: []
         config:
           embedding_point: "{{ params.embedding_point }}"
           subject_refs: "{{ params.subject_refs }}"
@@ -48,13 +53,18 @@ phases:
 
   - id: rule_execution
     name: "Execute Fitness Rules"
+    kind: stage
     description: "执行 fitness rule 并收集结果"
     default_complexity: L
     depends_on: [rule_load]
     spawns_l3: false
     steps:
       - id: execute_rules
-        agent: agent.governance.fitness_runner
+        name: "Execute Rules"
+        kind: agent
+        agent_id: agent.governance.fitness_runner
+        mandatory: true
+        depends_on: [load_rules]
         config:
           rules: "{{ steps.load_rules.output.rules }}"
           subject_refs: "{{ params.subject_refs }}"
@@ -62,12 +72,17 @@ phases:
 
   - id: result_aggregate
     name: "Aggregate Fitness Result"
+    kind: stage
     description: "聚合 fitness_result 对象"
     default_complexity: S
     depends_on: [rule_execution]
     steps:
       - id: aggregate
-        agent: agent.governance.result_aggregator
+        name: "Aggregate Results"
+        kind: agent
+        agent_id: agent.governance.result_aggregator
+        mandatory: true
+        depends_on: [execute_rules]
         config:
           dimension_results: "{{ steps.execute_rules.output.dimension_results }}"
           hard_gate_results: "{{ steps.execute_rules.output.hard_gate_results }}"
@@ -78,12 +93,17 @@ phases:
 
   - id: gate_integration
     name: "Gate Integration"
+    kind: stage
     description: "将 fitness_result 推送到 Gate"
     default_complexity: S
     depends_on: [result_aggregate]
     steps:
       - id: push_to_gate
-        agent: agent.governance.gate_integrator
+        name: "Push to Gate"
+        kind: agent
+        agent_id: agent.governance.gate_integrator
+        mandatory: true
+        depends_on: [aggregate]
         config:
           fitness_result: "{{ steps.aggregate.output.fitness_result }}"
           gate_id: "{{ params.gate_id }}"
