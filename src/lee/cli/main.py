@@ -9,6 +9,10 @@ LEE CLI
 - lee epic new --spec <frozen-src.md>
 - lee feat new --spec <frozen-epic.md>
 - lee delivery-prep new --spec <frozen-feat.md>
+- lee release new --spec <delivery-prep-bundle.yaml>
+- lee delivery-plan new --spec <delivery-plan-input.yaml>
+- lee devplan new --spec <release-bundle.yaml>
+- lee testplan new --spec <release-bundle.yaml>
 - lee chain validate --source-freeze <src> --epic-freeze-bundle <epic> --feat-freeze-bundle <feat> --delivery-prep-bundle <prep>
 - lee workflow create/list/pause/resume/run-step/reject
 - lee test-runner run-e2e ...
@@ -56,6 +60,10 @@ WORKFLOW_COMMANDS = {
     "epic",
     "feat",
     "delivery-prep",
+    "release",
+    "delivery-plan",
+    "devplan",
+    "testplan",
     "chain",
     "approve",
     "status",
@@ -249,6 +257,10 @@ def cli():
     - `lee epic new --spec <frozen-src.md>`: 冻结 SRC 进入 product.src-to-epic
     - `lee feat new --spec <frozen-epic.md>`: 冻结 EPIC 进入 product.epic-to-feat
     - `lee delivery-prep new --spec <frozen-feat.md>`: 冻结 FEAT 进入 product.feat-to-delivery-prep
+    - `lee release new --spec <delivery-prep-bundle.yaml>`: Delivery Prep 进入 product.feat-to-release
+    - `lee delivery-plan new --spec <delivery-plan-input.yaml>`: Delivery Prep 进入 product.feat-to-plan
+    - `lee devplan new --spec <release-bundle.yaml>`: RELEASE draft 进入 dev.release-to-devplan
+    - `lee testplan new --spec <release-bundle.yaml>`: RELEASE draft 进入 qa.release-to-testplan
     - `lee chain validate --source-freeze <src> --epic-freeze-bundle <epic> --feat-freeze-bundle <feat> --delivery-prep-bundle <prep>`:
       直接校验需求链，无需先手写 YAML spec
 
@@ -286,7 +298,18 @@ def _register_commands() -> None:
     from lee.cli.commands.task_brief import task_brief
     from lee.cli.commands.doctor import doctor
     from lee.cli.commands.governance import governance
-    from lee.cli.commands.workflow_entrypoints import adr, src, epic, feat, delivery_prep, chain
+    from lee.cli.commands.workflow_entrypoints import (
+        adr,
+        src,
+        epic,
+        feat,
+        delivery_prep,
+        release,
+        delivery_plan,
+        devplan,
+        testplan,
+        chain,
+    )
 
     cli.add_command(run)
     cli.add_command(status)
@@ -317,6 +340,10 @@ def _register_commands() -> None:
     cli.add_command(epic)
     cli.add_command(feat)
     cli.add_command(delivery_prep)
+    cli.add_command(release)
+    cli.add_command(delivery_plan)
+    cli.add_command(devplan)
+    cli.add_command(testplan)
     cli.add_command(chain)
     cli._lee_commands_registered = True
 

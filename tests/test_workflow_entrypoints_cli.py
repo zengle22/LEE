@@ -149,6 +149,90 @@ def test_delivery_prep_new_dry_run_shows_workflow_alias(monkeypatch, tmp_path: P
     assert "lee delivery-prep new -> lee run product.feat-to-delivery-prep" in result.output
 
 
+def test_release_new_dry_run_shows_workflow_alias(monkeypatch, tmp_path: Path) -> None:
+    _register_commands()
+    runner = CliRunner()
+    spec_file = tmp_path / "delivery-prep.yaml"
+    spec_file.write_text("bundle: {}\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        entry_module,
+        "load_workflow_registry",
+        lambda: {"workflows": {"product.feat-to-release": {}}},
+    )
+
+    result = runner.invoke(
+        cli,
+        ["release", "new", "--spec", str(spec_file), "--dry-run"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "lee release new -> lee run product.feat-to-release" in result.output
+
+
+def test_delivery_plan_new_dry_run_shows_workflow_alias(monkeypatch, tmp_path: Path) -> None:
+    _register_commands()
+    runner = CliRunner()
+    spec_file = tmp_path / "delivery-plan.yaml"
+    spec_file.write_text("release_id: REL-001\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        entry_module,
+        "load_workflow_registry",
+        lambda: {"workflows": {"product.feat-to-plan": {}}},
+    )
+
+    result = runner.invoke(
+        cli,
+        ["delivery-plan", "new", "--spec", str(spec_file), "--dry-run"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "lee delivery-plan new -> lee run product.feat-to-plan" in result.output
+
+
+def test_devplan_new_dry_run_shows_workflow_alias(monkeypatch, tmp_path: Path) -> None:
+    _register_commands()
+    runner = CliRunner()
+    spec_file = tmp_path / "release.yaml"
+    spec_file.write_text("release_ref: release-001\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        entry_module,
+        "load_workflow_registry",
+        lambda: {"workflows": {"dev.release-to-devplan": {}}},
+    )
+
+    result = runner.invoke(
+        cli,
+        ["devplan", "new", "--spec", str(spec_file), "--dry-run"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "lee devplan new -> lee run dev.release-to-devplan" in result.output
+
+
+def test_testplan_new_dry_run_shows_workflow_alias(monkeypatch, tmp_path: Path) -> None:
+    _register_commands()
+    runner = CliRunner()
+    spec_file = tmp_path / "release.yaml"
+    spec_file.write_text("release_ref: release-001\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        entry_module,
+        "load_workflow_registry",
+        lambda: {"workflows": {"qa.release-to-testplan": {}}},
+    )
+
+    result = runner.invoke(
+        cli,
+        ["testplan", "new", "--spec", str(spec_file), "--dry-run"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "lee testplan new -> lee run qa.release-to-testplan" in result.output
+
+
 def test_chain_validate_dispatches_direct_inputs_without_spec(monkeypatch, tmp_path: Path) -> None:
     _register_commands()
     runner = CliRunner()
@@ -231,7 +315,29 @@ def test_cli_help_groups_workflow_and_system_commands() -> None:
     assert "epic" in result.output
     assert "feat" in result.output
     assert "delivery-prep" in result.output
+    assert "release" in result.output
+    assert "delivery-plan" in result.output
+    assert "devplan" in result.output
+    assert "testplan" in result.output
     assert "chain" in result.output
     assert "lee src new --spec <raw.md>" in normalized_output
     assert "lee delivery-prep new --spec <frozen-feat.md>" in normalized_output
+    assert "lee release new --spec <delivery-prep-bundle.yaml>" in normalized_output
+    assert "lee delivery-plan new --spec" in normalized_output
+    assert "product.feat-to-plan" in normalized_output
+    assert "lee devplan new --spec <release-bundle.yaml>" in normalized_output
+    assert "lee testplan new --spec <release-bundle.yaml>" in normalized_output
     assert "lee chain validate --source-freeze <src>" in normalized_output
+
+
+def test_run_help_lists_delivery_axis_workflows() -> None:
+    _register_commands()
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["run", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "product.feat-to-release" in result.output
+    assert "product.feat-to-plan" in result.output
+    assert "dev.release-to-devplan" in result.output
+    assert "qa.release-to-testplan" in result.output

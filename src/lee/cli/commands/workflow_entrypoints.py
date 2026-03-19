@@ -19,6 +19,10 @@ WORKFLOW_ALIASES = {
     "epic": "product.src-to-epic",
     "feat": "product.epic-to-feat",
     "delivery-prep": "product.feat-to-delivery-prep",
+    "release": "product.feat-to-release",
+    "delivery-plan": "product.feat-to-plan",
+    "devplan": "dev.release-to-devplan",
+    "testplan": "qa.release-to-testplan",
 }
 
 
@@ -244,6 +248,26 @@ def delivery_prep() -> None:
     pass
 
 
+@click.group(help="通过 workflow-first 治理流程生成 RELEASE draft。")
+def release() -> None:
+    pass
+
+
+@click.group("delivery-plan", help="通过 workflow-first 治理流程生成交付计划桥接产物。")
+def delivery_plan() -> None:
+    pass
+
+
+@click.group(help="通过 workflow-first 治理流程生成 DEVPLAN。")
+def devplan() -> None:
+    pass
+
+
+@click.group(help="通过 workflow-first 治理流程生成 TESTPLAN。")
+def testplan() -> None:
+    pass
+
+
 @click.group(help="通过 workflow-first 治理流程校验需求链。")
 def chain() -> None:
     pass
@@ -363,6 +387,102 @@ def delivery_prep_new(
     )
 
 
+@_new_command("release")
+def release_new(
+    spec: Optional[Path],
+    project_dir: str,
+    max_steps: int,
+    executor: Optional[str],
+    task_id: Optional[str],
+    new_task: Optional[str],
+    skip_plan: bool,
+    dry_run: bool,
+) -> None:
+    _dispatch_workflow_alias(
+        "release",
+        spec=spec,
+        project_dir=project_dir,
+        max_steps=max_steps,
+        executor=executor,
+        task_id=task_id,
+        new_task=new_task,
+        skip_plan=skip_plan,
+        dry_run=dry_run,
+    )
+
+
+@_new_command("delivery-plan")
+def delivery_plan_new(
+    spec: Optional[Path],
+    project_dir: str,
+    max_steps: int,
+    executor: Optional[str],
+    task_id: Optional[str],
+    new_task: Optional[str],
+    skip_plan: bool,
+    dry_run: bool,
+) -> None:
+    _dispatch_workflow_alias(
+        "delivery-plan",
+        spec=spec,
+        project_dir=project_dir,
+        max_steps=max_steps,
+        executor=executor,
+        task_id=task_id,
+        new_task=new_task,
+        skip_plan=skip_plan,
+        dry_run=dry_run,
+    )
+
+
+@_new_command("devplan")
+def devplan_new(
+    spec: Optional[Path],
+    project_dir: str,
+    max_steps: int,
+    executor: Optional[str],
+    task_id: Optional[str],
+    new_task: Optional[str],
+    skip_plan: bool,
+    dry_run: bool,
+) -> None:
+    _dispatch_workflow_alias(
+        "devplan",
+        spec=spec,
+        project_dir=project_dir,
+        max_steps=max_steps,
+        executor=executor,
+        task_id=task_id,
+        new_task=new_task,
+        skip_plan=skip_plan,
+        dry_run=dry_run,
+    )
+
+
+@_new_command("testplan")
+def testplan_new(
+    spec: Optional[Path],
+    project_dir: str,
+    max_steps: int,
+    executor: Optional[str],
+    task_id: Optional[str],
+    new_task: Optional[str],
+    skip_plan: bool,
+    dry_run: bool,
+) -> None:
+    _dispatch_workflow_alias(
+        "testplan",
+        spec=spec,
+        project_dir=project_dir,
+        max_steps=max_steps,
+        executor=executor,
+        task_id=task_id,
+        new_task=new_task,
+        skip_plan=skip_plan,
+        dry_run=dry_run,
+    )
+
+
 @chain.command("validate")
 @click.option("--dry-run", is_flag=True, help="只显示将要触发的 workflow alias，不实际执行。")
 @click.option("--skip-plan", is_flag=True, help="跳过 Plan，直接执行 workflow。")
@@ -443,4 +563,8 @@ src.add_command(src_new)
 epic.add_command(epic_new)
 feat.add_command(feat_new)
 delivery_prep.add_command(delivery_prep_new)
+release.add_command(release_new)
+delivery_plan.add_command(delivery_plan_new)
+devplan.add_command(devplan_new)
+testplan.add_command(testplan_new)
 chain.add_command(chain_validate)

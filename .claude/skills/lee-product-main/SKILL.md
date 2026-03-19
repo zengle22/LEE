@@ -1,38 +1,38 @@
 ---
 name: lee-product-main
-description: Run the canonical LEE product main pipeline through Claude Code. Use when Claude should call `lee run product.main` to move raw requirement, ADR, or business opportunity input through the product SSOT chain instead of manually producing SRC, EPIC, FEAT, or delivery prep artifacts.
+description: Run the canonical LEE product main pipeline through Claude Code. Use when Claude should call `lee run product.main` instead of manually producing SRC, EPIC, FEAT, or delivery prep artifacts. If the CLI is missing or broken, stop and report a LEE CLI bug.
 author: LEE Team
-date: 2026-03-15
-version: 1.0
+date: 2026-03-19
+version: 1.1
 codex_source_skill: lee-product-main
 ---
 
 # Lee Product Main
 
-This Claude Code skill is a thin adapter over the repository workflow:
+This Claude Code skill is a thin CLI adapter.
 
 - workflow template: `spec-global/departments/product/workflows/templates/product-main-pipeline/v1/workflow.yaml`
 - CLI entry: `lee run product.main`
 
-## Workflow
+## Execution Contract
 
-1. Resolve the active LEE project root.
-2. Build a spec file with one or more of:
-   - `adr`
-   - `raw_requirement`
-   - `business_opportunity_freeze`
-3. Run:
+1. Resolve the active LEE project root and upstream input shape.
+2. Build the workflow spec.
+3. Before execution, declare the exact `lee` command, expected outputs, failure
+   fallback, and files that will not be edited directly.
+4. Run:
 
 ```bash
 lee run product.main --project-dir <repo> --spec <spec-file>
 ```
 
-4. Track the workflow until completion or gate blocking.
-5. Summarize workflow id, status, key outputs, and next step.
+5. Summarize workflow id, status, generated artifacts, and blockers.
 
 ## Rules
 
-- Do not manually recreate SRC, EPIC, FEAT, or delivery prep content in the
-  skill.
-- Treat checked-in workflow YAML as a template, not a runtime instance.
-- If a gate blocks the run, surface the gate and wait for user decision.
+- Do not manually recreate the product SSOT chain.
+- Accept governed outputs only when provenance includes `run_id`, `workflow`,
+  and `generated_by: lee-cli`.
+- Follow CLI-returned `allowed_actions` and `forbidden_actions` when present.
+- If the CLI fails, retry once only for corrected parameters; otherwise run a
+  diagnostic `lee` help/doctor command and report a LEE CLI bug.
