@@ -13,6 +13,8 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from lee.orchestrator.execution.runners.auto_check_gate_runner import AutoCheckGateRunner
+from lee.orchestrator.execution.runners.llm_runner import LLMRunner
+from lee.orchestrator.execution.runners.registry import StepRunnerRegistry
 from lee.orchestrator.storage.models import StepResult, TaskExecutionStatus
 
 
@@ -38,6 +40,24 @@ class TestAutoCheckGateRunner:
         assert self.runner.can_handle("compliance_gate") is False
         assert self.runner.can_handle("agent") is False
         assert self.runner.can_handle("skill") is False
+
+    def test_llm_runner_init_does_not_eagerly_create_llm_executor(self):
+        with patch("lee.orchestrator.execution.runners.llm_runner.RealLLMExecutor") as real_executor:
+            runner = LLMRunner()
+
+        assert runner.profile is None
+        real_executor.assert_not_called()
+
+    def test_registry_register_defaults_does_not_require_llm_profile(self):
+        with patch(
+            "lee.orchestrator.execution.runners.llm_runner.RealLLMExecutor",
+            side_effect=AssertionError("should not initialize during registry setup"),
+        ):
+            registry = StepRunnerRegistry()
+            registry.register_defaults()
+
+        assert registry.get_runner("auto_check_gate") is not None
+        assert registry.get_runner("agent") is not None
 
     # ========================================================================
     # _build_eval_context 测试

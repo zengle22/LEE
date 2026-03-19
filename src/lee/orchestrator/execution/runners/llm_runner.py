@@ -979,18 +979,12 @@ class LLMRunner(StepRunnerBase):
         result.message = f"Step {step.id} completed. UI design not applicable."
         return result
 
-    def __init__(self, profile: str = "qwen", config_path: str = None,
+    def __init__(self, profile: Optional[str] = None, config_path: str = None,
                  fallback_providers: list = None,
                  **kwargs):
         self.profile = profile
         self.config_path = config_path
         self.fallback_providers = fallback_providers
-
-        self._executor = RealLLMExecutor(
-            profile=profile,
-            config_path=config_path,
-            fallback_providers=fallback_providers
-        )
 
     def _build_executor_input(
         self,
