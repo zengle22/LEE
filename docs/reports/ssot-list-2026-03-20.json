@@ -1,0 +1,1899 @@
+[
+  {
+    "id": "ADR-001",
+    "type": "adr",
+    "title": "SSOT delivery chain hard governance",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-002",
+    "type": "adr",
+    "title": "Windows Hook Portability Gap",
+    "status": "DRAFT",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-003",
+    "type": "adr",
+    "title": "Product Department SSOT Design",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-004",
+    "type": "adr",
+    "title": "Claude Code Executor 流式可观测性改造",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-005",
+    "type": "adr",
+    "title": "Gate 三分类治理模型",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-006",
+    "type": "adr",
+    "title": "CLI 命令分层与 SSOT 物化边界",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-007",
+    "type": "adr",
+    "title": "QA department SSOT alignment and workflow reframe",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-008",
+    "type": "adr",
+    "title": "Dev department SSOT alignment and workflow reframe",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-009",
+    "type": "adr",
+    "title": "workflow 同类互斥收敛到 SSOT 作用域",
+    "status": "DRAFT",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-010",
+    "type": "adr",
+    "title": "LEE 主动智能体演进方向预留",
+    "status": "DRAFT",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-011",
+    "type": "adr",
+    "title": "需求链一致性测试体系建设",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-012",
+    "type": "adr",
+    "title": "raw-to-src 与 src-to-epic 分层拆分",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-013",
+    "type": "adr",
+    "title": "branch 与 worktree 并行开发下的 SSOT 正式编号分配策略",
+    "status": "DRAFT",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-014",
+    "type": "adr",
+    "title": "接入 Kimi 执行器原始需求说明",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-015",
+    "type": "adr",
+    "title": "AI 交付护栏与候选结果包闭环治理",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-016",
+    "type": "adr",
+    "title": "reverse-epic-feat-l3 与现行 SSOT 链对齐升级",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-017",
+    "type": "adr",
+    "title": "Gate 职责与决策模式分层及人机审批交互收敛",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-018",
+    "type": "adr",
+    "title": "本地 hook 绕过治理与 CI 失败回流闭环",
+    "status": "DRAFT",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-019",
+    "type": "adr",
+    "title": "EPIC 入口统一经 SRC 及 ADR 桥接薄 SRC 规则",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-020",
+    "type": "adr",
+    "title": "证据轴 REPORT/EVI 收口与自动回挂规则",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-021",
+    "type": "adr",
+    "title": "Run-Scoped Artifact Placement Governance and Directory Audit",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-022",
+    "type": "adr",
+    "title": "Delivery axis issue remediation governance",
+    "status": "FROZEN",
+    "parent_id": "ADR-001"
+  },
+  {
+    "id": "ADR-023",
+    "type": "adr",
+    "title": "Dev Smoke Gate 架构与测试职责分层",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-024",
+    "type": "adr",
+    "title": "Fitness Function 作为完成条件防腐层",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-025",
+    "type": "adr",
+    "title": "Materialization Verification 与 Phase-Gated Delivery Governance",
+    "status": "DRAFT",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-026",
+    "type": "adr",
+    "title": "交付轴设计 - 瀑布 - 敏捷混合模式 (Delivery Axis Design)",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "ADR-027",
+    "type": "adr",
+    "title": "渐进式工作流落地设计 (Incremental Workflow Implementation)",
+    "status": "DRAFT",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-001",
+    "type": "src",
+    "title": "CLI 命令分层与 SSOT 物化边界治理需求",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-002",
+    "type": "src",
+    "title": "workflow 并发控制收敛到 SSOT scope",
+    "status": "DRAFT",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-003",
+    "type": "src",
+    "title": "LEE 主动智能体演进方向预留需求",
+    "status": "DRAFT",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-004",
+    "type": "src",
+    "title": "Claude Code 实时反馈与可观测执行能力",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-007",
+    "type": "src",
+    "title": "QA department SSOT alignment and workflow reframe",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-009",
+    "type": "src",
+    "title": "Dev Department SSOT Alignment - Normalized Goal Analysis",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-011",
+    "type": "src",
+    "title": "LEE Qwen 对话执行后端接入契约",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-012",
+    "type": "src",
+    "title": "Kimi Executor 接入与配置能力",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-016",
+    "type": "src",
+    "title": "需求链一致性测试体系建设",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-020",
+    "type": "src",
+    "title": "ADR 桥接 SRC 规则 - 产品目标分析",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-035",
+    "type": "src",
+    "title": "reverse-epic-feat-l3 对齐现行 SSOT 链逆向升级",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-041",
+    "type": "src",
+    "title": "ADR-017 Gate 治理目标与价值分析",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-046",
+    "type": "src",
+    "title": "交付轴 workflow 化治理与发布闭环建设",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-055",
+    "type": "src",
+    "title": "Run-Scoped Artifact Placement Governance and Directory Audit",
+    "status": "ACTIVE",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-056",
+    "type": "src",
+    "title": "Run-Scoped Artifact Placement Governance and Directory Audit",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-057",
+    "type": "src",
+    "title": "SSOT 需求轴验收治理体系",
+    "status": "DRAFT",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-058",
+    "type": "src",
+    "title": "Dev Smoke Gate 架构与测试职责分层",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "SRC-059",
+    "type": "src",
+    "title": "Fitness Function 作为完成条件防腐层",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "TESTSET-FEAT-SRC-059-001",
+    "type": "test_set",
+    "title": "Fitness Rule Schema 验证测试集",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-059-001"
+  },
+  {
+    "id": "TESTSET-FEAT-045-001",
+    "type": "testset",
+    "title": "每日训练计划测试集",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-045"
+  },
+  {
+    "id": "TESTSET-FEAT-123-001",
+    "type": "testset",
+    "title": "产品治理模块测试集",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-123"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-001-001",
+    "type": "tech",
+    "title": "Feature Delivery L2 工作流定义 - Frozen技术架构",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-009-001"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-002-001",
+    "type": "tech",
+    "title": "Bugfix Delivery L2 工作流定义 - Frozen技术架构",
+    "status": "FROZEN",
+    "parent_id": "FEAT-SRC-009-002"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-004-001",
+    "type": "tech",
+    "title": "Evidence Pack 收口机制 - Frozen技术架构",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-009-004"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-005-001",
+    "type": "tech",
+    "title": "L3 Contract Design 阶段定义 - Frozen技术架构",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-009-005"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-006-001",
+    "type": "tech",
+    "title": "L3 Backend Development 阶段定义 - Frozen技术架构",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-009-006"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-007-001",
+    "type": "tech",
+    "title": "L3 Frontend Development 阶段定义 - Frozen技术架构",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-009-007"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-008-001",
+    "type": "tech",
+    "title": "L3 Integration 阶段定义 - Frozen技术架构",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-009-008"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-009-001",
+    "type": "tech",
+    "title": "L3 Evidence Pack 阶段定义 - Frozen技术架构",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-009-009"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-010-001",
+    "type": "tech",
+    "title": "旧路径降级治理 - Frozen技术架构",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-009-010"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-011-001",
+    "type": "tech",
+    "title": "共享输入规范落地 - Frozen技术架构",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-009-011"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009-012-001",
+    "type": "tech",
+    "title": "Bugfix 粒度控制规则 - Frozen技术架构",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-009-012"
+  },
+  {
+    "id": "TECH-FEAT-SRC-009",
+    "type": "tech",
+    "title": "tech_design",
+    "status": "FROZEN",
+    "parent_id": "FEAT-SRC-009-006"
+  },
+  {
+    "id": "TECH-FEAT-SRC-011",
+    "type": "tech",
+    "title": "SRC-011 Qwen 执行器接入批次技术总览",
+    "status": "FROZEN",
+    "parent_id": "SRC-011"
+  },
+  {
+    "id": "TECH-FEAT-SRC-041-001",
+    "type": "tech",
+    "title": "Gate 双轴模型技术架构设计",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-SRC-041-001"
+  },
+  {
+    "id": "TECH-FEAT-SRC-046-001",
+    "type": "tech",
+    "title": "交付主链建立与 RELEASE 起点治理技术设计",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-046-001"
+  },
+  {
+    "id": "TECH-FEAT-SRC-046-005",
+    "type": "tech",
+    "title": "Fitness L3 工作流实现技术设计",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-046-005"
+  },
+  {
+    "id": "TECH-FEAT-SRC-056-001",
+    "type": "tech",
+    "title": "Placement Manifest Schema Technical Design",
+    "status": "FROZEN",
+    "parent_id": "FEAT-SRC-056-001"
+  },
+  {
+    "id": "TECH-FEAT-SRC-056-002",
+    "type": "tech",
+    "title": "Artifact Placement Reviewer Agent Technical Design",
+    "status": "FROZEN",
+    "parent_id": "FEAT-SRC-056-002"
+  },
+  {
+    "id": "TASK-FEAT-001-001",
+    "type": "task",
+    "title": "验证码发送后端 API 开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-001"
+  },
+  {
+    "id": "TASK-FEAT-001-002",
+    "type": "task",
+    "title": "验证码发送前端组件开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-001"
+  },
+  {
+    "id": "TASK-FEAT-002-001",
+    "type": "task",
+    "title": "FEAT 规格视图结构定义与契约规范",
+    "status": "FROZEN",
+    "parent_id": "FEAT-002"
+  },
+  {
+    "id": "TASK-FEAT-002-002",
+    "type": "task",
+    "title": "FEAT 规格视图模板实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-002"
+  },
+  {
+    "id": "TASK-FEAT-002-003",
+    "type": "task",
+    "title": "FEAT 规格视图运行时集成",
+    "status": "FROZEN",
+    "parent_id": "FEAT-002"
+  },
+  {
+    "id": "TASK-FEAT-002-004",
+    "type": "task",
+    "title": "FEAT 规格视图验证规则与测试",
+    "status": "FROZEN",
+    "parent_id": "FEAT-002"
+  },
+  {
+    "id": "TASK-FEAT-002-005",
+    "type": "task",
+    "title": "FEAT 规格视图文档迁移与入门指南",
+    "status": "FROZEN",
+    "parent_id": "FEAT-002"
+  },
+  {
+    "id": "TASK-FEAT-003-001",
+    "type": "task",
+    "title": "会话管理后端服务开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-003"
+  },
+  {
+    "id": "TASK-FEAT-003-002",
+    "type": "task",
+    "title": "登录成功跳转和会话状态前端开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-003"
+  },
+  {
+    "id": "TASK-FEAT-004-001",
+    "type": "task",
+    "title": "手机号绑定后端 API 开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-004"
+  },
+  {
+    "id": "TASK-FEAT-004-002",
+    "type": "task",
+    "title": "手机号绑定解绑前端页面开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-004"
+  },
+  {
+    "id": "TASK-FEAT-005-001",
+    "type": "task",
+    "title": "国际手机号格式支持开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-005"
+  },
+  {
+    "id": "TASK-FEAT-005-002",
+    "type": "task",
+    "title": "国际手机号前端格式支持开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-005"
+  },
+  {
+    "id": "TASK-FEAT-006-001",
+    "type": "task",
+    "title": "验证码安全防护后端服务开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-006"
+  },
+  {
+    "id": "TASK-FEAT-006-002",
+    "type": "task",
+    "title": "安全防护前端提示和展示开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-006"
+  },
+  {
+    "id": "TASK-FEAT-006-003",
+    "type": "task",
+    "title": "安全事件日志后端 API 开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-006"
+  },
+  {
+    "id": "TASK-FEAT-006-004",
+    "type": "task",
+    "title": "安全事件日志前端页面开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-006"
+  },
+  {
+    "id": "TASK-FEAT-007-001",
+    "type": "task",
+    "title": "短信发送容错与备选方案开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-007"
+  },
+  {
+    "id": "TASK-FEAT-007-002",
+    "type": "task",
+    "title": "备用方案选择前端界面开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-007"
+  },
+  {
+    "id": "TASK-FEAT-008-001",
+    "type": "task",
+    "title": "双登录方式后端 API 开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-008"
+  },
+  {
+    "id": "TASK-FEAT-008-002",
+    "type": "task",
+    "title": "双登录方式前端页面开发",
+    "status": "FROZEN",
+    "parent_id": "FEAT-008"
+  },
+  {
+    "id": "TASK-FEAT-012-001-001",
+    "type": "task",
+    "title": "CLI executor 参数解析与路由层实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-012-001"
+  },
+  {
+    "id": "TASK-FEAT-012-001-002",
+    "type": "task",
+    "title": "执行器选择优先级规范与路由决策实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-012-001"
+  },
+  {
+    "id": "TASK-FEAT-012-002-001",
+    "type": "task",
+    "title": "配置模型定义与加载机制实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-012-002"
+  },
+  {
+    "id": "TASK-FEAT-012-002-002",
+    "type": "task",
+    "title": "执行器选择逻辑与 CLI 集成",
+    "status": "FROZEN",
+    "parent_id": "FEAT-012-002"
+  },
+  {
+    "id": "TASK-FEAT-012-003-001",
+    "type": "task",
+    "title": "Kimi 执行器接口实现与工厂注册",
+    "status": "FROZEN",
+    "parent_id": "FEAT-012-003"
+  },
+  {
+    "id": "TASK-FEAT-012-003-002",
+    "type": "task",
+    "title": "Kimi 执行器运行时集成验证",
+    "status": "FROZEN",
+    "parent_id": "FEAT-012-003"
+  },
+  {
+    "id": "TASK-FEAT-051-001",
+    "type": "task",
+    "title": "ssot create 环境变量访问控制",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-051"
+  },
+  {
+    "id": "TASK-FEAT-052-001",
+    "type": "task",
+    "title": "lee epic create 命令入口实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-052"
+  },
+  {
+    "id": "TASK-FEAT-052-002",
+    "type": "task",
+    "title": "lee feat create 命令入口实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-052"
+  },
+  {
+    "id": "TASK-FEAT-053-001",
+    "type": "task",
+    "title": "治理边界 Formal ID 分配器",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-053"
+  },
+  {
+    "id": "TASK-FEAT-053-002",
+    "type": "task",
+    "title": "治理边界验证器扩展",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-053"
+  },
+  {
+    "id": "TASK-FEAT-054-001",
+    "type": "task",
+    "title": "Source Chain 循环引用检测",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-054"
+  },
+  {
+    "id": "TASK-FEAT-055-001",
+    "type": "task",
+    "title": "CLI Help 文案更新",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-055"
+  },
+  {
+    "id": "TASK-FEAT-055-002",
+    "type": "task",
+    "title": "Demo 场景更新",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-055"
+  },
+  {
+    "id": "TASK-FEAT-055-003",
+    "type": "task",
+    "title": "E2E 测试覆盖",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-055"
+  },
+  {
+    "id": "TASK-FEAT-055-004",
+    "type": "task",
+    "title": "用户文档迁移",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-055"
+  },
+  {
+    "id": "TASK-FEAT-064-001",
+    "type": "task",
+    "title": "源冻结输入契约与路径治理收口",
+    "status": "FROZEN",
+    "parent_id": "FEAT-064"
+  },
+  {
+    "id": "TASK-FEAT-064-002",
+    "type": "task",
+    "title": "source_freeze 运行时与 gate 接线实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-064"
+  },
+  {
+    "id": "TASK-FEAT-064-003",
+    "type": "task",
+    "title": "ADR-016 验证重跑与交付证据收口",
+    "status": "FROZEN",
+    "parent_id": "FEAT-064"
+  },
+  {
+    "id": "TASK-FEAT-068-001",
+    "type": "task",
+    "title": "SSOT 写操作拦截器实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-068"
+  },
+  {
+    "id": "TASK-FEAT-068-002",
+    "type": "task",
+    "title": "Gate 引导服务实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-068"
+  },
+  {
+    "id": "TASK-FEAT-068-003",
+    "type": "task",
+    "title": "CLI 帮助文档管理器实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-068"
+  },
+  {
+    "id": "TASK-FEAT-068-004",
+    "type": "task",
+    "title": "CLI 集成与端到端测试",
+    "status": "FROZEN",
+    "parent_id": "FEAT-068"
+  },
+  {
+    "id": "TASK-FEAT-069-001",
+    "type": "task",
+    "title": "Gate 三类治理模型核心类型定义",
+    "status": "FROZEN",
+    "parent_id": "FEAT-069"
+  },
+  {
+    "id": "TASK-FEAT-069-002",
+    "type": "task",
+    "title": "Gate 与人工审批区分标准 UI 实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-069"
+  },
+  {
+    "id": "TASK-FEAT-069-003",
+    "type": "task",
+    "title": "Gate 决策规则引擎实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-069"
+  },
+  {
+    "id": "TASK-FEAT-069-004",
+    "type": "task",
+    "title": "Review Gate 与 Approval Gate Runner 实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-069"
+  },
+  {
+    "id": "TASK-FEAT-069-005",
+    "type": "task",
+    "title": "Gate 权限模型与决策验证实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-069"
+  },
+  {
+    "id": "TASK-FEAT-069-006",
+    "type": "task",
+    "title": "工作流模板 Gate 类型扩展",
+    "status": "FROZEN",
+    "parent_id": "FEAT-069"
+  },
+  {
+    "id": "TASK-FEAT-069-007",
+    "type": "task",
+    "title": "Gate CLI 命令与 API 适配",
+    "status": "FROZEN",
+    "parent_id": "FEAT-069"
+  },
+  {
+    "id": "TASK-FEAT-069-008",
+    "type": "task",
+    "title": "Gate 升级路径与状态追溯实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-069"
+  },
+  {
+    "id": "TASK-FEAT-069-009",
+    "type": "task",
+    "title": "向后兼容层与迁移策略实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-069"
+  },
+  {
+    "id": "TASK-FEAT-070-001",
+    "type": "task",
+    "title": "SSOT State Model Implementation",
+    "status": "FROZEN",
+    "parent_id": "FEAT-070"
+  },
+  {
+    "id": "TASK-FEAT-070-002",
+    "type": "task",
+    "title": "Gate Approval Service Integration",
+    "status": "FROZEN",
+    "parent_id": "FEAT-070"
+  },
+  {
+    "id": "TASK-FEAT-070-003",
+    "type": "task",
+    "title": "Freeze Trigger Engine Implementation",
+    "status": "FROZEN",
+    "parent_id": "FEAT-070"
+  },
+  {
+    "id": "TASK-FEAT-070-004",
+    "type": "task",
+    "title": "State Transition Logger Implementation",
+    "status": "FROZEN",
+    "parent_id": "FEAT-070"
+  },
+  {
+    "id": "TASK-FEAT-070-005",
+    "type": "task",
+    "title": "SSOT Details Page - Freeze Functionality",
+    "status": "FROZEN",
+    "parent_id": "FEAT-070"
+  },
+  {
+    "id": "TASK-FEAT-070-006",
+    "type": "task",
+    "title": "Freeze Request Form Implementation",
+    "status": "FROZEN",
+    "parent_id": "FEAT-070"
+  },
+  {
+    "id": "TASK-FEAT-070-007",
+    "type": "task",
+    "title": "Approval Gate UI Implementation",
+    "status": "FROZEN",
+    "parent_id": "FEAT-070"
+  },
+  {
+    "id": "TASK-FEAT-070-008",
+    "type": "task",
+    "title": "State Transition History Panel",
+    "status": "FROZEN",
+    "parent_id": "FEAT-070"
+  },
+  {
+    "id": "TASK-FEAT-070-009",
+    "type": "task",
+    "title": "End-to-End Freeze Flow Integration",
+    "status": "FROZEN",
+    "parent_id": "FEAT-070"
+  },
+  {
+    "id": "TASK-FEAT-071-001",
+    "type": "task",
+    "title": "Gate 级别枚举与状态管理核心实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-071"
+  },
+  {
+    "id": "TASK-FEAT-071-002",
+    "type": "task",
+    "title": "约束规则引擎实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-071"
+  },
+  {
+    "id": "TASK-FEAT-071-003",
+    "type": "task",
+    "title": "单向升级路径验证器",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-071"
+  },
+  {
+    "id": "TASK-FEAT-071-004",
+    "type": "task",
+    "title": "违规事件记录器",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-071"
+  },
+  {
+    "id": "TASK-FEAT-071-005",
+    "type": "task",
+    "title": "CLI Gate 命令实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-071"
+  },
+  {
+    "id": "TASK-FEAT-071-006",
+    "type": "task",
+    "title": "数据库 Schema 变更",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-071"
+  },
+  {
+    "id": "TASK-FEAT-071-007",
+    "type": "task",
+    "title": "Workflow 模板 Gate 配置集成",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-071"
+  },
+  {
+    "id": "TASK-FEAT-071-008",
+    "type": "task",
+    "title": "UI 组件实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-071"
+  },
+  {
+    "id": "TASK-FEAT-080-001",
+    "type": "task",
+    "title": "ssot create 命令权限校验实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-080"
+  },
+  {
+    "id": "TASK-FEAT-080-002",
+    "type": "task",
+    "title": "ssot create 命令可见性配置",
+    "status": "FROZEN",
+    "parent_id": "FEAT-080"
+  },
+  {
+    "id": "TASK-FEAT-080-003",
+    "type": "task",
+    "title": "ssot create 命令测试用例实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-080"
+  },
+  {
+    "id": "TASK-FEAT-081-001",
+    "type": "task",
+    "title": "SSOT Workflow-First CLI 命令骨架实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-081"
+  },
+  {
+    "id": "TASK-FEAT-081-002",
+    "type": "task",
+    "title": "Workflow 模板与防绕过安全机制",
+    "status": "FROZEN",
+    "parent_id": "FEAT-081"
+  },
+  {
+    "id": "TASK-FEAT-082-001",
+    "type": "task",
+    "title": "元数据继承引擎核心实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-082"
+  },
+  {
+    "id": "TASK-FEAT-082-002",
+    "type": "task",
+    "title": "元数据继承 UI 组件实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-082"
+  },
+  {
+    "id": "TASK-FEAT-083-001",
+    "type": "task",
+    "title": "CLI Help 分组与错误提示实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-083"
+  },
+  {
+    "id": "TASK-FEAT-083-002",
+    "type": "task",
+    "title": "文档与 Demo 统一治理",
+    "status": "FROZEN",
+    "parent_id": "FEAT-083"
+  },
+  {
+    "id": "TASK-FEAT-084-001",
+    "type": "task",
+    "title": "Template与Instance存储层实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-084"
+  },
+  {
+    "id": "TASK-FEAT-084-002",
+    "type": "task",
+    "title": "TemplateRegistry与InstanceManager运行时实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-084"
+  },
+  {
+    "id": "TASK-FEAT-084-003",
+    "type": "task",
+    "title": "Workflow CLI命令与输出格式化实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-084"
+  },
+  {
+    "id": "TASK-FEAT-085-001",
+    "type": "task",
+    "title": "流式输出引擎实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-085"
+  },
+  {
+    "id": "TASK-FEAT-085-002",
+    "type": "task",
+    "title": "流式输出 CLI 格式化组件",
+    "status": "FROZEN",
+    "parent_id": "FEAT-085"
+  },
+  {
+    "id": "TASK-FEAT-086-001",
+    "type": "task",
+    "title": "执行状态枚举与状态机实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-086"
+  },
+  {
+    "id": "TASK-FEAT-087-001",
+    "type": "task",
+    "title": "会话持久化存储层实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-087"
+  },
+  {
+    "id": "TASK-FEAT-087-002",
+    "type": "task",
+    "title": "会话恢复 CLI 集成",
+    "status": "FROZEN",
+    "parent_id": "FEAT-087"
+  },
+  {
+    "id": "TASK-FEAT-088-001",
+    "type": "task",
+    "title": "四类信息边界定义与存储分离",
+    "status": "FROZEN",
+    "parent_id": "FEAT-088"
+  },
+  {
+    "id": "TASK-FEAT-088-002",
+    "type": "task",
+    "title": "边界可视化 UI 前缀实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-088"
+  },
+  {
+    "id": "TASK-FEAT-089-001",
+    "type": "task",
+    "title": "并发作用域推导与冲突键实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-089"
+  },
+  {
+    "id": "TASK-FEAT-089-002",
+    "type": "task",
+    "title": "run 命令并发冲突检测与提示改造",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-089"
+  },
+  {
+    "id": "TASK-FEAT-090-001",
+    "type": "task",
+    "title": "临时 ID 创建与 formalize 流程接入",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-090"
+  },
+  {
+    "id": "TASK-FEAT-090-002",
+    "type": "task",
+    "title": "正式 ID rewrite 与 lint gate 集成",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-090"
+  },
+  {
+    "id": "TASK-FEAT-100-001",
+    "type": "task",
+    "title": "raw-to-src workflow 模板与运行时实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-100"
+  },
+  {
+    "id": "TASK-FEAT-100-002",
+    "type": "task",
+    "title": "raw-to-src 单元测试与性能验证",
+    "status": "FROZEN",
+    "parent_id": "FEAT-100"
+  },
+  {
+    "id": "TASK-FEAT-101-001",
+    "type": "task",
+    "title": "src-to-epic workflow 重构与边界净化实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-101"
+  },
+  {
+    "id": "TASK-FEAT-101-002",
+    "type": "task",
+    "title": "src-to-epic 向后兼容性测试",
+    "status": "FROZEN",
+    "parent_id": "FEAT-101"
+  },
+  {
+    "id": "TASK-FEAT-102-001",
+    "type": "task",
+    "title": "SRC v1 格式规范与注册器实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-102"
+  },
+  {
+    "id": "TASK-FEAT-102-002",
+    "type": "task",
+    "title": "SRC 验证 API 与版本历史追踪",
+    "status": "FROZEN",
+    "parent_id": "FEAT-102"
+  },
+  {
+    "id": "TASK-FEAT-103-001",
+    "type": "task",
+    "title": "分层接口契约与数据验证层实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-103"
+  },
+  {
+    "id": "TASK-FEAT-104-001",
+    "type": "task",
+    "title": "Workflow 注册表分层重组与 layer 标签系统",
+    "status": "FROZEN",
+    "parent_id": "FEAT-104"
+  },
+  {
+    "id": "TASK-FEAT-105-001",
+    "type": "task",
+    "title": "分层架构部署配置与健康检查端点",
+    "status": "FROZEN",
+    "parent_id": "FEAT-105"
+  },
+  {
+    "id": "TASK-FEAT-106-001",
+    "type": "task",
+    "title": "源文档冻结流水线实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-106"
+  },
+  {
+    "id": "TASK-FEAT-130-001",
+    "type": "task",
+    "title": "Feature/Bugfix Delivery L2 工作流模板实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-130"
+  },
+  {
+    "id": "TASK-FEAT-132-001",
+    "type": "task",
+    "title": "TECH 对象与 Evidence Pack Schema 实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-132"
+  },
+  {
+    "id": "TASK-FEAT-134-001",
+    "type": "task",
+    "title": "L3 阶段模板定义实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-134"
+  },
+  {
+    "id": "TASK-FEAT-140-001",
+    "type": "task",
+    "title": "共享输入规范与治理规则实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-140"
+  },
+  {
+    "id": "TASK-FEAT-142-001",
+    "type": "task",
+    "title": "QA资产SSOT核心模型与放置策略扩展",
+    "status": "FROZEN",
+    "parent_id": "FEAT-142"
+  },
+  {
+    "id": "TASK-FEAT-142-002",
+    "type": "task",
+    "title": "QAP0校验规则集与绑定检查CLI实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-142"
+  },
+  {
+    "id": "TASK-FEAT-143-001",
+    "type": "task",
+    "title": "执行入口规范与 SSOT 三轴绑定契约定义",
+    "status": "FROZEN",
+    "parent_id": "FEAT-143"
+  },
+  {
+    "id": "TASK-FEAT-143-002",
+    "type": "task",
+    "title": "EntryRouter 与 BypassBlocker 核心组件实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-143"
+  },
+  {
+    "id": "TASK-FEAT-143-003",
+    "type": "task",
+    "title": "ChainValidator 与链路完整性校验实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-143"
+  },
+  {
+    "id": "TASK-FEAT-143-004",
+    "type": "task",
+    "title": "AuditLogger 与审计存储层实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-143"
+  },
+  {
+    "id": "TASK-FEAT-143-005",
+    "type": "task",
+    "title": "CLI 命令集成与端到端验证",
+    "status": "FROZEN",
+    "parent_id": "FEAT-143"
+  },
+  {
+    "id": "TASK-FEAT-143-006",
+    "type": "task",
+    "title": "执行入口规范化测试与验证",
+    "status": "FROZEN",
+    "parent_id": "FEAT-143"
+  },
+  {
+    "id": "TASK-FEAT-145-001",
+    "type": "task",
+    "title": "CLI高层命令框架与核心命令实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-145"
+  },
+  {
+    "id": "TASK-FEAT-145-002",
+    "type": "task",
+    "title": "边界防护与治理链审计机制",
+    "status": "FROZEN",
+    "parent_id": "FEAT-145"
+  },
+  {
+    "id": "TASK-FEAT-159-001",
+    "type": "task",
+    "title": "核心测试引擎-测试器调度框架",
+    "status": "FROZEN",
+    "parent_id": "FEAT-159"
+  },
+  {
+    "id": "TASK-FEAT-159-002",
+    "type": "task",
+    "title": "核心测试引擎-采样缓存增量机制",
+    "status": "FROZEN",
+    "parent_id": "FEAT-159"
+  },
+  {
+    "id": "TASK-FEAT-160-001",
+    "type": "task",
+    "title": "Schema测试器-结构合规验证",
+    "status": "FROZEN",
+    "parent_id": "FEAT-160"
+  },
+  {
+    "id": "TASK-FEAT-161-001",
+    "type": "task",
+    "title": "Trace测试器-链路追溯与覆盖率",
+    "status": "FROZEN",
+    "parent_id": "FEAT-161"
+  },
+  {
+    "id": "TASK-FEAT-162-001",
+    "type": "task",
+    "title": "Semantic测试器-语义一致性验证",
+    "status": "FROZEN",
+    "parent_id": "FEAT-162"
+  },
+  {
+    "id": "TASK-FEAT-163-001",
+    "type": "task",
+    "title": "Overlap测试器-功能重叠检测",
+    "status": "FROZEN",
+    "parent_id": "FEAT-163"
+  },
+  {
+    "id": "TASK-FEAT-164-001",
+    "type": "task",
+    "title": "Replay测试器-稳定性验证",
+    "status": "FROZEN",
+    "parent_id": "FEAT-164"
+  },
+  {
+    "id": "TASK-FEAT-165-001",
+    "type": "task",
+    "title": "Executable测试器-可执行性评估",
+    "status": "FROZEN",
+    "parent_id": "FEAT-165"
+  },
+  {
+    "id": "TASK-FEAT-166-001",
+    "type": "task",
+    "title": "统一报告格式生成器-报告渲染引擎",
+    "status": "FROZEN",
+    "parent_id": "FEAT-166"
+  },
+  {
+    "id": "TASK-FEAT-167-001",
+    "type": "task",
+    "title": "黄金样本集管理-样本版本管理",
+    "status": "FROZEN",
+    "parent_id": "FEAT-167"
+  },
+  {
+    "id": "TASK-FEAT-168-001",
+    "type": "task",
+    "title": "CI/CD集成-CLI与CI模板",
+    "status": "FROZEN",
+    "parent_id": "FEAT-168"
+  },
+  {
+    "id": "TASK-FEAT-169-000",
+    "type": "task",
+    "title": "执行器配置优先级与验证规则规范",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-169"
+  },
+  {
+    "id": "TASK-FEAT-169-001",
+    "type": "task",
+    "title": "执行器类型枚举与数据模型定义",
+    "status": "FROZEN",
+    "parent_id": "FEAT-169"
+  },
+  {
+    "id": "TASK-FEAT-169-002",
+    "type": "task",
+    "title": "执行器配置解析器与验证器实现",
+    "status": "FROZEN",
+    "parent_id": "FEAT-169"
+  },
+  {
+    "id": "TASK-FEAT-169-003",
+    "type": "task",
+    "title": "CLI 命令集成与配置透传",
+    "status": "FROZEN",
+    "parent_id": "FEAT-169"
+  },
+  {
+    "id": "TASK-FEAT-169-004",
+    "type": "task",
+    "title": "配置文件加载器扩展与向后兼容",
+    "status": "FROZEN",
+    "parent_id": "FEAT-169"
+  },
+  {
+    "id": "TASK-FEAT-169-005",
+    "type": "task",
+    "title": "端到端测试与验收验证",
+    "status": "FROZEN",
+    "parent_id": "FEAT-169"
+  },
+  {
+    "id": "TASK-FEAT-170-002",
+    "type": "task",
+    "title": "Qwen Profile 解析与异常定位",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-170"
+  },
+  {
+    "id": "TASK-FEAT-171-001",
+    "type": "task",
+    "title": "Qwen Chat 实现与 CLI 封装",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-171"
+  },
+  {
+    "id": "TASK-FEAT-171-002",
+    "type": "task",
+    "title": "执行结果归一化层实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-171"
+  },
+  {
+    "id": "TASK-FEAT-172-001",
+    "type": "task",
+    "title": "Workflow 实例执行器上下文化与持久化",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-172"
+  },
+  {
+    "id": "TASK-FEAT-172-002",
+    "type": "task",
+    "title": "多执行器并发隔离与验证",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-172"
+  },
+  {
+    "id": "TASK-FEAT-173-001",
+    "type": "task",
+    "title": "中文基准样本与质量评估基线建设",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-173"
+  },
+  {
+    "id": "TASK-FEAT-173-002",
+    "type": "task",
+    "title": "Qwen 质量回归与回退机制实现",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-173"
+  },
+  {
+    "id": "TASK-FEAT-SRC-059-001-001",
+    "type": "task",
+    "title": "实现 Fitness Rule Schema JSON 定义",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-059-001"
+  },
+  {
+    "id": "TASK-FEAT-SRC-059-001-002",
+    "type": "task",
+    "title": "实现 Fitness Rule Schema 验证工具",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-059-001"
+  },
+  {
+    "id": "TASK-FEAT-SRC-059-001-003",
+    "type": "task",
+    "title": "Fitness Rule 证据绑定与审计日志",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-059-001"
+  },
+  {
+    "id": "TASK-FEAT-SRC-059-001-004",
+    "type": "task",
+    "title": "Fitness Rule 验证测试集与门禁集成",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-059-001"
+  },
+  {
+    "id": "TASK-FEAT-SRC-056-001-001",
+    "type": "task",
+    "title": "定义 Placement Manifest Schema 结构",
+    "status": "FROZEN",
+    "parent_id": "FEAT-SRC-056-001"
+  },
+  {
+    "id": "TASK-FEAT-SRC-056-002-001",
+    "type": "task",
+    "title": "实现 Artifact Placement Reviewer Agent 核心模块",
+    "status": "FROZEN",
+    "parent_id": "FEAT-SRC-056-002"
+  },
+  {
+    "id": "TASK-FEAT-SRC-046-001-001",
+    "type": "task",
+    "title": "SSOT Validator P0 规则扩展 - 交付链对象校验",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-046-001"
+  },
+  {
+    "id": "TASK-FEAT-SRC-046-001-002",
+    "type": "task",
+    "title": "SSOTService.release_check() 方法实现",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-046-001"
+  },
+  {
+    "id": "TASK-FEAT-SRC-046-001-003",
+    "type": "task",
+    "title": "SSOTService.derive_plans() 方法实现",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-046-001"
+  },
+  {
+    "id": "TASK-FEAT-SRC-041-001-001",
+    "type": "task",
+    "title": "Gate 双轴语义与 legacy 收敛治理定义",
+    "status": "FROZEN",
+    "parent_id": "FEAT-SRC-041-001"
+  },
+  {
+    "id": "TASK-FEAT-SRC-041-002-001",
+    "type": "task",
+    "title": "human_gate_context 前置对象与完整性校验接线",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-041-002"
+  },
+  {
+    "id": "TASK-FEAT-SRC-041-003-001",
+    "type": "task",
+    "title": "正式边界动作 approval plus human_required 约束落地",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-041-003"
+  },
+  {
+    "id": "TASK-FEAT-SRC-041-004-001",
+    "type": "task",
+    "title": "待审批摘要投影视图与 CLI 语义统一",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-041-004"
+  },
+  {
+    "id": "TASK-FEAT-SRC-041-005-001",
+    "type": "task",
+    "title": "人工 gate_result 统一输出与审计追溯绑定",
+    "status": "DRAFT",
+    "parent_id": "FEAT-SRC-041-005"
+  },
+  {
+    "id": "EPIC-189",
+    "type": "epic",
+    "title": "验证 raw_to_src 到 src_to_epic 数据传递修复",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "EPIC-190",
+    "type": "epic",
+    "title": "验证 raw_to_src 到 src_to_epic 数据传递修复",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "EPIC-SRC-009",
+    "type": "epic",
+    "title": "Dev Department SSOT Alignment - Delivery Governance Foundation",
+    "status": "FROZEN",
+    "parent_id": null
+  },
+  {
+    "id": "FEAT-SRC-009-001",
+    "type": "feat",
+    "title": "Feature Delivery L2 工作流定义",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-002",
+    "type": "feat",
+    "title": "Bugfix Delivery L2 工作流定义",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-003",
+    "type": "feat",
+    "title": "TECH 桥接对象设计",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-004",
+    "type": "feat",
+    "title": "Evidence Pack 收口机制",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-005",
+    "type": "feat",
+    "title": "L3 Contract Design 阶段定义",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-006",
+    "type": "feat",
+    "title": "L3 Backend Development 阶段定义",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-007",
+    "type": "feat",
+    "title": "L3 Frontend Development 阶段定义",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-008",
+    "type": "feat",
+    "title": "L3 Integration 阶段定义",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-009",
+    "type": "feat",
+    "title": "L3 Evidence Pack 阶段定义",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-010",
+    "type": "feat",
+    "title": "旧路径降级治理",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-011",
+    "type": "feat",
+    "title": "共享输入规范落地",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-009-012",
+    "type": "feat",
+    "title": "Bugfix 粒度控制规则",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-009"
+  },
+  {
+    "id": "FEAT-SRC-012-001",
+    "type": "feat",
+    "title": "Kimi 执行器基础注册与发现机制",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-012"
+  },
+  {
+    "id": "FEAT-SRC-012-002",
+    "type": "feat",
+    "title": "显式指定 Kimi 执行器能力",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-012"
+  },
+  {
+    "id": "FEAT-SRC-012-003",
+    "type": "feat",
+    "title": "默认执行器配置能力",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-012"
+  },
+  {
+    "id": "FEAT-SRC-012-004",
+    "type": "feat",
+    "title": "Kimi CLI 调用适配与输出兼容层",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-012"
+  },
+  {
+    "id": "FEAT-SRC-012-005",
+    "type": "feat",
+    "title": "执行器上下文保持与追溯性",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-012"
+  },
+  {
+    "id": "EPIC-SRC-041-016",
+    "type": "epic",
+    "title": "ADR-017 Gate 治理语义归一化与人工审批上下文统一治理",
+    "status": "FROZEN",
+    "parent_id": "SRC-041"
+  },
+  {
+    "id": "FEAT-SRC-041-001",
+    "type": "feat",
+    "title": "Gate purpose 与 decision_mode 目标语义冻结",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-041-016"
+  },
+  {
+    "id": "FEAT-SRC-041-002",
+    "type": "feat",
+    "title": "human_gate_context 人工决策前置上下文强制化",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-041-016"
+  },
+  {
+    "id": "FEAT-SRC-041-003",
+    "type": "feat",
+    "title": "正式边界动作的 approval plus human_required 约束",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-041-016"
+  },
+  {
+    "id": "FEAT-SRC-041-004",
+    "type": "feat",
+    "title": "待审批 gate 的最小可判断摘要统一",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-041-016"
+  },
+  {
+    "id": "FEAT-SRC-041-005",
+    "type": "feat",
+    "title": "人工 gate 决策结果的统一 gate_result 输出",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-041-016"
+  },
+  {
+    "id": "EPIC-SRC-046-001",
+    "type": "epic",
+    "title": "交付轴 workflow 化治理与发布闭环建设",
+    "status": "FROZEN",
+    "parent_id": "SRC-046"
+  },
+  {
+    "id": "FEAT-SRC-046-001",
+    "type": "feat",
+    "title": "交付主链建立 - RELEASE 为起点的交付对象绑定与 scope 完整性治理",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-046-001"
+  },
+  {
+    "id": "FEAT-SRC-046-002",
+    "type": "feat",
+    "title": "缺陷回流路径统一 - 缺陷回流与发布关闭标准的治理闭环",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-046-001"
+  },
+  {
+    "id": "FEAT-SRC-046-003",
+    "type": "feat",
+    "title": "QA 入口收口 - QA 与研发执行入口对正式交付主链的绑定关系治理",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-046-001"
+  },
+  {
+    "id": "FEAT-SRC-046-004",
+    "type": "feat",
+    "title": "bugfix 证据归属治理 - bugfix 的证据归属与执行承诺位置重入交付轴闭环",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-046-001"
+  },
+  {
+    "id": "FEAT-SRC-046-005",
+    "type": "feat",
+    "title": "workflow 命令整合 - 现有 RELEASE/DEVPLAN/TESTPLAN/TASK 对象与命令能力整合",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-046-001"
+  },
+  {
+    "id": "EPIC-SRC-056-001",
+    "type": "epic",
+    "title": "Run-Scoped Artifact Placement Governance and Directory Audit",
+    "status": "FROZEN",
+    "parent_id": "SRC-056"
+  },
+  {
+    "id": "FEAT-SRC-056-001",
+    "type": "feat",
+    "title": "Run-Scoped Placement Manifest Contract Design",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-056-001"
+  },
+  {
+    "id": "FEAT-SRC-056-002",
+    "type": "feat",
+    "title": "Artifact Placement Reviewer Agent Implementation",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-056-001"
+  },
+  {
+    "id": "EPIC-057",
+    "type": "epic",
+    "title": "SSOT 需求轴验收治理体系",
+    "status": "FROZEN",
+    "parent_id": "SRC-057"
+  },
+  {
+    "id": "EPIC-SRC-058-001",
+    "type": "epic",
+    "title": "Dev Smoke Gate 架构与测试职责分层",
+    "status": "FROZEN",
+    "parent_id": "SRC-058"
+  },
+  {
+    "id": "FEAT-SRC-058-001",
+    "type": "feat",
+    "title": "MR Smoke Gate Merge 门禁集成",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-058-001"
+  },
+  {
+    "id": "FEAT-SRC-058-002",
+    "type": "feat",
+    "title": "统一 Test Set 资产管理",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-058-001"
+  },
+  {
+    "id": "FEAT-SRC-058-003",
+    "type": "feat",
+    "title": "Smoke 执行性能优化",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-058-001"
+  },
+  {
+    "id": "FEAT-SRC-058-004",
+    "type": "feat",
+    "title": "本地环境检测与一致性校验",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-058-001"
+  },
+  {
+    "id": "FEAT-SRC-058-005",
+    "type": "feat",
+    "title": "误报处理与 Flaky Test 治理",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-058-001"
+  },
+  {
+    "id": "EPIC-SRC-059-001",
+    "type": "epic",
+    "title": "Fitness Function 作为完成条件防腐层",
+    "status": "FROZEN",
+    "parent_id": "SRC-059"
+  },
+  {
+    "id": "FEAT-SRC-059-001",
+    "type": "feat",
+    "title": "Fitness Rule Schema 定义",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-059-001"
+  },
+  {
+    "id": "FEAT-SRC-059-002",
+    "type": "feat",
+    "title": "Fitness Executor 核心实现",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-059-001"
+  },
+  {
+    "id": "FEAT-SRC-059-003",
+    "type": "feat",
+    "title": "Hard Gate 与 Quality Signal 分层",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-059-001"
+  },
+  {
+    "id": "FEAT-SRC-059-004",
+    "type": "feat",
+    "title": "Fitness Result 结构化输出",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-059-001"
+  },
+  {
+    "id": "FEAT-SRC-059-005",
+    "type": "feat",
+    "title": "CLI 与 CI 集成",
+    "status": "FROZEN",
+    "parent_id": "EPIC-SRC-059-001"
+  },
+  {
+    "id": "BUG-FEAT-071-001",
+    "type": "bug",
+    "title": "历史 workflow 生成不合规 SSOT 文件",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-071"
+  },
+  {
+    "id": "BUG-FEAT-071-002",
+    "type": "bug",
+    "title": "epic-to-feat 上下文错位导致 FEAT 内容错误",
+    "status": "ACTIVE",
+    "parent_id": "FEAT-071"
+  }
+]

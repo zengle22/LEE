@@ -1,0 +1,1432 @@
+[
+  {
+    "original": "spec/adr/ADR-022__delivery-axis-issue-remediation-governance.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/adr/ADR-022__delivery-axis-issue-remediation-governance.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/adr/ADR-028__ssot-requirement-axis-acceptance-governance.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/adr/ADR-028__ssot-requirement-axis-acceptance-governance.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-001/EPIC-003__lee-cli-workflow-first-zhilirukouzhonggou.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-001/EPIC-003__lee-cli-workflow-first-zhilirukouzhonggou.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-004/EPIC-004__claude-code-keguancezhixingnenglijianshe.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-004/EPIC-004__claude-code-keguancezhixingnenglijianshe.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-007/EPIC-009__qa-department-ssot-alignment-and-workflow-reframe.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-007/EPIC-009__qa-department-ssot-alignment-and-workflow-reframe.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-007/EPIC-011__qabumenssotduiqiyugongzuoliuzhonggou-jianlisanzhou.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-007/EPIC-011__qabumenssotduiqiyugongzuoliuzhonggou-jianlisanzhou.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-011/EPIC-022__lee-qwen-zhixingqijieru.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-011/EPIC-022__lee-qwen-zhixingqijieru.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-016/EPIC-018__epic.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-016/EPIC-018__epic.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-016/EPIC-021__xuqiulianyizhixingceshitixijianshe.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-016/EPIC-021__xuqiulianyizhixingceshitixijianshe.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-020/EPIC-LEE-SRC-FREEZE-20260313-001__adr-016-yanzhengyunxingyuandongjienengligoujian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-020/EPIC-LEE-SRC-FREEZE-20260313-001__adr-016-yanzhengyunxingyuandongjienengligoujian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-NO-SOURCE/EPIC-008__workflow-fencengjieou-jianli-raw-to-src-duliliushu.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-NO-SOURCE/EPIC-008__workflow-fencengjieou-jianli-raw-to-src-duliliushu.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-NO-SOURCE/EPIC-017__climinglingfencengyussotwuhuabianjiezhili.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-NO-SOURCE/EPIC-017__climinglingfencengyussotwuhuabianjiezhili.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-NO-SOURCE/EPIC-044__kimi-zhixingqijieruyupeizhinengli.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-NO-SOURCE/EPIC-044__kimi-zhixingqijieruyupeizhinengli.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-NO-SOURCE/EPIC-077__nixianggongzuoliuyuxianxing-ssot-wendanglianduiqis.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-NO-SOURCE/EPIC-077__nixianggongzuoliuyuxianxing-ssot-wendanglianduiqis.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-NO-SOURCE/EPIC-141__ssot-wendangliannixianggongzuoliuduiqishengji.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-NO-SOURCE/EPIC-141__ssot-wendangliannixianggongzuoliuduiqishengji.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/requirements/SRC-NO-SOURCE/EPIC-SSOT-REV-001__ssot-wendangliannixiangchengjieyuwuhuaguizeshengji.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/requirements/SRC-NO-SOURCE/EPIC-SSOT-REV-001__ssot-wendangliannixiangchengjieyuwuhuaguizeshengji.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/source/SRC-011__lee-qwen-zhixingqijieruqiyue.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/source/SRC-011__lee-qwen-zhixingqijieruqiyue.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-001/TASK-FEAT-001-001__yanzhengmafasonghouduan-api-kaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-001/TASK-FEAT-001-001__yanzhengmafasonghouduan-api-kaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-001/TASK-FEAT-001-002__yanzhengmafasongqianduanzujiankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-001/TASK-FEAT-001-002__yanzhengmafasongqianduanzujiankaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-002/TASK-FEAT-002-001__feat-guigeshitujiegoudingyiyuqiyueguifan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-002/TASK-FEAT-002-001__feat-guigeshitujiegoudingyiyuqiyueguifan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-002/TASK-FEAT-002-002__feat-guigeshitumobanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-002/TASK-FEAT-002-002__feat-guigeshitumobanshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-002/TASK-FEAT-002-003__feat-guigeshituyunxingshijicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-002/TASK-FEAT-002-003__feat-guigeshituyunxingshijicheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-002/TASK-FEAT-002-004__feat-guigeshituyanzhengguizeyuceshi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-002/TASK-FEAT-002-004__feat-guigeshituyanzhengguizeyuceshi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-002/TASK-FEAT-002-005__feat-guigeshituwendangqianyiyurumenzhinan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-002/TASK-FEAT-002-005__feat-guigeshituwendangqianyiyurumenzhinan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-003/TASK-FEAT-003-001__huihuaguanlihouduanfuwukaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-003/TASK-FEAT-003-001__huihuaguanlihouduanfuwukaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-003/TASK-FEAT-003-002__dengluchenggongtiaozhuanhehuihuazhuangtaiqianduank.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-003/TASK-FEAT-003-002__dengluchenggongtiaozhuanhehuihuazhuangtaiqianduank.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-004/TASK-FEAT-004-001__shoujihaobangdinghouduan-api-kaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-004/TASK-FEAT-004-001__shoujihaobangdinghouduan-api-kaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-004/TASK-FEAT-004-002__shoujihaobangdingjiebangqianduanyemiankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-004/TASK-FEAT-004-002__shoujihaobangdingjiebangqianduanyemiankaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-005/TASK-FEAT-005-001__guojishoujihaogeshizhichikaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-005/TASK-FEAT-005-001__guojishoujihaogeshizhichikaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-005/TASK-FEAT-005-002__guojishoujihaoqianduangeshizhichikaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-005/TASK-FEAT-005-002__guojishoujihaoqianduangeshizhichikaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-006/TASK-FEAT-006-001__yanzhengmaanquanfanghuhouduanfuwukaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-006/TASK-FEAT-006-001__yanzhengmaanquanfanghuhouduanfuwukaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-006/TASK-FEAT-006-002__anquanfanghuqianduantishihezhanshikaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-006/TASK-FEAT-006-002__anquanfanghuqianduantishihezhanshikaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-006/TASK-FEAT-006-003__anquanshijianrizhihouduan-api-kaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-006/TASK-FEAT-006-003__anquanshijianrizhihouduan-api-kaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-006/TASK-FEAT-006-004__anquanshijianrizhiqianduanyemiankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-006/TASK-FEAT-006-004__anquanshijianrizhiqianduanyemiankaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-007/TASK-FEAT-007-001__duanxinfasongrongcuoyubeixuanfangankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-007/TASK-FEAT-007-001__duanxinfasongrongcuoyubeixuanfangankaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-007/TASK-FEAT-007-002__beiyongfanganxuanzeqianduanjiemiankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-007/TASK-FEAT-007-002__beiyongfanganxuanzeqianduanjiemiankaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-008/TASK-FEAT-008-001__shuangdenglufangshihouduan-api-kaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-008/TASK-FEAT-008-001__shuangdenglufangshihouduan-api-kaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-008/TASK-FEAT-008-002__shuangdenglufangshiqianduanyemiankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-008/TASK-FEAT-008-002__shuangdenglufangshiqianduanyemiankaifa.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-001/TASK-FEAT-012-001-001__cli-executor-canshujiexiyuluyoucengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-001/TASK-FEAT-012-001-001__cli-executor-canshujiexiyuluyoucengshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-001/TASK-FEAT-012-001-002__zhixingqixuanzeyouxianjiguifanyuluyoujueceshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-001/TASK-FEAT-012-001-002__zhixingqixuanzeyouxianjiguifanyuluyoujueceshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-002/TASK-FEAT-012-002-001__peizhimoxingdingyiyujiazaijizhishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-002/TASK-FEAT-012-002-001__peizhimoxingdingyiyujiazaijizhishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-002/TASK-FEAT-012-002-002__zhixingqixuanzeluojiyu-cli-jicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-002/TASK-FEAT-012-002-002__zhixingqixuanzeluojiyu-cli-jicheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-003/TASK-FEAT-012-003-001__kimi-zhixingqijiekoushixianyugongchangzhuce.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-003/TASK-FEAT-012-003-001__kimi-zhixingqijiekoushixianyugongchangzhuce.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-003/TASK-FEAT-012-003-002__kimi-zhixingqiyunxingshijichengyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-003/TASK-FEAT-012-003-002__kimi-zhixingqiyunxingshijichengyanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-051/TASK-FEAT-051-001__ssot-create-huanjingbianliangfangwenkongzhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-051/TASK-FEAT-051-001__ssot-create-huanjingbianliangfangwenkongzhi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-052/TASK-FEAT-052-001__lee-epic-create-minglingrukoushixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-052/TASK-FEAT-052-001__lee-epic-create-minglingrukoushixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-052/TASK-FEAT-052-002__lee-feat-create-minglingrukoushixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-052/TASK-FEAT-052-002__lee-feat-create-minglingrukoushixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-053/TASK-FEAT-053-001__zhilibianjie-formal-id-fenpeiqi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-053/TASK-FEAT-053-001__zhilibianjie-formal-id-fenpeiqi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-053/TASK-FEAT-053-002__zhilibianjieyanzhengqikuozhan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-053/TASK-FEAT-053-002__zhilibianjieyanzhengqikuozhan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-054/TASK-FEAT-054-001__source-chain-xunhuanyinyongjiance.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-054/TASK-FEAT-054-001__source-chain-xunhuanyinyongjiance.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-055/TASK-FEAT-055-001__cli-help-wenangengxin.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-055/TASK-FEAT-055-001__cli-help-wenangengxin.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-055/TASK-FEAT-055-002__demo-changjinggengxin.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-055/TASK-FEAT-055-002__demo-changjinggengxin.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-055/TASK-FEAT-055-003__e2e-ceshifugai.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-055/TASK-FEAT-055-003__e2e-ceshifugai.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-055/TASK-FEAT-055-004__yonghuwendangqianyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-055/TASK-FEAT-055-004__yonghuwendangqianyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-064/TASK-FEAT-064-001__yuandongjieshuruqiyueyulujingzhilishoukou.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-064/TASK-FEAT-064-001__yuandongjieshuruqiyueyulujingzhilishoukou.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-064/TASK-FEAT-064-002__sourcefreezeyunxingshiyugatejiexianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-064/TASK-FEAT-064-002__sourcefreezeyunxingshiyugatejiexianshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-064/TASK-FEAT-064-003__adr016yanzhengzhongpaoyujiaofuzhengjushoukou.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-064/TASK-FEAT-064-003__adr016yanzhengzhongpaoyujiaofuzhengjushoukou.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-068/TASK-FEAT-068-001__ssot-xiecaozuolanjieqishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-068/TASK-FEAT-068-001__ssot-xiecaozuolanjieqishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-068/TASK-FEAT-068-002__gate-yindaofuwushixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-068/TASK-FEAT-068-002__gate-yindaofuwushixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-068/TASK-FEAT-068-003__cli-bangzhuwendangguanliqishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-068/TASK-FEAT-068-003__cli-bangzhuwendangguanliqishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-068/TASK-FEAT-068-004__cli-jichengyuduandaoduanceshi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-068/TASK-FEAT-068-004__cli-jichengyuduandaoduanceshi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-001__gate-sanleizhilimoxinghexinleixingdingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-001__gate-sanleizhilimoxinghexinleixingdingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-002__gate-yurengongshenpiqufenbiaozhun-ui-shixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-002__gate-yurengongshenpiqufenbiaozhun-ui-shixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-003__gate-jueceguizeyinqingshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-003__gate-jueceguizeyinqingshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-004__review-gate-yu-approval-gate-runner-shixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-004__review-gate-yu-approval-gate-runner-shixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-005__gate-quanxianmoxingyujueceyanzhengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-005__gate-quanxianmoxingyujueceyanzhengshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-006__gongzuoliumoban-gate-leixingkuozhan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-006__gongzuoliumoban-gate-leixingkuozhan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-007__gate-cli-minglingyu-api-shipei.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-007__gate-cli-minglingyu-api-shipei.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-008__gate-shengjilujingyuzhuangtaizhuisushixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-008__gate-shengjilujingyuzhuangtaizhuisushixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-009__xianghoujianrongcengyuqianyicelveshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-009__xianghoujianrongcengyuqianyicelveshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-001__ssot-state-model-implementation.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-001__ssot-state-model-implementation.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-002__gate-approval-service-integration.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-002__gate-approval-service-integration.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-003__freeze-trigger-engine-implementation.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-003__freeze-trigger-engine-implementation.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-004__state-transition-logger-implementation.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-004__state-transition-logger-implementation.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-005__ssot-details-page-freeze-functionality.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-005__ssot-details-page-freeze-functionality.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-006__freeze-request-form-implementation.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-006__freeze-request-form-implementation.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-007__approval-gate-ui-implementation.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-007__approval-gate-ui-implementation.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-008__state-transition-history-panel.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-008__state-transition-history-panel.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-009__end-to-end-freeze-flow-integration.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-009__end-to-end-freeze-flow-integration.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-001__gate-jibiemeijuyuzhuangtaiguanlihexinshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-001__gate-jibiemeijuyuzhuangtaiguanlihexinshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-002__yueshuguizeyinqingshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-002__yueshuguizeyinqingshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-003__danxiangshengjilujingyanzhengqi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-003__danxiangshengjilujingyanzhengqi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-004__weiguishijianjiluqi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-004__weiguishijianjiluqi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-005__cli-gate-minglingshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-005__cli-gate-minglingshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-006__shujuku-schema-biangeng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-006__shujuku-schema-biangeng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-007__workflow-moban-gate-peizhijicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-007__workflow-moban-gate-peizhijicheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-008__ui-zujianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-008__ui-zujianshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-080/TASK-FEAT-080-001__ssot-create-minglingquanxianxiaoyanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-080/TASK-FEAT-080-001__ssot-create-minglingquanxianxiaoyanshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-080/TASK-FEAT-080-002__ssot-create-minglingkejianxingpeizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-080/TASK-FEAT-080-002__ssot-create-minglingkejianxingpeizhi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-080/TASK-FEAT-080-003__ssot-create-minglingceshiyonglishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-080/TASK-FEAT-080-003__ssot-create-minglingceshiyonglishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-081/TASK-FEAT-081-001__ssot-workflow-first-cli-minglinggujiashixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-081/TASK-FEAT-081-001__ssot-workflow-first-cli-minglinggujiashixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-081/TASK-FEAT-081-002__workflow-mobanyufangraoguoanquanjizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-081/TASK-FEAT-081-002__workflow-mobanyufangraoguoanquanjizhi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-082/TASK-FEAT-082-001__yuanshujujichengyinqinghexinshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-082/TASK-FEAT-082-001__yuanshujujichengyinqinghexinshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-082/TASK-FEAT-082-002__yuanshujujicheng-ui-zujianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-082/TASK-FEAT-082-002__yuanshujujicheng-ui-zujianshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-083/TASK-FEAT-083-001__cli-help-fenzuyucuowutishishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-083/TASK-FEAT-083-001__cli-help-fenzuyucuowutishishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-083/TASK-FEAT-083-002__wendangyu-demo-tongyizhili.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-083/TASK-FEAT-083-002__wendangyu-demo-tongyizhili.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-084/TASK-FEAT-084-001__templateyuinstancecunchucengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-084/TASK-FEAT-084-001__templateyuinstancecunchucengshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-084/TASK-FEAT-084-002__templateregistryyuinstancemanageryunxingshishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-084/TASK-FEAT-084-002__templateregistryyuinstancemanageryunxingshishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-084/TASK-FEAT-084-003__workflow-climinglingyushuchugeshihuashixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-084/TASK-FEAT-084-003__workflow-climinglingyushuchugeshihuashixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-085/TASK-FEAT-085-001__liushishuchuyinqingshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-085/TASK-FEAT-085-001__liushishuchuyinqingshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-085/TASK-FEAT-085-002__liushishuchu-cli-geshihuazujian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-085/TASK-FEAT-085-002__liushishuchu-cli-geshihuazujian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-086/TASK-FEAT-086-001__zhixingzhuangtaimeijuyuzhuangtaijishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-086/TASK-FEAT-086-001__zhixingzhuangtaimeijuyuzhuangtaijishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-087/TASK-FEAT-087-001__huihuachijiuhuacunchucengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-087/TASK-FEAT-087-001__huihuachijiuhuacunchucengshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-087/TASK-FEAT-087-002__huihuahuifu-cli-jicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-087/TASK-FEAT-087-002__huihuahuifu-cli-jicheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-088/TASK-FEAT-088-001__sileixinxibianjiedingyiyucunchufenli.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-088/TASK-FEAT-088-001__sileixinxibianjiedingyiyucunchufenli.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-088/TASK-FEAT-088-002__bianjiekeshihua-ui-qianzhuishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-088/TASK-FEAT-088-002__bianjiekeshihua-ui-qianzhuishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-089/TASK-FEAT-089-001__bingfazuoyongyutuidaoyuchongtujianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-089/TASK-FEAT-089-001__bingfazuoyongyutuidaoyuchongtujianshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-089/TASK-FEAT-089-002__run-minglingbingfachongtujianceyutishigaizao.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-089/TASK-FEAT-089-002__run-minglingbingfachongtujianceyutishigaizao.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-090/TASK-FEAT-090-001__linshi-id-chuangjianyu-formalize-liuchengjieru.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-090/TASK-FEAT-090-001__linshi-id-chuangjianyu-formalize-liuchengjieru.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-090/TASK-FEAT-090-002__zhengshi-id-rewrite-yu-lint-gate-jicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-090/TASK-FEAT-090-002__zhengshi-id-rewrite-yu-lint-gate-jicheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-100/TASK-FEAT-100-001__raw-to-src-workflow-mobanyuyunxingshishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-100/TASK-FEAT-100-001__raw-to-src-workflow-mobanyuyunxingshishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-100/TASK-FEAT-100-002__raw-to-src-danyuanceshiyuxingnengyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-100/TASK-FEAT-100-002__raw-to-src-danyuanceshiyuxingnengyanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-101/TASK-FEAT-101-001__src-to-epic-workflow-zhonggouyubianjiejinghuashixi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-101/TASK-FEAT-101-001__src-to-epic-workflow-zhonggouyubianjiejinghuashixi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-101/TASK-FEAT-101-002__src-to-epic-xianghoujianrongxingceshi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-101/TASK-FEAT-101-002__src-to-epic-xianghoujianrongxingceshi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-102/TASK-FEAT-102-001__src-v1-geshiguifanyuzhuceqishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-102/TASK-FEAT-102-001__src-v1-geshiguifanyuzhuceqishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-102/TASK-FEAT-102-002__src-yanzheng-api-yubanbenlishizhuizong.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-102/TASK-FEAT-102-002__src-yanzheng-api-yubanbenlishizhuizong.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-103/TASK-FEAT-103-001__fencengjiekouqiyueyushujuyanzhengcengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-103/TASK-FEAT-103-001__fencengjiekouqiyueyushujuyanzhengcengshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-104/TASK-FEAT-104-001__workflow-zhucebiaofencengzhongzuyu-layer-biaoqianx.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-104/TASK-FEAT-104-001__workflow-zhucebiaofencengzhongzuyu-layer-biaoqianx.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-105/TASK-FEAT-105-001__fencengjiagoubushupeizhiyujiankangjianchaduandian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-105/TASK-FEAT-105-001__fencengjiagoubushupeizhiyujiankangjianchaduandian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-106/TASK-FEAT-106-001__yuanwendangdongjieliushuixianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-106/TASK-FEAT-106-001__yuanwendangdongjieliushuixianshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-130/TASK-FEAT-130-001__feature-bugfix-delivery-l2-gongzuoliumobanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-130/TASK-FEAT-130-001__feature-bugfix-delivery-l2-gongzuoliumobanshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-132/TASK-FEAT-132-001__tech-duixiangyu-evidence-pack-schema-shixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-132/TASK-FEAT-132-001__tech-duixiangyu-evidence-pack-schema-shixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-134/TASK-FEAT-134-001__l3-jieduanmobandingyishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-134/TASK-FEAT-134-001__l3-jieduanmobandingyishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-140/TASK-FEAT-140-001__gongxiangshuruguifanyuzhiliguizeshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-140/TASK-FEAT-140-001__gongxiangshuruguifanyuzhiliguizeshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-142/TASK-FEAT-142-001__qazichanssothexinmoxingyufangzhicelvekuozhan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-142/TASK-FEAT-142-001__qazichanssothexinmoxingyufangzhicelvekuozhan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-142/TASK-FEAT-142-002__qap0xiaoyanguizejiyubangdingjianchaclishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-142/TASK-FEAT-142-002__qap0xiaoyanguizejiyubangdingjianchaclishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-001__zhixingrukouguifanyu-ssot-sanzhoubangdingqiyueding.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-001__zhixingrukouguifanyu-ssot-sanzhoubangdingqiyueding.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-002__entryrouter-yu-bypassblocker-hexinzujianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-002__entryrouter-yu-bypassblocker-hexinzujianshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-003__chainvalidator-yulianluwanzhengxingxiaoyanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-003__chainvalidator-yulianluwanzhengxingxiaoyanshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-004__auditlogger-yushenjicunchucengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-004__auditlogger-yushenjicunchucengshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-005__cli-minglingjichengyuduandaoduanyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-005__cli-minglingjichengyuduandaoduanyanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-006__zhixingrukouguifanhuaceshiyuyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-006__zhixingrukouguifanhuaceshiyuyanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-145/TASK-FEAT-145-001__cligaocengminglingkuangjiayuhexinminglingshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-145/TASK-FEAT-145-001__cligaocengminglingkuangjiayuhexinminglingshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-145/TASK-FEAT-145-002__bianjiefanghuyuzhililianshenjijizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-145/TASK-FEAT-145-002__bianjiefanghuyuzhililianshenjijizhi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-159/TASK-FEAT-159-001__hexinceshiyinqing-ceshiqidiaodukuangjia.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-159/TASK-FEAT-159-001__hexinceshiyinqing-ceshiqidiaodukuangjia.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-159/TASK-FEAT-159-002__hexinceshiyinqing-caiyanghuancunzengliangjizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-159/TASK-FEAT-159-002__hexinceshiyinqing-caiyanghuancunzengliangjizhi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-160/TASK-FEAT-160-001__schemaceshiqi-jiegouheguiyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-160/TASK-FEAT-160-001__schemaceshiqi-jiegouheguiyanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-161/TASK-FEAT-161-001__traceceshiqi-lianluzhuisuyufugailv.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-161/TASK-FEAT-161-001__traceceshiqi-lianluzhuisuyufugailv.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-162/TASK-FEAT-162-001__semanticceshiqi-yuyiyizhixingyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-162/TASK-FEAT-162-001__semanticceshiqi-yuyiyizhixingyanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-163/TASK-FEAT-163-001__overlapceshiqi-gongnengzhongdiejiance.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-163/TASK-FEAT-163-001__overlapceshiqi-gongnengzhongdiejiance.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-164/TASK-FEAT-164-001__replayceshiqi-wendingxingyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-164/TASK-FEAT-164-001__replayceshiqi-wendingxingyanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-165/TASK-FEAT-165-001__executableceshiqi-kezhixingxingpinggu.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-165/TASK-FEAT-165-001__executableceshiqi-kezhixingxingpinggu.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-166/TASK-FEAT-166-001__tongyibaogaogeshishengchengqi-baogaoxuanranyinqing.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-166/TASK-FEAT-166-001__tongyibaogaogeshishengchengqi-baogaoxuanranyinqing.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-167/TASK-FEAT-167-001__huangjinyangbenjiguanli-yangbenbanbenguanli.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-167/TASK-FEAT-167-001__huangjinyangbenjiguanli-yangbenbanbenguanli.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-168/TASK-FEAT-168-001__ci-cdjicheng-cliyucimoban.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-168/TASK-FEAT-168-001__ci-cdjicheng-cliyucimoban.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-000__zhixingqipeizhiyouxianjiyuyanzhengguizeguifan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-000__zhixingqipeizhiyouxianjiyuyanzhengguizeguifan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-001__zhixingqileixingmeijuyushujumoxingdingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-001__zhixingqileixingmeijuyushujumoxingdingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-002__zhixingqipeizhijiexiqiyuyanzhengqishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-002__zhixingqipeizhijiexiqiyuyanzhengqishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-003__cli-minglingjichengyupeizhitouchuan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-003__cli-minglingjichengyupeizhitouchuan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-004__peizhiwenjianjiazaiqikuozhanyuxianghoujianrong.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-004__peizhiwenjianjiazaiqikuozhanyuxianghoujianrong.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-005__duandaoduanceshiyuyanshouyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-005__duandaoduanceshiyuyanshouyanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-170/TASK-FEAT-170-001__qwenzhixingqigongchangzhuceyushilihua.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-170/TASK-FEAT-170-001__qwenzhixingqigongchangzhuceyushilihua.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-170/TASK-FEAT-170-002__qwenprofilejiexiheyichangdingwei.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-170/TASK-FEAT-170-002__qwenprofilejiexiheyichangdingwei.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-171/TASK-FEAT-171-001__qwen-zhixingqishixianyu-cli-fengzhuang.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-171/TASK-FEAT-171-001__qwen-zhixingqishixianyu-cli-fengzhuang.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-171/TASK-FEAT-171-002__zhixingjieguoguiyihuacengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-171/TASK-FEAT-171-002__zhixingjieguoguiyihuacengshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-172/TASK-FEAT-172-001__workflowshilizhixingqishangxiawenchijiuhua.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-172/TASK-FEAT-172-001__workflowshilizhixingqishangxiawenchijiuhua.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-172/TASK-FEAT-172-002__duozhixingqibingfageliheyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-172/TASK-FEAT-172-002__duozhixingqibingfageliheyanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-173/TASK-FEAT-173-001__zhongwenjizhunyangbenyupingguijianshe.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-173/TASK-FEAT-173-001__zhongwenjizhunyangbenyupingguijianshe.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-173/TASK-FEAT-173-002__qwenzhilianghuiguiyuallbackjizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-173/TASK-FEAT-173-002__qwenzhilianghuiguiyuallbackjizhi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-001/TASK-FEAT-SRC-009-001-001__l2gongzuoliuguifanyujiegoudingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-001/TASK-FEAT-SRC-009-001-001__l2gongzuoliuguifanyujiegoudingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-001/TASK-FEAT-SRC-009-001-002__l2gongzuoliumobanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-001/TASK-FEAT-SRC-009-001-002__l2gongzuoliumobanshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-001/TASK-FEAT-SRC-009-001-003__yunxingshijichengyuagent-contractbangding.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-001/TASK-FEAT-SRC-009-001-003__yunxingshijichengyuagent-contractbangding.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-001/TASK-FEAT-SRC-009-001-004__yanzhengceshiyuwendangzhili.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-001/TASK-FEAT-SRC-009-001-004__yanzhengceshiyuwendangzhili.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-002/TASK-FEAT-SRC-009-002-001__bugfix-l2-gongzuoliuguifanyujiegoudingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-002/TASK-FEAT-SRC-009-002-001__bugfix-l2-gongzuoliuguifanyujiegoudingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-002/TASK-FEAT-SRC-009-002-002__bugfix-l2-gongzuoliumobanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-002/TASK-FEAT-SRC-009-002-002__bugfix-l2-gongzuoliumobanshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-002/TASK-FEAT-SRC-009-002-003__bugfix-l3-ziliuchengmobanyu-agent-contract-bangdin.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-002/TASK-FEAT-SRC-009-002-003__bugfix-l3-ziliuchengmobanyu-agent-contract-bangdin.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-002/TASK-FEAT-SRC-009-002-004__bugfix-lidukongzhicelveyuzhuangtaijishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-002/TASK-FEAT-SRC-009-002-004__bugfix-lidukongzhicelveyuzhuangtaijishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-002/TASK-FEAT-SRC-009-002-005__yanzhengceshiyuwendangzhili.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-002/TASK-FEAT-SRC-009-002-005__yanzhengceshiyuwendangzhili.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-001__tech-duixiang-schema-guifandingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-001__tech-duixiang-schema-guifandingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-002__feat-tech-yingsheguizeguifandingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-002__feat-tech-yingsheguizeguifandingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-003__tech-implementation-jiaofuguizeguifandingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-003__tech-implementation-jiaofuguizeguifandingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-004__tech-shejipingshen-checklist-dingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-004__tech-shejipingshen-checklist-dingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-005__tech-wendangmobanyushilichuangjian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-005__tech-wendangmobanyushilichuangjian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-006__tech-qiyueyanzhengceshishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-003/TASK-FEAT-SRC-009-003-006__tech-qiyueyanzhengceshishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-004/TASK-FEAT-SRC-009-004-001__evidence-pack-schema-jiegoudingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-004/TASK-FEAT-SRC-009-004-001__evidence-pack-schema-jiegoudingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-004/TASK-FEAT-SRC-009-004-002__evidence-pack-mobanyumulujiegoushixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-004/TASK-FEAT-SRC-009-004-002__evidence-pack-mobanyumulujiegoushixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-004/TASK-FEAT-SRC-009-004-003__l2-gongzuoliujichengjiekouguifan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-004/TASK-FEAT-SRC-009-004-003__l2-gongzuoliujichengjiekouguifan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-004/TASK-FEAT-SRC-009-004-004__shenjizhuisuguizedingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-004/TASK-FEAT-SRC-009-004-004__shenjizhuisuguizedingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-004/TASK-FEAT-SRC-009-004-005__l3-evidence-pack-jieduanguifanduiqi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-004/TASK-FEAT-SRC-009-004-005__l3-evidence-pack-jieduanguifanduiqi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-005/TASK-FEAT-SRC-009-005-001__contract-design-jieduanguifanyujiegoudingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-005/TASK-FEAT-SRC-009-005-001__contract-design-jieduanguifanyujiegoudingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-005/TASK-FEAT-SRC-009-005-002__contract-design-l3-gongzuoliumobanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-005/TASK-FEAT-SRC-009-005-002__contract-design-l3-gongzuoliumobanshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-005/TASK-FEAT-SRC-009-005-003__contract-design-yunxingshijichengyu-agent-gate-ban.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-005/TASK-FEAT-SRC-009-005-003__contract-design-yunxingshijichengyu-agent-gate-ban.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-005/TASK-FEAT-SRC-009-005-004__contract-design-testset-shejiyuyanzhengyonglishixi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-005/TASK-FEAT-SRC-009-005-004__contract-design-testset-shejiyuyanzhengyonglishixi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-005/TASK-FEAT-SRC-009-005-005__contract-design-wendangzhiliyurukougengxin.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-005/TASK-FEAT-SRC-009-005-005__contract-design-wendangzhiliyurukougengxin.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-006/TASK-FEAT-SRC-009-006-001__l3-backend-development-jieduanguifandingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-006/TASK-FEAT-SRC-009-006-001__l3-backend-development-jieduanguifandingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-006/TASK-FEAT-SRC-009-006-002__l3-backend-development-workflow-mobanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-006/TASK-FEAT-SRC-009-006-002__l3-backend-development-workflow-mobanshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-006/TASK-FEAT-SRC-009-006-003__tdd-fugailvmenjinyunxingshijicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-006/TASK-FEAT-SRC-009-006-003__tdd-fugailvmenjinyunxingshijicheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-006/TASK-FEAT-SRC-009-006-004__l3-backend-jieduanyanzhengceshi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-006/TASK-FEAT-SRC-009-006-004__l3-backend-jieduanyanzhengceshi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-006/TASK-FEAT-SRC-009-006-005__l3-backend-wendangqianyiyujiurukoufengjin.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-006/TASK-FEAT-SRC-009-006-005__l3-backend-wendangqianyiyujiurukoufengjin.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-007/TASK-FEAT-SRC-009-007-001__l3-frontend-development-jieduanguifandingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-007/TASK-FEAT-SRC-009-007-001__l3-frontend-development-jieduanguifandingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-007/TASK-FEAT-SRC-009-007-002__utdd-xunhuanmobanyu-tdd-guifanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-007/TASK-FEAT-SRC-009-007-002__utdd-xunhuanmobanyu-tdd-guifanshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-007/TASK-FEAT-SRC-009-007-003__l3-frontend-gongzuoliumobanyuyunxingshijiexian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-007/TASK-FEAT-SRC-009-007-003__l3-frontend-gongzuoliumobanyuyunxingshijiexian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-007/TASK-FEAT-SRC-009-007-004__jieduanshuchuwuguifanyuzhengjuyaoqiudingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-007/TASK-FEAT-SRC-009-007-004__jieduanshuchuwuguifanyuzhengjuyaoqiudingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-007/TASK-FEAT-SRC-009-007-005__jieduanwendangdongjieyu-readme-gengxin.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-007/TASK-FEAT-SRC-009-007-005__jieduanwendangdongjieyu-readme-gengxin.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-008/TASK-FEAT-SRC-009-008-001__integration-jieduanguifanyujiegoudingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-008/TASK-FEAT-SRC-009-008-001__integration-jieduanguifanyujiegoudingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-008/TASK-FEAT-SRC-009-008-002__integrationplanner-yu-integrationverifier-guifansh.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-008/TASK-FEAT-SRC-009-008-002__integrationplanner-yu-integrationverifier-guifansh.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-008/TASK-FEAT-SRC-009-008-003__structuralissuerouter-yuhuigunbianjiedingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-008/TASK-FEAT-SRC-009-008-003__structuralissuerouter-yuhuigunbianjiedingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-008/TASK-FEAT-SRC-009-008-004__integrationreporter-yu-evidence-pack-jiaojieguifan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-008/TASK-FEAT-SRC-009-008-004__integrationreporter-yu-evidence-pack-jiaojieguifan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-008/TASK-FEAT-SRC-009-008-005__wanchengbiaozhunyuzhidingyiyukelianghuayanzhenggui.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-008/TASK-FEAT-SRC-009-008-005__wanchengbiaozhunyuzhidingyiyukelianghuayanzhenggui.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-009/TASK-FEAT-SRC-009-009-001__evidence-pack-stage-guifanyuschemadingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-009/TASK-FEAT-SRC-009-009-001__evidence-pack-stage-guifanyuschemadingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-009/TASK-FEAT-SRC-009-009-002__l3evidencepackjieduanmobanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-009/TASK-FEAT-SRC-009-009-002__l3evidencepackjieduanmobanshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-009/TASK-FEAT-SRC-009-009-003__evidencepackyunshishishoujiqishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-009/TASK-FEAT-SRC-009-009-003__evidencepackyunshishishoujiqishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-009/TASK-FEAT-SRC-009-009-004__evidencepackyanzhengqiyuwanzhengxingjishenshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-009/TASK-FEAT-SRC-009-009-004__evidencepackyanzhengqiyuwanzhengxingjishenshixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-009/TASK-FEAT-SRC-009-009-005__evidencepackceshiyanyanzhengtaojian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-009/TASK-FEAT-SRC-009-009-005__evidencepackceshiyanyanzhengtaojian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-010/TASK-FEAT-SRC-009-010-001__jiulujingjiangjizhiliguifandingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-010/TASK-FEAT-SRC-009-010-001__jiulujingjiangjizhiliguifandingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-010/TASK-FEAT-SRC-009-010-002__dev-bumen-readme-he-workflows-wendangqianyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-010/TASK-FEAT-SRC-009-010-002__dev-bumen-readme-he-workflows-wendangqianyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-010/TASK-FEAT-SRC-009-010-003__jiulujing-workflow-wenjiantoububiaojishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-010/TASK-FEAT-SRC-009-010-003__jiulujing-workflow-wenjiantoububiaojishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-010/TASK-FEAT-SRC-009-010-004__jiulujinghuoyuedujiankongjizhishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-010/TASK-FEAT-SRC-009-010-004__jiulujinghuoyuedujiankongjizhishixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-010/TASK-FEAT-SRC-009-010-005__jiulujingjiangjiyanzhengceshisheji.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-010/TASK-FEAT-SRC-009-010-005__jiulujingjiangjiyanzhengceshisheji.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-011/TASK-FEAT-SRC-009-011-001__gongxiangshuruguifan-jiegoudingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-011/TASK-FEAT-SRC-009-011-001__gongxiangshuruguifan-jiegoudingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-011/TASK-FEAT-SRC-009-011-002__shuruyanzheng-checklist-shixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-011/TASK-FEAT-SRC-009-011-002__shuruyanzheng-checklist-shixian.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-011/TASK-FEAT-SRC-009-011-003__workflow-mulu-gongxiangguifan-jicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-011/TASK-FEAT-SRC-009-011-003__workflow-mulu-gongxiangguifan-jicheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-011/TASK-FEAT-SRC-009-011-004__gongxiangshuruguifan-ceshiyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-011/TASK-FEAT-SRC-009-011-004__gongxiangshuruguifan-ceshiyanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-011/TASK-FEAT-SRC-009-011-005__gongxiangshuruguifan-wendangqianyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-011/TASK-FEAT-SRC-009-011-005__gongxiangshuruguifan-wendangqianyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-012/TASK-FEAT-SRC-009-012-001__bugfix-lidukongzhi-guifandingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-012/TASK-FEAT-SRC-009-012-001__bugfix-lidukongzhi-guifandingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-012/TASK-FEAT-SRC-009-012-002__batch-lishenpi-liuchengsheji.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-012/TASK-FEAT-SRC-009-012-002__batch-lishenpi-liuchengsheji.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-012/TASK-FEAT-SRC-009-012-003__lidu-hegui-jianchajianbiaosheji.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-012/TASK-FEAT-SRC-009-012-003__lidu-hegui-jianchajianbiaosheji.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/FEAT-SRC-009-012/TASK-FEAT-SRC-009-012-004__heguiIv-tongjifangfadingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-SRC-009-012/TASK-FEAT-SRC-009-012-004__heguiIv-tongjifangfadingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-001__fitness-rule-schema-json-dingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-001__fitness-rule-schema-json-dingyi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-002__fitness-rule-schema-yanzheng-gongju.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-002__fitness-rule-schema-yanzheng-gongju.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-003__fitness-rule-zhengju-bangding-yu-shenji-rizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-003__fitness-rule-zhengju-bangding-yu-shenji-rizhi.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-004__fitness-rule-yanzheng-ceshi-ji-yu-menjin-jicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-004__fitness-rule-yanzheng-ceshi-ji-yu-menjin-jicheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-001/TECH-FEAT-SRC-001__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-001/TECH-FEAT-SRC-001__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-002/TECH-FEAT-SRC-002__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-002/TECH-FEAT-SRC-002__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-003/TECH-FEAT-SRC-003__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-003/TECH-FEAT-SRC-003__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-004/TECH-FEAT-SRC-004__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-004/TECH-FEAT-SRC-004__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-005/TECH-FEAT-SRC-005__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-005/TECH-FEAT-SRC-005__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-006/TECH-FEAT-SRC-006__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-006/TECH-FEAT-SRC-006__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-007/TECH-FEAT-SRC-007__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-007/TECH-FEAT-SRC-007__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-008/TECH-FEAT-SRC-008__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-008/TECH-FEAT-SRC-008__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-009/TECH-FEAT-100-001__raw-to-src-workflow-dulirukou-jishu-fangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-009/TECH-FEAT-100-001__raw-to-src-workflow-dulirukou-jishu-fangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-009/TECH-FEAT-101-001__src-to-epic-bianjiejinghua-jishu-fangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-009/TECH-FEAT-101-001__src-to-epic-bianjiejinghua-jishu-fangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-009/TECH-FEAT-102-001__src-geshiyuzhucejizhi-jishu-fangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-009/TECH-FEAT-102-001__src-geshiyuzhucejizhi-jishu-fangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-009/TECH-FEAT-103-001__fencengqiyueyuyanzheng-jishu-fangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-009/TECH-FEAT-103-001__fencengqiyueyuyanzheng-jishu-fangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-009/TECH-FEAT-104-001__workflow-zhucebiaofenceng-jishu-fangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-009/TECH-FEAT-104-001__workflow-zhucebiaofenceng-jishu-fangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-009/TECH-FEAT-105-001__fencengbushuhejiankangjiancha-jishu-fangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-009/TECH-FEAT-105-001__fencengbushuhejiankangjiancha-jishu-fangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-009/TECH-FEAT-SRC-009__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-009/TECH-FEAT-SRC-009__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-010/TECH-FEAT-SRC-010__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-010/TECH-FEAT-SRC-010__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-011/TECH-FEAT-169-001__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-011/TECH-FEAT-169-001__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-011/TECH-FEAT-169-002__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-011/TECH-FEAT-169-002__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-011/TECH-FEAT-169-003__frozen-technical-architecture-contract.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-011/TECH-FEAT-169-003__frozen-technical-architecture-contract.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-011/TECH-FEAT-169-004__feat-169-frozen-technical-architecture-xitongpeizh.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-011/TECH-FEAT-169-004__feat-169-frozen-technical-architecture-xitongpeizh.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-011/TECH-FEAT-170-001__qwenzhixingqigongchangshilihua-jishufangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-011/TECH-FEAT-170-001__qwenzhixingqigongchangshilihua-jishufangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-011/TECH-FEAT-171-001__runner-diaodu-qwenzhixingqiyujieguoguifanhuajishufangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-011/TECH-FEAT-171-001__runner-diaodu-qwenzhixingqiyujieguoguifanhuajishufangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-011/TECH-FEAT-172-001__workflow-shilizhixingqishangxiawenyugeli-jishufangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-011/TECH-FEAT-172-001__workflow-shilizhixingqishangxiawenyugeli-jishufangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-011/TECH-FEAT-173-001__qwenzhongwenchangjingzhiliangyanzhengyuhuiguihuijijishufangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-011/TECH-FEAT-173-001__qwenzhongwenchangjingzhiliangyanzhengyuhuiguihuijijishufangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-011/TECH-FEAT-SRC-011__qwenzhixingqijierupici-jishuzonglan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-011/TECH-FEAT-SRC-011__qwenzhixingqijierupici-jishuzonglan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-012/TECH-FEAT-SRC-012__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-012/TECH-FEAT-SRC-012__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-059/FEAT-SRC-059-001/TECH-FEAT-SRC-059-001__fitness-rule-schema-jishu-sheji.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-059/FEAT-SRC-059-001/TECH-FEAT-SRC-059-001__fitness-rule-schema-jishu-sheji.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-012-001__cli-xianshixuanzezhixingqinenglijizhufangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-012-001__cli-xianshixuanzezhixingqinenglijizhufangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-012-002__morenzhixingqipeizhinenglijizhufangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-012-002__morenzhixingqipeizhinenglijizhufangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-012-003__kimi-zhixingqiyunxingshijichengshipeijizhufangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-012-003__kimi-zhixingqiyunxingshijichengshipeijizhufangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-080-001__feat-080-climinglingcengjizhonggoujizhujiagou.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-080-001__feat-080-climinglingcengjizhonggoujizhujiagou.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-081-001__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-081-001__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-082-001__formal-object-yuanshujuzidongjichengjizhi-frozen-j.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-082-001__formal-object-yuanshujuzidongjichengjizhi-frozen-j.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-083-001__cli-wendangyubangzhuxitongtongyizhili-jizhujiagou.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-083-001__cli-wendangyubangzhuxitongtongyizhili-jizhujiagou.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-084-001__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-084-001__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-085-001__claude-code-liushishuchunengli-jishu-fangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-085-001__claude-code-liushishuchunengli-jishu-fangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-086-001__zhixingzhuangtaikeshihua-jishu-fangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-086-001__zhixingzhuangtaikeshihua-jishu-fangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-087-001__huihuahuifunengli-jishu-fangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-087-001__huihuahuifunengli-jishu-fangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-088-001__zhixingbianjieqingxihua-jishu-fangan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-088-001__zhixingbianjieqingxihua-jishu-fangan.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-090-001__branch-yu-worktree-bingxingkaifaxiazhengshi-ssot-b.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-090-001__branch-yu-worktree-bingxingkaifaxiazhengshi-ssot-b.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-001__qazhixingrukouguifanhua-frozenjizhujiagou.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-001__qazhixingrukouguifanhua-frozenjizhujiagou.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-002__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-002__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-003__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-003__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-004__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-004__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-005__qa-zhixingrukouguifanhua.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-005__qa-zhixingrukouguifanhua.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-006__qa-zhixingrukouguifanhua.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-006__qa-zhixingrukouguifanhua.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-007__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-007__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-008__qa-zhixingrukouguifanhua.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-008__qa-zhixingrukouguifanhua.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-009__feat-143-qa-zhixingrukouguifanhua-dongjiejizhujiag.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-009__feat-143-qa-zhixingrukouguifanhua-dongjiejizhujiag.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-010__feat-143-qa-zhixingrukouguifanhua-frozen-technical.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-010__feat-143-qa-zhixingrukouguifanhua-frozen-technical.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-011__feat-143-qa-zhixingrukouguifanhua-frozen-technical.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-011__feat-143-qa-zhixingrukouguifanhua-frozen-technical.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-012__feat-143-qa-zhixingrukouguifanhua-frozen-technical.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-012__feat-143-qa-zhixingrukouguifanhua-frozen-technical.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-013__feat-143-dongjiejizhujiagou.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-013__feat-143-dongjiejizhujiagou.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-014__frozen-technical-architecture-contract.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-014__frozen-technical-architecture-contract.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-015__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-015__tech-design.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-016__frozen-technical-architecture-contract.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-NO-SOURCE/TECH-FEAT-143-016__frozen-technical-architecture-contract.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/testing/testsets/TESTSET-FEAT-SRC-009-005-001__contract-design-stage-testset.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/testing/testsets/TESTSET-FEAT-SRC-009-005-001__contract-design-stage-testset.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/testing/testsets/TESTSET-FEAT-SRC-009-006-001__backend-development-stage-testset.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/testing/testsets/TESTSET-FEAT-SRC-009-006-001__backend-development-stage-testset.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/testing/testsets/TESTSET-FEAT-SRC-009-009-001__evidence-pack-stage-testset.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/testing/testsets/TESTSET-FEAT-SRC-009-009-001__evidence-pack-stage-testset.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/testing/testsets/TESTSET-FEAT-SRC-009-010-001__deprecated-path-governance-testset.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/testing/testsets/TESTSET-FEAT-SRC-009-010-001__deprecated-path-governance-testset.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/testing/testsets/TESTSET-FEAT-SRC-009-011-001__shared-input-schema-testset.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/testing/testsets/TESTSET-FEAT-SRC-009-011-001__shared-input-schema-testset.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "spec/testsets/SRC-059/FEAT-SRC-059-001/TESTSET-FEAT-SRC-059-001__fitness-rule-schema-yanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/testsets/SRC-059/FEAT-SRC-059-001/TESTSET-FEAT-SRC-059-001__fitness-rule-schema-yanzheng.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "tests/bugs/BUG-FEAT-071-001__lishi-workflow-shengchengbuguifan-ssot.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/tests/bugs/BUG-FEAT-071-001__lishi-workflow-shengchengbuguifan-ssot.md",
+    "action": "deprecated"
+  },
+  {
+    "original": "tests/bugs/BUG-FEAT-071-002__epic-to-feat-shangxiayucuoweidaozhineirongcuowu.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/tests/bugs/BUG-FEAT-071-002__epic-to-feat-shangxiayucuoweidaozhineirongcuowu.md",
+    "action": "deprecated"
+  }
+]
