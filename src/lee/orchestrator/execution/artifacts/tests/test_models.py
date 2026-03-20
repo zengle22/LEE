@@ -6,11 +6,12 @@ import pytest
 from datetime import datetime
 from pathlib import Path
 
-from lee.orchestrator.execution.artifacts.models import ArtifactMetadata, RunManifest
+from lee.orchestrator.execution.artifacts.models import ArtifactMetadata, RunManifest, SSOTMetadata
 from lee.orchestrator.execution.artifacts.types import (
     ArtifactType,
     ArtifactStatus,
     AdoptMode,
+    SSOTType,
 )
 
 
@@ -249,6 +250,21 @@ class TestRunManifest:
 
         with pytest.raises(ValueError, match="already exists"):
             manifest.add_artifact(artifact)
+
+
+class TestSSOTMetadata:
+    """测试 SSOTMetadata 数据模型"""
+
+    def test_slug_preserves_chinese_title(self):
+        metadata = SSOTMetadata(
+            id="ADR-001",
+            type=SSOTType.ADR,
+            title="完成条件防腐层",
+            status=ArtifactStatus.ACTIVE,
+        )
+
+        assert metadata.slug == "完成条件防腐层"
+        assert metadata.filename == "ADR-001__完成条件防腐层.md"
 
     def test_get_artifact(self):
         """测试获取产出物"""

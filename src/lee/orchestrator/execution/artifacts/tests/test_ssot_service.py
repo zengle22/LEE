@@ -153,3 +153,30 @@ def test_ssot_service_formalize_returns_replacements():
         assert "FEAT" in result["grouped_ids"]
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_ssot_validator_accepts_chinese_slug_without_warning():
+    temp_dir = Path(tempfile.mkdtemp())
+    try:
+        manager = ArtifactManager(root_path=temp_dir / ".artifacts", project_root=temp_dir)
+
+        src = manager.create_ssot(
+            ssot_type=SSOTType.SRC,
+            title="治理来源",
+            content="# 治理来源\n",
+            run_id="run-ssot-validator-003",
+        )
+        adr = manager.create_ssot(
+            ssot_type=SSOTType.ADR,
+            title="完成条件防腐层",
+            content="# 完成条件防腐层\n",
+            run_id="run-ssot-validator-003",
+            source_refs=[src.id],
+        )
+
+        validator = SSOTValidator(manager.registry)
+        result = validator.validate_p1(adr.id)
+
+        assert all("slug" not in warning for warning in result.warnings)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)

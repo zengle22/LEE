@@ -698,6 +698,7 @@ from .id_parser import (
     validate_id_format,
     validate_parent_consistency,
 )
+from .id_generator import SSOTIDGenerator
 from .types import SSOTType, ObjectCategory
 
 
@@ -1113,6 +1114,5 @@ class SSOTValidator:
             result.add_warning(f"slug 长度超过 50 字符: {slug}")
 
         # 检查 slug 字符
-        import re
-        if not re.match(r"^[a-z0-9-]*$", slug):
+        if slug != SSOTIDGenerator().generate_slug(slug, explicit_slug=slug):
             result.add_warning(f"slug 包含非标准字符: {slug}")

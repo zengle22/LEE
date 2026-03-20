@@ -19,13 +19,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
-# pinyin 库，用于中文转拼音
-try:
-    import pinyin
-    HAS_PINYIN = True
-except ImportError:
-    HAS_PINYIN = False
-
 from .types import SSOTType, ObjectCategory
 from .placement import resolve_ssot_relative_dir, resolve_src_root_id
 
@@ -368,15 +361,14 @@ class SSOTIDGenerator:
         """
         生成 slug
 
-        算法 (固定 8 步):
+        算法 (固定 7 步):
         1. 若显式提供 slug，使用该 slug；否则从 title 生成
-        2. 中文字符转拼音 (使用 pinyin 库)
-        3. 全量转小写
-        4. 非 [a-z0-9] 字符替换为 -
+        2. 全量转小写（中文保持不变）
+        3. 空白折叠为 -
+        4. 非 Unicode 词字符/连字符 替换为 -
         5. 合并连续 - 为单个 -
-        6. 去除首尾 -
-        7. 截断至 50 字符
-        8. 若为空，回退为 "untitled"
+        6. 去除首尾分隔符
+        7. 截断至 50 字符；若为空则回退为 "untitled"
 
         Args:
             title: 标题
@@ -388,30 +380,27 @@ class SSOTIDGenerator:
         # 步骤 1
         slug = explicit_slug if explicit_slug else title
 
-        # 步骤 2: 中文转拼音
-        if not explicit_slug and HAS_PINYIN:
-            # 使用 pinyin 库转换
-            slug = pinyin.get(slug, format="strip")
-
-        # 步骤 3: 转小写
+        # 步骤 2: 转小写（中文等非大小写字符保持不变）
         slug = slug.lower()
 
-        # 步骤 4: 非字母数字替换为 -
-        slug = re.sub(r"[^a-z0-9]", "-", slug)
+        # 步骤 3: 空白折叠为 -
+        slug = re.sub(r"\s+", "-", slug, flags=re.UNICODE)
+
+        # 步骤 4: 保留 Unicode 词字符和连字符，其他替换为 -
+        slug = re.sub(r"[^\w-]", "-", slug, flags=re.UNICODE)
 
         # 步骤 5: 合并连续 -
         slug = re.sub(r"-+", "-", slug)
 
-        # 步骤 6: 去除首尾 -
-        slug = slug.strip("-")
+        # 步骤 6: 去除首尾分隔符
+        slug = slug.strip(" .-_")
 
         # 步骤 7: 截断至 50 字符
         if len(slug) > 50:
             slug = slug[:50]
-            # 避免截断到 - 结尾
-            slug = slug.rstrip("-")
+            slug = slug.rstrip(" .-_")
 
-        # 步骤 8: 回退
+        # 回退
         if not slug:
             slug = "untitled"
 

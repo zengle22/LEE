@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from .types import ArtifactType, ArtifactStatus, AdoptMode, GovernanceKind, SSOTType
 from lee.orchestrator.core.path_policy import ARTIFACTS_SUBDIRS
+from .id_generator import SSOTIDGenerator
 
 
 @dataclass
@@ -261,12 +262,7 @@ class SSOTMetadata:
     @property
     def slug(self) -> str:
         """从标题提取 slug"""
-        # 简单实现：去除非字母数字，转小写，空格替换为 -
-        import re
-        slug = re.sub(r"[^a-zA-Z0-9\s]", "", self.title)
-        slug = slug.lower().strip()
-        slug = re.sub(r"\s+", "-", slug)
-        return slug[:50] if slug else "untitled"
+        return SSOTIDGenerator().generate_slug(self.title)
 
     @property
     def filename(self) -> str:
