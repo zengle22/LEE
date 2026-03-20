@@ -378,6 +378,18 @@ class TestArtifactManager:
         assert testset.path.startswith(f"spec/testing/testsets/{src.id}/")
         assert testset.properties["placement_dir"] == f"spec/testing/testsets/{src.id}"
 
+    def test_create_ssot_preserves_chinese_slug_in_filename(self, manager):
+        """测试正式 SSOT 文件名保留中文 slug"""
+        adr = manager.create_ssot(
+            ssot_type=SSOTType.ADR,
+            title="完成条件防腐层",
+            content="# ADR\n",
+            run_id="run-ssot-adr",
+        )
+
+        assert adr.path == "spec/adr/ADR-001__完成条件防腐层.md"
+        assert adr.absolute_path.exists()
+
     def test_create_ssot_writes_workflow_instance_id_front_matter(self, manager):
         metadata = manager.create_ssot(
             ssot_type=SSOTType.FEAT,

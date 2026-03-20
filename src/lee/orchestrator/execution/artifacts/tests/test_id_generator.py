@@ -129,11 +129,14 @@ class TestSSOTIDGenerator:
         assert slug == "generate-weekly-plan"
 
     def test_generate_slug_chinese(self, generator):
-        """测试中文 slug 生成 (如果 pinyin 库可用)"""
+        """测试中文 slug 生成保留中文"""
         slug = generator.generate_slug("生成周计划")
-        assert slug
-        assert slug == slug.lower()
-        assert all(c.isalnum() or c == "-" for c in slug)
+        assert slug == "生成周计划"
+
+    def test_generate_slug_mixed_title_preserves_chinese(self, generator):
+        """测试中英混合标题保留中文并规范分隔符"""
+        slug = generator.generate_slug("完成条件：防腐层 / Fitness Function")
+        assert slug == "完成条件-防腐层-fitness-function"
 
     def test_generate_slug_truncation(self, generator):
         """测试 slug 截断"""
@@ -162,6 +165,15 @@ class TestSSOTIDGenerator:
             ext="md"
         )
         assert filename == "FEAT-SRC-001-001__generate-weekly-plan.md"
+
+    def test_generate_filename_with_chinese_slug(self, generator):
+        """测试中文标题生成中文文件名"""
+        filename = generator.generate_filename(
+            ssot_type=SSOTType.ADR,
+            title="完成条件防腐层",
+            ext="md",
+        )
+        assert filename == "ADR-001__完成条件防腐层.md"
 
     def test_generate_filename_with_parent(self, generator):
         """测试带 parent_id 生成文件名"""

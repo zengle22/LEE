@@ -26,7 +26,7 @@
 
 - `identity_kind`: `ssot | non_ssot`
 - `ssot_type`: `SRC | EPIC | FEAT | UI | TECH | TASK | TESTSET | TC | BUG | REPORT | ADR | EVI`
-- `title`: 供 SSOT filename slug 生成
+- `title`: 供 SSOT filename slug 生成；slug 可直接保留中文
 - `parent`: 引用本 contract 内其他输出的符号名
 - `derived_from`
 - `source_refs`
