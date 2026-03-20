@@ -1,0 +1,378 @@
+❌ SSOT lint failed:
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\adr\ADR-028__ssot-requirement-axis-acceptance-governance.md: filename ID ADR-028 != front matter id ADR-025
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\testing\testsets\TESTSET-FEAT-SRC-009-005-001__contract-design-stage-testset.md: expected placement spec/testing/testsets/SRC-009 for TESTSET-FEAT-SRC-009-005-001, got spec/testing/testsets
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\testing\testsets\TESTSET-FEAT-SRC-009-006-001__backend-development-stage-testset.md: expected placement spec/testing/testsets/SRC-009 for TESTSET-FEAT-SRC-009-006-001, got spec/testing/testsets
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\testing\testsets\TESTSET-FEAT-SRC-009-009-001__evidence-pack-stage-testset.md: expected placement spec/testing/testsets/SRC-009 for TESTSET-FEAT-SRC-009-009-001, got spec/testing/testsets
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\testing\testsets\TESTSET-FEAT-SRC-009-010-001__deprecated-path-governance-testset.md: expected placement spec/testing/testsets/SRC-009 for TESTSET-FEAT-SRC-009-010-001, got spec/testing/testsets
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\testing\testsets\TESTSET-FEAT-SRC-009-011-001__shared-input-schema-testset.md: expected placement spec/testing/testsets/SRC-009 for TESTSET-FEAT-SRC-009-011-001, got spec/testing/testsets
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-001\TECH-FEAT-SRC-001__tech-design.md: expected placement spec/tech/SRC-009 for TECH-FEAT-SRC-001, got spec/tech/SRC-001
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-002\TECH-FEAT-SRC-002__tech-design.md: expected placement spec/tech/SRC-009 for TECH-FEAT-SRC-002, got spec/tech/SRC-002
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-003\TECH-FEAT-SRC-003__tech-design.md: expected placement spec/tech/SRC-009 for TECH-FEAT-SRC-003, got spec/tech/SRC-003
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-004\TECH-FEAT-SRC-004__tech-design.md: expected placement spec/tech/SRC-009 for TECH-FEAT-SRC-004, got spec/tech/SRC-004
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-005\TECH-FEAT-SRC-005__tech-design.md: expected placement spec/tech/SRC-009 for TECH-FEAT-SRC-005, got spec/tech/SRC-005
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-006\TECH-FEAT-SRC-006__tech-design.md: expected placement spec/tech/SRC-009 for TECH-FEAT-SRC-006, got spec/tech/SRC-006
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-007\TECH-FEAT-SRC-007__tech-design.md: expected placement spec/tech/SRC-009 for TECH-FEAT-SRC-007, got spec/tech/SRC-007
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-008\TECH-FEAT-SRC-008__tech-design.md: expected placement spec/tech/SRC-009 for TECH-FEAT-SRC-008, got spec/tech/SRC-008
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-009\TECH-FEAT-100-001__raw-to-src-workflow-dulirukou-jishu-fangan.md: expected placement spec/tech for TECH-FEAT-100-001, got spec/tech/SRC-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-009\TECH-FEAT-101-001__src-to-epic-bianjiejinghua-jishu-fangan.md: expected placement spec/tech for TECH-FEAT-101-001, got spec/tech/SRC-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-009\TECH-FEAT-102-001__src-geshiyuzhucejizhi-jishu-fangan.md: expected placement spec/tech for TECH-FEAT-102-001, got spec/tech/SRC-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-009\TECH-FEAT-103-001__fencengqiyueyuyanzheng-jishu-fangan.md: expected placement spec/tech for TECH-FEAT-103-001, got spec/tech/SRC-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-009\TECH-FEAT-104-001__workflow-zhucebiaofenceng-jishu-fangan.md: expected placement spec/tech for TECH-FEAT-104-001, got spec/tech/SRC-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-009\TECH-FEAT-105-001__fencengbushuhejiankangjiancha-jishu-fangan.md: expected placement spec/tech for TECH-FEAT-105-001, got spec/tech/SRC-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-010\TECH-FEAT-SRC-010__tech-design.md: expected placement spec/tech/SRC-009 for TECH-FEAT-SRC-010, got spec/tech/SRC-010
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-011\TECH-FEAT-169-001__tech-design.md: expected placement spec/tech for TECH-FEAT-169-001, got spec/tech/SRC-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-011\TECH-FEAT-169-002__tech-design.md: expected placement spec/tech for TECH-FEAT-169-002, got spec/tech/SRC-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-011\TECH-FEAT-169-003__frozen-technical-architecture-contract.md: expected placement spec/tech for TECH-FEAT-169-003, got spec/tech/SRC-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-011\TECH-FEAT-169-004__feat-169-frozen-technical-architecture-xitongpeizh.md: expected placement spec/tech for TECH-FEAT-169-004, got spec/tech/SRC-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-011\TECH-FEAT-170-001__qwenzhixingqigongchangshilihua-jishufangan.md: expected placement spec/tech for TECH-FEAT-170-001, got spec/tech/SRC-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-011\TECH-FEAT-171-001__runner-diaodu-qwenzhixingqiyujieguoguifanhuajishufangan.md: expected placement spec/tech for TECH-FEAT-171-001, got spec/tech/SRC-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-011\TECH-FEAT-172-001__workflow-shilizhixingqishangxiawenyugeli-jishufangan.md: expected placement spec/tech for TECH-FEAT-172-001, got spec/tech/SRC-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-011\TECH-FEAT-173-001__qwenzhongwenchangjingzhiliangyanzhengyuhuiguihuijijishufangan.md: expected placement spec/tech for TECH-FEAT-173-001, got spec/tech/SRC-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-012\TECH-FEAT-SRC-012__tech-design.md: expected placement spec/tech/SRC-009 for TECH-FEAT-SRC-012, got spec/tech/SRC-012
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-012-001__cli-xianshixuanzezhixingqinenglijizhufangan.md: expected placement spec/tech for TECH-FEAT-012-001, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-012-002__morenzhixingqipeizhinenglijizhufangan.md: expected placement spec/tech for TECH-FEAT-012-002, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-012-003__kimi-zhixingqiyunxingshijichengshipeijizhufangan.md: expected placement spec/tech for TECH-FEAT-012-003, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-080-001__feat-080-climinglingcengjizhonggoujizhujiagou.md: expected placement spec/tech for TECH-FEAT-080-001, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-081-001__tech-design.md: expected placement spec/tech for TECH-FEAT-081-001, got spec/tech/SRC-NO-SOURCE
+  - mapping values are not allowed here
+  in "<unicode string>", line 31, column 17:
+      governing_adrs:
+                    ^
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-083-001__cli-wendangyubangzhuxitongtongyizhili-jizhujiagou.md: expected placement spec/tech for TECH-FEAT-083-001, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-084-001__tech-design.md: expected placement spec/tech for TECH-FEAT-084-001, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-085-001__claude-code-liushishuchunengli-jishu-fangan.md: expected placement spec/tech for TECH-FEAT-085-001, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-086-001__zhixingzhuangtaikeshihua-jishu-fangan.md: expected placement spec/tech for TECH-FEAT-086-001, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-087-001__huihuahuifunengli-jishu-fangan.md: expected placement spec/tech for TECH-FEAT-087-001, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-088-001__zhixingbianjieqingxihua-jishu-fangan.md: expected placement spec/tech for TECH-FEAT-088-001, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-090-001__branch-yu-worktree-bingxingkaifaxiazhengshi-ssot-b.md: expected placement spec/tech for TECH-FEAT-090-001, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-001__qazhixingrukouguifanhua-frozenjizhujiagou.md: expected placement spec/tech for TECH-FEAT-143-001, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-002__tech-design.md: expected placement spec/tech for TECH-FEAT-143-002, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-003__tech-design.md: expected placement spec/tech for TECH-FEAT-143-003, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-004__tech-design.md: expected placement spec/tech for TECH-FEAT-143-004, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-005__qa-zhixingrukouguifanhua.md: expected placement spec/tech for TECH-FEAT-143-005, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-006__qa-zhixingrukouguifanhua.md: expected placement spec/tech for TECH-FEAT-143-006, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-007__tech-design.md: expected placement spec/tech for TECH-FEAT-143-007, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-008__qa-zhixingrukouguifanhua.md: expected placement spec/tech for TECH-FEAT-143-008, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-009__feat-143-qa-zhixingrukouguifanhua-dongjiejizhujiag.md: expected placement spec/tech for TECH-FEAT-143-009, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-010__feat-143-qa-zhixingrukouguifanhua-frozen-technical.md: expected placement spec/tech for TECH-FEAT-143-010, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-011__feat-143-qa-zhixingrukouguifanhua-frozen-technical.md: expected placement spec/tech for TECH-FEAT-143-011, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-012__feat-143-qa-zhixingrukouguifanhua-frozen-technical.md: expected placement spec/tech for TECH-FEAT-143-012, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-013__feat-143-dongjiejizhujiagou.md: filename ID TECH-FEAT-143-013 != front matter id ARCH-FEAT-143
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-013__feat-143-dongjiejizhujiagou.md: expected placement spec/tech for ARCH-FEAT-143, got spec/tech/SRC-NO-SOURCE
+  - mapping values are not allowed here
+  in "<unicode string>", line 15, column 12:
+      frozen_by: architect
+               ^
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-015__tech-design.md: expected placement spec/tech for TECH-FEAT-143-015, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-NO-SOURCE\TECH-FEAT-143-016__frozen-technical-architecture-contract.md: expected placement spec/tech for TECH-FEAT-143-016, got spec/tech/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tech\SRC-059\FEAT-SRC-059-001\TECH-FEAT-SRC-059-001__fitness-rule-schema-jishu-sheji.md: expected placement spec/tech/SRC-059 for TECH-FEAT-SRC-059-001, got spec/tech/SRC-059/FEAT-SRC-059-001
+  - while scanning a simple key
+  in "<unicode string>", line 4, column 1:
+    <<<<<<< HEAD
+    ^
+could not find expected ':'
+  in "<unicode string>", line 5, column 1:
+    title: Qwen 执行器工厂注册与实例化
+    ^
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-001\TASK-FEAT-SRC-009-001-001__l2gongzuoliuguifanyujiegoudingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-001 for TASK-FEAT-SRC-009-001-001, got spec/tasks/FEAT-SRC-009-001
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-001\TASK-FEAT-SRC-009-001-002__l2gongzuoliumobanshixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-001 for TASK-FEAT-SRC-009-001-002, got spec/tasks/FEAT-SRC-009-001
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-001\TASK-FEAT-SRC-009-001-003__yunxingshijichengyuagent-contractbangding.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-001 for TASK-FEAT-SRC-009-001-003, got spec/tasks/FEAT-SRC-009-001
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-001\TASK-FEAT-SRC-009-001-004__yanzhengceshiyuwendangzhili.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-001 for TASK-FEAT-SRC-009-001-004, got spec/tasks/FEAT-SRC-009-001
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-002\TASK-FEAT-SRC-009-002-001__bugfix-l2-gongzuoliuguifanyujiegoudingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-002 for TASK-FEAT-SRC-009-002-001, got spec/tasks/FEAT-SRC-009-002
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-002\TASK-FEAT-SRC-009-002-002__bugfix-l2-gongzuoliumobanshixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-002 for TASK-FEAT-SRC-009-002-002, got spec/tasks/FEAT-SRC-009-002
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-002\TASK-FEAT-SRC-009-002-003__bugfix-l3-ziliuchengmobanyu-agent-contract-bangdin.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-002 for TASK-FEAT-SRC-009-002-003, got spec/tasks/FEAT-SRC-009-002
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-002\TASK-FEAT-SRC-009-002-004__bugfix-lidukongzhicelveyuzhuangtaijishixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-002 for TASK-FEAT-SRC-009-002-004, got spec/tasks/FEAT-SRC-009-002
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-002\TASK-FEAT-SRC-009-002-005__yanzhengceshiyuwendangzhili.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-002 for TASK-FEAT-SRC-009-002-005, got spec/tasks/FEAT-SRC-009-002
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-003\TASK-FEAT-SRC-009-003-001__tech-duixiang-schema-guifandingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-003 for TASK-FEAT-SRC-009-003-001, got spec/tasks/FEAT-SRC-009-003
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-003\TASK-FEAT-SRC-009-003-002__feat-tech-yingsheguizeguifandingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-003 for TASK-FEAT-SRC-009-003-002, got spec/tasks/FEAT-SRC-009-003
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-003\TASK-FEAT-SRC-009-003-003__tech-implementation-jiaofuguizeguifandingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-003 for TASK-FEAT-SRC-009-003-003, got spec/tasks/FEAT-SRC-009-003
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-003\TASK-FEAT-SRC-009-003-004__tech-shejipingshen-checklist-dingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-003 for TASK-FEAT-SRC-009-003-004, got spec/tasks/FEAT-SRC-009-003
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-003\TASK-FEAT-SRC-009-003-005__tech-wendangmobanyushilichuangjian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-003 for TASK-FEAT-SRC-009-003-005, got spec/tasks/FEAT-SRC-009-003
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-003\TASK-FEAT-SRC-009-003-006__tech-qiyueyanzhengceshishixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-003 for TASK-FEAT-SRC-009-003-006, got spec/tasks/FEAT-SRC-009-003
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-004\TASK-FEAT-SRC-009-004-001__evidence-pack-schema-jiegoudingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-004 for TASK-FEAT-SRC-009-004-001, got spec/tasks/FEAT-SRC-009-004
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-004\TASK-FEAT-SRC-009-004-002__evidence-pack-mobanyumulujiegoushixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-004 for TASK-FEAT-SRC-009-004-002, got spec/tasks/FEAT-SRC-009-004
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-004\TASK-FEAT-SRC-009-004-003__l2-gongzuoliujichengjiekouguifan.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-004 for TASK-FEAT-SRC-009-004-003, got spec/tasks/FEAT-SRC-009-004
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-004\TASK-FEAT-SRC-009-004-004__shenjizhuisuguizedingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-004 for TASK-FEAT-SRC-009-004-004, got spec/tasks/FEAT-SRC-009-004
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-004\TASK-FEAT-SRC-009-004-005__l3-evidence-pack-jieduanguifanduiqi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-004 for TASK-FEAT-SRC-009-004-005, got spec/tasks/FEAT-SRC-009-004
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-005\TASK-FEAT-SRC-009-005-001__contract-design-jieduanguifanyujiegoudingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-005 for TASK-FEAT-SRC-009-005-001, got spec/tasks/FEAT-SRC-009-005
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-005\TASK-FEAT-SRC-009-005-002__contract-design-l3-gongzuoliumobanshixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-005 for TASK-FEAT-SRC-009-005-002, got spec/tasks/FEAT-SRC-009-005
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-005\TASK-FEAT-SRC-009-005-003__contract-design-yunxingshijichengyu-agent-gate-ban.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-005 for TASK-FEAT-SRC-009-005-003, got spec/tasks/FEAT-SRC-009-005
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-005\TASK-FEAT-SRC-009-005-004__contract-design-testset-shejiyuyanzhengyonglishixi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-005 for TASK-FEAT-SRC-009-005-004, got spec/tasks/FEAT-SRC-009-005
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-005\TASK-FEAT-SRC-009-005-005__contract-design-wendangzhiliyurukougengxin.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-005 for TASK-FEAT-SRC-009-005-005, got spec/tasks/FEAT-SRC-009-005
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-006\TASK-FEAT-SRC-009-006-001__l3-backend-development-jieduanguifandingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-006 for TASK-FEAT-SRC-009-006-001, got spec/tasks/FEAT-SRC-009-006
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-006\TASK-FEAT-SRC-009-006-002__l3-backend-development-workflow-mobanshixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-006 for TASK-FEAT-SRC-009-006-002, got spec/tasks/FEAT-SRC-009-006
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-006\TASK-FEAT-SRC-009-006-003__tdd-fugailvmenjinyunxingshijicheng.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-006 for TASK-FEAT-SRC-009-006-003, got spec/tasks/FEAT-SRC-009-006
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-006\TASK-FEAT-SRC-009-006-004__l3-backend-jieduanyanzhengceshi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-006 for TASK-FEAT-SRC-009-006-004, got spec/tasks/FEAT-SRC-009-006
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-006\TASK-FEAT-SRC-009-006-005__l3-backend-wendangqianyiyujiurukoufengjin.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-006 for TASK-FEAT-SRC-009-006-005, got spec/tasks/FEAT-SRC-009-006
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-007\TASK-FEAT-SRC-009-007-001__l3-frontend-development-jieduanguifandingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-007 for TASK-FEAT-SRC-009-007-001, got spec/tasks/FEAT-SRC-009-007
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-007\TASK-FEAT-SRC-009-007-002__utdd-xunhuanmobanyu-tdd-guifanshixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-007 for TASK-FEAT-SRC-009-007-002, got spec/tasks/FEAT-SRC-009-007
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-007\TASK-FEAT-SRC-009-007-003__l3-frontend-gongzuoliumobanyuyunxingshijiexian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-007 for TASK-FEAT-SRC-009-007-003, got spec/tasks/FEAT-SRC-009-007
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-007\TASK-FEAT-SRC-009-007-004__jieduanshuchuwuguifanyuzhengjuyaoqiudingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-007 for TASK-FEAT-SRC-009-007-004, got spec/tasks/FEAT-SRC-009-007
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-007\TASK-FEAT-SRC-009-007-005__jieduanwendangdongjieyu-readme-gengxin.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-007 for TASK-FEAT-SRC-009-007-005, got spec/tasks/FEAT-SRC-009-007
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-008\TASK-FEAT-SRC-009-008-001__integration-jieduanguifanyujiegoudingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-008 for TASK-FEAT-SRC-009-008-001, got spec/tasks/FEAT-SRC-009-008
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-008\TASK-FEAT-SRC-009-008-002__integrationplanner-yu-integrationverifier-guifansh.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-008 for TASK-FEAT-SRC-009-008-002, got spec/tasks/FEAT-SRC-009-008
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-008\TASK-FEAT-SRC-009-008-003__structuralissuerouter-yuhuigunbianjiedingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-008 for TASK-FEAT-SRC-009-008-003, got spec/tasks/FEAT-SRC-009-008
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-008\TASK-FEAT-SRC-009-008-004__integrationreporter-yu-evidence-pack-jiaojieguifan.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-008 for TASK-FEAT-SRC-009-008-004, got spec/tasks/FEAT-SRC-009-008
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-008\TASK-FEAT-SRC-009-008-005__wanchengbiaozhunyuzhidingyiyukelianghuayanzhenggui.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-008 for TASK-FEAT-SRC-009-008-005, got spec/tasks/FEAT-SRC-009-008
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-009\TASK-FEAT-SRC-009-009-001__evidence-pack-stage-guifanyuschemadingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-009 for TASK-FEAT-SRC-009-009-001, got spec/tasks/FEAT-SRC-009-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-009\TASK-FEAT-SRC-009-009-002__l3evidencepackjieduanmobanshixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-009 for TASK-FEAT-SRC-009-009-002, got spec/tasks/FEAT-SRC-009-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-009\TASK-FEAT-SRC-009-009-003__evidencepackyunshishishoujiqishixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-009 for TASK-FEAT-SRC-009-009-003, got spec/tasks/FEAT-SRC-009-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-009\TASK-FEAT-SRC-009-009-004__evidencepackyanzhengqiyuwanzhengxingjishenshixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-009 for TASK-FEAT-SRC-009-009-004, got spec/tasks/FEAT-SRC-009-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-009\TASK-FEAT-SRC-009-009-005__evidencepackceshiyanyanzhengtaojian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-009 for TASK-FEAT-SRC-009-009-005, got spec/tasks/FEAT-SRC-009-009
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-010\TASK-FEAT-SRC-009-010-001__jiulujingjiangjizhiliguifandingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-010 for TASK-FEAT-SRC-009-010-001, got spec/tasks/FEAT-SRC-009-010
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-010\TASK-FEAT-SRC-009-010-002__dev-bumen-readme-he-workflows-wendangqianyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-010 for TASK-FEAT-SRC-009-010-002, got spec/tasks/FEAT-SRC-009-010
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-010\TASK-FEAT-SRC-009-010-003__jiulujing-workflow-wenjiantoububiaojishixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-010 for TASK-FEAT-SRC-009-010-003, got spec/tasks/FEAT-SRC-009-010
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-010\TASK-FEAT-SRC-009-010-004__jiulujinghuoyuedujiankongjizhishixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-010 for TASK-FEAT-SRC-009-010-004, got spec/tasks/FEAT-SRC-009-010
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-010\TASK-FEAT-SRC-009-010-005__jiulujingjiangjiyanzhengceshisheji.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-010 for TASK-FEAT-SRC-009-010-005, got spec/tasks/FEAT-SRC-009-010
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-011\TASK-FEAT-SRC-009-011-001__gongxiangshuruguifan-jiegoudingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-011 for TASK-FEAT-SRC-009-011-001, got spec/tasks/FEAT-SRC-009-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-011\TASK-FEAT-SRC-009-011-002__shuruyanzheng-checklist-shixian.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-011 for TASK-FEAT-SRC-009-011-002, got spec/tasks/FEAT-SRC-009-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-011\TASK-FEAT-SRC-009-011-003__workflow-mulu-gongxiangguifan-jicheng.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-011 for TASK-FEAT-SRC-009-011-003, got spec/tasks/FEAT-SRC-009-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-011\TASK-FEAT-SRC-009-011-004__gongxiangshuruguifan-ceshiyanzheng.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-011 for TASK-FEAT-SRC-009-011-004, got spec/tasks/FEAT-SRC-009-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-011\TASK-FEAT-SRC-009-011-005__gongxiangshuruguifan-wendangqianyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-011 for TASK-FEAT-SRC-009-011-005, got spec/tasks/FEAT-SRC-009-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-012\TASK-FEAT-SRC-009-012-001__bugfix-lidukongzhi-guifandingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-012 for TASK-FEAT-SRC-009-012-001, got spec/tasks/FEAT-SRC-009-012
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-012\TASK-FEAT-SRC-009-012-002__batch-lishenpi-liuchengsheji.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-012 for TASK-FEAT-SRC-009-012-002, got spec/tasks/FEAT-SRC-009-012
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-012\TASK-FEAT-SRC-009-012-003__lidu-hegui-jianchajianbiaosheji.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-012 for TASK-FEAT-SRC-009-012-003, got spec/tasks/FEAT-SRC-009-012
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\tasks\FEAT-SRC-009-012\TASK-FEAT-SRC-009-012-004__heguiIv-tongjifangfadingyi.md: expected placement spec/tasks/SRC-009/FEAT-SRC-009-012 for TASK-FEAT-SRC-009-012-004, got spec/tasks/FEAT-SRC-009-012
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-001\EPIC-003__lee-cli-workflow-first-zhilirukouzhonggou.md: expected placement spec/requirements/epics for EPIC-003, got spec/requirements/SRC-001
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-004\EPIC-004__claude-code-keguancezhixingnenglijianshe.md: expected placement spec/requirements/epics for EPIC-004, got spec/requirements/SRC-004
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-007\EPIC-009__qa-department-ssot-alignment-and-workflow-reframe.md: expected placement spec/requirements/epics for EPIC-009, got spec/requirements/SRC-007
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-007\EPIC-011__qabumenssotduiqiyugongzuoliuzhonggou-jianlisanzhou.md: expected placement spec/requirements/epics for EPIC-011, got spec/requirements/SRC-007
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-011\EPIC-022__lee-qwen-zhixingqijieru.md: expected placement spec/requirements/epics for EPIC-022, got spec/requirements/SRC-011
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-016\EPIC-018__epic.md: expected placement spec/requirements/epics for EPIC-018, got spec/requirements/SRC-016
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-016\EPIC-021__xuqiulianyizhixingceshitixijianshe.md: expected placement spec/requirements/epics for EPIC-021, got spec/requirements/SRC-016
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-020\EPIC-LEE-SRC-FREEZE-20260313-001__adr-016-yanzhengyunxingyuandongjienengligoujian.md: expected placement spec/requirements/epics for EPIC-LEE-SRC-FREEZE-20260313-001, got spec/requirements/SRC-020
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-NO-SOURCE\EPIC-008__workflow-fencengjieou-jianli-raw-to-src-duliliushu.md: expected placement spec/requirements/epics for EPIC-008, got spec/requirements/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-NO-SOURCE\EPIC-017__climinglingfencengyussotwuhuabianjiezhili.md: expected placement spec/requirements/epics for EPIC-017, got spec/requirements/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-NO-SOURCE\EPIC-044__kimi-zhixingqijieruyupeizhinengli.md: expected placement spec/requirements/epics for EPIC-044, got spec/requirements/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-NO-SOURCE\EPIC-077__nixianggongzuoliuyuxianxing-ssot-wendanglianduiqis.md: expected placement spec/requirements/epics for EPIC-077, got spec/requirements/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-NO-SOURCE\EPIC-141__ssot-wendangliannixianggongzuoliuduiqishengji.md: expected placement spec/requirements/epics for EPIC-141, got spec/requirements/SRC-NO-SOURCE
+  - C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\requirements\SRC-NO-SOURCE\EPIC-SSOT-REV-001__ssot-wendangliannixiangchengjieyuwuhuaguizeshengji.md: expected placement spec/requirements/epics for EPIC-SSOT-REV-001, got spec/requirements/SRC-NO-SOURCE
+  - duplicate SSOT id ADR-025: C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\adr\ADR-025__materialization-verification-and-phase-gated-delivery-governance.md, C:\Users\shado\.codex\worktrees\ecdb\LEE\spec\adr\ADR-028__ssot-requirement-axis-acceptance-governance.md
+  - ADR-022: 类型 adr 不应设置 parent_id，当前为 ADR-001
+  - ADR-025: Filename ID 'ADR-028' does not match artifact id 'ADR-025'
+  - SRC-011: source_refs 'ART-00398' does not exist
+  - TECH-FEAT-SRC-001: ID format is invalid: TECH-FEAT-SRC-001
+  - TECH-FEAT-SRC-001: ID TECH-FEAT-SRC-001 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-001
+  - TECH-FEAT-SRC-002: ID format is invalid: TECH-FEAT-SRC-002
+  - TECH-FEAT-SRC-002: ID TECH-FEAT-SRC-002 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-001
+  - TECH-FEAT-SRC-003: ID format is invalid: TECH-FEAT-SRC-003
+  - TECH-FEAT-SRC-003: ID TECH-FEAT-SRC-003 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-002
+  - TECH-FEAT-SRC-004: ID format is invalid: TECH-FEAT-SRC-004
+  - TECH-FEAT-SRC-004: ID TECH-FEAT-SRC-004 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-002
+  - TECH-FEAT-SRC-005: ID format is invalid: TECH-FEAT-SRC-005
+  - TECH-FEAT-SRC-005: ID TECH-FEAT-SRC-005 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-012
+  - TECH-FEAT-SRC-006: ID format is invalid: TECH-FEAT-SRC-006
+  - TECH-FEAT-SRC-006: ID TECH-FEAT-SRC-006 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-005
+  - TECH-FEAT-SRC-007: ID format is invalid: TECH-FEAT-SRC-007
+  - TECH-FEAT-SRC-007: ID TECH-FEAT-SRC-007 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-011
+  - TECH-FEAT-SRC-008: ID format is invalid: TECH-FEAT-SRC-008
+  - TECH-FEAT-SRC-008: ID TECH-FEAT-SRC-008 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-010
+  - TECH-FEAT-100-001: source_refs 'FEAT-100' does not exist
+  - TECH-FEAT-101-001: source_refs 'FEAT-101' does not exist
+  - TECH-FEAT-102-001: source_refs 'FEAT-102' does not exist
+  - TECH-FEAT-103-001: source_refs 'FEAT-103' does not exist
+  - TECH-FEAT-104-001: source_refs 'FEAT-104' does not exist
+  - TECH-FEAT-105-001: source_refs 'FEAT-105' does not exist
+  - TECH-FEAT-SRC-009: ID format is invalid: TECH-FEAT-SRC-009
+  - TECH-FEAT-SRC-009: ID TECH-FEAT-SRC-009 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-006
+  - TECH-FEAT-SRC-010: ID format is invalid: TECH-FEAT-SRC-010
+  - TECH-FEAT-SRC-010: ID TECH-FEAT-SRC-010 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-009
+  - TECH-FEAT-170-001: source_refs 'FEAT-170' does not exist
+  - TECH-FEAT-170-001: derived_from_ids 'FEAT-170' does not exist
+  - TECH-FEAT-171-001: source_refs 'FEAT-171' does not exist
+  - TECH-FEAT-171-001: derived_from_ids 'FEAT-171' does not exist
+  - TECH-FEAT-172-001: source_refs 'FEAT-172' does not exist
+  - TECH-FEAT-172-001: derived_from_ids 'FEAT-172' does not exist
+  - TECH-FEAT-173-001: source_refs 'FEAT-173' does not exist
+  - TECH-FEAT-173-001: derived_from_ids 'FEAT-173' does not exist
+  - TECH-FEAT-SRC-011: source_refs 'FEAT-169' does not exist
+  - TECH-FEAT-SRC-011: source_refs 'FEAT-170' does not exist
+  - TECH-FEAT-SRC-011: source_refs 'FEAT-171' does not exist
+  - TECH-FEAT-SRC-011: source_refs 'FEAT-172' does not exist
+  - TECH-FEAT-SRC-011: source_refs 'FEAT-173' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'FEAT-169' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'FEAT-170' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'FEAT-171' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'FEAT-172' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'FEAT-173' does not exist
+  - TECH-FEAT-SRC-011: ID format is invalid: TECH-FEAT-SRC-011
+  - TECH-FEAT-SRC-011: ID TECH-FEAT-SRC-011 解析出 parent None，但 parent_id 设置为 SRC-011
+  - TECH-FEAT-SRC-011: 类型 tech 的 parent_id 必须是 FEAT，当前为 SRC
+  - TECH-FEAT-SRC-012: ID format is invalid: TECH-FEAT-SRC-012
+  - TECH-FEAT-SRC-012: ID TECH-FEAT-SRC-012 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-007
+  - TECH-FEAT-012-001: source_refs 'FEAT-012-001' does not exist
+  - TECH-FEAT-012-001: ID TECH-FEAT-012-001 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-001
+  - TECH-FEAT-012-002: source_refs 'FEAT-012-002' does not exist
+  - TECH-FEAT-012-002: ID TECH-FEAT-012-002 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-002
+  - TECH-FEAT-012-003: source_refs 'FEAT-012-003' does not exist
+  - TECH-FEAT-012-003: ID TECH-FEAT-012-003 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-003
+  - TECH-FEAT-080-001: source_refs 'FEAT-080#scope' does not exist
+  - TECH-FEAT-080-001: source_refs 'FEAT-080#acceptance' does not exist
+  - TECH-FEAT-081-001: source_refs 'FEAT-081#scope' does not exist
+  - TECH-FEAT-081-001: source_refs 'FEAT-081#acceptance' does not exist
+  - TECH-FEAT-081-001: source_refs 'UI-FEAT-081-001' does not exist
+  - TECH-FEAT-083-001: source_refs 'FEAT-083#scope' does not exist
+  - TECH-FEAT-083-001: source_refs 'FEAT-083#acceptance' does not exist
+  - TECH-FEAT-084-001: source_refs 'FEAT-084#scope' does not exist
+  - TECH-FEAT-084-001: source_refs 'FEAT-084#acceptance' does not exist
+  - TECH-FEAT-085-001: source_refs 'FEAT-085' does not exist
+  - TECH-FEAT-086-001: source_refs 'FEAT-086' does not exist
+  - TECH-FEAT-087-001: source_refs 'FEAT-087' does not exist
+  - TECH-FEAT-088-001: source_refs 'FEAT-088' does not exist
+  - TECH-FEAT-090-001: source_refs 'FEAT-090' does not exist
+  - TECH-FEAT-143-016: source_refs 'FEAT-143#Acceptance' does not exist
+  - TECH-FEAT-143-016: derived_from_ids 'FEAT-143' does not exist
+  - TASK-FEAT-001-001: source_refs 'FEAT-001#delivery' does not exist
+  - TASK-FEAT-001-002: source_refs 'FEAT-001#delivery' does not exist
+  - TASK-FEAT-002-001: source_refs 'FEAT-002#delivery' does not exist
+  - TASK-FEAT-002-002: source_refs 'FEAT-002#delivery' does not exist
+  - TASK-FEAT-002-003: source_refs 'FEAT-002#delivery' does not exist
+  - TASK-FEAT-002-004: source_refs 'FEAT-002#delivery' does not exist
+  - TASK-FEAT-002-005: source_refs 'FEAT-002#delivery' does not exist
+  - TASK-FEAT-003-001: source_refs 'FEAT-003#delivery' does not exist
+  - TASK-FEAT-003-002: source_refs 'FEAT-003#delivery' does not exist
+  - TASK-FEAT-004-001: source_refs 'FEAT-004#delivery' does not exist
+  - TASK-FEAT-004-002: source_refs 'FEAT-004#delivery' does not exist
+  - TASK-FEAT-005-001: source_refs 'FEAT-005#delivery' does not exist
+  - TASK-FEAT-005-002: source_refs 'FEAT-005#delivery' does not exist
+  - TASK-FEAT-006-001: source_refs 'FEAT-006#delivery' does not exist
+  - TASK-FEAT-006-002: source_refs 'FEAT-006#delivery' does not exist
+  - TASK-FEAT-006-003: source_refs 'FEAT-006#delivery' does not exist
+  - TASK-FEAT-006-004: source_refs 'FEAT-006#delivery' does not exist
+  - TASK-FEAT-007-001: source_refs 'FEAT-007#delivery' does not exist
+  - TASK-FEAT-007-002: source_refs 'FEAT-007#delivery' does not exist
+  - TASK-FEAT-008-001: source_refs 'FEAT-008#delivery' does not exist
+  - TASK-FEAT-008-002: source_refs 'FEAT-008#delivery' does not exist
+  - TASK-FEAT-012-001-001: source_refs 'FEAT-012-001#delivery' does not exist
+  - TASK-FEAT-012-001-001: ID TASK-FEAT-012-001-001 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-001
+  - TASK-FEAT-012-001-002: source_refs 'FEAT-012-001#delivery' does not exist
+  - TASK-FEAT-012-001-002: ID TASK-FEAT-012-001-002 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-001
+  - TASK-FEAT-012-002-001: source_refs 'FEAT-012-002#delivery' does not exist
+  - TASK-FEAT-012-002-001: ID TASK-FEAT-012-002-001 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-002
+  - TASK-FEAT-012-002-002: source_refs 'FEAT-012-002#delivery' does not exist
+  - TASK-FEAT-012-002-002: ID TASK-FEAT-012-002-002 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-002
+  - TASK-FEAT-012-003-001: source_refs 'FEAT-012-003#delivery' does not exist
+  - TASK-FEAT-012-003-001: ID TASK-FEAT-012-003-001 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-003
+  - TASK-FEAT-012-003-002: source_refs 'FEAT-012-003#delivery' does not exist
+  - TASK-FEAT-012-003-002: ID TASK-FEAT-012-003-002 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-003
+  - TASK-FEAT-051-001: source_refs 'FEAT-051#delivery' does not exist
+  - TASK-FEAT-052-001: source_refs 'FEAT-052#delivery' does not exist
+  - TASK-FEAT-052-002: source_refs 'FEAT-052#delivery' does not exist
+  - TASK-FEAT-053-001: source_refs 'FEAT-053#delivery' does not exist
+  - TASK-FEAT-053-002: source_refs 'FEAT-053#delivery' does not exist
+  - TASK-FEAT-054-001: source_refs 'FEAT-054#delivery' does not exist
+  - TASK-FEAT-055-001: source_refs 'FEAT-055#delivery' does not exist
+  - TASK-FEAT-055-002: source_refs 'FEAT-055#delivery' does not exist
+  - TASK-FEAT-055-003: source_refs 'FEAT-055#delivery' does not exist
+  - TASK-FEAT-055-004: source_refs 'FEAT-055#delivery' does not exist
+  - TASK-FEAT-064-001: source_refs 'FEAT-064#delivery' does not exist
+  - TASK-FEAT-064-002: source_refs 'FEAT-064#delivery' does not exist
+  - TASK-FEAT-064-003: source_refs 'FEAT-064#delivery' does not exist
+  - TASK-FEAT-068-001: source_refs 'FEAT-068#delivery' does not exist
+  - TASK-FEAT-068-002: source_refs 'FEAT-068#delivery' does not exist
+  - TASK-FEAT-068-003: source_refs 'FEAT-068#delivery' does not exist
+  - TASK-FEAT-068-004: source_refs 'FEAT-068#delivery' does not exist
+  - TASK-FEAT-069-001: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-002: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-003: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-004: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-005: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-006: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-007: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-008: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-009: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-070-001: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-002: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-003: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-004: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-005: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-006: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-007: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-008: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-009: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-071-001: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-002: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-003: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-004: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-005: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-006: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-007: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-008: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-080-001: source_refs 'FEAT-080#delivery' does not exist
+  - TASK-FEAT-080-002: source_refs 'FEAT-080#delivery' does not exist
+  - TASK-FEAT-080-003: source_refs 'FEAT-080#delivery' does not exist
+  - TASK-FEAT-081-001: source_refs 'FEAT-081#delivery' does not exist
+  - TASK-FEAT-081-002: source_refs 'FEAT-081#delivery' does not exist
+  - TASK-FEAT-082-001: source_refs 'FEAT-082#delivery' does not exist
+  - TASK-FEAT-082-002: source_refs 'FEAT-082#delivery' does not exist
+  - TASK-FEAT-083-001: source_refs 'FEAT-083#delivery' does not exist
+  - TASK-FEAT-083-002: source_refs 'FEAT-083#delivery' does not exist
+  - TASK-FEAT-084-001: source_refs 'FEAT-084#delivery' does not exist
+  - TASK-FEAT-084-002: source_refs 'FEAT-084#delivery' does not exist
+  - TASK-FEAT-084-003: source_refs 'FEAT-084#delivery' does not exist
+  - TASK-FEAT-085-001: source_refs 'FEAT-085#delivery' does not exist
+  - TASK-FEAT-085-002: source_refs 'FEAT-085#delivery' does not exist
+  - TASK-FEAT-086-001: source_refs 'FEAT-086#delivery' does not exist
+  - TASK-FEAT-087-001: source_refs 'FEAT-087#delivery' does not exist
+  - TASK-FEAT-087-002: source_refs 'FEAT-087#delivery' does not exist
+  - TASK-FEAT-088-001: source_refs 'FEAT-088#delivery' does not exist
+  - TASK-FEAT-088-002: source_refs 'FEAT-088#delivery' does not exist
+  - TASK-FEAT-089-001: source_refs 'FEAT-089#delivery' does not exist
+  - TASK-FEAT-089-002: source_refs 'FEAT-089#delivery' does not exist
+  - TASK-FEAT-090-001: source_refs 'FEAT-090#delivery' does not exist
+  - TASK-FEAT-090-002: source_refs 'FEAT-090#delivery' does not exist
+  - TASK-FEAT-100-001: source_refs 'FEAT-100#delivery' does not exist
+  - TASK-FEAT-100-002: source_refs 'FEAT-100#delivery' does not exist
+  - TASK-FEAT-101-001: source_refs 'FEAT-101#delivery' does not exist
+  - TASK-FEAT-101-002: source_refs 'FEAT-101#delivery' does not exist
+  - TASK-FEAT-102-001: source_refs 'FEAT-102#delivery' does not exist
+  - TASK-FEAT-102-002: source_refs 'FEAT-102#delivery' does not exist
+  - TASK-FEAT-103-001: source_refs 'FEAT-103#delivery' does not exist
+  - TASK-FEAT-104-001: source_refs 'FEAT-104#delivery' does not exist
+  - TASK-FEAT-105-001: source_refs 'FEAT-105#delivery' does not exist
+  - TASK-FEAT-106-001: source_refs 'FEAT-106#delivery' does not exist
+  - TASK-FEAT-130-001: source_refs 'FEAT-130#delivery' does not exist
+  - TASK-FEAT-132-001: source_refs 'FEAT-132#delivery' does not exist
+  - TASK-FEAT-134-001: source_refs 'FEAT-134#delivery' does not exist
+  - TASK-FEAT-140-001: source_refs 'FEAT-140#delivery' does not exist
+  - TASK-FEAT-142-001: source_refs 'FEAT-142#delivery' does not exist
+  - TASK-FEAT-142-002: source_refs 'FEAT-142#delivery' does not exist
+  - TASK-FEAT-143-001: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-143-002: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-143-003: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-143-004: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-143-005: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-143-006: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-145-001: source_refs 'FEAT-145#delivery' does not exist
+  - TASK-FEAT-145-002: source_refs 'FEAT-145#delivery' does not exist
+  - TASK-FEAT-159-001: source_refs 'FEAT-159#delivery' does not exist
+  - TASK-FEAT-159-002: source_refs 'FEAT-159#delivery' does not exist
+  - TASK-FEAT-160-001: source_refs 'FEAT-160#delivery' does not exist
+  - TASK-FEAT-161-001: source_refs 'FEAT-161#delivery' does not exist
+  - TASK-FEAT-162-001: source_refs 'FEAT-162#delivery' does not exist
+  - TASK-FEAT-163-001: source_refs 'FEAT-163#delivery' does not exist
+  - TASK-FEAT-164-001: source_refs 'FEAT-164#delivery' does not exist
+  - TASK-FEAT-165-001: source_refs 'FEAT-165#delivery' does not exist
+  - TASK-FEAT-166-001: source_refs 'FEAT-166#delivery' does not exist
+  - TASK-FEAT-167-001: source_refs 'FEAT-167#delivery' does not exist
+  - TASK-FEAT-168-001: source_refs 'FEAT-168#delivery' does not exist
+  - TASK-FEAT-169-000: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-169-001: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-169-002: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-169-003: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-169-004: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-169-005: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-170-002: source_refs 'FEAT-170#delivery' does not exist
+  - TASK-FEAT-171-001: source_refs 'FEAT-171#delivery' does not exist
+  - TASK-FEAT-171-002: source_refs 'FEAT-171#delivery' does not exist
+  - TASK-FEAT-172-001: source_refs 'FEAT-172#delivery' does not exist
+  - TASK-FEAT-172-002: source_refs 'FEAT-172#delivery' does not exist
+  - TASK-FEAT-173-001: source_refs 'FEAT-173#delivery' does not exist
+  - TASK-FEAT-173-002: source_refs 'FEAT-173#delivery' does not exist
+  - EPIC-LEE-SRC-FREEZE-20260313-001: ID format is invalid: EPIC-LEE-SRC-FREEZE-20260313-001
+  - EPIC-SSOT-REV-001: ID format is invalid: EPIC-SSOT-REV-001
+  - BUG-FEAT-071-001: source_refs 'FEAT-071#scope' does not exist
+  - BUG-FEAT-071-001: derived_from_ids 'FEAT-071' does not exist
+  - BUG-FEAT-071-002: source_refs 'FEAT-071#scope' does not exist
+  - BUG-FEAT-071-002: derived_from_ids 'FEAT-071' does not exist
+Aborted!

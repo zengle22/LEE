@@ -1,0 +1,757 @@
+[
+  {
+    "original": "spec/adr/ADR-022__delivery-axis-issue-remediation-governance.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/adr/ADR-022__delivery-axis-issue-remediation-governance.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/source/SRC-011__lee-qwen-zhixingqijieruqiyue.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/source/SRC-011__lee-qwen-zhixingqijieruqiyue.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-001/TASK-FEAT-001-001__yanzhengmafasonghouduan-api-kaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-001/TASK-FEAT-001-001__yanzhengmafasonghouduan-api-kaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-001/TASK-FEAT-001-002__yanzhengmafasongqianduanzujiankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-001/TASK-FEAT-001-002__yanzhengmafasongqianduanzujiankaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-002/TASK-FEAT-002-001__feat-guigeshitujiegoudingyiyuqiyueguifan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-002/TASK-FEAT-002-001__feat-guigeshitujiegoudingyiyuqiyueguifan.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-002/TASK-FEAT-002-002__feat-guigeshitumobanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-002/TASK-FEAT-002-002__feat-guigeshitumobanshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-002/TASK-FEAT-002-003__feat-guigeshituyunxingshijicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-002/TASK-FEAT-002-003__feat-guigeshituyunxingshijicheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-002/TASK-FEAT-002-004__feat-guigeshituyanzhengguizeyuceshi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-002/TASK-FEAT-002-004__feat-guigeshituyanzhengguizeyuceshi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-002/TASK-FEAT-002-005__feat-guigeshituwendangqianyiyurumenzhinan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-002/TASK-FEAT-002-005__feat-guigeshituwendangqianyiyurumenzhinan.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-003/TASK-FEAT-003-001__huihuaguanlihouduanfuwukaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-003/TASK-FEAT-003-001__huihuaguanlihouduanfuwukaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-003/TASK-FEAT-003-002__dengluchenggongtiaozhuanhehuihuazhuangtaiqianduank.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-003/TASK-FEAT-003-002__dengluchenggongtiaozhuanhehuihuazhuangtaiqianduank.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-004/TASK-FEAT-004-001__shoujihaobangdinghouduan-api-kaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-004/TASK-FEAT-004-001__shoujihaobangdinghouduan-api-kaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-004/TASK-FEAT-004-002__shoujihaobangdingjiebangqianduanyemiankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-004/TASK-FEAT-004-002__shoujihaobangdingjiebangqianduanyemiankaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-005/TASK-FEAT-005-001__guojishoujihaogeshizhichikaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-005/TASK-FEAT-005-001__guojishoujihaogeshizhichikaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-005/TASK-FEAT-005-002__guojishoujihaoqianduangeshizhichikaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-005/TASK-FEAT-005-002__guojishoujihaoqianduangeshizhichikaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-006/TASK-FEAT-006-001__yanzhengmaanquanfanghuhouduanfuwukaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-006/TASK-FEAT-006-001__yanzhengmaanquanfanghuhouduanfuwukaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-006/TASK-FEAT-006-002__anquanfanghuqianduantishihezhanshikaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-006/TASK-FEAT-006-002__anquanfanghuqianduantishihezhanshikaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-006/TASK-FEAT-006-003__anquanshijianrizhihouduan-api-kaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-006/TASK-FEAT-006-003__anquanshijianrizhihouduan-api-kaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-006/TASK-FEAT-006-004__anquanshijianrizhiqianduanyemiankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-006/TASK-FEAT-006-004__anquanshijianrizhiqianduanyemiankaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-007/TASK-FEAT-007-001__duanxinfasongrongcuoyubeixuanfangankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-007/TASK-FEAT-007-001__duanxinfasongrongcuoyubeixuanfangankaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-007/TASK-FEAT-007-002__beiyongfanganxuanzeqianduanjiemiankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-007/TASK-FEAT-007-002__beiyongfanganxuanzeqianduanjiemiankaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-008/TASK-FEAT-008-001__shuangdenglufangshihouduan-api-kaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-008/TASK-FEAT-008-001__shuangdenglufangshihouduan-api-kaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-008/TASK-FEAT-008-002__shuangdenglufangshiqianduanyemiankaifa.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-008/TASK-FEAT-008-002__shuangdenglufangshiqianduanyemiankaifa.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-001/TASK-FEAT-012-001-001__cli-executor-canshujiexiyuluyoucengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-001/TASK-FEAT-012-001-001__cli-executor-canshujiexiyuluyoucengshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-001/TASK-FEAT-012-001-002__zhixingqixuanzeyouxianjiguifanyuluyoujueceshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-001/TASK-FEAT-012-001-002__zhixingqixuanzeyouxianjiguifanyuluyoujueceshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-002/TASK-FEAT-012-002-001__peizhimoxingdingyiyujiazaijizhishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-002/TASK-FEAT-012-002-001__peizhimoxingdingyiyujiazaijizhishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-002/TASK-FEAT-012-002-002__zhixingqixuanzeluojiyu-cli-jicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-002/TASK-FEAT-012-002-002__zhixingqixuanzeluojiyu-cli-jicheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-003/TASK-FEAT-012-003-001__kimi-zhixingqijiekoushixianyugongchangzhuce.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-003/TASK-FEAT-012-003-001__kimi-zhixingqijiekoushixianyugongchangzhuce.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-012-003/TASK-FEAT-012-003-002__kimi-zhixingqiyunxingshijichengyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-012-003/TASK-FEAT-012-003-002__kimi-zhixingqiyunxingshijichengyanzheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-051/TASK-FEAT-051-001__ssot-create-huanjingbianliangfangwenkongzhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-051/TASK-FEAT-051-001__ssot-create-huanjingbianliangfangwenkongzhi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-052/TASK-FEAT-052-001__lee-epic-create-minglingrukoushixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-052/TASK-FEAT-052-001__lee-epic-create-minglingrukoushixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-052/TASK-FEAT-052-002__lee-feat-create-minglingrukoushixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-052/TASK-FEAT-052-002__lee-feat-create-minglingrukoushixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-053/TASK-FEAT-053-001__zhilibianjie-formal-id-fenpeiqi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-053/TASK-FEAT-053-001__zhilibianjie-formal-id-fenpeiqi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-053/TASK-FEAT-053-002__zhilibianjieyanzhengqikuozhan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-053/TASK-FEAT-053-002__zhilibianjieyanzhengqikuozhan.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-054/TASK-FEAT-054-001__source-chain-xunhuanyinyongjiance.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-054/TASK-FEAT-054-001__source-chain-xunhuanyinyongjiance.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-055/TASK-FEAT-055-001__cli-help-wenangengxin.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-055/TASK-FEAT-055-001__cli-help-wenangengxin.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-055/TASK-FEAT-055-002__demo-changjinggengxin.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-055/TASK-FEAT-055-002__demo-changjinggengxin.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-055/TASK-FEAT-055-003__e2e-ceshifugai.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-055/TASK-FEAT-055-003__e2e-ceshifugai.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-055/TASK-FEAT-055-004__yonghuwendangqianyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-055/TASK-FEAT-055-004__yonghuwendangqianyi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-064/TASK-FEAT-064-001__yuandongjieshuruqiyueyulujingzhilishoukou.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-064/TASK-FEAT-064-001__yuandongjieshuruqiyueyulujingzhilishoukou.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-064/TASK-FEAT-064-002__sourcefreezeyunxingshiyugatejiexianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-064/TASK-FEAT-064-002__sourcefreezeyunxingshiyugatejiexianshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-064/TASK-FEAT-064-003__adr016yanzhengzhongpaoyujiaofuzhengjushoukou.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-064/TASK-FEAT-064-003__adr016yanzhengzhongpaoyujiaofuzhengjushoukou.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-068/TASK-FEAT-068-001__ssot-xiecaozuolanjieqishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-068/TASK-FEAT-068-001__ssot-xiecaozuolanjieqishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-068/TASK-FEAT-068-002__gate-yindaofuwushixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-068/TASK-FEAT-068-002__gate-yindaofuwushixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-068/TASK-FEAT-068-003__cli-bangzhuwendangguanliqishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-068/TASK-FEAT-068-003__cli-bangzhuwendangguanliqishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-068/TASK-FEAT-068-004__cli-jichengyuduandaoduanceshi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-068/TASK-FEAT-068-004__cli-jichengyuduandaoduanceshi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-001__gate-sanleizhilimoxinghexinleixingdingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-001__gate-sanleizhilimoxinghexinleixingdingyi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-002__gate-yurengongshenpiqufenbiaozhun-ui-shixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-002__gate-yurengongshenpiqufenbiaozhun-ui-shixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-003__gate-jueceguizeyinqingshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-003__gate-jueceguizeyinqingshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-004__review-gate-yu-approval-gate-runner-shixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-004__review-gate-yu-approval-gate-runner-shixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-005__gate-quanxianmoxingyujueceyanzhengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-005__gate-quanxianmoxingyujueceyanzhengshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-006__gongzuoliumoban-gate-leixingkuozhan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-006__gongzuoliumoban-gate-leixingkuozhan.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-007__gate-cli-minglingyu-api-shipei.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-007__gate-cli-minglingyu-api-shipei.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-008__gate-shengjilujingyuzhuangtaizhuisushixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-008__gate-shengjilujingyuzhuangtaizhuisushixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-069/TASK-FEAT-069-009__xianghoujianrongcengyuqianyicelveshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-069/TASK-FEAT-069-009__xianghoujianrongcengyuqianyicelveshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-001__ssot-state-model-implementation.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-001__ssot-state-model-implementation.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-002__gate-approval-service-integration.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-002__gate-approval-service-integration.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-003__freeze-trigger-engine-implementation.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-003__freeze-trigger-engine-implementation.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-004__state-transition-logger-implementation.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-004__state-transition-logger-implementation.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-005__ssot-details-page-freeze-functionality.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-005__ssot-details-page-freeze-functionality.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-006__freeze-request-form-implementation.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-006__freeze-request-form-implementation.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-007__approval-gate-ui-implementation.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-007__approval-gate-ui-implementation.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-008__state-transition-history-panel.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-008__state-transition-history-panel.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-070/TASK-FEAT-070-009__end-to-end-freeze-flow-integration.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-070/TASK-FEAT-070-009__end-to-end-freeze-flow-integration.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-001__gate-jibiemeijuyuzhuangtaiguanlihexinshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-001__gate-jibiemeijuyuzhuangtaiguanlihexinshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-002__yueshuguizeyinqingshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-002__yueshuguizeyinqingshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-003__danxiangshengjilujingyanzhengqi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-003__danxiangshengjilujingyanzhengqi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-004__weiguishijianjiluqi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-004__weiguishijianjiluqi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-005__cli-gate-minglingshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-005__cli-gate-minglingshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-006__shujuku-schema-biangeng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-006__shujuku-schema-biangeng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-007__workflow-moban-gate-peizhijicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-007__workflow-moban-gate-peizhijicheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-071/TASK-FEAT-071-008__ui-zujianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-071/TASK-FEAT-071-008__ui-zujianshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-080/TASK-FEAT-080-001__ssot-create-minglingquanxianxiaoyanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-080/TASK-FEAT-080-001__ssot-create-minglingquanxianxiaoyanshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-080/TASK-FEAT-080-002__ssot-create-minglingkejianxingpeizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-080/TASK-FEAT-080-002__ssot-create-minglingkejianxingpeizhi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-080/TASK-FEAT-080-003__ssot-create-minglingceshiyonglishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-080/TASK-FEAT-080-003__ssot-create-minglingceshiyonglishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-081/TASK-FEAT-081-001__ssot-workflow-first-cli-minglinggujiashixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-081/TASK-FEAT-081-001__ssot-workflow-first-cli-minglinggujiashixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-081/TASK-FEAT-081-002__workflow-mobanyufangraoguoanquanjizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-081/TASK-FEAT-081-002__workflow-mobanyufangraoguoanquanjizhi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-082/TASK-FEAT-082-001__yuanshujujichengyinqinghexinshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-082/TASK-FEAT-082-001__yuanshujujichengyinqinghexinshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-082/TASK-FEAT-082-002__yuanshujujicheng-ui-zujianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-082/TASK-FEAT-082-002__yuanshujujicheng-ui-zujianshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-083/TASK-FEAT-083-001__cli-help-fenzuyucuowutishishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-083/TASK-FEAT-083-001__cli-help-fenzuyucuowutishishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-083/TASK-FEAT-083-002__wendangyu-demo-tongyizhili.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-083/TASK-FEAT-083-002__wendangyu-demo-tongyizhili.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-084/TASK-FEAT-084-001__templateyuinstancecunchucengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-084/TASK-FEAT-084-001__templateyuinstancecunchucengshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-084/TASK-FEAT-084-002__templateregistryyuinstancemanageryunxingshishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-084/TASK-FEAT-084-002__templateregistryyuinstancemanageryunxingshishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-084/TASK-FEAT-084-003__workflow-climinglingyushuchugeshihuashixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-084/TASK-FEAT-084-003__workflow-climinglingyushuchugeshihuashixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-085/TASK-FEAT-085-001__liushishuchuyinqingshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-085/TASK-FEAT-085-001__liushishuchuyinqingshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-085/TASK-FEAT-085-002__liushishuchu-cli-geshihuazujian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-085/TASK-FEAT-085-002__liushishuchu-cli-geshihuazujian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-086/TASK-FEAT-086-001__zhixingzhuangtaimeijuyuzhuangtaijishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-086/TASK-FEAT-086-001__zhixingzhuangtaimeijuyuzhuangtaijishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-087/TASK-FEAT-087-001__huihuachijiuhuacunchucengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-087/TASK-FEAT-087-001__huihuachijiuhuacunchucengshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-087/TASK-FEAT-087-002__huihuahuifu-cli-jicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-087/TASK-FEAT-087-002__huihuahuifu-cli-jicheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-088/TASK-FEAT-088-001__sileixinxibianjiedingyiyucunchufenli.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-088/TASK-FEAT-088-001__sileixinxibianjiedingyiyucunchufenli.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-088/TASK-FEAT-088-002__bianjiekeshihua-ui-qianzhuishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-088/TASK-FEAT-088-002__bianjiekeshihua-ui-qianzhuishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-089/TASK-FEAT-089-001__bingfazuoyongyutuidaoyuchongtujianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-089/TASK-FEAT-089-001__bingfazuoyongyutuidaoyuchongtujianshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-089/TASK-FEAT-089-002__run-minglingbingfachongtujianceyutishigaizao.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-089/TASK-FEAT-089-002__run-minglingbingfachongtujianceyutishigaizao.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-090/TASK-FEAT-090-001__linshi-id-chuangjianyu-formalize-liuchengjieru.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-090/TASK-FEAT-090-001__linshi-id-chuangjianyu-formalize-liuchengjieru.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-090/TASK-FEAT-090-002__zhengshi-id-rewrite-yu-lint-gate-jicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-090/TASK-FEAT-090-002__zhengshi-id-rewrite-yu-lint-gate-jicheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-100/TASK-FEAT-100-001__raw-to-src-workflow-mobanyuyunxingshishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-100/TASK-FEAT-100-001__raw-to-src-workflow-mobanyuyunxingshishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-100/TASK-FEAT-100-002__raw-to-src-danyuanceshiyuxingnengyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-100/TASK-FEAT-100-002__raw-to-src-danyuanceshiyuxingnengyanzheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-101/TASK-FEAT-101-001__src-to-epic-workflow-zhonggouyubianjiejinghuashixi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-101/TASK-FEAT-101-001__src-to-epic-workflow-zhonggouyubianjiejinghuashixi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-101/TASK-FEAT-101-002__src-to-epic-xianghoujianrongxingceshi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-101/TASK-FEAT-101-002__src-to-epic-xianghoujianrongxingceshi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-102/TASK-FEAT-102-001__src-v1-geshiguifanyuzhuceqishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-102/TASK-FEAT-102-001__src-v1-geshiguifanyuzhuceqishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-102/TASK-FEAT-102-002__src-yanzheng-api-yubanbenlishizhuizong.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-102/TASK-FEAT-102-002__src-yanzheng-api-yubanbenlishizhuizong.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-103/TASK-FEAT-103-001__fencengjiekouqiyueyushujuyanzhengcengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-103/TASK-FEAT-103-001__fencengjiekouqiyueyushujuyanzhengcengshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-104/TASK-FEAT-104-001__workflow-zhucebiaofencengzhongzuyu-layer-biaoqianx.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-104/TASK-FEAT-104-001__workflow-zhucebiaofencengzhongzuyu-layer-biaoqianx.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-105/TASK-FEAT-105-001__fencengjiagoubushupeizhiyujiankangjianchaduandian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-105/TASK-FEAT-105-001__fencengjiagoubushupeizhiyujiankangjianchaduandian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-106/TASK-FEAT-106-001__yuanwendangdongjieliushuixianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-106/TASK-FEAT-106-001__yuanwendangdongjieliushuixianshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-130/TASK-FEAT-130-001__feature-bugfix-delivery-l2-gongzuoliumobanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-130/TASK-FEAT-130-001__feature-bugfix-delivery-l2-gongzuoliumobanshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-132/TASK-FEAT-132-001__tech-duixiangyu-evidence-pack-schema-shixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-132/TASK-FEAT-132-001__tech-duixiangyu-evidence-pack-schema-shixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-134/TASK-FEAT-134-001__l3-jieduanmobandingyishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-134/TASK-FEAT-134-001__l3-jieduanmobandingyishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-140/TASK-FEAT-140-001__gongxiangshuruguifanyuzhiliguizeshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-140/TASK-FEAT-140-001__gongxiangshuruguifanyuzhiliguizeshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-142/TASK-FEAT-142-001__qazichanssothexinmoxingyufangzhicelvekuozhan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-142/TASK-FEAT-142-001__qazichanssothexinmoxingyufangzhicelvekuozhan.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-142/TASK-FEAT-142-002__qap0xiaoyanguizejiyubangdingjianchaclishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-142/TASK-FEAT-142-002__qap0xiaoyanguizejiyubangdingjianchaclishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-001__zhixingrukouguifanyu-ssot-sanzhoubangdingqiyueding.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-001__zhixingrukouguifanyu-ssot-sanzhoubangdingqiyueding.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-002__entryrouter-yu-bypassblocker-hexinzujianshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-002__entryrouter-yu-bypassblocker-hexinzujianshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-003__chainvalidator-yulianluwanzhengxingxiaoyanshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-003__chainvalidator-yulianluwanzhengxingxiaoyanshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-004__auditlogger-yushenjicunchucengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-004__auditlogger-yushenjicunchucengshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-005__cli-minglingjichengyuduandaoduanyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-005__cli-minglingjichengyuduandaoduanyanzheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-143/TASK-FEAT-143-006__zhixingrukouguifanhuaceshiyuyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-143/TASK-FEAT-143-006__zhixingrukouguifanhuaceshiyuyanzheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-145/TASK-FEAT-145-001__cligaocengminglingkuangjiayuhexinminglingshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-145/TASK-FEAT-145-001__cligaocengminglingkuangjiayuhexinminglingshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-145/TASK-FEAT-145-002__bianjiefanghuyuzhililianshenjijizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-145/TASK-FEAT-145-002__bianjiefanghuyuzhililianshenjijizhi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-159/TASK-FEAT-159-001__hexinceshiyinqing-ceshiqidiaodukuangjia.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-159/TASK-FEAT-159-001__hexinceshiyinqing-ceshiqidiaodukuangjia.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-159/TASK-FEAT-159-002__hexinceshiyinqing-caiyanghuancunzengliangjizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-159/TASK-FEAT-159-002__hexinceshiyinqing-caiyanghuancunzengliangjizhi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-160/TASK-FEAT-160-001__schemaceshiqi-jiegouheguiyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-160/TASK-FEAT-160-001__schemaceshiqi-jiegouheguiyanzheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-161/TASK-FEAT-161-001__traceceshiqi-lianluzhuisuyufugailv.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-161/TASK-FEAT-161-001__traceceshiqi-lianluzhuisuyufugailv.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-162/TASK-FEAT-162-001__semanticceshiqi-yuyiyizhixingyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-162/TASK-FEAT-162-001__semanticceshiqi-yuyiyizhixingyanzheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-163/TASK-FEAT-163-001__overlapceshiqi-gongnengzhongdiejiance.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-163/TASK-FEAT-163-001__overlapceshiqi-gongnengzhongdiejiance.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-164/TASK-FEAT-164-001__replayceshiqi-wendingxingyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-164/TASK-FEAT-164-001__replayceshiqi-wendingxingyanzheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-165/TASK-FEAT-165-001__executableceshiqi-kezhixingxingpinggu.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-165/TASK-FEAT-165-001__executableceshiqi-kezhixingxingpinggu.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-166/TASK-FEAT-166-001__tongyibaogaogeshishengchengqi-baogaoxuanranyinqing.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-166/TASK-FEAT-166-001__tongyibaogaogeshishengchengqi-baogaoxuanranyinqing.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-167/TASK-FEAT-167-001__huangjinyangbenjiguanli-yangbenbanbenguanli.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-167/TASK-FEAT-167-001__huangjinyangbenjiguanli-yangbenbanbenguanli.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-168/TASK-FEAT-168-001__ci-cdjicheng-cliyucimoban.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-168/TASK-FEAT-168-001__ci-cdjicheng-cliyucimoban.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-000__zhixingqipeizhiyouxianjiyuyanzhengguizeguifan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-000__zhixingqipeizhiyouxianjiyuyanzhengguizeguifan.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-001__zhixingqileixingmeijuyushujumoxingdingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-001__zhixingqileixingmeijuyushujumoxingdingyi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-002__zhixingqipeizhijiexiqiyuyanzhengqishixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-002__zhixingqipeizhijiexiqiyuyanzhengqishixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-003__cli-minglingjichengyupeizhitouchuan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-003__cli-minglingjichengyupeizhitouchuan.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-004__peizhiwenjianjiazaiqikuozhanyuxianghoujianrong.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-004__peizhiwenjianjiazaiqikuozhanyuxianghoujianrong.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-169/TASK-FEAT-169-005__duandaoduanceshiyuyanshouyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-169/TASK-FEAT-169-005__duandaoduanceshiyuyanshouyanzheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-170/TASK-FEAT-170-001__qwenzhixingqigongchangzhuceyushilihua.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-170/TASK-FEAT-170-001__qwenzhixingqigongchangzhuceyushilihua.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-170/TASK-FEAT-170-002__qwenprofilejiexiheyichangdingwei.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-170/TASK-FEAT-170-002__qwenprofilejiexiheyichangdingwei.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-171/TASK-FEAT-171-001__qwen-zhixingqishixianyu-cli-fengzhuang.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-171/TASK-FEAT-171-001__qwen-zhixingqishixianyu-cli-fengzhuang.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-171/TASK-FEAT-171-002__zhixingjieguoguiyihuacengshixian.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-171/TASK-FEAT-171-002__zhixingjieguoguiyihuacengshixian.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-172/TASK-FEAT-172-001__workflowshilizhixingqishangxiawenchijiuhua.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-172/TASK-FEAT-172-001__workflowshilizhixingqishangxiawenchijiuhua.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-172/TASK-FEAT-172-002__duozhixingqibingfageliheyanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-172/TASK-FEAT-172-002__duozhixingqibingfageliheyanzheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-173/TASK-FEAT-173-001__zhongwenjizhunyangbenyupingguijianshe.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-173/TASK-FEAT-173-001__zhongwenjizhunyangbenyupingguijianshe.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/FEAT-173/TASK-FEAT-173-002__qwenzhilianghuiguiyuallbackjizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/FEAT-173/TASK-FEAT-173-002__qwenzhilianghuiguiyuallbackjizhi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-001__fitness-rule-schema-json-dingyi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-001__fitness-rule-schema-json-dingyi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-002__fitness-rule-schema-yanzheng-gongju.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-002__fitness-rule-schema-yanzheng-gongju.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-003__fitness-rule-zhengju-bangding-yu-shenji-rizhi.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-003__fitness-rule-zhengju-bangding-yu-shenji-rizhi.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-004__fitness-rule-yanzheng-ceshi-ji-yu-menjin-jicheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tasks/SRC-059/FEAT-SRC-059-001/TASK-FEAT-SRC-059-001-004__fitness-rule-yanzheng-ceshi-ji-yu-menjin-jicheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tech/SRC-009/TECH-FEAT-SRC-009__tech-design.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-009/TECH-FEAT-SRC-009__tech-design.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/tech/SRC-011/TECH-FEAT-SRC-011__qwenzhixingqijierupici-jishuzonglan.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/tech/SRC-011/TECH-FEAT-SRC-011__qwenzhixingqijierupici-jishuzonglan.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  },
+  {
+    "original": "spec/testsets/SRC-059/FEAT-SRC-059-001/TESTSET-FEAT-SRC-059-001__fitness-rule-schema-yanzheng.md",
+    "deprecated_to": "legacy/deprecated-ssot/2026-03-20/spec/testsets/SRC-059/FEAT-SRC-059-001/TESTSET-FEAT-SRC-059-001__fitness-rule-schema-yanzheng.md",
+    "reason": "remaining ssot lint id/frontmatter/conflict error"
+  }
+]

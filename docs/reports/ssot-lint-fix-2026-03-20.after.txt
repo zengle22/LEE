@@ -1,0 +1,193 @@
+❌ SSOT lint failed:
+  - mapping values are not allowed here
+  in "<unicode string>", line 31, column 17:
+      governing_adrs:
+                    ^
+  - mapping values are not allowed here
+  in "<unicode string>", line 15, column 12:
+      frozen_by: architect
+               ^
+  - while scanning a simple key
+  in "<unicode string>", line 4, column 1:
+    <<<<<<< HEAD
+    ^
+could not find expected ':'
+  in "<unicode string>", line 5, column 1:
+    title: Qwen 执行器工厂注册与实例化
+    ^
+  - ADR-022: 类型 adr 不应设置 parent_id，当前为 ADR-001
+  - SRC-011: source_refs 'ART-00398' does not exist
+  - TESTSET-FEAT-SRC-059-001: source_refs 'TECH-FEAT-SRC-059-001' does not exist
+  - TECH-FEAT-SRC-009: ID format is invalid: TECH-FEAT-SRC-009
+  - TECH-FEAT-SRC-009: ID TECH-FEAT-SRC-009 解析出 parent None，但 parent_id 设置为 FEAT-SRC-009-006
+  - TECH-FEAT-SRC-011: source_refs 'EPIC-022' does not exist
+  - TECH-FEAT-SRC-011: source_refs 'FEAT-169' does not exist
+  - TECH-FEAT-SRC-011: source_refs 'FEAT-170' does not exist
+  - TECH-FEAT-SRC-011: source_refs 'FEAT-171' does not exist
+  - TECH-FEAT-SRC-011: source_refs 'FEAT-172' does not exist
+  - TECH-FEAT-SRC-011: source_refs 'FEAT-173' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'EPIC-022' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'FEAT-169' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'FEAT-170' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'FEAT-171' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'FEAT-172' does not exist
+  - TECH-FEAT-SRC-011: derived_from_ids 'FEAT-173' does not exist
+  - TECH-FEAT-SRC-011: ID format is invalid: TECH-FEAT-SRC-011
+  - TECH-FEAT-SRC-011: ID TECH-FEAT-SRC-011 解析出 parent None，但 parent_id 设置为 SRC-011
+  - TECH-FEAT-SRC-011: 类型 tech 的 parent_id 必须是 FEAT，当前为 SRC
+  - TASK-FEAT-001-001: source_refs 'FEAT-001#delivery' does not exist
+  - TASK-FEAT-001-002: source_refs 'FEAT-001#delivery' does not exist
+  - TASK-FEAT-002-001: source_refs 'FEAT-002#delivery' does not exist
+  - TASK-FEAT-002-002: source_refs 'FEAT-002#delivery' does not exist
+  - TASK-FEAT-002-003: source_refs 'FEAT-002#delivery' does not exist
+  - TASK-FEAT-002-004: source_refs 'FEAT-002#delivery' does not exist
+  - TASK-FEAT-002-005: source_refs 'FEAT-002#delivery' does not exist
+  - TASK-FEAT-003-001: source_refs 'FEAT-003#delivery' does not exist
+  - TASK-FEAT-003-002: source_refs 'FEAT-003#delivery' does not exist
+  - TASK-FEAT-004-001: source_refs 'FEAT-004#delivery' does not exist
+  - TASK-FEAT-004-002: source_refs 'FEAT-004#delivery' does not exist
+  - TASK-FEAT-005-001: source_refs 'FEAT-005#delivery' does not exist
+  - TASK-FEAT-005-002: source_refs 'FEAT-005#delivery' does not exist
+  - TASK-FEAT-006-001: source_refs 'FEAT-006#delivery' does not exist
+  - TASK-FEAT-006-002: source_refs 'FEAT-006#delivery' does not exist
+  - TASK-FEAT-006-003: source_refs 'FEAT-006#delivery' does not exist
+  - TASK-FEAT-006-004: source_refs 'FEAT-006#delivery' does not exist
+  - TASK-FEAT-007-001: source_refs 'FEAT-007#delivery' does not exist
+  - TASK-FEAT-007-002: source_refs 'FEAT-007#delivery' does not exist
+  - TASK-FEAT-008-001: source_refs 'FEAT-008#delivery' does not exist
+  - TASK-FEAT-008-002: source_refs 'FEAT-008#delivery' does not exist
+  - TASK-FEAT-012-001-001: source_refs 'FEAT-012-001#delivery' does not exist
+  - TASK-FEAT-012-001-001: ID TASK-FEAT-012-001-001 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-001
+  - TASK-FEAT-012-001-002: source_refs 'FEAT-012-001#delivery' does not exist
+  - TASK-FEAT-012-001-002: ID TASK-FEAT-012-001-002 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-001
+  - TASK-FEAT-012-002-001: source_refs 'FEAT-012-002#delivery' does not exist
+  - TASK-FEAT-012-002-001: ID TASK-FEAT-012-002-001 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-002
+  - TASK-FEAT-012-002-002: source_refs 'FEAT-012-002#delivery' does not exist
+  - TASK-FEAT-012-002-002: ID TASK-FEAT-012-002-002 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-002
+  - TASK-FEAT-012-003-001: source_refs 'FEAT-012-003#delivery' does not exist
+  - TASK-FEAT-012-003-001: ID TASK-FEAT-012-003-001 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-003
+  - TASK-FEAT-012-003-002: source_refs 'FEAT-012-003#delivery' does not exist
+  - TASK-FEAT-012-003-002: ID TASK-FEAT-012-003-002 解析出 parent FEAT-012，但 parent_id 设置为 FEAT-012-003
+  - TASK-FEAT-051-001: source_refs 'FEAT-051#delivery' does not exist
+  - TASK-FEAT-052-001: source_refs 'FEAT-052#delivery' does not exist
+  - TASK-FEAT-052-002: source_refs 'FEAT-052#delivery' does not exist
+  - TASK-FEAT-053-001: source_refs 'FEAT-053#delivery' does not exist
+  - TASK-FEAT-053-002: source_refs 'FEAT-053#delivery' does not exist
+  - TASK-FEAT-054-001: source_refs 'FEAT-054#delivery' does not exist
+  - TASK-FEAT-055-001: source_refs 'FEAT-055#delivery' does not exist
+  - TASK-FEAT-055-002: source_refs 'FEAT-055#delivery' does not exist
+  - TASK-FEAT-055-003: source_refs 'FEAT-055#delivery' does not exist
+  - TASK-FEAT-055-004: source_refs 'FEAT-055#delivery' does not exist
+  - TASK-FEAT-064-001: source_refs 'FEAT-064#delivery' does not exist
+  - TASK-FEAT-064-002: source_refs 'FEAT-064#delivery' does not exist
+  - TASK-FEAT-064-003: source_refs 'FEAT-064#delivery' does not exist
+  - TASK-FEAT-068-001: source_refs 'FEAT-068#delivery' does not exist
+  - TASK-FEAT-068-002: source_refs 'FEAT-068#delivery' does not exist
+  - TASK-FEAT-068-003: source_refs 'FEAT-068#delivery' does not exist
+  - TASK-FEAT-068-004: source_refs 'FEAT-068#delivery' does not exist
+  - TASK-FEAT-069-001: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-002: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-003: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-004: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-005: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-006: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-007: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-008: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-069-009: source_refs 'FEAT-069#delivery' does not exist
+  - TASK-FEAT-070-001: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-002: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-003: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-004: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-005: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-006: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-007: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-008: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-070-009: source_refs 'FEAT-070#delivery' does not exist
+  - TASK-FEAT-071-001: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-002: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-003: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-004: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-005: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-006: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-007: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-071-008: source_refs 'FEAT-071#delivery' does not exist
+  - TASK-FEAT-080-001: source_refs 'FEAT-080#delivery' does not exist
+  - TASK-FEAT-080-002: source_refs 'FEAT-080#delivery' does not exist
+  - TASK-FEAT-080-003: source_refs 'FEAT-080#delivery' does not exist
+  - TASK-FEAT-081-001: source_refs 'FEAT-081#delivery' does not exist
+  - TASK-FEAT-081-002: source_refs 'FEAT-081#delivery' does not exist
+  - TASK-FEAT-082-001: source_refs 'FEAT-082#delivery' does not exist
+  - TASK-FEAT-082-002: source_refs 'FEAT-082#delivery' does not exist
+  - TASK-FEAT-083-001: source_refs 'FEAT-083#delivery' does not exist
+  - TASK-FEAT-083-002: source_refs 'FEAT-083#delivery' does not exist
+  - TASK-FEAT-084-001: source_refs 'FEAT-084#delivery' does not exist
+  - TASK-FEAT-084-002: source_refs 'FEAT-084#delivery' does not exist
+  - TASK-FEAT-084-003: source_refs 'FEAT-084#delivery' does not exist
+  - TASK-FEAT-085-001: source_refs 'FEAT-085#delivery' does not exist
+  - TASK-FEAT-085-002: source_refs 'FEAT-085#delivery' does not exist
+  - TASK-FEAT-086-001: source_refs 'FEAT-086#delivery' does not exist
+  - TASK-FEAT-087-001: source_refs 'FEAT-087#delivery' does not exist
+  - TASK-FEAT-087-002: source_refs 'FEAT-087#delivery' does not exist
+  - TASK-FEAT-088-001: source_refs 'FEAT-088#delivery' does not exist
+  - TASK-FEAT-088-002: source_refs 'FEAT-088#delivery' does not exist
+  - TASK-FEAT-089-001: source_refs 'FEAT-089#delivery' does not exist
+  - TASK-FEAT-089-002: source_refs 'FEAT-089#delivery' does not exist
+  - TASK-FEAT-090-001: source_refs 'FEAT-090#delivery' does not exist
+  - TASK-FEAT-090-002: source_refs 'FEAT-090#delivery' does not exist
+  - TASK-FEAT-100-001: source_refs 'FEAT-100#delivery' does not exist
+  - TASK-FEAT-100-002: source_refs 'FEAT-100#delivery' does not exist
+  - TASK-FEAT-101-001: source_refs 'FEAT-101#delivery' does not exist
+  - TASK-FEAT-101-002: source_refs 'FEAT-101#delivery' does not exist
+  - TASK-FEAT-102-001: source_refs 'FEAT-102#delivery' does not exist
+  - TASK-FEAT-102-002: source_refs 'FEAT-102#delivery' does not exist
+  - TASK-FEAT-103-001: source_refs 'FEAT-103#delivery' does not exist
+  - TASK-FEAT-104-001: source_refs 'FEAT-104#delivery' does not exist
+  - TASK-FEAT-105-001: source_refs 'FEAT-105#delivery' does not exist
+  - TASK-FEAT-106-001: source_refs 'FEAT-106#delivery' does not exist
+  - TASK-FEAT-130-001: source_refs 'FEAT-130#delivery' does not exist
+  - TASK-FEAT-132-001: source_refs 'FEAT-132#delivery' does not exist
+  - TASK-FEAT-134-001: source_refs 'FEAT-134#delivery' does not exist
+  - TASK-FEAT-140-001: source_refs 'FEAT-140#delivery' does not exist
+  - TASK-FEAT-142-001: source_refs 'FEAT-142#delivery' does not exist
+  - TASK-FEAT-142-002: source_refs 'FEAT-142#delivery' does not exist
+  - TASK-FEAT-143-001: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-143-002: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-143-003: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-143-004: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-143-005: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-143-006: source_refs 'FEAT-143#delivery' does not exist
+  - TASK-FEAT-145-001: source_refs 'FEAT-145#delivery' does not exist
+  - TASK-FEAT-145-002: source_refs 'FEAT-145#delivery' does not exist
+  - TASK-FEAT-159-001: source_refs 'FEAT-159#delivery' does not exist
+  - TASK-FEAT-159-002: source_refs 'FEAT-159#delivery' does not exist
+  - TASK-FEAT-160-001: source_refs 'FEAT-160#delivery' does not exist
+  - TASK-FEAT-161-001: source_refs 'FEAT-161#delivery' does not exist
+  - TASK-FEAT-162-001: source_refs 'FEAT-162#delivery' does not exist
+  - TASK-FEAT-163-001: source_refs 'FEAT-163#delivery' does not exist
+  - TASK-FEAT-164-001: source_refs 'FEAT-164#delivery' does not exist
+  - TASK-FEAT-165-001: source_refs 'FEAT-165#delivery' does not exist
+  - TASK-FEAT-166-001: source_refs 'FEAT-166#delivery' does not exist
+  - TASK-FEAT-167-001: source_refs 'FEAT-167#delivery' does not exist
+  - TASK-FEAT-168-001: source_refs 'FEAT-168#delivery' does not exist
+  - TASK-FEAT-169-000: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-169-001: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-169-002: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-169-003: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-169-004: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-169-005: source_refs 'FEAT-169#delivery' does not exist
+  - TASK-FEAT-170-002: source_refs 'FEAT-170#delivery' does not exist
+  - TASK-FEAT-171-001: source_refs 'FEAT-171#delivery' does not exist
+  - TASK-FEAT-171-002: source_refs 'FEAT-171#delivery' does not exist
+  - TASK-FEAT-172-001: source_refs 'FEAT-172#delivery' does not exist
+  - TASK-FEAT-172-002: source_refs 'FEAT-172#delivery' does not exist
+  - TASK-FEAT-173-001: source_refs 'FEAT-173#delivery' does not exist
+  - TASK-FEAT-173-002: source_refs 'FEAT-173#delivery' does not exist
+  - TASK-FEAT-SRC-059-001-001: source_refs 'TECH-FEAT-SRC-059-001' does not exist
+  - TASK-FEAT-SRC-059-001-002: source_refs 'TECH-FEAT-SRC-059-001' does not exist
+  - TASK-FEAT-SRC-059-001-003: source_refs 'TECH-FEAT-SRC-059-001' does not exist
+  - TASK-FEAT-SRC-059-001-004: source_refs 'TECH-FEAT-SRC-059-001' does not exist
+  - BUG-FEAT-071-001: source_refs 'FEAT-071#scope' does not exist
+  - BUG-FEAT-071-001: derived_from_ids 'FEAT-071' does not exist
+  - BUG-FEAT-071-002: source_refs 'FEAT-071#scope' does not exist
+  - BUG-FEAT-071-002: derived_from_ids 'FEAT-071' does not exist
+Aborted!
