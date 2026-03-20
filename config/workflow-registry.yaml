@@ -2,6 +2,28 @@ version: "1.1"
 
 workflows:
   # ========== Core Governance 工作流 ==========
+  governance.adr-create:
+    path: spec-global/core/workflows/templates/spec-governance-l3-template.yaml
+    kind: l3_workflow_template
+    description: "ADR 创建治理工作流 (L3) - 通过治理流程创建新的 ADR"
+    load_spec_as_params: true
+    required_params:
+      - request_id
+      - spec_kind
+      - action
+      - change_request
+      - target_path
+    optional_params:
+      - title
+      - adr_id
+      - scope
+      - acceptance_brief_id
+      - ssot_root_id
+      - reviewer_mode
+      - strict_review_gate
+      - human_gate_reviewers
+      - human_gate_required
+
   governance.adr-update:
     path: spec-global/core/workflows/templates/spec-governance-l3-template.yaml
     kind: l3_workflow_template

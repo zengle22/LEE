@@ -20,6 +20,21 @@ def test_workflow_registry_contains_spec_governance() -> None:
     registry = _load_registry()
     workflows = registry["workflows"]
 
+    assert "governance.adr-create" in workflows
+    adr_create_entry = workflows["governance.adr-create"]
+    assert adr_create_entry["path"] == "spec-global/core/workflows/templates/spec-governance-l3-template.yaml"
+    assert adr_create_entry["load_spec_as_params"] is True
+    assert adr_create_entry["required_params"] == [
+        "request_id",
+        "spec_kind",
+        "action",
+        "change_request",
+        "target_path",
+    ]
+    assert "title" in adr_create_entry["optional_params"]
+    assert "adr_id" in adr_create_entry["optional_params"]
+    assert "human_gate_required" in adr_create_entry["optional_params"]
+
     assert "core.spec-governance" in workflows
     entry = workflows["core.spec-governance"]
     assert entry["path"] == "spec-global/core/workflows/templates/spec-governance-l3-template.yaml"

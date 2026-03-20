@@ -197,10 +197,10 @@ def test_chain_validate_dispatches_direct_inputs_without_spec(monkeypatch, tmp_p
     assert captured["workflow_key"] == "product.requirement-chain-validation"
     assert captured["skip_plan"] is True
     assert captured["spec_doc"] == {
-        "source_freeze": str(source_freeze.resolve()),
-        "epic_freeze_bundle": str(epic_bundle.resolve()),
-        "feat_freeze_bundle": str(feat_bundle.resolve()),
-        "delivery_prep_bundle": str(delivery_bundle.resolve()),
+        "source_freeze": source_freeze.resolve().as_posix(),
+        "epic_freeze_bundle": epic_bundle.resolve().as_posix(),
+        "feat_freeze_bundle": feat_bundle.resolve().as_posix(),
+        "delivery_prep_bundle": delivery_bundle.resolve().as_posix(),
     }
 
 
@@ -210,10 +210,88 @@ def test_adr_new_reports_missing_registered_workflow(monkeypatch) -> None:
 
     monkeypatch.setattr(entry_module, "load_workflow_registry", lambda: {"workflows": {}})
 
-    result = runner.invoke(cli, ["adr", "new", "--dry-run"])
+    result = runner.invoke(
+        cli,
+        [
+            "adr",
+            "new",
+            "--dry-run",
+            "--id",
+            "ADR-031",
+            "--title",
+            "测试 ADR",
+            "--change-request",
+            "测试治理工作流注册缺失",
+        ],
+    )
 
     assert result.exit_code != 0
     assert "governance.adr-create" in result.output
+
+
+def test_adr_new_dispatches_to_governance_adr_create(monkeypatch, tmp_path: Path) -> None:
+    _register_commands()
+    runner = CliRunner()
+    captured = {}
+
+    monkeypatch.setattr(
+        entry_module,
+        "load_workflow_registry",
+        lambda: {"workflows": {"governance.adr-create": {}}},
+    )
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        if kwargs.get("spec"):
+            captured["spec_doc"] = yaml.safe_load(Path(kwargs["spec"]).read_text(encoding="utf-8"))
+
+    monkeypatch.setattr(entry_module.run, "callback", fake_run)
+
+    result = runner.invoke(
+        cli,
+        [
+            "adr",
+            "new",
+            "--project-dir",
+            str(tmp_path),
+            "--skip-plan",
+            "--id",
+            "31",
+            "--title",
+            "LEE AI 治理增强方案",
+            "--change-request",
+            "为 LEE 建立 brief、trace、risk、gate、provenance 一体化治理链",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["workflow_key"] == "governance.adr-create"
+    assert captured["skip_plan"] is True
+    assert captured["spec_doc"]["request_id"] == "adr-create-adr-031"
+    assert captured["spec_doc"]["spec_kind"] == "adr"
+    assert captured["spec_doc"]["action"] == "create"
+    assert captured["spec_doc"]["adr_id"] == "ADR-031"
+    assert captured["spec_doc"]["title"] == "LEE AI 治理增强方案"
+    assert captured["spec_doc"]["human_gate_required"] is True
+    assert captured["spec_doc"]["target_path"] == (
+        tmp_path / "spec" / "adr" / "ADR-031__lee-ai-治理增强方案.md"
+    ).resolve().as_posix()
+
+
+def test_adr_new_requires_direct_inputs_when_spec_is_missing(monkeypatch) -> None:
+    _register_commands()
+    runner = CliRunner()
+
+    monkeypatch.setattr(
+        entry_module,
+        "load_workflow_registry",
+        lambda: {"workflows": {"governance.adr-create": {}}},
+    )
+
+    result = runner.invoke(cli, ["adr", "new"])
+
+    assert result.exit_code != 0
+    assert "Missing direct inputs for `lee adr new`" in result.output
 
 
 def test_adr_update_dispatches_to_governance_adr_update(monkeypatch, tmp_path: Path) -> None:
@@ -260,7 +338,7 @@ def test_adr_update_dispatches_to_governance_adr_update(monkeypatch, tmp_path: P
     assert captured["spec_doc"]["spec_kind"] == "adr"
     assert captured["spec_doc"]["action"] == "update"
     assert captured["spec_doc"]["change_request"] == "测试更新"
-    assert str(adr_file.resolve()) in captured["spec_doc"]["target_path"]
+    assert adr_file.resolve().as_posix() == captured["spec_doc"]["target_path"]
 
 
 def test_adr_update_dry_run_shows_workflow_alias(monkeypatch, tmp_path: Path) -> None:

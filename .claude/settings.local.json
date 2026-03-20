@@ -10,10 +10,16 @@
       "Bash(python:*)",
       "Bash(lee gates list:*)",
       "Bash(claude config list:*)",
-      "Bash(unset:*)"
+      "Bash(unset:*)",
+      "Bash(gh auth:*)",
+      "Bash(gh pr:*)",
+      "Bash(git push:*)"
     ]
   },
   "commands": {
     "directory": ".claude/commands"
+  },
+  "env": {
+    "GH_TOKEN": "${GITHUB_TOKEN}"
   }
 }
