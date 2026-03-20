@@ -252,3 +252,103 @@ class TestEventTypes:
         assert hasattr(EventType, 'STEP_COMPLETED')
         assert hasattr(EventType, 'STEP_FAILED')
         assert hasattr(EventType, 'WORKFLOW_COMPLETED')
+
+
+class TestRunUntilBlockedNullSafety:
+    """
+    Tests for BUG-LEE-CLI-001 fix:
+    run_until_blocked must not raise AttributeError when store.get_workflow returns None.
+    """
+
+    @pytest.mark.asyncio
+    async def test_run_until_blocked_workflow_not_found_returns_failed(self):
+        """
+        Entry-guard: When workflow_id does not exist in the DB,
+        run_until_blocked should return ExecutionSummary(status='failed')
+        without raising AttributeError.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+        from lee.orchestrator.storage.models import ExecutionSummary
+
+        orchestrator = object.__new__(Orchestrator)
+
+        # store.get_workflow returns None (workflow does not exist)
+        mock_store = MagicMock()
+        mock_store.get_workflow = AsyncMock(return_value=None)
+        orchestrator.store = mock_store
+
+        mock_event_log = MagicMock()
+        mock_event_log.log = MagicMock()
+        orchestrator.event_log = mock_event_log
+
+        summary = await orchestrator.run_until_blocked("nonexistent-wf-id", max_steps=5)
+
+        assert isinstance(summary, ExecutionSummary)
+        assert summary.status == "failed"
+        assert summary.workflow_id == "nonexistent-wf-id"
+        assert summary.total_steps == 0
+        assert summary.completed_steps == 0
+
+    @pytest.mark.asyncio
+    async def test_run_until_blocked_no_ready_step_none_instance(self):
+        """
+        Defensive check inside loop: when result.status == 'no_ready_step'
+        and store.get_workflow returns None mid-execution, final_status must
+        be 'failed' without AttributeError.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+        from lee.orchestrator.execution.orchestrator import Orchestrator
+        from lee.orchestrator.storage.models import (
+            ExecutionSummary, WorkflowInstance, WorkflowLevel, WorkflowStatus,
+        )
+        from datetime import datetime
+
+        orchestrator = object.__new__(Orchestrator)
+
+        existing_instance = WorkflowInstance(
+            id="wf-test",
+            level=WorkflowLevel.TASK,
+            status=WorkflowStatus.RUNNING,
+            template_id="tmpl",
+            data={},
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+
+        # First call (entry): returns a real instance; subsequent calls: return None
+        call_count = {"n": 0}
+
+        async def _get_workflow(wf_id):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return existing_instance
+            return None
+
+        mock_store = MagicMock()
+        mock_store.get_workflow = _get_workflow
+
+        mock_event_log = MagicMock()
+        mock_event_log.log = MagicMock()
+        mock_event_log.run_id = ""
+        orchestrator.store = mock_store
+        orchestrator.event_log = mock_event_log
+        orchestrator.RUNNING_EXECUTION_POLL_SECONDS = 0.01
+
+        # run_step returns no_ready_step on first call to trigger the inner branch
+        from lee.orchestrator.execution.orchestrator import StepResult
+        orchestrator.run_step = AsyncMock(
+            return_value=StepResult(
+                status="no_ready_step",
+                step_id=None,
+                workflow_id="wf-test",
+                message="no ready steps",
+            )
+        )
+        orchestrator._has_running_task_executions = AsyncMock(return_value=False)
+        orchestrator._inject_loop_variables_if_needed = AsyncMock(return_value=None)
+
+        summary = await orchestrator.run_until_blocked("wf-test", max_steps=5)
+
+        assert isinstance(summary, ExecutionSummary)
+        assert summary.status == "failed"

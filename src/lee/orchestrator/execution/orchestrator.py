@@ -1233,8 +1233,16 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         # v3.2: 记录 RUN_STARTED
         run_instance = await self.store.get_workflow(workflow_id)
-        if run_instance:
-            self.event_log.run_id = run_instance.data.get("run_id", workflow_id)
+        if not run_instance:
+            return ExecutionSummary(
+                workflow_id=workflow_id,
+                total_steps=0,
+                completed_steps=0,
+                blocked_at=None,
+                status="failed",
+                duration_seconds=0.0,
+            )
+        self.event_log.run_id = run_instance.data.get("run_id", workflow_id)
         from lee.orchestrator.storage.event_log import EventType
         self.event_log.log(
             event_type=EventType.RUN_STARTED,
@@ -1262,6 +1270,9 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             elif result.status == "no_ready_step":
                 # 没有可执行的步骤，可能是完成或阻塞
                 instance = await self.store.get_workflow(workflow_id)
+                if instance is None:
+                    final_status = "failed"
+                    break
                 if instance.status == WorkflowStatus.COMPLETED:
                     break
                 if instance.status == WorkflowStatus.FAILED:
@@ -1284,7 +1295,9 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
 
         # 获取最终状态
         instance = await self.store.get_workflow(workflow_id)
-        if instance.status == WorkflowStatus.COMPLETED:
+        if instance is None:
+            final_status = "failed"
+        elif instance.status == WorkflowStatus.COMPLETED:
             final_status = "completed"
         elif instance.status == WorkflowStatus.FAILED:
             final_status = "failed"
@@ -2862,6 +2875,8 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
         from lee.orchestrator.core.workflow_generator import WorkflowGenerator, L3InstanceConfig
 
         parent = await self.store.get_workflow(parent_l2_id)
+        if parent is None:
+            raise ValueError(f"Parent L2 workflow not found: {parent_l2_id}")
         context = parent.data.get("context", {})
         parent_params = dict(parent.data.get("params", {}) or {})
         parent_artifacts = dict(parent.data.get("artifacts", {}) or {})
@@ -2935,7 +2950,7 @@ class Orchestrator(StepRunnerMixin, GateOperationsMixin, SubworkflowMixin, Insta
             all_done = True
             for l3_id in l3_ids:
                 l3 = await self.store.get_workflow(l3_id)
-                if l3.status not in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED):
+                if l3 is None or l3.status not in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED):
                     all_done = False
                     break
 
